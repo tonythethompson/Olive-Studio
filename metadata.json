@@ -1,0 +1,6 @@
+{
+  "name": "Olive Studio",
+  "description": "Microsoft Olive Hardware-Aware Model Optimization Toolkit Workspace",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

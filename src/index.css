@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  --color-slate-750: #293548;
+  --color-slate-850: #151e2e;
+  --color-slate-950: #020617;
+  
+  --color-electric-blue: #3b82f6;
+  --color-electric-blue-dark: #2563eb;
+  
+  --color-emerald-accent: #10b981;
+  --color-emerald-dark: #059669;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-slate-950 text-slate-300 font-sans antialiased selection:bg-electric-blue/30;
+  }
+}
+
+/* Custom Scrollbar for High Density Arrays */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-slate-900;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-700 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-600;
+}
+
+/* Custom CSS Keyframes for Interactive Flow Pipes */
+@keyframes dash-flow {
+  to {
+    stroke-dashoffset: -20px;
+  }
+}
+
+@keyframes pulsar-glow {
+  0%, 100% {
+    r: 3px;
+    filter: drop-shadow(0 0 2px #00f0ff);
+  }
+  50% {
+    r: 5px;
+    filter: drop-shadow(0 0 6px #00f0ff);
+  }
+}
+
+.glow-pulsar {
+  animation: pulsar-glow 2s ease-in-out infinite;
+}
