@@ -23,6 +23,8 @@ const defaultState: UIState = {
   ihvProvider: "CPUExecutionProvider",
   cacheDir: "",
   azureStr: "",
+  distributedCaching: false,
+  activeJobId: null,
   passes: {
     conversion: true,
     conversionSourceFormat: "pytorch",
@@ -55,6 +57,7 @@ function Dashboard() {
   const setState = (partial: Partial<UIState>) => {
     setStateRaw(prev => ({ ...prev, ...partial }));
   };
+
 
   const navItems: { id: ActiveView; label: string; icon: any }[] = [
     { id: "input", label: "Model Source & Data", icon: BrainCircuit },
@@ -187,7 +190,24 @@ function Dashboard() {
                 <h2 className="text-2xl font-semibold text-slate-100">5. Recipe Review & Execution</h2>
                 <p className="text-sm text-slate-400 mt-1">Review the generated Olive workflow and trigger the optimization.</p>
               </div>
-              <ExecutionWorkspace state={state} setState={setState} onExecute={() => console.log("Run triggered")} />
+              <ExecutionWorkspace state={state} setState={setState} onExecute={async (recipeJson: string) => {
+                try {
+                  const resp = await fetch("/api/olive/run", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ recipeJson }),
+                  });
+                  if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+                    console.error("Olive run failed:", err.error);
+                    return;
+                  }
+                  const data = await resp.json();
+                  setState({ activeJobId: data.jobId });
+                } catch (err: any) {
+                  console.error("Failed to start Olive run:", err.message);
+                }
+              }} />
             </section>
 
             <section id="batch" className="pt-2">

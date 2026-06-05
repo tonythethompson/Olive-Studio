@@ -61,6 +61,7 @@ export function InputEnvironmentPanel({
   setState: (s: Partial<UIState>) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const chunkFilesRef = useRef<Map<string, File>>(new Map());
   const [isReconstructing, setIsReconstructing] = useState(false);
   const [reconstructProgress, setReconstructProgress] = useState(0);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
@@ -68,6 +69,8 @@ export function InputEnvironmentPanel({
   const [reconstructedHistory, setReconstructedHistory] = useState<
     ReconstructedItem[]
   >([]);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [downloadName, setDownloadName] = useState<string | null>(null);
 
   // States for the Olive Recipe Hub
   const [recipeSearch, setRecipeSearch] = useState("");
@@ -197,19 +200,18 @@ export function InputEnvironmentPanel({
     return matchesSearch && matchesArch && matchesDev;
   });
 
-  // Metadata generation functions for the preview panel
-  const generateFileHash = (name: string, size: number) => {
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = (hash << 5) - hash + name.charCodeAt(i);
-      hash |= 0;
+  // Helper to get hash from reconstructed history (or a placeholder for local files)
+  const getDisplayHash = (name: string) => {
+    // Check reconstructed history for real hash
+    const recon = reconstructedHistory.find((r) => r.baseName === name);
+    if (recon) return recon.finalHash;
+    // Check chunk hashes within reconstructed history
+    for (const r of reconstructedHistory) {
+      const chunk = r.chunks.find((c) => c.name === name);
+      if (chunk) return chunk.hash;
     }
-    hash = Math.abs(hash + size);
-    const hashStr =
-      hash.toString(16).padEnd(8, "4") +
-      (size * 17).toString(16).padEnd(12, "a") +
-      "c7e9f";
-    return `sha256:${hashStr.slice(0, 32)}`;
+    // For non-reconstructed local files, return a placeholder indicating no hash computed
+    return `sha256:(not yet computed — reconstruct to get real hash)`;
   };
 
   const getFileFormatLabel = (name: string) => {
@@ -304,13 +306,20 @@ export function InputEnvironmentPanel({
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files).map((f: File) => ({
+      const newFiles = Array.from(e.target.files);
+
+      // Store actual File objects for reconstruction
+      for (const f of newFiles) {
+        chunkFilesRef.current.set(f.name, f);
+      }
+
+      const newFileMetas = newFiles.map((f: File) => ({
         name: f.name,
         size: f.size,
       }));
       // Append to existing, avoid duplicates by name
       const existingNames = new Set(state.localFiles.map((f) => f.name));
-      const filteredNew = newFiles.filter((f) => !existingNames.has(f.name));
+      const filteredNew = newFileMetas.filter((f) => !existingNames.has(f.name));
 
       const combined = [...state.localFiles, ...filteredNew].sort((a, b) =>
         a.name.localeCompare(b.name),
@@ -360,59 +369,87 @@ export function InputEnvironmentPanel({
     return Object.entries(groups).filter(([base, files]) => files.length > 0);
   };
 
-  const startReconstruction = (
+  const startReconstruction = async (
     baseName: string,
     files: { name: string; size: number }[],
   ) => {
     setIsReconstructing(true);
     setReconstructProgress(0);
+    // Clear any previous download
+    if (downloadUrl) {
+      URL.revokeObjectURL(downloadUrl);
+      setDownloadUrl(null);
+      setDownloadName(null);
+    }
 
-    // Simulate the assembly of chunked files
-    let p = 0;
-    const interval = setInterval(() => {
-      p += Math.floor(Math.random() * 15) + 5;
-      if (p >= 100) {
-        p = 100;
-        clearInterval(interval);
-        setTimeout(() => {
-          setIsReconstructing(false);
-          setReconstructProgress(0);
+    try {
+      // Sort chunks by numeric suffix
+      const sortedFiles = [...files].sort((a, b) => {
+        const numA = parseInt(a.name.match(/(\d+)$/)?.[1] || "0");
+        const numB = parseInt(b.name.match(/(\d+)$/)?.[1] || "0");
+        return numA - numB;
+      });
 
-          // Remove original chunk files and add assembled file
-          const chunkNames = new Set(files.map((f) => f.name));
-          const newLocalFiles = state.localFiles.filter(
-            (f) => !chunkNames.has(f.name),
-          );
-          const totalSize = files.reduce((acc, f) => acc + f.size, 0);
+      const totalBytes = sortedFiles.reduce((acc, f) => acc + f.size, 0);
+      let bytesRead = 0;
+      const buffers: ArrayBuffer[] = [];
 
-          // Log to reconstruction history with full metadata for lineage list
-          const generatedChunks = files.map((file) => ({
-            name: file.name,
-            size: file.size,
-            hash: generateFileHash(file.name, file.size),
-          }));
-
-          const finalHash = generateFileHash(baseName, totalSize);
-
-          setReconstructedHistory((prev) => [
-            ...prev,
-            {
-              baseName,
-              totalSize,
-              finalHash,
-              chunks: generatedChunks,
-              reconstructedAt: new Date().toISOString(),
-            },
-          ]);
-
-          setState({
-            localFiles: [...newLocalFiles, { name: baseName, size: totalSize }],
-          });
-          setSelectedFileName(baseName);
-        }, 500);
+      for (const fileMeta of sortedFiles) {
+        const fileObj = chunkFilesRef.current.get(fileMeta.name);
+        if (!fileObj) {
+          throw new Error(`File object not found for chunk: ${fileMeta.name}. Please re-select the files.`);
+        }
+        const buffer = await fileObj.arrayBuffer();
+        buffers.push(buffer);
+        bytesRead += buffer.byteLength;
+        setReconstructProgress(Math.round((bytesRead / totalBytes) * 100));
       }
-      setReconstructProgress(p);
-    }, 150);
+
+      // Concatenate all ArrayBuffers into one Blob
+      const blob = new Blob(buffers);
+      const url = URL.createObjectURL(blob);
+      setDownloadUrl(url);
+      setDownloadName(baseName);
+
+      // Compute real SHA-256 hash using Web Crypto API
+      const combined = await blob.arrayBuffer();
+      const hashBuffer = await crypto.subtle.digest("SHA-256", combined);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+      const finalHash = `sha256:${hashHex}`;
+
+      // Build chunk metadata with real sizes
+      const generatedChunks = sortedFiles.map((file) => ({
+        name: file.name,
+        size: file.size,
+        hash: `sha256:chunk-${file.name}`,
+      }));
+
+      setReconstructedHistory((prev) => [
+        ...prev,
+        {
+          baseName,
+          totalSize: blob.size,
+          finalHash,
+          chunks: generatedChunks,
+          reconstructedAt: new Date().toISOString(),
+        },
+      ]);
+
+      // Remove original chunk files from localFiles and add assembled file
+      const chunkNames = new Set(files.map((f) => f.name));
+      const newLocalFiles = state.localFiles.filter((f) => !chunkNames.has(f.name));
+      setState({
+        localFiles: [...newLocalFiles, { name: baseName, size: blob.size }],
+      });
+      setSelectedFileName(baseName);
+    } catch (err: any) {
+      console.error("Reconstruction failed:", err);
+      alert(`Reconstruction failed: ${err.message}`);
+    } finally {
+      setIsReconstructing(false);
+      setReconstructProgress(0);
+    }
   };
 
   const activeFileSelectedName =
@@ -1033,21 +1070,33 @@ export function InputEnvironmentPanel({
                             ).
                           </p>
                         </div>
-                        <Button
-                          variant="outline"
-                          className="border-electric-blue/50 text-electric-blue hover:bg-electric-blue hover:text-white"
-                          onClick={() => startReconstruction(base, files)}
-                          disabled={isReconstructing}
-                        >
-                          {isReconstructing ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />{" "}
-                              Assembling...
-                            </>
-                          ) : (
-                            "Reconstruct Binary"
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                          <Button
+                            variant="outline"
+                            className="border-electric-blue/50 text-electric-blue hover:bg-electric-blue hover:text-white"
+                            onClick={() => startReconstruction(base, files)}
+                            disabled={isReconstructing}
+                          >
+                            {isReconstructing ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />{" "}
+                                Assembling...
+                              </>
+                            ) : (
+                              "Reconstruct Binary"
+                            )}
+                          </Button>
+                          {downloadUrl && downloadName && (
+                            <a
+                              href={downloadUrl}
+                              download={downloadName}
+                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded text-xs text-emerald-400 font-semibold transition-all"
+                            >
+                              <DownloadCloud className="h-3.5 w-3.5" />
+                              Download {downloadName}
+                            </a>
                           )}
-                        </Button>
+                        </div>
                       </div>
 
                       {isReconstructing && (
@@ -1215,16 +1264,16 @@ export function InputEnvironmentPanel({
                                   <div className="flex items-center gap-1.5 mt-0.5">
                                     <span
                                       className="text-[11px] font-semibold font-mono text-emerald-400 bg-emerald-500/5 px-1.5 py-0.5 border border-emerald-500/10 rounded truncate max-w-[170px]"
-                                      title={generateFileHash(selectedFileDetailed.name, selectedFileDetailed.size)}
+                                      title={getDisplayHash(selectedFileDetailed.name)}
                                     >
-                                      {generateFileHash(selectedFileDetailed.name, selectedFileDetailed.size).substring(0, 24)}...
+                                      {getDisplayHash(selectedFileDetailed.name).substring(0, 24)}...
                                     </span>
                                     <button
                                       type="button"
-                                      onClick={() => handleCopyHash(generateFileHash(selectedFileDetailed.name, selectedFileDetailed.size))}
+                                      onClick={() => handleCopyHash(getDisplayHash(selectedFileDetailed.name))}
                                       className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-900 transition-colors cursor-pointer"
                                     >
-                                      {copiedHash === generateFileHash(selectedFileDetailed.name, selectedFileDetailed.size) ? (
+                                      {copiedHash === getDisplayHash(selectedFileDetailed.name) ? (
                                         <Check className="h-3.5 w-3.5 text-emerald-400" />
                                       ) : (
                                         <Copy className="h-3.5 w-3.5" />

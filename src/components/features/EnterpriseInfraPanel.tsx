@@ -41,9 +41,14 @@ export function EnterpriseInfraPanel({ state, setState }: { state: UIState; setS
              <div className="flex items-center justify-between">
                 <div>
                    <Label>Enable Distributed Caching</Label>
-                   <p className="text-xs text-slate-500">Pull artifacts from the remote Azure Cache before running passes locally.</p>
+                   <p className="text-xs text-slate-500">
+                     When enabled, the Olive recipe will use Azure Blob storage as cache if a connection string is provided; otherwise falls back to local cache.
+                   </p>
                 </div>
-                <Switch defaultChecked />
+                <Switch
+                  checked={state.distributedCaching}
+                  onCheckedChange={(checked) => setState({ distributedCaching: checked })}
+                />
              </div>
           </div>
         </CardContent>

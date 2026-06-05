@@ -3,28 +3,272 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import { spawn, execFile } from "child_process";
+import { promisify } from "util";
+import fs from "fs";
+import os from "os";
+import { v4 as uuidv4 } from "uuid";
 
 dotenv.config();
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 const PORT = 3000;
+const VENV_DIR = path.join(process.cwd(), ".venv");
+const execFileAsync = promisify(execFile);
 
-// Initialize Gemini Client
+// ─── Gemini Client ────────────────────────────────────────────────────────────
 const apiKey = process.env.GEMINI_API_KEY;
 const ai = apiKey
   ? new GoogleGenAI({
       apiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
-      },
+      httpOptions: { headers: { "User-Agent": "aistudio-build" } },
     })
   : null;
 
-// API routes FIRST
+// ─── Olive Job Registry ───────────────────────────────────────────────────────
+interface OliveJob {
+  id: string;
+  status: "setting_up" | "running" | "completed" | "failed";
+  exitCode: number | null;
+  logs: string[];
+  // SSE subscriber queues: each subscriber is a function that receives new log lines
+  subscribers: Array<(line: string) => void>;
+  process: ReturnType<typeof spawn> | null;
+}
+
+const jobRegistry = new Map<string, OliveJob>();
+
+function pushLog(job: OliveJob, line: string) {
+  job.logs.push(line);
+  for (const sub of job.subscribers) {
+    try { sub(line); } catch { /* subscriber gone */ }
+  }
+}
+
+// ─── Python / venv Helpers ────────────────────────────────────────────────────
+
+/** Returns the path to python inside the venv, or null if not resolvable */
+function getVenvPython(): string {
+  return process.platform === "win32"
+    ? path.join(VENV_DIR, "Scripts", "python.exe")
+    : path.join(VENV_DIR, "bin", "python");
+}
+
+function getVenvPip(): string {
+  return process.platform === "win32"
+    ? path.join(VENV_DIR, "Scripts", "pip.exe")
+    : path.join(VENV_DIR, "bin", "pip");
+}
+
+/** Check whether python/python3 is available on PATH */
+async function findSystemPython(): Promise<string | null> {
+  for (const cmd of ["python", "python3"]) {
+    try {
+      await execFileAsync(cmd, ["--version"]);
+      return cmd;
+    } catch { /* not found */ }
+  }
+  return null;
+}
+
+/**
+ * Ensures the .venv exists and olive-ai is installed.
+ * Streams progress lines through the provided callback.
+ */
+async function ensureVenv(onLine: (line: string) => void): Promise<{ ok: boolean; error?: string }> {
+  const systemPython = await findSystemPython();
+  if (!systemPython) {
+    return {
+      ok: false,
+      error: "Python not found on PATH. Install Python 3.9+ to use Olive execution.",
+    };
+  }
+
+  // Create venv if missing
+  if (!fs.existsSync(VENV_DIR)) {
+    onLine("[setup] Creating Python virtual environment (.venv)...");
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn(systemPython, ["-m", "venv", VENV_DIR], { stdio: "pipe" });
+      proc.stdout.on("data", (d) => onLine("[setup] " + d.toString().trim()));
+      proc.stderr.on("data", (d) => onLine("[setup] " + d.toString().trim()));
+      proc.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`venv creation failed (exit ${code})`))));
+    });
+    onLine("[setup] Virtual environment created.");
+  }
+
+  // Check if olive is installed
+  const venvPython = getVenvPython();
+  let oliveInstalled = false;
+  try {
+    await execFileAsync(venvPython, ["-c", "import olive"]);
+    oliveInstalled = true;
+  } catch { /* not installed */ }
+
+  if (!oliveInstalled) {
+    onLine("[setup] Installing olive-ai (this may take a few minutes)...");
+    await new Promise<void>((resolve, reject) => {
+      const pip = spawn(getVenvPip(), ["install", "olive-ai"], { stdio: "pipe" });
+      pip.stdout.on("data", (d) => onLine("[setup] " + d.toString().trim()));
+      pip.stderr.on("data", (d) => onLine("[setup] " + d.toString().trim()));
+      pip.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`pip install failed (exit ${code})`))));
+    });
+    onLine("[setup] olive-ai installed successfully.");
+  }
+
+  return { ok: true };
+}
+
+// ─── POST /api/olive/run ──────────────────────────────────────────────────────
+app.post("/api/olive/run", async (req, res) => {
+  const { recipeJson } = req.body as { recipeJson?: string };
+  if (!recipeJson) {
+    return res.status(400).json({ error: "Missing recipeJson in request body." });
+  }
+
+  const jobId = uuidv4();
+  const job: OliveJob = {
+    id: jobId,
+    status: "setting_up",
+    exitCode: null,
+    logs: [],
+    subscribers: [],
+    process: null,
+  };
+  jobRegistry.set(jobId, job);
+
+  // Return job ID immediately so the client can open SSE
+  res.json({ jobId });
+
+  // Run setup + execution asynchronously
+  (async () => {
+    const setupResult = await ensureVenv((line) => pushLog(job, line)).catch((err) => ({
+      ok: false,
+      error: String(err.message),
+    }));
+
+    if (!setupResult.ok) {
+      pushLog(job, `[error] ${setupResult.error}`);
+      job.status = "failed";
+      job.exitCode = 1;
+      return;
+    }
+
+    // Write recipe to a temp file
+    const tmpFile = path.join(os.tmpdir(), `olive_recipe_${jobId}.json`);
+    fs.writeFileSync(tmpFile, recipeJson, "utf-8");
+    pushLog(job, `[info] Recipe written to ${tmpFile}`);
+    pushLog(job, `[info] Starting Olive optimization run...`);
+
+    job.status = "running";
+    const venvPython = getVenvPython();
+    const proc = spawn(venvPython, ["-m", "olive", "run", "--config", tmpFile], {
+      stdio: "pipe",
+      env: { ...process.env },
+    });
+    job.process = proc;
+
+    proc.stdout.on("data", (data: Buffer) => {
+      const lines = data.toString().split(/\r?\n/).filter(Boolean);
+      lines.forEach((line) => pushLog(job, line));
+    });
+    proc.stderr.on("data", (data: Buffer) => {
+      const lines = data.toString().split(/\r?\n/).filter(Boolean);
+      lines.forEach((line) => pushLog(job, `[stderr] ${line}`));
+    });
+
+    proc.on("close", (code) => {
+      job.exitCode = code;
+      job.status = code === 0 ? "completed" : "failed";
+      pushLog(job, `[done] Olive process exited with code ${code}.`);
+      // Cleanup temp file
+      try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
+      // Signal end to all subscribers
+      for (const sub of job.subscribers) {
+        try { sub("__DONE__"); } catch { /* gone */ }
+      }
+    });
+
+    proc.on("error", (err) => {
+      pushLog(job, `[error] Failed to start Olive process: ${err.message}`);
+      job.status = "failed";
+      job.exitCode = 1;
+      for (const sub of job.subscribers) {
+        try { sub("__DONE__"); } catch { /* gone */ }
+      }
+    });
+  })();
+});
+
+// ─── GET /api/olive/stream/:jobId (SSE) ──────────────────────────────────────
+app.get("/api/olive/stream/:jobId", (req, res) => {
+  const job = jobRegistry.get(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({ error: "Job not found." });
+  }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  const send = (line: string) => {
+    if (line === "__DONE__") {
+      res.write("event: done\ndata: {}\n\n");
+      res.end();
+    } else {
+      res.write(`data: ${JSON.stringify({ line })}\n\n`);
+    }
+  };
+
+  // Replay existing logs
+  for (const line of job.logs) {
+    res.write(`data: ${JSON.stringify({ line })}\n\n`);
+  }
+
+  // If already finished, send done immediately
+  if (job.status === "completed" || job.status === "failed") {
+    res.write("event: done\ndata: {}\n\n");
+    res.end();
+    return;
+  }
+
+  // Subscribe to new lines
+  job.subscribers.push(send);
+
+  req.on("close", () => {
+    const idx = job.subscribers.indexOf(send);
+    if (idx !== -1) job.subscribers.splice(idx, 1);
+  });
+});
+
+// ─── GET /api/olive/status/:jobId ─────────────────────────────────────────────
+app.get("/api/olive/status/:jobId", (req, res) => {
+  const job = jobRegistry.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: "Job not found." });
+  res.json({
+    jobId: job.id,
+    status: job.status,
+    exitCode: job.exitCode,
+    logCount: job.logs.length,
+  });
+});
+
+// ─── DELETE /api/olive/cancel/:jobId ──────────────────────────────────────────
+app.delete("/api/olive/cancel/:jobId", (req, res) => {
+  const job = jobRegistry.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: "Job not found." });
+  if (job.process && job.status === "running") {
+    job.process.kill("SIGTERM");
+    job.status = "failed";
+    job.exitCode = -1;
+    pushLog(job, "[info] Job cancelled by user.");
+  }
+  res.json({ ok: true });
+});
+
+// ─── POST /api/gemini/validate ────────────────────────────────────────────────
 app.post("/api/gemini/validate", async (req, res) => {
   if (!ai) {
     return res.status(500).json({
@@ -45,7 +289,7 @@ Recipe JSON:
 ${recipeJson}`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.0-flash",
       contents: prompt,
       config: {
         systemInstruction: "You are an expert MS Olive compiler engineer. Output strict valid structural feedback matching the requested schema. Be constructive and specific.",
@@ -92,6 +336,7 @@ ${recipeJson}`;
   }
 });
 
+// ─── POST /api/gemini/analyze-state ──────────────────────────────────────────
 app.post("/api/gemini/analyze-state", async (req, res) => {
   if (!ai) {
     return res.status(500).json({
@@ -111,10 +356,10 @@ Current Optimization State:
 ${JSON.stringify(state, null, 2)}`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.0-flash",
       contents: prompt,
       config: {
-        systemInstruction: `You are "Olive Optimization Advisor", a compiler hardware hardware co-design expert.
+        systemInstruction: `You are "Olive Optimization Advisor", a compiler hardware co-design expert.
 Your goal is to inspect the optimization choices (conversion, quantization, pruning, PEFT fine-tuning, transformer optimizations) and the target Hardware, and provide a set of actionable advice.
 Output valid JSON adhering to this schema:
 {
@@ -179,6 +424,7 @@ Output valid JSON adhering to this schema:
   }
 });
 
+// ─── POST /api/gemini/chat ────────────────────────────────────────────────────
 app.post("/api/gemini/chat", async (req, res) => {
   if (!ai) {
     return res.status(500).json({
@@ -205,14 +451,12 @@ Current recipe configuration JSON:
 ${recipeJson || "No active recipe selected."}`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.0-flash",
       contents: [
         ...formattedHistory,
         { role: "user", parts: [{ text: message }] }
       ],
-      config: {
-        systemInstruction,
-      }
+      config: { systemInstruction }
     });
 
     const text = response.text || "I was unable to formulate a response.";
@@ -225,7 +469,7 @@ ${recipeJson || "No active recipe selected."}`;
   }
 });
 
-// Serve static assets or vite middleware & start
+// ─── Vite / Static ────────────────────────────────────────────────────────────
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -236,12 +480,11 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  // Ensure the dev server runs on 0.0.0.0 and port 3000
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });

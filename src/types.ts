@@ -39,9 +39,15 @@ export interface BatchJob {
   modelIdentifier: string;
   provider: IHVProvider;
   passes: string[];
+  /** recipe JSON string used to launch this job */
+  recipeJson?: string;
   status: "queued" | "running" | "completed" | "failed";
   progress: number;
+  /** null = indeterminate progress */
+  progressKnown: boolean;
   logs: string[];
+  /** olive backend job ID once started */
+  oliveJobId?: string;
   metrics?: {
     latency: string;
     throughput: string;
@@ -60,7 +66,10 @@ export interface UIState {
   ihvProvider: IHVProvider;
   cacheDir: string;
   azureStr: string;
+  distributedCaching: boolean;
   batchJobs?: BatchJob[];
+  /** Active olive job ID for the Execute Live button */
+  activeJobId?: string | null;
   passes: {
     conversion: boolean;
     conversionSourceFormat: "pytorch" | "tensorflow" | "jax";

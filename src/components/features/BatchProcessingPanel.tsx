@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, Button, Label, Input, Select, Switch } from "@/components/ui";
 import { UIState, BatchJob, IHVProvider, ModelSource } from "@/types";
 import { 
@@ -22,8 +22,11 @@ import {
 } from "lucide-react";
 
 export function BatchProcessingPanel({ state, setState }: { state: UIState; setState: (s: Partial<UIState>) => void }) {
-  const [selectedJobId, setSelectedJobId] = useState<string | null>("job-2");
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const activeSourcesRef = useRef<EventSource[]>([]);
+  // Always keep a ref to the latest jobs array so SSE callbacks can read current state
+  const jobsRef = useRef<typeof state.batchJobs>(state.batchJobs || []);
   const [showAddForm, setShowAddForm] = useState(false);
   
   // Custom job creation states
@@ -38,138 +41,185 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
   const [passPruning, setPassPruning] = useState(false);
   const [passTransformer, setPassTransformer] = useState(false);
 
-  // Initialize batchJobs in global state if not present
+  // Keep jobsRef in sync with the latest batchJobs so SSE async callbacks can read current state
   useEffect(() => {
-    if (!state.batchJobs) {
-      const initialBatchJobs: BatchJob[] = [
-        {
-          id: "job-1",
-          name: "Llama-3-8B PTQ Quantization Strategy",
-          modelSource: "huggingface",
-          modelIdentifier: "meta-llama/Meta-Llama-3-8B",
-          provider: "CUDAExecutionProvider",
-          passes: ["Model Conversion", "OnnxQuantization (4-bit Dynamic)"],
-          status: "completed",
-          progress: 100,
-          logs: [
-            "[10:30:12] Initializing Olive pipeline for CUDAExecutionProvider...",
-            "[10:30:15] Loaded Hugging Face model metadata for meta-llama/Meta-Llama-3-8B.",
-            "[10:30:20] Executing pass: Model Conversion...",
-            "[10:31:05] Model Conversion succeeded. Output size: 15.6 GB.",
-            "[10:31:10] Executing pass: OnnxQuantization (4-bit AWQ)...",
-            "[10:32:45] Calibration completed on 512 tokens.",
-            "[10:33:12] Quantization completed. Original weights dense fp16 -> quantized int4.",
-            "[10:33:15] Pipeline completed successfully. Output workspace: ./outputs/llama-3-8b-int4/"
-          ],
-          metrics: {
-            latency: "14.2 ms",
-            throughput: "70.4 tok/s",
-            memory: "4.8 GB",
-            compression: "3.25x"
-          }
-        },
-        {
-          id: "job-2",
-          name: "Whisper-Large-V3 CPU Int8 Optimization",
-          modelSource: "huggingface",
-          modelIdentifier: "openai/whisper-large-v3",
-          provider: "CPUExecutionProvider",
-          passes: ["Model Conversion", "OnnxQuantization (8-bit)", "OrtTransformersOptimization"],
-          status: "running",
-          progress: 45,
-          logs: [
-            "[10:35:01] Initializing CPU-optimized container pipeline...",
-            "[10:35:05] Loading model model weights from offline HF Hub cache...",
-            "[10:35:12] Model loaded. Starting standard OnnxConversion to target Opset 14...",
-            "[10:35:50] Conversion passed correctly. Size matches baseline expectations (3.1 GB).",
-            "[10:35:54] Executing OrtTransformersOptimization for custom multihead attention fusing...",
-            "[10:36:10] Transformer Attention fusion applied. Optimized graph contains 14 fusions.",
-            "[10:36:12] Entering OnnxQuantization (Int8 PTQ)..."
-          ]
-        },
-        {
-          id: "job-3",
-          name: "Stable Diffusion UNet TensorRT FP16 Pass",
-          modelSource: "local",
-          modelIdentifier: "unet_sd15_subfolder",
-          provider: "TensorrtExecutionProvider",
-          passes: ["Model Conversion", "TensorRTOptimization"],
-          status: "queued",
-          progress: 0,
-          logs: [
-            "Job queued. Awaiting serial pipeline executor thread trigger..."
-          ]
-        }
-      ];
-      setState({ batchJobs: initialBatchJobs });
-    }
+    jobsRef.current = state.batchJobs || [];
   }, [state.batchJobs]);
 
   const jobs = state.batchJobs || [];
 
-  // Sequential execution simulator trigger
-  useEffect(() => {
-    let interval: any = null;
+  const handleStartQueue = async () => {
     if (isProcessing) {
-      interval = setInterval(() => {
-        // Find the first job that is running or queued
-        const currentActiveIndex = jobs.findIndex(j => j.status === "running");
-        
-        if (currentActiveIndex !== -1) {
-          const currentJob = jobs[currentActiveIndex];
-          const newProgress = Math.min(currentJob.progress + 5, 100);
-          
-          let updatedLogs = [...currentJob.logs];
-          if (newProgress === 60 && currentJob.passes.includes("OnnxQuantization (8-bit)")) {
-            updatedLogs.push(`[${new Date().toLocaleTimeString()}] ONNX Quantization PTQ layer calibration...`);
-          } else if (newProgress === 80) {
-            updatedLogs.push(`[${new Date().toLocaleTimeString()}] Optimizing execution graphs and exporting runtime configurations...`);
-          } else if (newProgress === 100) {
-            updatedLogs.push(`[${new Date().toLocaleTimeString()}] Assembly and validation check passing...`);
-            updatedLogs.push(`[${new Date().toLocaleTimeString()}] Serial run completed. Workspace exported.`);
-          }
-
-          const updatedJob: BatchJob = {
-            ...currentJob,
-            progress: newProgress,
-            logs: updatedLogs,
-            status: newProgress === 100 ? "completed" : "running",
-            metrics: newProgress === 100 ? {
-              latency: currentJob.provider.includes("CUDA") || currentJob.provider.includes("Tensorrt") ? "9.1 ms" : "34.5 ms",
-              throughput: currentJob.provider.includes("CUDA") || currentJob.provider.includes("Tensorrt") ? "105.2 req/s" : "18.1 req/s",
-              memory: "1.2 GB",
-              compression: "4.0x"
-            } : undefined
-          };
-
-          const updatedJobs = [...jobs];
-          updatedJobs[currentActiveIndex] = updatedJob;
-          setState({ batchJobs: updatedJobs });
-        } else {
-          // No active job running, check if there is a queued job we can transition to 'running'
-          const nextQueuedIndex = jobs.findIndex(j => j.status === "queued");
-          if (nextQueuedIndex !== -1) {
-            const updatedJobs = [...jobs];
-            updatedJobs[nextQueuedIndex] = {
-              ...updatedJobs[nextQueuedIndex],
-              status: "running",
-              progress: 5,
-              logs: [
-                `[${new Date().toLocaleTimeString()}] Serial Queue triggered. Initializing Olive workspace...`,
-                `[${new Date().toLocaleTimeString()}] Pulling environment configuration targets...`,
-                `[${new Date().toLocaleTimeString()}] Running passes sequentially: ${updatedJobs[nextQueuedIndex].passes.join(" → ")}`
-              ]
-            };
-            setState({ batchJobs: updatedJobs });
-          } else {
-            // No running or queued jobs remaining, turn off execution simulator
-            setIsProcessing(false);
-          }
-        }
-      }, 1000);
+      // Halt: close all active SSE connections
+      activeSourcesRef.current.forEach(s => s.close());
+      activeSourcesRef.current = [];
+      setIsProcessing(false);
+      return;
     }
-    return () => clearInterval(interval);
-  }, [isProcessing, jobs]);
+
+    const queuedJobs = (state.batchJobs || []).filter(j => j.status === "queued");
+    if (queuedJobs.length === 0) return;
+
+    setIsProcessing(true);
+
+    // Process jobs sequentially
+    for (const job of queuedJobs) {
+      // Build recipe JSON for this job
+      const recipe: any = {
+        input_model: {
+          type: "PyTorchModel",
+          config: job.modelSource === "huggingface"
+            ? { hf_config: { model_name: job.modelIdentifier, task: "auto-detect" } }
+            : { model_path: job.modelIdentifier }
+        },
+        systems: {
+          local_system: {
+            type: "LocalSystem",
+            config: { accelerators: [job.provider] }
+          }
+        },
+        passes: {} as Record<string, any>,
+        engine: {
+          search_strategy: { execution_order: "serial" },
+          host: "local_system",
+          target: "local_system",
+          cache_dir: "~/.cache/olive",
+          output_dir: "./models/optimized"
+        }
+      };
+
+      // Add passes based on job.passes array
+      if (job.passes.some(p => p.toLowerCase().includes("conv"))) {
+        recipe.passes.conversion = { type: "OnnxConversion", config: { target_opset: 14 } };
+      }
+      if (job.passes.some(p => p.toLowerCase().includes("quant"))) {
+        recipe.passes.quantization = { type: "OnnxQuantization", config: { weight_type: "int8" } };
+      }
+      if (job.passes.some(p => p.toLowerCase().includes("prun"))) {
+        recipe.passes.pruning = { type: "Prune", config: { sparsity: 0.5 } };
+      }
+      if (job.passes.some(p => p.toLowerCase().includes("transform") || p.toLowerCase().includes("fusion"))) {
+        recipe.passes.transformer_opt = { type: "OrtTransformersOptimization", config: { model_type: "gpt2" } };
+      }
+
+      // Mark job as running
+      setState({
+        batchJobs: (jobsRef.current).map(j =>
+          j.id === job.id ? { ...j, status: "running", progress: -1, logs: ["[INFO] Starting Olive run..."] } : j
+        )
+      });
+
+      // POST to /api/olive/run
+      let jobId: string;
+      try {
+        const resp = await fetch("/api/olive/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ recipeJson: JSON.stringify(recipe, null, 2) })
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+          setState({
+            batchJobs: (jobsRef.current).map(j =>
+              j.id === job.id ? { ...j, status: "failed", logs: [...(j.logs || []), `[ERROR] ${err.error}`] } : j
+            )
+          });
+          continue;
+        }
+        const data = await resp.json();
+        jobId = data.jobId;
+      } catch (err: any) {
+        setState({
+          batchJobs: (jobsRef.current).map(j =>
+            j.id === job.id ? { ...j, status: "failed", logs: [...(j.logs || []), `[ERROR] ${err.message}`] } : j
+          )
+        });
+        continue;
+      }
+
+      // Open SSE stream and wait for completion
+      await new Promise<void>((resolve) => {
+        const evtSource = new EventSource(`/api/olive/stream/${jobId}`);
+        activeSourcesRef.current.push(evtSource);
+
+        // Helper: try to extract a 0-100 progress percentage from a log line.
+        // Returns the parsed number if found, otherwise -1 (indeterminate).
+        const parseProgress = (line: string): number => {
+          const lower = line.toLowerCase();
+          if (lower.includes("pass") || lower.includes("step") || lower.includes("%")) {
+            // Try to extract an explicit percentage, e.g. "45%" or "45 %"
+            const match = line.match(/(\d+(?:\.\d+)?)\s*%/);
+            if (match) {
+              const pct = parseFloat(match[1]);
+              if (!isNaN(pct)) return Math.min(Math.max(Math.round(pct), 0), 100);
+            }
+            // Progress-related line but no explicit %; keep indeterminate
+            return -1;
+          }
+          return -1;
+        };
+
+        // Handle named 'log' SSE events from Olive
+        evtSource.addEventListener("log", (e: MessageEvent) => {
+          const line: string = e.data;
+          const parsedPct = parseProgress(line);
+          const currentJobs = jobsRef.current;
+          setState({
+            batchJobs: currentJobs.map(j =>
+              j.id === job.id
+                ? {
+                    ...j,
+                    logs: [...j.logs, line],
+                    // Use explicit percentage if available; otherwise keep existing
+                    // progress (or -1 if not yet set)
+                    progress: parsedPct >= 0 ? parsedPct : (j.progress >= 0 ? j.progress : -1)
+                  }
+                : j
+            )
+          });
+        });
+
+        // Handle named 'done' SSE event with {exitCode: N}
+        evtSource.addEventListener("done", (e: MessageEvent) => {
+          let exitCode = 1;
+          try {
+            const payload = JSON.parse(e.data);
+            exitCode = typeof payload.exitCode === "number" ? payload.exitCode : 1;
+          } catch {
+            exitCode = 1;
+          }
+          const finalStatus = exitCode === 0 ? "completed" : "failed";
+          const currentJobs = jobsRef.current;
+          setState({
+            batchJobs: currentJobs.map(j =>
+              j.id === job.id
+                ? { ...j, status: finalStatus, progress: finalStatus === "completed" ? 100 : j.progress }
+                : j
+            )
+          });
+          evtSource.close();
+          const idx = activeSourcesRef.current.indexOf(evtSource);
+          if (idx !== -1) activeSourcesRef.current.splice(idx, 1);
+          resolve();
+        });
+
+        evtSource.onerror = () => {
+          const currentJobs = jobsRef.current;
+          setState({
+            batchJobs: currentJobs.map(j =>
+              j.id === job.id
+                ? { ...j, status: "failed", logs: [...j.logs, "[ERROR] SSE connection lost."] }
+                : j
+            )
+          });
+          evtSource.close();
+          resolve();
+        };
+      });
+    }
+
+    setIsProcessing(false);
+  };
 
   // Queue current dashboard configuration
   const handleQueueCurrent = () => {
@@ -299,13 +349,13 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
 
                 <div className="flex items-center gap-2">
                   <Button 
-                    variant={isProcessing ? "outline" : "default"} 
-                    className="h-8 text-xs font-semibold px-4" 
-                    onClick={() => setIsProcessing(!isProcessing)}
-                    disabled={counts.queued === 0 && counts.running === 0 && !isProcessing}
-                  >
-                     {isProcessing ? <><Pause className="h-3.5 w-3.5 mr-1" /> Halt Serial Engine</> : <><Play className="h-3.5 w-3.5 mr-1 text-emerald-400 fill-emerald-400" /> Start Queue</>}
-                  </Button>
+                     variant={isProcessing ? "outline" : "default"} 
+                     className="h-8 text-xs font-semibold px-4" 
+                     onClick={handleStartQueue}
+                     disabled={counts.queued === 0 && counts.running === 0 && !isProcessing}
+                   >
+                      {isProcessing ? <><Pause className="h-3.5 w-3.5 mr-1" /> Halt Serial Engine</> : <><Play className="h-3.5 w-3.5 mr-1 text-emerald-400 fill-emerald-400" /> Start Queue</>}
+                   </Button>
                   <Button variant="outline" className="h-8 p-2" title="Reset all statuses to Queued" onClick={handleResetQueue}>
                      <RotateCcw className="h-3.5 w-3.5 text-slate-400" />
                   </Button>
@@ -449,14 +499,25 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
                        </div>
 
                        <div className="flex items-center justify-between sm:justify-end gap-4 mt-4 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-0 border-slate-900 shrink-0">
-                          {job.status === "running" && (
-                            <div className="flex flex-col items-end gap-1.5 w-24">
-                              <span className="text-[10px] font-mono text-electric-blue">{job.progress}%</span>
-                              <div className="h-1 w-full bg-slate-950 rounded-full overflow-hidden">
-                                <div className="h-full bg-electric-blue transition-all duration-300" style={{ width: `${job.progress}%` }} />
-                              </div>
-                            </div>
-                          )}
+                           {job.status === "running" && (
+                             <div className="flex flex-col items-end gap-1.5 w-24">
+                               {job.progress >= 0 ? (
+                                 <>
+                                   <span className="text-[10px] font-mono text-electric-blue">{job.progress}%</span>
+                                   <div className="h-1 w-full bg-slate-950 rounded-full overflow-hidden">
+                                     <div className="h-full bg-electric-blue transition-all duration-300" style={{ width: `${job.progress}%` }} />
+                                   </div>
+                                 </>
+                               ) : (
+                                 <>
+                                   <span className="text-[10px] font-mono text-electric-blue">running…</span>
+                                   <div className="h-1 w-full bg-slate-950 rounded-full overflow-hidden">
+                                     <div className="h-full bg-electric-blue animate-pulse" style={{ width: "40%" }} />
+                                   </div>
+                                 </>
+                               )}
+                             </div>
+                           )}
 
                           {job.status === "completed" && job.metrics && (
                             <div className="text-right text-xs bg-emerald-500/5 px-2.5 py-1.5 rounded-md border border-emerald-500/10">
@@ -509,34 +570,41 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
                      </div>
                   </div>
 
-                  {/* Benchmark targets summary */}
-                  {selectedJob.status === "completed" && selectedJob.metrics ? (
-                    <div className="grid grid-cols-2 gap-2.5 animate-in fade-in">
-                       <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
-                          <span className="text-slate-500 text-[10px] block uppercase font-bold font-mono">Latency</span>
-                          <span className="text-base font-bold text-slate-200 block mt-0.5 font-mono">{selectedJob.metrics.latency}</span>
-                       </div>
-                       <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
-                          <span className="text-slate-500 text-[10px] block uppercase font-bold font-mono">Throughput</span>
-                          <span className="text-base font-bold text-emerald-400 block mt-0.5 font-mono">{selectedJob.metrics.throughput}</span>
-                       </div>
-                       <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
-                          <span className="text-slate-500 text-[10px] block uppercase font-bold font-mono font-mono">VRAM Size</span>
-                          <span className="text-base font-bold text-purple-400 block mt-0.5 font-mono">{selectedJob.metrics.memory}</span>
-                       </div>
-                       <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center font-mono">
-                          <span className="text-slate-500 text-[10px] block uppercase font-bold">Compression</span>
-                          <span className="text-base font-bold text-electric-blue block mt-0.5 font-mono">{selectedJob.metrics.compression}</span>
-                       </div>
-                    </div>
-                  ) : selectedJob.status === "running" ? (
-                    <div className="p-4 rounded-lg bg-electric-blue/5 border border-electric-blue/10 flex items-center justify-between gap-3 text-xs text-electric-blue animate-pulse">
-                       <span className="flex items-center gap-2 font-semibold">
-                          <Play className="h-4 w-4 fill-electric-blue" />
-                          Serial runner active...
-                       </span>
-                       <span className="font-mono">{selectedJob.progress}% complete</span>
-                    </div>
+                  {/* Benchmark targets summary — only shown when Olive actually reports metrics */}
+                   {selectedJob.status === "completed" && selectedJob.metrics ? (
+                     <div className="grid grid-cols-2 gap-2.5 animate-in fade-in">
+                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
+                           <span className="text-slate-500 text-[10px] block uppercase font-bold font-mono">Latency</span>
+                           <span className="text-base font-bold text-slate-200 block mt-0.5 font-mono">{selectedJob.metrics.latency}</span>
+                        </div>
+                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
+                           <span className="text-slate-500 text-[10px] block uppercase font-bold font-mono">Throughput</span>
+                           <span className="text-base font-bold text-emerald-400 block mt-0.5 font-mono">{selectedJob.metrics.throughput}</span>
+                        </div>
+                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
+                           <span className="text-slate-500 text-[10px] block uppercase font-bold font-mono font-mono">VRAM Size</span>
+                           <span className="text-base font-bold text-purple-400 block mt-0.5 font-mono">{selectedJob.metrics.memory}</span>
+                        </div>
+                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center font-mono">
+                           <span className="text-slate-500 text-[10px] block uppercase font-bold">Compression</span>
+                           <span className="text-base font-bold text-electric-blue block mt-0.5 font-mono">{selectedJob.metrics.compression}</span>
+                        </div>
+                     </div>
+                   ) : selectedJob.status === "completed" ? (
+                     <div className="p-4 rounded-lg bg-slate-900 border border-slate-850 flex items-center gap-3 text-xs text-slate-450">
+                        <Sparkles className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <span>Metrics will appear when Olive reports them in output.</span>
+                     </div>
+                   ) : selectedJob.status === "running" ? (
+                     <div className="p-4 rounded-lg bg-electric-blue/5 border border-electric-blue/10 flex items-center justify-between gap-3 text-xs text-electric-blue animate-pulse">
+                        <span className="flex items-center gap-2 font-semibold">
+                           <Play className="h-4 w-4 fill-electric-blue" />
+                           Serial runner active...
+                        </span>
+                        <span className="font-mono">
+                          {selectedJob.progress >= 0 ? `${selectedJob.progress}% complete` : "running…"}
+                        </span>
+                     </div>
                   ) : (
                     <div className="p-4 rounded-lg bg-slate-900 border border-slate-850 flex items-center gap-3 text-xs text-slate-450">
                        <AlertCircle className="h-4.5 w-4.5 text-slate-500 shrink-0" />

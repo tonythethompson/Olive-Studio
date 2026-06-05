@@ -1,99 +1,67 @@
-import { BarChart, Bar, XAxis, YAxis, Tooltip as RTTooltip, ResponsiveContainer, Cell, CartesianGrid } from "recharts";
 import { Card, CardContent, CardHeader } from "@/components/ui";
-import { Zap, Activity, Cpu } from "lucide-react";
+import { Activity } from "lucide-react";
 
-const metrics = [
-  {
-    id: "latency",
-    title: "Latency",
-    icon: Zap,
-    unit: "ms",
-    higherIsBetter: false,
-    data: [
-      { name: "Baseline", value: 45.2, fill: "#64748b" },
-      { name: "Optimized", value: 8.4, fill: "#3b82f6" },
-    ]
-  },
-  {
-    id: "throughput",
-    title: "Throughput",
-    icon: Activity,
-    unit: "req/s",
-    higherIsBetter: true,
-    data: [
-      { name: "Baseline", value: 22, fill: "#64748b" },
-      { name: "Optimized", value: 118, fill: "#10b981" },
-    ]
-  },
-  {
-    id: "memory",
-    title: "Memory",
-    icon: Cpu,
-    unit: "MB",
-    higherIsBetter: false,
-    data: [
-      { name: "Baseline", value: 4800, fill: "#64748b" },
-      { name: "Optimized", value: 1100, fill: "#8b5cf6" },
-    ]
+/**
+ * PerformanceMetrics — intentionally empty until a real Olive run completes.
+ *
+ * The previous implementation rendered static hardcoded bar charts
+ * (e.g. Baseline 45.2 ms → Optimized 8.4 ms) that were completely fabricated
+ * and had no connection to any actual Olive execution result.
+ *
+ * Real metrics (latency, throughput, memory) will be parsed from Olive's stdout
+ * once a job completes and surfaced here. Until then the card shows a
+ * "Run Olive to see metrics" placeholder — no fake data.
+ */
+export function PerformanceMetrics({ logs }: { logs?: string[] }) {
+  // Attempt to parse real metrics from Olive log output
+  const parsedMetrics: { label: string; value: string; color: string }[] = [];
+
+  if (logs && logs.length > 0) {
+    for (const line of logs) {
+      // Match patterns like "latency: 14.2 ms" or "throughput: 70 tok/s"
+      const latencyMatch = line.match(/latency[:\s]+([0-9.]+\s*ms)/i);
+      if (latencyMatch) parsedMetrics.push({ label: "Latency", value: latencyMatch[1], color: "text-electric-blue" });
+
+      const throughputMatch = line.match(/throughput[:\s]+([0-9.]+\s*(?:tok\/s|req\/s|it\/s|samples\/s))/i);
+      if (throughputMatch) parsedMetrics.push({ label: "Throughput", value: throughputMatch[1], color: "text-emerald-400" });
+
+      const memoryMatch = line.match(/(?:memory|vram|footprint)[:\s]+([0-9.]+\s*(?:MB|GB|MiB|GiB))/i);
+      if (memoryMatch) parsedMetrics.push({ label: "Memory", value: memoryMatch[1], color: "text-purple-400" });
+
+      const compressionMatch = line.match(/compression[:\s]+([0-9.]+[x%])/i);
+      if (compressionMatch) parsedMetrics.push({ label: "Compression", value: compressionMatch[1], color: "text-amber-400" });
+    }
   }
-];
 
-export function PerformanceMetrics() {
   return (
     <Card>
-      <CardHeader title="Performance Metrics" description="Estimated Pre- vs Post-Optimization hardware metrics." />
+      <CardHeader
+        title="Performance Metrics"
+        description={parsedMetrics.length > 0 ? "Metrics extracted from the most recent Olive run output." : "Metrics will appear here after a completed Olive optimization run."}
+        badge={<div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-slate-400"><Activity className="h-4 w-4" /></div>}
+      />
       <CardContent>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
-          {metrics.map(metric => {
-            const Icon = metric.icon;
-            const baseline = metric.data[0].value;
-            const opt = metric.data[1].value;
-            const improv = metric.higherIsBetter 
-              ? ((opt / baseline) * 100).toFixed(0) + "% higher"
-              : ((1 - (opt / baseline)) * 100).toFixed(0) + "% lower";
-              
-            return (
-              <div key={metric.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Icon className="h-4 w-4 text-slate-400" />
-                    <h5 className="text-sm font-semibold text-slate-200">{metric.title}</h5>
-                  </div>
-                </div>
-                
-                <div className="h-[140px] w-full mt-2 relative">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={metric.data} margin={{ top: 10, right: 0, left: -25, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                      <XAxis dataKey="name" stroke="#64748b" tick={{fill: '#64748b', fontSize: 10}} axisLine={false} tickLine={false} />
-                      <YAxis stroke="#64748b" tick={{fill: '#64748b', fontSize: 10}} axisLine={false} tickLine={false} />
-                      <RTTooltip 
-                        cursor={{fill: '#1e293b', opacity: 0.4}}
-                        contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', borderRadius: '8px', fontSize: '12px' }}
-                        formatter={(value: number) => [`${value} ${metric.unit}`, metric.title]}
-                      />
-                      <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={30}>
-                        {metric.data.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.fill} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-800/60 pb-1">
-                   <div className="flex items-center justify-between font-mono text-xs">
-                      <span className="text-slate-500">Delta</span>
-                      <span className={`px-1.5 py-0.5 rounded font-medium ${metric.higherIsBetter ? "text-emerald-400 bg-emerald-400/10" : "text-electric-blue bg-electric-blue/10"}`}>
-                        {improv}
-                      </span>
-                   </div>
-                </div>
+        {parsedMetrics.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {parsedMetrics.map((m, i) => (
+              <div key={i} className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+                <span className="text-slate-500 text-[10px] block uppercase font-bold font-mono mb-1">{m.label}</span>
+                <span className={`text-lg font-bold font-mono ${m.color}`}>{m.value}</span>
               </div>
-            )
-          })}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-12 text-center bg-slate-950/20 border border-dashed border-slate-800 rounded-xl gap-3">
+            <Activity className="h-8 w-8 text-slate-600" />
+            <div>
+              <p className="text-sm font-semibold text-slate-400">No metrics yet</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                Click <strong>Execute Live</strong> to run Olive optimization. Metrics reported in the output will be surfaced here automatically.
+              </p>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
-  )
+  );
 }

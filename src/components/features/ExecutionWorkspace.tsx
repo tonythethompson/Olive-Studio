@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, Button, Tabs, TabsList, TabsTrigger, TabsContent, Input, Label, Select } from "@/components/ui";
 import { UIState } from "@/types";
 import { Code, Play, CheckCircle2, AlertCircle, Copy, Check, Upload, FileJson, X, Github, Sparkles, ArrowUpRight, Search, BookOpen, Workflow, GitBranch, GitPullRequest, Globe, RefreshCw, AlertTriangle, Send, Bot, User, Trash2, HelpCircle, Download, Laptop, Smartphone, FileCode, Sliders, Cpu, Settings } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import JSZip from "jszip";
 import { PerformanceMetrics } from "./PerformanceMetrics";
+
 import { RecipeGraphView } from "./RecipeGraphView";
 
 export const SUGGESTED_RECIPES = [
@@ -476,7 +477,14 @@ export const SUGGESTED_RECIPES = [
   }
 ];
 
-export function ExecutionWorkspace({ state, setState, onExecute }: { state: UIState; setState: (s: Partial<UIState>) => void; onExecute: () => void }) {
+export function ExecutionWorkspace({ state, setState, onExecute, jobId: _jobId, isRunning: _isRunning, setIsRunning: _setIsRunning }: { state: UIState; setState: (s: Partial<UIState>) => void; onExecute: (recipe: object) => void; jobId?: string | null; isRunning?: boolean; setIsRunning?: (v: boolean) => void }) {
+  // Live execution state
+  const [liveJobId, setLiveJobId] = useState<string | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
+  const [executionLogs, setExecutionLogs] = useState<string[]>([]);
+  const [executionStatus, setExecutionStatus] = useState<"idle" | "running" | "completed" | "failed">("idle");
+  const [executionExitCode, setExecutionExitCode] = useState<number | null>(null);
+  const liveSourceRef = useRef<EventSource | null>(null);
   const [recipeView, setRecipeView] = useState<"graph" | "json">("graph");
   const [isCopied, setIsCopied] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -940,7 +948,9 @@ ${owrPlatform === "web" ?
       search_strategy: { execution_order: "joint", search_algorithm: "exhaustive" },
       host: "local_system",
       target: "local_system",
-      cache_dir: state.cacheDir || "~/.cache/olive",
+      cache_dir: state.distributedCaching && state.azureStr
+        ? state.azureStr
+        : state.cacheDir || "~/.cache/olive",
       output_dir: "./models/optimized"
     }
   };
@@ -991,6 +1001,77 @@ ${owrPlatform === "web" ?
     
     recipe.passes['pruning'] = { type: pType, config };
   }
+
+  const handleExecuteLive = async () => {
+    if (isRunning) return;
+
+    setIsRunning(true);
+    setExecutionLogs(["[INFO] Initiating Olive run...\n"]);
+    setExecutionStatus("running");
+    setExecutionExitCode(null);
+
+    try {
+      // Notify parent of execution start
+      onExecute(JSON.stringify(recipe, null, 2));
+
+      const resp = await fetch("/api/olive/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipeJson: JSON.stringify(recipe, null, 2) })
+      });
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+        setExecutionLogs(prev => [...prev, `[ERROR] ${errData.error}`]);
+        setExecutionStatus("failed");
+        setIsRunning(false);
+        return;
+      }
+
+      const { jobId } = await resp.json();
+      setLiveJobId(jobId);
+
+      // Close any existing SSE connection
+      liveSourceRef.current?.close();
+
+      // Open SSE connection
+      const evtSource = new EventSource(`/api/olive/stream/${jobId}`);
+      liveSourceRef.current = evtSource;
+
+      // Standard message event (log lines)
+      evtSource.onmessage = (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload.line) {
+            setExecutionLogs(prev => [...prev, payload.line]);
+          }
+        } catch { /* ignore malformed */ }
+      };
+
+      // Named 'done' event — fired when the Olive process exits
+      evtSource.addEventListener("done", (e: MessageEvent) => {
+        let exitCode = 0;
+        try { exitCode = JSON.parse(e.data)?.exitCode ?? 0; } catch { exitCode = 0; }
+        setExecutionStatus(exitCode === 0 ? "completed" : "failed");
+        setExecutionExitCode(exitCode);
+        setIsRunning(false);
+        evtSource.close();
+        liveSourceRef.current = null;
+      });
+
+      evtSource.onerror = () => {
+        setExecutionLogs(prev => [...prev, "[ERROR] SSE connection lost."]);
+        setExecutionStatus("failed");
+        setIsRunning(false);
+        evtSource.close();
+        liveSourceRef.current = null;
+      };
+    } catch (err: any) {
+      setExecutionLogs(prev => [...prev, `[ERROR] ${err.message}`]);
+      setExecutionStatus("failed");
+      setIsRunning(false);
+    }
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(JSON.stringify(recipe, null, 2));
@@ -1378,8 +1459,17 @@ ${owrPlatform === "web" ?
                 Queue Batch Job
               </Button>
             )}
-            <Button variant="success" onClick={onExecute} className="h-9 text-xs">
-              <Play className="h-3.5 w-3.5 mr-1.5" fill="currentColor" /> Execute Live
+            <Button 
+              variant="success" 
+              onClick={handleExecuteLive} 
+              disabled={isRunning}
+              className="h-9 text-xs"
+            >
+              {isRunning ? (
+                <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Olive running...</>
+              ) : (
+                <><Play className="h-3.5 w-3.5 mr-1.5" fill="currentColor" /> Execute Live</>
+              )}
             </Button>
           </div>
         </div>
@@ -1389,7 +1479,7 @@ ${owrPlatform === "web" ?
       {/* Analytics / Real-time Execution Tracking */}
       <div className="space-y-6 overflow-auto">
         
-        <PerformanceMetrics />
+
 
         {/* Gemini AI Companion Workspace */}
         <Card className="border-electric-blue/30 shadow-[0_4px_30px_rgba(59,130,246,0.05)] bg-slate-900/60 overflow-hidden">
@@ -1436,7 +1526,7 @@ ${owrPlatform === "web" ?
                     <div className="text-center py-12 bg-slate-950/50 border border-slate-800 rounded-lg flex flex-col items-center justify-center">
                       <RefreshCw className="h-8 w-8 text-electric-blue animate-spin mb-3" />
                       <p className="text-xs font-medium text-slate-300">Compiling Recipe Context...</p>
-                      <p className="text-[10px] text-slate-500 mt-1 font-mono tracking-tight animate-pulse">Invoking Gemini-3.5-Compiler-Expert</p>
+                      <p className="text-[10px] text-slate-500 mt-1 font-mono tracking-tight animate-pulse">Invoking Gemini Pipeline Expert...</p>
                     </div>
                   )}
 
@@ -1666,11 +1756,34 @@ ${owrPlatform === "web" ?
         </Card>
 
         <Card>
-          <CardHeader title="Optimization Logs" />
+          <CardHeader 
+            title="Optimization Logs" 
+            description={executionStatus === "running" ? "Olive is running..." : executionStatus === "completed" ? `Completed (exit 0)` : executionStatus === "failed" ? `Failed (exit ${executionExitCode ?? "?"})` : "Ready"}
+            badge={
+              executionStatus === "running" ? (
+                <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-2.5 py-1 rounded-full font-bold animate-pulse">
+                  <RefreshCw className="h-3 w-3 animate-spin" /> Running
+                </span>
+              ) : executionStatus === "completed" ? (
+                <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full font-bold">
+                  <CheckCircle2 className="h-3 w-3" /> Done
+                </span>
+              ) : executionStatus === "failed" ? (
+                <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded-full font-bold">
+                  <AlertCircle className="h-3 w-3" /> Failed
+                </span>
+              ) : null
+            }
+          />
           <CardContent>
-            <div className="bg-slate-950 border border-slate-800 rounded-md p-4 font-mono text-xs text-slate-400 space-y-1 h-[200px] overflow-y-auto">
-              <p>[INFO] Waiting for execution trigger...</p>
-              <p className="text-slate-600">-- Ready to initialize Olive Engine --</p>
+            <div className="bg-slate-950 border border-slate-800 rounded-md p-4 font-mono text-xs text-emerald-400 space-y-0.5 h-[200px] overflow-y-auto">
+              {executionLogs.length === 0 ? (
+                <p className="text-slate-500 italic">Ready — click &quot;Execute Live&quot; to begin an Olive optimization run.</p>
+              ) : (
+                executionLogs.map((line, i) => (
+                  <p key={i} className={line.includes("[ERROR]") ? "text-red-400" : line.includes("[SETUP]") ? "text-amber-400" : line.includes("[DONE]") ? "text-emerald-300 font-bold" : "text-emerald-400"}>{line}</p>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
