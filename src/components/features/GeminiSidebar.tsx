@@ -1,10 +1,49 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { UIState } from "@/types";
-import { 
-  Sparkles, Bot, Send, X, RefreshCw, Zap, CheckCircle2, 
-  AlertTriangle, HelpCircle, ChevronRight, MessageSquareCode, 
-  Lightbulb, ArrowRight, Check, Play
+import {
+  Sparkles, Bot, Send, X, RefreshCw, Zap, CheckCircle2,
+  AlertTriangle, MessageSquareCode, Lightbulb, Check, Settings2, Key,
 } from "lucide-react";
+
+const PROVIDER_OPTIONS = [
+  {
+    id: "gemini",
+    name: "Google Gemini",
+    models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
+    keyEnvVar: "GEMINI_API_KEY",
+    docsUrl: "aistudio.google.com",
+  },
+  {
+    id: "openai",
+    name: "OpenAI",
+    models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+    keyEnvVar: "OPENAI_API_KEY",
+    docsUrl: "platform.openai.com/api-keys",
+  },
+  {
+    id: "anthropic",
+    name: "Anthropic",
+    models: ["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-4-8"],
+    keyEnvVar: "ANTHROPIC_API_KEY",
+    docsUrl: "console.anthropic.com",
+  },
+  {
+    id: "mistral",
+    name: "Mistral AI",
+    models: ["mistral-large-latest", "mistral-medium-latest", "ministral-8b-latest"],
+    keyEnvVar: "MISTRAL_API_KEY",
+    docsUrl: "console.mistral.ai",
+  },
+  {
+    id: "openai-compat",
+    name: "OpenAI-Compatible",
+    models: [],
+    keyEnvVar: "",
+    docsUrl: "",
+  },
+] as const;
+
+type ProviderId = (typeof PROVIDER_OPTIONS)[number]["id"];
 
 interface GeminiSidebarProps {
   state: UIState;
@@ -18,10 +57,7 @@ interface Suggestion {
   description: string;
   impact: "High" | "Medium" | "Low";
   type: "warning" | "success" | "suggestion" | "info";
-  autofix: {
-    pass: "quantization" | "ihvProvider" | "onnxTransforms" | "pruning" | "peft";
-    value: string;
-  };
+  autofix: { pass: string; value: string };
 }
 
 interface AnalysisResult {
@@ -31,265 +67,290 @@ interface AnalysisResult {
   suggestions: Suggestion[];
 }
 
+interface ProviderStatus {
+  source: "env" | "user" | "none";
+  provider?: string;
+  model?: string;
+}
+
 export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSidebarProps) {
-  const [activeTab, setActiveTab] = useState<"audit" | "chat">("audit");
-  
-  // Audit Analysis State
+  const [activeTab, setActiveTab] = useState<"audit" | "chat" | "settings">("audit");
+
+  // Audit
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
 
-  // Chat State
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: "user" | "assistant"; text: string; timestamp: Date }>>([
-    {
-      sender: "assistant",
-      text: "Hello! I am your **Olive AI Copilot**. I have access to your live **model, custom passes & hardware target selections**.\n\nAsk me any question (e.g. *'How do I quantize for DirectML?'*) or run the pipeline audit for instant hardware diagnostics!",
-      timestamp: new Date()
-    }
-  ]);
+  // Chat
+  const [chatMessages, setChatMessages] = useState<{ sender: "user" | "assistant"; text: string }[]>([{
+    sender: "assistant",
+    text: "Hello! I'm your **Olive AI Copilot**. I have access to your live **model, passes & hardware target**.\n\nAsk me anything about optimization, or run the pipeline audit for instant diagnostics.",
+  }]);
   const [inputQuestion, setInputQuestion] = useState("");
   const [isChatting, setIsChatting] = useState(false);
   const [chatError, setChatError] = useState("");
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto trigger analysis on initial open
+  // Provider settings
+  const [providerStatus, setProviderStatus] = useState<ProviderStatus>({ source: "none" });
+  const [settingsProvider, setSettingsProvider] = useState<ProviderId>("gemini");
+  const [settingsModel, setSettingsModel] = useState("gemini-2.5-flash");
+  const [settingsApiKey, setSettingsApiKey] = useState("");
+  const [settingsBaseUrl, setSettingsBaseUrl] = useState("");
+  const [customModel, setCustomModel] = useState("");
+  const [isSavingProvider, setIsSavingProvider] = useState(false);
+  const [providerSaveError, setProviderSaveError] = useState("");
+
+  const providerOption = PROVIDER_OPTIONS.find(p => p.id === settingsProvider)!;
+  const isCompatMode = settingsProvider === "openai-compat";
+
+  const fetchProviderStatus = () =>
+    fetch("/api/ai/provider")
+      .then(r => r.json())
+      .then((d: ProviderStatus) => { setProviderStatus(d); return d; })
+      .catch((): ProviderStatus => { setProviderStatus({ source: "none" }); return { source: "none" }; });
+
   useEffect(() => {
-    if (isOpen && !analysis) {
+    if (!isOpen) return;
+    fetchProviderStatus().then(status => {
+      if (status.source === "none") setActiveTab("settings");
+    });
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen && !analysis && providerStatus.source !== "none") {
       handleRunAnalysis();
     }
-  }, [isOpen]);
+  }, [isOpen, providerStatus.source]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages, isChatting]);
 
   const handleRunAnalysis = async () => {
     setIsAnalyzing(true);
     setAnalysisError("");
     try {
-      const response = await fetch("/api/gemini/analyze-state", {
+      const r = await fetch("/api/ai/analyze-state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ state }),
       });
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `HTTP ${response.status} Failed to run analysis.`);
-      }
-      const data = await response.json();
-      setAnalysis(data);
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+      setAnalysis(await r.json());
     } catch (err: any) {
-      console.error(err);
-      setAnalysisError(err.message || "Pipeline analysis offline. Try verifying your network settings.");
+      setAnalysisError(err.message || "Analysis failed.");
     } finally {
       setIsAnalyzing(false);
     }
   };
 
   const handleApplyAutofix = (autofix: Suggestion["autofix"]) => {
-    if (!autofix || !autofix.pass) return;
-
-    const key = autofix.pass;
-    const value = autofix.value;
-
-    if (key === "ihvProvider") {
+    if (!autofix?.pass) return;
+    const { pass, value } = autofix;
+    if (pass === "ihvProvider") {
       setState({ ihvProvider: value as any });
+    } else if (pass === "cudaVersion") {
+      setState({ cudaVersion: value as any });
     } else {
-      // Toggle a pass boolean
-      const booleanVal = value === "true";
-      setState({
-        passes: {
-          ...state.passes,
-          [key]: booleanVal
-        }
-      });
+      const passKey = pass.startsWith("passes.") ? pass.slice(7) : pass;
+      const parsed = value === "true" ? true : value === "false" ? false : isNaN(Number(value)) ? value : Number(value);
+      setState({ passes: { ...state.passes, [passKey]: parsed as any } });
     }
-
-    // Trigger re-analysis automatically to update suggestions
-    setTimeout(() => {
-      handleRunAnalysis();
-    }, 400);
+    setTimeout(() => handleRunAnalysis(), 400);
   };
 
   const handleSendChat = async (presetText?: string) => {
-    const textToSend = presetText || inputQuestion;
-    if (!textToSend.trim()) return;
-
-    const userMsg = { sender: "user" as const, text: textToSend, timestamp: new Date() };
-    setChatMessages(prev => [...prev, userMsg]);
-    
+    const text = presetText || inputQuestion;
+    if (!text.trim()) return;
+    setChatMessages(prev => [...prev, { sender: "user", text }]);
     if (!presetText) setInputQuestion("");
     setIsChatting(true);
     setChatError("");
-
     try {
-      const response = await fetch("/api/gemini/chat", {
+      const r = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: textToSend,
-          recipeJson: JSON.stringify(state, null, 2),
-          chatHistory: chatMessages.map(m => ({
-            role: m.sender === "user" ? "user" : "assistant",
-            content: m.text
-          })),
-          ihvProvider: state.ihvProvider
-        })
+          message: text,
+          context: { modelId: state.hfModelId, provider: state.ihvProvider, cudaVersion: state.cudaVersion, passes: state.passes },
+          chatHistory: chatMessages.map(m => ({ role: m.sender === "user" ? "user" : "assistant", content: m.text })),
+        }),
       });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `HTTP ${response.status} failed to fetch answer.`);
-      }
-
-      const data = await response.json();
-      setChatMessages(prev => [...prev, {
-        sender: "assistant" as const,
-        text: data.text,
-        timestamp: new Date()
-      }]);
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+      const data = await r.json();
+      setChatMessages(prev => [...prev, { sender: "assistant", text: data.text }]);
     } catch (err: any) {
-      console.error(err);
-      setChatError(err.message || "Failed to obtain advice from Gemini server.");
+      setChatError(err.message || "Chat request failed.");
     } finally {
       setIsChatting(false);
     }
   };
 
-  // Helper formatting for rich chat response bubbles
+  const handleSaveProvider = async () => {
+    const key = settingsApiKey.trim();
+    const model = isCompatMode ? customModel.trim() : settingsModel;
+    if (!key || !model) return;
+    setIsSavingProvider(true);
+    setProviderSaveError("");
+    try {
+      const r = await fetch("/api/ai/provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: settingsProvider,
+          apiKey: key,
+          model,
+          baseUrl: settingsBaseUrl.trim() || undefined,
+        }),
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+      setProviderStatus({ source: "user", provider: settingsProvider, model });
+      setSettingsApiKey("");
+      setAnalysis(null);
+      setActiveTab("audit");
+    } catch (err: any) {
+      setProviderSaveError(err.message || "Failed to save provider.");
+    } finally {
+      setIsSavingProvider(false);
+    }
+  };
+
+  const handleClearProvider = async () => {
+    await fetch("/api/ai/provider", { method: "DELETE" });
+    await fetchProviderStatus();
+    setAnalysis(null);
+  };
+
+  const isProviderError = (msg: string) =>
+    msg.includes("not configured") || msg.includes("API key") || msg.includes("No AI provider");
+
   const renderMessageContent = (text: string) => {
     const parts = text.split(/(```[\s\S]*?```)/g);
-    return parts.map((part, index) => {
+    return parts.map((part, i) => {
       if (part.startsWith("```") && part.endsWith("```")) {
         const lines = part.split("\n");
-        const content = lines.slice(1, -1).join("\n");
         return (
-          <pre key={index} className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-[10px] font-mono text-emerald-400 my-1.5 overflow-x-auto whitespace-pre-wrap">
-            {content}
+          <pre key={i} className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-[10px] font-mono text-emerald-400 my-1.5 overflow-x-auto whitespace-pre-wrap">
+            {lines.slice(1, -1).join("\n")}
           </pre>
         );
       }
-      
-      const lines = part.split("\n");
-      return lines.map((line, lineIdx) => {
-        let isBullet = false;
-        let cleanLine = line;
-        if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
-          isBullet = true;
-          cleanLine = line.trim().substring(2);
-        }
-        
-        const elements: any[] = [];
-        const boldParts = cleanLine.split(/(\*\*.*?\*\*|`.*?`)/g);
-        boldParts.forEach((bp, bpIdx) => {
-          if (bp.startsWith("**") && bp.endsWith("**")) {
-            elements.push(<strong key={bpIdx} className="font-bold text-slate-100">{bp.slice(2, -2)}</strong>);
-          } else if (bp.startsWith("`") && bp.endsWith("`")) {
-            elements.push(<code key={bpIdx} className="bg-slate-950 border border-slate-800 px-1 py-0.5 rounded text-[10px] font-mono text-cyan-400">{bp.slice(1, -1)}</code>);
-          } else {
-            elements.push(bp);
-          }
+      return part.split("\n").map((line, j) => {
+        const isBullet = line.trim().startsWith("- ") || line.trim().startsWith("* ");
+        const clean = isBullet ? line.trim().substring(2) : line;
+        const elems: any[] = [];
+        clean.split(/(\*\*.*?\*\*|`.*?`)/g).forEach((bp, k) => {
+          if (bp.startsWith("**") && bp.endsWith("**"))
+            elems.push(<strong key={k} className="font-bold text-slate-100">{bp.slice(2, -2)}</strong>);
+          else if (bp.startsWith("`") && bp.endsWith("`"))
+            elems.push(<code key={k} className="bg-slate-950 border border-slate-800 px-1 py-0.5 rounded text-[10px] font-mono text-cyan-400">{bp.slice(1, -1)}</code>);
+          else elems.push(bp);
         });
-
-        if (isBullet) {
-          return (
-            <li key={`${index}-${lineIdx}`} className="ml-3.5 list-disc text-xs text-slate-300 leading-relaxed my-0.5">
-              {elements}
-            </li>
-          );
-        }
-
-        if (line.trim().startsWith("### ")) {
-          return <h5 key={`${index}-${lineIdx}`} className="text-xs font-bold text-indigo-400 mt-2.5 mb-1 uppercase tracking-wider font-mono">{line.trim().substring(4)}</h5>;
-        }
-        if (line.trim().startsWith("## ")) {
-          return <h4 key={`${index}-${lineIdx}`} className="text-xs font-bold text-slate-100 mt-3 mb-1.5 pb-0.5 border-b border-slate-800/80">{line.trim().substring(3)}</h4>;
-        }
-
-        return (
-          <p key={`${index}-${lineIdx}`} className="text-xs text-slate-300 leading-relaxed my-0.5">
-            {elements}
-          </p>
-        );
+        if (isBullet) return <li key={`${i}-${j}`} className="ml-3.5 list-disc text-xs text-slate-300 leading-relaxed my-0.5">{elems}</li>;
+        if (line.trim().startsWith("### ")) return <h5 key={`${i}-${j}`} className="text-xs font-bold text-indigo-400 mt-2.5 mb-1 uppercase tracking-wider font-mono">{line.trim().substring(4)}</h5>;
+        if (line.trim().startsWith("## ")) return <h4 key={`${i}-${j}`} className="text-xs font-bold text-slate-100 mt-3 mb-1.5 pb-0.5 border-b border-slate-800/80">{line.trim().substring(3)}</h4>;
+        return <p key={`${i}-${j}`} className="text-xs text-slate-300 leading-relaxed my-0.5">{elems}</p>;
       });
     });
   };
 
-  return (
-    <div 
-      className={`fixed top-0 right-0 h-full w-[420px] bg-slate-900/95 backdrop-blur-md border-l border-slate-800 z-50 flex flex-col transition-all duration-300 ease-in-out shadow-[-10px_0_40px_rgba(3,7,18,0.45)] transform ${
-        isOpen ? "translate-x-0" : "translate-x-full"
-      }`}
-    >
-      {/* Sidebar Header */}
-      <div className="h-16 flex items-center justify-between px-5 border-b border-slate-800 shrink-0 bg-slate-950/80">
-        <div className="flex items-center gap-2">
-          <div className="p-1 px-2 bg-electric-blue/10 rounded-full border border-electric-blue/30 flex items-center gap-1.5 shrink-0 animate-pulse">
-            <Sparkles className="h-3 w-3 text-electric-blue" />
-            <span className="text-[10px] font-extrabold font-mono text-electric-blue uppercase tracking-widest">Gemini Copilot</span>
-          </div>
+  const ProviderErrorBlock = ({ msg, onGoSettings }: { msg: string; onGoSettings: () => void }) =>
+    isProviderError(msg) ? (
+      <div className="p-4 bg-slate-900 border border-slate-700 rounded-xl text-xs flex flex-col gap-2.5">
+        <div className="flex items-center gap-2 text-amber-400">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span className="font-bold text-sm">No AI Provider Configured</span>
         </div>
-        <button 
-          onClick={onClose}
-          className="h-8 w-8 p-0 rounded-lg hover:bg-slate-800 border border-slate-800/55 flex items-center justify-center text-slate-400 hover:text-slate-100 transition-colors cursor-pointer"
-        >
+        <p className="text-slate-400 leading-relaxed">
+          Configure a provider in the{" "}
+          <button onClick={onGoSettings} className="text-electric-blue underline cursor-pointer">Settings tab</button>.
+        </p>
+        <p className="text-slate-500 text-[10px]">
+          Or set an env var (<code className="bg-slate-800 px-1 rounded font-mono text-slate-300">GEMINI_API_KEY</code>,{" "}
+          <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">OPENAI_API_KEY</code>,{" "}
+          <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">ANTHROPIC_API_KEY</code>,{" "}
+          <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">MISTRAL_API_KEY</code>) and restart.
+        </p>
+      </div>
+    ) : (
+      <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-lg text-xs text-rose-400 flex items-start gap-2">
+        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-500" />
+        <div><span className="font-bold block text-rose-200">Error</span>{msg}</div>
+      </div>
+    );
+
+  const presetQueries = [
+    state.hfModelId
+      ? `Best quantization for ${state.hfModelId.split("/").pop()} on ${state.ihvProvider.replace("ExecutionProvider", "")}?`
+      : `Best quantization for ${state.ihvProvider.replace("ExecutionProvider", "")}?`,
+    state.passes.pruning
+      ? `Trade-offs: ${state.passes.pruningMethod} vs SparseGPT for this model`
+      : "When does pruning hurt accuracy vs. latency?",
+    "Recommend a pass sequence for max throughput",
+  ];
+
+  const providerLabel = providerStatus.source !== "none"
+    ? `${PROVIDER_OPTIONS.find(p => p.id === providerStatus.provider)?.name ?? providerStatus.provider} / ${providerStatus.model}`
+    : "No provider set";
+
+  return (
+    <div className={`fixed top-0 right-0 h-full w-[420px] bg-slate-900/95 backdrop-blur-md border-l border-slate-800 z-50 flex flex-col transition-all duration-300 ease-in-out shadow-[-10px_0_40px_rgba(3,7,18,0.45)] transform ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
+
+      {/* Header */}
+      <div className="h-16 flex items-center justify-between px-5 border-b border-slate-800 shrink-0 bg-slate-950/80">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="p-1 px-2 bg-electric-blue/10 rounded-full border border-electric-blue/30 flex items-center gap-1.5 shrink-0">
+            <Sparkles className="h-3 w-3 text-electric-blue" />
+            <span className="text-[10px] font-extrabold font-mono text-electric-blue uppercase tracking-widest">AI Copilot</span>
+          </div>
+          <span className="text-[9px] font-mono text-slate-500 truncate">{providerLabel}</span>
+        </div>
+        <button onClick={onClose} className="h-8 w-8 rounded-lg hover:bg-slate-800 border border-slate-800/55 flex items-center justify-center text-slate-400 hover:text-slate-100 transition-colors cursor-pointer shrink-0">
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      {/* Selector Tabs */}
+      {/* Tabs */}
       <div className="p-4 border-b border-slate-800/60 bg-slate-950/20 shrink-0">
-        <div className="grid grid-cols-2 bg-slate-950/90 p-1 border border-slate-850 rounded-lg">
-          <button
-            onClick={() => setActiveTab("audit")}
-            className={`py-1.5 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === "audit" 
-                ? "bg-slate-900 text-electric-blue shadow-sm border border-slate-800/40" 
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <Lightbulb className={`h-3.5 w-3.5 ${activeTab === "audit" ? "text-electric-blue" : "text-slate-500"}`} />
-            Pipeline Audit
-          </button>
-          <button
-            onClick={() => setActiveTab("chat")}
-            className={`py-1.5 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === "chat" 
-                ? "bg-slate-900 text-electric-blue shadow-sm border border-slate-800/40" 
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <MessageSquareCode className={`h-3.5 w-3.5 ${activeTab === "chat" ? "text-electric-blue" : "text-slate-500"}`} />
-            Copilot Chat
-          </button>
+        <div className="grid grid-cols-3 bg-slate-950/90 p-1 border border-slate-850 rounded-lg">
+          {([
+            { id: "audit" as const, label: "Audit", Icon: Lightbulb },
+            { id: "chat" as const, label: "Chat", Icon: MessageSquareCode },
+            { id: "settings" as const, label: "Settings", Icon: Settings2 },
+          ]).map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`py-1.5 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeTab === id ? "bg-slate-900 text-electric-blue shadow-sm border border-slate-800/40" : "text-slate-400 hover:text-slate-200"}`}
+            >
+              <Icon className={`h-3.5 w-3.5 ${activeTab === id ? "text-electric-blue" : "text-slate-500"}`} />
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Tab Content Box */}
+      {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {activeTab === "audit" ? (
+
+        {/* ── Audit ── */}
+        {activeTab === "audit" && (
           <div className="space-y-4">
-            {/* Interactive State Summary Board */}
             {analysis && !isAnalyzing && (
               <div className="bg-slate-950/70 rounded-xl p-4 border border-slate-800 flex items-center gap-4 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-1 bg-indigo-500/10 text-[8px] font-mono uppercase tracking-widest text-indigo-400 border-l border-b border-slate-800 rounded-bl font-sans">
-                  Live State
-                </div>
-                {/* Visual Circle Gauge */}
+                <div className="absolute top-0 right-0 p-1 bg-indigo-500/10 text-[8px] font-mono uppercase tracking-widest text-indigo-400 border-l border-b border-slate-800 rounded-bl">Live State</div>
                 <div className="relative h-16 w-16 shrink-0 flex items-center justify-center">
                   <svg className="w-full h-full transform -rotate-90">
                     <circle cx="32" cy="32" r="28" stroke="currentColor" className="text-slate-800" strokeWidth="4" fill="transparent" />
                     <circle cx="32" cy="32" r="28" stroke="currentColor" className="text-electric-blue transition-all duration-1000" strokeWidth="4" fill="transparent"
-                      strokeDasharray={176}
-                      strokeDashoffset={176 - (176 * analysis.score) / 100}
-                    />
+                      strokeDasharray={176} strokeDashoffset={176 - (176 * analysis.score) / 100} />
                   </svg>
                   <span className="absolute text-sm font-extrabold font-mono text-slate-100">{analysis.score}%</span>
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-slate-100 uppercase tracking-wider">Pipeline Efficiency</h4>
-                  <div className={`mt-0.5 text-[10px] inline-block px-1.5 py-0.5 rounded font-mono font-bold ${
-                    analysis.level === "Optimized" 
-                      ? "bg-emerald-500/10 text-emerald-400" 
-                      : analysis.level === "Suboptimal" 
-                      ? "bg-amber-500/10 text-amber-400" 
-                      : "bg-rose-500/10 text-rose-400"
-                  }`}>
+                  <div className={`mt-0.5 text-[10px] inline-block px-1.5 py-0.5 rounded font-mono font-bold ${analysis.level === "Optimized" ? "bg-emerald-500/10 text-emerald-400" : analysis.level === "Suboptimal" ? "bg-amber-500/10 text-amber-400" : "bg-rose-500/10 text-rose-400"}`}>
                     {analysis.level} Mode
                   </div>
                   <p className="text-[11px] text-slate-400 leading-relaxed mt-1">{analysis.summary}</p>
@@ -300,79 +361,39 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
             {isAnalyzing && (
               <div className="text-center py-12 bg-slate-950/30 border border-slate-800 rounded-lg flex flex-col items-center justify-center">
                 <RefreshCw className="h-7 w-7 text-electric-blue animate-spin mb-3" />
-                <p className="text-xs font-medium text-slate-300">Auditing Active Switches...</p>
-                <p className="text-[10px] text-slate-500 mt-0.5 font-mono animate-pulse">Gemini co-design agent inspecting</p>
+                <p className="text-xs font-medium text-slate-300">Auditing pipeline...</p>
+                <p className="text-[10px] text-slate-500 mt-0.5 font-mono animate-pulse">AI analysis agent inspecting</p>
               </div>
             )}
 
-            {analysisError && (
-              <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-lg text-xs text-rose-400 flex items-start gap-2 animate-bounce">
-                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-500" />
-                <div>
-                  <span className="font-bold block text-rose-200">Diagnostics Incomplete</span>
-                  {analysisError}
-                </div>
-              </div>
-            )}
+            {analysisError && <ProviderErrorBlock msg={analysisError} onGoSettings={() => setActiveTab("settings")} />}
 
-            {/* List of suggestions */}
             {analysis && !isAnalyzing && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase font-mono tracking-wider text-slate-500 font-extrabold">State-Based Suggestions</span>
-                  <button 
-                    onClick={handleRunAnalysis}
-                    className="text-[10px] text-electric-blue hover:text-white flex items-center gap-1 cursor-pointer font-bold"
-                  >
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-slate-500 font-extrabold">Suggestions</span>
+                  <button onClick={handleRunAnalysis} className="text-[10px] text-electric-blue hover:text-white flex items-center gap-1 cursor-pointer font-bold">
                     <RefreshCw className="h-3 w-3" /> Refresh
                   </button>
                 </div>
-
                 <div className="space-y-2.5 max-h-[50vh] overflow-y-auto pr-0.5">
-                  {analysis.suggestions.map((suggestion, index) => (
-                    <div 
-                      key={index}
-                      className={`p-3.5 rounded-lg border text-xs leading-relaxed transition-all flex flex-col justify-between gap-3 bg-slate-950/45 ${
-                        suggestion.type === "warning" 
-                          ? "border-rose-500/20 hover:border-rose-500/40" 
-                          : suggestion.type === "success" 
-                          ? "border-emerald-500/25 hover:border-emerald-500/40"
-                          : "border-slate-800 hover:border-slate-700"
-                      }`}
-                    >
+                  {analysis.suggestions.map((s, i) => (
+                    <div key={i} className={`p-3.5 rounded-lg border text-xs flex flex-col gap-3 bg-slate-950/45 transition-all ${s.type === "warning" ? "border-rose-500/20 hover:border-rose-500/40" : s.type === "success" ? "border-emerald-500/25 hover:border-emerald-500/40" : "border-slate-800 hover:border-slate-700"}`}>
                       <div>
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <span className="font-bold text-slate-100 flex items-center gap-1.5">
-                            {suggestion.type === "warning" ? (
-                              <AlertTriangle className="h-3.5 w-3.5 text-rose-450 mt-0.5 shrink-0" />
-                            ) : suggestion.type === "success" ? (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-450 mt-0.5 shrink-0" />
-                            ) : (
-                              <Zap className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
-                            )}
-                            {suggestion.title}
+                            {s.type === "warning" ? <AlertTriangle className="h-3.5 w-3.5 text-rose-450 shrink-0" /> : s.type === "success" ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-450 shrink-0" /> : <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
+                            {s.title}
                           </span>
-                          <span className={`text-[9px] font-mono uppercase tracking-widest px-1.5 rounded font-bold ${
-                            suggestion.impact === "High" 
-                              ? "bg-rose-500/10 text-rose-400" 
-                              : "bg-slate-800 text-slate-400"
-                          }`}>
-                            {suggestion.impact} Impact
-                          </span>
+                          <span className={`text-[9px] font-mono uppercase tracking-widest px-1.5 rounded font-bold ${s.impact === "High" ? "bg-rose-500/10 text-rose-400" : "bg-slate-800 text-slate-400"}`}>{s.impact}</span>
                         </div>
-                        <p className="text-[11px] text-slate-405 leading-relaxed">{suggestion.description}</p>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">{s.description}</p>
                       </div>
-
-                      {suggestion.autofix && (
-                        <div className="pt-2 border-t border-slate-900/60 flex items-center justify-between shrink-0">
-                          <span className="text-[9px] font-mono text-slate-500">
-                            Updates: {suggestion.autofix.pass}
-                          </span>
-                          <button
-                            onClick={() => handleApplyAutofix(suggestion.autofix)}
-                            className="bg-electric-blue/10 text-electric-blue hover:bg-electric-blue hover:text-white border border-electric-blue/30 text-[10px] px-2.5 py-1 rounded font-bold flex items-center gap-1 transition-all cursor-pointer"
-                          >
-                            <Check className="h-3 w-3" /> Quick Apply
+                      {s.autofix?.pass && (
+                        <div className="pt-2 border-t border-slate-900/60 flex items-center justify-between">
+                          <span className="text-[9px] font-mono text-slate-500">→ {s.autofix.pass}</span>
+                          <button onClick={() => handleApplyAutofix(s.autofix)} className="bg-electric-blue/10 text-electric-blue hover:bg-electric-blue hover:text-white border border-electric-blue/30 text-[10px] px-2.5 py-1 rounded font-bold flex items-center gap-1 transition-all cursor-pointer">
+                            <Check className="h-3 w-3" /> Apply
                           </button>
                         </div>
                       )}
@@ -382,106 +403,190 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
               </div>
             )}
 
-            {/* General Trigger Button */}
-            <div className="pt-1.5">
-              <button
-                onClick={handleRunAnalysis}
-                disabled={isAnalyzing}
-                className="w-full h-10 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs text-slate-200 transition-colors font-bold flex items-center justify-center gap-2 rounded-lg cursor-pointer shrink-0"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 text-indigo-400 ${isAnalyzing ? "animate-spin" : ""}`} />
-                Analyze Model Optimization Efficiency
-              </button>
-            </div>
+            <button onClick={handleRunAnalysis} disabled={isAnalyzing} className="w-full h-10 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs text-slate-200 font-bold flex items-center justify-center gap-2 rounded-lg cursor-pointer transition-colors">
+              <RefreshCw className={`h-3.5 w-3.5 text-indigo-400 ${isAnalyzing ? "animate-spin" : ""}`} />
+              Analyze Optimization Pipeline
+            </button>
           </div>
-        ) : (
-          <div className="flex flex-col h-full space-y-3 justify-between">
-            {/* Chat Box Window */}
+        )}
+
+        {/* ── Chat ── */}
+        {activeTab === "chat" && (
+          <div className="flex flex-col h-full space-y-3">
             <div className="flex-1 overflow-y-auto space-y-3 p-3 bg-slate-950/50 border border-slate-850 rounded-xl min-h-[350px]">
-              {chatMessages.map((msg, index) => (
-                <div 
-                  key={index}
-                  className={`max-w-[90%] p-3 rounded-lg text-xs leading-relaxed flex flex-col gap-1 ${
-                    msg.sender === "user" 
-                      ? "bg-electric-blue/10 border border-electric-blue/20 ml-auto" 
-                      : "bg-slate-900 border border-slate-800 mr-auto"
-                  }`}
-                >
+              {chatMessages.map((msg, i) => (
+                <div key={i} className={`max-w-[90%] p-3 rounded-lg text-xs flex flex-col gap-1 ${msg.sender === "user" ? "bg-electric-blue/10 border border-electric-blue/20 ml-auto" : "bg-slate-900 border border-slate-800 mr-auto"}`}>
                   <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-extrabold mb-0.5 pb-0.5 border-b border-slate-800/40">
-                    {msg.sender === "user" ? "Operator" : "Olive Expert AI"}
+                    {msg.sender === "user" ? "Operator" : "AI Expert"}
                   </span>
                   <div>{renderMessageContent(msg.text)}</div>
                 </div>
               ))}
-
               {isChatting && (
                 <div className="p-3 bg-slate-900/60 border border-slate-850 rounded-lg animate-pulse flex items-center gap-2">
                   <Bot className="h-3.5 w-3.5 text-indigo-400 animate-spin" />
-                  <span className="text-[10px] font-mono text-indigo-400">Gemini formulation active...</span>
+                  <span className="text-[10px] font-mono text-indigo-400">Thinking...</span>
                 </div>
               )}
-
-              {chatError && (
-                <div className="p-2.5 bg-rose-500/10 border border-rose-500/35 rounded text-[11px] text-rose-400">
-                  {chatError}
-                </div>
-              )}
+              {chatError && <ProviderErrorBlock msg={chatError} onGoSettings={() => setActiveTab("settings")} />}
+              <div ref={chatEndRef} />
             </div>
 
-            {/* Quick Helper Chips */}
             <div className="space-y-1.5 py-1">
-              <span className="text-[9px] font-mono tracking-wider font-extrabold text-slate-500 uppercase block">Preset Helper Queries</span>
+              <span className="text-[9px] font-mono tracking-wider font-extrabold text-slate-500 uppercase block">Quick Queries</span>
               <div className="flex flex-wrap gap-1.5">
-                {[
-                  "Which quant fits CUDA最佳?",
-                  "Recommend passes for LLM 4-bit config",
-                  "Why would pruning collapse model metric accuracy?"
-                ].map((prompt, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleSendChat(prompt)}
-                    disabled={isChatting}
-                    className="text-[10px] px-2.5 py-0.5 bg-slate-950/80 hover:bg-slate-900 text-slate-400 hover:text-slate-100 border border-slate-800 rounded transition-all cursor-pointer font-sans"
-                  >
+                {presetQueries.map((prompt, i) => (
+                  <button key={i} onClick={() => handleSendChat(prompt)} disabled={isChatting}
+                    className="text-[10px] px-2.5 py-0.5 bg-slate-950/80 hover:bg-slate-900 text-slate-400 hover:text-slate-100 border border-slate-800 rounded transition-all cursor-pointer">
                     {prompt}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Send Question Form */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSendChat();
-              }}
-              className="flex gap-2 pt-1.5 border-t border-slate-800/60 bg-slate-900/40"
-            >
+            <form onSubmit={e => { e.preventDefault(); handleSendChat(); }} className="flex gap-2 pt-1.5 border-t border-slate-800/60">
               <input
-                placeholder="Ask model compiling or state questions..."
+                placeholder="Ask about optimization, passes, hardware..."
                 value={inputQuestion}
-                onChange={(e) => setInputQuestion(e.target.value)}
+                onChange={e => setInputQuestion(e.target.value)}
                 disabled={isChatting}
                 className="flex-1 min-w-0 bg-slate-950 border border-slate-800 hover:border-slate-700/80 focus:border-electric-blue/40 text-xs px-3 py-2 rounded-lg text-slate-200 focus:outline-none transition-colors"
-                type="text"
               />
-              <button
-                type="submit"
-                disabled={isChatting || !inputQuestion.trim()}
-                className="h-9 w-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg transition-all flex items-center justify-center shrink-0 text-white cursor-pointer"
-              >
+              <button type="submit" disabled={isChatting || !inputQuestion.trim()}
+                className="h-9 w-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg flex items-center justify-center shrink-0 text-white cursor-pointer">
                 <Send className="h-4 w-4" />
               </button>
             </form>
           </div>
         )}
+
+        {/* ── Settings ── */}
+        {activeTab === "settings" && (
+          <div className="space-y-5">
+            {/* Active provider status */}
+            <div className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl">
+              <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold mb-2">Active Provider</p>
+              {providerStatus.source === "none" ? (
+                <p className="text-xs text-slate-500 italic">No provider. AI features disabled.</p>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-100">
+                      {PROVIDER_OPTIONS.find(p => p.id === providerStatus.provider)?.name ?? providerStatus.provider}
+                    </p>
+                    <p className="text-[10px] font-mono text-slate-400">{providerStatus.model} · {providerStatus.source === "env" ? "env var" : "session key"}</p>
+                  </div>
+                  {providerStatus.source === "user" && (
+                    <button onClick={handleClearProvider} className="text-[10px] text-rose-400 hover:text-rose-200 border border-rose-500/20 rounded px-2 py-1 font-bold transition-all cursor-pointer">
+                      Clear
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Configure new provider */}
+            <div className="space-y-3">
+              <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">Configure Provider</p>
+
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Provider</label>
+                <select
+                  value={settingsProvider}
+                  onChange={e => {
+                    const id = e.target.value as ProviderId;
+                    setSettingsProvider(id);
+                    const opt = PROVIDER_OPTIONS.find(p => p.id === id)!;
+                    setSettingsModel(opt.models[0] ?? "");
+                    setCustomModel("");
+                  }}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue cursor-pointer"
+                >
+                  {PROVIDER_OPTIONS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Model</label>
+                {isCompatMode ? (
+                  <input
+                    placeholder="Model name (e.g. llama3.1:8b, deepseek-r1)"
+                    value={customModel}
+                    onChange={e => setCustomModel(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+                  />
+                ) : (
+                  <select
+                    value={settingsModel}
+                    onChange={e => setSettingsModel(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue cursor-pointer"
+                  >
+                    {providerOption.models.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                )}
+              </div>
+
+              {isCompatMode && (
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Base URL</label>
+                  <input
+                    type="text"
+                    placeholder="http://localhost:11434/v1"
+                    value={settingsBaseUrl}
+                    onChange={e => setSettingsBaseUrl(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+                  />
+                  <p className="text-[10px] text-slate-600 mt-1">Works with Ollama, LM Studio, vLLM, etc.</p>
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs text-slate-400 mb-1 flex items-center gap-1.5 block">
+                  <Key className="h-3 w-3" />
+                  API Key
+                  {"keyEnvVar" in providerOption && providerOption.keyEnvVar && (
+                    <span className="text-[9px] text-slate-600">
+                      (or env: <code className="font-mono">{providerOption.keyEnvVar}</code>)
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  placeholder="Stored in memory only, never persisted to disk"
+                  value={settingsApiKey}
+                  onChange={e => setSettingsApiKey(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleSaveProvider()}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+                />
+              </div>
+
+              {providerSaveError && <p className="text-xs text-rose-400">{providerSaveError}</p>}
+
+              <button
+                onClick={handleSaveProvider}
+                disabled={isSavingProvider || !settingsApiKey.trim() || (isCompatMode && !customModel.trim())}
+                className="w-full h-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                {isSavingProvider ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                Save & Activate
+              </button>
+
+              {"docsUrl" in providerOption && providerOption.docsUrl && (
+                <p className="text-[10px] text-slate-600 text-center">
+                  Get key at <span className="font-mono text-slate-500">{providerOption.docsUrl}</span>
+                </p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Footer Info Box */}
+      {/* Footer */}
       <div className="p-3.5 border-t border-slate-800 shrink-0 bg-slate-950/85">
         <div className="flex items-center gap-2 text-[10px] text-slate-500 justify-center">
           <Bot className="h-3 w-3 text-slate-600" />
-          <span>Active Device Context: <span className="text-slate-400 font-mono">{state.ihvProvider}</span></span>
+          <span>Target: <span className="text-slate-400 font-mono">{state.ihvProvider}</span></span>
         </div>
       </div>
     </div>

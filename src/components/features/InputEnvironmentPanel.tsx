@@ -1,4 +1,4 @@
-import { useState, useRef, ChangeEvent } from "react";
+import { useState, useRef, useEffect, ChangeEvent } from "react";
 import {
   Card,
   CardContent,
@@ -71,6 +71,40 @@ export function InputEnvironmentPanel({
   >([]);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [downloadName, setDownloadName] = useState<string | null>(null);
+
+  // HuggingFace token
+  const [hfTokenStatus, setHfTokenStatus] = useState<"environment" | "user" | "none" | "loading">("loading");
+  const [hfTokenInput, setHfTokenInput] = useState("");
+  const [isSubmittingToken, setIsSubmittingToken] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/env/hf-token-status")
+      .then(r => r.json())
+      .then(d => setHfTokenStatus(d.source))
+      .catch(() => setHfTokenStatus("none"));
+  }, []);
+
+  const handleSubmitToken = async () => {
+    if (!hfTokenInput.trim()) return;
+    setIsSubmittingToken(true);
+    try {
+      const r = await fetch("/api/env/hf-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: hfTokenInput.trim() }),
+      });
+      if (r.ok) {
+        setHfTokenStatus("user");
+        setHfTokenInput("");
+      }
+    } catch { /* ignore */ }
+    setIsSubmittingToken(false);
+  };
+
+  const handleClearToken = async () => {
+    await fetch("/api/env/hf-token", { method: "DELETE" });
+    setHfTokenStatus("none");
+  };
 
   // States for the Olive Recipe Hub
   const [recipeSearch, setRecipeSearch] = useState("");
@@ -943,6 +977,73 @@ export function InputEnvironmentPanel({
                     BERT Base
                   </button>
                 </div>
+              </div>
+
+              {/* HuggingFace Token */}
+              <div className="p-4 rounded-xl border border-slate-800 bg-slate-900/30 space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <Label className="flex items-center gap-1.5 mb-0">
+                    <KeyRound className="h-3.5 w-3.5 text-amber-400" />
+                    HuggingFace Token
+                  </Label>
+                  {hfTokenStatus === "loading" && (
+                    <span className="text-[10px] text-slate-500 font-mono">Checking...</span>
+                  )}
+                  {hfTokenStatus === "environment" && (
+                    <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono font-semibold">
+                      ✓ Found in Windows env vars
+                    </span>
+                  )}
+                  {hfTokenStatus === "user" && (
+                    <span className="text-[10px] bg-electric-blue/10 border border-electric-blue/20 text-electric-blue px-2 py-0.5 rounded font-mono font-semibold">
+                      ✓ Set for this session
+                    </span>
+                  )}
+                  {hfTokenStatus === "none" && (
+                    <span className="text-[10px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-mono">
+                      Not set — required for gated models
+                    </span>
+                  )}
+                </div>
+
+                {hfTokenStatus !== "environment" && hfTokenStatus !== "loading" && (
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <KeyRound className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                      <input
+                        type="password"
+                        placeholder="hf_..."
+                        autoComplete="off"
+                        className="w-full pl-9 pr-3 h-9 bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-electric-blue rounded-md font-mono text-xs text-slate-200 placeholder:text-slate-600 outline-none"
+                        value={hfTokenInput}
+                        onChange={(e) => setHfTokenInput(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleSubmitToken()}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={handleSubmitToken}
+                      disabled={!hfTokenInput.trim() || isSubmittingToken}
+                      className="h-9 px-4 text-xs bg-electric-blue hover:bg-electric-blue/90 text-white font-bold"
+                    >
+                      {isSubmittingToken ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+                    </Button>
+                    {hfTokenStatus === "user" && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleClearToken}
+                        className="h-9 px-3 text-xs border-red-500/30 text-red-400 hover:bg-red-500/10"
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  Stored in server memory only — never written to disk or returned to the client. Set <code className="text-slate-400 font-mono">HF_TOKEN</code> in Windows environment variables for persistent access without re-entering each session.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
