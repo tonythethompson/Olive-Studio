@@ -1,9 +1,20 @@
 {
   "name": "olive-studio",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "license": "AGPL-3.0-or-later",
+  "description": "GUI for Microsoft Olive model optimization — runs locally, no cloud required",
   "type": "module",
+  "bin": {
+    "olive-studio": "./bin/cli.js"
+  },
+  "files": [
+    "dist/",
+    "bin/"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "tsx server.ts",
     "generate:recipes": "node scripts/generate-olive-recipes-catalog.mjs",

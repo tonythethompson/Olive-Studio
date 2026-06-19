@@ -1073,7 +1073,7 @@ async function startServer() {
       vite.middlewares(req, res, next);
     });
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    const distPath = process.env.OLIVE_DIST_DIR ?? path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
