@@ -9,6 +9,8 @@ export interface PipelineIssue {
   title: string;
   description: string;
   affectedTabs?: string[];
+  /** Graph node IDs (pipeline step ids) affected — drives per-node conflict badges */
+  affectedPasses?: string[];
   actionLabel?: string;
   autofix?: Partial<UIState>;
 }
@@ -209,6 +211,7 @@ function getCrossPassIssues(state: UIState): PipelineIssue[] {
       description:
         "Pruning conflicts with AWQ scale calibration. Pruning is turned off automatically when AWQ is selected.",
       affectedTabs: ["quantization", "compression"],
+      affectedPasses: ["pruning", "quantization"],
       actionLabel: "Disable pruning",
       autofix: { passes: { ...passes, pruning: false } },
     });
@@ -222,6 +225,7 @@ function getCrossPassIssues(state: UIState): PipelineIssue[] {
       description:
         "Standard LoRA expects floating-point base parameters to optimize. If you use integers (INT4/INT8), you must select QLoRA's double-quantized parameters.",
       affectedTabs: ["quantization", "peft"],
+      affectedPasses: ["peft", "quantization"],
       actionLabel: "Enable QLoRA Mode",
       autofix: { passes: { ...passes, peftMethod: "qlora" } },
     });
@@ -235,6 +239,7 @@ function getCrossPassIssues(state: UIState): PipelineIssue[] {
       description:
         "Applying both sparsity pruning and aggressive INT4 quantization leads to extreme mathematical precision decline and accuracy degradation.",
       affectedTabs: ["quantization", "compression"],
+      affectedPasses: ["pruning", "quantization"],
       actionLabel: "Increase Quant to INT8",
       autofix: { passes: { ...passes, quantPrecision: "int8" } },
     });
@@ -248,6 +253,7 @@ function getCrossPassIssues(state: UIState): PipelineIssue[] {
       description:
         "Manual ONNX graph layout transforms are redundant and can clash during subsequent compilation into OpenVINO XML representation.",
       affectedTabs: ["conversion", "transforms"],
+      affectedPasses: ["conversion", "transformer_opt"],
       actionLabel: "Deactivate ONNX Transforms",
       autofix: { passes: { ...passes, onnxTransforms: false } },
     });
@@ -261,6 +267,7 @@ function getCrossPassIssues(state: UIState): PipelineIssue[] {
       description:
         "Model splitting breaks the weights dictionary across boundary subroutines. QAT fine-tuning requires unbroken parameters.",
       affectedTabs: ["conversion", "quantization"],
+      affectedPasses: ["splitting", "quantization"],
       actionLabel: "Disable Model Splitting",
       autofix: { passes: { ...passes, splitting: false } },
     });
@@ -274,6 +281,7 @@ function getCrossPassIssues(state: UIState): PipelineIssue[] {
       description:
         "QLoRA gradients expect specialized GPU CUDA kernels. Training adapters on standard CPU threads is highly inefficient and slow.",
       affectedTabs: ["peft"],
+      affectedPasses: ["peft"],
       actionLabel: "Revert PEFT to floating-point LoRA",
       autofix: { passes: { ...passes, peftMethod: "lora" } },
     });
@@ -291,6 +299,7 @@ function getCrossPassIssues(state: UIState): PipelineIssue[] {
       description:
         "OpenVINO conversion format is selected, but the target hardware is not Intel OpenVINO. Pipeline execution will fail.",
       affectedTabs: ["conversion"],
+      affectedPasses: ["conversion", "provider"],
       actionLabel: "Switch conversion to ONNX",
       autofix: { passes: { ...passes, conversionFormat: "onnx" } },
     });
@@ -299,12 +308,22 @@ function getCrossPassIssues(state: UIState): PipelineIssue[] {
   return issues;
 }
 
+const PASS_KEY_TO_NODE: Record<string, string> = {
+  conversionFormat: "conversion",
+  quantMethod: "quantization",
+  quantPrecision: "quantization",
+  pruningType: "pruning",
+  peft: "peft",
+  peftMethod: "peft",
+};
+
 function getProviderIssues(state: UIState): PipelineIssue[] {
   return getProviderConflicts(state.ihvProvider, state.passes).map((c) => ({
     id: `provider-${state.ihvProvider}-${c.passKey}`,
     severity: c.severity,
     title: `${c.passName} incompatible with ${state.ihvProvider.replace("ExecutionProvider", "")}`,
     description: c.reason,
+    affectedPasses: [PASS_KEY_TO_NODE[c.passKey] ?? c.passKey, "provider"].filter(Boolean),
     actionLabel: "Apply suggested fix",
     autofix: { passes: { ...state.passes, ...c.autofix() } },
   }));
@@ -321,6 +340,7 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
       title: "INT4 on CPU",
       description:
         "INT4 precision is generally not hardware-accelerated on standard CPUs (may fallback to FP32 math).",
+      affectedPasses: ["quantization", "provider"],
     });
   }
 

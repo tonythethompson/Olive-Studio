@@ -1,4 +1,4 @@
-import { useState, useLayoutEffect, useRef, type ReactElement } from "react";
+import { useState, useLayoutEffect, useEffect, useRef, type ReactElement } from "react";
 import { UIState } from "@/types";
 import { Button, Card, CardContent, Input, Label, Slider, Select } from "@/components/ui";
 import {
@@ -33,6 +33,7 @@ import {
 interface RecipeGraphViewProps {
   state: UIState;
   setState: (s: Partial<UIState>) => void;
+  showDot?: boolean;
 }
 
 type GraphPoint = { x: number; y: number };
@@ -67,11 +68,36 @@ function appendSegmentCurve(from: GraphPoint, to: GraphPoint): string {
   return `C ${from.x} ${c1y}, ${to.x} ${c2y}, ${to.x} ${to.y}`;
 }
 
-export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
+// Derive allowable conversionInputTargetTypes from the selected model identifier
+function getModelDefaultInputType(state: UIState): string {
+  const id = (
+    state.modelSource === "huggingface" ? state.hfModelId :
+    state.modelSource === "azure" ? state.azureModelPath :
+    state.localFiles?.[0]?.name ?? ""
+  ).toLowerCase();
+
+  if (id.includes("whisper")) return "float16";
+  if (id.includes("diffusion") || id.includes("unet") || id.includes("sdxl") || id.includes("flux")) return "float16";
+  if (id.includes("bert") || id.includes("roberta") || id.includes("t5")) return "float32";
+  // LLMs and generic default
+  return "float16";
+}
+
+export function RecipeGraphView({ state, setState, showDot = true }: RecipeGraphViewProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string>("input");
   const [connections, setConnections] = useState<{ from: string; to: string }[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [layoutTick, setLayoutTick] = useState(0);
+
+  // Keep conversionInputTargetTypes in sync with the selected model family
+  useEffect(() => {
+    const defaultType = getModelDefaultInputType(state);
+    const allowed = ["float16", "bfloat16", "float32", "int8", "int32", "int64"];
+    if (!allowed.includes(state.passes.conversionInputTargetTypes)) {
+      setState({ passes: { ...state.passes, conversionInputTargetTypes: defaultType } });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.modelSource, state.hfModelId, state.azureModelPath, state.localFiles.length]);
 
   // Redraw connections when layout or pipeline changes
   useLayoutEffect(() => {
@@ -154,121 +180,119 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
   const allowedPruningTypes = getAllowedPruningTypes(state.ihvProvider);
   const allowedPeftMethods = getAllowedPeftMethods(state.ihvProvider);
 
+  // Per-node worst-severity conflict level for graph badge rendering
+  const nodeIssueLevel = (nodeId: string): "critical" | "warning" | null => {
+    const relevant = validation.issues.filter(i => i.affectedPasses?.includes(nodeId));
+    if (relevant.some(i => i.severity === "critical")) return "critical";
+    if (relevant.some(i => i.severity === "warning")) return "warning";
+    return null;
+  };
+
   // Render SVG wires Dynamically
   const renderSVGConnections = () => {
     if (!containerRef.current) return null;
 
     const paths: ReactElement[] = [];
-    let fullChainPath = "";
+    const parentRect = containerRef.current.getBoundingClientRect();
+    // Bypass lane: 28px from top of container, 8px below bottom
+    const arcYTop = 28;
 
-    // Draw connections chronologically through active nodes
-    for (let i = 0; i < activeNodes.length - 1; i++) {
-      const fromId = activeNodes[i].id;
-      const toId = activeNodes[i + 1].id;
-      const points = getConnectionPoints(fromId, toId);
+    const numSegs = activeNodes.length - 1;
+    const totalDur = Math.max(2, numSegs * 0.8);
 
-      if (points) {
-        const d = buildSegmentCurve(points.from, points.to);
+    for (let i = 0; i < numSegs; i++) {
+      const fromNode = activeNodes[i];
+      const toNode = activeNodes[i + 1];
+      const fromPipelineIdx = pipelineSteps.findIndex(s => s.id === fromNode.id);
+      const toPipelineIdx = pipelineSteps.findIndex(s => s.id === toNode.id);
 
-        if (!fullChainPath) {
-          fullChainPath = d;
-        } else {
-          fullChainPath += ` L ${points.from.x} ${points.from.y} ${appendSegmentCurve(points.from, points.to)}`;
-        }
+      // Are there any inactive steps between these two active nodes?
+      const hasSkip = pipelineSteps
+        .slice(fromPipelineIdx + 1, toPipelineIdx)
+        .some(s => !s.active);
 
+      const tStart = i / numSegs;
+      const tEnd = (i + 1) / numSegs;
+      const tStartBefore = Math.max(0, tStart - 0.001);
+      const tEndAfter = Math.min(1, tEnd + 0.001);
+
+      let d: string;
+
+      if (hasSkip) {
+        // Route over/under the skipped nodes via a bypass lane
+        const fromElem = document.getElementById(`node-btn-${fromNode.id}`);
+        const toElem = document.getElementById(`node-btn-${toNode.id}`);
+        if (!fromElem || !toElem) continue;
+
+        const fromR = fromElem.getBoundingClientRect();
+        const toR = toElem.getBoundingClientRect();
+        const fromX = fromR.left - parentRect.left + fromR.width / 2;
+        const fromY = fromR.top - parentRect.top;
+        const toX = toR.left - parentRect.left + toR.width / 2;
+        const toY = toR.top - parentRect.top;
+
+        const arcY = arcYTop;
+
+        d = `M ${fromX} ${fromY} C ${fromX} ${arcY}, ${toX} ${arcY}, ${toX} ${toY}`;
+
+        // Subtle bypass lane track
         paths.push(
-          <g key={`${fromId}-${toId}`}>
-            <path
-              d={d}
-              fill="none"
-              stroke="rgba(0, 240, 255, 0.15)"
-              strokeWidth="6"
-              className="transition-all duration-300"
-            />
-            <path
-              d={d}
-              fill="none"
-              stroke="url(#wireGradient)"
-              strokeWidth="2"
-              strokeDasharray="6 6"
-              className="transition-all duration-300"
-            />
-          </g>
-        );
-      }
-    }
-
-    if (fullChainPath) {
-      const motionDuration = Math.max(4, activeNodes.length * 1.4);
-      paths.push(
-        <circle key={`flow-pulse-${fullChainPath}`} r="4" fill="#8DA840" className="glow-pulsar">
-          <animateMotion
-            dur={`${motionDuration}s`}
-            repeatCount="indefinite"
-            path={fullChainPath}
-            calcMode="linear"
-            keyPoints="0;1"
-            keyTimes="0;1"
+          <path
+            key={`bypass-lane-${fromNode.id}-${toNode.id}`}
+            d={d}
+            fill="none"
+            stroke="rgba(100, 116, 139, 0.08)"
+            strokeWidth="8"
+            className="transition-all duration-300"
           />
-        </circle>
-      );
-    }
-
-    // Draw dashed bypass paths for disabled components
-    for (let i = 0; i < pipelineSteps.length; i++) {
-      const current = pipelineSteps[i];
-      if (!current.active) {
-        // Find preceding active and proceeding active
-        let precedingActive: (typeof pipelineSteps)[number] | null = null;
-        for (let idx = i - 1; idx >= 0; idx--) {
-          if (pipelineSteps[idx].active) {
-            precedingActive = pipelineSteps[idx];
-            break;
-          }
-        }
-        let proceedingActive: (typeof pipelineSteps)[number] | null = null;
-        for (let idx = i + 1; idx < pipelineSteps.length; idx++) {
-          if (pipelineSteps[idx].active) {
-            proceedingActive = pipelineSteps[idx];
-            break;
-          }
-        }
-
-        if (precedingActive && proceedingActive !== current && proceedingActive.id !== "output") {
-          const points = getConnectionPoints(precedingActive.id, current.id);
-          if (points) {
-            const pb = buildSegmentCurve(points.from, points.to);
-            paths.push(
-              <path
-                key={`bypass-pre-${current.id}`}
-                d={pb}
-                fill="none"
-                stroke="rgba(100, 116, 139, 0.15)"
-                strokeWidth="1.5"
-                strokeDasharray="4 4"
-                className="transition-all duration-300"
-              />
-            );
-          }
-        }
-        if (proceedingActive && proceedingActive !== current) {
-          const points = getConnectionPoints(current.id, proceedingActive.id);
-          if (points) {
-            const pa = buildSegmentCurve(points.from, points.to);
-            paths.push(
-              <path
-                key={`bypass-post-${current.id}`}
-                d={pa}
-                fill="none"
-                stroke="rgba(100, 116, 139, 0.15)"
-                strokeWidth="1.5"
-                strokeDasharray="4 4"
-                className="transition-all duration-300"
-              />
-            );
-          }
-        }
+        );
+      } else {
+        const points = getConnectionPoints(fromNode.id, toNode.id);
+        if (!points) continue;
+        d = buildSegmentCurve(points.from, points.to);
       }
+
+      paths.push(
+        <g key={`${fromNode.id}-${toNode.id}`}>
+          <path
+            d={d}
+            fill="none"
+            stroke={hasSkip ? "rgba(141, 168, 64, 0.08)" : "rgba(141, 168, 64, 0.12)"}
+            strokeWidth={hasSkip ? 5 : 6}
+            className="transition-all duration-300"
+          />
+          <path
+            d={d}
+            fill="none"
+            stroke="url(#wireGradient)"
+            strokeWidth={hasSkip ? 1.5 : 2}
+            strokeDasharray="6 6"
+            strokeOpacity={hasSkip ? 0.6 : 1}
+            className="transition-all duration-300"
+          >
+            <animate attributeName="stroke-dashoffset" from="12" to="0" dur="0.7s" repeatCount="indefinite" />
+          </path>
+          {showDot && (
+            <circle r={hasSkip ? 3 : 3.5} fill="#8DA840" opacity="0">
+              <animateMotion
+                dur={`${totalDur}s`}
+                repeatCount="indefinite"
+                path={d}
+                calcMode="linear"
+                keyPoints="0;0;1;1"
+                keyTimes={`0;${tStart};${tEnd};1`}
+              />
+              <animate
+                attributeName="opacity"
+                dur={`${totalDur}s`}
+                repeatCount="indefinite"
+                values="0;0;1;1;0;0"
+                keyTimes={`0;${tStartBefore};${tStart};${tEnd};${tEndAfter};1`}
+              />
+            </circle>
+          )}
+        </g>
+      );
     }
 
     return (
@@ -424,7 +448,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
         <div className="grid grid-cols-1 md:grid-cols-12 gap-y-6 md:gap-3 relative z-10 items-center justify-between h-full w-full min-w-0 md:min-w-[720px]">
           
           {/* Column 1: Model Source Input Model (Cols 1-3) */}
-          <div className="md:col-span-3 flex flex-col justify-center items-center h-full">
+          <div className="md:col-span-2 flex flex-col justify-center items-center h-full">
             <div className="text-xs text-slate-500 mb-3">
               Input
             </div>
@@ -457,41 +481,59 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
           </div>
 
           {/* Column 2: Olive Optimization Steps Carousel Cascades (Cols 4-8) */}
-          <div className="md:col-span-6 flex flex-col items-center justify-center gap-4 border-l border-r border-slate-900/30 px-2">
+          <div className="md:col-span-7 flex flex-col items-center justify-center gap-4 border-l border-r border-slate-900/30 px-4">
             <div className="text-xs text-slate-500 mb-1">
               Optimization passes
             </div>
             
-            <div className="grid grid-cols-3 gap-2 w-full">
+            <div className="grid grid-cols-3 gap-4 w-full">
               {["splitting", "peft", "conversion", "pruning", "transformer_opt", "quantization"].map(id => {
                 const nd = getNodePreviewData(id);
                 const isSelected = selectedNodeId === id;
                 const active = pipelineSteps.find(s => s.id === id)?.active;
-                
+                const issueLevel = active ? nodeIssueLevel(id) : null;
+
                 return (
                   <button
                     key={id}
                     id={`node-btn-${id}`}
                     onClick={() => handleNodeClick(id)}
                     className={`group text-left p-2 rounded-lg border transition-all duration-300 relative flex flex-col justify-between ${
-                      isSelected 
-                      ? "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue" 
-                      : active
-                        ? "border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/60"
-                        : "border-slate-900/50 hover:border-slate-800/80 bg-slate-950/60 opacity-60 hover:opacity-85 border-dashed"
+                      isSelected
+                        ? issueLevel === "critical"
+                          ? "border-rose-500 bg-rose-950/20 ring-1 ring-rose-500"
+                          : issueLevel === "warning"
+                            ? "border-amber-500 bg-amber-950/10 ring-1 ring-amber-500"
+                            : "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue"
+                        : issueLevel === "critical"
+                          ? "border-rose-700/60 bg-rose-950/10 hover:border-rose-600"
+                          : issueLevel === "warning"
+                            ? "border-amber-700/50 bg-amber-950/5 hover:border-amber-600"
+                            : active
+                              ? "border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/60"
+                              : "border-slate-900/50 hover:border-slate-800/80 bg-slate-950/60 opacity-60 hover:opacity-85 border-dashed"
                     }`}
                   >
+                    {issueLevel && (
+                      <span className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${issueLevel === "critical" ? "bg-rose-500" : "bg-amber-400"}`} />
+                    )}
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <div className={`p-1 rounded ${active ? "bg-electric-blue/10 border border-electric-blue/20 text-electric-blue" : "bg-slate-950 border border-slate-900 text-slate-500"}`}>
+                        <div className={`p-1 rounded ${
+                          issueLevel === "critical" ? "bg-rose-950/40 border border-rose-700/40 text-rose-400"
+                          : issueLevel === "warning" ? "bg-amber-950/30 border border-amber-700/30 text-amber-400"
+                          : active ? "bg-electric-blue/10 border border-electric-blue/20 text-electric-blue"
+                          : "bg-slate-950 border border-slate-900 text-slate-500"
+                        }`}>
                           {nd.icon}
                         </div>
                         <span className={`text-[8px] font-mono px-1 py-0.2 rounded border uppercase whitespace-nowrap ${
-                          active 
-                          ? "bg-slate-950 text-electric-blue border-electric-blue/20" 
+                          issueLevel === "critical" ? "bg-rose-950/40 text-rose-400 border-rose-700/40"
+                          : issueLevel === "warning" ? "bg-amber-950/30 text-amber-400 border-amber-700/30"
+                          : active ? "bg-slate-950 text-electric-blue border-electric-blue/20"
                           : "bg-slate-950 text-slate-600 border-slate-900"
                         }`}>
-                          {active ? "Active" : "Skip"}
+                          {issueLevel === "critical" ? "Conflict" : issueLevel === "warning" ? "Warning" : active ? "Active" : "Skip"}
                         </span>
                       </div>
                       <h4 className="text-[11px] font-bold text-slate-200 truncate leading-snug">{nd.title}</h4>
@@ -514,18 +556,34 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
               {(() => {
                 const nd = getNodePreviewData("provider");
                 const isSelected = selectedNodeId === "provider";
+                const providerIssue = nodeIssueLevel("provider");
                 return (
                   <button
                     id="node-btn-provider"
                     onClick={() => handleNodeClick("provider")}
                     className={`group w-full max-w-[240px] text-left p-3.5 rounded-xl border transition-all duration-300 relative ${
-                      isSelected 
-                      ? "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue" 
-                      : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
+                      isSelected
+                        ? providerIssue === "critical"
+                          ? "border-rose-500 bg-rose-950/20 ring-1 ring-rose-500"
+                          : providerIssue === "warning"
+                            ? "border-amber-500 bg-amber-950/10 ring-1 ring-amber-500"
+                            : "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue"
+                        : providerIssue === "critical"
+                          ? "border-rose-700/60 bg-rose-950/10 hover:border-rose-600"
+                          : providerIssue === "warning"
+                            ? "border-amber-700/50 bg-amber-950/5 hover:border-amber-600"
+                            : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
                     }`}
                   >
+                    {providerIssue && (
+                      <span className={`absolute top-2 right-2 w-2 h-2 rounded-full ${providerIssue === "critical" ? "bg-rose-500" : "bg-amber-400"}`} />
+                    )}
                     <div className="flex items-center justify-between mb-1.5">
-                      <div className="p-1.5 rounded bg-electric-blue/10 border border-electric-blue/20 group-hover:bg-electric-blue/15 transition-all duration-200">
+                      <div className={`p-1.5 rounded border transition-all duration-200 ${
+                        providerIssue === "critical" ? "bg-rose-950/40 border-rose-700/40 text-rose-400"
+                        : providerIssue === "warning" ? "bg-amber-950/30 border-amber-700/30 text-amber-400"
+                        : "bg-electric-blue/10 border-electric-blue/20 group-hover:bg-electric-blue/15"
+                      }`}>
                         {nd.icon}
                       </div>
                     </div>
