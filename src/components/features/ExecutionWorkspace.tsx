@@ -2,13 +2,12 @@
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
 import { Code, Play, CheckCircle2, AlertCircle, Copy, Check, Upload, FileJson, X, Github, Sparkles, ArrowUpRight, Search, BookOpen, Workflow, GitBranch, GitPullRequest, Globe, RefreshCw, Trash2, Download, Laptop, Smartphone, FileCode, Sliders, Cpu, Settings, AlertTriangle } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 import JSZip from "jszip";
 import { RecipeGraphView } from "./RecipeGraphView";
 import { cn } from "@/lib/utils";
 import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
 
-export function ExecutionWorkspace({ state, setState, onExecute: _onExecute, jobId: _jobId, isRunning: _isRunning, setIsRunning: _setIsRunning }: { state: UIState; setState: (s: Partial<UIState>) => void; onExecute?: () => void; jobId?: string | null; isRunning?: boolean; setIsRunning?: (v: boolean) => void }) {
+export function ExecutionWorkspace({ state, setState, onOpenAiAudit, onExecute: _onExecute, jobId: _jobId, isRunning: _isRunning, setIsRunning: _setIsRunning }: { state: UIState; setState: (s: Partial<UIState>) => void; onOpenAiAudit?: () => void; onExecute?: () => void; jobId?: string | null; isRunning?: boolean; setIsRunning?: (v: boolean) => void }) {
   // Live execution state
   const [liveJobId, setLiveJobId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -21,15 +20,6 @@ export function ExecutionWorkspace({ state, setState, onExecute: _onExecute, job
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isExportCopied, setIsExportCopied] = useState(false);
   const [justQueued, setJustQueued] = useState(false);
-  const [aiReviewLoading, setAiReviewLoading] = useState(false);
-  const [aiReviewResult, setAiReviewResult] = useState<{
-    valid?: boolean;
-    severity?: string;
-    summary?: string;
-    issues?: Array<{ type?: string; title?: string; explanation?: string; fix?: string }>;
-    suggestions?: string[];
-    error?: string;
-  } | null>(null);
 
   // States for Exporting to ONNX Runtime Web/Mobile (OWR)
   const [isOwrExportOpen, setIsOwrExportOpen] = useState(false);
@@ -254,29 +244,6 @@ ${owrPlatform === "web" ?
     ? `Schema invalid (${schema.errors.length} issue${schema.errors.length === 1 ? "" : "s"})`
     : validation.statusLabel;
   const validationTone = !schema.valid ? "error" : validation.statusTone;
-
-  const handleAiReview = async () => {
-    setAiReviewLoading(true);
-    setAiReviewResult(null);
-    try {
-      const resp = await fetch("/api/ai/validate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipeJson, ihvProvider: state.ihvProvider }),
-      });
-      const data = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
-      if (!resp.ok) {
-        setAiReviewResult({ error: data.error || `HTTP ${resp.status}` });
-      } else {
-        setAiReviewResult(data);
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "AI review request failed";
-      setAiReviewResult({ error: message });
-    } finally {
-      setAiReviewLoading(false);
-    }
-  };
 
   const handleQueueJob = () => {
     if (!isRunnable) {
@@ -788,9 +755,44 @@ ${owrPlatform === "web" ?
         )}
       </Card>
 
-      {/* Execution Controls */}
+      {/* Active Draft — execution controls + live log in one card */}
       <Card className="border-slate-800 bg-slate-900/40">
-        <CardContent className="p-4 flex flex-col gap-3">
+        <CardHeader
+          title="Active Draft"
+          description={
+            executionStatus === "running" ? "Olive is running — streaming optimization logs." :
+            executionStatus === "completed" ? `Run completed (exit 0)` :
+            executionStatus === "failed" ? `Run failed (exit ${executionExitCode ?? "?"})` :
+            "Review recipe above, then execute live or add to batch queue."
+          }
+          badge={
+            <div className="flex items-center gap-2 flex-wrap">
+              {executionStatus === "running" && (
+                <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-2.5 py-1 rounded-full font-bold animate-pulse">
+                  <RefreshCw className="h-3 w-3 animate-spin" /> Running
+                </span>
+              )}
+              {executionStatus === "completed" && (
+                <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full font-bold">
+                  <CheckCircle2 className="h-3 w-3" /> Done
+                </span>
+              )}
+              {executionStatus === "failed" && (
+                <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded-full font-bold">
+                  <AlertCircle className="h-3 w-3" /> Failed
+                </span>
+              )}
+              <Button
+                variant="outline"
+                className="h-8 px-2.5 text-[10px] border-slate-700 text-slate-300 hover:border-purple-500/40 hover:text-purple-300"
+                onClick={() => onOpenAiAudit?.()}
+              >
+                <Sparkles className="h-3 w-3 mr-1 inline" /> AI Review
+              </Button>
+            </div>
+          }
+        />
+        <CardContent className="flex flex-col gap-4 p-4">
           {schema.errors.length > 0 && (
             <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3 space-y-2">
               {schema.errors.map((error) => (
@@ -815,7 +817,6 @@ ${owrPlatform === "web" ?
             </div>
           )}
           <div className="flex justify-between items-center gap-3 flex-wrap sm:flex-nowrap">
-          <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2">
               {validationTone === "success" ? (
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -834,91 +835,29 @@ ${owrPlatform === "web" ?
                 {validationLabel}
               </span>
             </div>
-            <Button
-              variant="outline"
-              className="h-8 px-2.5 text-[10px] border-slate-700 text-slate-300 hover:border-purple-500/40 hover:text-purple-300"
-              onClick={handleAiReview}
-              disabled={aiReviewLoading}
-            >
-              {aiReviewLoading ? (
-                <><RefreshCw className="h-3 w-3 mr-1 animate-spin inline" /> Reviewing...</>
+            <div className="flex items-center gap-2 ml-auto">
+              {justQueued ? (
+                <span className="text-xs text-electric-blue font-semibold animate-pulse font-mono mr-2">Queued!</span>
               ) : (
-                <><Sparkles className="h-3 w-3 mr-1 inline" /> AI Review</>
+                <Button variant="outline" className="h-9 px-3 text-xs border-dashed border-slate-700 hover:border-electric-blue hover:text-electric-blue disabled:opacity-40" onClick={handleQueueJob} disabled={!isRunnable}>
+                  + Queue
+                </Button>
               )}
-            </Button>
-            {executionStatus === "running" && (
-              <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-2.5 py-1 rounded-full font-bold animate-pulse">
-                <RefreshCw className="h-3 w-3 animate-spin" /> Running
-              </span>
-            )}
-            {executionStatus === "completed" && (
-              <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full font-bold">
-                <CheckCircle2 className="h-3 w-3" /> Done
-              </span>
-            )}
-            {executionStatus === "failed" && (
-              <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded-full font-bold">
-                <AlertCircle className="h-3 w-3" /> Failed
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 ml-auto">
-            {justQueued ? (
-              <span className="text-xs text-electric-blue font-semibold animate-pulse font-mono mr-2">Queued to Batch!</span>
-            ) : (
-              <Button variant="outline" className="h-9 px-3 text-xs border-dashed border-slate-700 hover:border-electric-blue hover:text-electric-blue disabled:opacity-40" onClick={handleQueueJob} disabled={!isRunnable}>
-                Queue Batch Job
+              <Button
+                variant="success"
+                onClick={handleExecuteLive}
+                disabled={isRunning || !isRunnable}
+                className="h-9 text-xs"
+              >
+                {isRunning ? (
+                  <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Olive running...</>
+                ) : (
+                  <><Play className="h-3.5 w-3.5 mr-1.5" fill="currentColor" /> Execute Live</>
+                )}
               </Button>
-            )}
-            <Button 
-              variant="success" 
-              onClick={handleExecuteLive} 
-              disabled={isRunning || !isRunnable}
-              className="h-9 text-xs"
-            >
-              {isRunning ? (
-                <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Olive running...</>
-              ) : (
-                <><Play className="h-3.5 w-3.5 mr-1.5" fill="currentColor" /> Execute Live</>
-              )}
-            </Button>
-          </div>
-          {aiReviewResult && (
-            <div className="rounded-lg border border-purple-500/20 bg-purple-950/20 p-3 space-y-2">
-              {"error" in aiReviewResult && aiReviewResult.error ? (
-                <p className="text-xs text-rose-300">{aiReviewResult.error}</p>
-              ) : (
-                <>
-                  <p className="text-xs font-semibold text-purple-200">
-                    AI Review{aiReviewResult.severity ? ` · ${aiReviewResult.severity}` : ""}
-                    {aiReviewResult.valid === false ? " · issues found" : aiReviewResult.valid ? " · looks OK" : ""}
-                  </p>
-                  {aiReviewResult.summary && (
-                    <p className="text-[11px] text-slate-300 leading-relaxed">{aiReviewResult.summary}</p>
-                  )}
-                  {(aiReviewResult.issues ?? []).map((issue, idx) => (
-                    <div key={`${issue.title ?? "issue"}-${idx}`} className="text-[11px] text-slate-400">
-                      <span className="font-semibold text-slate-300">{issue.title}</span>
-                      {issue.explanation ? `: ${issue.explanation}` : ""}
-                      {issue.fix ? ` — ${issue.fix}` : ""}
-                    </div>
-                  ))}
-                </>
-              )}
             </div>
-          )}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Optimization Logs */}
-      <Card>
-        <CardHeader 
-          title="Optimization Logs" 
-          description={executionStatus === "running" ? "Olive is running..." : executionStatus === "completed" ? `Completed (exit 0)` : executionStatus === "failed" ? `Failed (exit ${executionExitCode ?? "?"})` : "Ready"}
-        />
-        <CardContent>
-          <div className="bg-slate-950 border border-slate-800 rounded-md p-4 font-mono text-xs text-emerald-400 space-y-0.5 h-[260px] overflow-y-auto">
+          <div className="bg-slate-950 border border-slate-800 rounded-md p-4 font-mono text-xs text-emerald-400 space-y-0.5 h-[220px] overflow-y-auto">
             {executionLogs.length === 0 ? (
               <p className="text-slate-500 italic">Ready — click &quot;Execute Live&quot; to begin an Olive optimization run.</p>
             ) : (

@@ -3,11 +3,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { UIState } from "@/types";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import { commitUiStateUpdate } from "@/lib/pipelineValidation";
-import { BrainCircuit, Cpu, Zap, Terminal, Database, ListOrdered, Bot } from "lucide-react";
+import { BrainCircuit, Cpu, Zap, Terminal, Bot } from "lucide-react";
 import { InputEnvironmentPanel } from "@/components/features/InputEnvironmentPanel";
 import { IHVIntegrationPanel } from "@/components/features/IHVIntegrationPanel";
 import { OptimizationPassesPanel } from "@/components/features/OptimizationPassesPanel";
-import { EnterpriseInfraPanel } from "@/components/features/EnterpriseInfraPanel";
 import { ExecutionWorkspace } from "@/components/features/ExecutionWorkspace";
 import { BatchProcessingPanel } from "@/components/features/BatchProcessingPanel";
 import { GeminiSidebar } from "@/components/features/GeminiSidebar";
@@ -30,21 +29,25 @@ const defaultState: UIState = {
   passes: { ...DEFAULT_PASSES },
 };
 
-type ActiveView = "input" | "ihv" | "passes" | "infra" | "execute" | "batch";
+type ActiveView = "input" | "ihv" | "passes" | "execute";
 
 const SECTIONS: { id: ActiveView; step: string; label: string; desc: string; icon: any }[] = [
   { id: "input",   step: "01", label: "Model Source & Data",      desc: "Select an existing recipe or define the base model for optimization.",          icon: BrainCircuit },
   { id: "ihv",     step: "02", label: "Target Hardware (IHV)",    desc: "Choose the hardware accelerator and execution provider framework.",              icon: Cpu },
   { id: "passes",  step: "03", label: "Optimization Passes",      desc: "Configure conversion, quantization, and pruning techniques.",                   icon: Zap },
-  { id: "infra",   step: "04", label: "Enterprise Infrastructure",desc: "Connect to Azure Machine Learning or other enterprise deployments.",             icon: Database },
-  { id: "execute", step: "05", label: "Recipe & Execution",       desc: "Review the generated Olive workflow and trigger the optimization.",              icon: Terminal },
-  { id: "batch",   step: "06", label: "Batch Queue",              desc: "Monitor multi-model parallel optimization runs.",                               icon: ListOrdered },
+  { id: "execute", step: "04", label: "Recipe & Execution",       desc: "Review the generated Olive workflow, execute live, or queue batch jobs.",       icon: Terminal },
 ];
 
 function Dashboard() {
   const [state, setStateRaw] = useState<UIState>(defaultState);
   const [activeView, setActiveView] = useState<ActiveView>("input");
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
+  const [triggerAiAudit, setTriggerAiAudit] = useState(false);
+
+  const handleOpenAiAudit = () => {
+    setIsAiSidebarOpen(true);
+    setTriggerAiAudit(true);
+  };
 
   const setState = (partial: Partial<UIState>) =>
     setStateRaw((prev) => commitUiStateUpdate(prev, partial));
@@ -166,9 +169,12 @@ function Dashboard() {
                 {id === "input"   && <InputEnvironmentPanel   state={state} setState={setState} />}
                 {id === "ihv"     && <IHVIntegrationPanel     state={state} setState={setState} />}
                 {id === "passes"  && <OptimizationPassesPanel state={state} setState={setState} />}
-                {id === "infra"   && <EnterpriseInfraPanel    state={state} setState={setState} />}
-                {id === "execute" && <ExecutionWorkspace       state={state} setState={setState} />}
-                {id === "batch"   && <BatchProcessingPanel     state={state} setState={setState} />}
+{id === "execute" && (
+                  <div className="space-y-10">
+                    <ExecutionWorkspace state={state} setState={setState} onOpenAiAudit={handleOpenAiAudit} />
+                    <BatchProcessingPanel state={state} setState={setState} />
+                  </div>
+                )}
               </section>
             ))}
           </div>
@@ -180,6 +186,8 @@ function Dashboard() {
         setState={setState}
         isOpen={isAiSidebarOpen}
         onClose={() => setIsAiSidebarOpen(false)}
+        openToAudit={triggerAiAudit}
+        onAuditOpened={() => setTriggerAiAudit(false)}
       />
       </div>
     </div>

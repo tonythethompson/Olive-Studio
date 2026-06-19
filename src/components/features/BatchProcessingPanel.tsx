@@ -202,48 +202,6 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
     setIsProcessing(false);
   };
 
-  // Queue current dashboard configuration
-  const handleQueueCurrent = () => {
-    const validation = getPipelineValidation(state);
-    if (validation.isBlocked) return;
-
-    const activePassesNames: string[] = [];
-    if (state.passes.conversion) activePassesNames.push(`Conversion (${state.passes.conversionFormat === "onnx" ? "ONNX" : "OpenVINO"})`);
-    if (state.passes.quantization) activePassesNames.push(`Quantization (${state.passes.quantPrecision})`);
-    if (state.passes.pruning) activePassesNames.push(`Pruning (${state.passes.pruningMethod})`);
-    if (state.passes.onnxTransforms) activePassesNames.push("ORT Transforms");
-    
-    if (activePassesNames.length === 0) {
-      activePassesNames.push("Default Baseline Export");
-    }
-
-    let mid = "Offline Weights Folder";
-    if (state.modelSource === "huggingface") {
-      mid = state.hfModelId || "unspecified-hf-model";
-    } else if (state.modelSource === "azure") {
-      mid = state.azureModelPath || "AzureML Asset Container";
-    }
-
-    const jobName = `Staged: ${mid.split("/").pop()} - ${state.ihvProvider.replace("ExecutionProvider", "")}`;
-
-    const newJob: BatchJob = {
-      id: "job-" + Date.now(),
-      name: jobName,
-      modelSource: state.modelSource,
-      modelIdentifier: mid,
-      provider: state.ihvProvider,
-      passes: activePassesNames,
-      recipeJson: buildRecipeJsonFromState(state),
-      status: "queued",
-      progress: 0,
-      progressKnown: true,
-      logs: ["Job created from active template configuration. Awaiting queue start."]
-    };
-
-    setState({ batchJobs: [...jobs, newJob] });
-    setSelectedJobId(newJob.id);
-  };
-
   const handleAddCustom = () => {
     if (!newModelName.trim()) return;
 
@@ -331,14 +289,9 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
             title="Olive Batch Serialization Queue" 
             description="Manage sequential optimization jobs to execute parallel permutations or benchmark suites."
             badge={
-              <div className="flex gap-2">
-                 <Button variant="outline" className="h-8 text-xs shrink-0" onClick={handleQueueCurrent}>
-                   Queue Active Setup
-                 </Button>
-                 <Button variant="default" className="h-8 text-xs bg-electric-blue text-white shrink-0" onClick={() => setShowAddForm(!showAddForm)}>
-                   <Plus className="h-4 w-4 mr-1" /> Custom Job
-                 </Button>
-              </div>
+              <Button variant="default" className="h-8 text-xs bg-electric-blue text-white shrink-0" onClick={() => setShowAddForm(!showAddForm)}>
+                <Plus className="h-4 w-4 mr-1" /> Custom Job
+              </Button>
             }
           />
 

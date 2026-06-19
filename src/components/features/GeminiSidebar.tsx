@@ -56,6 +56,8 @@ interface GeminiSidebarProps {
   setState: (partial: Partial<UIState>) => void;
   isOpen: boolean;
   onClose: () => void;
+  openToAudit?: boolean;
+  onAuditOpened?: () => void;
 }
 
 interface Suggestion {
@@ -79,7 +81,7 @@ interface ProviderStatus {
   model?: string;
 }
 
-export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSidebarProps) {
+export function GeminiSidebar({ state, setState, isOpen, onClose, openToAudit, onAuditOpened }: GeminiSidebarProps) {
   const [activeTab, setActiveTab] = useState<"audit" | "chat" | "settings">("audit");
 
   // Audit
@@ -152,6 +154,15 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages, isChatting]);
+
+  useEffect(() => {
+    if (!openToAudit) return;
+    setActiveTab("audit");
+    setAnalysis(null);
+    setAnalysisError("");
+    handleRunAnalysis();
+    onAuditOpened?.();
+  }, [openToAudit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRunAnalysis = async () => {
     setIsAnalyzing(true);
