@@ -412,7 +412,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
         <div className="grid grid-cols-1 md:grid-cols-12 gap-y-6 md:gap-3 relative z-10 items-center justify-between h-full w-full min-w-0 md:min-w-[720px]">
           
           {/* Column 1: Model Source Input Model (Cols 1-3) */}
-          <div className="md:col-span-3 flex flex-col justify-center items-center h-full">
+          <div className="md:col-span-2 flex flex-col justify-center items-center h-full">
             <div className="text-xs text-slate-500 mb-3">
               Input
             </div>
@@ -445,12 +445,12 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
           </div>
 
           {/* Column 2: Olive Optimization Steps Carousel Cascades (Cols 4-8) */}
-          <div className="md:col-span-6 flex flex-col items-center justify-center gap-4 border-l border-r border-slate-900/30 px-2">
+          <div className="md:col-span-7 flex flex-col items-center justify-center gap-4 border-l border-r border-slate-900/30 px-4">
             <div className="text-xs text-slate-500 mb-1">
               Optimization passes
             </div>
             
-            <div className="grid grid-cols-3 gap-2 w-full">
+            <div className="grid grid-cols-3 gap-4 w-full">
               {["splitting", "peft", "conversion", "pruning", "transformer_opt", "quantization"].map(id => {
                 const nd = getNodePreviewData(id);
                 const isSelected = selectedNodeId === id;
