@@ -162,40 +162,45 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
     let fullChainPath = "";
 
     // Draw connections chronologically through active nodes
-    for (let i = 0; i < activeNodes.length - 1; i++) {
+    void fullChainPath;
+    const numSegs = activeNodes.length - 1;
+    const totalDur = Math.max(2, numSegs * 1.0);
+
+    for (let i = 0; i < numSegs; i++) {
       const fromId = activeNodes[i].id;
       const toId = activeNodes[i + 1].id;
       const points = getConnectionPoints(fromId, toId);
 
       if (points) {
         const d = buildSegmentCurve(points.from, points.to);
-        void fullChainPath;
+        const tStart = i / numSegs;
+        const tEnd = (i + 1) / numSegs;
+        const tStartBefore = Math.max(0, tStart - 0.001);
+        const tEndAfter = Math.min(1, tEnd + 0.001);
 
         paths.push(
           <g key={`${fromId}-${toId}`}>
-            <path
-              d={d}
-              fill="none"
-              stroke="rgba(141, 168, 64, 0.12)"
-              strokeWidth="6"
-              className="transition-all duration-300"
-            />
-            <path
-              d={d}
-              fill="none"
-              stroke="url(#wireGradient)"
-              strokeWidth="2"
-              strokeDasharray="6 6"
-              className="transition-all duration-300"
-            >
-              <animate
-                attributeName="stroke-dashoffset"
-                from="12"
-                to="0"
-                dur="0.7s"
-                repeatCount="indefinite"
-              />
+            <path d={d} fill="none" stroke="rgba(141, 168, 64, 0.12)" strokeWidth="6" className="transition-all duration-300" />
+            <path d={d} fill="none" stroke="url(#wireGradient)" strokeWidth="2" strokeDasharray="6 6" className="transition-all duration-300">
+              <animate attributeName="stroke-dashoffset" from="12" to="0" dur="0.7s" repeatCount="indefinite" />
             </path>
+            <circle r="3.5" fill="#8DA840" opacity="0">
+              <animateMotion
+                dur={`${totalDur}s`}
+                repeatCount="indefinite"
+                path={d}
+                calcMode="linear"
+                keyPoints={`0;0;1;1`}
+                keyTimes={`0;${tStart};${tEnd};1`}
+              />
+              <animate
+                attributeName="opacity"
+                dur={`${totalDur}s`}
+                repeatCount="indefinite"
+                values="0;0;1;1;0;0"
+                keyTimes={`0;${tStartBefore};${tStart};${tEnd};${tEndAfter};1`}
+              />
+            </circle>
           </g>
         );
       }
