@@ -164,7 +164,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
     const arcYTop = 28;
 
     const numSegs = activeNodes.length - 1;
-    const totalDur = Math.max(2, numSegs * 1.0);
+    const totalDur = Math.max(1.5, numSegs * 0.5);
 
     for (let i = 0; i < numSegs; i++) {
       const fromNode = activeNodes[i];
