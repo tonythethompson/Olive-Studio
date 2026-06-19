@@ -169,19 +169,14 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
 
       if (points) {
         const d = buildSegmentCurve(points.from, points.to);
-
-        if (!fullChainPath) {
-          fullChainPath = d;
-        } else {
-          fullChainPath += ` L ${points.from.x} ${points.from.y} ${appendSegmentCurve(points.from, points.to)}`;
-        }
+        void fullChainPath;
 
         paths.push(
           <g key={`${fromId}-${toId}`}>
             <path
               d={d}
               fill="none"
-              stroke="rgba(0, 240, 255, 0.15)"
+              stroke="rgba(141, 168, 64, 0.12)"
               strokeWidth="6"
               className="transition-all duration-300"
             />
@@ -192,26 +187,18 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
               strokeWidth="2"
               strokeDasharray="6 6"
               className="transition-all duration-300"
-            />
+            >
+              <animate
+                attributeName="stroke-dashoffset"
+                from="12"
+                to="0"
+                dur="0.7s"
+                repeatCount="indefinite"
+              />
+            </path>
           </g>
         );
       }
-    }
-
-    if (fullChainPath) {
-      const motionDuration = Math.max(4, activeNodes.length * 1.4);
-      paths.push(
-        <circle key={`flow-pulse-${fullChainPath}`} r="4" fill="#8DA840" className="glow-pulsar">
-          <animateMotion
-            dur={`${motionDuration}s`}
-            repeatCount="indefinite"
-            path={fullChainPath}
-            calcMode="linear"
-            keyPoints="0;1"
-            keyTimes="0;1"
-          />
-        </circle>
-      );
     }
 
     // Draw dashed bypass paths for disabled components
