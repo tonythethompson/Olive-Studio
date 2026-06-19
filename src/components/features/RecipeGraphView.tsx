@@ -325,12 +325,12 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      
+    <div className="flex flex-col h-full overflow-x-auto">
+
       {/* Node Stage Grid Workspace Canvas */}
-      <div 
+      <div
         ref={containerRef}
-        className="relative flex-1 min-h-[350px] bg-slate-950 p-6 md:p-8 flex flex-col justify-center select-none overflow-hidden"
+        className="relative flex-1 min-h-[350px] bg-slate-950 p-4 md:p-6 flex flex-col justify-center select-none overflow-visible"
         style={{
           backgroundImage: `
             radial-gradient(ellipse at center, rgba(30, 41, 59, 0.4) 0%, transparent 80%),
@@ -343,7 +343,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
         {renderSVGConnections()}
 
         {/* 3 Main Tiers horizontally arranged */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-y-8 md:gap-4 relative z-10 items-center justify-between h-full">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-y-6 md:gap-3 relative z-10 items-center justify-between h-full min-w-[620px]">
           
           {/* Column 1: Model Source Input Model (Cols 1-3) */}
           <div className="md:col-span-3 flex flex-col justify-center items-center h-full">
@@ -384,7 +384,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
               Olive Optimizers Chain
             </div>
             
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 w-full max-w-[580px]">
+            <div className="grid grid-cols-3 gap-2 w-full">
               {["splitting", "peft", "conversion", "pruning", "transformer_opt", "quantization"].map(id => {
                 const nd = getNodePreviewData(id);
                 const isSelected = selectedNodeId === id;
@@ -395,7 +395,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                     key={id}
                     id={`node-btn-${id}`}
                     onClick={() => handleNodeClick(id)}
-                    className={`group text-left p-3 rounded-lg border transition-all duration-300 relative flex flex-col justify-between ${
+                    className={`group text-left p-2 rounded-lg border transition-all duration-300 relative flex flex-col justify-between ${
                       isSelected 
                       ? "border-cyan-400 bg-cyan-950/20 ring-1 ring-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.25)]" 
                       : active

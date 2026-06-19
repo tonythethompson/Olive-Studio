@@ -164,12 +164,12 @@ export function getProviderConflicts(providerId: IHVProvider, passes: UIState["p
   return conflicts;
 }
 
-const providers: { id: IHVProvider; name: string; desc: string; icon: any }[] = [
-  { id: "CPUExecutionProvider", name: "Native CPU", desc: "Standard ONNX Runtime CPU Provider for broad compatibility.", icon: Cpu },
-  { id: "CUDAExecutionProvider", name: "NVIDIA CUDA / TensorRT", desc: "Accelerates deep learning inference on NVIDIA GPUs.", icon: Layers },
-  { id: "OpenVINOExecutionProvider", name: "Intel OpenVINO", desc: "Optimized for Intel architectures (Core, Xeon, Core Ultra).", icon: CpuIcon },
-  { id: "QNNExecutionProvider", name: "Qualcomm QNN (Snapdragon)", desc: "Leverage Qualcomm Hexagon NPUs on edge and mobile devices.", icon: CpuIcon },
-  { id: "ROCMExecutionProvider", name: "AMD ROCm", desc: "High-performance compute provider for AMD GPUs.", icon: Layers },
+const providers: { id: IHVProvider; name: string; shortName: string; desc: string; icon: any }[] = [
+  { id: "CPUExecutionProvider",    name: "Native CPU",              shortName: "CPU",       desc: "Standard ONNX Runtime CPU Provider for broad compatibility.",          icon: Cpu },
+  { id: "CUDAExecutionProvider",   name: "NVIDIA CUDA / TensorRT", shortName: "CUDA/TRT",  desc: "Accelerates deep learning inference on NVIDIA GPUs.",                   icon: Layers },
+  { id: "OpenVINOExecutionProvider", name: "Intel OpenVINO",        shortName: "OpenVINO",  desc: "Optimized for Intel architectures (Core, Xeon, Core Ultra).",          icon: CpuIcon },
+  { id: "QNNExecutionProvider",    name: "Qualcomm QNN (Snapdragon)", shortName: "QNN",    desc: "Leverage Qualcomm Hexagon NPUs on edge and mobile devices.",           icon: CpuIcon },
+  { id: "ROCMExecutionProvider",   name: "AMD ROCm",                shortName: "ROCm",      desc: "High-performance compute provider for AMD GPUs.",                      icon: Layers },
 ];
 
 interface OptimizationPassValidation {
@@ -549,6 +549,32 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
             })}
           </div>
 
+          {/* CUDA Version Override — only for GPU providers */}
+          {(["CUDAExecutionProvider", "TensorrtExecutionProvider", "ROCMExecutionProvider"] as IHVProvider[]).includes(state.ihvProvider) && (
+            <div className="mt-4 p-4 rounded-xl border border-slate-800/60 bg-slate-900/30">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="text-sm font-medium text-slate-200">PyTorch CUDA Version</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Auto-detect reads <code className="text-slate-400 bg-slate-800 px-1 py-0.5 rounded">nvidia-smi</code> at runtime. Override if wrong toolkit version is picked.
+                  </p>
+                </div>
+                <select
+                  value={state.cudaVersion ?? "auto"}
+                  onChange={e => setState({ cudaVersion: e.target.value as UIState["cudaVersion"] })}
+                  className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-electric-blue shrink-0 cursor-pointer"
+                >
+                  <option value="auto">Auto-detect</option>
+                  <option value="cpu">CPU Only</option>
+                  <option value="cu118">CUDA 11.8</option>
+                  <option value="cu121">CUDA 12.1</option>
+                  <option value="cu124">CUDA 12.4</option>
+                  <option value="cu126">CUDA 12.6</option>
+                </select>
+              </div>
+            </div>
+          )}
+
           {/* Interactive Optimization Passes Cross-Referencing Matrix */}
           <div className="mt-10 pt-8 border-t border-slate-800">
             {/* Header, Search Filter, and View Toggles */}
@@ -660,21 +686,21 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
               /* TAB 1: VALIDATION MATRIX INTERACTIVE HEATMAP */
               <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/25 mt-2 shadow-xl animate-in fade-in duration-300">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse min-w-[800px]">
+                  <table className="w-full text-left border-collapse min-w-[620px]">
                     <thead>
                       <tr className="border-b border-slate-800/80 bg-slate-900/30">
                         {/* Header Cell 1 */}
-                        <th className="p-4 text-xs font-mono font-semibold tracking-wider text-slate-400 max-w-[280px]">
-                          COMPILER OPTIMIZATION PASS
+                        <th className="p-2 px-3 text-[10px] font-mono font-semibold tracking-wider text-slate-400 w-[200px]">
+                          PASS
                         </th>
-                        
+
                         {/* 5 Hardware Target Columns */}
                         {providers.map((p) => {
                           const isSelectedProvider = p.id === state.ihvProvider;
                           const HIcon = p.icon;
-                          
+
                           return (
-                            <th 
+                            <th
                               key={p.id}
                               onClick={() => {
                                 const pConflicts = getProviderConflicts(p.id, state.passes);
@@ -688,37 +714,37 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                                   setState({ ihvProvider: p.id });
                                 }
                               }}
-                              className={`p-4 text-center cursor-pointer transition-all relative select-none ${
-                                isSelectedProvider 
-                                  ? "bg-purple-500/10 border-l border-r border-t-2 border-t-purple-500 border-l-purple-500/20 border-r-purple-500/20" 
+                              className={`p-2 px-1 text-center cursor-pointer transition-all relative select-none ${
+                                isSelectedProvider
+                                  ? "bg-purple-500/10 border-l border-r border-t-2 border-t-purple-500 border-l-purple-500/20 border-r-purple-500/20"
                                   : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/30"
                               }`}
                             >
-                              <div className="flex flex-col items-center justify-center gap-1.5 py-1">
-                                <div className={`p-1.5 rounded-lg border leading-none transition-all ${
-                                  isSelectedProvider 
+                              <div className="flex flex-col items-center justify-center gap-1 py-1">
+                                <div className={`p-1 rounded border leading-none transition-all ${
+                                  isSelectedProvider
                                     ? "bg-purple-950/40 border-purple-500/50 text-purple-300"
                                     : "bg-slate-900 border-slate-800 text-slate-500"
                                 }`}>
-                                  <HIcon className="h-4 w-4" />
+                                  <HIcon className="h-3 w-3" />
                                 </div>
-                                <span className={`text-[11px] font-semibold tracking-tight leading-none ${
-                                  isSelectedProvider ? "text-purple-300 font-bold" : "text-slate-355"
+                                <span className={`text-[10px] font-mono font-semibold leading-none text-center ${
+                                  isSelectedProvider ? "text-purple-300" : "text-slate-400"
                                 }`}>
-                                  {p.name.replace(" (Snapdragon)", "")}
+                                  {p.shortName}
                                 </span>
                                 {isSelectedProvider ? (
-                                  <div className="flex items-center gap-1 mt-0.5">
+                                  <div className="flex items-center gap-1">
                                     <span className="flex h-1.5 w-1.5 relative">
                                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                       <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
                                     </span>
-                                    <span className="text-[9px] tracking-widest font-mono font-black uppercase text-purple-400 leading-none">
+                                    <span className="text-[8px] tracking-widest font-mono font-black uppercase text-purple-400 leading-none">
                                       Active
                                     </span>
                                   </div>
                                 ) : (
-                                  <span className="text-[8.5px] font-mono text-slate-600 uppercase tracking-wider leading-none select-none hover:text-slate-400 mt-0.5">
+                                  <span className="text-[8px] font-mono text-slate-700 uppercase tracking-wider leading-none select-none hover:text-slate-400">
                                     Select
                                   </span>
                                 )}
@@ -728,15 +754,15 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                         })}
                       </tr>
                     </thead>
-                    
+
                     <tbody>
                       {filteredValidations.map((v) => {
                         const isActiveOnSelected = v.isActive(state.passes);
-                        
+
                         return (
                           <tr key={v.id} className="border-b border-slate-900 hover:bg-slate-900/10 transition-colors">
                             {/* Column 1: Row Title and Category info */}
-                            <td className="p-4 max-w-[280px]">
+                            <td className="p-2 px-3 w-[200px]">
                               <div className="space-y-1.5">
                                 <div className="flex items-center gap-2">
                                   <span className={`text-[8.5px] font-mono uppercase px-1.5 py-0.5 rounded border leading-none shrink-0 font-extrabold ${
@@ -788,10 +814,10 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                               };
 
                               return (
-                                <td 
+                                <td
                                   key={p.id}
                                   onClick={handleCellClick}
-                                  className={`p-4 text-center transition-all ${
+                                  className={`p-2 text-center transition-all ${
                                     isSelectedProvider 
                                       ? "bg-purple-500/5 border-l border-r border-purple-500/10" 
                                       : "hover:bg-slate-900/30"

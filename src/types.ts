@@ -64,6 +64,7 @@ export interface UIState {
   hfModelId: string;
   hfDataset: string;
   ihvProvider: IHVProvider;
+  cudaVersion: "auto" | "cpu" | "cu118" | "cu121" | "cu124" | "cu126";
   cacheDir: string;
   azureStr: string;
   distributedCaching: boolean;

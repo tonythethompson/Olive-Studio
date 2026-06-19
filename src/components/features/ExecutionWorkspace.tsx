@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, Button, Tabs, TabsList, TabsTrigger, TabsContent, Input, Label, Select } from "@/components/ui";
-import { UIState } from "@/types";
+import { UIState, IHVProvider } from "@/types";
 import { Code, Play, CheckCircle2, AlertCircle, Copy, Check, Upload, FileJson, X, Github, Sparkles, ArrowUpRight, Search, BookOpen, Workflow, GitBranch, GitPullRequest, Globe, RefreshCw, AlertTriangle, Send, Bot, User, Trash2, HelpCircle, Download, Laptop, Smartphone, FileCode, Sliders, Cpu, Settings } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import JSZip from "jszip";
@@ -477,7 +477,38 @@ export const SUGGESTED_RECIPES = [
   }
 ];
 
-export function ExecutionWorkspace({ state, setState, onExecute, jobId: _jobId, isRunning: _isRunning, setIsRunning: _setIsRunning }: { state: UIState; setState: (s: Partial<UIState>) => void; onExecute: (recipe: object) => void; jobId?: string | null; isRunning?: boolean; setIsRunning?: (v: boolean) => void }) {
+function inferHfTask(modelId: string): string {
+  const id = modelId.toLowerCase();
+  if (id.includes("whisper")) return "speech-recognition";
+  if (id.includes("bert") || id.includes("roberta") || id.includes("deberta")) return "fill-mask";
+  if (id.includes("t5") || id.includes("bart")) return "text2text-generation";
+  if (id.includes("vit") || id.includes("clip") || id.includes("resnet") || id.includes("mobilenet")) return "image-classification";
+  return "text-generation";
+}
+
+function inferModelType(modelId: string): string {
+  const id = modelId.toLowerCase();
+  if (id.includes("llama")) return "llama";
+  if (id.includes("phi")) return "phi";
+  if (id.includes("whisper")) return "whisper";
+  if (id.includes("bert") || id.includes("roberta")) return "bert";
+  if (id.includes("qwen")) return "qwen";
+  if (id.includes("mistral") || id.includes("mixtral")) return "mistral";
+  if (id.includes("falcon")) return "falcon";
+  if (id.includes("t5")) return "t5";
+  if (id.includes("gpt2") || id.includes("gpt-2")) return "gpt2";
+  return "gpt2";
+}
+
+const GPU_PROVIDERS: IHVProvider[] = ["CUDAExecutionProvider", "TensorrtExecutionProvider", "ROCMExecutionProvider"];
+const NPU_PROVIDERS: IHVProvider[] = ["QNNExecutionProvider"];
+
+function providerToAccelerator(provider: IHVProvider): { device: string; execution_providers: string[] } {
+  const device = GPU_PROVIDERS.includes(provider) ? "gpu" : NPU_PROVIDERS.includes(provider) ? "npu" : "cpu";
+  return { device, execution_providers: [provider] };
+}
+
+export function ExecutionWorkspace({ state, setState, onExecute: _onExecute, jobId: _jobId, isRunning: _isRunning, setIsRunning: _setIsRunning }: { state: UIState; setState: (s: Partial<UIState>) => void; onExecute?: () => void; jobId?: string | null; isRunning?: boolean; setIsRunning?: (v: boolean) => void }) {
   // Live execution state
   const [liveJobId, setLiveJobId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -826,7 +857,7 @@ ${owrPlatform === "web" ?
     setIsValidating(true);
     setValidationError("");
     try {
-      const response = await fetch("/api/gemini/validate", {
+      const response = await fetch("/api/ai/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -842,7 +873,7 @@ ${owrPlatform === "web" ?
       setValidationResult(data);
     } catch (err: any) {
       console.error(err);
-      setValidationError(err.message || "Failed to contact Gemini compilation expert.");
+      setValidationError(err.message || "No AI provider configured. Use the 'AI AUDIT' button in the header to set an API key.");
     } finally {
       setIsValidating(false);
     }
@@ -861,22 +892,21 @@ ${owrPlatform === "web" ?
     setChatError("");
 
     try {
-      const response = await fetch("/api/gemini/chat", {
+      const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: queryText,
-          recipeJson: JSON.stringify(recipe, null, 2),
+          context: { passes: state.passes, ihvProvider: state.ihvProvider, recipeJson: JSON.stringify(recipe, null, 2) },
           chatHistory: chatMessages.map(m => ({ role: m.sender === "user" ? "user" : "assistant", content: m.text })),
-          ihvProvider: state.ihvProvider
         })
       });
-      
+
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         throw new Error(errData.error || `HTTP ${response.status} failed to fetch answer.`);
       }
-      
+
       const data = await response.json();
       setChatMessages(prev => [...prev, {
         sender: "assistant" as const,
@@ -885,7 +915,7 @@ ${owrPlatform === "web" ?
       }]);
     } catch (err: any) {
       console.error(err);
-      setChatError(err.message || "Failed to obtain expert advice from Gemini.");
+      setChatError(err.message || "No AI provider configured. Use the 'AI AUDIT' button in the header to set an API key.");
     } finally {
       setIsChatting(false);
     }
@@ -939,7 +969,7 @@ ${owrPlatform === "web" ?
       local_system: {
         type: "LocalSystem",
         config: {
-          accelerators: [state.ihvProvider]
+          accelerators: [providerToAccelerator(state.ihvProvider)]
         }
       }
     },
@@ -958,8 +988,8 @@ ${owrPlatform === "web" ?
   if (state.modelSource === "huggingface") {
     recipe.input_model.config.hf_config = {
       model_name: state.hfModelId || "unspecified",
-      task: "auto-detect",
-      dataset: state.hfDataset || undefined
+      task: inferHfTask(state.hfModelId || ""),
+      ...(state.hfDataset ? { dataset: state.hfDataset } : {})
     };
   } else if (state.modelSource === "local") {
     recipe.input_model.config.model_path = "./local_models"; // Example path, in reality would point to uploaded folder
@@ -979,12 +1009,21 @@ ${owrPlatform === "web" ?
     }
   }
   if (state.passes.quantization) recipe.passes['quantization'] = { type: "OnnxQuantization", config: { weight_type: state.passes.quantPrecision, optimize_model: true }};
-  if (state.passes.onnxTransforms) recipe.passes['transformer_opt'] = { type: "OrtTransformersOptimization", config: { model_type: "gpt2", use_gpu: true }};
+  if (state.passes.onnxTransforms) {
+    recipe.passes['transformer_opt'] = {
+      type: "OrtTransformersOptimization",
+      config: {
+        model_type: inferModelType(state.hfModelId || ""),
+        use_gpu: GPU_PROVIDERS.includes(state.ihvProvider)
+      }
+    };
+  }
   if (state.passes.splitting) {
     recipe.passes['splitting'] = { type: "ModelSplitting", config: {} };
   }
   if (state.passes.peft) {
-    recipe.passes['peft'] = { type: "LoRATraining", config: { method: state.passes.peftMethod, r: 8, lora_alpha: 16 } };
+    const peftType = state.passes.peftMethod === "qlora" ? "QLoRA" : "LoRA";
+    recipe.passes['peft'] = { type: peftType, config: { r: 8, lora_alpha: 16 } };
   }
   if (state.passes.pruning) {
     const pType = state.passes.pruningMethod === "sparsegpt" ? "SparseGPT" : 
@@ -1011,13 +1050,10 @@ ${owrPlatform === "web" ?
     setExecutionExitCode(null);
 
     try {
-      // Notify parent of execution start
-      onExecute(JSON.stringify(recipe, null, 2));
-
       const resp = await fetch("/api/olive/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipeJson: JSON.stringify(recipe, null, 2) })
+        body: JSON.stringify({ recipeJson: JSON.stringify(recipe, null, 2), cudaVersion: state.cudaVersion ?? "auto" })
       });
 
       if (!resp.ok) {
@@ -1030,6 +1066,7 @@ ${owrPlatform === "web" ?
 
       const { jobId } = await resp.json();
       setLiveJobId(jobId);
+      setState({ activeJobId: jobId });
 
       // Close any existing SSE connection
       liveSourceRef.current?.close();
@@ -1481,15 +1518,15 @@ ${owrPlatform === "web" ?
         
 
 
-        {/* Gemini AI Companion Workspace */}
-        <Card className="border-electric-blue/30 shadow-[0_4px_30px_rgba(59,130,246,0.05)] bg-slate-900/60 overflow-hidden">
-          <CardHeader 
-            title="Gemini AI Companion" 
-            description="Deep model optimization intelligence, automatic pipeline audits, and hardware compiler advice."
+        {/* AI Copilot Workspace */}
+        <Card className="border-electric-blue/30 bg-slate-900/60 overflow-hidden">
+          <CardHeader
+            title="AI Copilot"
+            description="Pipeline audit, hardware compatibility checks, and Olive compiler advice."
             badge={
-              <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-2.5 py-1 rounded-full font-bold">
-                <Sparkles className="h-3 w-3 animate-pulse text-electric-blue" />
-                Gemini Active
+              <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-2.5 py-1 font-bold">
+                <Bot className="h-3 w-3 text-electric-blue" />
+                AI Copilot
               </span>
             }
           />
