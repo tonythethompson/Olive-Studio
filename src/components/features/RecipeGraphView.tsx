@@ -159,108 +159,104 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
     if (!containerRef.current) return null;
 
     const paths: ReactElement[] = [];
-    let fullChainPath = "";
+    const parentRect = containerRef.current.getBoundingClientRect();
+    // Bypass lane: 28px from top of container, 8px below bottom
+    const arcYTop = 28;
 
-    // Draw connections chronologically through active nodes
-    void fullChainPath;
     const numSegs = activeNodes.length - 1;
     const totalDur = Math.max(2, numSegs * 1.0);
 
     for (let i = 0; i < numSegs; i++) {
-      const fromId = activeNodes[i].id;
-      const toId = activeNodes[i + 1].id;
-      const points = getConnectionPoints(fromId, toId);
+      const fromNode = activeNodes[i];
+      const toNode = activeNodes[i + 1];
+      const fromPipelineIdx = pipelineSteps.findIndex(s => s.id === fromNode.id);
+      const toPipelineIdx = pipelineSteps.findIndex(s => s.id === toNode.id);
 
-      if (points) {
-        const d = buildSegmentCurve(points.from, points.to);
-        const tStart = i / numSegs;
-        const tEnd = (i + 1) / numSegs;
-        const tStartBefore = Math.max(0, tStart - 0.001);
-        const tEndAfter = Math.min(1, tEnd + 0.001);
+      // Are there any inactive steps between these two active nodes?
+      const hasSkip = pipelineSteps
+        .slice(fromPipelineIdx + 1, toPipelineIdx)
+        .some(s => !s.active);
 
+      const tStart = i / numSegs;
+      const tEnd = (i + 1) / numSegs;
+      const tStartBefore = Math.max(0, tStart - 0.001);
+      const tEndAfter = Math.min(1, tEnd + 0.001);
+
+      let d: string;
+
+      if (hasSkip) {
+        // Route over/under the skipped nodes via a bypass lane
+        const fromElem = document.getElementById(`node-btn-${fromNode.id}`);
+        const toElem = document.getElementById(`node-btn-${toNode.id}`);
+        if (!fromElem || !toElem) continue;
+
+        const fromR = fromElem.getBoundingClientRect();
+        const toR = toElem.getBoundingClientRect();
+        const fromX = fromR.left - parentRect.left + fromR.width / 2;
+        const fromY = fromR.top - parentRect.top;
+        const toX = toR.left - parentRect.left + toR.width / 2;
+        const toY = toR.top - parentRect.top;
+
+        const arcY = arcYTop;
+
+        d = `M ${fromX} ${fromY} C ${fromX} ${arcY}, ${toX} ${arcY}, ${toX} ${toY}`;
+
+        // Subtle bypass lane track
         paths.push(
-          <g key={`${fromId}-${toId}`}>
-            <path d={d} fill="none" stroke="rgba(141, 168, 64, 0.12)" strokeWidth="6" className="transition-all duration-300" />
-            <path d={d} fill="none" stroke="url(#wireGradient)" strokeWidth="2" strokeDasharray="6 6" className="transition-all duration-300">
-              <animate attributeName="stroke-dashoffset" from="12" to="0" dur="0.7s" repeatCount="indefinite" />
-            </path>
-            <circle r="3.5" fill="#8DA840" opacity="0">
-              <animateMotion
-                dur={`${totalDur}s`}
-                repeatCount="indefinite"
-                path={d}
-                calcMode="linear"
-                keyPoints={`0;0;1;1`}
-                keyTimes={`0;${tStart};${tEnd};1`}
-              />
-              <animate
-                attributeName="opacity"
-                dur={`${totalDur}s`}
-                repeatCount="indefinite"
-                values="0;0;1;1;0;0"
-                keyTimes={`0;${tStartBefore};${tStart};${tEnd};${tEndAfter};1`}
-              />
-            </circle>
-          </g>
+          <path
+            key={`bypass-lane-${fromNode.id}-${toNode.id}`}
+            d={d}
+            fill="none"
+            stroke="rgba(100, 116, 139, 0.08)"
+            strokeWidth="8"
+            className="transition-all duration-300"
+          />
         );
+      } else {
+        const points = getConnectionPoints(fromNode.id, toNode.id);
+        if (!points) continue;
+        d = buildSegmentCurve(points.from, points.to);
       }
-    }
 
-    // Draw dashed bypass paths for disabled components
-    for (let i = 0; i < pipelineSteps.length; i++) {
-      const current = pipelineSteps[i];
-      if (!current.active) {
-        // Find preceding active and proceeding active
-        let precedingActive: (typeof pipelineSteps)[number] | null = null;
-        for (let idx = i - 1; idx >= 0; idx--) {
-          if (pipelineSteps[idx].active) {
-            precedingActive = pipelineSteps[idx];
-            break;
-          }
-        }
-        let proceedingActive: (typeof pipelineSteps)[number] | null = null;
-        for (let idx = i + 1; idx < pipelineSteps.length; idx++) {
-          if (pipelineSteps[idx].active) {
-            proceedingActive = pipelineSteps[idx];
-            break;
-          }
-        }
-
-        if (precedingActive && proceedingActive !== current && proceedingActive.id !== "output") {
-          const points = getConnectionPoints(precedingActive.id, current.id);
-          if (points) {
-            const pb = buildSegmentCurve(points.from, points.to);
-            paths.push(
-              <path
-                key={`bypass-pre-${current.id}`}
-                d={pb}
-                fill="none"
-                stroke="rgba(100, 116, 139, 0.15)"
-                strokeWidth="1.5"
-                strokeDasharray="4 4"
-                className="transition-all duration-300"
-              />
-            );
-          }
-        }
-        if (proceedingActive && proceedingActive !== current) {
-          const points = getConnectionPoints(current.id, proceedingActive.id);
-          if (points) {
-            const pa = buildSegmentCurve(points.from, points.to);
-            paths.push(
-              <path
-                key={`bypass-post-${current.id}`}
-                d={pa}
-                fill="none"
-                stroke="rgba(100, 116, 139, 0.15)"
-                strokeWidth="1.5"
-                strokeDasharray="4 4"
-                className="transition-all duration-300"
-              />
-            );
-          }
-        }
-      }
+      paths.push(
+        <g key={`${fromNode.id}-${toNode.id}`}>
+          <path
+            d={d}
+            fill="none"
+            stroke={hasSkip ? "rgba(141, 168, 64, 0.08)" : "rgba(141, 168, 64, 0.12)"}
+            strokeWidth={hasSkip ? 5 : 6}
+            className="transition-all duration-300"
+          />
+          <path
+            d={d}
+            fill="none"
+            stroke="url(#wireGradient)"
+            strokeWidth={hasSkip ? 1.5 : 2}
+            strokeDasharray="6 6"
+            strokeOpacity={hasSkip ? 0.6 : 1}
+            className="transition-all duration-300"
+          >
+            <animate attributeName="stroke-dashoffset" from="12" to="0" dur="0.7s" repeatCount="indefinite" />
+          </path>
+          <circle r={hasSkip ? 3 : 3.5} fill="#8DA840" opacity="0">
+            <animateMotion
+              dur={`${totalDur}s`}
+              repeatCount="indefinite"
+              path={d}
+              calcMode="linear"
+              keyPoints="0;0;1;1"
+              keyTimes={`0;${tStart};${tEnd};1`}
+            />
+            <animate
+              attributeName="opacity"
+              dur={`${totalDur}s`}
+              repeatCount="indefinite"
+              values="0;0;1;1;0;0"
+              keyTimes={`0;${tStartBefore};${tStart};${tEnd};${tEndAfter};1`}
+            />
+          </circle>
+        </g>
+      );
     }
 
     return (
