@@ -293,7 +293,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
   // Core model weights calculation details
   const getSelectedModelName = () => {
     if (state.modelSource === "huggingface") {
-      return state.hfModelId ? state.hfModelId.split("/").pop() : "Llama-3-8B";
+      return state.hfModelId ? state.hfModelId.split("/").pop() : "No model selected";
     } else if (state.modelSource === "azure") {
       return state.azureModelPath ? state.azureModelPath.split("/").pop() : "Asset Container";
     } else {
