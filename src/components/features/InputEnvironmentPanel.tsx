@@ -24,6 +24,7 @@ import {
   type RecipeCatalogItem,
 } from "@/lib/oliveRecipeHub";
 import { parseRecipeJson } from "@/lib/recipePipeline";
+import { cn } from "@/lib/utils";
 import {
   DownloadCloud,
   KeyRound,
@@ -39,6 +40,8 @@ import {
   Check,
   Copy,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Info,
   FileCode,
   Activity,
@@ -132,6 +135,10 @@ export function InputEnvironmentPanel({
   const [activeRecipeTab, setActiveRecipeTab] = useState<"starter" | "github" | "editor">("starter");
   const [recipeSuccessMsg, setRecipeSuccessMsg] = useState<string | null>(null);
   const [applyingRecipePath, setApplyingRecipePath] = useState<string | null>(null);
+  const [appliedRecipeLabel, setAppliedRecipeLabel] = useState<string | null>(null);
+  const [recipeRailExpanded, setRecipeRailExpanded] = useState(true);
+
+  const recipeRailCollapsed = Boolean(appliedRecipeLabel) && !recipeRailExpanded;
 
   const handleApplyCuratedRecipe = async (item: RecipeCatalogItem) => {
     setApplyingRecipePath(item.repoPath);
@@ -142,6 +149,8 @@ export function InputEnvironmentPanel({
       const json = await fetchOliveRecipesCatalogItem(item);
       const metadata = compareCatalogMetadataToRecipe(item, json);
       setState(deriveUiStateFromOliveRecipe(json, { replacePasses: true }));
+      setAppliedRecipeLabel(item.name);
+      setRecipeRailExpanded(false);
       setImportJson(JSON.stringify(json, null, 2));
       setImportError(null);
       const mismatchNote =
@@ -189,6 +198,8 @@ export function InputEnvironmentPanel({
       return;
     }
     setState(deriveUiStateFromOliveRecipe(recipe, { replacePasses: true }));
+    setAppliedRecipeLabel("Custom JSON recipe");
+    setRecipeRailExpanded(false);
     setImportError(null);
     setRecipeSuccessMsg("Recipe parsed and applied successfully!");
     setTimeout(() => setRecipeSuccessMsg(null), 4000);
@@ -534,11 +545,11 @@ export function InputEnvironmentPanel({
         </div>
       )}
 
-      {/* OLIVE RECIPE HUB CARD */}
-      <Card className="border-indigo-500/20 shadow-lg shadow-indigo-500/[0.02]">
+      {/* Unified Model Source + Recipe split panel */}
+      <Card className="border-slate-800/80 shadow-lg shadow-indigo-500/[0.02]">
         <CardHeader
-          title="Olive Recipe Hub"
-          description="Load a curated optimization recipe flow or synchronize with custom templates on GitHub."
+          title="Model Source & Data"
+          description="Start from an Olive recipe preset or configure Hugging Face, local, and Azure sources directly."
           badge={
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-400">
               <BookOpen className="h-4 w-4" />
@@ -546,47 +557,103 @@ export function InputEnvironmentPanel({
           }
         />
         <CardContent>
+          {recipeRailCollapsed && (
+            <div className="mb-6 flex flex-col gap-3 rounded-xl border border-indigo-500/25 bg-indigo-500/5 p-4 sm:flex-row sm:items-center sm:justify-between animate-in fade-in duration-200">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-400">
+                  <CheckCircle2 className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-indigo-400">
+                    Applied recipe
+                  </p>
+                  <p className="truncate text-sm font-semibold text-slate-200" title={appliedRecipeLabel ?? undefined}>
+                    {appliedRecipeLabel}
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
+                    Source fields below are pre-filled — edit anytime before running.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                className="h-8 shrink-0 self-start px-3 text-[11px] bg-indigo-600 hover:bg-indigo-500 text-white sm:self-center"
+                onClick={() => {
+                  setRecipeRailExpanded(true);
+                  setActiveRecipeTab("starter");
+                }}
+              >
+                Change recipe
+              </Button>
+            </div>
+          )}
+
+          <div
+            className={cn(
+              "flex flex-col gap-6 xl:gap-8",
+              !recipeRailCollapsed && "xl:flex-row"
+            )}
+          >
+            {!recipeRailCollapsed && (
+            <aside className="min-w-0 shrink-0 xl:w-1/2">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-400">
+                  <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                  Recipes
+                </h3>
+                {appliedRecipeLabel && (
+                  <button
+                    type="button"
+                    onClick={() => setRecipeRailExpanded(false)}
+                    className="flex cursor-pointer items-center gap-1 text-[10px] font-mono text-slate-500 hover:text-slate-300"
+                  >
+                    <ChevronUp className="h-3 w-3" />
+                    Collapse
+                  </button>
+                )}
+              </div>
+
+                <div className="rounded-xl border border-slate-800/80 bg-slate-950/30 p-3 sm:p-4 animate-in fade-in duration-200">
           <Tabs
             value={activeRecipeTab}
-            onValueChange={(v) => setActiveRecipeTab(v as any)}
+            onValueChange={(v) => setActiveRecipeTab(v as "starter" | "github" | "editor")}
             className="w-full"
           >
-            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center border-b border-slate-900 pb-3 mb-5 gap-3">
-              <TabsList className="grid w-full xl:w-auto grid-cols-3 h-auto rounded-lg p-1 bg-slate-950 border border-slate-900">
-                <TabsTrigger value="starter" className="text-xs py-1.5 px-3 rounded-md cursor-pointer">
-                  <Activity className="h-3.5 w-3.5 mr-1.5 text-indigo-400" />
-                  Starter Curated
-                </TabsTrigger>
-                <TabsTrigger value="github" className="text-xs py-1.5 px-3 rounded-md cursor-pointer">
-                  <Globe className="h-3.5 w-3.5 mr-1.5 text-cyan-400" />
-                  GitHub Sync
-                </TabsTrigger>
-                <TabsTrigger value="editor" className="text-xs py-1.5 px-3 rounded-md cursor-pointer">
-                  <FileJson className="h-3.5 w-3.5 mr-1.5 text-amber-400" />
-                  Recipe Editor
-                </TabsTrigger>
-              </TabsList>
+            <TabsList className="grid w-full grid-cols-3 h-auto rounded-lg p-1 bg-slate-950 border border-slate-900 mb-4">
+              <TabsTrigger value="starter" className="text-[10px] sm:text-xs py-1.5 px-1.5 sm:px-2 rounded-md cursor-pointer">
+                <Activity className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 text-indigo-400" />
+                Curated
+              </TabsTrigger>
+              <TabsTrigger value="github" className="text-[10px] sm:text-xs py-1.5 px-1.5 sm:px-2 rounded-md cursor-pointer">
+                <Globe className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 text-cyan-400" />
+                GitHub
+              </TabsTrigger>
+              <TabsTrigger value="editor" className="text-[10px] sm:text-xs py-1.5 px-1.5 sm:px-2 rounded-md cursor-pointer">
+                <FileJson className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 text-amber-400" />
+                JSON
+              </TabsTrigger>
+            </TabsList>
 
-              {activeRecipeTab === "starter" && (
-                <div className="text-[11px] text-slate-500 font-mono">
-                  Showing {filteredRecipes.length} of {SUGGESTED_RECIPES.length} optimization pathways
-                </div>
-              )}
-            </div>
+            {activeRecipeTab === "starter" && (
+              <p className="text-[10px] text-slate-500 font-mono mb-3">
+                {filteredRecipes.length} of {SUGGESTED_RECIPES.length} presets
+              </p>
+            )}
 
             {/* STARTER CURATED TAB */}
-            <TabsContent value="starter" className="space-y-4 animate-in fade-in">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 pb-4 border-b border-slate-900">
-                <div className="md:col-span-6 relative">
+            <TabsContent value="starter" className="space-y-3 animate-in fade-in mt-0">
+              <div className="space-y-2 pb-3 border-b border-slate-900">
+                <div className="relative">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
                   <Input
-                    placeholder="Search curated recipes..."
+                    placeholder="Search recipes..."
                     className="pl-9 h-9 text-xs"
                     value={recipeSearch}
                     onChange={(e) => setRecipeSearch(e.target.value)}
                   />
                   {recipeSearch && (
                     <button
+                      type="button"
                       onClick={() => setRecipeSearch("")}
                       className="absolute right-3 top-2.5 text-slate-500 hover:text-white cursor-pointer"
                     >
@@ -594,8 +661,7 @@ export function InputEnvironmentPanel({
                     </button>
                   )}
                 </div>
-
-                <div className="md:col-span-3">
+                <div className="grid grid-cols-2 gap-2">
                   <Select
                     value={selectedArchitecture}
                     onChange={(e) => setSelectedArchitecture(e.target.value)}
@@ -612,9 +678,6 @@ export function InputEnvironmentPanel({
                     <option value="Stable Diffusion">Stable Diffusion</option>
                     <option value="Other">Other models</option>
                   </Select>
-                </div>
-
-                <div className="md:col-span-3">
                   <Select
                     value={selectedDevice}
                     onChange={(e) => setSelectedDevice(e.target.value)}
@@ -631,7 +694,7 @@ export function InputEnvironmentPanel({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[380px] overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 max-h-[420px] overflow-y-auto pr-1">
                 {filteredRecipes.map((item) => (
                   <div
                     key={item.repoPath}
@@ -708,7 +771,7 @@ export function InputEnvironmentPanel({
                 ))}
 
                 {filteredRecipes.length === 0 && (
-                  <div className="col-span-2 p-8 text-center bg-slate-950/20 rounded-lg border border-slate-900 border-dashed">
+                  <div className="lg:col-span-2 p-6 text-center bg-slate-950/20 rounded-lg border border-slate-900 border-dashed">
                     <Search className="h-6 w-6 text-slate-700 mx-auto mb-2 animate-pulse" />
                     <p className="text-xs font-semibold text-slate-400">No Presets Match Filters</p>
                     <p className="text-[11px] text-slate-500 mt-1 max-w-[280px] mx-auto">
@@ -720,9 +783,8 @@ export function InputEnvironmentPanel({
             </TabsContent>
 
             {/* GITHUB RECIPE SYNC TAB */}
-            <TabsContent value="github" className="space-y-4 animate-in fade-in">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
-                <div className="md:col-span-7 space-y-4 bg-slate-950/30 p-4 rounded-xl border border-slate-900">
+            <TabsContent value="github" className="space-y-3 animate-in fade-in mt-0">
+              <div className="space-y-3 bg-slate-950/30 p-3 rounded-xl border border-slate-900 max-h-[420px] overflow-y-auto">
                   <div className="space-y-2">
                     <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                       <Globe className="h-3.5 w-3.5 text-indigo-400" />
@@ -795,13 +857,11 @@ export function InputEnvironmentPanel({
                       <span>{syncError}</span>
                     </div>
                   )}
-                </div>
 
-                <div className="md:col-span-5 space-y-3">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500 block">
-                    Microsoft Olive Shortcuts
-                  </span>
-                  <div className="grid grid-cols-1 gap-2.5">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500 block pt-2 border-t border-slate-900">
+                  Microsoft Olive shortcuts
+                </span>
+                <div className="grid grid-cols-1 gap-2">
                     {[
                       {
                         label: "Qwen2.5 TRT-RTX FP16",
@@ -848,13 +908,12 @@ export function InputEnvironmentPanel({
                         </span>
                       </button>
                     ))}
-                  </div>
                 </div>
               </div>
             </TabsContent>
 
             {/* RECIPE schema EDITOR TAB */}
-            <TabsContent value="editor" className="space-y-4 animate-in fade-in">
+            <TabsContent value="editor" className="space-y-3 animate-in fade-in mt-0">
               <div className="flex flex-col gap-3">
                 {importError && (
                   <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs font-mono leading-relaxed flex items-start gap-1.5 animate-bounce">
@@ -863,9 +922,9 @@ export function InputEnvironmentPanel({
                   </div>
                 )}
 
-                <div className="relative flex flex-col min-h-[220px]">
+                <div className="relative flex flex-col min-h-[180px]">
                   <textarea
-                    className="w-full flex-1 bg-slate-950 border border-slate-900 hover:border-slate-800 focus:border-indigo-500 rounded-lg p-4 font-mono text-xs text-slate-300 focus-visible:outline-none focus:focus-visible:ring-1 focus-visible:ring-indigo-500/40 placeholder:text-slate-700 resize-none h-[220px]"
+                    className="w-full flex-1 bg-slate-950 border border-slate-900 hover:border-slate-800 focus:border-indigo-500 rounded-lg p-3 font-mono text-[11px] text-slate-300 focus-visible:outline-none focus:focus-visible:ring-1 focus-visible:ring-indigo-500/40 placeholder:text-slate-700 resize-none h-[180px]"
                     placeholder={`{\n  "input_model": {\n    "type": "PyTorchModel",\n    "config": {\n      "hf_config": {\n        "model_name": "meta-llama/Meta-Llama-3-8B"\n      }\n    }\n  },\n  "passes": {\n    "conversion": { "type": "OnnxConversion" }\n  }\n}`}
                     value={importJson}
                     onChange={(e) => {
@@ -892,32 +951,67 @@ export function InputEnvironmentPanel({
               </div>
             </TabsContent>
           </Tabs>
-        </CardContent>
-      </Card>
+                </div>
+            </aside>
+            )}
 
-      <Card>
-        <CardHeader
-          title="Model Source & Data"
-          description="Select where your model originates before optimization."
-        />
-        <CardContent>
+            <div
+              className={cn(
+                "min-w-0 flex-1",
+                !recipeRailCollapsed && "border-t border-slate-800/80 pt-6 xl:border-t-0 xl:border-l xl:border-slate-800/80 xl:pl-8 xl:pt-0"
+              )}
+            >
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-1.5">
+                <DownloadCloud className="h-3.5 w-3.5 text-electric-blue" />
+                Source config
+              </h3>
+
+              {appliedRecipeLabel && (
+                <div className="mb-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5 text-xs text-slate-300">
+                  <span className="text-emerald-400 font-semibold">From recipe:</span>{" "}
+                  {appliedRecipeLabel}
+                  <span className="text-slate-500"> · </span>
+                  <span className="font-mono text-[11px] text-slate-400">
+                    {state.modelSource === "huggingface" && state.hfModelId
+                      ? `HF · ${state.hfModelId}`
+                      : state.modelSource === "local"
+                        ? `Local · ${state.localFiles.length} file(s)`
+                        : state.modelSource === "azure" && state.azureModelPath
+                          ? `Azure · ${state.azureModelPath}`
+                          : state.modelSource}
+                  </span>
+                </div>
+              )}
+
           <Tabs
             value={state.modelSource}
-            onValueChange={(v) => setState({ modelSource: v as any })}
+            onValueChange={(v) => setState({ modelSource: v as UIState["modelSource"] })}
             className="w-full"
           >
-            <TabsList className="mb-6 grid w-full grid-cols-1 md:grid-cols-3 h-auto rounded-xl p-1.5 bg-slate-950 border border-slate-800">
-              <TabsTrigger value="huggingface" className="py-2.5 rounded-lg">
-                <DownloadCloud className="h-4 w-4 mr-2" />
-                Hugging Face Hub
+            <TabsList className="mb-6 !grid h-auto w-full grid-cols-3 gap-1 rounded-xl border border-slate-800 bg-slate-950 p-1.5">
+              <TabsTrigger
+                value="huggingface"
+                title="Hugging Face Hub"
+                className="w-full rounded-lg px-2 py-2.5 text-[11px] sm:text-xs"
+              >
+                <DownloadCloud className="mr-1.5 h-4 w-4 shrink-0" />
+                <span className="truncate">Hugging Face</span>
               </TabsTrigger>
-              <TabsTrigger value="local" className="py-2.5 rounded-lg">
-                <HardDrive className="h-4 w-4 mr-2" />
-                Local Machine
+              <TabsTrigger
+                value="local"
+                title="Local Machine"
+                className="w-full rounded-lg px-2 py-2.5 text-[11px] sm:text-xs"
+              >
+                <HardDrive className="mr-1.5 h-4 w-4 shrink-0" />
+                <span className="truncate">Local</span>
               </TabsTrigger>
-              <TabsTrigger value="azure" className="py-2.5 rounded-lg">
-                <Cloud className="h-4 w-4 mr-2" />
-                Azure ML Model
+              <TabsTrigger
+                value="azure"
+                title="Azure ML Model"
+                className="w-full rounded-lg px-2 py-2.5 text-[11px] sm:text-xs"
+              >
+                <Cloud className="mr-1.5 h-4 w-4 shrink-0" />
+                <span className="truncate">Azure ML</span>
               </TabsTrigger>
             </TabsList>
 
@@ -1510,6 +1604,8 @@ export function InputEnvironmentPanel({
               </div>
             </TabsContent>
           </Tabs>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

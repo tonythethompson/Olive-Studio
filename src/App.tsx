@@ -109,8 +109,9 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* ── Main ── */}
-      <div className="flex-1 flex flex-col relative overflow-hidden bg-slate-950">
+      {/* ── Workspace + AI panel ── */}
+      <div className="flex-1 flex min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
 
         {/* Header */}
         <header className="h-12 flex items-center justify-between px-8 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 shrink-0">
@@ -120,8 +121,13 @@ function Dashboard() {
             <span className="text-[10px] font-mono text-slate-700">optimization pipeline</span>
           </div>
           <button
-            onClick={() => setIsAiSidebarOpen(true)}
-            className="px-3 py-1.5 border border-slate-700 hover:border-electric-blue text-[11px] font-mono font-bold text-slate-500 hover:text-electric-blue flex items-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wide"
+            onClick={() => setIsAiSidebarOpen((open) => !open)}
+            className={cn(
+              "px-3 py-1.5 border text-[11px] font-mono font-bold flex items-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wide",
+              isAiSidebarOpen
+                ? "border-electric-blue text-electric-blue bg-electric-blue/5"
+                : "border-slate-700 text-slate-500 hover:border-electric-blue hover:text-electric-blue"
+            )}
           >
             <Bot className="h-3.5 w-3.5" />
             ai audit
@@ -149,7 +155,7 @@ function Dashboard() {
                 id={id}
                 className={cn(
                   "pt-2 mx-auto w-full",
-                  id === "execute" ? "max-w-7xl" : "max-w-5xl"
+                  id === "execute" || id === "input" ? "max-w-7xl" : "max-w-5xl"
                 )}
               >
                 <div className="mb-6 pb-3 border-b border-slate-800">
@@ -169,13 +175,13 @@ function Dashboard() {
         </main>
       </div>
 
-      {/* AI sidebar */}
       <GeminiSidebar
         state={state}
         setState={setState}
         isOpen={isAiSidebarOpen}
         onClose={() => setIsAiSidebarOpen(false)}
       />
+      </div>
     </div>
   );
 }

@@ -11,6 +11,10 @@ import { v4 as uuidv4 } from "uuid";
 import { validateOliveRecipeStructure } from "./src/lib/oliveRecipeSchema.ts";
 import { parseJsonFromAiResponse, readEnvApiKey } from "./src/lib/aiResponse.ts";
 import {
+  buildAiWorkspaceContext,
+  formatAiWorkspaceContextForPrompt,
+} from "./src/lib/aiWorkspaceContext.ts";
+import {
   mergeDetectedProviders,
   pickRecommendedProvider,
   type HardwareProbeResult,
@@ -991,15 +995,11 @@ app.post("/api/ai/analyze-state", async (req, res) => {
   const { state } = req.body;
   if (!state) return res.status(400).json({ error: "No state provided." });
 
-  const cleanState = {
-    modelSource: state.modelSource,
-    hfModelId: state.hfModelId || "(not set)",
-    ihvProvider: state.ihvProvider,
-    cudaVersion: state.cudaVersion || "auto",
-    passes: state.passes,
-  };
+  const workspace = buildAiWorkspaceContext(state);
 
   const system = `You are "Olive Optimization Advisor", an expert Microsoft Olive compiler and hardware co-design specialist. Analyze the pipeline configuration and give specific, actionable advice.
+
+${formatAiWorkspaceContextForPrompt(workspace)}
 
 autofix.pass MUST be one of these exact strings:
 ihvProvider (value: CPUExecutionProvider|CUDAExecutionProvider|TensorrtExecutionProvider|OpenVINOExecutionProvider|QNNExecutionProvider|ROCMExecutionProvider)
@@ -1020,7 +1020,7 @@ Respond with ONLY valid JSON:
 {"score":<0-100>,"level":"Optimized"|"Suboptimal"|"Unoptimized"|"Critical Mismatch","summary":"<2 sentences>","suggestions":[{"title":"<short>","description":"<why+what>","impact":"High"|"Medium"|"Low","type":"warning"|"success"|"suggestion"|"info","autofix":{"pass":"<path>","value":"<val>"}}]}`;
 
   try {
-    const text = await callAI(system, [{ role: "user", content: `Pipeline:\n${JSON.stringify(cleanState, null, 2)}` }], true);
+    const text = await callAI(system, [{ role: "user", content: `Pipeline JSON:\n${JSON.stringify(workspace, null, 2)}` }], true);
     return res.json(parseJsonFromAiResponse(text));
   } catch (err: any) {
     console.error("AI Analyze Error:", err);
@@ -1030,20 +1030,16 @@ Respond with ONLY valid JSON:
 
 // ─── POST /api/ai/chat ────────────────────────────────────────────────────────
 app.post("/api/ai/chat", async (req, res) => {
-  const { message, context, chatHistory } = req.body;
+  const { message, workspaceContext, state, chatHistory } = req.body;
   if (!message) return res.status(400).json({ error: "Missing message." });
 
-  const ctx = context || {};
-  const activePasses = Object.entries(ctx.passes || {})
-    .filter(([, v]) => v === true)
-    .map(([k]) => k)
-    .join(", ") || "none";
+  const workspace = workspaceContext ?? (state ? buildAiWorkspaceContext(state) : null);
 
-  const contextBlock = ctx.provider
-    ? `\nCurrent pipeline:\n- Model: ${ctx.modelId || "(not set)"}\n- Hardware: ${ctx.provider}\n- CUDA: ${ctx.cudaVersion || "auto"}\n- Active passes: ${activePasses}\n- Quantization: ${ctx.passes?.quantization ? `${ctx.passes.quantMethod} (${ctx.passes.quantPrecision})` : "disabled"}\n- Pruning: ${ctx.passes?.pruning ? `${ctx.passes.pruningMethod} (${Math.round((ctx.passes.pruningSparsity ?? 0.5) * 100)}% sparse)` : "disabled"}\n- PEFT: ${ctx.passes?.peft ? ctx.passes.peftMethod : "disabled"}`
+  const contextBlock = workspace
+    ? `\n\n${formatAiWorkspaceContextForPrompt(workspace)}`
     : "";
 
-  const system = `You are "Olive AI Assistant", an expert Microsoft Olive compiler specialist. Deep expertise in quantization (AWQ, GPTQ, PTQ, QAT, SmoothQuant), pruning (magnitude, SparseGPT, Wanda), PEFT (LoRA, QLoRA), ONNX Runtime, and hardware execution providers (CUDA, TensorRT, DirectML, OpenVINO, QNN/Snapdragon). Give professional, accurate, concise answers. When relevant, provide Olive config snippets or CLI commands.${contextBlock}`;
+  const system = `You are "Olive AI Assistant", an expert Microsoft Olive compiler specialist. Deep expertise in quantization (AWQ, GPTQ, PTQ, QAT, SmoothQuant), pruning (magnitude, SparseGPT, Wanda), PEFT (LoRA, QLoRA), ONNX Runtime, and hardware execution providers (CUDA, TensorRT, DirectML, OpenVINO, QNN/Snapdragon). Give professional, accurate, concise answers. When relevant, provide Olive config snippets or CLI commands. Treat the workspace block below as the user's live pipeline — do not invent a different model, provider, or pass list.${contextBlock}`;
 
   const history: AIChatMessage[] = (chatHistory || []).map((m: any) => ({
     role: m.role === "assistant" ? "assistant" : "user",

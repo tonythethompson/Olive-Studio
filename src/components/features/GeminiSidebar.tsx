@@ -1,5 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { UIState } from "@/types";
+import { cn } from "@/lib/utils";
+import {
+  buildAiWorkspaceContext,
+  buildChatPresetQueries,
+  buildWorkspaceContextSummary,
+} from "@/lib/aiWorkspaceContext";
 import {
   Sparkles, Bot, Send, X, RefreshCw, Zap, CheckCircle2,
   AlertTriangle, MessageSquareCode, Lightbulb, Check, Settings2, Key,
@@ -84,7 +90,7 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
   // Chat
   const [chatMessages, setChatMessages] = useState<{ sender: "user" | "assistant"; text: string }[]>([{
     sender: "assistant",
-    text: "Hello! I'm your **Olive AI Copilot**. I have access to your live **model, passes & hardware target**.\n\nAsk me anything about optimization, or run the pipeline audit for instant diagnostics.",
+    text: "Hello! I'm your **Olive AI Copilot**. I read your **live workspace** — model source, IHV target, passes, validation issues, and batch queue — and use that as context for every reply.\n\nUse the quick queries below (they update as you change the pipeline) or ask anything about optimization.",
   }]);
   const [inputQuestion, setInputQuestion] = useState("");
   const [isChatting, setIsChatting] = useState(false);
@@ -200,7 +206,7 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
-          context: { modelId: state.hfModelId, provider: state.ihvProvider, cudaVersion: state.cudaVersion, passes: state.passes },
+          workspaceContext,
           chatHistory: chatMessages.map(m => ({ role: m.sender === "user" ? "user" : "assistant", content: m.text })),
         }),
       });
@@ -336,23 +342,23 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
       </div>
     );
 
-  const presetQueries = [
-    state.hfModelId
-      ? `Best quantization for ${state.hfModelId.split("/").pop()} on ${state.ihvProvider.replace("ExecutionProvider", "")}?`
-      : `Best quantization for ${state.ihvProvider.replace("ExecutionProvider", "")}?`,
-    state.passes.pruning
-      ? `Trade-offs: ${state.passes.pruningMethod} vs SparseGPT for this model`
-      : "When does pruning hurt accuracy vs. latency?",
-    "Recommend a pass sequence for max throughput",
-  ];
+  const workspaceContext = useMemo(() => buildAiWorkspaceContext(state), [state]);
+  const presetQueries = useMemo(() => buildChatPresetQueries(state), [state]);
+  const workspaceSummary = useMemo(() => buildWorkspaceContextSummary(workspaceContext), [workspaceContext]);
 
   const providerLabel = providerStatus.source !== "none"
     ? `${PROVIDER_OPTIONS.find(p => p.id === providerStatus.provider)?.name ?? providerStatus.provider} / ${providerStatus.model}`
     : "No provider set";
 
   return (
-    <div className={`fixed top-0 right-0 h-full w-[420px] bg-slate-900/95 backdrop-blur-md border-l border-slate-800 z-50 flex flex-col transition-all duration-300 ease-in-out shadow-[-10px_0_40px_rgba(3,7,18,0.45)] transform ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
-
+    <div
+      className={cn(
+        "h-full shrink-0 overflow-hidden border-l border-slate-800 bg-slate-900 transition-[width] duration-300 ease-in-out",
+        isOpen ? "w-[420px]" : "w-0 border-l-0"
+      )}
+      aria-hidden={!isOpen}
+    >
+      <div className="w-[420px] h-full flex flex-col shadow-[-4px_0_24px_rgba(3,7,18,0.25)]">
       {/* Header */}
       <div className="h-16 flex items-center justify-between px-5 border-b border-slate-800 shrink-0 bg-slate-950/80">
         <div className="flex items-center gap-2 min-w-0">
@@ -469,6 +475,14 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
         {/* ── Chat ── */}
         {activeTab === "chat" && (
           <div className="flex flex-col h-full space-y-3">
+            <div className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
+              <p className="text-[9px] font-mono uppercase tracking-wider text-slate-500 font-extrabold mb-1">
+                Live workspace
+              </p>
+              <p className="text-[11px] text-slate-300 leading-relaxed font-mono" title={workspaceSummary}>
+                {workspaceSummary}
+              </p>
+            </div>
             <div className="flex-1 overflow-y-auto space-y-3 p-3 bg-slate-950/50 border border-slate-850 rounded-xl min-h-[350px]">
               {chatMessages.map((msg, i) => (
                 <div key={i} className={`max-w-[90%] p-3 rounded-lg text-xs flex flex-col gap-1 ${msg.sender === "user" ? "bg-electric-blue/10 border border-electric-blue/20 ml-auto" : "bg-slate-900 border border-slate-800 mr-auto"}`}>
@@ -489,11 +503,16 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
             </div>
 
             <div className="space-y-1.5 py-1">
-              <span className="text-[9px] font-mono tracking-wider font-extrabold text-slate-500 uppercase block">Quick Queries</span>
+              <span className="text-[9px] font-mono tracking-wider font-extrabold text-slate-500 uppercase block">Quick queries (from your pipeline)</span>
               <div className="flex flex-wrap gap-1.5">
                 {presetQueries.map((prompt, i) => (
-                  <button key={i} onClick={() => handleSendChat(prompt)} disabled={isChatting}
-                    className="text-[10px] px-2.5 py-0.5 bg-slate-950/80 hover:bg-slate-900 text-slate-400 hover:text-slate-100 border border-slate-800 rounded transition-all cursor-pointer">
+                  <button
+                    key={`${i}-${prompt.slice(0, 24)}`}
+                    onClick={() => handleSendChat(prompt)}
+                    disabled={isChatting}
+                    title={prompt}
+                    className="text-[10px] px-2.5 py-0.5 bg-slate-950/80 hover:bg-slate-900 text-slate-400 hover:text-slate-100 border border-slate-800 rounded transition-all cursor-pointer text-left max-w-full truncate"
+                  >
                     {prompt}
                   </button>
                 ))}
@@ -644,6 +663,7 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
           <Bot className="h-3 w-3 text-slate-600" />
           <span>Target: <span className="text-slate-400 font-mono">{state.ihvProvider}</span></span>
         </div>
+      </div>
       </div>
     </div>
   );
