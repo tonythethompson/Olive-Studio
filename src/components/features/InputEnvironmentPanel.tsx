@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, ChangeEvent } from "react";
+import { useState, useRef, useEffect, ChangeEvent, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -25,6 +25,19 @@ import {
 } from "@/lib/oliveRecipeHub";
 import { parseRecipeJson } from "@/lib/recipePipeline";
 import { cn } from "@/lib/utils";
+import {
+  buildLocalModelHints,
+  scoreRecipeMatchForLocal,
+  summarizeLocalRecipeMatches,
+  type LocalModelHints,
+} from "@/lib/recipeModelMatch";
+import {
+  assessCatalogItemHardwareCompatibility,
+  assessRecipeHardwareCompatibility,
+  summarizeRecipeHardwareCompatibility,
+} from "@/lib/recipeHardwareCompatibility";
+import { getCatalogDeviceFromRecipe } from "@/lib/oliveRecipeHub";
+import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import {
   DownloadCloud,
   KeyRound,
@@ -137,10 +150,37 @@ export function InputEnvironmentPanel({
   const [applyingRecipePath, setApplyingRecipePath] = useState<string | null>(null);
   const [appliedRecipeLabel, setAppliedRecipeLabel] = useState<string | null>(null);
   const [recipeRailExpanded, setRecipeRailExpanded] = useState(true);
+  const [localModelHints, setLocalModelHints] = useState<LocalModelHints | null>(null);
+  const [localHintsLoading, setLocalHintsLoading] = useState(false);
+  const [showLocalRecipeMatchesOnly, setShowLocalRecipeMatchesOnly] = useState(false);
+  const [hideIncompatibleRecipes, setHideIncompatibleRecipes] = useState(true);
+  const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
+  const [hardwareProbeLoading, setHardwareProbeLoading] = useState(true);
 
   const recipeRailCollapsed = Boolean(appliedRecipeLabel) && !recipeRailExpanded;
 
-  const handleApplyCuratedRecipe = async (item: RecipeCatalogItem) => {
+  useEffect(() => {
+    let cancelled = false;
+    setHardwareProbeLoading(true);
+    void fetchHardwareProbe(false)
+      .then((result) => {
+        if (!cancelled) setHardwareProbe(result);
+      })
+      .catch(() => {
+        if (!cancelled) setHardwareProbe(null);
+      })
+      .finally(() => {
+        if (!cancelled) setHardwareProbeLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const applyCuratedRecipe = async (
+    item: RecipeCatalogItem,
+    options?: { allowIncompatible?: boolean },
+  ) => {
     setApplyingRecipePath(item.repoPath);
     setSyncStatus("idle");
     setSyncError("");
@@ -148,6 +188,16 @@ export function InputEnvironmentPanel({
     try {
       const json = await fetchOliveRecipesCatalogItem(item);
       const metadata = compareCatalogMetadataToRecipe(item, json);
+      const hw = assessCatalogItemHardwareCompatibility(item, hardwareProbe, json);
+
+      if (hw.tier === "unavailable" && !options?.allowIncompatible) {
+        setSyncStatus("error");
+        setSyncError(
+          `Recipe targets ${hw.targetDevice} but this machine cannot run it. ${hw.reason} Use "Apply anyway" only for remote or cross-compile workflows.`,
+        );
+        return;
+      }
+
       setState(deriveUiStateFromOliveRecipe(json, { replacePasses: true }));
       setAppliedRecipeLabel(item.name);
       setRecipeRailExpanded(false);
@@ -159,8 +209,14 @@ export function InputEnvironmentPanel({
           : "";
       const approximateNote =
         item.metadataSource !== "recipe" ? " Tags are folder-inferred (approximate)." : "";
+      const hwNote =
+        hw.tier === "unavailable"
+          ? " Applied despite missing local hardware (cross-compile / remote target)."
+          : hw.tier === "compatible"
+            ? ` Verified for ${hw.targetDevice} on this machine.`
+            : "";
       setRecipeSuccessMsg(
-        `Applied preset recipe: "${item.name}"!${approximateNote}${mismatchNote} Config features are updated.`
+        `Applied preset recipe: "${item.name}"!${approximateNote}${mismatchNote}${hwNote}`,
       );
       setTimeout(() => {
         setRecipeSuccessMsg(null);
@@ -172,6 +228,10 @@ export function InputEnvironmentPanel({
       setApplyingRecipePath(null);
     }
   };
+
+  const handleApplyCuratedRecipe = (item: RecipeCatalogItem) => applyCuratedRecipe(item);
+  const handleApplyCuratedRecipeAnyway = (item: RecipeCatalogItem) =>
+    applyCuratedRecipe(item, { allowIncompatible: true });
 
   const handleFetchRemote = async () => {
     setSyncStatus("loading");
@@ -191,17 +251,31 @@ export function InputEnvironmentPanel({
     }
   };
 
-  const handleImport = () => {
+  const handleImport = (allowIncompatible = false) => {
     const { recipe, schema } = parseRecipeJson(importJson);
     if (!schema.valid) {
       setImportError(`Recipe structure invalid:\n- ${schema.errors.join("\n- ")}`);
       return;
     }
+
+    const targetDevice = getCatalogDeviceFromRecipe(recipe) ?? "CPU";
+    const hw = assessRecipeHardwareCompatibility(targetDevice, hardwareProbe);
+    if (hw.tier === "unavailable" && !allowIncompatible) {
+      setImportError(
+        `Recipe targets ${hw.targetDevice} but this machine cannot run it.\n${hw.reason}\nUse "Apply anyway" for remote/cross-compile workflows.`,
+      );
+      return;
+    }
+
     setState(deriveUiStateFromOliveRecipe(recipe, { replacePasses: true }));
     setAppliedRecipeLabel("Custom JSON recipe");
     setRecipeRailExpanded(false);
     setImportError(null);
-    setRecipeSuccessMsg("Recipe parsed and applied successfully!");
+    setRecipeSuccessMsg(
+      hw.tier === "unavailable"
+        ? "Recipe applied (incompatible hardware — remote/cross-compile target)."
+        : "Recipe parsed and applied successfully!",
+    );
     setTimeout(() => setRecipeSuccessMsg(null), 4000);
   };
 
@@ -217,6 +291,87 @@ export function InputEnvironmentPanel({
       selectedDevice === "All" || item.device === selectedDevice;
     return matchesSearch && matchesArch && matchesDev;
   });
+
+  useEffect(() => {
+    if (state.localFiles.length === 0) {
+      setLocalModelHints(null);
+      setLocalHintsLoading(false);
+      setShowLocalRecipeMatchesOnly(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLocalHintsLoading(true);
+
+    void (async () => {
+      const configFile = chunkFilesRef.current.get("config.json");
+      let configText: string | undefined;
+      if (configFile) {
+        try {
+          configText = await configFile.text();
+        } catch {
+          configText = undefined;
+        }
+      }
+
+      if (cancelled) return;
+      setLocalModelHints(
+        buildLocalModelHints(
+          state.localFiles.map((f) => f.name),
+          configText,
+        ),
+      );
+      setLocalHintsLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [state.localFiles]);
+
+  const localMatchSummary = useMemo(
+    () => (localModelHints ? summarizeLocalRecipeMatches(localModelHints, SUGGESTED_RECIPES) : null),
+    [localModelHints],
+  );
+
+  const hardwareMatchSummary = useMemo(
+    () =>
+      hardwareProbe
+        ? summarizeRecipeHardwareCompatibility(SUGGESTED_RECIPES, hardwareProbe)
+        : null,
+    [hardwareProbe],
+  );
+
+  const curatedRecipesWithMatch = useMemo(() => {
+    let rows = filteredRecipes;
+    if (localModelHints && showLocalRecipeMatchesOnly) {
+      rows = rows.filter((item) => scoreRecipeMatchForLocal(localModelHints, item).tier !== "none");
+    }
+    if (hideIncompatibleRecipes && hardwareProbe) {
+      rows = rows.filter(
+        (item) => assessCatalogItemHardwareCompatibility(item, hardwareProbe).tier !== "unavailable",
+      );
+    }
+
+    return rows
+      .map((item) => ({
+        item,
+        match: localModelHints ? scoreRecipeMatchForLocal(localModelHints, item) : null,
+        hardware: assessCatalogItemHardwareCompatibility(item, hardwareProbe),
+      }))
+      .sort((a, b) => {
+        const hwOrder = { compatible: 0, unknown: 1, unavailable: 2 };
+        const hwDiff = hwOrder[a.hardware.tier] - hwOrder[b.hardware.tier];
+        if (hwDiff !== 0) return hwDiff;
+        return (b.match?.score ?? -1) - (a.match?.score ?? -1);
+      });
+  }, [
+    filteredRecipes,
+    localModelHints,
+    showLocalRecipeMatchesOnly,
+    hideIncompatibleRecipes,
+    hardwareProbe,
+  ]);
 
   const pathSuggestions = SUGGESTED_RECIPES.filter((item) => {
     if (!repoPath.trim()) return true;
@@ -636,12 +791,114 @@ export function InputEnvironmentPanel({
 
             {activeRecipeTab === "starter" && (
               <p className="text-[10px] text-slate-500 font-mono mb-3">
-                {filteredRecipes.length} of {SUGGESTED_RECIPES.length} presets
+                {curatedRecipesWithMatch.length} of {SUGGESTED_RECIPES.length} presets
+                {localModelHints && !localHintsLoading
+                  ? ` · ${localMatchSummary?.match ?? 0} match local upload`
+                  : ""}
+                {hardwareProbe && !hardwareProbeLoading
+                  ? ` · ${hardwareMatchSummary?.compatible ?? 0} compatible with this PC`
+                  : ""}
               </p>
             )}
 
             {/* STARTER CURATED TAB */}
             <TabsContent value="starter" className="space-y-3 animate-in fade-in mt-0">
+              <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5 space-y-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                      Hardware compatibility
+                    </p>
+                    {hardwareProbeLoading ? (
+                      <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-400" />
+                        Probing this machine…
+                      </p>
+                    ) : hardwareProbe ? (
+                      <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                        <span className="text-emerald-400">{hardwareMatchSummary?.compatible ?? 0} compatible</span>
+                        <span className="text-slate-600"> · </span>
+                        <span className="text-rose-400">{hardwareMatchSummary?.unavailable ?? 0} incompatible</span>
+                        <span className="text-slate-600"> · </span>
+                        <span className="text-slate-500">
+                          Detected:{" "}
+                          {hardwareProbe.detectedProviders
+                            .map((p) => p.replace("ExecutionProvider", ""))
+                            .join(", ")}
+                        </span>
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-500 mt-1">Hardware probe unavailable — compatibility not verified.</p>
+                    )}
+                  </div>
+                  {hardwareProbe && !hardwareProbeLoading && (
+                    <label className="flex items-center gap-2 text-[10px] text-slate-400 cursor-pointer shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={hideIncompatibleRecipes}
+                        onChange={(e) => setHideIncompatibleRecipes(e.target.checked)}
+                        className="rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-indigo-500/40"
+                      />
+                      Hide incompatible
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {syncStatus === "error" && syncError && (
+                <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{syncError}</span>
+                </div>
+              )}
+
+              {state.localFiles.length > 0 && (
+                <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5 space-y-2">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                        Local model recipe match
+                      </p>
+                      {localHintsLoading ? (
+                        <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-400" />
+                          Reading upload…
+                        </p>
+                      ) : localModelHints ? (
+                        <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                          <span className="text-slate-200 font-semibold">{localModelHints.displayName}</span>
+                          <span className="text-slate-600"> · </span>
+                          <span className="text-emerald-400">{localMatchSummary?.match ?? 0} match</span>
+                          {(localMatchSummary?.possible ?? 0) > 0 && (
+                            <>
+                              <span className="text-slate-600"> · </span>
+                              <span className="text-amber-400">{localMatchSummary?.possible} possible</span>
+                            </>
+                          )}
+                          <span className="text-slate-600"> · </span>
+                          <span className="text-slate-500">{localMatchSummary?.none ?? 0} no preset</span>
+                        </p>
+                      ) : null}
+                      {localModelHints?.hfModelIds[0] && (
+                        <p className="text-[10px] font-mono text-slate-500 mt-1 truncate" title={localModelHints.hfModelIds[0]}>
+                          From config: {localModelHints.hfModelIds[0]}
+                        </p>
+                      )}
+                    </div>
+                    {localModelHints && !localHintsLoading && (localMatchSummary?.match ?? 0) > 0 && (
+                      <label className="flex items-center gap-2 text-[10px] text-slate-400 cursor-pointer shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={showLocalRecipeMatchesOnly}
+                          onChange={(e) => setShowLocalRecipeMatchesOnly(e.target.checked)}
+                          className="rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-indigo-500/40"
+                        />
+                        Matches only
+                      </label>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="space-y-2 pb-3 border-b border-slate-900">
                 <div className="relative">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
@@ -695,17 +952,59 @@ export function InputEnvironmentPanel({
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 max-h-[420px] overflow-y-auto pr-1">
-                {filteredRecipes.map((item) => (
+                {curatedRecipesWithMatch.map(({ item, match, hardware }) => {
+                  const hwBlocked = hardware.tier === "unavailable";
+                  return (
                   <div
                     key={item.repoPath}
-                    className="p-4 rounded-xl border border-slate-900 bg-slate-950/45 hover:border-indigo-500/25 transition-all flex flex-col justify-between h-full group gap-3 text-left"
+                    title={hardware.reason}
+                    className={cn(
+                      "p-4 rounded-xl border bg-slate-950/45 transition-all flex flex-col justify-between h-full group gap-3 text-left",
+                      hardware.tier === "compatible"
+                        ? "border-emerald-500/20 hover:border-emerald-500/35"
+                        : hardware.tier === "unavailable"
+                          ? "border-rose-500/25 bg-rose-500/[0.02] opacity-90"
+                          : "border-slate-900 hover:border-indigo-500/25",
+                      match?.tier === "match" && hardware.tier === "compatible" && "bg-emerald-500/[0.03]",
+                    )}
                   >
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between gap-1 flex-wrap">
                         <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/10">
                           {item.architecture}
                         </span>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 flex-wrap justify-end">
+                          <span
+                            className={cn(
+                              "text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded border",
+                              hardware.tier === "compatible" && "bg-emerald-500/10 text-emerald-400 border-emerald-500/25",
+                              hardware.tier === "unavailable" && "bg-rose-500/10 text-rose-400 border-rose-500/25",
+                              hardware.tier === "unknown" && "bg-slate-800/80 text-slate-500 border-slate-700/60",
+                            )}
+                            title={hardware.reason}
+                          >
+                            {hardware.tier === "compatible"
+                              ? "Runs on this PC"
+                              : hardware.tier === "unavailable"
+                                ? "Incompatible"
+                                : "Unverified"}
+                          </span>
+                          {localModelHints && match && (
+                            <span
+                              className={cn(
+                                "text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded border",
+                                match.tier === "match" && "bg-emerald-500/10 text-emerald-400 border-emerald-500/25",
+                                match.tier === "possible" && "bg-amber-500/10 text-amber-300 border-amber-500/25",
+                                match.tier === "none" && "bg-slate-800/80 text-slate-500 border-slate-700/60",
+                              )}
+                            >
+                              {match.tier === "match"
+                                ? "Matches upload"
+                                : match.tier === "possible"
+                                  ? "Possible match"
+                                  : "No match"}
+                            </span>
+                          )}
                           {item.metadataSource !== "recipe" && (
                             <span
                               className="text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20"
@@ -725,13 +1024,18 @@ export function InputEnvironmentPanel({
                       <p className="text-xs text-slate-400 leading-normal line-clamp-2">
                         {item.description}
                       </p>
+                      {hardware.tier === "unavailable" && (
+                        <p className="text-[10px] text-rose-400/90 leading-relaxed line-clamp-2">
+                          {hardware.reason}
+                        </p>
+                      )}
                     </div>
 
-                    <div className="flex justify-between items-center pt-3 border-t border-slate-900 mt-auto">
-                      <span className="text-[10px] font-mono text-slate-500 truncate max-w-[150px]">
-                        Path: {item.repoPath}
+                    <div className="flex justify-between items-center pt-3 border-t border-slate-900 mt-auto gap-2">
+                      <span className="text-[10px] font-mono text-slate-500 truncate min-w-0">
+                        {item.device} · {item.repoPath.split("/").slice(-2, -1)[0] ?? item.repoPath}
                       </span>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 shrink-0">
                         <Button
                           variant="outline"
                           type="button"
@@ -750,32 +1054,62 @@ export function InputEnvironmentPanel({
                         >
                           Load JSON
                         </Button>
-                        <Button
-                          type="button"
-                          className="h-7 px-2.5 text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white font-bold"
-                          disabled={applyingRecipePath === item.repoPath}
-                          onClick={() => handleApplyCuratedRecipe(item)}
-                        >
-                          {applyingRecipePath === item.repoPath ? (
-                            <>
-                              <Loader2 className="h-3 w-3 mr-1 animate-spin inline" />
-                              Loading
-                            </>
-                          ) : (
-                            "Apply Recipe"
-                          )}
-                        </Button>
+                        {hwBlocked ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-7 px-2.5 text-[10px] border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
+                            disabled={applyingRecipePath === item.repoPath}
+                            onClick={() => handleApplyCuratedRecipeAnyway(item)}
+                          >
+                            {applyingRecipePath === item.repoPath ? (
+                              <>
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin inline" />
+                                Loading
+                              </>
+                            ) : (
+                              "Apply anyway"
+                            )}
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            className="h-7 px-2.5 text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white font-bold"
+                            disabled={applyingRecipePath === item.repoPath}
+                            onClick={() => handleApplyCuratedRecipe(item)}
+                          >
+                            {applyingRecipePath === item.repoPath ? (
+                              <>
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin inline" />
+                                Loading
+                              </>
+                            ) : (
+                              "Apply Recipe"
+                            )}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
 
-                {filteredRecipes.length === 0 && (
+                {curatedRecipesWithMatch.length === 0 && (
                   <div className="lg:col-span-2 p-6 text-center bg-slate-950/20 rounded-lg border border-slate-900 border-dashed">
                     <Search className="h-6 w-6 text-slate-700 mx-auto mb-2 animate-pulse" />
-                    <p className="text-xs font-semibold text-slate-400">No Presets Match Filters</p>
+                    <p className="text-xs font-semibold text-slate-400">
+                      {showLocalRecipeMatchesOnly && localModelHints
+                        ? "No presets match your local upload with current filters"
+                        : hideIncompatibleRecipes && hardwareProbe
+                          ? "No presets compatible with this PC match your filters"
+                          : "No Presets Match Filters"}
+                    </p>
                     <p className="text-[11px] text-slate-500 mt-1 max-w-[280px] mx-auto">
-                      Try relaxing your search query or setting the category filters to default values.
+                      {hideIncompatibleRecipes && hardwareProbe
+                        ? "Turn off “Hide incompatible” or relax search and device filters."
+                        : showLocalRecipeMatchesOnly && localModelHints
+                          ? "Turn off “Matches only” or relax search and device filters."
+                          : "Try relaxing your search query or setting the category filters to default values."}
                     </p>
                   </div>
                 )}
@@ -934,13 +1268,22 @@ export function InputEnvironmentPanel({
                   />
                 </div>
 
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-950 px-4 py-3 border border-slate-900 rounded-lg gap-2">
-                  <span className="text-[10px] text-slate-500 font-mono">
+                <div className="flex flex-col sm:flex-row justify-end items-stretch sm:items-center bg-slate-950 px-4 py-3 border border-slate-900 rounded-lg gap-2">
+                  <span className="text-[10px] text-slate-500 font-mono sm:mr-auto">
                     Paste raw Olive JSON format schema above or load standard presets
                   </span>
                   <Button
                     type="button"
-                    onClick={handleImport}
+                    variant="outline"
+                    onClick={() => handleImport(true)}
+                    disabled={!importJson.trim()}
+                    className="text-xs h-8 border-rose-500/30 text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                  >
+                    Apply anyway
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => handleImport(false)}
                     disabled={!importJson.trim()}
                     className="text-xs h-8 bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer"
                   >

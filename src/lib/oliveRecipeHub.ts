@@ -142,6 +142,32 @@ function mapExecutionProviderFromRecipe(parsed: any): IHVProvider | undefined {
   return undefined;
 }
 
+/** Catalog device label from recipe JSON (more accurate than folder tags). */
+export function getCatalogDeviceFromRecipe(parsed: unknown): string | undefined {
+  const systems = (parsed as { systems?: Record<string, unknown> })?.systems;
+  if (systems && typeof systems === "object") {
+    for (const system of Object.values(systems)) {
+      const config = (system as { config?: { accelerators?: unknown[] }; accelerators?: unknown[] })?.config;
+      const accelerators = config?.accelerators ?? (system as { accelerators?: unknown[] })?.accelerators;
+      if (!Array.isArray(accelerators)) continue;
+      for (const accelerator of accelerators) {
+        const providers = (accelerator as { execution_providers?: unknown[] })?.execution_providers;
+        if (!Array.isArray(providers) || providers.length === 0) continue;
+        const token = String(providers[0]).toLowerCase();
+        if (token.includes("directml") || token.includes("dml")) return "DirectML";
+        if (token.includes("tensorrt") || token.includes("trt")) return "TensorRT";
+        if (token.includes("cuda")) return "CUDA";
+        if (token.includes("qnn")) return "QNN";
+        if (token.includes("openvino")) return "OpenVINO";
+        if (token.includes("rocm")) return "CUDA";
+      }
+    }
+  }
+
+  const provider = mapExecutionProviderFromRecipe(parsed);
+  return provider ? mapProviderToCatalogDevice(provider) : undefined;
+}
+
 export function getExecutionProviderFromRecipe(parsed: unknown): IHVProvider | undefined {
   return mapExecutionProviderFromRecipe(parsed);
 }
