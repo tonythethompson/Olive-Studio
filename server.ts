@@ -1109,7 +1109,12 @@ app.use("/api", (_req, res) => {
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        watch: {
+          ignored: ["**/.venv/**", "**/node_modules/**", "**/models/**", "**/.cache/**"],
+        },
+      },
       appType: "spa",
     });
     app.use((req, res, next) => {

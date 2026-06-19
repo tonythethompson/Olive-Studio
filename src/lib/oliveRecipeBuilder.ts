@@ -64,7 +64,8 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
     },
     passes: {} as Record<string, unknown>,
     engine: {
-      search_strategy: { execution_order: "joint", search_algorithm: "exhaustive" },
+      // Fixed pipeline order from the graph — no pass search (would require evaluators).
+      search_strategy: false,
       host: "local_system",
       target: "local_system",
       cache_dir:
@@ -110,6 +111,7 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
         config: {
           target_opset: state.passes.conversionOpset,
           precision: state.passes.conversionInputTargetTypes,
+          source_format: state.passes.conversionSourceFormat,
         },
       };
     } else {
@@ -147,6 +149,9 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   if (state.passes.peft) {
     const peftType = state.passes.peftMethod === "qlora" ? "QLoRA" : "LoRA";
     const peftConfig: Record<string, unknown> = { r: 8, lora_alpha: 16 };
+    if (state.passes.diffusionLora) {
+      peftConfig.diffusion_lora = true;
+    }
     if (useMemoryOffload) {
       Object.assign(peftConfig, buildPeftOffloadConfig());
     }

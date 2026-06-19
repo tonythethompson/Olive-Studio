@@ -43,6 +43,7 @@ function inferParamBillions(identifier: string): { paramsB: number; confidence: 
   if (id.includes("llama-3") || id.includes("llama3")) return { paramsB: 8, confidence: "low" };
   if (id.includes("llama-2") || id.includes("llama2")) return { paramsB: 7, confidence: "low" };
   if (id.includes("mistral") || id.includes("mixtral")) return { paramsB: 7, confidence: "low" };
+  if (id.includes("qwen2.5") || id.includes("qwen2")) return { paramsB: 7, confidence: "medium" };
   if (id.includes("qwen")) return { paramsB: 7, confidence: "low" };
   if (id.includes("sdxl") || id.includes("stable-diffusion-xl")) return { paramsB: 2.6, confidence: "low" };
   if (id.includes("stable-diffusion") || id.includes("sd15")) return { paramsB: 0.9, confidence: "low" };
@@ -53,8 +54,32 @@ function inferParamBillions(identifier: string): { paramsB: number; confidence: 
   return { paramsB: 7, confidence: "low" };
 }
 
+/** Short label for VRAM UI — full HF id or local filename. */
+export function getVramModelLabel(state: UIState): string {
+  if (state.modelSource === "huggingface" && state.hfModelId.trim()) {
+    return state.hfModelId.trim();
+  }
+  if (state.modelSource === "azure" && state.azureModelPath.trim()) {
+    return state.azureModelPath.trim();
+  }
+  if (state.modelSource === "local" && state.localFiles.length > 0) {
+    return state.localFiles[0].name;
+  }
+  return "No model selected";
+}
+
+/** Display name (repo tail) for compact UI. */
+export function getVramModelShortName(state: UIState): string {
+  const label = getVramModelLabel(state);
+  if (label === "No model selected") return label;
+  if (label.includes("/")) return label.split("/").pop() ?? label;
+  if (label.includes("\\")) return label.split("\\").pop() ?? label;
+  return label;
+}
+
 function resolveSourceWeightGb(state: UIState): {
   weightGb: number;
+  paramBillions: number;
   confidence: VramConfidence;
   notes: string[];
 } {
@@ -62,6 +87,7 @@ function resolveSourceWeightGb(state: UIState): {
     const totalBytes = state.localFiles.reduce((sum, file) => sum + file.size, 0);
     return {
       weightGb: totalBytes / 1024 ** 3,
+      paramBillions: 0,
       confidence: "high",
       notes: ["Based on total uploaded weight file size."],
     };
@@ -75,23 +101,40 @@ function resolveSourceWeightGb(state: UIState): {
         : "";
 
   if (!identifier.trim()) {
+    const weightGb = paramsToGb(7, 2);
     return {
-      weightGb: 14,
+      weightGb,
+      paramBillions: 7,
       confidence: "low",
       notes: ["No model selected — using a generic ~7B FP16 placeholder."],
     };
   }
 
   const { paramsB, confidence } = inferParamBillions(identifier);
-  const weightGb = (paramsB * 1e9 * 2) / 1024 ** 3;
+  const bytesPerParam = sourceBytesPerParam(state);
   return {
-    weightGb,
+    weightGb: paramsToGb(paramsB, bytesPerParam),
+    paramBillions: paramsB,
     confidence,
     notes: [`Inferred ~${paramsB}B parameters from model id.`],
   };
 }
 
-function inferenceBytesPerParam(state: UIState): number {
+function paramsToGb(paramBillions: number, bytesPerParam: number): number {
+  return (paramBillions * 1e9 * bytesPerParam) / 1024 ** 3;
+}
+
+/** Precision of weights as loaded / before optimization passes. */
+function sourceBytesPerParam(state: UIState): number {
+  const dtype = state.passes.conversionInputTargetTypes.toLowerCase();
+  if (dtype.includes("int8")) return 1;
+  if (dtype.includes("float16") || dtype.includes("bfloat16")) return 2;
+  if (dtype.includes("float32") || dtype.includes("float64")) return 4;
+  return 2;
+}
+
+/** Deployed artifact precision after active optimization passes. */
+function deployedBytesPerParam(state: UIState): number {
   if (state.passes.quantization) {
     switch (state.passes.quantPrecision) {
       case "int4":
@@ -106,11 +149,17 @@ function inferenceBytesPerParam(state: UIState): number {
       }
     }
   }
+  return sourceBytesPerParam(state);
+}
 
-  const dtype = state.passes.conversionInputTargetTypes.toLowerCase();
-  if (dtype.includes("int8")) return 1;
-  if (dtype.includes("float16") || dtype.includes("bfloat16")) return 2;
-  return 4;
+function effectiveParamBillions(state: UIState, paramBillions: number): number {
+  if (paramBillions <= 0) {
+    return 0;
+  }
+  if (state.passes.pruning) {
+    return paramBillions * (1 - state.passes.pruningSparsity);
+  }
+  return paramBillions;
 }
 
 function peakRunMultiplier(state: UIState): number {
@@ -155,7 +204,16 @@ export function formatMemoryGb(gb: number): string {
 
 export function estimateVramRequirement(state: UIState): VramEstimate {
   const source = resolveSourceWeightGb(state);
-  const inferenceGb = source.weightGb * (inferenceBytesPerParam(state) / 2);
+  const paramBillions =
+    source.paramBillions > 0
+      ? source.paramBillions
+      : source.weightGb / paramsToGb(1, sourceBytesPerParam(state));
+
+  const effectiveParams = effectiveParamBillions(state, paramBillions);
+  const inferenceGb =
+    source.paramBillions > 0
+      ? paramsToGb(effectiveParams, deployedBytesPerParam(state))
+      : source.weightGb;
   const peakRunGb = source.weightGb * peakRunMultiplier(state);
   const usesGpu = isGpuProvider(state.ihvProvider);
 

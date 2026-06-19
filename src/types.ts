@@ -13,11 +13,11 @@ export interface OliveRecipe {
     };
   };
   systems: Record<string, any>;
-  evaluators: Record<string, any>;
+  evaluators?: Record<string, unknown>;
   passes: Record<string, PassConfig>;
   engine: {
-    search_strategy: any;
-    evaluator: string;
+    search_strategy: false | Record<string, unknown>;
+    evaluator?: string;
     host: string;
     target: string;
     cache_dir: string;

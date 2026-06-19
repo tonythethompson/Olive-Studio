@@ -95,11 +95,67 @@ export function pickRecommendedProvider(detected: IHVProvider[]): IHVProvider {
   return "CPUExecutionProvider";
 }
 
+function undetectedProviderReason(provider: IHVProvider): string {
+  switch (provider) {
+    case "QNNExecutionProvider":
+      return "Qualcomm QNN requires Snapdragon / Hexagon NPU hardware on this machine.";
+    case "ROCMExecutionProvider":
+      return "AMD ROCm was not detected (no ROCm GPU or ROCm runtime on this machine).";
+    case "OpenVINOExecutionProvider":
+      return "Intel OpenVINO was not detected (OpenVINO runtime not installed locally).";
+    case "CUDAExecutionProvider":
+      return "NVIDIA CUDA was not detected (no NVIDIA GPU or CUDA execution provider on this machine).";
+    case "TensorrtExecutionProvider":
+      return "NVIDIA TensorRT was not detected (no TensorRT execution provider on this machine).";
+    case "CPUExecutionProvider":
+      return "";
+    default: {
+      const unreachable: never = provider;
+      return `Execution provider not available on this machine (${unreachable}).`;
+    }
+  }
+}
+
+/** Providers the user may select after local hardware detection. */
+export function getSelectableProviders(
+  probe: HardwareProbeResult | null | undefined
+): IHVProvider[] {
+  if (!probe) {
+    return ["CPUExecutionProvider"];
+  }
+  return probe.detectedProviders;
+}
+
+/** Block selection when a provider is absent from the local probe. */
+export function getProviderAvailabilityBlock(
+  provider: IHVProvider,
+  probe: HardwareProbeResult | null | undefined
+): { reason: string } | null {
+  if (provider === "CPUExecutionProvider") {
+    return null;
+  }
+  if (!probe) {
+    return {
+      reason:
+        "Hardware detection is still running. Only CPU can be selected until probing finishes.",
+    };
+  }
+  if (!probe.detectedProviders.includes(provider)) {
+    return { reason: undetectedProviderReason(provider) };
+  }
+  return null;
+}
+
 export function isProviderDetectedLocally(
   provider: IHVProvider,
   probe: HardwareProbeResult | null | undefined
 ): boolean {
-  if (!probe) return true;
+  if (provider === "CPUExecutionProvider") {
+    return true;
+  }
+  if (!probe) {
+    return false;
+  }
   return probe.detectedProviders.includes(provider);
 }
 

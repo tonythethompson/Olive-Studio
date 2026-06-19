@@ -1,0 +1,93 @@
+{
+    "workflow_id": "default_workflow",
+    "input_model": {
+        "type": "pytorchmodel",
+        "config": {
+            "hf_config": {
+                "model_name": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+                "task": "text-generation"
+            }
+        }
+    },
+    "systems": {
+        "local_system": {
+            "type": "LocalSystem",
+            "config": {
+                "accelerators": [
+                    {
+                        "device": "gpu",
+                        "execution_providers": [
+                            "TensorrtExecutionProvider"
+                        ],
+                        "memory": null
+                    }
+                ],
+                "hf_token": null
+            }
+        }
+    },
+    "data_configs": [],
+    "evaluators": null,
+    "engine": {
+        "search_strategy": false,
+        "host": {
+            "type": "LocalSystem",
+            "config": {
+                "accelerators": [
+                    {
+                        "device": "gpu",
+                        "execution_providers": [
+                            "TensorrtExecutionProvider"
+                        ],
+                        "memory": null
+                    }
+                ],
+                "hf_token": null
+            }
+        },
+        "target": {
+            "type": "LocalSystem",
+            "config": {
+                "accelerators": [
+                    {
+                        "device": "gpu",
+                        "execution_providers": [
+                            "TensorrtExecutionProvider"
+                        ],
+                        "memory": null
+                    }
+                ],
+                "hf_token": null
+            }
+        },
+        "evaluator": null,
+        "plot_pareto_frontier": false,
+        "no_artifacts": false,
+        "evaluate_input_model": true,
+        "output_dir": "A:\\Olive-Studio\\models\\optimized",
+        "packaging_config": null,
+        "cache_config": null,
+        "cache_dir": "~/.cache/olive",
+        "clean_cache": false,
+        "clean_evaluation_cache": false,
+        "enable_shared_cache": false,
+        "log_severity_level": 1,
+        "ort_log_severity_level": 3,
+        "ort_py_log_severity_level": 3,
+        "log_to_file": false
+    },
+    "passes": {
+        "conversion": [
+            {
+                "type": "onnxconversion",
+                "config": {
+                    "target_opset": 14,
+                    "precision": "float32",
+                    "source_format": "pytorch"
+                },
+                "host": null,
+                "evaluator": null
+            }
+        ]
+    }
+}

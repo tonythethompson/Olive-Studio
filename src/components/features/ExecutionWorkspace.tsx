@@ -1,4 +1,4 @@
-﻿import { useState, useRef } from "react";
+﻿import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
 import { Code, Play, CheckCircle2, AlertCircle, Copy, Check, Upload, FileJson, X, Github, ArrowUpRight, Search, BookOpen, Workflow, GitBranch, GitPullRequest, Globe, RefreshCw, Trash2, Download, Laptop, Smartphone, FileCode, Sliders, Cpu, Settings, AlertTriangle, CircleDot } from "lucide-react";
@@ -6,9 +6,10 @@ import JSZip from "jszip";
 import { RecipeGraphView } from "./RecipeGraphView";
 import { cn } from "@/lib/utils";
 import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
+import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 
-export function ExecutionWorkspace({ state, setState, onOpenAiAudit, onExecute: _onExecute, jobId: _jobId, isRunning: _isRunning, setIsRunning: _setIsRunning }: { state: UIState; setState: (s: Partial<UIState>) => void; onOpenAiAudit?: () => void; onExecute?: () => void; jobId?: string | null; isRunning?: boolean; setIsRunning?: (v: boolean) => void }) {
+export function ExecutionWorkspace({ state, setState, onOpenAiAudit, onRunStateChange, onExecute: _onExecute, jobId: _jobId, isRunning: _isRunning, setIsRunning: _setIsRunning }: { state: UIState; setState: (s: Partial<UIState>) => void; onOpenAiAudit?: () => void; onRunStateChange?: (running: boolean) => void; onExecute?: () => void; jobId?: string | null; isRunning?: boolean; setIsRunning?: (v: boolean) => void }) {
   // Live execution state
   const [liveJobId, setLiveJobId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -30,6 +31,13 @@ export function ExecutionWorkspace({ state, setState, onOpenAiAudit, onExecute: 
   const [owrVramMode, setOwrVramMode] = useState<"performance" | "memory">("performance");
   const [owrSelectedFile, setOwrSelectedFile] = useState<"ort_config.json" | "web_init.js" | "mobile_init.kt" | "onnx_model_manifest.json">("ort_config.json");
   const [isOwrCopied, setIsOwrCopied] = useState(false);
+  const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
+
+  useEffect(() => {
+    fetchHardwareProbe()
+      .then(setHardwareProbe)
+      .catch(() => setHardwareProbe(null));
+  }, []);
 
   // Dynamic generation helper for OWR Config Bundle
   const getOwrConfigs = () => {
@@ -240,7 +248,7 @@ ${owrPlatform === "web" ?
     }
   };
 
-  const pipeline = buildRecipeFromState(state);
+  const pipeline = buildRecipeFromState(state, { hardwareProbe });
   const { recipe, recipeJson, validation, schema, advisories, isRunnable } = pipeline;
   const validationLabel = !schema.valid
     ? `Schema invalid (${schema.errors.length} issue${schema.errors.length === 1 ? "" : "s"})`
@@ -317,6 +325,7 @@ ${owrPlatform === "web" ?
     }
 
     setIsRunning(true);
+    onRunStateChange?.(true);
     setExecutionLogs(["[INFO] Initiating Olive run...\n"]);
     setExecutionStatus("running");
     setExecutionExitCode(null);
@@ -333,6 +342,7 @@ ${owrPlatform === "web" ?
         setExecutionLogs(prev => [...prev, `[ERROR] ${errData.error}`]);
         setExecutionStatus("failed");
         setIsRunning(false);
+        onRunStateChange?.(false);
         return;
       }
 
@@ -364,6 +374,7 @@ ${owrPlatform === "web" ?
         setExecutionStatus(exitCode === 0 ? "completed" : "failed");
         setExecutionExitCode(exitCode);
         setIsRunning(false);
+        onRunStateChange?.(false);
         evtSource.close();
         liveSourceRef.current = null;
       });
@@ -372,6 +383,7 @@ ${owrPlatform === "web" ?
         setExecutionLogs(prev => [...prev, "[ERROR] SSE connection lost."]);
         setExecutionStatus("failed");
         setIsRunning(false);
+        onRunStateChange?.(false);
         evtSource.close();
         liveSourceRef.current = null;
       };
@@ -379,6 +391,7 @@ ${owrPlatform === "web" ?
       setExecutionLogs(prev => [...prev, `[ERROR] ${err.message}`]);
       setExecutionStatus("failed");
       setIsRunning(false);
+      onRunStateChange?.(false);
     }
   };
 

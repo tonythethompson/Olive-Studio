@@ -1,4 +1,4 @@
-import { useState, type SVGProps } from "react";
+import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { UIState } from "@/types";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
@@ -42,6 +42,7 @@ const SECTIONS: { id: ActiveView; step: string; label: string; desc: string; ico
 function Dashboard() {
   const [state, setStateRaw] = useState<UIState>(defaultState);
   const [activeView, setActiveView] = useState<ActiveView>("input");
+  const [isOliveRunning, setIsOliveRunning] = useState(false);
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
   const [triggerAiAudit, setTriggerAiAudit] = useState(false);
   const [licenseOpen, setLicenseOpen] = useState(false);
@@ -59,9 +60,11 @@ function Dashboard() {
       <aside className="w-56 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
         <div className="h-14 flex items-center px-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="border border-electric-blue/40 p-1 text-electric-blue shrink-0">
-              <LayersIcon className="w-4 h-4" />
-            </div>
+            <img
+              src="/assets/logo.png"
+              alt="Olive Studio"
+              className="h-8 w-8 shrink-0 rounded object-contain"
+            />
             <div className="min-w-0">
               <div className="text-sm font-semibold text-slate-100 truncate">Olive Studio</div>
               <div className="text-[11px] text-slate-500">Recipe builder</div>
@@ -137,6 +140,7 @@ function Dashboard() {
           <main
             className="flex-1 overflow-y-auto px-6 py-8 md:px-10 h-full scroll-smooth"
             onScroll={(e) => {
+              if (isOliveRunning) return;
               const scrollPos = (e.target as HTMLElement).scrollTop + 120;
               for (let i = SECTIONS.length - 1; i >= 0; i--) {
                 const el = document.getElementById(SECTIONS[i].id);
@@ -163,7 +167,18 @@ function Dashboard() {
                   {id === "ihv" && <IHVIntegrationPanel state={state} setState={setState} />}
                   {id === "execute" && (
                     <div className="space-y-8">
-                      <ExecutionWorkspace state={state} setState={setState} onOpenAiAudit={handleOpenAiAudit} />
+                      <ExecutionWorkspace
+                        state={state}
+                        setState={setState}
+                        onOpenAiAudit={handleOpenAiAudit}
+                        onRunStateChange={(running) => {
+                          setIsOliveRunning(running);
+                          if (running) {
+                            setActiveView("execute");
+                            document.getElementById("execute")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                          }
+                        }}
+                      />
                       <BatchProcessingPanel state={state} setState={setState} />
                     </div>
                   )}
@@ -185,17 +200,6 @@ function Dashboard() {
 
       <LicenseNotice open={licenseOpen} onClose={() => setLicenseOpen(false)} />
     </div>
-  );
-}
-
-function LayersIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="12 2 2 7 12 12 22 7 12 2" />
-      <polyline points="2 12 12 17 22 12" />
-      <polyline points="2 17 12 22 22 17" />
-    </svg>
   );
 }
 

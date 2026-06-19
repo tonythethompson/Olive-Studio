@@ -1,0 +1,6 @@
+triton
+peft
+onnxruntime-gpu
+accelerate>=0.30.0
+scipy
+bitsandbytes

@@ -4,6 +4,7 @@ import {
   getPipelineValidation,
   getRemainingAdvisories,
   PipelineValidationResult,
+  PipelineValidationOptions,
   sanitizePipelineState,
 } from "@/lib/pipelineValidation";
 import {
@@ -23,11 +24,14 @@ export interface RecipePipelineResult {
 }
 
 /** Single source of truth: UI state → sanitized recipe artifact. */
-export function buildRecipeFromState(state: UIState): RecipePipelineResult {
+export function buildRecipeFromState(
+  state: UIState,
+  options?: PipelineValidationOptions
+): RecipePipelineResult {
   const sanitized = sanitizePipelineState(state);
   const recipe = buildOliveRecipe(sanitized);
   const recipeJson = serializeRecipe(recipe);
-  const validation = getPipelineValidation(sanitized);
+  const validation = getPipelineValidation(sanitized, options);
   const schema = validateOliveRecipeStructure(recipe);
 
   return {

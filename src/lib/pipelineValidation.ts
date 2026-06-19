@@ -1,5 +1,13 @@
 import { IHVProvider, UIState } from "@/types";
 import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
+import {
+  getProviderAvailabilityBlock,
+  type HardwareProbeResult,
+} from "@/lib/hardwareProbe";
+
+export type PipelineValidationOptions = {
+  hardwareProbe?: HardwareProbeResult | null;
+};
 
 export type IssueSeverity = "critical" | "warning" | "info";
 
@@ -199,9 +207,66 @@ export function hasProviderCriticalConflicts(
   return getProviderConflicts(providerId, passes).some((c) => c.severity === "critical");
 }
 
+/** Providers absent from the local hardware probe cannot be selected or run. */
+export function getProviderHardwareBlock(
+  providerId: IHVProvider,
+  probe: HardwareProbeResult | null | undefined
+): { reason: string } | null {
+  return getProviderAvailabilityBlock(providerId, probe);
+}
+
+export function getProviderSelectionBlockReason(
+  providerId: IHVProvider,
+  _passes: UIState["passes"],
+  probe?: HardwareProbeResult | null
+): string | null {
+  return getProviderHardwareBlock(providerId, probe)?.reason ?? null;
+}
+
+/** Apply provider switch with pass autofixes; returns null when the target is blocked. */
+export function prepareProviderChange(
+  state: UIState,
+  providerId: IHVProvider,
+  probe?: HardwareProbeResult | null
+): Partial<UIState> | null {
+  if (getProviderHardwareBlock(providerId, probe)) {
+    return null;
+  }
+
+  const conflicts = getProviderConflicts(providerId, state.passes);
+  const hasCritical = conflicts.some((c) => c.severity === "critical");
+
+  if (hasCritical) {
+    return {
+      ihvProvider: providerId,
+      passes: applyProviderConflictAutofixes(providerId, state.passes),
+    };
+  }
+
+  return { ihvProvider: providerId };
+}
+
+function passesNeedOnnxGraph(passes: UIState["passes"]): boolean {
+  return Boolean(passes.quantization || passes.onnxTransforms);
+}
+
 function getCrossPassIssues(state: UIState): PipelineIssue[] {
   const { passes } = state;
   const issues: PipelineIssue[] = [];
+
+  if (passesNeedOnnxGraph(passes) && !passes.conversion) {
+    issues.push({
+      id: "onnx-pipeline-missing-conversion",
+      severity: "critical",
+      title: "ONNX conversion required",
+      description:
+        "ORT graph transforms and ONNX quantization operate on an ONNX graph. Enable Graph Conversion before these passes, especially for QNN and OpenVINO deployment targets.",
+      affectedTabs: ["conversion", "transforms", "quantization"],
+      affectedPasses: ["conversion", "transformer_opt", "quantization", "provider"],
+      actionLabel: "Enable ONNX conversion",
+      autofix: { passes: { ...passes, conversion: true, conversionFormat: "onnx" } },
+    });
+  }
 
   if (passes.pruning && passes.quantization && passes.quantMethod === "awq") {
     issues.push({
@@ -329,6 +394,33 @@ function getProviderIssues(state: UIState): PipelineIssue[] {
   }));
 }
 
+function getProviderHardwareIssues(
+  state: UIState,
+  probe?: HardwareProbeResult | null
+): PipelineIssue[] {
+  if (!probe) {
+    return [];
+  }
+
+  const block = getProviderHardwareBlock(state.ihvProvider, probe);
+  if (!block) {
+    return [];
+  }
+
+  const shortName = state.ihvProvider.replace("ExecutionProvider", "");
+  return [
+    {
+      id: `provider-hardware-${state.ihvProvider}`,
+      severity: "critical",
+      title: `${shortName} not available on this machine`,
+      description: block.reason,
+      affectedPasses: ["provider"],
+      actionLabel: "Use detected hardware",
+      autofix: { ihvProvider: probe.recommendedProvider },
+    },
+  ];
+}
+
 function getAdvisoryIssues(state: UIState): PipelineIssue[] {
   const issues: PipelineIssue[] = [];
   const { passes } = state;
@@ -358,10 +450,14 @@ function dedupeIssues(issues: PipelineIssue[]): PipelineIssue[] {
   return Array.from(byId.values());
 }
 
-export function getPipelineValidation(state: UIState): PipelineValidationResult {
+export function getPipelineValidation(
+  state: UIState,
+  options?: PipelineValidationOptions
+): PipelineValidationResult {
   const issues = dedupeIssues([
     ...getCrossPassIssues(state),
     ...getProviderIssues(state),
+    ...getProviderHardwareIssues(state, options?.hardwareProbe),
     ...getAdvisoryIssues(state),
   ]);
 

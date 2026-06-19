@@ -60,6 +60,13 @@ export function inferPassesFromCatalogItem(item: RecipeCatalogItem): UIState["pa
     passes.conversionInputTargetTypes = "float16";
   } else if (text.includes("fp32") || text.includes("float32")) {
     passes.conversionInputTargetTypes = "float32";
+  } else if (
+    /llama|mistral|qwen|deepseek|phi|gemma|instruct|coder/i.test(
+      `${item.repoPath} ${inferCatalogModelId(item)}`,
+    )
+  ) {
+    // HF LLMs are typically loaded in fp16/bf16 — not fp32.
+    passes.conversionInputTargetTypes = "float16";
   }
 
   if (text.includes("lora") || text.includes("peft") || text.includes("qlora")) {
@@ -111,7 +118,7 @@ export function estimateVramForCatalogPreset(
   const availableGb = getSelectedGpuVramGb(probe ?? null, sketch.ihvProvider);
   const systemRamGb = probe?.platform.systemRamGb ?? null;
 
-  const inferenceLabel = estimate.usesGpu ? "VRAM after opt" : "RAM after opt";
+  const beforeLabel = estimate.usesGpu ? "VRAM" : "RAM";
   const peakLabel = estimate.usesGpu ? "peak VRAM" : "peak RAM";
 
   let fitHint: string | null = null;
@@ -121,16 +128,16 @@ export function estimateVramForCatalogPreset(
       systemRamGb != null ? getHybridMemoryPoolGb(availableGb, systemRamGb) : availableGb;
     const runFit = compareVramFit(estimate.peakRunGb, poolGb);
 
-    if (inferenceFit === "insufficient") {
-      fitHint = "May exceed GPU for inference";
-    } else if (runFit === "insufficient") {
+    if (runFit === "insufficient") {
       fitHint = "Peak run may need hybrid offload";
     } else if (runFit === "tight" || inferenceFit === "tight") {
       fitHint = "Tight on this GPU";
+    } else if (inferenceFit === "insufficient") {
+      fitHint = "Deployed model may exceed GPU VRAM";
     }
   }
 
-  const summaryLine = `~${formatMemoryGb(estimate.inferenceGb)} ${inferenceLabel} · ~${formatMemoryGb(estimate.peakRunGb)} ${peakLabel}`;
+  const summaryLine = `~${formatMemoryGb(estimate.sourceWeightGb)} ${beforeLabel} model · ~${formatMemoryGb(estimate.peakRunGb)} ${peakLabel} during run`;
 
   return {
     inferenceGb: estimate.inferenceGb,

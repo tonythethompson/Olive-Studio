@@ -1,24 +1,18 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, Select, Label, Switch, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { IHVProvider, UIState } from "@/types";
-import { applyProviderConflictAutofixes, getProviderConflicts, getQuantMethodActivationBlock, isConversionFormatAllowed, isPeftAllowed, isPeftMethodAllowed, isQuantMethodAllowed, isStructuredPruningAllowed } from "@/lib/pipelineValidation";
+import { applyProviderConflictAutofixes, getProviderConflicts, getProviderHardwareBlock, getQuantMethodActivationBlock, isConversionFormatAllowed, isPeftAllowed, isPeftMethodAllowed, isQuantMethodAllowed, isStructuredPruningAllowed, prepareProviderChange } from "@/lib/pipelineValidation";
 import { isMemoryOffloadAvailable, hasHuggingFaceModel } from "@/lib/memoryOffload";
 import { isGpuProvider } from "@/lib/vramEstimate";
-import { fetchHardwareProbe, isProviderDetectedLocally, type HardwareProbeResult } from "@/lib/hardwareProbe";
+import { fetchHardwareProbe, getSelectableProviders, isProviderDetectedLocally, type HardwareProbeResult } from "@/lib/hardwareProbe";
+import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { formatMemoryGb } from "@/lib/vramEstimate";
 import { Cpu, CpuIcon, Layers, Settings2, AlertTriangle, ShieldAlert, Check, Wand2, Activity, Lock, CheckCircle, AlertCircle, Info, Search, Sliders, Table, List, RefreshCw, HardDrive } from "lucide-react";
 
 export { getProviderConflicts };
 
-const providers: { id: IHVProvider; name: string; shortName: string; desc: string; icon: typeof Cpu }[] = [
-  { id: "CPUExecutionProvider", name: "Native CPU", shortName: "CPU", desc: "Standard ONNX Runtime CPU provider for broad compatibility.", icon: Cpu },
-  { id: "CUDAExecutionProvider", name: "NVIDIA CUDA", shortName: "CUDA", desc: "Accelerates inference on NVIDIA GPUs via CUDA.", icon: Layers },
-  { id: "TensorrtExecutionProvider", name: "NVIDIA TensorRT", shortName: "TensorRT", desc: "Maximum throughput on NVIDIA GPUs using TensorRT engines.", icon: Layers },
-  { id: "OpenVINOExecutionProvider", name: "Intel OpenVINO", shortName: "OpenVINO", desc: "Optimized for Intel Core, Xeon, and Core Ultra (CPU/GPU/NPU).", icon: CpuIcon },
-  { id: "QNNExecutionProvider", name: "Qualcomm QNN (Snapdragon)", shortName: "QNN", desc: "Hexagon NPU acceleration on Snapdragon edge and mobile devices.", icon: CpuIcon },
-  { id: "ROCMExecutionProvider", name: "AMD ROCm", shortName: "ROCm", desc: "High-performance compute on AMD Instinct and Radeon GPUs.", icon: Layers },
-];
+const providers = PROVIDER_CATALOG;
 
 interface OptimizationPassValidation {
   id: string;
@@ -253,6 +247,10 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
 
   // Real-time conflicts of the selected hardware provider
   const selectedConflicts = getProviderConflicts(state.ihvProvider, state.passes);
+  const selectableProviders = useMemo(
+    () => providers.filter((p) => getSelectableProviders(hardwareProbe).includes(p.id)),
+    [hardwareProbe]
+  );
   const hasSelectedCritical = selectedConflicts.some(c => c.severity === "critical");
 
   return (
@@ -415,16 +413,30 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
             </div>
           )}
 
+          <p className="text-[11px] text-slate-500 mb-3">
+            {probeLoading
+              ? "Detecting local execution providers…"
+              : `Showing ${selectableProviders.length} provider${selectableProviders.length === 1 ? "" : "s"} detected on this machine. Undetected hardware is hidden.`}
+          </p>
+
           <div className="grid gap-4 mt-2">
-            {providers.map(p => {
+            {probeLoading ? (
+              <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-8 text-center text-sm text-slate-500">
+                <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-slate-600" />
+                Probing NVIDIA, AMD, Intel, and CPU runtimes…
+              </div>
+            ) : (
+            selectableProviders.map(p => {
               const isSelected = state.ihvProvider === p.id;
               const Icon = p.icon;
               
               // Compute conflicts for this particular card to implement visual disabled indicators & warnings
               const pConflicts = getProviderConflicts(p.id, state.passes);
               const cardHasCritical = pConflicts.some(c => c.severity === "critical");
+              const cardHardwareBlocked = Boolean(getProviderHardwareBlock(p.id, hardwareProbe));
+              const cardBlocked = cardHasCritical || cardHardwareBlocked;
               const cardHasWarning = pConflicts.some(c => c.severity === "warning");
-              const showSwitchAssist = pConflicts.length > 0 && (isSelected || !cardHasCritical);
+              const showSwitchAssist = pConflicts.length > 0 && (isSelected || !cardBlocked);
               const detectedLocally = isProviderDetectedLocally(p.id, hardwareProbe);
 
               let cardClasses = "relative flex flex-col rounded-xl border p-4.5 transition-all duration-200 cursor-pointer ";
@@ -432,9 +444,9 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
               let badgeColor = "";
 
               if (isSelected) {
-                if (cardHasCritical) {
+                if (cardBlocked) {
                   cardClasses += "border-rose-500 bg-rose-500/5";
-                  badgeText = "Critical Conflict";
+                  badgeText = cardHardwareBlocked ? "Unavailable hardware" : "Critical Conflict";
                   badgeColor = "bg-rose-500/10 text-rose-400 border-rose-550/25";
                 } else if (cardHasWarning) {
                   cardClasses += "border-amber-500 bg-amber-500/5";
@@ -445,6 +457,10 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                   badgeText = !detectedLocally && !probeLoading ? "Active (not local)" : "Active Target";
                   badgeColor = "bg-electric-blue/10 text-electric-blue border-electric-blue/20";
                 }
+              } else if (cardHardwareBlocked) {
+                cardClasses += "border-rose-950/35 bg-zinc-950/40 opacity-55 cursor-not-allowed";
+                badgeText = "Not on this system";
+                badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
               } else if (!detectedLocally && !probeLoading) {
                 cardClasses += "border-slate-850/60 bg-zinc-950/30 opacity-80 hover:opacity-100 hover:border-slate-700";
                 badgeText = "Not on this system";
@@ -482,14 +498,10 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                       setState({ passes: applyProviderConflictAutofixes(p.id, state.passes) });
                       return;
                     }
-                    if (!isSelected && pConflicts.length > 0 && !cardHasCritical) {
-                      setState({
-                        passes: applyProviderConflictAutofixes(p.id, state.passes),
-                        ihvProvider: p.id,
-                      });
-                      return;
+                    const patch = prepareProviderChange(state, p.id, hardwareProbe);
+                    if (patch) {
+                      setState(patch);
                     }
-                    setState({ ihvProvider: p.id });
                   }}
                   className={cardClasses}
                 >
@@ -570,12 +582,14 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            const fixedPasses = applyProviderConflictAutofixes(p.id, state.passes);
-                            setState(
-                              isSelected
-                                ? { passes: fixedPasses }
-                                : { passes: fixedPasses, ihvProvider: p.id }
-                            );
+                            if (isSelected) {
+                              setState({ passes: applyProviderConflictAutofixes(p.id, state.passes) });
+                              return;
+                            }
+                            const patch = prepareProviderChange(state, p.id, hardwareProbe);
+                            if (patch) {
+                              setState(patch);
+                            }
                           }}
                           className={`text-[9.5px] uppercase tracking-wider font-extrabold px-3 py-1.5 rounded border transition-all cursor-pointer flex items-center gap-1.5 ${
                             cardHasCritical 
@@ -599,7 +613,8 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                   )}
                 </div>
               );
-            })}
+            })
+            )}
           </div>
 
           {/* Hybrid offload — visible for Hugging Face models; toggle when GPU target selected */}
@@ -800,7 +815,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                         </th>
 
                         {/* Hardware target columns */}
-                        {providers.map((p) => {
+                        {selectableProviders.map((p) => {
                           const isSelectedProvider = p.id === state.ihvProvider;
                           const HIcon = p.icon;
                           const detectedLocally = isProviderDetectedLocally(p.id, hardwareProbe);
@@ -809,15 +824,9 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                             <th
                               key={p.id}
                               onClick={() => {
-                                const pConflicts = getProviderConflicts(p.id, state.passes);
-                                const hasCritical = pConflicts.some((c) => c.severity === "critical");
-                                if (pConflicts.length > 0 && !hasCritical) {
-                                  setState({
-                                    passes: applyProviderConflictAutofixes(p.id, state.passes),
-                                    ihvProvider: p.id,
-                                  });
-                                } else {
-                                  setState({ ihvProvider: p.id });
+                                const patch = prepareProviderChange(state, p.id, hardwareProbe);
+                                if (patch) {
+                                  setState(patch);
                                 }
                               }}
                               className={`p-2 px-1 text-center cursor-pointer transition-all relative select-none ${
@@ -874,10 +883,9 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                         return (
                           <tr key={v.id} className="border-b border-slate-900 hover:bg-slate-900/10 transition-colors">
                             {/* Column 1: Row Title and Category info */}
-                            <td className="p-2 px-3 w-[200px]">
-                              <div className="space-y-1.5">
-                                <div className="flex items-center gap-2">
-                                  <span className={`text-[8.5px] font-mono uppercase px-1.5 py-0.5 rounded border leading-none shrink-0 font-extrabold ${
+                            <td className="p-3 px-4 w-[min(100%,280px)] min-w-[220px] align-top">
+                              <div className="space-y-2">
+                                <span className={`inline-block text-[9px] font-mono uppercase px-2 py-0.5 rounded border tracking-wider font-bold ${
                                     v.category === "Conversion"
                                       ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
                                       : v.category === "Quantization"
@@ -886,41 +894,37 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                                           ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
                                           : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                                   }`}>
-                                    {v.category}
-                                  </span>
-                                  
-                                  <span className="text-xs font-bold text-slate-200 leading-tight">
-                                    {v.name}
-                                  </span>
-                                </div>
-                                <p className="text-[10px] text-slate-450 leading-relaxed font-sans pr-4 line-clamp-2" title={v.description}>
+                                  {v.category}
+                                </span>
+                                <p className="text-sm font-semibold text-slate-100 leading-snug pr-2">
+                                  {v.name}
+                                </p>
+                                <p className="text-xs text-slate-400 leading-relaxed pr-2">
                                   {v.description}
                                 </p>
                               </div>
                             </td>
 
                             {/* Column 2-6: Dynamic hardware cells */}
-                            {providers.map((p) => {
+                            {selectableProviders.map((p) => {
                               const isSelectedProvider = p.id === state.ihvProvider;
                               const comp = getCellCompatibility(v, p.id, state.passes);
                               const isCurrentlyActiveInCore = isSelectedProvider && isActiveOnSelected;
 
                               const handleCellClick = () => {
                                 if (comp.status === "unsupported" || comp.status === "blocked") return;
-                                
+
                                 if (isSelectedProvider) {
-                                  // Toggle the pass on the active provider
                                   const updated = v.toggle(state.passes, isActiveOnSelected);
                                   setState({ passes: { ...state.passes, ...updated } });
-                                } else {
-                                  const pConflicts = getProviderConflicts(p.id, state.passes);
-                                  const hasCritical = pConflicts.some((c) => c.severity === "critical");
-                                  const basePasses = hasCritical
-                                    ? state.passes
-                                    : applyProviderConflictAutofixes(p.id, state.passes);
-                                  const finalPasses = { ...basePasses, ...v.toggle(basePasses, false) };
-                                  setState({ passes: finalPasses, ihvProvider: p.id });
+                                  return;
                                 }
+
+                                const patch = prepareProviderChange(state, p.id, hardwareProbe);
+                                if (!patch) return;
+                                const basePasses = patch.passes ?? state.passes;
+                                const finalPasses = { ...basePasses, ...v.toggle(basePasses, false) };
+                                setState({ ...patch, passes: finalPasses });
                               };
 
                               return (
@@ -1082,10 +1086,10 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                               : "bg-slate-900/30 border-slate-800/80 hover:bg-slate-900/65 hover:border-slate-700"
                         }`}
                       >
-                        <div className="space-y-2">
-                          <div className="flex items-start justify-between gap-1.5">
-                            <div>
-                              <span className={`text-[9px] uppercase font-mono px-2 py-0.5 rounded border tracking-wider font-extrabold ${
+                        <div className="space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 space-y-2">
+                              <span className={`inline-block text-[9px] uppercase font-mono px-2 py-0.5 rounded border tracking-wider font-bold ${
                                 v.category === "Conversion"
                                   ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
                                   : v.category === "Quantization"
@@ -1096,8 +1100,8 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                               }`}>
                                 {v.category}
                               </span>
-                              <h5 className={`text-xs font-bold mt-2 flex items-center gap-1.5 leading-tight ${
-                                isUnsupportedOnCurrent ? "text-slate-500" : "text-slate-200"
+                              <h5 className={`text-sm font-semibold leading-snug ${
+                                isUnsupportedOnCurrent ? "text-slate-500" : "text-slate-100"
                               }`}>
                                 {v.name}
                               </h5>
@@ -1153,8 +1157,12 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                             )}
                           </div>
 
-                          <p className={`text-slate-400 text-xs leading-relaxed ${isUnsupportedOnCurrent ? "text-slate-600" : ""}`}>
+                          <p className={`text-xs text-slate-400 leading-relaxed ${isUnsupportedOnCurrent ? "text-slate-600" : ""}`}>
                             {v.description}
+                          </p>
+                          <p className="text-[11px] text-slate-500 leading-relaxed border-l border-slate-800 pl-3">
+                            <span className="text-slate-400 font-medium">Note: </span>
+                            {v.requiresExplanation}
                           </p>
                         </div>
 

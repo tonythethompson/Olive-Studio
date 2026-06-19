@@ -1,10 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Card, CardContent, CardHeader, Button, Label, Input, Select, Switch } from "@/components/ui";
 import { UIState, BatchJob, IHVProvider, ModelSource } from "@/types";
 import { buildRecipeJsonFromState, buildOliveRecipeFromBatchJob } from "@/lib/recipePipeline";
 import { parseOliveMetricsFromLogs } from "@/lib/oliveLogMetrics";
 import { commitUiStateUpdate, getPipelineValidation } from "@/lib/pipelineValidation";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
+import { fetchHardwareProbe, getSelectableProviders, type HardwareProbeResult } from "@/lib/hardwareProbe";
+import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { 
   Play, 
   Pause, 
@@ -38,6 +40,7 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
   const [newModelId, setNewModelId] = useState("meta-llama/Llama-3-8B");
   const [newSource, setNewSource] = useState<ModelSource>("huggingface");
   const [newProvider, setNewProvider] = useState<IHVProvider>("CUDAExecutionProvider");
+  const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
   
   // Enabled passes for custom job
   const [passConv, setPassConv] = useState(true);
@@ -49,6 +52,22 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
   useEffect(() => {
     jobsRef.current = state.batchJobs || [];
   }, [state.batchJobs]);
+
+  useEffect(() => {
+    fetchHardwareProbe()
+      .then((probe) => {
+        setHardwareProbe(probe);
+        if (!getSelectableProviders(probe).includes(newProvider)) {
+          setNewProvider(probe.recommendedProvider);
+        }
+      })
+      .catch(() => setHardwareProbe(null));
+  }, []);
+
+  const selectableBatchProviders = useMemo(
+    () => PROVIDER_CATALOG.filter((p) => getSelectableProviders(hardwareProbe).includes(p.id)),
+    [hardwareProbe]
+  );
 
   const jobs = state.batchJobs || [];
 
@@ -357,11 +376,12 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
                      </div>
                      <div className="space-y-1.5">
                        <Label>Target Execution Provider</Label>
-                        <Select value={newProvider} onChange={(e) => setNewProvider(e.target.value as any)}>
-                          <option value="CUDAExecutionProvider">GPU: NVIDIA CUDA</option>
-                          <option value="TensorrtExecutionProvider">GPU: NVIDIA TensorRT</option>
-                          <option value="CPUExecutionProvider">CPU: ONNX Standard</option>
-                          <option value="OpenVINOExecutionProvider">CPU/GPU: Intel OpenVINO</option>
+                        <Select value={newProvider} onChange={(e) => setNewProvider(e.target.value as IHVProvider)}>
+                          {selectableBatchProviders.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
                         </Select>
                      </div>
                   </div>
