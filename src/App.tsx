@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type SVGProps } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { UIState } from "@/types";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
@@ -148,7 +148,7 @@ function Dashboard() {
                 <section
                   key={id}
                   id={id}
-                  className={cn("mx-auto w-full", id === "execute" || id === "input" ? "max-w-7xl" : "max-w-5xl")}
+                  className="mx-auto w-full max-w-7xl"
                 >
                   <header className="mb-5 pb-4 border-b border-slate-800">
                     <p className="text-xs text-electric-blue mb-1">{step}</p>
@@ -185,7 +185,7 @@ function Dashboard() {
   );
 }
 
-function LayersIcon(props: React.SVGProps<SVGSVGElement>) {
+function LayersIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
       fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

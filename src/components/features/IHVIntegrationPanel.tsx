@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, Select, Label, Switch, Tooltip, TooltipC
 import { IHVProvider, UIState } from "@/types";
 import { getProviderConflicts, isConversionFormatAllowed, isPeftAllowed, isPeftMethodAllowed, isQuantMethodAllowed, isStructuredPruningAllowed } from "@/lib/pipelineValidation";
 import { fetchHardwareProbe, isProviderDetectedLocally, type HardwareProbeResult } from "@/lib/hardwareProbe";
-import { Cpu, CpuIcon, Layers, AlertTriangle, ShieldAlert, Check, Wand2, Activity, Lock, CheckCircle, AlertCircle, Info, Search, Sliders, Table, List, RefreshCw, HardDrive } from "lucide-react";
+import { Cpu, CpuIcon, Layers, Settings2, AlertTriangle, ShieldAlert, Check, Wand2, Activity, Lock, CheckCircle, AlertCircle, Info, Search, Sliders, Table, List, RefreshCw, HardDrive } from "lucide-react";
 
 export { getProviderConflicts };
 
