@@ -103,6 +103,7 @@ async function main() {
       device: inferDevice(providerFolder),
       repoPath: blob.path,
       description: buildDescription(modelFolder, providerFolder, fileName),
+      metadataSource: "folder",
     });
   }
 
@@ -128,6 +129,7 @@ async function main() {
     lines.push(`    device: "${escapeTs(e.device)}",`);
     lines.push(`    repoPath: "${escapeTs(e.repoPath)}",`);
     lines.push(`    description: "${escapeTs(e.description)}",`);
+    lines.push(`    metadataSource: "${escapeTs(e.metadataSource)}",`);
     lines.push("  },");
   }
 

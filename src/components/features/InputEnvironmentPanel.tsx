@@ -15,6 +15,7 @@ import {
 import { UIState } from "@/types";
 import { SUGGESTED_RECIPES } from "@/data/recipes";
 import {
+  compareCatalogMetadataToRecipe,
   deriveUiStateFromOliveRecipe,
   fetchGitHubRecipeJson,
   fetchOliveRecipesCatalogItem,
@@ -22,6 +23,7 @@ import {
   OLIVE_RECIPES_REPO,
   type RecipeCatalogItem,
 } from "@/lib/oliveRecipeHub";
+import { parseRecipeJson } from "@/lib/recipePipeline";
 import {
   DownloadCloud,
   KeyRound,
@@ -138,12 +140,22 @@ export function InputEnvironmentPanel({
 
     try {
       const json = await fetchOliveRecipesCatalogItem(item);
-      setState(deriveUiStateFromOliveRecipe(json, state.passes));
+      const metadata = compareCatalogMetadataToRecipe(item, json);
+      setState(deriveUiStateFromOliveRecipe(json, { replacePasses: true }));
       setImportJson(JSON.stringify(json, null, 2));
-      setRecipeSuccessMsg(`Applied preset recipe: "${item.name}"! Config features are updated.`);
+      setImportError(null);
+      const mismatchNote =
+        !metadata.matches && metadata.recipeDevice
+          ? ` Catalog device (${metadata.catalogDevice}) differs from recipe EP (${metadata.recipeDevice}).`
+          : "";
+      const approximateNote =
+        item.metadataSource !== "recipe" ? " Tags are folder-inferred (approximate)." : "";
+      setRecipeSuccessMsg(
+        `Applied preset recipe: "${item.name}"!${approximateNote}${mismatchNote} Config features are updated.`
+      );
       setTimeout(() => {
         setRecipeSuccessMsg(null);
-      }, 4000);
+      }, 5000);
     } catch (err: any) {
       setSyncStatus("error");
       setSyncError(err.message || "Failed to load recipe from GitHub.");
@@ -171,15 +183,15 @@ export function InputEnvironmentPanel({
   };
 
   const handleImport = () => {
-    try {
-      const parsed = JSON.parse(importJson);
-      setState(deriveUiStateFromOliveRecipe(parsed, state.passes));
-      setImportError(null);
-      setRecipeSuccessMsg("Recipe parsed and applied successfully!");
-      setTimeout(() => setRecipeSuccessMsg(null), 4000);
-    } catch (e: any) {
-      setImportError(`JSON Syntax Error: ${e.message}`);
+    const { recipe, schema } = parseRecipeJson(importJson);
+    if (!schema.valid) {
+      setImportError(`Recipe structure invalid:\n- ${schema.errors.join("\n- ")}`);
+      return;
     }
+    setState(deriveUiStateFromOliveRecipe(recipe, { replacePasses: true }));
+    setImportError(null);
+    setRecipeSuccessMsg("Recipe parsed and applied successfully!");
+    setTimeout(() => setRecipeSuccessMsg(null), 4000);
   };
 
   const filteredRecipes = SUGGESTED_RECIPES.filter((item) => {
@@ -309,7 +321,7 @@ export function InputEnvironmentPanel({
       const newFiles = Array.from(e.target.files);
 
       // Store actual File objects for reconstruction
-      for (const f of newFiles) {
+      for (const f of newFiles as File[]) {
         chunkFilesRef.current.set(f.name, f);
       }
 
@@ -626,13 +638,23 @@ export function InputEnvironmentPanel({
                     className="p-4 rounded-xl border border-slate-900 bg-slate-950/45 hover:border-indigo-500/25 transition-all flex flex-col justify-between h-full group gap-3 text-left"
                   >
                     <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center justify-between gap-1 flex-wrap">
                         <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/10">
                           {item.architecture}
                         </span>
-                        <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/10">
-                          {item.device}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          {item.metadataSource !== "recipe" && (
+                            <span
+                              className="text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20"
+                              title="Architecture and device tags are inferred from folder names, not parsed from the recipe JSON."
+                            >
+                              Approx. metadata
+                            </span>
+                          )}
+                          <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/10">
+                            {item.device}
+                          </span>
+                        </div>
                       </div>
                       <h4 className="text-sm font-semibold text-slate-200 group-hover:text-indigo-400 transition-colors">
                         {item.name}

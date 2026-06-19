@@ -1,6 +1,15 @@
 import { useState, useLayoutEffect, useRef, type ReactElement } from "react";
 import { UIState } from "@/types";
 import { Button, Card, CardContent, Input, Label, Slider, Select } from "@/components/ui";
+import {
+  applyIssueAutofix,
+  getAllowedConversionFormats,
+  getAllowedPeftMethods,
+  getAllowedPruningTypes,
+  getAllowedQuantMethods,
+  getPipelineValidation,
+  getRemainingAdvisories,
+} from "@/lib/pipelineValidation";
 import { 
   Database, 
   Workflow, 
@@ -17,6 +26,7 @@ import {
   Info, 
   Settings, 
   Activity,
+  AlertTriangle,
   ArrowUpRight
 } from "lucide-react";
 
@@ -136,6 +146,13 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
 
   const activeNodes = pipelineSteps.filter((s) => s.active);
   void layoutTick;
+
+  const validation = getPipelineValidation(state);
+  const advisories = getRemainingAdvisories(state);
+  const allowedQuantMethods = getAllowedQuantMethods(state.ihvProvider);
+  const allowedConversionFormats = getAllowedConversionFormats(state.ihvProvider);
+  const allowedPruningTypes = getAllowedPruningTypes(state.ihvProvider);
+  const allowedPeftMethods = getAllowedPeftMethods(state.ihvProvider);
 
   // Render SVG wires Dynamically
   const renderSVGConnections = () => {
@@ -586,6 +603,49 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
             )}
           </div>
 
+          {advisories.length > 0 && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-950/10 p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-400" />
+                <span className="text-xs font-bold text-amber-300">
+                  {advisories.length} performance note{advisories.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              {advisories.slice(0, 2).map((issue) => (
+                <p key={issue.id} className="text-[11px] text-slate-400 leading-relaxed">
+                  {issue.description}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {validation.issues.some((issue) => issue.autofix) && (
+            <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-rose-400" />
+                <span className="text-xs font-bold text-rose-300">
+                  Incompatible settings detected — use Fix to auto-correct
+                </span>
+              </div>
+              <div className="space-y-2">
+                {validation.issues.filter((issue) => issue.autofix).slice(0, 3).map((issue) => (
+                  <div key={issue.id} className="flex items-start justify-between gap-2">
+                    <p className="text-[11px] text-slate-400 leading-relaxed">{issue.title}</p>
+                    {issue.actionLabel && (
+                      <Button
+                        variant="outline"
+                        className="h-6 text-[9px] px-2 shrink-0"
+                        onClick={() => setState(applyIssueAutofix(state, issue))}
+                      >
+                        Fix
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="bg-slate-900/40 rounded-lg p-4 border border-slate-900 min-h-[90px] flex flex-col justify-center">
             
             {/* Input Node Properties Control */}
@@ -672,9 +732,9 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                           className="h-8 text-xs bg-slate-950"
                         >
                           <option value="lora">LoRA Standard Adapters</option>
-                          <option value="qlora" disabled={state.ihvProvider === "CPUExecutionProvider"}>
-                            QLoRA Quantized Adapters
-                          </option>
+                          {allowedPeftMethods.includes("qlora") && (
+                            <option value="qlora">QLoRA Quantized Adapters</option>
+                          )}
                         </Select>
                       </div>
                       <div className="bg-slate-950 border border-slate-900/60 p-2.5 rounded text-center">
@@ -714,7 +774,9 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                           className="h-8 text-xs bg-slate-950"
                         >
                           <option value="onnx">ONNX Graph Runtime</option>
-                          <option value="openvino">Intel OpenVINO IR</option>
+                          {allowedConversionFormats.includes("openvino") && (
+                            <option value="openvino">Intel OpenVINO IR</option>
+                          )}
                         </Select>
                       </div>
                       {state.passes.conversionFormat === "onnx" && (
@@ -791,7 +853,9 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                           className="h-8 text-[11px] bg-slate-950"
                         >
                           <option value="unstructured">Unstructured Layout</option>
-                          <option value="structured">Structured 2:4 Pattern</option>
+                          {allowedPruningTypes.includes("structured") && (
+                            <option value="structured">Structured 2:4 Pattern</option>
+                          )}
                         </Select>
                       </div>
                     </>
@@ -871,8 +935,12 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                           className="h-8 text-xs bg-slate-950"
                         >
                           <option value="ptq">PTQ (Post-Training Quantization)</option>
-                          <option value="awq">AWQ (Activation-Aware Weights)</option>
-                          <option value="qat">QAT (Quantization-Aware Training)</option>
+                          {allowedQuantMethods.includes("awq") && (
+                            <option value="awq">AWQ (Activation-Aware Weights)</option>
+                          )}
+                          {allowedQuantMethods.includes("qat") && (
+                            <option value="qat">QAT (Quantization-Aware Training)</option>
+                          )}
                         </Select>
                       </div>
                     </>
@@ -930,8 +998,11 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-4 border-l border-slate-800/50 pl-4 items-center">
+                  <div className="col-span-2 text-[10px] text-amber-400/90 font-mono uppercase tracking-wide bg-amber-500/5 border border-amber-500/15 rounded px-2 py-1">
+                    Simulated heuristics — not profiled. Run Olive for real metrics.
+                  </div>
                   <div className="bg-slate-950 border border-slate-800 p-2.5 rounded text-center">
-                    <div className="text-[10px] text-slate-500 font-mono uppercase">Compressed Target Size</div>
+                    <div className="text-[10px] text-slate-500 font-mono uppercase">Sim. Size (heuristic)</div>
                     <div className="text-sm font-bold text-emerald-400 font-mono mt-0.5">
                       {state.passes.quantization && state.passes.quantPrecision === "int4" 
                         ? "~1.40 GB" 
@@ -941,11 +1012,11 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                     </div>
                   </div>
                   <div className="bg-slate-950 border border-slate-800 p-2.5 rounded text-center col-span-1">
-                    <div className="text-[10px] text-slate-500 font-mono uppercase">Est. Latency Gain</div>
-                    <div className="text-sm font-bold text-cyan-400 font-mono mt-0.5">
+                    <div className="text-[10px] text-slate-500 font-mono uppercase">Sim. Latency (heuristic)</div>
+                    <div className="text-sm font-bold text-cyan-400/80 font-mono mt-0.5">
                       {state.passes.quantization 
-                        ? state.passes.quantPrecision === "int4" ? "-84% Latency" : "-68% Latency"
-                        : state.passes.pruning ? "-34% Latency" : "Baseline Specs"}
+                        ? state.passes.quantPrecision === "int4" ? "~-84% (est.)" : "~-68% (est.)"
+                        : state.passes.pruning ? "~-34% (est.)" : "Not estimated"}
                     </div>
                   </div>
                 </div>

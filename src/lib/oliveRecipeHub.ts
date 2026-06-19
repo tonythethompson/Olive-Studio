@@ -1,4 +1,5 @@
 import { UIState, IHVProvider } from "@/types";
+import { createInactivePasses, DEFAULT_PASSES } from "@/lib/defaultPasses";
 
 export const OLIVE_RECIPES_REPO = "microsoft/olive-recipes";
 export const OLIVE_RECIPES_BRANCH = "main";
@@ -9,6 +10,8 @@ export interface RecipeCatalogItem {
   device: string;
   repoPath: string;
   description: string;
+  /** How architecture/device tags were derived. Folder inference is approximate. */
+  metadataSource?: "folder" | "recipe";
 }
 
 export interface ParsedGitHubTarget {
@@ -16,6 +19,12 @@ export interface ParsedGitHubTarget {
   repo: string;
   branch: string;
   path: string;
+}
+
+export interface DeriveUiStateOptions {
+  /** When true, pass toggles come only from the recipe (not merged with prior UI). */
+  replacePasses?: boolean;
+  basePasses?: UIState["passes"];
 }
 
 export function parseGitHubRecipeTarget(
@@ -114,10 +123,11 @@ function mapExecutionProviderFromRecipe(parsed: any): IHVProvider | undefined {
   const systems = parsed?.systems;
   if (systems && typeof systems === "object") {
     for (const system of Object.values(systems)) {
-      const accelerators = (system as any)?.accelerators;
+      const config = (system as { config?: { accelerators?: unknown[] }; accelerators?: unknown[] })?.config;
+      const accelerators = config?.accelerators ?? (system as { accelerators?: unknown[] })?.accelerators;
       if (!Array.isArray(accelerators)) continue;
       for (const accelerator of accelerators) {
-        const providers = accelerator?.execution_providers;
+        const providers = (accelerator as { execution_providers?: unknown[] })?.execution_providers;
         if (!Array.isArray(providers) || providers.length === 0) continue;
         const token = String(providers[0]).toLowerCase();
         if (token.includes("cuda")) return "CUDAExecutionProvider";
@@ -132,7 +142,159 @@ function mapExecutionProviderFromRecipe(parsed: any): IHVProvider | undefined {
   return undefined;
 }
 
-export function deriveUiStateFromOliveRecipe(parsed: any, currentPasses?: UIState["passes"]): Partial<UIState> {
+export function getExecutionProviderFromRecipe(parsed: unknown): IHVProvider | undefined {
+  return mapExecutionProviderFromRecipe(parsed);
+}
+
+export function mapProviderToCatalogDevice(provider: IHVProvider): string {
+  switch (provider) {
+    case "CUDAExecutionProvider":
+    case "ROCMExecutionProvider":
+      return "CUDA";
+    case "TensorrtExecutionProvider":
+      return "TensorRT";
+    case "OpenVINOExecutionProvider":
+      return "OpenVINO";
+    case "QNNExecutionProvider":
+      return "QNN";
+    case "CPUExecutionProvider":
+    default:
+      return "CPU";
+  }
+}
+
+export function compareCatalogMetadataToRecipe(
+  item: RecipeCatalogItem,
+  parsed: unknown
+): { catalogDevice: string; recipeDevice?: string; matches: boolean } {
+  const provider = getExecutionProviderFromRecipe(parsed);
+  const recipeDevice = provider ? mapProviderToCatalogDevice(provider) : undefined;
+  return {
+    catalogDevice: item.device,
+    recipeDevice,
+    matches: recipeDevice ? recipeDevice === item.device : true,
+  };
+}
+
+function mapQuantMethod(config: any): UIState["passes"]["quantMethod"] {
+  const algorithm = String(config?.algorithm ?? "").toLowerCase();
+  if (algorithm.includes("awq")) return "awq";
+  if (config?.quant_mode || String(config?.mode ?? "").toLowerCase().includes("qat")) {
+    return "qat";
+  }
+  return "ptq";
+}
+
+function mapQuantPrecision(config: any): UIState["passes"]["quantPrecision"] {
+  const weight = String(config?.weight_type ?? config?.precision ?? "int8").toLowerCase();
+  if (weight.includes("int4") || weight === "4") return "int4";
+  if (weight.includes("fp16") || weight.includes("float16")) return "fp16";
+  return "int8";
+}
+
+function mapPruningMethod(type: string): UIState["passes"]["pruningMethod"] {
+  const lower = type.toLowerCase();
+  if (lower.includes("sparsegpt")) return "sparsegpt";
+  if (lower.includes("wanda")) return "wanda";
+  return "magnitude";
+}
+
+function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes"] {
+  const next = createInactivePasses();
+
+  for (const [key, pass] of Object.entries(recipePasses)) {
+    if (!pass || typeof pass !== "object") continue;
+    const type = String((pass as any).type ?? "");
+    const config = (pass as any).config ?? {};
+    const lowerType = type.toLowerCase();
+
+    if (lowerType.includes("openvino") && lowerType.includes("conversion")) {
+      next.conversion = true;
+      next.conversionFormat = "openvino";
+      continue;
+    }
+
+    if (lowerType.includes("onnx") && lowerType.includes("conversion")) {
+      next.conversion = true;
+      next.conversionFormat = "onnx";
+      if (config.target_opset) next.conversionOpset = Number(config.target_opset);
+      if (config.precision) next.conversionInputTargetTypes = String(config.precision);
+      continue;
+    }
+
+    if (lowerType.includes("quant")) {
+      next.quantization = true;
+      next.quantMethod = mapQuantMethod(config);
+      next.quantPrecision = mapQuantPrecision(config);
+      continue;
+    }
+
+    if (lowerType.includes("sparsegpt")) {
+      next.pruning = true;
+      next.pruningMethod = "sparsegpt";
+      if (config.sparsity != null) next.pruningSparsity = Number(config.sparsity);
+      if (config.semi_sparse_acc) next.pruningType = "structured";
+      continue;
+    }
+
+    if (lowerType.includes("wanda")) {
+      next.pruning = true;
+      next.pruningMethod = "wanda";
+      if (config.sparsity != null) next.pruningSparsity = Number(config.sparsity);
+      continue;
+    }
+
+    if (lowerType.includes("prune")) {
+      next.pruning = true;
+      next.pruningMethod = "magnitude";
+      if (config.sparsity != null) next.pruningSparsity = Number(config.sparsity);
+      if (config.semi_sparse_acc) next.pruningType = "structured";
+      if (config.pruning_criteria) {
+        const criteria = String(config.pruning_criteria).toLowerCase();
+        next.pruningCriteria = criteria.includes("l2") ? "l2_norm" : "l1_norm";
+      }
+      continue;
+    }
+
+    if (lowerType.includes("qlora")) {
+      next.peft = true;
+      next.peftMethod = "qlora";
+      continue;
+    }
+
+    if (lowerType.includes("lora") || key === "peft") {
+      next.peft = true;
+      next.peftMethod = "lora";
+      continue;
+    }
+
+    if (lowerType.includes("split")) {
+      next.splitting = true;
+      continue;
+    }
+
+    if (
+      lowerType.includes("transform") ||
+      key === "transformer_opt" ||
+      key === "transformers_optimization"
+    ) {
+      next.onnxTransforms = true;
+      continue;
+    }
+
+    if (key === "builder") {
+      next.conversion = true;
+      next.conversionFormat = "onnx";
+    }
+  }
+
+  return next;
+}
+
+export function deriveUiStateFromOliveRecipe(
+  parsed: any,
+  options?: DeriveUiStateOptions
+): Partial<UIState> {
   const incomingState: Partial<UIState> = {};
   const inputModel = parsed?.input_model;
 
@@ -156,54 +318,26 @@ export function deriveUiStateFromOliveRecipe(parsed: any, currentPasses?: UIStat
     incomingState.modelSource = "local";
   }
 
+  if (inputModel?.config?.model_path && incomingState.modelSource === "azure") {
+    incomingState.azureModelPath = String(inputModel.config.model_path);
+  } else if (inputModel?.config?.model_path && !hfConfig && hfModelPath?.includes("azure")) {
+    incomingState.modelSource = "azure";
+    incomingState.azureModelPath = hfModelPath;
+  }
+
   const provider = mapExecutionProviderFromRecipe(parsed);
   if (provider) {
     incomingState.ihvProvider = provider;
   }
 
-  if (parsed?.passes && currentPasses) {
-    const next: UIState["passes"] = { ...currentPasses };
-
-    if (parsed.passes.conversion) {
-      next.conversion = true;
-      if (parsed.passes.conversion.config?.target_opset) {
-        next.conversionOpset = parsed.passes.conversion.config.target_opset;
-      }
-      if (parsed.passes.conversion.config?.precision) {
-        next.conversionInputTargetTypes = parsed.passes.conversion.config.precision;
-      }
+  if (parsed?.passes && typeof parsed.passes === "object") {
+    const mapped = mapPassesFromRecipe(parsed.passes);
+    if (options?.replacePasses) {
+      incomingState.passes = mapped;
+    } else {
+      const base = options?.basePasses ?? DEFAULT_PASSES;
+      incomingState.passes = { ...base, ...mapped };
     }
-
-    if (parsed.passes.quantization) {
-      next.quantization = true;
-      if (parsed.passes.quantization.config?.weight_type) {
-        next.quantPrecision = parsed.passes.quantization.config.weight_type;
-      }
-    }
-
-    if (parsed.passes.pruning) {
-      next.pruning = true;
-      if (parsed.passes.pruning.config?.sparsity) {
-        next.pruningSparsity = parsed.passes.pruning.config.sparsity;
-      }
-    }
-
-    if (parsed.passes.peft || parsed.passes.builder) {
-      if (parsed.passes.peft) next.peft = true;
-      if (parsed.passes.builder) next.conversion = true;
-    }
-
-    if (
-      parsed.passes.transformers_optimization ||
-      parsed.passes.transformer_opt ||
-      Object.values(parsed.passes).some((pass: any) =>
-        String(pass?.type || "").toLowerCase().includes("transform")
-      )
-    ) {
-      next.onnxTransforms = true;
-    }
-
-    incomingState.passes = next;
   }
 
   return incomingState;

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { UIState } from "@/types";
+import { DEFAULT_PASSES } from "@/lib/defaultPasses";
+import { commitUiStateUpdate } from "@/lib/pipelineValidation";
 import { BrainCircuit, Cpu, Zap, Terminal, Database, ListOrdered, Bot } from "lucide-react";
 import { InputEnvironmentPanel } from "@/components/features/InputEnvironmentPanel";
 import { IHVIntegrationPanel } from "@/components/features/IHVIntegrationPanel";
@@ -25,26 +27,7 @@ const defaultState: UIState = {
   azureStr: "",
   distributedCaching: false,
   activeJobId: null,
-  passes: {
-    conversion: true,
-    conversionSourceFormat: "pytorch",
-    conversionFormat: "onnx",
-    conversionOpset: 14,
-    conversionInputTargetTypes: "float32",
-    quantization: false,
-    quantMethod: "ptq",
-    quantPrecision: "int8",
-    pruning: false,
-    pruningSparsity: 0.5,
-    pruningType: "unstructured",
-    pruningMethod: "magnitude",
-    pruningCriteria: "l1_norm",
-    splitting: false,
-    onnxTransforms: false,
-    peft: false,
-    peftMethod: "lora",
-    diffusionLora: false,
-  },
+  passes: { ...DEFAULT_PASSES },
 };
 
 type ActiveView = "input" | "ihv" | "passes" | "infra" | "execute" | "batch";
@@ -64,7 +47,7 @@ function Dashboard() {
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
 
   const setState = (partial: Partial<UIState>) =>
-    setStateRaw(prev => ({ ...prev, ...partial }));
+    setStateRaw((prev) => commitUiStateUpdate(prev, partial));
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-300 overflow-hidden font-sans">

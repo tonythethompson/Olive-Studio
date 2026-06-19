@@ -10,7 +10,7 @@ const PROVIDER_OPTIONS = [
     id: "gemini",
     name: "Google Gemini",
     models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
-    keyEnvVar: "GEMINI_API_KEY",
+    keyEnvVar: "GEMINI_API_KEY or GOOGLE_API_KEY",
     docsUrl: "aistudio.google.com",
   },
   {
@@ -104,11 +104,31 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
   const providerOption = PROVIDER_OPTIONS.find(p => p.id === settingsProvider)!;
   const isCompatMode = settingsProvider === "openai-compat";
 
-  const fetchProviderStatus = () =>
-    fetch("/api/ai/provider")
-      .then(r => r.json())
-      .then((d: ProviderStatus) => { setProviderStatus(d); return d; })
-      .catch((): ProviderStatus => { setProviderStatus({ source: "none" }); return { source: "none" }; });
+  const fetchProviderStatus = async (): Promise<ProviderStatus> => {
+    try {
+      const r = await fetch("/api/ai/provider");
+      const contentType = r.headers.get("content-type") ?? "";
+      if (!r.ok || !contentType.includes("application/json")) {
+        const fallback: ProviderStatus = { source: "none" };
+        setProviderStatus(fallback);
+        return fallback;
+      }
+      const d = (await r.json()) as ProviderStatus;
+      setProviderStatus(d);
+      if (d.provider && d.provider in Object.fromEntries(PROVIDER_OPTIONS.map((p) => [p.id, true]))) {
+        setSettingsProvider(d.provider as ProviderId);
+      }
+      if (d.model) {
+        setSettingsModel(d.model);
+        setCustomModel(d.model);
+      }
+      return d;
+    } catch {
+      const fallback: ProviderStatus = { source: "none" };
+      setProviderStatus(fallback);
+      return fallback;
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -136,8 +156,15 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ state }),
       });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
-      setAnalysis(await r.json());
+      const contentType = r.headers.get("content-type") ?? "";
+      const data = contentType.includes("application/json")
+        ? await r.json().catch(() => ({}))
+        : {};
+      if (!r.ok) throw new Error((data as { error?: string }).error || `HTTP ${r.status}`);
+      if (!contentType.includes("application/json")) {
+        throw new Error("Server returned non-JSON. Restart with npm run dev (Express + API), not vite alone.");
+      }
+      setAnalysis(data as AnalysisResult);
     } catch (err: any) {
       setAnalysisError(err.message || "Analysis failed.");
     } finally {
@@ -177,9 +204,15 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
           chatHistory: chatMessages.map(m => ({ role: m.sender === "user" ? "user" : "assistant", content: m.text })),
         }),
       });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
-      const data = await r.json();
-      setChatMessages(prev => [...prev, { sender: "assistant", text: data.text }]);
+      const contentType = r.headers.get("content-type") ?? "";
+      const data = contentType.includes("application/json")
+        ? await r.json().catch(() => ({}))
+        : {};
+      if (!r.ok) throw new Error((data as { error?: string }).error || `HTTP ${r.status}`);
+      if (!contentType.includes("application/json")) {
+        throw new Error("Server returned non-JSON. Restart with npm run dev (Express + API), not vite alone.");
+      }
+      setChatMessages(prev => [...prev, { sender: "assistant", text: (data as { text?: string }).text || "No response generated." }]);
     } catch (err: any) {
       setChatError(err.message || "Chat request failed.");
     } finally {
@@ -190,7 +223,18 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
   const handleSaveProvider = async () => {
     const key = settingsApiKey.trim();
     const model = isCompatMode ? customModel.trim() : settingsModel;
-    if (!key || !model) return;
+    if (!key) {
+      setProviderSaveError("Enter an API key.");
+      return;
+    }
+    if (!model) {
+      setProviderSaveError(isCompatMode ? "Enter a model name." : "Select a model.");
+      return;
+    }
+    if (isCompatMode && !settingsBaseUrl.trim()) {
+      setProviderSaveError("Base URL is required for OpenAI-compatible providers.");
+      return;
+    }
     setIsSavingProvider(true);
     setProviderSaveError("");
     try {
@@ -204,8 +248,12 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
           baseUrl: settingsBaseUrl.trim() || undefined,
         }),
       });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
-      setProviderStatus({ source: "user", provider: settingsProvider, model });
+      const contentType = r.headers.get("content-type") ?? "";
+      const data = contentType.includes("application/json")
+        ? await r.json().catch(() => ({}))
+        : {};
+      if (!r.ok) throw new Error((data as { error?: string }).error || `HTTP ${r.status}`);
+      await fetchProviderStatus();
       setSettingsApiKey("");
       setAnalysis(null);
       setActiveTab("audit");
@@ -223,7 +271,14 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
   };
 
   const isProviderError = (msg: string) =>
-    msg.includes("not configured") || msg.includes("API key") || msg.includes("No AI provider");
+    msg.includes("not configured") ||
+    msg.includes("API key") ||
+    msg.includes("No AI provider") ||
+    msg.includes("401") ||
+    msg.includes("403") ||
+    msg.includes("API route not found") ||
+    msg.includes("not valid JSON") ||
+    msg.includes("Unexpected token");
 
   const renderMessageContent = (text: string) => {
     const parts = text.split(/(```[\s\S]*?```)/g);
@@ -268,9 +323,10 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
         </p>
         <p className="text-slate-500 text-[10px]">
           Or set an env var (<code className="bg-slate-800 px-1 rounded font-mono text-slate-300">GEMINI_API_KEY</code>,{" "}
+          <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">GOOGLE_API_KEY</code>,{" "}
           <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">OPENAI_API_KEY</code>,{" "}
           <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">ANTHROPIC_API_KEY</code>,{" "}
-          <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">MISTRAL_API_KEY</code>) and restart.
+          <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">MISTRAL_API_KEY</code>) in <code className="font-mono">.env</code> or <code className="font-mono">.env.local</code>, then restart <code className="font-mono">npm run dev</code>.
         </p>
       </div>
     ) : (
@@ -339,7 +395,7 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
           <div className="space-y-4">
             {analysis && !isAnalyzing && (
               <div className="bg-slate-950/70 rounded-xl p-4 border border-slate-800 flex items-center gap-4 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-1 bg-indigo-500/10 text-[8px] font-mono uppercase tracking-widest text-indigo-400 border-l border-b border-slate-800 rounded-bl">Live State</div>
+                <div className="absolute top-0 right-0 p-1 bg-indigo-500/10 text-[8px] font-mono uppercase tracking-widest text-indigo-400 border-l border-b border-slate-800 rounded-bl">AI advisory</div>
                 <div className="relative h-16 w-16 shrink-0 flex items-center justify-center">
                   <svg className="w-full h-full transform -rotate-90">
                     <circle cx="32" cy="32" r="28" stroke="currentColor" className="text-slate-800" strokeWidth="4" fill="transparent" />
@@ -565,7 +621,7 @@ export function GeminiSidebar({ state, setState, isOpen, onClose }: GeminiSideba
 
               <button
                 onClick={handleSaveProvider}
-                disabled={isSavingProvider || !settingsApiKey.trim() || (isCompatMode && !customModel.trim())}
+                disabled={isSavingProvider}
                 className="w-full h-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
                 {isSavingProvider ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}

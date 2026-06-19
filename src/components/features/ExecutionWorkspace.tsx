@@ -1,511 +1,12 @@
-import { useState, useRef } from "react";
+﻿import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
-import { UIState, IHVProvider } from "@/types";
-import { Code, Play, CheckCircle2, AlertCircle, Copy, Check, Upload, FileJson, X, Github, Sparkles, ArrowUpRight, Search, BookOpen, Workflow, GitBranch, GitPullRequest, Globe, RefreshCw, Trash2, Download, Laptop, Smartphone, FileCode, Sliders, Cpu, Settings } from "lucide-react";
+import { UIState } from "@/types";
+import { Code, Play, CheckCircle2, AlertCircle, Copy, Check, Upload, FileJson, X, Github, Sparkles, ArrowUpRight, Search, BookOpen, Workflow, GitBranch, GitPullRequest, Globe, RefreshCw, Trash2, Download, Laptop, Smartphone, FileCode, Sliders, Cpu, Settings, AlertTriangle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import JSZip from "jszip";
 import { RecipeGraphView } from "./RecipeGraphView";
 import { cn } from "@/lib/utils";
-
-export const SUGGESTED_RECIPES = [
-  {
-    name: "Llama-3-8B AWQ GPU Pass",
-    architecture: "Llama",
-    device: "CUDA",
-    repoPath: "examples/llama3",
-    description: "Configures 4-bit dynamic AWQ quantization & OnnxConversion optimized for CUDA GPUs.",
-    state: {
-      modelSource: "huggingface" as const,
-      hfModelId: "meta-llama/Meta-Llama-3-8B",
-      ihvProvider: "CUDAExecutionProvider" as const,
-      passes: {
-        conversion: true,
-        conversionSourceFormat: "pytorch" as const,
-        conversionFormat: "onnx" as const,
-        conversionOpset: 17,
-        conversionInputTargetTypes: "float16",
-        quantization: true,
-        quantMethod: "awq" as const,
-        quantPrecision: "int4" as const,
-        pruning: false,
-        pruningSparsity: 0.5,
-        pruningType: "unstructured" as const,
-        pruningMethod: "sparsegpt" as const,
-        pruningCriteria: "l1_norm" as const,
-        splitting: false,
-        onnxTransforms: true,
-        peft: false,
-        peftMethod: "lora" as const,
-        diffusionLora: false
-      }
-    },
-    json: {
-      "input_model": {
-        "type": "PyTorchModel",
-        "config": {
-          "hf_config": {
-            "model_name": "meta-llama/Meta-Llama-3-8B",
-            "task": "text-generation"
-          }
-        }
-      },
-      "passes": {
-        "conversion": {
-          "type": "OnnxConversion",
-          "config": { "target_opset": 17, "precision": "float16" }
-        },
-        "quantization": {
-          "type": "OnnxQuantization",
-          "config": { "weight_type": "int4", "algorithm": "awq", "optimize_model": true }
-        },
-        "transformers_optimization": {
-          "type": "OrtTransformersOptimization",
-          "config": { "model_type": "gpt2", "use_gpu": true }
-        }
-      },
-      "engine": {
-        "search_strategy": { "execution_order": "joint" },
-        "cache_dir": "~/.cache/olive"
-      }
-    }
-  },
-  {
-    name: "Phi-3-Mini DirectML NPU",
-    architecture: "Phi",
-    device: "DirectML",
-    repoPath: "examples/phi3",
-    description: "Optimizes Microsoft Phi-3-Mini Transformer model using float16 DirectML compilation for Windows Copilot+ PC NPUs.",
-    state: {
-      modelSource: "huggingface" as const,
-      hfModelId: "microsoft/Phi-3-mini-4k-instruct",
-      ihvProvider: "CPUExecutionProvider" as const, // Uses default provider fallback for CPU-bound testing
-      passes: {
-        conversion: true,
-        conversionSourceFormat: "pytorch" as const,
-        conversionFormat: "onnx" as const,
-        conversionOpset: 16,
-        conversionInputTargetTypes: "float16",
-        quantization: true,
-        quantMethod: "ptq" as const,
-        quantPrecision: "int4" as const,
-        pruning: false,
-        pruningSparsity: 0.2,
-        pruningType: "structured" as const,
-        pruningMethod: "magnitude" as const,
-        pruningCriteria: "l1_norm" as const,
-        splitting: false,
-        onnxTransforms: true,
-        peft: false,
-        peftMethod: "lora" as const,
-        diffusionLora: false
-      }
-    },
-    json: {
-      "input_model": {
-        "type": "PyTorchModel",
-        "config": {
-          "hf_config": {
-            "model_name": "microsoft/Phi-3-mini-4k-instruct",
-            "task": "text-generation"
-          }
-        }
-      },
-      "passes": {
-        "conversion": {
-          "type": "OnnxConversion",
-          "config": { "target_opset": 16, "precision": "float16" }
-        },
-        "quantization": {
-          "type": "OnnxQuantization",
-          "config": { "weight_type": "int4", "optimize_model": true }
-        }
-      },
-      "engine": {
-        "search_strategy": { "execution_order": "serial" },
-        "cache_dir": "~/.cache/olive"
-      }
-    }
-  },
-  {
-    name: "Stable Diffusion UNet TensorRT",
-    architecture: "Stable Diffusion",
-    device: "TensorRT",
-    repoPath: "examples/stable_diffusion",
-    description: "Optimized workflow for SD 1.5 UNet engine compiling with TensorRT EP to yield high-speed image generation rates.",
-    state: {
-      modelSource: "local" as const,
-      localFiles: [{ name: "unet_weights.pt", size: 3400000000 }],
-      ihvProvider: "TensorrtExecutionProvider" as const,
-      passes: {
-        conversion: true,
-        conversionSourceFormat: "pytorch" as const,
-        conversionFormat: "onnx" as const,
-        conversionOpset: 16,
-        conversionInputTargetTypes: "float16",
-        quantization: false,
-        quantMethod: "ptq" as const,
-        quantPrecision: "int8" as const,
-        pruning: false,
-        pruningSparsity: 0.3,
-        pruningType: "unstructured" as const,
-        pruningMethod: "magnitude" as const,
-        pruningCriteria: "l1_norm" as const,
-        splitting: false,
-        onnxTransforms: false,
-        peft: false,
-        peftMethod: "lora" as const,
-        diffusionLora: false
-      }
-    },
-    json: {
-      "input_model": {
-        "type": "PyTorchModel",
-        "config": {
-          "model_path": "./local_models",
-          "local_files": ["unet_weights.pt"]
-        }
-      },
-      "passes": {
-        "conversion": {
-          "type": "OnnxConversion",
-          "config": { "target_opset": 16, "precision": "float16" }
-        },
-        "tensorrt_opt": {
-          "type": "TensorRTOptimization",
-          "config": { "fp16": true }
-        }
-      },
-      "engine": {
-        "search_strategy": { "execution_order": "joint" },
-        "cache_dir": "~/.cache/olive"
-      }
-    }
-  },
-  {
-    name: "Whisper-Large INT8 CPU Target",
-    architecture: "Whisper",
-    device: "CPU",
-    repoPath: "examples/whisper",
-    description: "Fully converts and quantizes Whisper-Large v3 weights into efficient 8-bit model suitable for standard x86 CPU platforms.",
-    state: {
-      modelSource: "huggingface" as const,
-      hfModelId: "openai/whisper-large-v3",
-      ihvProvider: "CPUExecutionProvider" as const,
-      passes: {
-        conversion: true,
-        conversionSourceFormat: "pytorch" as const,
-        conversionFormat: "onnx" as const,
-        conversionOpset: 15,
-        conversionInputTargetTypes: "float32",
-        quantization: true,
-        quantMethod: "ptq" as const,
-        quantPrecision: "int8" as const,
-        pruning: false,
-        pruningSparsity: 0.3,
-        pruningType: "unstructured" as const,
-        pruningMethod: "magnitude" as const,
-        pruningCriteria: "l1_norm" as const,
-        splitting: false,
-        onnxTransforms: true,
-        peft: false,
-        peftMethod: "lora" as const,
-        diffusionLora: false
-      }
-    },
-    json: {
-      "input_model": {
-        "type": "PyTorchModel",
-        "config": {
-          "hf_config": {
-            "model_name": "openai/whisper-large-v3",
-            "task": "speech-recognition"
-          }
-        }
-      },
-      "passes": {
-        "conversion": {
-          "type": "OnnxConversion",
-          "config": { "target_opset": 15, "precision": "float32" }
-        },
-        "quantization": {
-          "type": "OnnxQuantization",
-          "config": { "weight_type": "int8" }
-        },
-        "transformers_optimization": {
-          "type": "OrtTransformersOptimization",
-          "config": { "model_type": "whisper", "use_gpu": false }
-        }
-      },
-      "engine": {
-        "search_strategy": { "execution_order": "serial" },
-        "cache_dir": "~/.cache/olive"
-      }
-    }
-  },
-  {
-    name: "Qwen-2.5-7B QLoRA Adapter GPU",
-    architecture: "Qwen",
-    device: "CUDA",
-    repoPath: "examples/qwen25_qlora",
-    description: "Compiles Qwen 2.5 Causal LLM equipped with PEFT/QLoRA adapters and integrates dynamic quantization for server-grade GPUs.",
-    state: {
-      modelSource: "huggingface" as const,
-      hfModelId: "Qwen/Qwen2.5-7B-Instruct",
-      ihvProvider: "CUDAExecutionProvider" as const,
-      passes: {
-        conversion: true,
-        conversionSourceFormat: "pytorch" as const,
-        conversionFormat: "onnx" as const,
-        conversionOpset: 17,
-        conversionInputTargetTypes: "float16",
-        quantization: true,
-        quantMethod: "qat" as const,
-        quantPrecision: "fp16" as const,
-        pruning: false,
-        pruningSparsity: 0.0,
-        pruningType: "unstructured" as const,
-        pruningMethod: "magnitude" as const,
-        pruningCriteria: "l1_norm" as const,
-        splitting: false,
-        onnxTransforms: true,
-        peft: true,
-        peftMethod: "qlora" as const,
-        diffusionLora: false
-      }
-    },
-    json: {
-      "input_model": {
-        "type": "PyTorchModel",
-        "config": {
-          "hf_config": {
-            "model_name": "Qwen/Qwen2.5-7B-Instruct",
-            "task": "text-generation"
-          }
-        }
-      },
-      "passes": {
-        "peft": {
-          "type": "QLoRA",
-          "config": { "lora_r": 16, "lora_alpha": 32 }
-        },
-        "conversion": {
-          "type": "OnnxConversion",
-          "config": { "target_opset": 17, "precision": "float16" }
-        }
-      },
-      "engine": {
-        "search_strategy": { "execution_order": "serial" },
-        "cache_dir": "~/.cache/olive"
-      }
-    }
-  },
-  {
-    name: "MobileNet-V2 QNN Snapdragon NPU",
-    architecture: "MobileNet",
-    device: "QNN",
-    repoPath: "examples/mobilenetv2_qnn",
-    description: "Configures structured pruning and static quantization for Snapdragon NPUs utilizing Qualcomm QNN provider optimization.",
-    state: {
-      modelSource: "huggingface" as const,
-      hfModelId: "google/mobilenet_v2_1.0_224",
-      ihvProvider: "QNNExecutionProvider" as const,
-      passes: {
-        conversion: true,
-        conversionSourceFormat: "pytorch" as const,
-        conversionFormat: "onnx" as const,
-        conversionOpset: 14,
-        conversionInputTargetTypes: "float32",
-        quantization: true,
-        quantMethod: "ptq" as const,
-        quantPrecision: "int8" as const,
-        pruning: true,
-        pruningSparsity: 0.3,
-        pruningType: "structured" as const,
-        pruningMethod: "magnitude" as const,
-        pruningCriteria: "l2_norm" as const,
-        splitting: false,
-        onnxTransforms: true,
-        peft: false,
-        peftMethod: "lora" as const,
-        diffusionLora: false
-      }
-    },
-    json: {
-      "input_model": {
-        "type": "PyTorchModel",
-        "config": {
-          "hf_config": {
-            "model_name": "google/mobilenet_v2_1.0_224",
-            "task": "image-classification"
-          }
-        }
-      },
-      "passes": {
-        "pruning": {
-          "type": "Pruning",
-          "config": { "amount": 0.30, "method": "l2_norm" }
-        },
-        "conversion": {
-          "type": "OnnxConversion",
-          "config": { "target_opset": 14, "precision": "float32" }
-        },
-        "quantization": {
-          "type": "OnnxQuantization",
-          "config": { "weight_type": "int8" }
-        }
-      },
-      "engine": {
-        "search_strategy": { "execution_order": "serial" },
-        "cache_dir": "~/.cache/olive"
-      }
-    }
-  },
-  {
-    name: "ResNet-50 OpenVINO Intel Edge CPU",
-    architecture: "ResNet",
-    device: "OpenVINO",
-    repoPath: "examples/resnet50_openvino",
-    description: "Applies 8-bit quantization and graphs optimizations for ResNet-50 targeting high throughput on Intel Xeon Edge Core processors.",
-    state: {
-      modelSource: "huggingface" as const,
-      hfModelId: "microsoft/resnet-50",
-      ihvProvider: "OpenVINOExecutionProvider" as const,
-      passes: {
-        conversion: true,
-        conversionSourceFormat: "pytorch" as const,
-        conversionFormat: "openvino" as const,
-        conversionOpset: 15,
-        conversionInputTargetTypes: "float32",
-        quantization: true,
-        quantMethod: "ptq" as const,
-        quantPrecision: "int8" as const,
-        pruning: false,
-        pruningSparsity: 0.0,
-        pruningType: "unstructured" as const,
-        pruningMethod: "magnitude" as const,
-        pruningCriteria: "l1_norm" as const,
-        splitting: false,
-        onnxTransforms: false,
-        peft: false,
-        peftMethod: "lora" as const,
-        diffusionLora: false
-      }
-    },
-    json: {
-      "input_model": {
-        "type": "PyTorchModel",
-        "config": {
-          "hf_config": {
-            "model_name": "microsoft/resnet-50",
-            "task": "image-classification"
-          }
-        }
-      },
-      "passes": {
-        "openvino_converter": {
-          "type": "OpenVINOConversion",
-          "config": { "output_precision": "FP32" }
-        },
-        "openvino_quantization": {
-          "type": "OpenVINOQuantization",
-          "config": { "preset": "performance" }
-        }
-      },
-      "engine": {
-        "search_strategy": { "execution_order": "serial" },
-        "cache_dir": "~/.cache/olive"
-      }
-    }
-  },
-  {
-    name: "BERT Transformer NLP Pruning CPU",
-    architecture: "BERT",
-    device: "CPU",
-    repoPath: "examples/bert",
-    description: "Provides pre-configured magnitude pruning at 50% sparsity to compress standard BERT encoder architectures.",
-    state: {
-      modelSource: "huggingface" as const,
-      hfModelId: "bert-base-uncased",
-      ihvProvider: "CPUExecutionProvider" as const,
-      passes: {
-        conversion: true,
-        conversionSourceFormat: "pytorch" as const,
-        conversionFormat: "onnx" as const,
-        conversionOpset: 14,
-        conversionInputTargetTypes: "float32",
-        quantization: false,
-        quantMethod: "ptq" as const,
-        quantPrecision: "int8" as const,
-        pruning: true,
-        pruningSparsity: 0.5,
-        pruningType: "unstructured" as const,
-        pruningMethod: "magnitude" as const,
-        pruningCriteria: "l1_norm" as const,
-        splitting: false,
-        onnxTransforms: false,
-        peft: false,
-        peftMethod: "lora" as const,
-        diffusionLora: false
-      }
-    },
-    json: {
-      "input_model": {
-        "type": "PyTorchModel",
-        "config": {
-          "hf_config": {
-            "model_name": "bert-base-uncased",
-            "task": "fill-mask"
-          }
-        }
-      },
-      "passes": {
-        "conversion": {
-          "type": "OnnxConversion",
-          "config": { "target_opset": 14, "precision": "float32" }
-        },
-        "pruning": {
-          "type": "Prune",
-          "config": { "sparsity": 0.5, "pruning_criteria": "l1" }
-        }
-      },
-      "engine": {
-        "search_strategy": { "execution_order": "joint" },
-        "cache_dir": "~/.cache/olive"
-      }
-    }
-  }
-];
-
-function inferHfTask(modelId: string): string {
-  const id = modelId.toLowerCase();
-  if (id.includes("whisper")) return "speech-recognition";
-  if (id.includes("bert") || id.includes("roberta") || id.includes("deberta")) return "fill-mask";
-  if (id.includes("t5") || id.includes("bart")) return "text2text-generation";
-  if (id.includes("vit") || id.includes("clip") || id.includes("resnet") || id.includes("mobilenet")) return "image-classification";
-  return "text-generation";
-}
-
-function inferModelType(modelId: string): string {
-  const id = modelId.toLowerCase();
-  if (id.includes("llama")) return "llama";
-  if (id.includes("phi")) return "phi";
-  if (id.includes("whisper")) return "whisper";
-  if (id.includes("bert") || id.includes("roberta")) return "bert";
-  if (id.includes("qwen")) return "qwen";
-  if (id.includes("mistral") || id.includes("mixtral")) return "mistral";
-  if (id.includes("falcon")) return "falcon";
-  if (id.includes("t5")) return "t5";
-  if (id.includes("gpt2") || id.includes("gpt-2")) return "gpt2";
-  return "gpt2";
-}
-
-const GPU_PROVIDERS: IHVProvider[] = ["CUDAExecutionProvider", "TensorrtExecutionProvider", "ROCMExecutionProvider"];
-const NPU_PROVIDERS: IHVProvider[] = ["QNNExecutionProvider"];
-
-function providerToAccelerator(provider: IHVProvider): { device: string; execution_providers: string[] } {
-  const device = GPU_PROVIDERS.includes(provider) ? "gpu" : NPU_PROVIDERS.includes(provider) ? "npu" : "cpu";
-  return { device, execution_providers: [provider] };
-}
+import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
 
 export function ExecutionWorkspace({ state, setState, onExecute: _onExecute, jobId: _jobId, isRunning: _isRunning, setIsRunning: _setIsRunning }: { state: UIState; setState: (s: Partial<UIState>) => void; onExecute?: () => void; jobId?: string | null; isRunning?: boolean; setIsRunning?: (v: boolean) => void }) {
   // Live execution state
@@ -520,6 +21,15 @@ export function ExecutionWorkspace({ state, setState, onExecute: _onExecute, job
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isExportCopied, setIsExportCopied] = useState(false);
   const [justQueued, setJustQueued] = useState(false);
+  const [aiReviewLoading, setAiReviewLoading] = useState(false);
+  const [aiReviewResult, setAiReviewResult] = useState<{
+    valid?: boolean;
+    severity?: string;
+    summary?: string;
+    issues?: Array<{ type?: string; title?: string; explanation?: string; fix?: string }>;
+    suggestions?: string[];
+    error?: string;
+  } | null>(null);
 
   // States for Exporting to ONNX Runtime Web/Mobile (OWR)
   const [isOwrExportOpen, setIsOwrExportOpen] = useState(false);
@@ -738,7 +248,46 @@ ${owrPlatform === "web" ?
     }
   };
 
+  const pipeline = buildRecipeFromState(state);
+  const { recipe, recipeJson, validation, schema, advisories, isRunnable } = pipeline;
+  const validationLabel = !schema.valid
+    ? `Schema invalid (${schema.errors.length} issue${schema.errors.length === 1 ? "" : "s"})`
+    : validation.statusLabel;
+  const validationTone = !schema.valid ? "error" : validation.statusTone;
+
+  const handleAiReview = async () => {
+    setAiReviewLoading(true);
+    setAiReviewResult(null);
+    try {
+      const resp = await fetch("/api/ai/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipeJson, ihvProvider: state.ihvProvider }),
+      });
+      const data = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+      if (!resp.ok) {
+        setAiReviewResult({ error: data.error || `HTTP ${resp.status}` });
+      } else {
+        setAiReviewResult(data);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "AI review request failed";
+      setAiReviewResult({ error: message });
+    } finally {
+      setAiReviewLoading(false);
+    }
+  };
+
   const handleQueueJob = () => {
+    if (!isRunnable) {
+      setExecutionLogs([
+        schema.valid
+          ? `[ERROR] Cannot queue batch job: ${validation.criticalCount} blocking compatibility issue(s). Resolve in the graph or passes panel.`
+          : `[ERROR] Cannot queue batch job: recipe schema invalid.\n${schema.errors.map((e) => `[SCHEMA] ${e}`).join("\n")}`,
+      ]);
+      return;
+    }
+
     const activePassesNames: string[] = [];
     if (state.passes.conversion) activePassesNames.push(`Conversion (${state.passes.conversionFormat === "onnx" ? "ONNX" : "OpenVINO"})`);
     if (state.passes.quantization) activePassesNames.push(`Quantization (${state.passes.quantPrecision})`);
@@ -758,6 +307,8 @@ ${owrPlatform === "web" ?
 
     const jobName = `Staged: ${mid.split("/").pop()} - ${state.ihvProvider.replace("ExecutionProvider", "")}`;
 
+    const recipeJsonForJob = buildRecipeJsonFromState(state);
+
     const newJob = {
       id: "job-" + Date.now(),
       name: jobName,
@@ -765,8 +316,10 @@ ${owrPlatform === "web" ?
       modelIdentifier: mid,
       provider: state.ihvProvider,
       passes: activePassesNames,
+      recipeJson: recipeJsonForJob,
       status: "queued" as const,
       progress: 0,
+      progressKnown: true,
       logs: ["Job created from active template configuration. Awaiting queue start."]
     };
 
@@ -776,90 +329,23 @@ ${owrPlatform === "web" ?
     setTimeout(() => setJustQueued(false), 3000);
   };
 
-  // Create JSON recipe from UI State
-  const recipe: any = {
-    input_model: {
-      type: "PyTorchModel",
-      config: {}
-    },
-    systems: {
-      local_system: {
-        type: "LocalSystem",
-        config: {
-          accelerators: [providerToAccelerator(state.ihvProvider)]
-        }
-      }
-    },
-    passes: {} as Record<string, any>,
-    engine: {
-      search_strategy: { execution_order: "joint", search_algorithm: "exhaustive" },
-      host: "local_system",
-      target: "local_system",
-      cache_dir: state.distributedCaching && state.azureStr
-        ? state.azureStr
-        : state.cacheDir || "~/.cache/olive",
-      output_dir: "./models/optimized"
-    }
-  };
-
-  if (state.modelSource === "huggingface") {
-    recipe.input_model.config.hf_config = {
-      model_name: state.hfModelId || "unspecified",
-      task: inferHfTask(state.hfModelId || ""),
-      ...(state.hfDataset ? { dataset: state.hfDataset } : {})
-    };
-  } else if (state.modelSource === "local") {
-    recipe.input_model.config.model_path = "./local_models"; // Example path, in reality would point to uploaded folder
-    if (state.localFiles.length > 0) {
-      recipe.input_model.config.local_files = state.localFiles.map(f => f.name);
-    }
-  } else if (state.modelSource === "azure") {
-    recipe.input_model.config.model_path = state.azureModelPath || "azureml://...";
-  }
-
-  // Hydrate Passes based on UI State
-  if (state.passes.conversion) {
-    if (state.passes.conversionFormat === "onnx") {
-        recipe.passes['conversion'] = { type: "OnnxConversion", config: { target_opset: state.passes.conversionOpset }};
-    } else {
-        recipe.passes['conversion'] = { type: "OpenVINOConversion", config: {} };
-    }
-  }
-  if (state.passes.quantization) recipe.passes['quantization'] = { type: "OnnxQuantization", config: { weight_type: state.passes.quantPrecision, optimize_model: true }};
-  if (state.passes.onnxTransforms) {
-    recipe.passes['transformer_opt'] = {
-      type: "OrtTransformersOptimization",
-      config: {
-        model_type: inferModelType(state.hfModelId || ""),
-        use_gpu: GPU_PROVIDERS.includes(state.ihvProvider)
-      }
-    };
-  }
-  if (state.passes.splitting) {
-    recipe.passes['splitting'] = { type: "ModelSplitting", config: {} };
-  }
-  if (state.passes.peft) {
-    const peftType = state.passes.peftMethod === "qlora" ? "QLoRA" : "LoRA";
-    recipe.passes['peft'] = { type: peftType, config: { r: 8, lora_alpha: 16 } };
-  }
-  if (state.passes.pruning) {
-    const pType = state.passes.pruningMethod === "sparsegpt" ? "SparseGPT" : 
-                 state.passes.pruningMethod === "wanda" ? "Wanda" : "Prune";
-    const config: any = { sparsity: state.passes.pruningSparsity };
-    
-    if (state.passes.pruningType === "structured") {
-      config.semi_sparse_acc = true; // Typical flag for 2:4 sparsity in Olive
-    }
-    
-    if (pType === "Prune") {
-      config.pruning_criteria = state.passes.pruningCriteria;
-    }
-    
-    recipe.passes['pruning'] = { type: pType, config };
-  }
-
   const handleExecuteLive = async () => {
     if (isRunning) return;
+
+    if (!isRunnable) {
+      setExecutionLogs([
+        schema.valid
+          ? `[ERROR] Cannot execute: ${validation.criticalCount} blocking compatibility issue(s).`
+          : `[ERROR] Cannot execute: recipe schema invalid.`,
+        ...(schema.valid
+          ? validation.issues
+              .filter((issue) => issue.severity === "critical")
+              .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`)
+          : schema.errors.map((e) => `[SCHEMA] ${e}`)),
+      ]);
+      setExecutionStatus("failed");
+      return;
+    }
 
     setIsRunning(true);
     setExecutionLogs(["[INFO] Initiating Olive run...\n"]);
@@ -870,7 +356,7 @@ ${owrPlatform === "web" ?
       const resp = await fetch("/api/olive/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipeJson: JSON.stringify(recipe, null, 2), cudaVersion: state.cudaVersion ?? "auto" })
+        body: JSON.stringify({ recipeJson, cudaVersion: state.cudaVersion ?? "auto" })
       });
 
       if (!resp.ok) {
@@ -1141,7 +627,7 @@ ${owrPlatform === "web" ?
 
                   <div className="mt-auto pt-4 border-t border-slate-900/60 space-y-2">
                     <div className="p-3 rounded-lg bg-purple-500/5 border border-purple-500/10 text-[11px] text-slate-400 leading-relaxed font-sans">
-                      ⚡ <strong>Olive OWR Cross-compile:</strong> Generates structural session configs mapped dynamically to the model’s weight format, execution steps, and target drivers.
+                      <strong>Olive OWR Cross-compile:</strong> Generates structural session configs mapped dynamically to the model's weight format, execution steps, and target drivers.
                     </div>
                   </div>
                 </div>
@@ -1304,12 +790,62 @@ ${owrPlatform === "web" ?
 
       {/* Execution Controls */}
       <Card className="border-slate-800 bg-slate-900/40">
-        <CardContent className="p-4 flex justify-between items-center gap-3 flex-wrap sm:flex-nowrap">
+        <CardContent className="p-4 flex flex-col gap-3">
+          {schema.errors.length > 0 && (
+            <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3 space-y-2">
+              {schema.errors.map((error) => (
+                <div key={error} className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-rose-200 leading-relaxed">{error}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {advisories.length > 0 && (
+            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 space-y-2">
+              {advisories.map((issue) => (
+                <div key={issue.id} className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-amber-300">{issue.title}</p>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">{issue.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex justify-between items-center gap-3 flex-wrap sm:flex-nowrap">
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-              <span className="text-xs sm:text-sm font-medium text-slate-300">Schema Validated</span>
+              {validationTone === "success" ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              ) : validationTone === "warning" ? (
+                <AlertTriangle className="h-4 w-4 text-amber-400" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-rose-400" />
+              )}
+              <span className={`text-xs sm:text-sm font-medium ${
+                validationTone === "success"
+                  ? "text-emerald-400"
+                  : validationTone === "warning"
+                    ? "text-amber-300"
+                    : "text-rose-300"
+              }`}>
+                {validationLabel}
+              </span>
             </div>
+            <Button
+              variant="outline"
+              className="h-8 px-2.5 text-[10px] border-slate-700 text-slate-300 hover:border-purple-500/40 hover:text-purple-300"
+              onClick={handleAiReview}
+              disabled={aiReviewLoading}
+            >
+              {aiReviewLoading ? (
+                <><RefreshCw className="h-3 w-3 mr-1 animate-spin inline" /> Reviewing...</>
+              ) : (
+                <><Sparkles className="h-3 w-3 mr-1 inline" /> AI Review</>
+              )}
+            </Button>
             {executionStatus === "running" && (
               <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-2.5 py-1 rounded-full font-bold animate-pulse">
                 <RefreshCw className="h-3 w-3 animate-spin" /> Running
@@ -1328,16 +864,16 @@ ${owrPlatform === "web" ?
           </div>
           <div className="flex items-center gap-2 ml-auto">
             {justQueued ? (
-              <span className="text-xs text-electric-blue font-semibold animate-pulse font-mono mr-2">✓ Queued to Batch!</span>
+              <span className="text-xs text-electric-blue font-semibold animate-pulse font-mono mr-2">Queued to Batch!</span>
             ) : (
-              <Button variant="outline" className="h-9 px-3 text-xs border-dashed border-slate-700 hover:border-electric-blue hover:text-electric-blue" onClick={handleQueueJob}>
+              <Button variant="outline" className="h-9 px-3 text-xs border-dashed border-slate-700 hover:border-electric-blue hover:text-electric-blue disabled:opacity-40" onClick={handleQueueJob} disabled={!isRunnable}>
                 Queue Batch Job
               </Button>
             )}
             <Button 
               variant="success" 
               onClick={handleExecuteLive} 
-              disabled={isRunning}
+              disabled={isRunning || !isRunnable}
               className="h-9 text-xs"
             >
               {isRunning ? (
@@ -1346,6 +882,31 @@ ${owrPlatform === "web" ?
                 <><Play className="h-3.5 w-3.5 mr-1.5" fill="currentColor" /> Execute Live</>
               )}
             </Button>
+          </div>
+          {aiReviewResult && (
+            <div className="rounded-lg border border-purple-500/20 bg-purple-950/20 p-3 space-y-2">
+              {"error" in aiReviewResult && aiReviewResult.error ? (
+                <p className="text-xs text-rose-300">{aiReviewResult.error}</p>
+              ) : (
+                <>
+                  <p className="text-xs font-semibold text-purple-200">
+                    AI Review{aiReviewResult.severity ? ` · ${aiReviewResult.severity}` : ""}
+                    {aiReviewResult.valid === false ? " · issues found" : aiReviewResult.valid ? " · looks OK" : ""}
+                  </p>
+                  {aiReviewResult.summary && (
+                    <p className="text-[11px] text-slate-300 leading-relaxed">{aiReviewResult.summary}</p>
+                  )}
+                  {(aiReviewResult.issues ?? []).map((issue, idx) => (
+                    <div key={`${issue.title ?? "issue"}-${idx}`} className="text-[11px] text-slate-400">
+                      <span className="font-semibold text-slate-300">{issue.title}</span>
+                      {issue.explanation ? `: ${issue.explanation}` : ""}
+                      {issue.fix ? ` — ${issue.fix}` : ""}
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
           </div>
         </CardContent>
       </Card>

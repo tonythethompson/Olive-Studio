@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, Button, Label, Input, Select, Switch } from "@/components/ui";
 import { UIState, BatchJob, IHVProvider, ModelSource } from "@/types";
+import { buildRecipeJsonFromState, buildOliveRecipeFromBatchJob } from "@/lib/recipePipeline";
+import { parseOliveMetricsFromLogs } from "@/lib/oliveLogMetrics";
+import { commitUiStateUpdate, getPipelineValidation } from "@/lib/pipelineValidation";
+import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import { 
   Play, 
   Pause, 
@@ -60,49 +64,16 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
     const queuedJobs = (state.batchJobs || []).filter(j => j.status === "queued");
     if (queuedJobs.length === 0) return;
 
+    const queueValidation = getPipelineValidation(state);
+    if (queueValidation.isBlocked) {
+      return;
+    }
+
     setIsProcessing(true);
 
     // Process jobs sequentially
     for (const job of queuedJobs) {
-      // Build recipe JSON for this job
-      const recipe: any = {
-        input_model: {
-          type: "PyTorchModel",
-          config: job.modelSource === "huggingface"
-            ? { hf_config: { model_name: job.modelIdentifier, task: "auto-detect" } }
-            : { model_path: job.modelIdentifier }
-        },
-        systems: {
-          local_system: {
-            type: "LocalSystem",
-            config: { accelerators: [job.provider] }
-          }
-        },
-        passes: {} as Record<string, any>,
-        engine: {
-          search_strategy: { execution_order: "serial" },
-          host: "local_system",
-          target: "local_system",
-          cache_dir: "~/.cache/olive",
-          output_dir: "./models/optimized"
-        }
-      };
-
-      // Add passes based on job.passes array
-      if (job.passes.some(p => p.toLowerCase().includes("conv"))) {
-        recipe.passes.conversion = { type: "OnnxConversion", config: { target_opset: 14 } };
-      }
-      if (job.passes.some(p => p.toLowerCase().includes("quant"))) {
-        recipe.passes.quantization = { type: "OnnxQuantization", config: { weight_type: "int8" } };
-      }
-      if (job.passes.some(p => p.toLowerCase().includes("prun"))) {
-        recipe.passes.pruning = { type: "Prune", config: { sparsity: 0.5 } };
-      }
-      if (job.passes.some(p => p.toLowerCase().includes("transform") || p.toLowerCase().includes("fusion"))) {
-        recipe.passes.transformer_opt = { type: "OrtTransformersOptimization", config: { model_type: "gpt2" } };
-      }
-
-      // Mark job as running
+      const recipe = buildOliveRecipeFromBatchJob(job, state);
       setState({
         batchJobs: (jobsRef.current).map(j =>
           j.id === job.id ? { ...j, status: "running", progress: -1, logs: ["[INFO] Starting Olive run..."] } : j
@@ -190,10 +161,20 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
           }
           const finalStatus = exitCode === 0 ? "completed" : "failed";
           const currentJobs = jobsRef.current;
+          const completedJob = currentJobs.find((j) => j.id === job.id);
+          const metrics =
+            finalStatus === "completed" && completedJob
+              ? parseOliveMetricsFromLogs(completedJob.logs)
+              : undefined;
           setState({
             batchJobs: currentJobs.map(j =>
               j.id === job.id
-                ? { ...j, status: finalStatus, progress: finalStatus === "completed" ? 100 : j.progress }
+                ? {
+                    ...j,
+                    status: finalStatus,
+                    progress: finalStatus === "completed" ? 100 : j.progress,
+                    metrics: metrics ?? j.metrics,
+                  }
                 : j
             )
           });
@@ -223,6 +204,9 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
 
   // Queue current dashboard configuration
   const handleQueueCurrent = () => {
+    const validation = getPipelineValidation(state);
+    if (validation.isBlocked) return;
+
     const activePassesNames: string[] = [];
     if (state.passes.conversion) activePassesNames.push(`Conversion (${state.passes.conversionFormat === "onnx" ? "ONNX" : "OpenVINO"})`);
     if (state.passes.quantization) activePassesNames.push(`Quantization (${state.passes.quantPrecision})`);
@@ -249,8 +233,10 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
       modelIdentifier: mid,
       provider: state.ihvProvider,
       passes: activePassesNames,
+      recipeJson: buildRecipeJsonFromState(state),
       status: "queued",
       progress: 0,
+      progressKnown: true,
       logs: ["Job created from active template configuration. Awaiting queue start."]
     };
 
@@ -268,15 +254,33 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
     if (passTransformer) chosenPasses.push("Graph Transformers Fusions");
     if (chosenPasses.length === 0) chosenPasses.push("Model Assembly Standard Pass");
 
+    const draftState = commitUiStateUpdate(state, {
+      modelSource: newSource,
+      hfModelId: newSource === "huggingface" ? newModelId : state.hfModelId,
+      azureModelPath: newSource === "azure" ? newModelId : state.azureModelPath,
+      ihvProvider: newProvider,
+      passes: {
+        ...DEFAULT_PASSES,
+        conversion: passConv,
+        quantization: passQuant,
+        pruning: passPruning,
+        onnxTransforms: passTransformer,
+        quantMethod: "ptq",
+        quantPrecision: "int8",
+      },
+    });
+
     const newJob: BatchJob = {
       id: "job-" + Date.now(),
       name: newModelName,
       modelSource: newSource,
       modelIdentifier: newModelId || "source_weights",
-      provider: newProvider,
+      provider: draftState.ihvProvider,
       passes: chosenPasses,
+      recipeJson: buildRecipeJsonFromState(draftState),
       status: "queued",
       progress: 0,
+      progressKnown: true,
       logs: ["Custom pipeline queued manually via workspace controller."]
     };
 
@@ -570,7 +574,6 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
                      </div>
                   </div>
 
-                  {/* Benchmark targets summary — only shown when Olive actually reports metrics */}
                    {selectedJob.status === "completed" && selectedJob.metrics ? (
                      <div className="grid grid-cols-2 gap-2.5 animate-in fade-in">
                         <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">

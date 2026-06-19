@@ -8,7 +8,16 @@ import fs from "fs";
 import os from "os";
 import { v4 as uuidv4 } from "uuid";
 
+import { validateOliveRecipeStructure } from "./src/lib/oliveRecipeSchema.ts";
+import { parseJsonFromAiResponse, readEnvApiKey } from "./src/lib/aiResponse.ts";
+import {
+  mergeDetectedProviders,
+  pickRecommendedProvider,
+  type HardwareProbeResult,
+} from "./src/lib/hardwareProbe.ts";
+
 dotenv.config();
+dotenv.config({ path: ".env.local", override: true });
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -31,23 +40,38 @@ interface AIChatMessage {
   content: string;
 }
 
+const ALLOWED_AI_PROVIDERS = new Set<ProviderConfig["provider"]>([
+  "gemini",
+  "openai",
+  "anthropic",
+  "mistral",
+  "openai-compat",
+]);
+
 function detectEnvProvider(): ProviderConfig | null {
-  if (process.env.GEMINI_API_KEY)
-    return { provider: "gemini", apiKey: process.env.GEMINI_API_KEY, model: "gemini-2.5-flash" };
-  if (process.env.OPENAI_API_KEY)
-    return { provider: "openai", apiKey: process.env.OPENAI_API_KEY, model: "gpt-4o-mini" };
-  if (process.env.ANTHROPIC_API_KEY)
-    return { provider: "anthropic", apiKey: process.env.ANTHROPIC_API_KEY, model: "claude-haiku-4-5-20251001" };
-  if (process.env.MISTRAL_API_KEY)
-    return { provider: "mistral", apiKey: process.env.MISTRAL_API_KEY, model: "mistral-large-latest" };
+  const geminiKey = readEnvApiKey("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_API_KEY");
+  if (geminiKey) {
+    return { provider: "gemini", apiKey: geminiKey, model: "gemini-2.5-flash" };
+  }
+  const openaiKey = readEnvApiKey("OPENAI_API_KEY");
+  if (openaiKey) {
+    return { provider: "openai", apiKey: openaiKey, model: "gpt-4o-mini" };
+  }
+  const anthropicKey = readEnvApiKey("ANTHROPIC_API_KEY");
+  if (anthropicKey) {
+    return { provider: "anthropic", apiKey: anthropicKey, model: "claude-haiku-4-5-20251001" };
+  }
+  const mistralKey = readEnvApiKey("MISTRAL_API_KEY");
+  if (mistralKey) {
+    return { provider: "mistral", apiKey: mistralKey, model: "mistral-large-latest" };
+  }
   return null;
 }
 
-const envProvider = detectEnvProvider();
 let runtimeAiProvider: ProviderConfig | null = null;
 
 function getAiProvider(): ProviderConfig | null {
-  return runtimeAiProvider ?? envProvider;
+  return runtimeAiProvider ?? detectEnvProvider();
 }
 
 async function callGemini(cfg: ProviderConfig, system: string, messages: AIChatMessage[], wantJson: boolean): Promise<string> {
@@ -66,7 +90,11 @@ async function callGemini(cfg: ProviderConfig, system: string, messages: AIChatM
     throw new Error(`Gemini ${resp.status}: ${(err as any)?.error?.message ?? resp.statusText}`);
   }
   const data = await resp.json() as any;
-  return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  if (!text.trim()) {
+    throw new Error("Gemini returned an empty response.");
+  }
+  return text;
 }
 
 async function callOpenAICompat(cfg: ProviderConfig, system: string, messages: AIChatMessage[], wantJson: boolean): Promise<string> {
@@ -210,6 +238,19 @@ async function ensureVenv(onLine: (line: string) => void): Promise<{ ok: boolean
     onLine("[setup] olive-ai installed successfully.");
   }
 
+  // Olive CLI imports requests at startup; ensure it is present in older/partial installs.
+  try {
+    await execFileAsync(venvPython, ["-c", "import requests"]);
+  } catch {
+    onLine("[setup] Installing requests (Olive CLI dependency)...");
+    await new Promise<void>((resolve, reject) => {
+      const pip = spawn(getVenvPip(), ["install", "requests"], { stdio: "pipe" });
+      pip.stdout.on("data", (d) => onLine("[setup] " + d.toString().trim()));
+      pip.stderr.on("data", (d) => onLine("[setup] " + d.toString().trim()));
+      pip.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`requests install failed (exit ${code})`))));
+    });
+  }
+
   return { ok: true };
 }
 
@@ -335,6 +376,55 @@ function inferRequiredPackages(recipe: any, cudaTag: string): PkgDef[] {
   return pkgs.filter(p => seen.has(p.importName) ? false : (seen.add(p.importName), true));
 }
 
+/** Olive RunConfig parse + package scan without starting optimization. */
+async function runOliveConfigPreflight(
+  configPath: string,
+  onLine: (line: string) => void
+): Promise<{ ok: boolean; error?: string }> {
+  const venvPython = getVenvPython();
+
+  return new Promise((resolve) => {
+    const proc = spawn(
+      venvPython,
+      ["-m", "olive", "run", "--config", configPath, "--list_required_packages"],
+      { stdio: "pipe", env: process.env }
+    );
+
+    let stderr = "";
+    proc.stdout.on("data", (data: Buffer) => {
+      data
+        .toString()
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .forEach((line) => onLine(`[preflight] ${line}`));
+    });
+    proc.stderr.on("data", (data: Buffer) => {
+      const text = data.toString();
+      stderr += text;
+      text
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .forEach((line) => onLine(`[preflight] ${line}`));
+    });
+
+    proc.on("close", (code) => {
+      if (code === 0) {
+        onLine("[preflight] Olive RunConfig accepted (schema parse + package scan OK).");
+        resolve({ ok: true });
+        return;
+      }
+      resolve({
+        ok: false,
+        error: stderr.trim() || `Olive preflight exited with code ${code ?? "unknown"}`,
+      });
+    });
+
+    proc.on("error", (err) => {
+      resolve({ ok: false, error: `Failed to start Olive preflight: ${err.message}` });
+    });
+  });
+}
+
 async function ensureDeps(
   pkgs: PkgDef[],
   onLine: (line: string) => void
@@ -381,6 +471,14 @@ async function ensureDeps(
 
 // ─── CUDA Detection ───────────────────────────────────────────────────────────
 
+function parseCudaVersionFromNvidiaSmi(stdout: string): { cudaVersion: string; cudaTag: string } | null {
+  const m = stdout.match(/CUDA (?:UMD )?Version:\s*(\d+)\.(\d+)/);
+  if (!m) return null;
+  const cudaVersion = `${m[1]}.${m[2]}`;
+  const cudaTag = pickCudaTag(parseInt(m[1], 10), parseInt(m[2], 10));
+  return { cudaVersion, cudaTag };
+}
+
 function pickCudaTag(major: number, minor: number): string {
   const tiers = [
     { major: 12, minor: 6, tag: "cu126" },
@@ -419,11 +517,10 @@ async function detectCudaTag(
   // Auto-detect via nvidia-smi
   try {
     const { stdout } = await execFileAsync("nvidia-smi", []);
-    const m = stdout.match(/CUDA Version:\s*(\d+)\.(\d+)/);
-    if (m) {
-      const tag = pickCudaTag(parseInt(m[1]), parseInt(m[2]));
-      onLine(`[deps] nvidia-smi detected CUDA ${m[1]}.${m[2]} → ${tag}`);
-      return tag;
+    const parsed = parseCudaVersionFromNvidiaSmi(stdout);
+    if (parsed) {
+      onLine(`[deps] nvidia-smi detected CUDA ${parsed.cudaVersion} → ${parsed.cudaTag}`);
+      return parsed.cudaTag;
     }
   } catch { /* no GPU or nvidia-smi not in PATH */ }
 
@@ -431,11 +528,199 @@ async function detectCudaTag(
   return "cpu";
 }
 
+// ─── System Hardware Probe ────────────────────────────────────────────────────
+
+async function probeNvidiaGpus(): Promise<HardwareProbeResult["nvidia"] | undefined> {
+  try {
+    const { stdout } = await execFileAsync("nvidia-smi", [
+      "--query-gpu=name,driver_version,memory.total",
+      "--format=csv,noheader",
+    ]);
+    const gpus = stdout
+      .trim()
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.split(",").map((s) => s.trim());
+        const name = parts[0] ?? "Unknown GPU";
+        const driver = parts[1];
+        const memStr = parts[2];
+        let vramMb: number | undefined;
+        if (memStr) {
+          const m = memStr.match(/(\d+)/);
+          if (m) vramMb = parseInt(m[1], 10);
+        }
+        return { name, driver, vramMb };
+      });
+
+    if (gpus.length === 0) return undefined;
+
+    let cudaVersion: string | undefined;
+    let cudaTag: string | undefined;
+    try {
+      const { stdout: smiOut } = await execFileAsync("nvidia-smi", []);
+      const parsed = parseCudaVersionFromNvidiaSmi(smiOut);
+      if (parsed) {
+        cudaVersion = parsed.cudaVersion;
+        cudaTag = parsed.cudaTag;
+      }
+    } catch { /* ignore */ }
+
+    return { gpus, cudaVersion, cudaTag };
+  } catch {
+    return undefined;
+  }
+}
+
+async function probeRocmGpus(): Promise<HardwareProbeResult["rocm"] | undefined> {
+  try {
+    const { stdout } = await execFileAsync("rocm-smi", ["--showproductname"]);
+    const gpus = stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith("=") && !line.toLowerCase().includes("product"))
+      .map((name) => ({ name }));
+    if (gpus.length === 0) return undefined;
+    return { gpus };
+  } catch {
+    return undefined;
+  }
+}
+
+async function probePythonRuntime(
+  python: string
+): Promise<Pick<HardwareProbeResult, "openvino" | "onnxRuntimeProviders">> {
+  const result: Pick<HardwareProbeResult, "openvino" | "onnxRuntimeProviders"> = {};
+
+  try {
+    const { stdout } = await execFileAsync(python, ["-c", "import openvino; print(openvino.__version__)"]);
+    const version = stdout.trim();
+    if (version) result.openvino = { available: true, version };
+  } catch {
+    result.openvino = { available: false };
+  }
+
+  try {
+    const { stdout } = await execFileAsync(python, [
+      "-c",
+      "import onnxruntime as ort; print(','.join(ort.get_available_providers()))",
+    ]);
+    const providers = stdout.trim().split(",").filter(Boolean);
+    if (providers.length > 0) result.onnxRuntimeProviders = providers;
+  } catch { /* onnxruntime not installed */ }
+
+  return result;
+}
+
+async function probeSystemHardware(): Promise<HardwareProbeResult> {
+  const notes: string[] = [];
+  const cpus = os.cpus();
+  const platform = {
+    os: `${process.platform} ${os.release()}`,
+    arch: os.arch(),
+    cpuModel: cpus[0]?.model?.trim() || "Unknown CPU",
+    cpuCores: cpus.length,
+  };
+
+  const [nvidia, rocm] = await Promise.all([probeNvidiaGpus(), probeRocmGpus()]);
+
+  let openvino: HardwareProbeResult["openvino"];
+  let onnxRuntimeProviders: string[] | undefined;
+
+  const venvPython = getVenvPython();
+  const pythonCandidates: string[] = [];
+  if (fs.existsSync(venvPython)) pythonCandidates.push(venvPython);
+  const systemPython = await findSystemPython();
+  if (systemPython) pythonCandidates.push(systemPython);
+
+  for (const python of pythonCandidates) {
+    const pyResult = await probePythonRuntime(python);
+    if (pyResult.openvino?.available && !openvino?.available) {
+      openvino = pyResult.openvino;
+    }
+    if (pyResult.onnxRuntimeProviders?.length && !onnxRuntimeProviders?.length) {
+      onnxRuntimeProviders = pyResult.onnxRuntimeProviders;
+      notes.push(
+        `ONNX Runtime providers probed via ${python === venvPython ? ".venv Python" : "system Python"}.`
+      );
+    }
+  }
+
+  if (onnxRuntimeProviders?.length) {
+    notes.push(`ORT execution providers: ${onnxRuntimeProviders.join(", ")}`);
+    if (nvidia && !onnxRuntimeProviders.includes("CUDAExecutionProvider")) {
+      notes.push("NVIDIA GPU detected but ONNX Runtime CUDA EP is not installed in Python (try onnxruntime-gpu in .venv).");
+    }
+  } else if (nvidia) {
+    notes.push("ONNX Runtime not installed in Python — NVIDIA GPU inferred from nvidia-smi.");
+  }
+
+  if (!nvidia) notes.push("No NVIDIA GPU detected (nvidia-smi unavailable or returned no devices).");
+  if (!rocm) notes.push("No AMD ROCm GPU detected.");
+  if (!openvino?.available) notes.push("OpenVINO Python package not found locally.");
+  notes.push("QNN requires Snapdragon/Hexagon dev hardware — not probed on desktop.");
+
+  const detectedProviders = mergeDetectedProviders({
+    onnxRuntimeProviders,
+    hasNvidiaGpu: Boolean(nvidia?.gpus.length),
+    hasRocmGpu: Boolean(rocm?.gpus.length),
+    hasOpenVino: Boolean(openvino?.available),
+  });
+
+  return {
+    probedAt: new Date().toISOString(),
+    platform,
+    nvidia,
+    rocm,
+    openvino,
+    onnxRuntimeProviders,
+    detectedProviders,
+    recommendedProvider: pickRecommendedProvider(detectedProviders),
+    notes,
+  };
+}
+
+let hardwareProbeCache: { at: number; result: HardwareProbeResult } | null = null;
+const HARDWARE_PROBE_CACHE_MS = 30_000;
+
+app.get("/api/system/hardware-probe", async (req, res) => {
+  try {
+    const refresh = req.query.refresh === "1" || req.query.refresh === "true";
+    const now = Date.now();
+    if (!refresh && hardwareProbeCache && now - hardwareProbeCache.at < HARDWARE_PROBE_CACHE_MS) {
+      return res.json(hardwareProbeCache.result);
+    }
+    const result = await probeSystemHardware();
+    hardwareProbeCache = { at: now, result };
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({
+      error: err instanceof Error ? err.message : "Hardware probe failed.",
+    });
+  }
+});
+
 // ─── POST /api/olive/run ──────────────────────────────────────────────────────
 app.post("/api/olive/run", async (req, res) => {
   const { recipeJson, cudaVersion = "auto" } = req.body as { recipeJson?: string; cudaVersion?: string };
   if (!recipeJson) {
     return res.status(400).json({ error: "Missing recipeJson in request body." });
+  }
+
+  let parsedRecipe: unknown;
+  try {
+    parsedRecipe = JSON.parse(recipeJson);
+  } catch {
+    return res.status(400).json({ error: "recipeJson is not valid JSON." });
+  }
+
+  const schema = validateOliveRecipeStructure(parsedRecipe);
+  if (!schema.valid) {
+    return res.status(400).json({
+      error: "Recipe failed structural validation.",
+      schemaErrors: schema.errors,
+    });
   }
 
   const jobId = uuidv4();
@@ -494,6 +779,23 @@ app.post("/api/olive/run", async (req, res) => {
     const tmpFile = path.join(os.tmpdir(), `olive_recipe_${jobId}.json`);
     fs.writeFileSync(tmpFile, recipeJson, "utf-8");
     pushLog(job, `[info] Recipe written to ${tmpFile}`);
+
+    pushLog(job, "[preflight] Validating Olive RunConfig...");
+    const preflight = await runOliveConfigPreflight(tmpFile, (line) => pushLog(job, line)).catch((err) => ({
+      ok: false,
+      error: String(err.message),
+    }));
+    if (!preflight.ok) {
+      pushLog(job, `[error] Preflight failed: ${preflight.error}`);
+      job.status = "failed";
+      job.exitCode = 1;
+      try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
+      for (const sub of job.subscribers) {
+        try { sub("__DONE__"); } catch { /* gone */ }
+      }
+      return;
+    }
+
     pushLog(job, `[info] Starting Olive optimization run...`);
 
     job.status = "running";
@@ -634,11 +936,28 @@ app.get("/api/ai/provider", (_req, res) => {
 });
 
 app.post("/api/ai/provider", (req, res) => {
-  const { provider, apiKey: key, model, baseUrl } = req.body;
-  if (!provider || !key || !model)
+  const { provider, apiKey: key, model, baseUrl } = req.body as {
+    provider?: string;
+    apiKey?: string;
+    model?: string;
+    baseUrl?: string;
+  };
+  if (!provider || !key || !model) {
     return res.status(400).json({ error: "provider, apiKey, and model are required" });
-  runtimeAiProvider = { provider, apiKey: key, model, baseUrl };
-  return res.json({ ok: true });
+  }
+  if (!ALLOWED_AI_PROVIDERS.has(provider as ProviderConfig["provider"])) {
+    return res.status(400).json({ error: `Invalid provider: ${provider}` });
+  }
+  if (provider === "openai-compat" && !baseUrl?.trim()) {
+    return res.status(400).json({ error: "baseUrl is required for OpenAI-compatible providers." });
+  }
+  runtimeAiProvider = {
+    provider: provider as ProviderConfig["provider"],
+    apiKey: key.trim(),
+    model: model.trim(),
+    baseUrl: baseUrl?.trim() || undefined,
+  };
+  return res.json({ ok: true, source: "user", provider: runtimeAiProvider.provider, model: runtimeAiProvider.model });
 });
 
 app.delete("/api/ai/provider", (_req, res) => {
@@ -660,7 +979,7 @@ Respond with ONLY valid JSON:
       role: "user",
       content: `Validate this Olive recipe for hardware '${ihvProvider || "CPUExecutionProvider"}':\n\n${recipeJson}`,
     }], true);
-    return res.json(JSON.parse(text.trim()));
+    return res.json(parseJsonFromAiResponse(text));
   } catch (err: any) {
     console.error("AI Validate Error:", err);
     return res.status(500).json({ error: err.message });
@@ -702,7 +1021,7 @@ Respond with ONLY valid JSON:
 
   try {
     const text = await callAI(system, [{ role: "user", content: `Pipeline:\n${JSON.stringify(cleanState, null, 2)}` }], true);
-    return res.json(JSON.parse(text.trim()));
+    return res.json(parseJsonFromAiResponse(text));
   } catch (err: any) {
     console.error("AI Analyze Error:", err);
     return res.status(500).json({ error: err.message });
@@ -740,6 +1059,10 @@ app.post("/api/ai/chat", async (req, res) => {
   }
 });
 
+app.use("/api", (_req, res) => {
+  res.status(404).json({ error: "API route not found." });
+});
+
 // ─── Vite / Static ────────────────────────────────────────────────────────────
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
@@ -747,7 +1070,12 @@ async function startServer() {
       server: { middlewareMode: true },
       appType: "spa",
     });
-    app.use(vite.middlewares);
+    app.use((req, res, next) => {
+      if (req.path.startsWith("/api")) {
+        return next();
+      }
+      vite.middlewares(req, res, next);
+    });
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));

@@ -1,37 +1,21 @@
 import { Card, CardContent, CardHeader } from "@/components/ui";
 import { Activity } from "lucide-react";
+import { parseOliveMetricsFromLogs } from "@/lib/oliveLogMetrics";
 
 /**
  * PerformanceMetrics — intentionally empty until a real Olive run completes.
- *
- * The previous implementation rendered static hardcoded bar charts
- * (e.g. Baseline 45.2 ms → Optimized 8.4 ms) that were completely fabricated
- * and had no connection to any actual Olive execution result.
- *
- * Real metrics (latency, throughput, memory) will be parsed from Olive's stdout
- * once a job completes and surfaced here. Until then the card shows a
- * "Run Olive to see metrics" placeholder — no fake data.
+ * Parses latency/throughput/memory/compression from Olive stdout when present.
  */
 export function PerformanceMetrics({ logs }: { logs?: string[] }) {
-  // Attempt to parse real metrics from Olive log output
-  const parsedMetrics: { label: string; value: string; color: string }[] = [];
-
-  if (logs && logs.length > 0) {
-    for (const line of logs) {
-      // Match patterns like "latency: 14.2 ms" or "throughput: 70 tok/s"
-      const latencyMatch = line.match(/latency[:\s]+([0-9.]+\s*ms)/i);
-      if (latencyMatch) parsedMetrics.push({ label: "Latency", value: latencyMatch[1], color: "text-electric-blue" });
-
-      const throughputMatch = line.match(/throughput[:\s]+([0-9.]+\s*(?:tok\/s|req\/s|it\/s|samples\/s))/i);
-      if (throughputMatch) parsedMetrics.push({ label: "Throughput", value: throughputMatch[1], color: "text-emerald-400" });
-
-      const memoryMatch = line.match(/(?:memory|vram|footprint)[:\s]+([0-9.]+\s*(?:MB|GB|MiB|GiB))/i);
-      if (memoryMatch) parsedMetrics.push({ label: "Memory", value: memoryMatch[1], color: "text-purple-400" });
-
-      const compressionMatch = line.match(/compression[:\s]+([0-9.]+[x%])/i);
-      if (compressionMatch) parsedMetrics.push({ label: "Compression", value: compressionMatch[1], color: "text-amber-400" });
-    }
-  }
+  const parsed = logs && logs.length > 0 ? parseOliveMetricsFromLogs(logs) : undefined;
+  const parsedMetrics = parsed
+    ? [
+        parsed.latency !== "—" ? { label: "Latency", value: parsed.latency, color: "text-electric-blue" } : null,
+        parsed.throughput !== "—" ? { label: "Throughput", value: parsed.throughput, color: "text-emerald-400" } : null,
+        parsed.memory !== "—" ? { label: "Memory", value: parsed.memory, color: "text-purple-400" } : null,
+        parsed.compression !== "—" ? { label: "Compression", value: parsed.compression, color: "text-amber-400" } : null,
+      ].filter(Boolean) as { label: string; value: string; color: string }[]
+    : [];
 
   return (
     <Card>

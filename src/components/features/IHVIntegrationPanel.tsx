@@ -1,175 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, Select, Label, Switch, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { IHVProvider, UIState } from "@/types";
-import { Cpu, CpuIcon, Layers, Settings2, AlertTriangle, ShieldAlert, Check, Wand2, Activity, Lock, CheckCircle, AlertCircle, Info, Search, Sliders, Table, List, Sparkles } from "lucide-react";
+import { getProviderConflicts, isConversionFormatAllowed, isPeftAllowed, isPeftMethodAllowed, isQuantMethodAllowed, isStructuredPruningAllowed } from "@/lib/pipelineValidation";
+import { fetchHardwareProbe, isProviderDetectedLocally, type HardwareProbeResult } from "@/lib/hardwareProbe";
+import { Cpu, CpuIcon, Layers, Settings2, AlertTriangle, ShieldAlert, Check, Wand2, Activity, Lock, CheckCircle, AlertCircle, Info, Search, Sliders, Table, List, Sparkles, RefreshCw, HardDrive } from "lucide-react";
 
-interface HardwareConflict {
-  passKey: string;
-  passName: string;
-  reason: string;
-  severity: "critical" | "warning";
-  autofix: () => Partial<UIState["passes"]>;
-}
+export { getProviderConflicts };
 
-export function getProviderConflicts(providerId: IHVProvider, passes: UIState["passes"]): HardwareConflict[] {
-  const conflicts: HardwareConflict[] = [];
-
-  switch (providerId) {
-    case "CPUExecutionProvider":
-      if (passes.conversion && passes.conversionFormat === "openvino") {
-        conflicts.push({
-          passKey: "conversionFormat",
-          passName: "OpenVINO Format",
-          reason: "Intel OpenVINO IR format requires OpenVINO Execution Provider.",
-          severity: "warning",
-          autofix: () => ({ ...passes, conversionFormat: "onnx" }),
-        });
-      }
-      if (passes.quantization && passes.quantMethod === "awq") {
-        conflicts.push({
-          passKey: "quantMethod",
-          passName: "AWQ Quantization",
-          reason: "AWQ requires specialized CUDA/ROCm execution kernels on GPU.",
-          severity: "critical",
-          autofix: () => ({ ...passes, quantMethod: "ptq" }),
-        });
-      }
-      if (passes.pruning && passes.pruningType === "structured") {
-        conflicts.push({
-          passKey: "pruningType",
-          passName: "Structured Sparsity",
-          reason: "2:4 Structured Sparsity requires hardware-level NVIDIA Tensor Cores.",
-          severity: "warning",
-          autofix: () => ({ ...passes, pruningType: "unstructured" }),
-        });
-      }
-      if (passes.peft && passes.peftMethod === "qlora") {
-        conflicts.push({
-          passKey: "peftMethod",
-          passName: "QLoRA Tuning",
-          reason: "Quantized PEFT fine-tuning expects specialized GPU CUDA kernels. Extremely slow on CPU.",
-          severity: "warning",
-          autofix: () => ({ ...passes, peftMethod: "lora" }),
-        });
-      }
-      break;
-
-    case "CUDAExecutionProvider":
-    case "TensorrtExecutionProvider":
-      if (passes.conversion && passes.conversionFormat === "openvino") {
-        conflicts.push({
-          passKey: "conversionFormat",
-          passName: "OpenVINO Format",
-          reason: "NVIDIA GPUs utilize standard ONNX models, not OpenVINO IR representation.",
-          severity: "critical",
-          autofix: () => ({ ...passes, conversionFormat: "onnx" }),
-        });
-      }
-      break;
-
-    case "OpenVINOExecutionProvider":
-      if (passes.quantization && passes.quantMethod === "awq") {
-        conflicts.push({
-          passKey: "quantMethod",
-          passName: "AWQ Quantization",
-          reason: "AWQ is highly specific to CUDA/ROCm APIs and is not supported by OpenVINO.",
-          severity: "critical",
-          autofix: () => ({ ...passes, quantMethod: "ptq" }),
-        });
-      }
-      if (passes.pruning && passes.pruningType === "structured") {
-        conflicts.push({
-          passKey: "pruningType",
-          passName: "Structured Sparsity",
-          reason: "2:4 Structured Sparsity requires hardware-level NVIDIA Tensor Cores.",
-          severity: "warning",
-          autofix: () => ({ ...passes, pruningType: "unstructured" }),
-        });
-      }
-      if (passes.peft) {
-        conflicts.push({
-          passKey: "peft",
-          passName: "PEFT / LoRA Training",
-          reason: "Parameter-Efficient Fine-Tuning is designed for CUDA hosts. Intel NPU target is for optimized inference.",
-          severity: "warning",
-          autofix: () => ({ ...passes, peft: false }),
-        });
-      }
-      break;
-
-    case "QNNExecutionProvider":
-      if (passes.conversion && passes.conversionFormat === "openvino") {
-        conflicts.push({
-          passKey: "conversionFormat",
-          passName: "OpenVINO Format",
-          reason: "Qualcomm Snapdragon NPU requires ONNX format, not Intel OpenVINO IR.",
-          severity: "critical",
-          autofix: () => ({ ...passes, conversionFormat: "onnx" }),
-        });
-      }
-      if (passes.quantization && (passes.quantMethod === "awq" || passes.quantMethod === "qat")) {
-        conflicts.push({
-          passKey: "quantMethod",
-          passName: "AWQ / QAT Quantization",
-          reason: "Snapdragon NPUs require standard Post-Training Static/Dynamic Quantization (PTQ).",
-          severity: "critical",
-          autofix: () => ({ ...passes, quantMethod: "ptq" }),
-        });
-      }
-      if (passes.pruning && passes.pruningType === "structured") {
-        conflicts.push({
-          passKey: "pruningType",
-          passName: "Structured Sparsity",
-          reason: "Qualcomm Snapdragon NPUs do not support hardware-level 2:4 structured sparsity acceleration.",
-          severity: "warning",
-          autofix: () => ({ ...passes, pruningType: "unstructured" }),
-        });
-      }
-      if (passes.peft) {
-        conflicts.push({
-          passKey: "peft",
-          passName: "PEFT / LoRA Training",
-          reason: "Snapdragon edge targets are optimized for low-power execution, not active training loops.",
-          severity: "critical",
-          autofix: () => ({ ...passes, peft: false }),
-        });
-      }
-      break;
-
-    case "ROCMExecutionProvider":
-      if (passes.conversion && passes.conversionFormat === "openvino") {
-        conflicts.push({
-          passKey: "conversionFormat",
-          passName: "OpenVINO Format",
-          reason: "AMD GPUs utilize standard ONNX models, not Intel OpenVINO IR.",
-          severity: "critical",
-          autofix: () => ({ ...passes, conversionFormat: "onnx" }),
-        });
-      }
-      if (passes.pruning && passes.pruningType === "structured") {
-        conflicts.push({
-          passKey: "pruningType",
-          passName: "Structured Sparsity",
-          reason: "2:4 Structured Sparsity requires proprietary NVIDIA Tensor Core hardware.",
-          severity: "warning",
-          autofix: () => ({ ...passes, pruningType: "unstructured" }),
-        });
-      }
-      break;
-
-    default:
-      break;
-  }
-
-  return conflicts;
-}
-
-const providers: { id: IHVProvider; name: string; shortName: string; desc: string; icon: any }[] = [
-  { id: "CPUExecutionProvider",    name: "Native CPU",              shortName: "CPU",       desc: "Standard ONNX Runtime CPU Provider for broad compatibility.",          icon: Cpu },
-  { id: "CUDAExecutionProvider",   name: "NVIDIA CUDA / TensorRT", shortName: "CUDA/TRT",  desc: "Accelerates deep learning inference on NVIDIA GPUs.",                   icon: Layers },
-  { id: "OpenVINOExecutionProvider", name: "Intel OpenVINO",        shortName: "OpenVINO",  desc: "Optimized for Intel architectures (Core, Xeon, Core Ultra).",          icon: CpuIcon },
-  { id: "QNNExecutionProvider",    name: "Qualcomm QNN (Snapdragon)", shortName: "QNN",    desc: "Leverage Qualcomm Hexagon NPUs on edge and mobile devices.",           icon: CpuIcon },
-  { id: "ROCMExecutionProvider",   name: "AMD ROCm",                shortName: "ROCm",      desc: "High-performance compute provider for AMD GPUs.",                      icon: Layers },
+const providers: { id: IHVProvider; name: string; shortName: string; desc: string; icon: typeof Cpu }[] = [
+  { id: "CPUExecutionProvider", name: "Native CPU", shortName: "CPU", desc: "Standard ONNX Runtime CPU provider for broad compatibility.", icon: Cpu },
+  { id: "CUDAExecutionProvider", name: "NVIDIA CUDA", shortName: "CUDA", desc: "Accelerates inference on NVIDIA GPUs via CUDA.", icon: Layers },
+  { id: "TensorrtExecutionProvider", name: "NVIDIA TensorRT", shortName: "TensorRT", desc: "Maximum throughput on NVIDIA GPUs using TensorRT engines.", icon: Layers },
+  { id: "OpenVINOExecutionProvider", name: "Intel OpenVINO", shortName: "OpenVINO", desc: "Optimized for Intel Core, Xeon, and Core Ultra (CPU/GPU/NPU).", icon: CpuIcon },
+  { id: "QNNExecutionProvider", name: "Qualcomm QNN (Snapdragon)", shortName: "QNN", desc: "Hexagon NPU acceleration on Snapdragon edge and mobile devices.", icon: CpuIcon },
+  { id: "ROCMExecutionProvider", name: "AMD ROCm", shortName: "ROCm", desc: "High-performance compute on AMD Instinct and Radeon GPUs.", icon: Layers },
 ];
 
 interface OptimizationPassValidation {
@@ -190,7 +34,7 @@ const validations: OptimizationPassValidation[] = [
     name: "OpenVINO IR Conversion Stage",
     category: "Conversion",
     description: "Compiles standard execution graphs into the highly optimized Intel OpenVINO XML/BIN Intermediate Representation.",
-    isUnsupported: (provider) => provider !== "OpenVINOExecutionProvider",
+    isUnsupported: (provider) => !isConversionFormatAllowed("openvino", provider),
     getIncompatibilityReason: () => "Requires Intel OpenVINO hardware target.",
     isActive: (passes) => passes.conversion && passes.conversionFormat === "openvino",
     toggle: (passes, active) => active ? { ...passes, conversionFormat: "onnx" } : { ...passes, conversion: true, conversionFormat: "openvino" },
@@ -201,7 +45,7 @@ const validations: OptimizationPassValidation[] = [
     name: "AWQ Activation-Aware Quantization",
     category: "Quantization",
     description: "Protects high-salient channel weights dynamically from rounding errors, protecting baseline math precision.",
-    isUnsupported: (provider) => !["CUDAExecutionProvider", "TensorrtExecutionProvider", "ROCMExecutionProvider"].includes(provider),
+    isUnsupported: (provider) => !isQuantMethodAllowed("awq", provider),
     getIncompatibilityReason: () => "Requires NVIDIA/AMD high-performance compute host.",
     isActive: (passes) => passes.quantization && passes.quantMethod === "awq",
     toggle: (passes, active) => active ? { ...passes, quantMethod: "ptq" } : { ...passes, quantization: true, quantMethod: "awq" },
@@ -212,7 +56,7 @@ const validations: OptimizationPassValidation[] = [
     name: "Quantization-Aware Training (QAT)",
     category: "Quantization",
     description: "Instruments training backpropagation to emulate integer quantization noise, producing highly robust integer models.",
-    isUnsupported: (provider) => provider === "QNNExecutionProvider",
+    isUnsupported: (provider) => !isQuantMethodAllowed("qat", provider),
     getIncompatibilityReason: () => "Snapdragon NPU does not support active QAT pipelines.",
     isActive: (passes) => passes.quantization && passes.quantMethod === "qat",
     toggle: (passes, active) => active ? { ...passes, quantMethod: "ptq" } : { ...passes, quantization: true, quantMethod: "qat" },
@@ -223,7 +67,7 @@ const validations: OptimizationPassValidation[] = [
     name: "Structured 2:4 Sparsity Pruning",
     category: "Compression",
     description: "Systematically zeros out 2 out of every 4 block elements to maximize memory access efficiency.",
-    isUnsupported: (provider) => !["CUDAExecutionProvider", "TensorrtExecutionProvider"].includes(provider),
+    isUnsupported: (provider) => !isStructuredPruningAllowed(provider),
     getIncompatibilityReason: () => "Requires built-in NVIDIA Ampere+ Tensor Cores.",
     isActive: (passes) => passes.pruning && passes.pruningType === "structured",
     toggle: (passes, active) => active ? { ...passes, pruningType: "unstructured" } : { ...passes, pruning: true, pruningType: "structured" },
@@ -234,7 +78,7 @@ const validations: OptimizationPassValidation[] = [
     name: "PEFT LoRA Training Stage",
     category: "PEFT",
     description: "Locks core parameters to fine-tune compact rank-adapters, drastically boosting training speed and reducing VRAM footprint.",
-    isUnsupported: (provider) => ["QNNExecutionProvider", "OpenVINOExecutionProvider"].includes(provider),
+    isUnsupported: (provider) => !isPeftAllowed(provider),
     getIncompatibilityReason: () => "NPUs are strictly optimized for static low-power inference.",
     isActive: (passes) => passes.peft,
     toggle: (passes, active) => active ? { ...passes, peft: false } : { ...passes, peft: true },
@@ -245,7 +89,7 @@ const validations: OptimizationPassValidation[] = [
     name: "Double-Quantized QLoRA Adapter Tuning",
     category: "PEFT",
     description: "Pairs LoRA rank updates with highly compressed 4-bit NormalFloat parameters to allow massive model adjustments.",
-    isUnsupported: (provider) => !["CUDAExecutionProvider", "TensorrtExecutionProvider", "ROCMExecutionProvider"].includes(provider),
+    isUnsupported: (provider) => !isPeftMethodAllowed("qlora", provider),
     getIncompatibilityReason: () => "Requires GPU CUDA/ROCm acceleration.",
     isActive: (passes) => passes.peft && passes.peftMethod === "qlora",
     toggle: (passes, active) => active ? { ...passes, peftMethod: "lora" } : { ...passes, peft: true, peftMethod: "qlora" },
@@ -328,6 +172,27 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
   const [passSearch, setPassSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"matrix" | "cards">("matrix");
   const [selectedCategory, setSelectedCategory] = useState<"All" | "Conversion" | "Quantization" | "Compression" | "PEFT">("All");
+  const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
+  const [probeLoading, setProbeLoading] = useState(true);
+  const [probeError, setProbeError] = useState<string | null>(null);
+
+  const runHardwareProbe = useCallback(async (refresh = false) => {
+    setProbeLoading(true);
+    setProbeError(null);
+    try {
+      const result = await fetchHardwareProbe(refresh);
+      setHardwareProbe(result);
+    } catch (err) {
+      setProbeError(err instanceof Error ? err.message : "Hardware probe failed.");
+      setHardwareProbe(null);
+    } finally {
+      setProbeLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void runHardwareProbe(false);
+  }, [runHardwareProbe]);
 
   const filteredValidations = validations.filter(v => {
     const matchesSearch = v.name.toLowerCase().includes(passSearch.toLowerCase()) || 
@@ -350,6 +215,91 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
           badge={<div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-500/10 text-purple-500"><Settings2 className="h-4 w-4" /></div>}
         />
         <CardContent>
+          {/* Live hardware probe from this machine */}
+          <div className="mb-6 rounded-xl border border-slate-800/80 bg-slate-950/40 p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <HardDrive className="h-4 w-4 text-electric-blue shrink-0" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                    Detected on this machine
+                  </h4>
+                  {probeLoading && (
+                    <span className="text-[10px] font-mono text-slate-500 animate-pulse">Scanning…</span>
+                  )}
+                </div>
+                {probeError ? (
+                  <p className="text-xs text-rose-400">{probeError}</p>
+                ) : hardwareProbe ? (
+                  <div className="space-y-1.5 text-xs text-slate-400">
+                    <p>
+                      <span className="text-slate-500">CPU:</span>{" "}
+                      <span className="text-slate-200">{hardwareProbe.platform.cpuModel}</span>
+                      <span className="text-slate-600"> · {hardwareProbe.platform.cpuCores} cores · {hardwareProbe.platform.os} ({hardwareProbe.platform.arch})</span>
+                    </p>
+                    {hardwareProbe.nvidia?.gpus.length ? (
+                      <p>
+                        <span className="text-slate-500">NVIDIA:</span>{" "}
+                        <span className="text-slate-200">
+                          {hardwareProbe.nvidia.gpus.map((g) => g.name).join(", ")}
+                        </span>
+                        {hardwareProbe.nvidia.cudaVersion && (
+                          <span className="text-slate-600"> · driver CUDA {hardwareProbe.nvidia.cudaVersion}{hardwareProbe.nvidia.cudaTag ? ` → ${hardwareProbe.nvidia.cudaTag}` : ""}</span>
+                        )}
+                      </p>
+                    ) : (
+                      <p><span className="text-slate-500">NVIDIA:</span> <span className="text-slate-600">not detected</span></p>
+                    )}
+                    {hardwareProbe.rocm?.gpus.length ? (
+                      <p>
+                        <span className="text-slate-500">AMD ROCm:</span>{" "}
+                        <span className="text-slate-200">{hardwareProbe.rocm.gpus.map((g) => g.name).join(", ")}</span>
+                      </p>
+                    ) : null}
+                    {hardwareProbe.openvino?.available ? (
+                      <p>
+                        <span className="text-slate-500">OpenVINO:</span>{" "}
+                        <span className="text-slate-200">Python package v{hardwareProbe.openvino.version ?? "unknown"}</span>
+                      </p>
+                    ) : null}
+                    {hardwareProbe.onnxRuntimeProviders?.length ? (
+                      <p>
+                        <span className="text-slate-500">ONNX Runtime EPs:</span>{" "}
+                        <span className="font-mono text-[11px] text-emerald-400">{hardwareProbe.onnxRuntimeProviders.join(", ")}</span>
+                      </p>
+                    ) : null}
+                    <p className="text-[11px] text-slate-500 pt-1">
+                      Recommended target:{" "}
+                      <span className="text-purple-300 font-semibold">
+                        {providers.find((p) => p.id === hardwareProbe.recommendedProvider)?.name ?? hardwareProbe.recommendedProvider}
+                      </span>
+                      {state.ihvProvider !== hardwareProbe.recommendedProvider && (
+                        <button
+                          type="button"
+                          onClick={() => setState({ ihvProvider: hardwareProbe.recommendedProvider })}
+                          className="ml-2 text-[10px] font-bold uppercase tracking-wider text-electric-blue hover:text-white cursor-pointer"
+                        >
+                          Apply
+                        </button>
+                      )}
+                    </p>
+                  </div>
+                ) : !probeLoading ? (
+                  <p className="text-xs text-slate-500">No hardware data yet.</p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => void runHardwareProbe(true)}
+                disabled={probeLoading}
+                className="flex items-center gap-1.5 self-start rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-300 hover:border-slate-600 hover:text-white disabled:opacity-50 cursor-pointer shrink-0"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${probeLoading ? "animate-spin" : ""}`} />
+                Re-scan hardware
+              </button>
+            </div>
+          </div>
+
           {/* Hardware Validation Guard Alert Summary Banner */}
           {selectedConflicts.length > 0 && (
             <div className={`mb-6 rounded-xl border p-4.5 animate-in slide-in-from-top-2 duration-300 flex flex-col gap-3.5 ${
@@ -404,6 +354,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
               const pConflicts = getProviderConflicts(p.id, state.passes);
               const cardHasCritical = pConflicts.some(c => c.severity === "critical");
               const cardHasWarning = pConflicts.some(c => c.severity === "warning");
+              const detectedLocally = isProviderDetectedLocally(p.id, hardwareProbe);
 
               let cardClasses = "relative flex flex-col rounded-xl border p-4.5 transition-all duration-200 cursor-pointer ";
               let badgeText = "";
@@ -420,24 +371,37 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                   badgeColor = "bg-amber-500/10 text-amber-400 border-amber-550/25";
                 } else {
                   cardClasses += "border-electric-blue bg-electric-blue/5 shadow-[0_0_15px_rgba(59,130,246,0.1)]";
-                  badgeText = "Active Target";
+                  badgeText = !detectedLocally && !probeLoading ? "Active (not local)" : "Active Target";
                   badgeColor = "bg-electric-blue/10 text-electric-blue border-electric-blue/20";
                 }
+              } else if (!detectedLocally && !probeLoading) {
+                cardClasses += "border-slate-850/60 bg-zinc-950/30 opacity-80 hover:opacity-100 hover:border-slate-700";
+                badgeText = "Not on this system";
+                badgeColor = "bg-slate-800/80 text-slate-500 border-slate-700/60";
+              } else if (cardHasCritical) {
+                cardClasses += "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-100 hover:border-rose-500/40";
+                badgeText = "Incompatible";
+                badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
+              } else if (cardHasWarning) {
+                cardClasses += "border-amber-950/35 bg-zinc-950/40 opacity-75 hover:opacity-100 hover:border-amber-500/40";
+                badgeText = "Needs Adjust";
+                badgeColor = "bg-amber-500/5 text-amber-400/80 border-amber-550/15";
               } else {
-                if (cardHasCritical) {
-                  cardClasses += "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-100 hover:border-rose-500/40";
-                  badgeText = "Incompatible";
-                  badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
-                } else if (cardHasWarning) {
-                  cardClasses += "border-amber-950/35 bg-zinc-950/40 opacity-75 hover:opacity-100 hover:border-amber-500/40";
-                  badgeText = "Needs Adjust";
-                  badgeColor = "bg-amber-500/5 text-amber-400/80 border-amber-550/15";
-                } else {
-                  cardClasses += "border-slate-800/80 bg-slate-900/40 hover:bg-slate-900 hover:border-slate-700";
-                  badgeText = "Compatible";
-                  badgeColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/15";
-                }
+                cardClasses += "border-slate-800/80 bg-slate-900/40 hover:bg-slate-900 hover:border-slate-700";
+                badgeText = "Compatible with active passes";
+                badgeColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/15";
               }
+
+              const hardwareDetail =
+                p.id === "CUDAExecutionProvider" || p.id === "TensorrtExecutionProvider"
+                  ? hardwareProbe?.nvidia?.gpus.map((g) => g.name).join(", ")
+                  : p.id === "ROCMExecutionProvider"
+                    ? hardwareProbe?.rocm?.gpus.map((g) => g.name).join(", ")
+                    : p.id === "OpenVINOExecutionProvider" && hardwareProbe?.openvino?.available
+                      ? `OpenVINO ${hardwareProbe.openvino.version ?? ""}`.trim()
+                      : p.id === "CPUExecutionProvider" && hardwareProbe
+                        ? hardwareProbe.platform.cpuModel
+                        : null;
 
               return (
                 <div 
@@ -477,6 +441,12 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                         </span>
                       </div>
                       <p className="text-xs text-slate-400 leading-relaxed pr-6">{p.desc}</p>
+                      {detectedLocally && hardwareDetail && (
+                        <p className="text-[11px] text-emerald-400/90 font-mono">{hardwareDetail}</p>
+                      )}
+                      {!detectedLocally && !probeLoading && p.id !== "CPUExecutionProvider" && (
+                        <p className="text-[11px] text-slate-600">No matching hardware found locally — you can still select for remote/cross-compile targets.</p>
+                      )}
                     </div>
 
                     <div className="flex items-center justify-center shrink-0">
@@ -556,7 +526,9 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                 <div>
                   <p className="text-sm font-medium text-slate-200">PyTorch CUDA Version</p>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Auto-detect reads <code className="text-slate-400 bg-slate-800 px-1 py-0.5 rounded">nvidia-smi</code> at runtime. Override if wrong toolkit version is picked.
+                    {hardwareProbe?.nvidia?.cudaTag
+                      ? <>Probed: CUDA {hardwareProbe.nvidia.cudaVersion} (<code className="text-emerald-400 bg-slate-800 px-1 py-0.5 rounded">{hardwareProbe.nvidia.cudaTag}</code>) via nvidia-smi. Override if wrong.</>
+                      : <>Auto-detect reads <code className="text-slate-400 bg-slate-800 px-1 py-0.5 rounded">nvidia-smi</code> at execute time. Override if wrong toolkit version is picked.</>}
                   </p>
                 </div>
                 <select
@@ -582,11 +554,11 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <h4 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                    <Activity className="h-4.5 w-4.5 text-purple-400 animate-pulse shrink-0" />
-                    Real-Time Hardware Validation & Optimization Matrix
+                    <Activity className="h-4.5 w-4.5 text-purple-400 shrink-0" />
+                    Pass ↔ Provider Compatibility Matrix
                   </h4>
                   <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-                    Dynamic grid analyzer maps available compilation passes to driver backends. Select hardware, filter passes, toggle settings directly, or explore simulated silicon performance tooltips.
+                    Rule-based pass compatibility for each execution provider. Green cells mean the pass is allowed on that backend; hardware availability is shown separately in the probe banner and column headers.
                   </p>
                 </div>
                 
@@ -686,7 +658,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
               /* TAB 1: VALIDATION MATRIX INTERACTIVE HEATMAP */
               <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/25 mt-2 shadow-xl animate-in fade-in duration-300">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse min-w-[620px]">
+                  <table className="w-full text-left border-collapse min-w-[720px]">
                     <thead>
                       <tr className="border-b border-slate-800/80 bg-slate-900/30">
                         {/* Header Cell 1 */}
@@ -694,10 +666,11 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                           PASS
                         </th>
 
-                        {/* 5 Hardware Target Columns */}
+                        {/* Hardware target columns */}
                         {providers.map((p) => {
                           const isSelectedProvider = p.id === state.ihvProvider;
                           const HIcon = p.icon;
+                          const detectedLocally = isProviderDetectedLocally(p.id, hardwareProbe);
 
                           return (
                             <th
@@ -729,10 +702,16 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                                   <HIcon className="h-3 w-3" />
                                 </div>
                                 <span className={`text-[10px] font-mono font-semibold leading-none text-center ${
-                                  isSelectedProvider ? "text-purple-300" : "text-slate-400"
+                                  isSelectedProvider ? "text-purple-300" : detectedLocally ? "text-slate-400" : "text-slate-600"
                                 }`}>
                                   {p.shortName}
                                 </span>
+                                {!detectedLocally && !probeLoading && (
+                                  <span className="text-[7px] font-mono text-slate-600 uppercase tracking-wide leading-none">Absent</span>
+                                )}
+                                {detectedLocally && !isSelectedProvider && (
+                                  <span className="text-[7px] font-mono text-emerald-600 uppercase tracking-wide leading-none">Local</span>
+                                )}
                                 {isSelectedProvider ? (
                                   <div className="flex items-center gap-1">
                                     <span className="flex h-1.5 w-1.5 relative">
@@ -879,18 +858,18 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                                             <p className="text-slate-400 text-xs leading-relaxed">{comp.reason}</p>
                                           </div>
 
-                                          {/* Direct Silicon Acceleration Hardware Registers */}
+                                          {/* Estimated heuristics — not measured on this machine */}
                                           <div className="grid grid-cols-3 gap-1.5 border-t border-slate-900 pt-3">
                                             <div className="text-[10px] bg-slate-900/65 p-2 rounded-lg border border-slate-900 text-center font-mono">
-                                              <span className="text-[8.5px] text-slate-500 block uppercase font-bold tracking-tight mb-1">Pass Speed</span>
+                                              <span className="text-[8.5px] text-slate-500 block uppercase font-bold tracking-tight mb-1">Est. speed</span>
                                               <span className={`text-xs font-black block ${comp.status === "supported" ? "text-emerald-400" : "text-slate-350"}`}>{comp.speedup}</span>
                                             </div>
                                             <div className="text-[10px] bg-slate-900/65 p-2 rounded-lg border border-slate-900 text-center font-mono">
-                                              <span className="text-[8.5px] text-slate-500 block uppercase font-bold tracking-tight mb-1">VRAM impact</span>
+                                              <span className="text-[8.5px] text-slate-500 block uppercase font-bold tracking-tight mb-1">Est. VRAM</span>
                                               <span className={`text-xs font-black block ${comp.status === "supported" ? "text-emerald-400" : "text-slate-350"}`}>{comp.vram}</span>
                                             </div>
                                             <div className="text-[10px] bg-slate-900/65 p-2 rounded-lg border border-slate-900 text-center font-mono">
-                                              <span className="text-[8.5px] text-slate-500 block uppercase font-bold tracking-tight mb-1">Silicon Core</span>
+                                              <span className="text-[8.5px] text-slate-500 block uppercase font-bold tracking-tight mb-1">Heuristic</span>
                                               <span className={`text-xs font-black block ${comp.status === "supported" ? "text-purple-400" : "text-slate-350"}`}>{comp.efficiency}</span>
                                             </div>
                                           </div>
@@ -933,8 +912,10 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                       Incompatible / Blocked on Chipset
                     </span>
                   </div>
-                  <div className="flex items-center gap-1 text-[10.5px] font-mono bg-purple-500/10 text-purple-400 border border-purple-500/15 p-1 px-2.5 rounded">
-                    <Sparkles className="h-3 w-3 animate-spin duration-3000 shrink-0 text-purple-350 animate-pulse" /> Live validation engine connected
+                  <div className="flex items-center gap-1 text-[10.5px] font-mono bg-slate-800/40 text-slate-400 border border-slate-700/60 p-1 px-2.5 rounded">
+                    {hardwareProbe
+                      ? `Hardware probed ${new Date(hardwareProbe.probedAt).toLocaleTimeString()} · pass rules + local EP detection`
+                      : "Client-side compatibility rules"}
                   </div>
                 </div>
               </div>

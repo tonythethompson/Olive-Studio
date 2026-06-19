@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Card, CardContent, CardHeader, Switch, Label, Input, Slider, Select, Tabs, TabsList, TabsTrigger, TabsContent, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { UIState } from "@/types";
+import { applyIssueAutofix, getPipelineValidation, getRemainingAdvisories, getAllowedConversionFormats, getAllowedPeftMethods, getAllowedPruningTypes, getAllowedQuantMethods, isPeftAllowed } from "@/lib/pipelineValidation";
 import { Layers, Combine, Zap, Minimize2, Workflow, Fingerprint, Info, ArrowRight, ArrowDown, Box, Settings, AlertTriangle } from "lucide-react";
 
 export function getSelectedModelInfo(state: UIState) {
@@ -113,6 +114,20 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
     }
   }, [state.modelSource, state.hfModelId, state.localFiles.length, state.localFiles[0]?.name, state.azureModelPath]);
   
+  const validation = getPipelineValidation(state);
+  const advisories = getRemainingAdvisories(state);
+  const allowedQuantMethods = getAllowedQuantMethods(state.ihvProvider);
+  const allowedConversionFormats = getAllowedConversionFormats(state.ihvProvider);
+  const allowedPruningTypes = getAllowedPruningTypes(state.ihvProvider);
+  const allowedPeftMethods = getAllowedPeftMethods(state.ihvProvider);
+  const pipelineConflicts = validation.issues
+    .filter((issue) => issue.autofix)
+    .map((issue) => ({
+      ...issue,
+      type: issue.severity,
+      onResolve: issue.autofix ? () => setState(applyIssueAutofix(state, issue)) : undefined,
+    }));
+
   const PipelineToggle = ({ active, onToggle, icon, title, desc, disabled, reason }: any) => {
     const Icon = icon;
     return (
@@ -134,153 +149,8 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
     );
   };
 
-  const warnings = [];
-  if (state.passes.quantization && state.passes.quantPrecision === "int4" && state.ihvProvider === "CPUExecutionProvider") {
-    warnings.push("INT4 precision is generally not hardware-accelerated on standard CPUs (may fallback to FP32 math).");
-  }
-  if (state.passes.pruning && state.passes.pruningType === "structured" && !["CUDAExecutionProvider", "TensorrtExecutionProvider"].includes(state.ihvProvider)) {
-    warnings.push("2:4 Structured Sparsity requires NVIDIA Tensor Cores. Your selected hardware target may not see inference speedups.");
-  }
-  if (state.passes.quantization && state.passes.quantMethod === "awq" && !["CUDAExecutionProvider", "ROCMExecutionProvider"].includes(state.ihvProvider)) {
-    warnings.push("AWQ is optimized for GPU backends. It may not be fully supported on the selected provider.");
-  }
-  if (state.passes.conversion && state.passes.conversionFormat === "openvino" && state.ihvProvider !== "OpenVINOExecutionProvider") {
-    warnings.push("OpenVINO conversion format is selected, but the target hardware is not Intel OpenVINO. Pipeline execution will fail.");
-  }
-
-  // Live Pipeline Incompatible Pass Combinations Sentinel Rules
-  const pipelineConflicts: {
-    id: string;
-    type: "critical" | "warning";
-    title: string;
-    description: string;
-    affectedTabs: string[];
-    actionLabel?: string;
-    onResolve?: () => void;
-  }[] = [];
-
-  // Rule 1: AWQ + Pruning
-  if (state.passes.pruning && state.passes.quantization && state.passes.quantMethod === "awq") {
-    pipelineConflicts.push({
-      id: "pruning-awq",
-      type: "critical",
-      title: "Pruning & AWQ Quantization Conflict",
-      description: "Pruning destroys the tensor structures and activates scale gradients that AWQ depends on. This causes weight distribution scale mismatch.",
-      affectedTabs: ["quantization", "compression"],
-      actionLabel: "Switch Quantization to PTQ",
-      onResolve: () => {
-        setState({
-          passes: {
-            ...state.passes,
-            quantMethod: "ptq"
-          }
-        });
-      }
-    });
-  }
-
-  // Rule 2: PEFT LoRA + Non-QLoRA Quantization
-  if (state.passes.peft && state.passes.quantization && state.passes.quantPrecision !== "fp16" && state.passes.peftMethod === "lora") {
-    pipelineConflicts.push({
-      id: "peft-lora-quant",
-      type: "critical",
-      title: "LoRA Adapters active with base Quantization",
-      description: "Standard LoRA expects floating-point base parameters to optimize. If you use integers (INT4/INT8), you must select QLoRA's double-quantized parameters.",
-      affectedTabs: ["quantization", "peft"],
-      actionLabel: "Enable QLoRA Mode",
-      onResolve: () => {
-        setState({
-          passes: {
-            ...state.passes,
-            peftMethod: "qlora"
-          }
-        });
-      }
-    });
-  }
-
-  // Rule 3: Extreme Sparsity Pruning + INT4 Quantization Precision Collapse
-  if (state.passes.pruning && state.passes.quantization && state.passes.quantPrecision === "int4") {
-    pipelineConflicts.push({
-      id: "pruning-int4-collapse",
-      type: "warning",
-      title: "INT4 & Sparsity Double Compress",
-      description: "Applying both sparsity pruning and aggressive INT4 quantization leads to extreme mathematical precision decline and accuracy degradation.",
-      affectedTabs: ["quantization", "compression"],
-      actionLabel: "Increase Quant to INT8",
-      onResolve: () => {
-        setState({
-          passes: {
-            ...state.passes,
-            quantPrecision: "int8"
-          }
-        });
-      }
-    });
-  }
-
-  // Rule 4: ONNX Transforms + OpenVINO redundant
-  if (state.passes.conversion && state.passes.conversionFormat === "openvino" && state.passes.onnxTransforms) {
-    pipelineConflicts.push({
-      id: "openvino-onnx-transforms-clash",
-      type: "warning",
-      title: "Redundant Transforms with OpenVINO IR",
-      description: "Manual ONNX graph layout transforms are redundant and can clash during subsequent compilation into OpenVINO XML representation.",
-      affectedTabs: ["conversion", "transforms"],
-      actionLabel: "Deactivate ONNX Transforms",
-      onResolve: () => {
-        setState({
-          passes: {
-            ...state.passes,
-            onnxTransforms: false
-          }
-        });
-      }
-    });
-  }
-
-  // Rule 5: Quantization Aware Training (QAT) + Splitting Split Incompatible
-  if (state.passes.splitting && state.passes.quantization && state.passes.quantMethod === "qat") {
-    pipelineConflicts.push({
-      id: "splitting-qat-conflict",
-      type: "critical",
-      title: "Splitting + QAT Incompatibility",
-      description: "Model splitting breaks the weights dictionary across boundary subroutines. QAT fine-tuning requires unbroken parameters.",
-      affectedTabs: ["conversion", "quantization"],
-      actionLabel: "Disable Model Splitting",
-      onResolve: () => {
-        setState({
-          passes: {
-            ...state.passes,
-            splitting: false
-          }
-        });
-      }
-    });
-  }
-
-  // Rule 6: CPU Execution Provider + QLoRA (AWQ check is covered elsewhere)
-  if (state.passes.peft && state.passes.peftMethod === "qlora" && state.ihvProvider === "CPUExecutionProvider") {
-    pipelineConflicts.push({
-      id: "cpu-qlora-mismatch",
-      type: "warning",
-      title: "Inefficient PEFT Stage: QLoRA on CPU",
-      description: "QLoRA gradients expect specialized GPU CUDA kernels. Training adapters on standard CPU threads is highly inefficient and slow.",
-      affectedTabs: ["peft"],
-      actionLabel: "Revert PEFT to floating-point LoRA",
-      onResolve: () => {
-        setState({
-          passes: {
-            ...state.passes,
-            peftMethod: "lora"
-          }
-        });
-      }
-    });
-  }
-
   const getConflictCategory = (tab: string) => {
-    const tabConflicts = pipelineConflicts.filter(c => c.affectedTabs.includes(tab));
+    const tabConflicts = pipelineConflicts.filter((c) => c.affectedTabs?.includes(tab));
     if (tabConflicts.some(c => c.type === "critical")) return "critical";
     if (tabConflicts.length > 0) return "warning";
     return null;
@@ -347,13 +217,15 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
         </div>
       )}
 
-      {warnings.length > 0 && (
+      {advisories.length > 0 && (
         <div className="mb-6 bg-amber-500/10 border border-amber-500/50 rounded-lg p-4 flex flex-col gap-2 animate-in slide-in-from-top-2">
           <div className="flex items-center gap-2 text-amber-500 font-semibold text-sm">
-            <AlertTriangle className="h-4 w-4" /> Hardware Compatibility Warnings
+            <AlertTriangle className="h-4 w-4" /> Performance Notes
           </div>
           <ul className="list-disc pl-6 text-xs text-amber-400/80 space-y-1">
-            {warnings.map((w, i) => <li key={i}>{w}</li>)}
+            {advisories.map((issue) => (
+              <li key={issue.id}>{issue.description}</li>
+            ))}
           </ul>
         </div>
       )}
@@ -482,9 +354,9 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
                           value={state.passes.conversionFormat} 
                           onChange={(e) => setState({ passes: {...state.passes, conversionFormat: e.target.value as any}})}>
                           <option value="onnx">ONNX (.onnx)</option>
-                          <option value="openvino" disabled={state.ihvProvider !== "OpenVINOExecutionProvider"}>
-                            OpenVINO IR (.xml / .bin) {state.ihvProvider !== "OpenVINOExecutionProvider" ? " (Requires Intel OpenVINO Target)" : ""}
-                          </option>
+                          {allowedConversionFormats.includes("openvino") && (
+                            <option value="openvino">OpenVINO IR (.xml / .bin)</option>
+                          )}
                         </Select>
                       </div>
                     </div>
@@ -520,13 +392,15 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
                   <div className="space-y-2">
                     <Label>Quantization Strategy</Label>
                     <Select value={state.passes.quantMethod} onChange={e => setState({ passes: {...state.passes, quantMethod: e.target.value as any}})}>
-                      <option value="ptq">Post-Training Quantization (PTQ)</option>
-                      <option value="awq" disabled={["CPUExecutionProvider", "OpenVINOExecutionProvider", "QNNExecutionProvider"].includes(state.ihvProvider)}>
-                        Activation-Aware Weight Quantization (AWQ) {["CPUExecutionProvider", "OpenVINOExecutionProvider", "QNNExecutionProvider"].includes(state.ihvProvider) ? " (GPU CUDA/ROCm Required)" : ""}
-                      </option>
-                      <option value="qat" disabled={state.ihvProvider === "QNNExecutionProvider"}>
-                        Quantization-Aware Training (QAT) {state.ihvProvider === "QNNExecutionProvider" ? " (Not Supported on Snapdragon)" : ""}
-                      </option>
+                      {allowedQuantMethods.includes("ptq") && (
+                        <option value="ptq">Post-Training Quantization (PTQ)</option>
+                      )}
+                      {allowedQuantMethods.includes("awq") && (
+                        <option value="awq">Activation-Aware Weight Quantization (AWQ)</option>
+                      )}
+                      {allowedQuantMethods.includes("qat") && (
+                        <option value="qat">Quantization-Aware Training (QAT)</option>
+                      )}
                     </Select>
                   </div>
                   <div className="space-y-2">
@@ -599,10 +473,12 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
                           <Select 
                             value={state.passes.pruningType} 
                             onChange={e => setState({ passes: {...state.passes, pruningType: e.target.value as any}})}>
-                            <option value="unstructured">Unstructured (Weight-level)</option>
-                            <option value="structured" disabled={!["CUDAExecutionProvider", "TensorrtExecutionProvider"].includes(state.ihvProvider)}>
-                              Structured (N:M Block-level) {!["CUDAExecutionProvider", "TensorrtExecutionProvider"].includes(state.ihvProvider) ? " (NVIDIA CUDA/TensorRT Required)" : ""}
-                            </option>
+                            {allowedPruningTypes.includes("unstructured") && (
+                              <option value="unstructured">Unstructured (Weight-level)</option>
+                            )}
+                            {allowedPruningTypes.includes("structured") && (
+                              <option value="structured">Structured (N:M Block-level)</option>
+                            )}
                           </Select>
                           <p className="text-xs text-slate-500 mt-1">Structured pruning ensures hardware alignment (e.g. 2:4 sparsity for Tensor Cores) at the cost of slight accuracy reduction compared to unstructured.</p>
                         </div>
@@ -664,8 +540,14 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
                   title="Enable PEFT Adapters"
                   desc="Parameter-Efficient Fine-Tuning using Low Rank Adaptation."
                   icon={Layers}
-                  disabled={state.ihvProvider === "QNNExecutionProvider" || state.ihvProvider === "OpenVINOExecutionProvider"}
-                  reason={state.ihvProvider === "QNNExecutionProvider" ? "Incompatible with Snapdragon NPU" : state.ihvProvider === "OpenVINOExecutionProvider" ? "Incompatible with OpenVINO" : ""}
+                  disabled={!isPeftAllowed(state.ihvProvider)}
+                  reason={
+                    !isPeftAllowed(state.ihvProvider)
+                      ? state.ihvProvider === "QNNExecutionProvider"
+                        ? "Incompatible with Snapdragon NPU"
+                        : "Incompatible with OpenVINO"
+                      : ""
+                  }
                 />
                 
                 {state.passes.peft && (
@@ -674,10 +556,10 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
                          <div className="space-y-2">
                            <Label>Adapter Type</Label>
                            <Select value={state.passes.peftMethod} onChange={e => setState({ passes: {...state.passes, peftMethod: e.target.value as any}})}>
-                             <option value="lora">LoRA</option>
-                             <option value="qlora" disabled={state.ihvProvider === "CPUExecutionProvider"}>
-                               QLoRA (Quantized LoRA) {state.ihvProvider === "CPUExecutionProvider" ? " (Requires GPU Target)" : ""}
-                             </option>
+                             {allowedPeftMethods.includes("lora") && <option value="lora">LoRA</option>}
+                             {allowedPeftMethods.includes("qlora") && (
+                               <option value="qlora">QLoRA (Quantized LoRA)</option>
+                             )}
                            </Select>
                          </div>
                          <div className="space-y-2">
