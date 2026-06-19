@@ -159,9 +159,16 @@ function Dashboard() {
             }
           }}
         >
-          <div className="max-w-5xl mx-auto pb-24 space-y-20">
+          <div className="pb-24 space-y-20">
             {SECTIONS.map(({ id, step, label, desc }) => (
-              <section key={id} id={id} className="pt-2">
+              <section
+                key={id}
+                id={id}
+                className={cn(
+                  "pt-2 mx-auto w-full",
+                  id === "execute" ? "max-w-7xl" : "max-w-5xl"
+                )}
+              >
                 <div className="mb-6 pb-3 border-b border-slate-800">
                   <div className="text-[10px] font-mono text-electric-blue uppercase tracking-widest mb-1">{step} /</div>
                   <h2 className="text-xl font-mono font-bold text-slate-100">{label}</h2>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useLayoutEffect, useRef, type ReactElement } from "react";
 import { UIState } from "@/types";
 import { Button, Card, CardContent, Input, Label, Slider, Select } from "@/components/ui";
 import { 
@@ -25,23 +25,54 @@ interface RecipeGraphViewProps {
   setState: (s: Partial<UIState>) => void;
 }
 
+type GraphPoint = { x: number; y: number };
+
+function buildSegmentCurve(from: GraphPoint, to: GraphPoint): string {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    const c1x = from.x + dx * 0.45;
+    const c2x = from.x + dx * 0.55;
+    return `M ${from.x} ${from.y} C ${c1x} ${from.y}, ${c2x} ${to.y}, ${to.x} ${to.y}`;
+  }
+
+  const c1y = from.y + dy * 0.45;
+  const c2y = from.y + dy * 0.55;
+  return `M ${from.x} ${from.y} C ${from.x} ${c1y}, ${to.x} ${c2y}, ${to.x} ${to.y}`;
+}
+
+function appendSegmentCurve(from: GraphPoint, to: GraphPoint): string {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    const c1x = from.x + dx * 0.45;
+    const c2x = from.x + dx * 0.55;
+    return `C ${c1x} ${from.y}, ${c2x} ${to.y}, ${to.x} ${to.y}`;
+  }
+
+  const c1y = from.y + dy * 0.45;
+  const c2y = from.y + dy * 0.55;
+  return `C ${from.x} ${c1y}, ${to.x} ${c2y}, ${to.x} ${to.y}`;
+}
+
 export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string>("input");
   const [connections, setConnections] = useState<{ from: string; to: string }[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [, forceUpdate] = useState(0);
+  const [layoutTick, setLayoutTick] = useState(0);
 
-  // Redraw connections on resize/state changes
-  useEffect(() => {
-    const handleResize = () => forceUpdate(prev => prev + 1);
+  // Redraw connections when layout or pipeline changes
+  useLayoutEffect(() => {
+    const handleResize = () => setLayoutTick((prev) => prev + 1);
     window.addEventListener("resize", handleResize);
-    
-    // Slight delay to allow DOM positions to settle
-    const r = setTimeout(() => forceUpdate(prev => prev + 1), 200);
+
+    const r = requestAnimationFrame(() => setLayoutTick((prev) => prev + 1));
 
     return () => {
       window.removeEventListener("resize", handleResize);
-      clearTimeout(r);
+      cancelAnimationFrame(r);
     };
   }, [
     state.passes.conversion,
@@ -52,7 +83,8 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
     state.passes.peft,
     state.modelSource,
     state.hfModelId,
-    state.ihvProvider
+    state.ihvProvider,
+    selectedNodeId,
   ]);
 
   // Define active pipeline flow
@@ -68,45 +100,67 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
     { id: "output", label: "Optimized Output", active: true }
   ];
 
-  // Helper to get element credentials
-  const getCoordinates = (id: string) => {
+  const getConnectionPoints = (fromId: string, toId: string): { from: GraphPoint; to: GraphPoint } | null => {
     if (!containerRef.current) return null;
-    const parentRect = containerRef.current.getBoundingClientRect();
-    const elem = document.getElementById(`node-btn-${id}`);
-    if (!elem) return null;
-    const rect = elem.getBoundingClientRect();
 
-    return {
-      x: rect.left - parentRect.left + rect.width / 2,
-      y: rect.top - parentRect.top + rect.height / 2
-    };
+    const fromElem = document.getElementById(`node-btn-${fromId}`);
+    const toElem = document.getElementById(`node-btn-${toId}`);
+    if (!fromElem || !toElem) return null;
+
+    const parentRect = containerRef.current.getBoundingClientRect();
+    const toParent = (rect: DOMRect) => ({
+      left: rect.left - parentRect.left,
+      top: rect.top - parentRect.top,
+      right: rect.right - parentRect.left,
+      bottom: rect.bottom - parentRect.top,
+      cx: rect.left - parentRect.left + rect.width / 2,
+      cy: rect.top - parentRect.top + rect.height / 2,
+    });
+
+    const fromBox = toParent(fromElem.getBoundingClientRect());
+    const toBox = toParent(toElem.getBoundingClientRect());
+
+    const dx = toBox.cx - fromBox.cx;
+    const dy = toBox.cy - fromBox.cy;
+
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      return dx >= 0
+        ? { from: { x: fromBox.right, y: fromBox.cy }, to: { x: toBox.left, y: toBox.cy } }
+        : { from: { x: fromBox.left, y: fromBox.cy }, to: { x: toBox.right, y: toBox.cy } };
+    }
+
+    return dy >= 0
+      ? { from: { x: fromBox.cx, y: fromBox.bottom }, to: { x: toBox.cx, y: toBox.top } }
+      : { from: { x: fromBox.cx, y: fromBox.top }, to: { x: toBox.cx, y: toBox.bottom } };
   };
 
-  const activeNodes = pipelineSteps.filter(s => s.active);
+  const activeNodes = pipelineSteps.filter((s) => s.active);
+  void layoutTick;
 
   // Render SVG wires Dynamically
   const renderSVGConnections = () => {
     if (!containerRef.current) return null;
 
-    const paths: any[] = [];
-    
+    const paths: ReactElement[] = [];
+    let fullChainPath = "";
+
     // Draw connections chronologically through active nodes
     for (let i = 0; i < activeNodes.length - 1; i++) {
       const fromId = activeNodes[i].id;
       const toId = activeNodes[i + 1].id;
-      const fromCoord = getCoordinates(fromId);
-      const toCoord = getCoordinates(toId);
+      const points = getConnectionPoints(fromId, toId);
 
-      if (fromCoord && toCoord) {
-        // Draw elegant curve between nodes
-        const dx = toCoord.x - fromCoord.x;
-        const controlX1 = fromCoord.x + dx * 0.4;
-        const controlX2 = fromCoord.x + dx * 0.6;
-        const d = `M ${fromCoord.x} ${fromCoord.y} C ${controlX1} ${fromCoord.y}, ${controlX2} ${toCoord.y}, ${toCoord.x} ${toCoord.y}`;
-        
+      if (points) {
+        const d = buildSegmentCurve(points.from, points.to);
+
+        if (!fullChainPath) {
+          fullChainPath = d;
+        } else {
+          fullChainPath += ` L ${points.from.x} ${points.from.y} ${appendSegmentCurve(points.from, points.to)}`;
+        }
+
         paths.push(
           <g key={`${fromId}-${toId}`}>
-            {/* Ambient Background wire glow */}
             <path
               d={d}
               fill="none"
@@ -114,22 +168,33 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
               strokeWidth="6"
               className="transition-all duration-300"
             />
-            {/* Core glowing active pathway */}
             <path
               d={d}
               fill="none"
               stroke="url(#wireGradient)"
               strokeWidth="2"
-              strokeDasharray="4 4"
-              className="animate-[dash-flow_30s_linear_infinite] transition-all duration-300"
+              strokeDasharray="6 6"
+              className="transition-all duration-300"
             />
-            {/* Flying electron pulse */}
-            <circle r="4" fill="#00f0ff" className="glow-pulsar" style={{ offsetPath: `path('${d}')`, animation: "pulsar-flow 4s linear infinite" }}>
-              <animateMotion dur="3s" repeatCount="indefinite" path={d} />
-            </circle>
           </g>
         );
       }
+    }
+
+    if (fullChainPath) {
+      const motionDuration = Math.max(4, activeNodes.length * 1.4);
+      paths.push(
+        <circle key={`flow-pulse-${fullChainPath}`} r="4" fill="#00f0ff" className="glow-pulsar">
+          <animateMotion
+            dur={`${motionDuration}s`}
+            repeatCount="indefinite"
+            path={fullChainPath}
+            calcMode="linear"
+            keyPoints="0;1"
+            keyTimes="0;1"
+          />
+        </circle>
+      );
     }
 
     // Draw dashed bypass paths for disabled components
@@ -137,14 +202,14 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
       const current = pipelineSteps[i];
       if (!current.active) {
         // Find preceding active and proceeding active
-        let precedingActive: typeof current | null = null;
+        let precedingActive: (typeof pipelineSteps)[number] | null = null;
         for (let idx = i - 1; idx >= 0; idx--) {
           if (pipelineSteps[idx].active) {
             precedingActive = pipelineSteps[idx];
             break;
           }
         }
-        let proceedingActive: typeof current | null = null;
+        let proceedingActive: (typeof pipelineSteps)[number] | null = null;
         for (let idx = i + 1; idx < pipelineSteps.length; idx++) {
           if (pipelineSteps[idx].active) {
             proceedingActive = pipelineSteps[idx];
@@ -153,11 +218,9 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
         }
 
         if (precedingActive && proceedingActive !== current && proceedingActive.id !== "output") {
-          const fromCoord = getCoordinates(precedingActive.id);
-          const blockCoord = getCoordinates(current.id);
-          if (fromCoord && blockCoord) {
-            const dx = blockCoord.x - fromCoord.x;
-            const pb = `M ${fromCoord.x} ${fromCoord.y} C ${fromCoord.x + dx*0.4} ${fromCoord.y}, ${fromCoord.x + dx*0.6} ${blockCoord.y}, ${blockCoord.x} ${blockCoord.y}`;
+          const points = getConnectionPoints(precedingActive.id, current.id);
+          if (points) {
+            const pb = buildSegmentCurve(points.from, points.to);
             paths.push(
               <path
                 key={`bypass-pre-${current.id}`}
@@ -172,11 +235,9 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
           }
         }
         if (proceedingActive && proceedingActive !== current) {
-          const blockCoord = getCoordinates(current.id);
-          const toCoord = getCoordinates(proceedingActive.id);
-          if (blockCoord && toCoord) {
-            const dx = toCoord.x - blockCoord.x;
-            const pa = `M ${blockCoord.x} ${blockCoord.y} C ${blockCoord.x + dx*0.4} ${blockCoord.y}, ${blockCoord.x + dx*0.6} ${toCoord.y}, ${toCoord.x} ${toCoord.y}`;
+          const points = getConnectionPoints(current.id, proceedingActive.id);
+          if (points) {
+            const pa = buildSegmentCurve(points.from, points.to);
             paths.push(
               <path
                 key={`bypass-post-${current.id}`}
@@ -330,7 +391,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
       {/* Node Stage Grid Workspace Canvas */}
       <div
         ref={containerRef}
-        className="relative flex-1 min-h-[350px] bg-slate-950 p-4 md:p-6 flex flex-col justify-center select-none overflow-visible"
+        className="relative flex-1 min-h-[420px] bg-slate-950 p-4 md:p-6 flex flex-col justify-center select-none overflow-visible"
         style={{
           backgroundImage: `
             radial-gradient(ellipse at center, rgba(30, 41, 59, 0.4) 0%, transparent 80%),
@@ -343,7 +404,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
         {renderSVGConnections()}
 
         {/* 3 Main Tiers horizontally arranged */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-y-6 md:gap-3 relative z-10 items-center justify-between h-full min-w-[620px]">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-y-6 md:gap-3 relative z-10 items-center justify-between h-full w-full min-w-0 md:min-w-[720px]">
           
           {/* Column 1: Model Source Input Model (Cols 1-3) */}
           <div className="md:col-span-3 flex flex-col justify-center items-center h-full">
@@ -357,7 +418,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                 <button
                   id="node-btn-input"
                   onClick={() => handleNodeClick("input")}
-                  className={`group w-full max-w-[200px] text-left p-4 rounded-xl border transition-all duration-300 relative ${
+                  className={`group w-full max-w-[240px] text-left p-4 rounded-xl border transition-all duration-300 relative ${
                     isSelected 
                     ? "border-indigo-500 bg-indigo-950/20 ring-1 ring-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.25)]" 
                     : "border-slate-800 hover:border-slate-700 bg-slate-900/60 shadow-lg"
@@ -440,7 +501,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                   <button
                     id="node-btn-provider"
                     onClick={() => handleNodeClick("provider")}
-                    className={`group w-full max-w-[200px] text-left p-3.5 rounded-xl border transition-all duration-300 relative ${
+                    className={`group w-full max-w-[240px] text-left p-3.5 rounded-xl border transition-all duration-300 relative ${
                       isSelected 
                       ? "border-fuchsia-500 bg-fuchsia-950/20 ring-1 ring-fuchsia-500 shadow-[0_0_20px_rgba(217,70,239,0.25)]" 
                       : "border-slate-800 hover:border-slate-700 bg-slate-900/60 shadow-lg"
@@ -470,7 +531,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                   <button
                     id="node-btn-output"
                     onClick={() => handleNodeClick("output")}
-                    className={`group w-full max-w-[200px] text-left p-3.5 rounded-xl border transition-all duration-300 relative ${
+                    className={`group w-full max-w-[240px] text-left p-3.5 rounded-xl border transition-all duration-300 relative ${
                       isSelected 
                       ? "border-emerald-500 bg-emerald-950/20 ring-1 ring-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.25)]" 
                       : "border-slate-800 hover:border-slate-700 bg-slate-900/60 shadow-lg"

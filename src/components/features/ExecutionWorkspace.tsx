@@ -1,12 +1,11 @@
 import { useState, useRef } from "react";
-import { Card, CardContent, CardHeader, Button, Tabs, TabsList, TabsTrigger, TabsContent, Input, Label, Select } from "@/components/ui";
+import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState, IHVProvider } from "@/types";
-import { Code, Play, CheckCircle2, AlertCircle, Copy, Check, Upload, FileJson, X, Github, Sparkles, ArrowUpRight, Search, BookOpen, Workflow, GitBranch, GitPullRequest, Globe, RefreshCw, AlertTriangle, Send, Bot, User, Trash2, HelpCircle, Download, Laptop, Smartphone, FileCode, Sliders, Cpu, Settings } from "lucide-react";
+import { Code, Play, CheckCircle2, AlertCircle, Copy, Check, Upload, FileJson, X, Github, Sparkles, ArrowUpRight, Search, BookOpen, Workflow, GitBranch, GitPullRequest, Globe, RefreshCw, Trash2, Download, Laptop, Smartphone, FileCode, Sliders, Cpu, Settings } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import JSZip from "jszip";
-import { PerformanceMetrics } from "./PerformanceMetrics";
-
 import { RecipeGraphView } from "./RecipeGraphView";
+import { cn } from "@/lib/utils";
 
 export const SUGGESTED_RECIPES = [
   {
@@ -739,188 +738,6 @@ ${owrPlatform === "web" ?
     }
   };
 
-  // Gemini AI Companion states
-  const [activeAssistantTab, setActiveAssistantTab] = useState<"validation" | "chat">("validation");
-  const [validationResult, setValidationResult] = useState<any>(null);
-  const [isValidating, setIsValidating] = useState(false);
-  const [validationError, setValidationError] = useState("");
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: "user" | "assistant"; text: string; timestamp: Date }>>([
-    {
-      sender: "assistant",
-      text: "Hello! I am your **Olive AI Assistant**. I have deep expertise in Microsoft Olive compiling pipelines, quantization strategies (GPTQ, AWQ, PTQ), PEFT fine-tuning adapters (LoRA/QLoRA), ONNX runtimes, and DirectML optimization.\n\nAsk me any question or click **AI Recipe Validation** to run a comprehensive compiler audit of your live flow model diagram!",
-      timestamp: new Date()
-    }
-  ]);
-  const [currentQuestion, setCurrentQuestion] = useState("");
-  const [isChatting, setIsChatting] = useState(false);
-  const [chatError, setChatError] = useState("");
-
-  // Simple Markdown & Code-block Formatter
-  const renderMarkdown = (text: string) => {
-    const parts = text.split(/(```[\s\S]*?```)/g);
-    return parts.map((part, index) => {
-      if (part.startsWith("```") && part.endsWith("```")) {
-        const lines = part.split("\n");
-        const content = lines.slice(1, -1).join("\n");
-        return (
-          <pre key={index} className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-[10px] sm:text-[11px] text-emerald-400 font-mono my-2 overflow-x-auto whitespace-pre-wrap">
-            {content}
-          </pre>
-        );
-      }
-      
-      const lines = part.split("\n");
-      return lines.map((line, lineIdx) => {
-        let isBullet = false;
-        let cleanLine = line;
-        if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
-          isBullet = true;
-          cleanLine = line.trim().substring(2);
-        }
-        
-        const elements: any[] = [];
-        const boldParts = cleanLine.split(/(\*\*.*?\*\*|`.*?`)/g);
-        boldParts.forEach((bp, bpIdx) => {
-          if (bp.startsWith("**") && bp.endsWith("**")) {
-            elements.push(<strong key={bpIdx} className="font-bold text-slate-100">{bp.slice(2, -2)}</strong>);
-          } else if (bp.startsWith("`") && bp.endsWith("`")) {
-            elements.push(<code key={bpIdx} className="bg-slate-1000 border border-slate-850 px-1.5 py-0.5 rounded text-[11px] font-mono text-cyan-400">{bp.slice(1, -1)}</code>);
-          } else {
-            elements.push(bp);
-          }
-        });
-
-        if (isBullet) {
-          return (
-            <li key={`${index}-${lineIdx}`} className="ml-4 list-disc text-xs text-slate-300 leading-relaxed my-1">
-              {elements}
-            </li>
-          );
-        }
-        
-        if (line.trim().startsWith("### ")) {
-          return <h4 key={`${index}-${lineIdx}`} className="text-xs font-bold text-indigo-400 mt-3 mb-1.5 uppercase hover:text-indigo-300 tracking-wider font-mono">{line.trim().substring(4)}</h4>;
-        }
-        if (line.trim().startsWith("## ")) {
-          return <h3 key={`${index}-${lineIdx}`} className="text-sm font-bold text-slate-100 mt-4 mb-2 border-b border-slate-800/85 pb-1 font-sans">{line.trim().substring(3)}</h3>;
-        }
-
-        return (
-          <p key={`${index}-${lineIdx}`} className="text-xs text-slate-300 leading-relaxed min-h-[0.5rem] my-1">
-            {elements}
-          </p>
-        );
-      });
-    });
-  };
-
-  const handleApplyValidationFix = (issueTitle: string) => {
-    const title = issueTitle.toLowerCase();
-    const pState = { ...state.passes };
-    const newState: Partial<UIState> = {};
-
-    if (title.includes("quantization") || title.includes("quantize")) {
-      pState.quantization = true;
-      if (title.includes("int4") || title.includes("4-bit")) {
-        pState.quantPrecision = "int4";
-      } else if (title.includes("int8") || title.includes("8-bit")) {
-        pState.quantPrecision = "int8";
-      }
-      newState.passes = pState;
-    } else if (title.includes("cuda") || title.includes("gpu")) {
-      newState.ihvProvider = "CUDAExecutionProvider";
-    } else if (title.includes("tensorrt")) {
-      newState.ihvProvider = "TensorrtExecutionProvider";
-    } else if (title.includes("openvino")) {
-      newState.ihvProvider = "OpenVINOExecutionProvider";
-    } else if (title.includes("qnn")) {
-      newState.ihvProvider = "QNNExecutionProvider";
-    } else if (title.includes("rocm")) {
-      newState.ihvProvider = "ROCMExecutionProvider";
-    } else if (title.includes("cpu")) {
-      newState.ihvProvider = "CPUExecutionProvider";
-    } else if (title.includes("transform") || title.includes("ort optimize")) {
-      pState.onnxTransforms = true;
-      newState.passes = pState;
-    } else if (title.includes("pruning") || title.includes("prune")) {
-      pState.pruning = true;
-      newState.passes = pState;
-    } else if (title.includes("conversion") || title.includes("convert")) {
-      pState.conversion = true;
-      newState.passes = pState;
-    }
-
-    setState(newState);
-  };
-
-  const handleRunValidation = async () => {
-    setIsValidating(true);
-    setValidationError("");
-    try {
-      const response = await fetch("/api/ai/validate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          recipeJson: JSON.stringify(recipe, null, 2),
-          ihvProvider: state.ihvProvider
-        })
-      });
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `HTTP ${response.status} Failed to run AI audit.`);
-      }
-      const data = await response.json();
-      setValidationResult(data);
-    } catch (err: any) {
-      console.error(err);
-      setValidationError(err.message || "No AI provider configured. Use the 'AI AUDIT' button in the header to set an API key.");
-    } finally {
-      setIsValidating(false);
-    }
-  };
-
-  const handleSendChat = async () => {
-    if (!currentQuestion.trim()) return;
-    
-    const userMsg = { sender: "user" as const, text: currentQuestion, timestamp: new Date() };
-    const updatedMessages = [...chatMessages, userMsg];
-    setChatMessages(updatedMessages);
-    
-    const queryText = currentQuestion;
-    setCurrentQuestion("");
-    setIsChatting(true);
-    setChatError("");
-
-    try {
-      const response = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: queryText,
-          context: { passes: state.passes, ihvProvider: state.ihvProvider, recipeJson: JSON.stringify(recipe, null, 2) },
-          chatHistory: chatMessages.map(m => ({ role: m.sender === "user" ? "user" : "assistant", content: m.text })),
-        })
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `HTTP ${response.status} failed to fetch answer.`);
-      }
-
-      const data = await response.json();
-      setChatMessages(prev => [...prev, {
-        sender: "assistant" as const,
-        text: data.text,
-        timestamp: new Date()
-      }]);
-    } catch (err: any) {
-      console.error(err);
-      setChatError(err.message || "No AI provider configured. Use the 'AI AUDIT' button in the header to set an API key.");
-    } finally {
-      setIsChatting(false);
-    }
-  };
-
   const handleQueueJob = () => {
     const activePassesNames: string[] = [];
     if (state.passes.conversion) activePassesNames.push(`Conversion (${state.passes.conversionFormat === "onnx" ? "ONNX" : "OpenVINO"})`);
@@ -1139,7 +956,7 @@ ${owrPlatform === "web" ?
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
+    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
       
       {/* Export Recipe Overlay */}
       {isExportOpen && (
@@ -1429,7 +1246,7 @@ ${owrPlatform === "web" ?
       })()}
 
       {/* Recipe Preview */}
-      <Card className="flex flex-col h-[calc(100vh-140px)] overflow-hidden">
+      <Card className={cn("flex flex-col overflow-hidden", recipeView === "graph" ? "min-h-[520px]" : "min-h-[420px]")}>
         <CardHeader 
           title="Olive Recipe Definition" 
           description={recipeView === "graph" ? "Interactive graph of the compilation and configuration pipeline." : "The exact JSON schema that will be sent to the Olive Engine."}
@@ -1473,22 +1290,43 @@ ${owrPlatform === "web" ?
           }
         />
         {recipeView === "graph" ? (
-          <CardContent className="flex-1 overflow-hidden p-0">
+          <CardContent className="flex-1 overflow-hidden p-0 min-h-[420px]">
             <RecipeGraphView state={state} setState={setState} />
           </CardContent>
         ) : (
-          <CardContent className="flex-1 overflow-auto bg-slate-950 p-4 m-6 mt-0 rounded-lg border border-slate-800">
+          <CardContent className="flex-1 overflow-auto bg-slate-950 p-4 m-6 mt-0 rounded-lg border border-slate-800 min-h-[360px]">
             <pre className="text-xs font-mono text-emerald-400">
               {JSON.stringify(recipe, null, 2)}
             </pre>
           </CardContent>
         )}
-        <div className="p-6 pt-0 mt-auto border-t border-slate-800 flex justify-between items-center bg-slate-900/50 gap-2 flex-wrap sm:flex-nowrap">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            <span className="text-xs sm:text-sm font-medium text-slate-300">Schema Validated</span>
+      </Card>
+
+      {/* Execution Controls */}
+      <Card className="border-slate-800 bg-slate-900/40">
+        <CardContent className="p-4 flex justify-between items-center gap-3 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              <span className="text-xs sm:text-sm font-medium text-slate-300">Schema Validated</span>
+            </div>
+            {executionStatus === "running" && (
+              <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-2.5 py-1 rounded-full font-bold animate-pulse">
+                <RefreshCw className="h-3 w-3 animate-spin" /> Running
+              </span>
+            )}
+            {executionStatus === "completed" && (
+              <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full font-bold">
+                <CheckCircle2 className="h-3 w-3" /> Done
+              </span>
+            )}
+            {executionStatus === "failed" && (
+              <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded-full font-bold">
+                <AlertCircle className="h-3 w-3" /> Failed
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-auto">
             {justQueued ? (
               <span className="text-xs text-electric-blue font-semibold animate-pulse font-mono mr-2">✓ Queued to Batch!</span>
             ) : (
@@ -1509,322 +1347,27 @@ ${owrPlatform === "web" ?
               )}
             </Button>
           </div>
-        </div>
+        </CardContent>
       </Card>
 
-
-      {/* Analytics / Real-time Execution Tracking */}
-      <div className="space-y-6 overflow-auto">
-        
-
-
-        {/* AI Copilot Workspace */}
-        <Card className="border-electric-blue/30 bg-slate-900/60 overflow-hidden">
-          <CardHeader
-            title="AI Copilot"
-            description="Pipeline audit, hardware compatibility checks, and Olive compiler advice."
-            badge={
-              <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-2.5 py-1 font-bold">
-                <Bot className="h-3 w-3 text-electric-blue" />
-                AI Copilot
-              </span>
-            }
-          />
-          <CardContent className="space-y-4">
-            <Tabs value={activeAssistantTab} onValueChange={(val) => setActiveAssistantTab(val as any)} className="w-full">
-              <TabsList className="grid grid-cols-2 bg-slate-950 p-1 border border-slate-800 rounded-lg mb-4 shrink-0">
-                <TabsTrigger value="validation" className="text-xs py-1.5 flex items-center justify-center gap-2 cursor-pointer">
-                  <CheckCircle2 className="h-3.5 w-3.5 animate-none text-emerald-500" /> Recipe Audit
-                </TabsTrigger>
-                <TabsTrigger value="chat" className="text-xs py-1.5 flex items-center justify-center gap-2 cursor-pointer">
-                  <Bot className="h-3.5 w-3.5 text-indigo-400" /> Assistant Chat
-                </TabsTrigger>
-              </TabsList>
-
-              {/* TAB 1: validation */}
-              <TabsContent value="validation" className="space-y-4">
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between pb-1 border-b border-slate-800/60">
-                    <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Automated Recipe Diagnostics</span>
-                    <span className="text-[10px] text-slate-400 font-medium">Model: {state.hfModelId ? "HF Target" : "Generic PyTorch"}</span>
-                  </div>
-
-                  {!validationResult && !isValidating && (
-                    <div className="text-center py-8 px-4 bg-slate-950/35 border border-dashed border-slate-800 rounded-lg mt-1">
-                      <HelpCircle className="h-8 w-8 text-slate-600 mx-auto mb-2" />
-                      <p className="text-xs font-bold text-slate-300">Run Deep Pipeline Audit</p>
-                      <p className="text-[11px] text-slate-500 max-w-xs mx-auto mt-1 leading-normal">
-                        Let Gemini validate compile parameters, detect hardware mismatch risks, or pinpoint accuracy decay before trigger.
-                      </p>
-                    </div>
-                  )}
-
-                  {isValidating && (
-                    <div className="text-center py-12 bg-slate-950/50 border border-slate-800 rounded-lg flex flex-col items-center justify-center">
-                      <RefreshCw className="h-8 w-8 text-electric-blue animate-spin mb-3" />
-                      <p className="text-xs font-medium text-slate-300">Compiling Recipe Context...</p>
-                      <p className="text-[10px] text-slate-500 mt-1 font-mono tracking-tight animate-pulse">Invoking Gemini Pipeline Expert...</p>
-                    </div>
-                  )}
-
-                  {validationError && (
-                    <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-lg text-xs text-rose-300 flex items-start gap-2.5">
-                      <AlertTriangle className="h-4 w-4 text-rose-500 shrink-0 mt-0.5 animate-bounce" />
-                      <div>
-                        <span className="font-bold block text-rose-200">Diagnostics Offline</span>
-                        {validationError}. Please check your connection or wait.
-                      </div>
-                    </div>
-                  )}
-
-                  {validationResult && !isValidating && (
-                    <div className="space-y-4">
-                      {/* Overall Verdict */}
-                      <div className={`p-3.5 rounded-lg border ${
-                        validationResult.severity === "success" 
-                          ? "bg-emerald-500/5 border-emerald-500/20" 
-                          : validationResult.severity === "error"
-                          ? "bg-rose-500/10 border-rose-500/30"
-                          : "bg-amber-500/5 border-amber-500/20"
-                      }`}>
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className={`h-2 w-2 rounded-full ${
-                            validationResult.severity === "success" 
-                              ? "bg-emerald-500 animate-ping" 
-                              : validationResult.severity === "error"
-                              ? "bg-rose-500 animate-pulse"
-                              : "bg-amber-500"
-                          }`} />
-                          <h4 className={`text-xs font-bold uppercase tracking-wider ${
-                            validationResult.severity === "success" 
-                              ? "text-emerald-400" 
-                              : validationResult.severity === "error"
-                              ? "text-rose-400"
-                              : "text-amber-400"
-                          }`}>
-                            {validationResult.severity === "success" ? "Valid Pipeline Config" : validationResult.severity === "error" ? "Execution Failure Risk" : "Optimization Warnings"}
-                          </h4>
-                        </div>
-                        <p className="text-xs text-slate-200 leading-normal">{validationResult.summary}</p>
-                      </div>
-
-                      {/* Issues Collated */}
-                      {validationResult.issues && validationResult.issues.length > 0 && (
-                        <div className="space-y-3">
-                          <h5 className="text-[10px] font-mono font-bold tracking-widest text-slate-500 uppercase">Identified Concerns ({validationResult.issues.length})</h5>
-                          <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
-                            {validationResult.issues.map((issue: any, idx: number) => (
-                              <div key={idx} className={`p-3 rounded-lg border text-xs leading-relaxed flex flex-col justify-between gap-2.5 bg-slate-950/40 ${
-                                issue.type === "critical" 
-                                  ? "border-rose-500/35" 
-                                  : issue.type === "warning"
-                                  ? "border-amber-500/25"
-                                  : "border-slate-800"
-                              }`}>
-                                <div>
-                                  <div className="flex items-center gap-1.5 mb-1">
-                                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${issue.type === "critical" ? "bg-rose-500" : issue.type === "warning" ? "bg-amber-500" : "bg-cyan-500"}`} />
-                                    <span className="font-bold text-slate-100">{issue.title}</span>
-                                  </div>
-                                  <p className="text-[11px] text-slate-400 leading-normal">{issue.explanation}</p>
-                                  {issue.fix && (
-                                    <div className="mt-2 text-[10px] p-2 bg-slate-950 border border-slate-900 rounded font-mono text-cyan-400 leading-normal whitespace-pre-wrap">
-                                      Option: {issue.fix}
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex items-center justify-between border-t border-slate-900/50 pt-2 shrink-0">
-                                  <span className="text-[9px] uppercase font-mono tracking-widest text-slate-500">{issue.type} pass</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleApplyValidationFix(issue.title)}
-                                    className="text-[10px] px-2 py-0.5 rounded border border-slate-800 text-electric-blue hover:text-white hover:bg-electric-blue/10 font-medium transition-all cursor-pointer"
-                                  >
-                                    💡 AutoFix Config
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* General Recommendations */}
-                      {validationResult.suggestions && validationResult.suggestions.length > 0 && (
-                        <div className="space-y-2.5 pt-1.5">
-                          <h5 className="text-[10px] font-mono font-bold tracking-widest text-slate-500 uppercase">Compiler Suggestions</h5>
-                          <ul className="space-y-1.5 pl-1">
-                            {validationResult.suggestions.map((s: string, idx: number) => (
-                              <li key={idx} className="text-xs text-slate-300 flex items-start gap-2 leading-relaxed">
-                                <span className="text-indigo-400 font-bold font-mono mt-0.5">·</span>
-                                <span>{s}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="pt-2">
-                    <Button 
-                      onClick={handleRunValidation}
-                      disabled={isValidating}
-                      className="w-full text-xs h-9 bg-slate-950 border border-slate-800 text-slate-200 hover:border-slate-700 hover:bg-slate-900 hover:text-white font-bold"
-                    >
-                      {isValidating ? (
-                        <>
-                          <RefreshCw className="h-3.5 w-3.5 mr-2 animate-spin text-electric-blue" />
-                          Analyzing Recipe...
-                        </>
-                      ) : validationResult ? (
-                        <>
-                          <RefreshCw className="h-3.5 w-3.5 mr-2 text-indigo-400" />
-                          Re-Run AI Validation Audit
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-2 text-emerald-400" />
-                          Trigger Gemini Validation Audit
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </TabsContent>
-
-              {/* TAB 2: chat */}
-              <TabsContent value="chat" className="space-y-4 flex flex-col h-[480px] overflow-hidden">
-                {/* Chat Log Window */}
-                <div className="flex-1 overflow-y-auto pr-1 space-y-3 bg-slate-950/40 border border-slate-800/40 rounded-lg p-3 min-h-[220px]">
-                  {chatMessages.map((msg, idx) => (
-                    <div 
-                      key={idx} 
-                      className={`flex flex-col max-w-[85%] rounded-lg p-3 ${
-                        msg.sender === "user" 
-                          ? "bg-electric-blue/10 border border-electric-blue/20 ml-auto" 
-                          : "bg-slate-900 border border-slate-800 mr-auto"
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 mb-1 pb-1 border-b border-slate-800/60">
-                        {msg.sender === "user" ? (
-                          <>
-                            <User className="h-3 w-3 text-electric-blue" />
-                            <span className="text-[9px] font-mono text-slate-400 font-bold uppercase tracking-wider">User Operator</span>
-                          </>
-                        ) : (
-                          <>
-                            <Bot className="h-3 w-3 text-indigo-400" />
-                            <span className="text-[9px] font-mono text-indigo-400 font-bold uppercase tracking-wider">Olive Compiler Expert</span>
-                          </>
-                        )}
-                      </div>
-                      <div className="space-y-1.5 break-words">
-                        {renderMarkdown(msg.text)}
-                      </div>
-                    </div>
-                  ))}
-
-                  {isChatting && (
-                    <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-3 animate-pulse flex items-center gap-2">
-                      <Bot className="h-3.5 w-3.5 text-indigo-400 animate-spin" />
-                      <span className="text-[10px] font-mono text-indigo-400">Gemini is thinking...</span>
-                    </div>
-                  )}
-
-                  {chatError && (
-                    <div className="p-2.5 bg-rose-500/10 border border-rose-500/35 rounded text-xs text-rose-400">
-                      Error: {chatError}
-                    </div>
-                  )}
-                </div>
-
-                {/* Preconfigured Fast Question Chips */}
-                <div className="space-y-1 shrink-0">
-                  <span className="text-[9px] font-mono tracking-widest font-extrabold text-slate-500 uppercase">Quick Diagnostic Queries</span>
-                  <div className="flex flex-wrap gap-1">
-                    {[
-                      "AWQ vs PTQ?",
-                      "How do I set up DirectML?",
-                      "Are sparsity and SmoothQuant compatible?"
-                    ].map((chip, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => {
-                          setCurrentQuestion(chip);
-                        }}
-                        disabled={isChatting}
-                        className="text-[10px] leading-tight px-2 py-0.5 bg-slate-950/80 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 rounded text-slate-450 hover:text-slate-100 font-medium transition-all cursor-pointer"
-                      >
-                        {chip}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Question form */}
-                <form 
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleSendChat();
-                  }}
-                  className="flex gap-2 pt-1 border-t border-slate-800/50 shrink-0"
-                >
-                  <Input 
-                    placeholder="Ask optimization, hardware compilation, or Olive advice..."
-                    value={currentQuestion}
-                    onChange={(e) => setCurrentQuestion(e.target.value)}
-                    disabled={isChatting}
-                    className="flex-1 h-9 text-xs focus-visible:ring-1 focus-visible:ring-electric-blue/40"
-                  />
-                  <Button 
-                    type="submit" 
-                    variant="default"
-                    disabled={isChatting || !currentQuestion.trim()}
-                    className="h-9 px-3 bg-electric-blue hover:bg-electric-blue/90 font-bold"
-                  >
-                    <Send className="h-3.5 w-3.5 text-white" />
-                  </Button>
-                </form>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader 
-            title="Optimization Logs" 
-            description={executionStatus === "running" ? "Olive is running..." : executionStatus === "completed" ? `Completed (exit 0)` : executionStatus === "failed" ? `Failed (exit ${executionExitCode ?? "?"})` : "Ready"}
-            badge={
-              executionStatus === "running" ? (
-                <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-2.5 py-1 rounded-full font-bold animate-pulse">
-                  <RefreshCw className="h-3 w-3 animate-spin" /> Running
-                </span>
-              ) : executionStatus === "completed" ? (
-                <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full font-bold">
-                  <CheckCircle2 className="h-3 w-3" /> Done
-                </span>
-              ) : executionStatus === "failed" ? (
-                <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded-full font-bold">
-                  <AlertCircle className="h-3 w-3" /> Failed
-                </span>
-              ) : null
-            }
-          />
-          <CardContent>
-            <div className="bg-slate-950 border border-slate-800 rounded-md p-4 font-mono text-xs text-emerald-400 space-y-0.5 h-[200px] overflow-y-auto">
-              {executionLogs.length === 0 ? (
-                <p className="text-slate-500 italic">Ready — click &quot;Execute Live&quot; to begin an Olive optimization run.</p>
-              ) : (
-                executionLogs.map((line, i) => (
-                  <p key={i} className={line.includes("[ERROR]") ? "text-red-400" : line.includes("[SETUP]") ? "text-amber-400" : line.includes("[DONE]") ? "text-emerald-300 font-bold" : "text-emerald-400"}>{line}</p>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Optimization Logs */}
+      <Card>
+        <CardHeader 
+          title="Optimization Logs" 
+          description={executionStatus === "running" ? "Olive is running..." : executionStatus === "completed" ? `Completed (exit 0)` : executionStatus === "failed" ? `Failed (exit ${executionExitCode ?? "?"})` : "Ready"}
+        />
+        <CardContent>
+          <div className="bg-slate-950 border border-slate-800 rounded-md p-4 font-mono text-xs text-emerald-400 space-y-0.5 h-[260px] overflow-y-auto">
+            {executionLogs.length === 0 ? (
+              <p className="text-slate-500 italic">Ready — click &quot;Execute Live&quot; to begin an Olive optimization run.</p>
+            ) : (
+              executionLogs.map((line, i) => (
+                <p key={i} className={line.includes("[ERROR]") ? "text-red-400" : line.includes("[SETUP]") ? "text-amber-400" : line.includes("[DONE]") ? "text-emerald-300 font-bold" : "text-emerald-400"}>{line}</p>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
     </div>
   );
