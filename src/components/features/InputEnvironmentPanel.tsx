@@ -61,8 +61,6 @@ import {
   Cpu,
   History,
   CheckCircle2,
-  Sparkles,
-  BookOpen,
   GitBranch,
   GitPullRequest,
   Globe,
@@ -77,6 +75,14 @@ interface ReconstructedItem {
   finalHash: string;
   chunks: { name: string; size: number; hash: string }[];
   reconstructedAt: string;
+}
+
+function presetDisplayName(name: string): { title: string; meta: string } {
+  const parts = name.split(" · ").map((p) => p.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    return { title: parts[0], meta: parts.slice(1).join(" · ") };
+  }
+  return { title: name, meta: "" };
 }
 
 export function InputEnvironmentPanel({
@@ -693,7 +699,7 @@ export function InputEnvironmentPanel({
       {/* SUCCESS TOAST BANNER */}
       {recipeSuccessMsg && (
         <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-4 rounded-xl flex items-start gap-3 animate-in slide-in-from-top-4 duration-300">
-          <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5 animate-pulse" />
+          <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
           <div className="text-xs sm:text-sm font-medium">
             {recipeSuccessMsg}
           </div>
@@ -701,25 +707,20 @@ export function InputEnvironmentPanel({
       )}
 
       {/* Unified Model Source + Recipe split panel */}
-      <Card className="border-slate-800/80 shadow-lg shadow-indigo-500/[0.02]">
+      <Card className="border-slate-800/80">
         <CardHeader
           title="Model Source & Data"
           description="Start from an Olive recipe preset or configure Hugging Face, local, and Azure sources directly."
-          badge={
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-400">
-              <BookOpen className="h-4 w-4" />
-            </div>
-          }
         />
         <CardContent>
           {recipeRailCollapsed && (
-            <div className="mb-6 flex flex-col gap-3 rounded-xl border border-indigo-500/25 bg-indigo-500/5 p-4 sm:flex-row sm:items-center sm:justify-between animate-in fade-in duration-200">
+            <div className="mb-6 flex flex-col gap-3 rounded border border-electric-blue/25 bg-electric-blue/5 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-400">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-electric-blue/15 text-electric-blue">
                   <CheckCircle2 className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-indigo-400">
+                  <p className="text-xs text-electric-blue font-medium">
                     Applied recipe
                   </p>
                   <p className="truncate text-sm font-semibold text-slate-200" title={appliedRecipeLabel ?? undefined}>
@@ -732,7 +733,7 @@ export function InputEnvironmentPanel({
               </div>
               <Button
                 type="button"
-                className="h-8 shrink-0 self-start px-3 text-[11px] bg-indigo-600 hover:bg-indigo-500 text-white sm:self-center"
+                className="h-8 shrink-0 self-start px-3 text-[11px] bg-electric-blue hover:bg-electric-blue-dark text-white sm:self-center"
                 onClick={() => {
                   setRecipeRailExpanded(true);
                   setActiveRecipeTab("starter");
@@ -752,8 +753,7 @@ export function InputEnvironmentPanel({
             {!recipeRailCollapsed && (
             <aside className="min-w-0 shrink-0 xl:w-1/2">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-400">
-                  <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                <h3 className="text-sm font-medium text-slate-400">
                   Recipes
                 </h3>
                 {appliedRecipeLabel && (
@@ -776,11 +776,11 @@ export function InputEnvironmentPanel({
           >
             <TabsList className="grid w-full grid-cols-3 h-auto rounded-lg p-1 bg-slate-950 border border-slate-900 mb-4">
               <TabsTrigger value="starter" className="text-[10px] sm:text-xs py-1.5 px-1.5 sm:px-2 rounded-md cursor-pointer">
-                <Activity className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 text-indigo-400" />
+                <Activity className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 text-electric-blue" />
                 Presets
               </TabsTrigger>
               <TabsTrigger value="github" className="text-[10px] sm:text-xs py-1.5 px-1.5 sm:px-2 rounded-md cursor-pointer">
-                <Globe className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 text-cyan-400" />
+                <Globe className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 text-electric-blue" />
                 GitHub
               </TabsTrigger>
               <TabsTrigger value="editor" className="text-[10px] sm:text-xs py-1.5 px-1.5 sm:px-2 rounded-md cursor-pointer">
@@ -811,7 +811,7 @@ export function InputEnvironmentPanel({
                     </p>
                     {hardwareProbeLoading ? (
                       <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-400" />
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-electric-blue" />
                         Probing this machine…
                       </p>
                     ) : hardwareProbe ? (
@@ -837,7 +837,7 @@ export function InputEnvironmentPanel({
                         type="checkbox"
                         checked={hideIncompatibleRecipes}
                         onChange={(e) => setHideIncompatibleRecipes(e.target.checked)}
-                        className="rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-indigo-500/40"
+                        className="rounded border-slate-700 bg-slate-950 text-electric-blue focus:ring-electric-blue/40"
                       />
                       Hide incompatible
                     </label>
@@ -861,7 +861,7 @@ export function InputEnvironmentPanel({
                       </p>
                       {localHintsLoading ? (
                         <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-400" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-electric-blue" />
                           Reading upload…
                         </p>
                       ) : localModelHints ? (
@@ -891,7 +891,7 @@ export function InputEnvironmentPanel({
                           type="checkbox"
                           checked={showLocalRecipeMatchesOnly}
                           onChange={(e) => setShowLocalRecipeMatchesOnly(e.target.checked)}
-                          className="rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-indigo-500/40"
+                          className="rounded border-slate-700 bg-slate-950 text-electric-blue focus:ring-electric-blue/40"
                         />
                         Matches only
                       </label>
@@ -951,95 +951,45 @@ export function InputEnvironmentPanel({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 max-h-[420px] overflow-y-auto pr-1">
+              <div className="max-h-[420px] overflow-y-auto rounded border border-slate-800 divide-y divide-slate-800/80">
                 {curatedRecipesWithMatch.map(({ item, match, hardware }) => {
                   const hwBlocked = hardware.tier === "unavailable";
-                  return (
-                  <div
-                    key={item.repoPath}
-                    title={hardware.reason}
-                    className={cn(
-                      "p-4 rounded-xl border bg-slate-950/45 transition-all flex flex-col justify-between h-full group gap-3 text-left",
-                      hardware.tier === "compatible"
-                        ? "border-emerald-500/20 hover:border-emerald-500/35"
-                        : hardware.tier === "unavailable"
-                          ? "border-rose-500/25 bg-rose-500/[0.02] opacity-90"
-                          : "border-slate-900 hover:border-indigo-500/25",
-                      match?.tier === "match" && hardware.tier === "compatible" && "bg-emerald-500/[0.03]",
-                    )}
-                  >
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-1 flex-wrap">
-                        <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/10">
-                          {item.architecture}
-                        </span>
-                        <div className="flex items-center gap-1 flex-wrap justify-end">
-                          <span
-                            className={cn(
-                              "text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded border",
-                              hardware.tier === "compatible" && "bg-emerald-500/10 text-emerald-400 border-emerald-500/25",
-                              hardware.tier === "unavailable" && "bg-rose-500/10 text-rose-400 border-rose-500/25",
-                              hardware.tier === "unknown" && "bg-slate-800/80 text-slate-500 border-slate-700/60",
-                            )}
-                            title={hardware.reason}
-                          >
-                            {hardware.tier === "compatible"
-                              ? "Runs on this PC"
-                              : hardware.tier === "unavailable"
-                                ? "Incompatible"
-                                : "Unverified"}
-                          </span>
-                          {localModelHints && match && (
-                            <span
-                              className={cn(
-                                "text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded border",
-                                match.tier === "match" && "bg-emerald-500/10 text-emerald-400 border-emerald-500/25",
-                                match.tier === "possible" && "bg-amber-500/10 text-amber-300 border-amber-500/25",
-                                match.tier === "none" && "bg-slate-800/80 text-slate-500 border-slate-700/60",
-                              )}
-                            >
-                              {match.tier === "match"
-                                ? "Matches upload"
-                                : match.tier === "possible"
-                                  ? "Possible match"
-                                  : "No match"}
-                            </span>
-                          )}
-                          {item.metadataSource !== "recipe" && (
-                            <span
-                              className="text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20"
-                              title="Architecture and device tags are inferred from folder names, not parsed from the recipe JSON."
-                            >
-                              Approx. metadata
-                            </span>
-                          )}
-                          <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/10">
-                            {item.device}
-                          </span>
-                        </div>
-                      </div>
-                      <h4 className="text-sm font-semibold text-slate-200 group-hover:text-indigo-400 transition-colors">
-                        {item.name}
-                      </h4>
-                      <p className="text-xs text-slate-400 leading-normal line-clamp-2">
-                        {item.description}
-                      </p>
-                      {hardware.tier === "unavailable" && (
-                        <p className="text-[10px] text-rose-400/90 leading-relaxed line-clamp-2">
-                          {hardware.reason}
-                        </p>
-                      )}
-                    </div>
+                  const { title, meta } = presetDisplayName(item.name);
+                  const statusParts: string[] = [];
+                  if (hardware.tier === "compatible") statusParts.push("Compatible");
+                  else if (hardware.tier === "unavailable") statusParts.push("Incompatible");
+                  else statusParts.push("Unverified");
+                  if (localModelHints && match?.tier === "match") statusParts.push("Matches upload");
+                  else if (localModelHints && match?.tier === "possible") statusParts.push("Possible match");
+                  if (item.metadataSource !== "recipe") statusParts.push("Approx. metadata");
 
-                    <div className="flex justify-between items-center pt-3 border-t border-slate-900 mt-auto gap-2">
-                      <span className="text-[10px] font-mono text-slate-500 truncate min-w-0">
-                        {item.device} · {item.repoPath.split("/").slice(-2, -1)[0] ?? item.repoPath}
-                      </span>
-                      <div className="flex gap-2 shrink-0">
+                  return (
+                    <div
+                      key={item.repoPath}
+                      title={hardware.reason}
+                      className={cn(
+                        "px-3 py-2.5 flex items-start gap-3 text-left",
+                        hwBlocked && "opacity-90",
+                      )}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <h4 className="text-sm font-medium text-slate-200">{title}</h4>
+                          {meta && <span className="text-xs text-slate-500">{meta}</span>}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{item.description}</p>
+                        <p className="text-[11px] text-slate-600 mt-1">
+                          {statusParts.join(" · ")} · {item.device} · {item.architecture}
+                        </p>
+                        {hwBlocked && (
+                          <p className="text-[11px] text-rose-400/80 mt-0.5 line-clamp-1">{hardware.reason}</p>
+                        )}
+                      </div>
+                      <div className="flex gap-1.5 shrink-0 pt-0.5">
                         <Button
                           variant="outline"
                           type="button"
-                          className="h-7 px-2.5 text-[10px] bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
+                          className="h-7 px-2 text-[10px] bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
                           disabled={applyingRecipePath === item.repoPath}
                           onClick={async () => {
                             try {
@@ -1052,21 +1002,18 @@ export function InputEnvironmentPanel({
                             }
                           }}
                         >
-                          Load JSON
+                          JSON
                         </Button>
                         {hwBlocked ? (
                           <Button
                             type="button"
                             variant="outline"
-                            className="h-7 px-2.5 text-[10px] border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
+                            className="h-7 px-2 text-[10px] border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
                             disabled={applyingRecipePath === item.repoPath}
                             onClick={() => handleApplyCuratedRecipeAnyway(item)}
                           >
                             {applyingRecipePath === item.repoPath ? (
-                              <>
-                                <Loader2 className="h-3 w-3 mr-1 animate-spin inline" />
-                                Loading
-                              </>
+                              <Loader2 className="h-3 w-3 animate-spin" />
                             ) : (
                               "Apply anyway"
                             )}
@@ -1074,29 +1021,25 @@ export function InputEnvironmentPanel({
                         ) : (
                           <Button
                             type="button"
-                            className="h-7 px-2.5 text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white font-bold"
+                            className="h-7 px-2.5 text-[10px] bg-electric-blue hover:bg-electric-blue-dark text-white"
                             disabled={applyingRecipePath === item.repoPath}
                             onClick={() => handleApplyCuratedRecipe(item)}
                           >
                             {applyingRecipePath === item.repoPath ? (
-                              <>
-                                <Loader2 className="h-3 w-3 mr-1 animate-spin inline" />
-                                Loading
-                              </>
+                              <Loader2 className="h-3 w-3 animate-spin" />
                             ) : (
-                              "Apply Recipe"
+                              "Apply"
                             )}
                           </Button>
                         )}
                       </div>
                     </div>
-                  </div>
                   );
                 })}
 
                 {curatedRecipesWithMatch.length === 0 && (
-                  <div className="lg:col-span-2 p-6 text-center bg-slate-950/20 rounded-lg border border-slate-900 border-dashed">
-                    <Search className="h-6 w-6 text-slate-700 mx-auto mb-2 animate-pulse" />
+                  <div className="p-6 text-center">
+                    <Search className="h-6 w-6 text-slate-700 mx-auto mb-2" />
                     <p className="text-xs font-semibold text-slate-400">
                       {showLocalRecipeMatchesOnly && localModelHints
                         ? "No presets match your local upload with current filters"
@@ -1121,7 +1064,7 @@ export function InputEnvironmentPanel({
               <div className="space-y-3 bg-slate-950/30 p-3 rounded-xl border border-slate-900 max-h-[420px] overflow-y-auto">
                   <div className="space-y-2">
                     <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                      <Globe className="h-3.5 w-3.5 text-indigo-400" />
+                      <Globe className="h-3.5 w-3.5 text-electric-blue" />
                       GitHub Repository URL (Public)
                     </Label>
                     <Input
@@ -1136,7 +1079,7 @@ export function InputEnvironmentPanel({
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                        <GitBranch className="h-3.5 w-3.5 text-cyan-400" />
+                        <GitBranch className="h-3.5 w-3.5 text-electric-blue" />
                         Target Branch
                       </Label>
                       <Input
@@ -1170,7 +1113,7 @@ export function InputEnvironmentPanel({
                     type="button"
                     onClick={handleFetchRemote}
                     disabled={syncStatus === "loading" || !repoUrl.trim()}
-                    className="w-full text-xs h-9 bg-indigo-600 hover:bg-indigo-500 text-white"
+                    className="w-full text-xs h-9 bg-electric-blue hover:bg-electric-blue-dark text-white"
                   >
                     {syncStatus === "loading" ? (
                       <>
@@ -1232,9 +1175,9 @@ export function InputEnvironmentPanel({
                           setSyncStatus("idle");
                           setSyncError("");
                         }}
-                        className="text-left p-2.5 bg-slate-950/80 hover:bg-slate-950 border border-slate-900 hover:border-indigo-500/20 hover:text-white rounded-lg text-xs text-slate-300 transition-all font-sans cursor-pointer group"
+                        className="text-left p-2.5 bg-slate-950/80 hover:bg-slate-950 border border-slate-900 hover:border-electric-blue/20 hover:text-white rounded-lg text-xs text-slate-300 transition-all font-sans cursor-pointer group"
                       >
-                        <span className="font-semibold block text-slate-200 group-hover:text-indigo-400 transition-colors">
+                        <span className="font-semibold block text-slate-200 group-hover:text-electric-blue transition-colors">
                           {sc.label}
                         </span>
                         <span className="text-[10px] text-slate-500 block truncate font-mono mt-0.5">
@@ -1258,7 +1201,7 @@ export function InputEnvironmentPanel({
 
                 <div className="relative flex flex-col min-h-[180px]">
                   <textarea
-                    className="w-full flex-1 bg-slate-950 border border-slate-900 hover:border-slate-800 focus:border-indigo-500 rounded-lg p-3 font-mono text-[11px] text-slate-300 focus-visible:outline-none focus:focus-visible:ring-1 focus-visible:ring-indigo-500/40 placeholder:text-slate-700 resize-none h-[180px]"
+                    className="w-full flex-1 bg-slate-950 border border-slate-900 hover:border-slate-800 focus:border-electric-blue rounded-lg p-3 font-mono text-[11px] text-slate-300 focus-visible:outline-none focus:focus-visible:ring-1 focus-visible:ring-electric-blue/40 placeholder:text-slate-700 resize-none h-[180px]"
                     placeholder={`{\n  "input_model": {\n    "type": "PyTorchModel",\n    "config": {\n      "hf_config": {\n        "model_name": "meta-llama/Meta-Llama-3-8B"\n      }\n    }\n  },\n  "passes": {\n    "conversion": { "type": "OnnxConversion" }\n  }\n}`}
                     value={importJson}
                     onChange={(e) => {
@@ -1285,7 +1228,7 @@ export function InputEnvironmentPanel({
                     type="button"
                     onClick={() => handleImport(false)}
                     disabled={!importJson.trim()}
-                    className="text-xs h-8 bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer"
+                    className="text-xs h-8 bg-electric-blue hover:bg-electric-blue-dark text-white cursor-pointer"
                   >
                     <FileJson className="h-3.5 w-3.5 mr-1.5" />
                     Parse & Apply Configuration
@@ -1304,7 +1247,7 @@ export function InputEnvironmentPanel({
                 !recipeRailCollapsed && "border-t border-slate-800/80 pt-6 xl:border-t-0 xl:border-l xl:border-slate-800/80 xl:pl-8 xl:pt-0"
               )}
             >
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-1.5">
+              <h3 className="text-sm font-medium text-slate-400 mb-4 flex items-center gap-1.5">
                 <DownloadCloud className="h-3.5 w-3.5 text-electric-blue" />
                 Source config
               </h3>

@@ -7,7 +7,7 @@ import {
   buildWorkspaceContextSummary,
 } from "@/lib/aiWorkspaceContext";
 import {
-  Sparkles, Bot, Send, X, RefreshCw, Zap, CheckCircle2,
+  Bot, Send, X, RefreshCw, Zap, CheckCircle2,
   AlertTriangle, MessageSquareCode, Lightbulb, Check, Settings2, Key,
 } from "lucide-react";
 
@@ -92,7 +92,7 @@ export function GeminiSidebar({ state, setState, isOpen, onClose, openToAudit, o
   // Chat
   const [chatMessages, setChatMessages] = useState<{ sender: "user" | "assistant"; text: string }[]>([{
     sender: "assistant",
-    text: "Hello! I'm your **Olive AI Copilot**. I read your **live workspace** — model source, IHV target, passes, validation issues, and batch queue — and use that as context for every reply.\n\nUse the quick queries below (they update as you change the pipeline) or ask anything about optimization.",
+    text: "Hello! I'm your **Olive Studio assistant**. I read your **live workspace** — model source, hardware target, passes, validation issues, and batch queue — and use that as context for every reply.\n\nUse the quick queries below (they update as you change the pipeline) or ask anything about optimization.",
   }]);
   const [inputQuestion, setInputQuestion] = useState("");
   const [isChatting, setIsChatting] = useState(false);
@@ -320,7 +320,7 @@ export function GeminiSidebar({ state, setState, isOpen, onClose, openToAudit, o
           else elems.push(bp);
         });
         if (isBullet) return <li key={`${i}-${j}`} className="ml-3.5 list-disc text-xs text-slate-300 leading-relaxed my-0.5">{elems}</li>;
-        if (line.trim().startsWith("### ")) return <h5 key={`${i}-${j}`} className="text-xs font-bold text-indigo-400 mt-2.5 mb-1 uppercase tracking-wider font-mono">{line.trim().substring(4)}</h5>;
+        if (line.trim().startsWith("### ")) return <h5 key={`${i}-${j}`} className="text-xs font-semibold text-electric-blue mt-2.5 mb-1">{line.trim().substring(4)}</h5>;
         if (line.trim().startsWith("## ")) return <h4 key={`${i}-${j}`} className="text-xs font-bold text-slate-100 mt-3 mb-1.5 pb-0.5 border-b border-slate-800/80">{line.trim().substring(3)}</h4>;
         return <p key={`${i}-${j}`} className="text-xs text-slate-300 leading-relaxed my-0.5">{elems}</p>;
       });
@@ -371,13 +371,11 @@ export function GeminiSidebar({ state, setState, isOpen, onClose, openToAudit, o
     >
       <div className="w-[420px] h-full flex flex-col shadow-[-4px_0_24px_rgba(3,7,18,0.25)]">
       {/* Header */}
-      <div className="h-16 flex items-center justify-between px-5 border-b border-slate-800 shrink-0 bg-slate-950/80">
+      <div className="h-12 flex items-center justify-between px-5 border-b border-slate-800 shrink-0 bg-slate-950/80">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="p-1 px-2 bg-electric-blue/10 rounded-full border border-electric-blue/30 flex items-center gap-1.5 shrink-0">
-            <Sparkles className="h-3 w-3 text-electric-blue" />
-            <span className="text-[10px] font-extrabold font-mono text-electric-blue uppercase tracking-widest">AI Copilot</span>
-          </div>
-          <span className="text-[9px] font-mono text-slate-500 truncate">{providerLabel}</span>
+          <Bot className="h-4 w-4 text-electric-blue shrink-0" />
+          <span className="text-sm font-medium text-slate-100">Assistant</span>
+          <span className="text-[11px] text-slate-500 truncate hidden sm:inline">· {providerLabel}</span>
         </div>
         <button onClick={onClose} className="h-8 w-8 rounded-lg hover:bg-slate-800 border border-slate-800/55 flex items-center justify-center text-slate-400 hover:text-slate-100 transition-colors cursor-pointer shrink-0">
           <X className="h-4 w-4" />
@@ -411,8 +409,7 @@ export function GeminiSidebar({ state, setState, isOpen, onClose, openToAudit, o
         {activeTab === "audit" && (
           <div className="space-y-4">
             {analysis && !isAnalyzing && (
-              <div className="bg-slate-950/70 rounded-xl p-4 border border-slate-800 flex items-center gap-4 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-1 bg-indigo-500/10 text-[8px] font-mono uppercase tracking-widest text-indigo-400 border-l border-b border-slate-800 rounded-bl">AI advisory</div>
+              <div className="bg-slate-950/70 rounded border border-slate-800 flex items-center gap-4 p-4">
                 <div className="relative h-16 w-16 shrink-0 flex items-center justify-center">
                   <svg className="w-full h-full transform -rotate-90">
                     <circle cx="32" cy="32" r="28" stroke="currentColor" className="text-slate-800" strokeWidth="4" fill="transparent" />
@@ -422,7 +419,7 @@ export function GeminiSidebar({ state, setState, isOpen, onClose, openToAudit, o
                   <span className="absolute text-sm font-extrabold font-mono text-slate-100">{analysis.score}%</span>
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-100 uppercase tracking-wider">Pipeline Efficiency</h4>
+                  <h4 className="text-sm font-medium text-slate-100">Pipeline efficiency</h4>
                   <div className={`mt-0.5 text-[10px] inline-block px-1.5 py-0.5 rounded font-mono font-bold ${analysis.level === "Optimized" ? "bg-emerald-500/10 text-emerald-400" : analysis.level === "Suboptimal" ? "bg-amber-500/10 text-amber-400" : "bg-rose-500/10 text-rose-400"}`}>
                     {analysis.level} Mode
                   </div>
@@ -435,7 +432,7 @@ export function GeminiSidebar({ state, setState, isOpen, onClose, openToAudit, o
               <div className="text-center py-12 bg-slate-950/30 border border-slate-800 rounded-lg flex flex-col items-center justify-center">
                 <RefreshCw className="h-7 w-7 text-electric-blue animate-spin mb-3" />
                 <p className="text-xs font-medium text-slate-300">Auditing pipeline...</p>
-                <p className="text-[10px] text-slate-500 mt-0.5 font-mono animate-pulse">AI analysis agent inspecting</p>
+                <p className="text-xs text-slate-500 mt-0.5">Inspecting workspace…</p>
               </div>
             )}
 
@@ -444,7 +441,7 @@ export function GeminiSidebar({ state, setState, isOpen, onClose, openToAudit, o
             {analysis && !isAnalyzing && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase font-mono tracking-wider text-slate-500 font-extrabold">Suggestions</span>
+                  <span className="text-xs text-slate-500 font-medium">Suggestions</span>
                   <button onClick={handleRunAnalysis} className="text-[10px] text-electric-blue hover:text-white flex items-center gap-1 cursor-pointer font-bold">
                     <RefreshCw className="h-3 w-3" /> Refresh
                   </button>
@@ -477,7 +474,7 @@ export function GeminiSidebar({ state, setState, isOpen, onClose, openToAudit, o
             )}
 
             <button onClick={handleRunAnalysis} disabled={isAnalyzing} className="w-full h-10 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs text-slate-200 font-bold flex items-center justify-center gap-2 rounded-lg cursor-pointer transition-colors">
-              <RefreshCw className={`h-3.5 w-3.5 text-indigo-400 ${isAnalyzing ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-3.5 w-3.5 text-electric-blue ${isAnalyzing ? "animate-spin" : ""}`} />
               Analyze Optimization Pipeline
             </button>
           </div>
@@ -487,9 +484,7 @@ export function GeminiSidebar({ state, setState, isOpen, onClose, openToAudit, o
         {activeTab === "chat" && (
           <div className="flex flex-col h-full space-y-3">
             <div className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
-              <p className="text-[9px] font-mono uppercase tracking-wider text-slate-500 font-extrabold mb-1">
-                Live workspace
-              </p>
+              <p className="text-xs text-slate-500 mb-1">Live workspace</p>
               <p className="text-[11px] text-slate-300 leading-relaxed font-mono" title={workspaceSummary}>
                 {workspaceSummary}
               </p>
@@ -497,16 +492,16 @@ export function GeminiSidebar({ state, setState, isOpen, onClose, openToAudit, o
             <div className="flex-1 overflow-y-auto space-y-3 p-3 bg-slate-950/50 border border-slate-850 rounded-xl min-h-[350px]">
               {chatMessages.map((msg, i) => (
                 <div key={i} className={`max-w-[90%] p-3 rounded-lg text-xs flex flex-col gap-1 ${msg.sender === "user" ? "bg-electric-blue/10 border border-electric-blue/20 ml-auto" : "bg-slate-900 border border-slate-800 mr-auto"}`}>
-                  <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-extrabold mb-0.5 pb-0.5 border-b border-slate-800/40">
-                    {msg.sender === "user" ? "Operator" : "AI Expert"}
+                  <span className="text-[10px] text-slate-500 mb-0.5 pb-0.5 border-b border-slate-800/40">
+                    {msg.sender === "user" ? "You" : "Assistant"}
                   </span>
                   <div>{renderMessageContent(msg.text)}</div>
                 </div>
               ))}
               {isChatting && (
-                <div className="p-3 bg-slate-900/60 border border-slate-850 rounded-lg animate-pulse flex items-center gap-2">
-                  <Bot className="h-3.5 w-3.5 text-indigo-400 animate-spin" />
-                  <span className="text-[10px] font-mono text-indigo-400">Thinking...</span>
+                <div className="p-3 bg-slate-900/60 border border-slate-850 rounded-lg flex items-center gap-2">
+                  <Bot className="h-3.5 w-3.5 text-electric-blue animate-spin" />
+                  <span className="text-xs text-slate-400">Thinking…</span>
                 </div>
               )}
               {chatError && <ProviderErrorBlock msg={chatError} onGoSettings={() => setActiveTab("settings")} />}
@@ -514,7 +509,7 @@ export function GeminiSidebar({ state, setState, isOpen, onClose, openToAudit, o
             </div>
 
             <div className="space-y-1.5 py-1">
-              <span className="text-[9px] font-mono tracking-wider font-extrabold text-slate-500 uppercase block">Quick queries (from your pipeline)</span>
+              <span className="text-xs text-slate-500 block">Quick queries</span>
               <div className="flex flex-wrap gap-1.5">
                 {presetQueries.map((prompt, i) => (
                   <button

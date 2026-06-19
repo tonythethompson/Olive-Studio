@@ -19,6 +19,8 @@
   /* Olive accent — the actual color the product is named after */
   --color-electric-blue: #8DA840;
   --color-electric-blue-dark: #6B8A28;
+  --color-olive: #8DA840;
+  --color-olive-dark: #6B8A28;
 
   /* Adjusted greens for success states */
   --color-emerald-accent: #7DB060;

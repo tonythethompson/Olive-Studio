@@ -62,3 +62,9 @@ npm run generate:recipes
 ## CI
 
 GitHub Actions (`.github/workflows/ci.yml`) runs typecheck and `npm run validate:recipe` on push/PR.
+
+## License
+
+Copyright © 2026 Anthony Thompson.
+
+Olive Studio is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-or-later). See [LICENSE](LICENSE) for the full text.

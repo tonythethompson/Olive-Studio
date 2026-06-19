@@ -201,7 +201,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
     if (fullChainPath) {
       const motionDuration = Math.max(4, activeNodes.length * 1.4);
       paths.push(
-        <circle key={`flow-pulse-${fullChainPath}`} r="4" fill="#00f0ff" className="glow-pulsar">
+        <circle key={`flow-pulse-${fullChainPath}`} r="4" fill="#8DA840" className="glow-pulsar">
           <animateMotion
             dur={`${motionDuration}s`}
             repeatCount="indefinite"
@@ -276,7 +276,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
         <defs>
           <linearGradient id="wireGradient" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#3b82f6" />
-            <stop offset="50%" stopColor="#00f0ff" />
+            <stop offset="50%" stopColor="#8DA840" />
             <stop offset="100%" stopColor="#10b981" />
           </linearGradient>
         </defs>
@@ -308,8 +308,8 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
         return {
           title: "Base Model Input",
           desc: getSelectedModelName(),
-          icon: <Database className="h-5 w-5 text-indigo-400 group-hover:text-indigo-300" />,
-          colorTheme: "border-indigo-500/30 text-indigo-400 bg-indigo-500/5",
+          icon: <Database className="h-5 w-5 text-electric-blue group-hover:text-electric-blue/80" />,
+          colorTheme: "border-electric-blue/30 text-electric-blue bg-electric-blue/5",
           badge: state.modelSource === "huggingface" ? "Hugging Face" : state.modelSource === "azure" ? "AzureML" : "Local Folder"
         };
       case "splitting":
@@ -324,16 +324,16 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
         return {
           title: "PEFT / LoRA Tuning",
           desc: state.passes.peft ? `${state.passes.peftMethod.toUpperCase()} Adapters` : "Bypassed Baseline",
-          icon: <Layers className="h-5 w-5 text-fuchsia-400 group-hover:text-fuchsia-300" />,
-          colorTheme: state.passes.peft ? "border-fuchsia-500/30 text-fuchsia-400 bg-fuchsia-500/5" : "border-slate-800 text-slate-500",
+          icon: <Layers className="h-5 w-5 text-electric-blue group-hover:text-electric-blue/80" />,
+          colorTheme: state.passes.peft ? "border-electric-blue/30 text-electric-blue bg-electric-blue/5" : "border-slate-800 text-slate-500",
           badge: state.passes.peft ? "Active" : "Skipped"
         };
       case "conversion":
         return {
           title: "Graph Conversion",
           desc: state.passes.conversion ? (state.passes.conversionFormat === "onnx" ? `ONNX Opset ${state.passes.conversionOpset}` : "OpenVINO Engine") : "Bypassed Baseline",
-          icon: <Workflow className="h-5 w-5 text-cyan-400 group-hover:text-cyan-300" />,
-          colorTheme: state.passes.conversion ? "border-cyan-500/30 text-cyan-400 bg-cyan-500/5" : "border-slate-800 text-slate-500",
+          icon: <Workflow className="h-5 w-5 text-electric-blue group-hover:text-electric-blue/80" />,
+          colorTheme: state.passes.conversion ? "border-electric-blue/30 text-electric-blue bg-electric-blue/5" : "border-slate-800 text-slate-500",
           badge: state.passes.conversion ? "Active.onnx" : "Skipped"
         };
       case "pruning":
@@ -348,8 +348,8 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
         return {
           title: "ORT Optimizations",
           desc: state.passes.onnxTransforms ? "Fusion & Fused Kernels" : "Bypassed Baseline",
-          icon: <Layers className="h-5 w-5 text-teal-400 group-hover:text-teal-300" />,
-          colorTheme: state.passes.onnxTransforms ? "border-teal-500/30 text-teal-400 bg-teal-500/5" : "border-slate-800 text-slate-500",
+          icon: <Layers className="h-5 w-5 text-slate-400 group-hover:text-slate-300" />,
+          colorTheme: state.passes.onnxTransforms ? "border-slate-600/50 text-slate-300 bg-slate-800/40" : "border-slate-800 text-slate-500",
           badge: state.passes.onnxTransforms ? "Active" : "Skipped"
         };
       case "quantization":
@@ -364,8 +364,8 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
         return {
           title: "IHV Target Device",
           desc: state.ihvProvider.replace("ExecutionProvider", ""),
-          icon: <Cpu className="h-5 w-5 text-fuchsia-400 group-hover:text-fuchsia-300" />,
-          colorTheme: "border-fuchsia-500/30 text-fuchsia-400 bg-fuchsia-500/5",
+          icon: <Cpu className="h-5 w-5 text-electric-blue group-hover:text-electric-blue/80" />,
+          colorTheme: "border-electric-blue/30 text-electric-blue bg-electric-blue/5",
           badge: "Execution Hardware"
         };
       case "output":
@@ -425,8 +425,8 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
           
           {/* Column 1: Model Source Input Model (Cols 1-3) */}
           <div className="md:col-span-3 flex flex-col justify-center items-center h-full">
-            <div className="text-[10px] font-mono font-semibold uppercase tracking-widest text-indigo-400 mb-3 bg-indigo-500/10 px-2.5 py-0.5 rounded border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.05)]">
-              Input Layer
+            <div className="text-xs text-slate-500 mb-3">
+              Input
             </div>
             {(() => {
               const nd = getNodePreviewData("input");
@@ -437,15 +437,15 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                   onClick={() => handleNodeClick("input")}
                   className={`group w-full max-w-[240px] text-left p-4 rounded-xl border transition-all duration-300 relative ${
                     isSelected 
-                    ? "border-indigo-500 bg-indigo-950/20 ring-1 ring-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.25)]" 
-                    : "border-slate-800 hover:border-slate-700 bg-slate-900/60 shadow-lg"
+                    ? "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue" 
+                    : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <div className="p-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 group-hover:bg-indigo-500/20 transition-all duration-200">
+                    <div className="p-1.5 rounded bg-electric-blue/10 border border-electric-blue/20 group-hover:bg-electric-blue/15 transition-all duration-200">
                       {nd.icon}
                     </div>
-                    <span className="text-[9px] px-2 py-0.5 bg-indigo-950 border border-indigo-500/20 text-indigo-300 rounded font-mono">
+                    <span className="text-[9px] px-2 py-0.5 bg-slate-900 border border-electric-blue/20 text-electric-blue rounded font-mono">
                       {nd.badge}
                     </span>
                   </div>
@@ -458,8 +458,8 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
 
           {/* Column 2: Olive Optimization Steps Carousel Cascades (Cols 4-8) */}
           <div className="md:col-span-6 flex flex-col items-center justify-center gap-4 border-l border-r border-slate-900/30 px-2">
-            <div className="text-[10px] font-mono font-semibold uppercase tracking-widest text-[#00f0ff] mb-1 bg-cyan-500/10 px-2.5 py-0.5 rounded border border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.05)]">
-              Olive Optimizers Chain
+            <div className="text-xs text-slate-500 mb-1">
+              Optimization passes
             </div>
             
             <div className="grid grid-cols-3 gap-2 w-full">
@@ -475,7 +475,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                     onClick={() => handleNodeClick(id)}
                     className={`group text-left p-2 rounded-lg border transition-all duration-300 relative flex flex-col justify-between ${
                       isSelected 
-                      ? "border-cyan-400 bg-cyan-950/20 ring-1 ring-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.25)]" 
+                      ? "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue" 
                       : active
                         ? "border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/60"
                         : "border-slate-900/50 hover:border-slate-800/80 bg-slate-950/60 opacity-60 hover:opacity-85 border-dashed"
@@ -483,12 +483,12 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                   >
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <div className={`p-1 rounded-lg ${active ? "bg-cyan-500/10 border border-cyan-500/20 text-cyan-400" : "bg-slate-950 border border-slate-900 text-slate-500"}`}>
+                        <div className={`p-1 rounded ${active ? "bg-electric-blue/10 border border-electric-blue/20 text-electric-blue" : "bg-slate-950 border border-slate-900 text-slate-500"}`}>
                           {nd.icon}
                         </div>
                         <span className={`text-[8px] font-mono px-1 py-0.2 rounded border uppercase whitespace-nowrap ${
                           active 
-                          ? "bg-slate-950 text-cyan-400 border-cyan-500/20" 
+                          ? "bg-slate-950 text-electric-blue border-electric-blue/20" 
                           : "bg-slate-950 text-slate-600 border-slate-900"
                         }`}>
                           {active ? "Active" : "Skip"}
@@ -508,8 +508,8 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
             
             {/* Accelerator Host Node */}
             <div className="w-full flex flex-col items-center">
-              <div className="text-[10px] font-mono font-semibold uppercase tracking-widest text-fuchsia-400 mb-2.5 bg-fuchsia-500/10 px-2.5 py-0.5 rounded border border-fuchsia-500/20">
-                Target Device
+              <div className="text-xs text-slate-500 mb-2.5">
+                Target device
               </div>
               {(() => {
                 const nd = getNodePreviewData("provider");
@@ -520,12 +520,12 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                     onClick={() => handleNodeClick("provider")}
                     className={`group w-full max-w-[240px] text-left p-3.5 rounded-xl border transition-all duration-300 relative ${
                       isSelected 
-                      ? "border-fuchsia-500 bg-fuchsia-950/20 ring-1 ring-fuchsia-500 shadow-[0_0_20px_rgba(217,70,239,0.25)]" 
-                      : "border-slate-800 hover:border-slate-700 bg-slate-900/60 shadow-lg"
+                      ? "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue" 
+                      : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
-                      <div className="p-1.5 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/20 group-hover:bg-fuchsia-500/20 transition-all duration-200">
+                      <div className="p-1.5 rounded bg-electric-blue/10 border border-electric-blue/20 group-hover:bg-electric-blue/15 transition-all duration-200">
                         {nd.icon}
                       </div>
                     </div>
@@ -538,8 +538,8 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
 
             {/* Output Node */}
             <div className="w-full flex flex-col items-center">
-              <div className="text-[10px] font-mono font-semibold uppercase tracking-widest text-emerald-400 mb-2.5 bg-emerald-500/10 px-2.5 py-0.5 rounded border border-emerald-500/20">
-                Optimized Engine
+              <div className="text-xs text-slate-500 mb-2.5">
+                Output
               </div>
               {(() => {
                 const nd = getNodePreviewData("output");
@@ -550,8 +550,8 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                     onClick={() => handleNodeClick("output")}
                     className={`group w-full max-w-[240px] text-left p-3.5 rounded-xl border transition-all duration-300 relative ${
                       isSelected 
-                      ? "border-emerald-500 bg-emerald-950/20 ring-1 ring-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.25)]" 
-                      : "border-slate-800 hover:border-slate-700 bg-slate-900/60 shadow-lg"
+                      ? "border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500" 
+                      : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
@@ -582,7 +582,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Settings className="h-4 w-4 text-electric-blue" />
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">
+              <span className="text-xs font-medium text-slate-400">
                 Step Inspector: <span className="text-white">{pipelineSteps.find(s => s.id === selectedNodeId)?.label} Config</span>
               </span>
             </div>
@@ -653,7 +653,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <h4 className="text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1">
-                    <Database className="h-3.5 w-3.5 text-indigo-400" />
+                    <Database className="h-3.5 w-3.5 text-electric-blue" />
                     Input Framework Model Source
                   </h4>
                   <p className="text-xs text-slate-400 leading-relaxed">
@@ -714,7 +714,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <h4 className="text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
-                    <Layers className="h-3.5 w-3.5 text-fuchsia-400" />
+                    <Layers className="h-3.5 w-3.5 text-electric-blue" />
                     Parameter-Efficient Fine-Tuning (PEFT)
                   </h4>
                   <p className="text-xs text-slate-400 leading-relaxed">
@@ -739,7 +739,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                       </div>
                       <div className="bg-slate-950 border border-slate-900/60 p-2.5 rounded text-center">
                         <div className="text-[10px] text-slate-500 font-mono uppercase">Trainable Params</div>
-                        <div className="text-xs font-bold text-fuchsia-400 font-mono mt-0.5">~0.08% Coefs</div>
+                        <div className="text-xs font-bold text-electric-blue font-mono mt-0.5">~0.08% Coefs</div>
                       </div>
                     </>
                   ) : (
@@ -756,7 +756,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <h4 className="text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1">
-                    <Workflow className="h-3.5 w-3.5 text-cyan-400" />
+                    <Workflow className="h-3.5 w-3.5 text-electric-blue" />
                     Graph Assembly Compiler Target
                   </h4>
                   <p className="text-xs text-slate-400 leading-relaxed">
@@ -873,7 +873,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <h4 className="text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
-                    <Layers className="h-3.5 w-3.5 text-teal-400" />
+                    <Layers className="h-3.5 w-3.5 text-slate-400" />
                     ONNX Runtime Layout Fusion Operators
                   </h4>
                   <p className="text-xs text-slate-400 leading-relaxed">
@@ -883,8 +883,8 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                 <div className="border-l border-slate-800/50 pl-4 flex flex-col justify-center">
                   {state.passes.onnxTransforms ? (
                     <div className="p-3 bg-slate-950/80 rounded border border-slate-800 flex items-center gap-3">
-                      <div className="p-1.5 rounded-full bg-teal-500/10">
-                        <Check className="h-4 w-4 text-teal-400" />
+                      <div className="p-1.5 rounded-full bg-slate-800/50">
+                        <Check className="h-4 w-4 text-slate-400" />
                       </div>
                       <div className="flex-1">
                         <div className="text-xs font-bold text-slate-200">Active Stage Fusions</div>
@@ -958,7 +958,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <h4 className="text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
-                    <TargetIcon className="h-3.5 w-3.5 text-fuchsia-400" />
+                    <TargetIcon className="h-3.5 w-3.5 text-electric-blue" />
                     Target Hardware System Accelerator
                   </h4>
                   <p className="text-xs text-slate-400 leading-relaxed">
@@ -1013,7 +1013,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                   </div>
                   <div className="bg-slate-950 border border-slate-800 p-2.5 rounded text-center col-span-1">
                     <div className="text-[10px] text-slate-500 font-mono uppercase">Sim. Latency (heuristic)</div>
-                    <div className="text-sm font-bold text-cyan-400/80 font-mono mt-0.5">
+                    <div className="text-sm font-bold text-electric-blue/80 font-mono mt-0.5">
                       {state.passes.quantization 
                         ? state.passes.quantPrecision === "int4" ? "~-84% (est.)" : "~-68% (est.)"
                         : state.passes.pruning ? "~-34% (est.)" : "Not estimated"}

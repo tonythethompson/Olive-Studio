@@ -131,18 +131,18 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
   const PipelineToggle = ({ active, onToggle, icon, title, desc, disabled, reason }: any) => {
     const Icon = icon;
     return (
-      <div className={`flex items-start gap-4 p-4 rounded-lg border transition-all ${disabled ? 'opacity-40 border-slate-900 bg-slate-950/20' : active ? 'border-amber-500/50 bg-amber-500/5' : 'border-slate-800 bg-slate-900/50'}`}>
-        <div className={`mt-0.5 rounded-md p-1.5 ${disabled ? 'bg-slate-950 text-slate-705' : active ? 'bg-amber-500/20 text-amber-500' : 'bg-slate-800 text-slate-400'}`}><Icon className="h-5 w-5" /></div>
+      <div className={`flex items-start gap-4 p-4 rounded border transition-colors ${disabled ? "opacity-40 border-slate-900 bg-slate-950/20" : active ? "border-electric-blue/40 bg-electric-blue/5" : "border-slate-800 bg-slate-900/50"}`}>
+        <div className={`mt-0.5 rounded p-1.5 ${disabled ? "bg-slate-950 text-slate-600" : active ? "bg-electric-blue/15 text-electric-blue" : "bg-slate-800 text-slate-400"}`}><Icon className="h-5 w-5" /></div>
         <div className="flex-1 space-y-1">
           <div className="flex items-center gap-2">
-            <Label className={`text-base font-semibold text-slate-350 ${disabled ? 'text-slate-500 cursor-not-allowed' : 'cursor-pointer text-slate-200'}`} onClick={!disabled ? onToggle : undefined}>{title}</Label>
+            <Label className={`text-sm font-medium ${disabled ? "text-slate-500 cursor-not-allowed" : "cursor-pointer text-slate-200"}`} onClick={!disabled ? onToggle : undefined}>{title}</Label>
             {disabled && reason && (
-              <span className="text-[10px] font-mono text-rose-450 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded font-extrabold">
+              <span className="text-[10px] font-mono text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded">
                 {reason}
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-400">{desc}</p>
+          <p className="text-xs text-slate-500">{desc}</p>
         </div>
         <Switch disabled={disabled} checked={disabled ? false : active} onCheckedChange={onToggle} />
       </div>
@@ -159,55 +159,49 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
       
-      {/* Recipe Integrity & Conflict Resolution Sentinel Banner */}
       {pipelineConflicts.length > 0 && (
-        <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-950/10 p-4 md:p-5 shadow-[0_4px_24px_rgba(245,158,11,0.03)] animate-in slide-in-from-top-3 flex flex-col gap-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-5 w-5 items-center justify-center rounded bg-amber-500/20 text-amber-500">
-                <AlertTriangle className="h-3.5 w-3.5 animate-pulse" />
-              </span>
-              <div>
-                <h3 className="text-sm font-bold text-amber-500 flex items-center gap-1.5">
-                  Pipeline Incompatibility Warning ({pipelineConflicts.length})
-                </h3>
-                <p className="text-[11px] text-slate-400">Incompatible recipe configurations may trigger build failures or precision collapse.</p>
-              </div>
-            </div>
-            <span className="text-[9px] uppercase tracking-widest font-mono bg-amber-500/15 text-amber-400 px-2.5 py-0.5 rounded font-extrabold border border-amber-500/30">
-              Pass Guard Active
+        <div className="mb-6 rounded border border-amber-500/30 bg-amber-950/10 p-4 md:p-5 flex flex-col gap-4">
+          <div className="flex items-start gap-2.5 border-b border-slate-800 pb-3">
+            <span className="flex h-5 w-5 items-center justify-center rounded bg-amber-500/20 text-amber-500 shrink-0 mt-0.5">
+              <AlertTriangle className="h-3.5 w-3.5" />
             </span>
+            <div>
+              <h3 className="text-sm font-medium text-amber-400">
+                Pass conflicts ({pipelineConflicts.length})
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">These settings conflict with your hardware target and may fail at run time.</p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {pipelineConflicts.map((conflict) => (
               <div 
                 key={conflict.id} 
-                className={`p-3.5 rounded-lg border flex flex-col justify-between gap-3.5 transition-all ${
+                className={`p-3.5 rounded border flex flex-col justify-between gap-3 ${
                   conflict.type === "critical" 
-                    ? "border-rose-500/20 bg-rose-950/10 shadow-[0_2px_12px_rgba(244,63,94,0.05)]" 
-                    : "border-amber-500/10 bg-amber-950/5 shadow-[0_2px_12px_rgba(245,158,11,0.03)]"
+                    ? "border-rose-500/20 bg-rose-950/10" 
+                    : "border-amber-500/10 bg-amber-950/5"
                 }`}
               >
                 <div>
                   <div className="flex items-center gap-1.5 mb-1.5">
-                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${conflict.type === "critical" ? "bg-rose-500 animate-ping" : "bg-amber-400"}`} />
-                    <h4 className={`text-xs font-bold ${conflict.type === "critical" ? "text-rose-300" : "text-amber-400"}`}>{conflict.title}</h4>
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${conflict.type === "critical" ? "bg-rose-500" : "bg-amber-400"}`} />
+                    <h4 className={`text-xs font-medium ${conflict.type === "critical" ? "text-rose-300" : "text-amber-400"}`}>{conflict.title}</h4>
                   </div>
-                  <p className="text-[11px] text-slate-400 leading-normal">{conflict.description}</p>
+                  <p className="text-[11px] text-slate-500 leading-normal">{conflict.description}</p>
                 </div>
                 {conflict.actionLabel && conflict.onResolve && (
                   <div className="flex items-center justify-end border-t border-slate-900/50 pt-2.5 mt-1">
                     <button 
                       type="button"
                       onClick={conflict.onResolve}
-                      className={`text-[10px] px-2.5 py-1 rounded border font-semibold tracking-wide transition-all cursor-pointer ${
+                      className={`text-xs px-2.5 py-1 rounded border transition-colors cursor-pointer ${
                         conflict.type === "critical" 
                           ? "border-rose-500/30 text-rose-400 hover:text-white hover:bg-rose-500/15" 
                           : "border-amber-500/30 text-amber-400 hover:text-white hover:bg-amber-500/15"
                       }`}
                     >
-                      💡 Resolve: {conflict.actionLabel}
+                      Resolve: {conflict.actionLabel}
                     </button>
                   </div>
                 )}
@@ -218,11 +212,11 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
       )}
 
       {advisories.length > 0 && (
-        <div className="mb-6 bg-amber-500/10 border border-amber-500/50 rounded-lg p-4 flex flex-col gap-2 animate-in slide-in-from-top-2">
-          <div className="flex items-center gap-2 text-amber-500 font-semibold text-sm">
-            <AlertTriangle className="h-4 w-4" /> Performance Notes
+        <div className="mb-6 bg-amber-500/5 border border-amber-500/30 rounded p-4 flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-amber-400 font-medium text-sm">
+            <AlertTriangle className="h-4 w-4" /> Performance notes
           </div>
-          <ul className="list-disc pl-6 text-xs text-amber-400/80 space-y-1">
+          <ul className="list-disc pl-6 text-xs text-slate-500 space-y-1">
             {advisories.map((issue) => (
               <li key={issue.id}>{issue.description}</li>
             ))}
@@ -231,47 +225,47 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
       )}
 
       <Tabs defaultValue="conversion" className="w-full">
-        <TabsList className="mb-6 grid grid-cols-2 md:grid-cols-5 h-auto rounded-xl p-1.5 gap-1.5 bg-slate-950 border border-slate-800">
-          <TabsTrigger value="conversion" className="py-2 data-[state=active]:bg-slate-800 rounded-lg relative">
+        <TabsList className="mb-6 grid grid-cols-2 md:grid-cols-5 h-auto rounded border p-1 gap-1 bg-slate-950 border-slate-800">
+          <TabsTrigger value="conversion" className="py-2 data-[state=active]:bg-electric-blue/10 data-[state=active]:text-electric-blue rounded relative">
             <Workflow className="h-4 w-4 mr-2 hidden lg:block" />
             Conversion
             {getConflictCategory("conversion") && (
-              <span className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full ${getConflictCategory("conversion") === "critical" ? "bg-rose-500 animate-pulse" : "bg-amber-500"}`} />
+              <span className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full ${getConflictCategory("conversion") === "critical" ? "bg-rose-500" : "bg-amber-500"}`} />
             )}
           </TabsTrigger>
-          <TabsTrigger value="quantization" className="py-2 data-[state=active]:bg-slate-800 rounded-lg relative">
+          <TabsTrigger value="quantization" className="py-2 data-[state=active]:bg-electric-blue/10 data-[state=active]:text-electric-blue rounded relative">
             <Minimize2 className="h-4 w-4 mr-2 hidden lg:block" />
             Quantization
             {getConflictCategory("quantization") && (
-              <span className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full ${getConflictCategory("quantization") === "critical" ? "bg-rose-500 animate-pulse" : "bg-amber-500"}`} />
+              <span className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full ${getConflictCategory("quantization") === "critical" ? "bg-rose-500" : "bg-amber-500"}`} />
             )}
           </TabsTrigger>
-          <TabsTrigger value="compression" className="py-2 data-[state=active]:bg-slate-800 rounded-lg relative">
+          <TabsTrigger value="compression" className="py-2 data-[state=active]:bg-electric-blue/10 data-[state=active]:text-electric-blue rounded relative">
             <Combine className="h-4 w-4 mr-2 hidden lg:block" />
             Compression
             {getConflictCategory("compression") && (
-              <span className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full ${getConflictCategory("compression") === "critical" ? "bg-rose-500 animate-pulse" : "bg-amber-500"}`} />
+              <span className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full ${getConflictCategory("compression") === "critical" ? "bg-rose-500" : "bg-amber-500"}`} />
             )}
           </TabsTrigger>
-          <TabsTrigger value="peft" className="py-2 data-[state=active]:bg-slate-800 rounded-lg relative">
+          <TabsTrigger value="peft" className="py-2 data-[state=active]:bg-electric-blue/10 data-[state=active]:text-electric-blue rounded relative">
             <Layers className="h-4 w-4 mr-2 hidden lg:block" />
             PEFT / LoRA
             {getConflictCategory("peft") && (
-              <span className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full ${getConflictCategory("peft") === "critical" ? "bg-rose-500 animate-pulse" : "bg-amber-500"}`} />
+              <span className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full ${getConflictCategory("peft") === "critical" ? "bg-rose-500" : "bg-amber-500"}`} />
             )}
           </TabsTrigger>
-          <TabsTrigger value="transforms" className="py-2 data-[state=active]:bg-slate-800 rounded-lg relative">
+          <TabsTrigger value="transforms" className="py-2 data-[state=active]:bg-electric-blue/10 data-[state=active]:text-electric-blue rounded relative">
             <Zap className="h-4 w-4 mr-2 hidden lg:block" />
             Transforms
             {getConflictCategory("transforms") && (
-              <span className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full ${getConflictCategory("transforms") === "critical" ? "bg-rose-500 animate-pulse" : "bg-amber-500"}`} />
+              <span className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full ${getConflictCategory("transforms") === "critical" ? "bg-rose-500" : "bg-amber-500"}`} />
             )}
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="conversion" className="space-y-4">
           <Card>
-            <CardHeader title="Model Conversion Workspace" description="Convert PyTorch/TensorFlow to optimized deployment formats." badge={<Workflow className="h-5 w-5 text-slate-400"/>} />
+            <CardHeader title="Model conversion" description="Convert PyTorch or TensorFlow to ONNX or OpenVINO." />
             <CardContent className="space-y-6">
               <PipelineToggle 
                 active={state.passes.conversion} 
@@ -285,8 +279,8 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
                   <div className="flex flex-col xl:flex-row items-center gap-4 w-full">
                     
                     {/* Node 1: Source */}
-                    <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-5 w-full relative group hover:border-slate-700 transition-colors">
-                      <div className="absolute top-0 right-0 p-3"><Box className="w-4 h-4 text-slate-600 group-hover:text-amber-500 transition-colors" /></div>
+                    <div className="flex-1 bg-slate-900 border border-slate-800 rounded p-5 w-full relative group hover:border-slate-700 transition-colors">
+                      <div className="absolute top-0 right-0 p-3"><Box className="w-4 h-4 text-slate-600 group-hover:text-electric-blue transition-colors" /></div>
                       <h4 className="font-semibold text-slate-200 mb-1 text-sm">1. Source Framework</h4>
                       <p className="text-xs text-slate-500 mb-4 h-8 text-balance">The original training framework format.</p>
                       <div className="space-y-2">
@@ -305,7 +299,7 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
                     <ArrowDown className="text-slate-700 xl:hidden shrink-0" />
 
                     {/* Node 2: Engine */}
-                    <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-5 w-full relative shadow-[0_0_20px_rgba(59,130,246,0.03)] group hover:border-electric-blue/50 transition-colors">
+                    <div className="flex-1 bg-slate-900 border border-slate-800 rounded p-5 w-full relative group hover:border-electric-blue/40 transition-colors">
                       <div className="absolute top-0 right-0 p-3"><Settings className="w-4 h-4 text-slate-600 group-hover:text-electric-blue transition-colors" /></div>
                       <h4 className="font-semibold text-slate-200 mb-1 text-sm">2. Conversion Engine</h4>
                       <p className="text-xs text-slate-500 mb-4 h-8 text-balance">Parameters guiding the Intermediate Representation (IR).</p>
@@ -333,8 +327,8 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
                               <option key={t.value} value={t.value}>{t.label}</option>
                             ))}
                           </Select>
-                          <span className="text-[10px] font-mono text-amber-500 block mt-1">
-                            Detected Architecture: {modelInfo.family}
+                          <span className="text-[10px] font-mono text-electric-blue block mt-1">
+                            Detected: {modelInfo.family}
                           </span>
                         </div>
                       </div>
@@ -344,8 +338,8 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
                     <ArrowDown className="text-slate-700 xl:hidden shrink-0" />
 
                     {/* Node 3: Target */}
-                    <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-5 w-full relative group hover:border-emerald-500/50 transition-colors">
-                      <div className="absolute top-0 right-0 p-3"><Workflow className="w-4 h-4 text-slate-600 group-hover:text-emerald-500 transition-colors" /></div>
+                    <div className="flex-1 bg-slate-900 border border-slate-800 rounded p-5 w-full relative group hover:border-slate-600 transition-colors">
+                      <div className="absolute top-0 right-0 p-3"><Workflow className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors" /></div>
                       <h4 className="font-semibold text-slate-200 mb-1 text-sm">3. Deployment Target</h4>
                       <p className="text-xs text-slate-500 mb-4 h-8 text-balance">The optimized artifact format.</p>
                       <div className="space-y-2">
@@ -365,8 +359,8 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
 
                   <div className="mt-6 pt-4 border-t border-slate-800">
                     <div className="flex items-center space-x-2">
-                       <Switch id=" splitting" checked={state.passes.splitting} onCheckedChange={(v) => setState({ passes: { ...state.passes, splitting: v }})} />
-                       <Label htmlFor="splitting" className="flex items-center gap-2">Enable Model Splitting <span className="bg-electric-blue/20 text-electric-blue text-[10px] px-1.5 py-0.5 rounded font-bold">BETA</span></Label>
+                       <Switch id="splitting" checked={state.passes.splitting} onCheckedChange={(v) => setState({ passes: { ...state.passes, splitting: v }})} />
+                       <Label htmlFor="splitting" className="flex items-center gap-2">Enable model splitting <span className="bg-electric-blue/15 text-electric-blue text-[10px] px-1.5 py-0.5 rounded">Beta</span></Label>
                     </div>
                     <p className="text-xs text-slate-500 mt-1 pl-11">Breaks large architectures (e.g. LLMs) into manageable blocks (encoder/decoder/kv-cache) for memory-constrained edge deployment or pipeline parallelism.</p>
                   </div>
@@ -378,7 +372,7 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
 
         <TabsContent value="quantization" className="space-y-4">
           <Card>
-            <CardHeader title="Advanced Quantization Suite" description="Reduce precision boundaries to lower model footprint." badge={<Minimize2 className="h-5 w-5 text-slate-400"/>} />
+            <CardHeader title="Quantization" description="Reduce weight and activation precision (INT8, INT4, AWQ)." />
             <CardContent className="space-y-6">
                <PipelineToggle 
                 active={state.passes.quantization} 
@@ -427,7 +421,7 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
 
         <TabsContent value="compression" className="space-y-4">
           <Card>
-            <CardHeader title="Model Compression & Pruning Suite" description="Structurally thin weights to eliminate redundancies." badge={<Combine className="h-5 w-5 text-slate-400"/>} />
+            <CardHeader title="Compression & pruning" description="Remove redundant weights and enforce sparsity." />
             <CardContent className="space-y-6">
                 <PipelineToggle 
                   active={state.passes.pruning} 
@@ -532,7 +526,7 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
 
         <TabsContent value="peft" className="space-y-4">
           <Card>
-            <CardHeader title="PEFT & LoRA Studio" description="Train lightweight adapters for foundation models." badge={<Layers className="h-5 w-5 text-slate-400"/>} />
+            <CardHeader title="PEFT & LoRA" description="Train lightweight adapters on foundation models." />
             <CardContent className="space-y-6">
                 <PipelineToggle 
                   active={state.passes.peft} 
@@ -571,7 +565,7 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
                       <div className="pt-4 border-t border-slate-800">
                         <div className="flex items-center space-x-2">
                            <Switch id="diffusionLora" checked={state.passes.diffusionLora} onCheckedChange={(v) => setState({ passes: { ...state.passes, diffusionLora: v }})} />
-                           <Label htmlFor="diffusionLora" className="flex items-center gap-2">Diffusion Model LoRA Mode <Fingerprint className="w-3.5 h-3.5 text-pink-500" /></Label>
+                           <Label htmlFor="diffusionLora" className="flex items-center gap-2">Diffusion LoRA mode <Fingerprint className="w-3.5 h-3.5 text-electric-blue" /></Label>
                         </div>
                         <p className="text-xs text-slate-500 mt-1 pl-11">Enable specialized UNet/Text Encoder extraction for Stable Diffusion, SDXL, and Flux.</p>
                       </div>
@@ -583,7 +577,7 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
 
         <TabsContent value="transforms" className="space-y-4">
            <Card>
-            <CardHeader title="ONNX Transformations" description="Native graph optimizations, node fusions, and dead-node elimination." badge={<Zap className="h-5 w-5 text-slate-400"/>} />
+            <CardHeader title="ONNX transforms" description="Graph fusions, attention rewrites, and dead-node elimination." />
             <CardContent className="space-y-6">
                 <PipelineToggle 
                   active={state.passes.onnxTransforms} 

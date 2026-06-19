@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, Select, Label, Switch, Tooltip, TooltipC
 import { IHVProvider, UIState } from "@/types";
 import { getProviderConflicts, isConversionFormatAllowed, isPeftAllowed, isPeftMethodAllowed, isQuantMethodAllowed, isStructuredPruningAllowed } from "@/lib/pipelineValidation";
 import { fetchHardwareProbe, isProviderDetectedLocally, type HardwareProbeResult } from "@/lib/hardwareProbe";
-import { Cpu, CpuIcon, Layers, Settings2, AlertTriangle, ShieldAlert, Check, Wand2, Activity, Lock, CheckCircle, AlertCircle, Info, Search, Sliders, Table, List, Sparkles, RefreshCw, HardDrive } from "lucide-react";
+import { Cpu, CpuIcon, Layers, AlertTriangle, ShieldAlert, Check, Wand2, Activity, Lock, CheckCircle, AlertCircle, Info, Search, Sliders, Table, List, RefreshCw, HardDrive } from "lucide-react";
 
 export { getProviderConflicts };
 
@@ -104,7 +104,7 @@ export function getCellCompatibility(pass: OptimizationPassValidation, provider:
     return {
       status: "unsupported" as const,
       label: "Incompatible",
-      color: "bg-rose-500/15 border-rose-500/30 text-rose-400 shadow-[0_0_8px_rgba(239,68,68,0.05)]",
+      color: "bg-rose-500/15 border-rose-500/30 text-rose-400",
       reason: pass.getIncompatibilityReason(provider),
       speedup: "N/A",
       vram: "N/A",
@@ -117,7 +117,7 @@ export function getCellCompatibility(pass: OptimizationPassValidation, provider:
       return {
         status: "partial" as const,
         label: "CPU Fallback",
-        color: "bg-amber-500/15 border-amber-500/30 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.05)]",
+        color: "bg-amber-500/15 border-amber-500/30 text-amber-400",
         reason: "Executes correctly but lacks hardware tensor cores. Active tuning is extremely slow on CPUs.",
         speedup: "1.0x (Baseline)",
         vram: "System RAM (-20%)",
@@ -160,7 +160,7 @@ export function getCellCompatibility(pass: OptimizationPassValidation, provider:
   return {
     status: "supported" as const,
     label: "Optimized",
-    color: "bg-emerald-500/15 border-emerald-500/30 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.05)]",
+    color: "bg-emerald-500/15 border-emerald-500/30 text-emerald-400",
     reason: "Fully supported. Direct edge hardware instruction sets mapped successfully.",
     speedup,
     vram,
@@ -210,9 +210,8 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <Card>
         <CardHeader 
-          title="Hardware Acceleration (IHV Integration)" 
-          description="Select target compute targets. Olive automatically optimizes graphs for these backends."
-          badge={<div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-500/10 text-purple-500"><Settings2 className="h-4 w-4" /></div>}
+          title="Hardware acceleration" 
+          description="Select execution provider and accelerator target. Olive optimizes graphs for the chosen backend."
         />
         <CardContent>
           {/* Live hardware probe from this machine */}
@@ -221,11 +220,11 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <HardDrive className="h-4 w-4 text-electric-blue shrink-0" />
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                  <h4 className="text-sm font-medium text-slate-200">
                     Detected on this machine
                   </h4>
                   {probeLoading && (
-                    <span className="text-[10px] font-mono text-slate-500 animate-pulse">Scanning…</span>
+                    <span className="text-[10px] font-mono text-slate-500">Scanning…</span>
                   )}
                 </div>
                 {probeError ? (
@@ -270,14 +269,14 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                     ) : null}
                     <p className="text-[11px] text-slate-500 pt-1">
                       Recommended target:{" "}
-                      <span className="text-purple-300 font-semibold">
+                      <span className="text-electric-blue font-semibold">
                         {providers.find((p) => p.id === hardwareProbe.recommendedProvider)?.name ?? hardwareProbe.recommendedProvider}
                       </span>
                       {state.ihvProvider !== hardwareProbe.recommendedProvider && (
                         <button
                           type="button"
                           onClick={() => setState({ ihvProvider: hardwareProbe.recommendedProvider })}
-                          className="ml-2 text-[10px] font-bold uppercase tracking-wider text-electric-blue hover:text-white cursor-pointer"
+                          className="ml-2 text-xs text-electric-blue hover:text-white cursor-pointer"
                         >
                           Apply
                         </button>
@@ -292,7 +291,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                 type="button"
                 onClick={() => void runHardwareProbe(true)}
                 disabled={probeLoading}
-                className="flex items-center gap-1.5 self-start rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-300 hover:border-slate-600 hover:text-white disabled:opacity-50 cursor-pointer shrink-0"
+                className="flex items-center gap-1.5 self-start rounded border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 hover:border-slate-600 hover:text-white disabled:opacity-50 cursor-pointer shrink-0"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${probeLoading ? "animate-spin" : ""}`} />
                 Re-scan hardware
@@ -312,11 +311,11 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                   <span className={`flex h-6 w-6 items-center justify-center rounded shrink-0 ${
                     hasSelectedCritical ? "bg-rose-500/10 text-rose-400" : "bg-amber-500/10 text-amber-500"
                   }`}>
-                    {hasSelectedCritical ? <ShieldAlert className="h-4 w-4 animate-pulse" /> : <AlertTriangle className="h-4 w-4" />}
+                    {hasSelectedCritical ? <ShieldAlert className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
                   </span>
                   <div>
-                    <h4 className={`text-xs font-bold uppercase tracking-wider ${hasSelectedCritical ? "text-rose-300" : "text-amber-400"}`}>
-                      Hardware Pipeline Conflict Detected ({selectedConflicts.length})
+                    <h4 className={`text-sm font-medium ${hasSelectedCritical ? "text-rose-300" : "text-amber-400"}`}>
+                      Pipeline conflict ({selectedConflicts.length})
                     </h4>
                     <p className="text-[11px] text-slate-400 leading-normal">
                       The execution passes currently configured in your recipe are incompatible with the selected 
@@ -333,7 +332,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                     });
                     setState({ passes: updatedPasses });
                   }}
-                  className={`text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded border transition-all cursor-pointer flex items-center gap-1.5 hover:text-white ${
+                  className={`text-xs px-3 py-1.5 rounded border transition-all cursor-pointer flex items-center gap-1.5 hover:text-white ${
                     hasSelectedCritical 
                       ? "border-rose-500/30 bg-rose-950/20 text-rose-400 hover:bg-rose-500/20" 
                       : "border-amber-500/30 bg-amber-950/20 text-amber-400 hover:bg-amber-500/20"
@@ -362,15 +361,15 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
 
               if (isSelected) {
                 if (cardHasCritical) {
-                  cardClasses += "border-rose-500 bg-rose-500/5 shadow-[0_0_15px_rgba(244,63,94,0.06)]";
+                  cardClasses += "border-rose-500 bg-rose-500/5";
                   badgeText = "Critical Conflict";
                   badgeColor = "bg-rose-500/10 text-rose-400 border-rose-550/25";
                 } else if (cardHasWarning) {
-                  cardClasses += "border-amber-500 bg-amber-500/5 shadow-[0_0_15px_rgba(245,158,11,0.06)]";
+                  cardClasses += "border-amber-500 bg-amber-500/5";
                   badgeText = "Warning Conflict";
                   badgeColor = "bg-amber-500/10 text-amber-400 border-amber-550/25";
                 } else {
-                  cardClasses += "border-electric-blue bg-electric-blue/5 shadow-[0_0_15px_rgba(59,130,246,0.1)]";
+                  cardClasses += "border-electric-blue bg-electric-blue/5";
                   badgeText = !detectedLocally && !probeLoading ? "Active (not local)" : "Active Target";
                   badgeColor = "bg-electric-blue/10 text-electric-blue border-electric-blue/20";
                 }
@@ -471,15 +470,15 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                   {/* Inline list of critical and warning conflicts within the provider card if any exist */}
                   {pConflicts.length > 0 && (
                     <div className="mt-3.5 pt-3.5 border-t border-slate-800/60 flex flex-col gap-2.5 animate-in fade-in duration-200">
-                      <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest font-extrabold flex items-center gap-1.5">
-                        <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" /> Pipeline Validation Overrides:
+                      <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                        <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" /> Validation overrides
                       </p>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pb-1">
                         {pConflicts.map((c, idx) => (
                           <div key={idx} className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-900 flex items-start gap-2 text-xs">
                             <span className={`inline-block h-1.5 w-1.5 rounded-full mt-1.5 shrink-0 ${
-                              c.severity === "critical" ? "bg-rose-500 animate-pulse" : "bg-amber-400"
+                              c.severity === "critical" ? "bg-rose-500" : "bg-amber-400"
                             }`} />
                             <div className="leading-tight">
                               <span className={`font-bold block text-[11px] mb-0.5 ${
@@ -554,7 +553,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <h4 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                    <Activity className="h-4.5 w-4.5 text-purple-400 shrink-0" />
+                    <Activity className="h-4.5 w-4.5 text-electric-blue shrink-0" />
                     Pass ↔ Provider Compatibility Matrix
                   </h4>
                   <p className="text-xs text-slate-500 mt-1 max-w-2xl">
@@ -569,7 +568,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                     onClick={() => setActiveTab("matrix")}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap cursor-pointer transition-all ${
                       activeTab === "matrix"
-                        ? "bg-purple-600 text-white font-bold shadow-md shadow-purple-500/20"
+                        ? "bg-electric-blue text-white font-bold"
                         : "text-slate-400 hover:text-slate-205"
                     }`}
                   >
@@ -581,7 +580,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                     onClick={() => setActiveTab("cards")}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap cursor-pointer transition-all ${
                       activeTab === "cards"
-                        ? "bg-purple-600 text-white font-bold shadow-md shadow-purple-500/20"
+                        ? "bg-electric-blue text-white font-bold"
                         : "text-slate-400 hover:text-slate-205"
                     }`}
                   >
@@ -601,7 +600,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                     placeholder="Search compiler passes..."
                     value={passSearch}
                     onChange={(e) => setPassSearch(e.target.value)}
-                    className="w-full h-9 bg-slate-950 border border-slate-800/80 rounded-lg pl-9 pr-4 text-xs font-medium text-slate-200 placeholder-slate-500 outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/30 transition-all font-sans"
+                    className="w-full h-9 bg-slate-950 border border-slate-800/80 rounded-lg pl-9 pr-4 text-xs font-medium text-slate-200 placeholder-slate-500 outline-none focus:border-electric-blue/50 focus:ring-1 focus:ring-electric-blue/30 transition-all font-sans"
                   />
                   {passSearch && (
                     <button
@@ -624,7 +623,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                       onClick={() => setSelectedCategory(cat)}
                       className={`px-3 py-1 rounded-full text-[10.5px] font-semibold tracking-tight transition-all cursor-pointer ${
                         selectedCategory === cat
-                          ? "bg-purple-500/15 border-purple-500/40 text-purple-300 font-bold border"
+                          ? "bg-electric-blue/15 border-electric-blue/40 text-electric-blue font-bold border"
                           : "bg-slate-950 hover:bg-slate-900 border border-slate-805 text-slate-400"
                       }`}
                     >
@@ -648,7 +647,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                       setPassSearch("");
                       setSelectedCategory("All");
                     }}
-                    className="text-xs bg-purple-600 hover:bg-purple-700 text-white font-bold p-2 px-4 rounded-lg cursor-pointer"
+                    className="text-xs bg-electric-blue hover:bg-electric-blue-dark text-white font-bold p-2 px-4 rounded-lg cursor-pointer"
                   >
                     Reset Active Filters
                   </button>
@@ -689,20 +688,20 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                               }}
                               className={`p-2 px-1 text-center cursor-pointer transition-all relative select-none ${
                                 isSelectedProvider
-                                  ? "bg-purple-500/10 border-l border-r border-t-2 border-t-purple-500 border-l-purple-500/20 border-r-purple-500/20"
+                                  ? "bg-electric-blue/10 border-l border-r border-t-2 border-t-electric-blue border-l-electric-blue/20 border-r-electric-blue/20"
                                   : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/30"
                               }`}
                             >
                               <div className="flex flex-col items-center justify-center gap-1 py-1">
                                 <div className={`p-1 rounded border leading-none transition-all ${
                                   isSelectedProvider
-                                    ? "bg-purple-950/40 border-purple-500/50 text-purple-300"
+                                    ? "bg-electric-blue/10 border-electric-blue/50 text-electric-blue"
                                     : "bg-slate-900 border-slate-800 text-slate-500"
                                 }`}>
                                   <HIcon className="h-3 w-3" />
                                 </div>
                                 <span className={`text-[10px] font-mono font-semibold leading-none text-center ${
-                                  isSelectedProvider ? "text-purple-300" : detectedLocally ? "text-slate-400" : "text-slate-600"
+                                  isSelectedProvider ? "text-electric-blue" : detectedLocally ? "text-slate-400" : "text-slate-600"
                                 }`}>
                                   {p.shortName}
                                 </span>
@@ -718,7 +717,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                       <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
                                     </span>
-                                    <span className="text-[8px] tracking-widest font-mono font-black uppercase text-purple-400 leading-none">
+                                    <span className="text-[8px] tracking-widest font-mono font-black uppercase text-electric-blue leading-none">
                                       Active
                                     </span>
                                   </div>
@@ -798,7 +797,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                                   onClick={handleCellClick}
                                   className={`p-2 text-center transition-all ${
                                     isSelectedProvider 
-                                      ? "bg-purple-500/5 border-l border-r border-purple-500/10" 
+                                      ? "bg-electric-blue/5 border-l border-r border-electric-blue/10" 
                                       : "hover:bg-slate-900/30"
                                   } ${comp.status === "unsupported" ? "cursor-not-allowed" : "cursor-pointer"}`}
                                 >
@@ -808,8 +807,8 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                                         <div className="inline-flex items-center justify-center p-1 cursor-help">
                                           {comp.status === "supported" ? (
                                             isCurrentlyActiveInCore ? (
-                                              <div className="flex h-6 items-center gap-1 p-1 px-3 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10.5px] font-mono font-bold hover:scale-105 active:scale-95 transition-all shadow-[0_0_12px_rgba(16,185,129,0.15)]">
-                                                <CheckCircle className="h-3.5 w-3.5 animate-pulse text-emerald-400" /> Active
+                                              <div className="flex h-6 items-center gap-1 p-1 px-3 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10.5px] font-mono font-medium">
+                                                <CheckCircle className="h-3.5 w-3.5 text-emerald-400" /> Active
                                               </div>
                                             ) : (
                                               <div className="h-6 w-6 rounded-full bg-slate-900 border border-slate-800 hover:border-emerald-500/40 hover:bg-emerald-500/10 flex items-center justify-center text-slate-500 hover:text-emerald-400 hover:scale-110 active:scale-90 transition-all">
@@ -818,8 +817,8 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                                             )
                                           ) : comp.status === "partial" ? (
                                             isCurrentlyActiveInCore ? (
-                                              <div className="flex h-6 items-center gap-1 p-1 px-3 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-550 text-[10.5px] font-mono font-bold hover:scale-105 active:scale-95 transition-all shadow-[0_0_12px_rgba(245,158,11,0.12)]">
-                                                <AlertCircle className="h-3.5 w-3.5 animate-pulse text-amber-400" /> Fallback
+                                              <div className="flex h-6 items-center gap-1 p-1 px-3 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10.5px] font-mono font-medium">
+                                                <AlertCircle className="h-3.5 w-3.5 text-amber-400" /> Fallback
                                               </div>
                                             ) : (
                                               <div className="h-6 w-6 rounded-full bg-slate-900 border border-slate-800 hover:border-amber-500/40 hover:bg-amber-500/10 flex items-center justify-center text-slate-500 hover:text-amber-400 hover:scale-110 active:scale-90 transition-all">
@@ -852,7 +851,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                                           </div>
 
                                           <div className="space-y-1">
-                                            <p className="text-[11.5px] font-mono font-bold text-purple-300 uppercase tracking-wide">
+                                            <p className="text-[11.5px] font-mono font-bold text-electric-blue uppercase tracking-wide">
                                               {v.name}
                                             </p>
                                             <p className="text-slate-400 text-xs leading-relaxed">{comp.reason}</p>
@@ -870,7 +869,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                                             </div>
                                             <div className="text-[10px] bg-slate-900/65 p-2 rounded-lg border border-slate-900 text-center font-mono">
                                               <span className="text-[8.5px] text-slate-500 block uppercase font-bold tracking-tight mb-1">Heuristic</span>
-                                              <span className={`text-xs font-black block ${comp.status === "supported" ? "text-purple-400" : "text-slate-350"}`}>{comp.efficiency}</span>
+                                              <span className={`text-xs font-black block ${comp.status === "supported" ? "text-electric-blue" : "text-slate-350"}`}>{comp.efficiency}</span>
                                             </div>
                                           </div>
 
@@ -898,7 +897,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                 {/* Matrix Footer Legend */}
                 <div className="flex flex-wrap items-center justify-between gap-4 p-4 border-t border-slate-900 bg-slate-900/20 text-[11px] text-slate-400">
                   <div className="flex items-center gap-4 flex-wrap">
-                    <span className="font-mono text-slate-500 uppercase tracking-widest font-black text-[10px]">LEGEND:</span>
+                    <span className="text-xs text-slate-500">Legend</span>
                     <span className="flex items-center gap-1.5 font-sans">
                       <span className="h-3.5 w-3.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400"><Check className="h-2 w-2" /></span>
                       Optimized Acceleration Available
@@ -985,7 +984,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                               }`}>
                                 {isActiveState ? (
                                   <>
-                                    <CheckCircle className="h-3 w-3 animate-pulse" /> Enabled
+                                    <CheckCircle className="h-3 w-3" /> Enabled
                                   </>
                                 ) : (
                                   "Inactive"

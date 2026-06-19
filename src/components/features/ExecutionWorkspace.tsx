@@ -1,7 +1,7 @@
 ﻿import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
-import { Code, Play, CheckCircle2, AlertCircle, Copy, Check, Upload, FileJson, X, Github, Sparkles, ArrowUpRight, Search, BookOpen, Workflow, GitBranch, GitPullRequest, Globe, RefreshCw, Trash2, Download, Laptop, Smartphone, FileCode, Sliders, Cpu, Settings, AlertTriangle } from "lucide-react";
+import { Code, Play, CheckCircle2, AlertCircle, Copy, Check, Upload, FileJson, X, Github, ArrowUpRight, Search, BookOpen, Workflow, GitBranch, GitPullRequest, Globe, RefreshCw, Trash2, Download, Laptop, Smartphone, FileCode, Sliders, Cpu, Settings, AlertTriangle } from "lucide-react";
 import JSZip from "jszip";
 import { RecipeGraphView } from "./RecipeGraphView";
 import { cn } from "@/lib/utils";
@@ -414,7 +414,7 @@ ${owrPlatform === "web" ?
       {/* Export Recipe Overlay */}
       {isExportOpen && (
         <div className="absolute inset-0 z-55 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in overflow-y-auto">
-          <Card className="w-full max-w-2xl shadow-2xl border-electric-blue/50 flex flex-col max-h-[85vh]">
+          <Card className="w-full max-w-2xl border-electric-blue/30 flex flex-col max-h-[85vh]">
             <CardHeader 
               title="Export Microsoft Olive Recipe" 
               description="Download your dynamic JSON recipe configuration or copy the schema to run with the MS Olive CLI."
@@ -448,7 +448,7 @@ ${owrPlatform === "web" ?
                   <Button variant="outline" className="text-xs h-9" onClick={() => setIsExportOpen(false)}>
                     Close
                   </Button>
-                  <Button variant="outline" className="text-xs h-9 border-indigo-500/30 text-indigo-400 hover:text-white hover:bg-indigo-500/10" onClick={handleExportCopy}>
+                  <Button variant="outline" className="text-xs h-9 border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10" onClick={handleExportCopy}>
                     {isExportCopied ? (
                       <Check className="h-4 w-4 mr-1.5 text-emerald-500" />
                     ) : (
@@ -494,7 +494,7 @@ ${owrPlatform === "web" ?
 
         return (
           <div className="absolute inset-0 z-55 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in overflow-y-auto">
-            <Card className="w-full max-w-4xl shadow-2xl border-purple-500/50 flex flex-col max-h-[90vh]">
+            <Card className="w-full max-w-4xl border-electric-blue/30 flex flex-col max-h-[90vh]">
               <CardHeader 
                 title="Export for ONNX Runtime (Web/Mobile)" 
                 description="Package specific metadata configurations, environment session maps, and code initializers for seamless OWR edge deployment."
@@ -515,14 +515,14 @@ ${owrPlatform === "web" ?
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                        <Globe className="h-3.5 w-3.5 text-purple-400" /> Target Platform Runtime
+                        <Globe className="h-3.5 w-3.5 text-electric-blue" /> Target Platform Runtime
                       </Label>
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           className={`p-2.5 rounded-lg border text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
                             owrPlatform === "web"
-                              ? "bg-purple-500/15 border-purple-500/50 text-purple-300 font-extrabold"
+                              ? "bg-electric-blue/15 border-electric-blue/50 text-electric-blue font-semibold"
                               : "bg-slate-950 border-slate-850 text-slate-400 hover:border-slate-800"
                           }`}
                           onClick={() => {
@@ -539,7 +539,7 @@ ${owrPlatform === "web" ?
                           type="button"
                           className={`p-2.5 rounded-lg border text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
                             owrPlatform === "mobile"
-                              ? "bg-purple-500/15 border-purple-500/50 text-purple-300 font-extrabold"
+                              ? "bg-electric-blue/15 border-electric-blue/50 text-electric-blue font-semibold"
                               : "bg-slate-950 border-slate-850 text-slate-400 hover:border-slate-800"
                           }`}
                           onClick={() => {
@@ -557,7 +557,7 @@ ${owrPlatform === "web" ?
 
                     <div className="space-y-1.5 pt-2">
                       <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                        <Cpu className="h-3.5 w-3.5 text-purple-400" /> Runtime Thread Allocation
+                        <Cpu className="h-3.5 w-3.5 text-electric-blue" /> Runtime Thread Allocation
                       </Label>
                       <select 
                         value={owrThreads} 
@@ -576,7 +576,7 @@ ${owrPlatform === "web" ?
 
                     <div className="space-y-1.5 pt-2">
                       <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                        <Sliders className="h-3.5 w-3.5 text-purple-400" /> VRAM Optimizer Mode
+                        <Sliders className="h-3.5 w-3.5 text-electric-blue" /> VRAM Optimizer Mode
                       </Label>
                       <select 
                         value={owrVramMode} 
@@ -593,7 +593,7 @@ ${owrPlatform === "web" ?
                   </div>
 
                   <div className="mt-auto pt-4 border-t border-slate-900/60 space-y-2">
-                    <div className="p-3 rounded-lg bg-purple-500/5 border border-purple-500/10 text-[11px] text-slate-400 leading-relaxed font-sans">
+                    <div className="p-3 rounded-lg bg-electric-blue/5 border border-electric-blue/10 text-[11px] text-slate-400 leading-relaxed font-sans">
                       <strong>Olive OWR Cross-compile:</strong> Generates structural session configs mapped dynamically to the model's weight format, execution steps, and target drivers.
                     </div>
                   </div>
@@ -606,7 +606,7 @@ ${owrPlatform === "web" ?
                       type="button"
                       className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${
                         owrSelectedFile === "onnx_model_manifest.json"
-                          ? "bg-purple-600 text-white shadow shadow-purple-500/20 font-bold"
+                          ? "bg-electric-blue text-white font-medium"
                           : "text-slate-400 hover:text-slate-200"
                       }`}
                       onClick={() => setOwrSelectedFile("onnx_model_manifest.json")}
@@ -617,7 +617,7 @@ ${owrPlatform === "web" ?
                       type="button"
                       className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${
                         owrSelectedFile === "ort_config.json"
-                          ? "bg-purple-600 text-white shadow shadow-purple-500/20 font-bold"
+                          ? "bg-electric-blue text-white font-medium"
                           : "text-slate-400 hover:text-slate-200"
                       }`}
                       onClick={() => setOwrSelectedFile("ort_config.json")}
@@ -629,7 +629,7 @@ ${owrPlatform === "web" ?
                         type="button"
                         className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${
                           owrSelectedFile === "web_init.js"
-                            ? "bg-purple-600 text-white shadow shadow-purple-500/20 font-bold"
+                            ? "bg-electric-blue text-white font-medium"
                             : "text-slate-400 hover:text-slate-200"
                         }`}
                         onClick={() => setOwrSelectedFile("web_init.js")}
@@ -641,7 +641,7 @@ ${owrPlatform === "web" ?
                         type="button"
                         className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${
                           owrSelectedFile === "mobile_init.kt"
-                            ? "bg-purple-600 text-white shadow shadow-purple-500/20 font-bold"
+                            ? "bg-electric-blue text-white font-medium"
                             : "text-slate-400 hover:text-slate-200"
                         }`}
                         onClick={() => setOwrSelectedFile("mobile_init.kt")}
@@ -654,17 +654,17 @@ ${owrPlatform === "web" ?
                   <div className="flex-1 min-h-[250px] relative flex flex-col overflow-hidden bg-slate-950 border border-slate-850 rounded-lg">
                     <div className="flex items-center justify-between px-4 py-2 border-b border-slate-900 bg-slate-900/40 shrink-0">
                       <div className="flex items-center gap-1.5 text-xs font-mono text-slate-300">
-                        <FileCode className="h-4 w-4 text-purple-400" />
+                        <FileCode className="h-4 w-4 text-electric-blue" />
                         <span>{fileTitle}</span>
                       </div>
-                      <span className="text-[10px] bg-purple-500/10 border border-purple-500/20 text-purple-350 px-2 py-0.5 rounded font-mono font-bold uppercase tracking-wider">
-                        ORT Cross Export
+                      <span className="text-[10px] bg-electric-blue/10 border border-electric-blue/20 text-electric-blue px-2 py-0.5 rounded font-mono">
+                        ORT export
                       </span>
                     </div>
 
                     <textarea
                       readOnly
-                      className="w-full flex-1 bg-transparent p-4 font-mono text-xs text-purple-350 focus-visible:outline-none resize-none overflow-y-auto cursor-text whitespace-pre bg-transparent select-text"
+                      className="w-full flex-1 bg-transparent p-4 font-mono text-xs text-electric-blue focus-visible:outline-none resize-none overflow-y-auto cursor-text whitespace-pre bg-transparent select-text"
                       value={fileContent}
                       onClick={(e) => (e.target as HTMLTextAreaElement).select()}
                     />
@@ -678,7 +678,7 @@ ${owrPlatform === "web" ?
                       <Button variant="outline" className="text-xs h-9" onClick={() => setIsOwrExportOpen(false)}>
                         Cancel
                       </Button>
-                      <Button variant="outline" className="text-xs h-9 border-indigo-500/30 text-indigo-400 hover:text-white hover:bg-indigo-500/10" onClick={handleCopyActiveCode}>
+                      <Button variant="outline" className="text-xs h-9 border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10" onClick={handleCopyActiveCode}>
                         {isOwrCopied ? (
                           <Check className="h-4 w-4 mr-1.5 text-emerald-500" />
                         ) : (
@@ -686,7 +686,7 @@ ${owrPlatform === "web" ?
                         )}
                         {isOwrCopied ? "Copied!" : "Copy Active File"}
                       </Button>
-                      <Button variant="default" className="text-xs h-9 bg-purple-600 hover:bg-purple-700 text-white font-bold" onClick={handleDownloadOwrBundle}>
+                      <Button variant="default" className="text-xs h-9 bg-electric-blue hover:bg-electric-blue-dark text-white font-bold" onClick={handleDownloadOwrBundle}>
                         <Download className="h-4 w-4 mr-1.5" /> Download Bundle (.zip)
                       </Button>
                     </div>
@@ -711,7 +711,7 @@ ${owrPlatform === "web" ?
                   onClick={() => setRecipeView("graph")}
                   className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${
                     recipeView === "graph"
-                      ? "bg-electric-blue text-white shadow shadow-blue-500/20"
+                      ? "bg-electric-blue text-white"
                       : "text-slate-400 hover:text-slate-200"
                   }`}
                 >
@@ -722,19 +722,19 @@ ${owrPlatform === "web" ?
                   onClick={() => setRecipeView("json")}
                   className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${
                     recipeView === "json"
-                      ? "bg-electric-blue text-white shadow shadow-blue-500/20"
+                      ? "bg-electric-blue text-white"
                       : "text-slate-400 hover:text-slate-200"
                   }`}
                 >
                   <Code className="h-3 w-3" /> JSON Code
                 </button>
               </div>
-              <Button variant="outline" className="h-8 px-3 text-xs border-indigo-500/30 text-indigo-400 hover:text-white hover:bg-indigo-500/10" onClick={() => setIsExportOpen(true)}>
+              <Button variant="outline" className="h-8 px-3 text-xs border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10" onClick={() => setIsExportOpen(true)}>
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Export Recipe
               </Button>
               <Button 
                 variant="outline" 
-                className="h-8 px-3 text-xs border-purple-500/30 text-purple-400 hover:text-white hover:bg-purple-500/10" 
+                className="h-8 px-3 text-xs border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10" 
                 onClick={() => setIsOwrExportOpen(true)}
               >
                 <Globe className="h-3.5 w-3.5 mr-1.5" /> Export for OWR
@@ -768,26 +768,26 @@ ${owrPlatform === "web" ?
           badge={
             <div className="flex items-center gap-2 flex-wrap">
               {executionStatus === "running" && (
-                <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-2.5 py-1 rounded-full font-bold animate-pulse">
+                <span className="flex items-center gap-1.5 text-xs font-mono bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-2.5 py-1 rounded">
                   <RefreshCw className="h-3 w-3 animate-spin" /> Running
                 </span>
               )}
               {executionStatus === "completed" && (
-                <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full font-bold">
+                <span className="flex items-center gap-1.5 text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded">
                   <CheckCircle2 className="h-3 w-3" /> Done
                 </span>
               )}
               {executionStatus === "failed" && (
-                <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-mono bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded-full font-bold">
+                <span className="flex items-center gap-1.5 text-xs font-mono bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded">
                   <AlertCircle className="h-3 w-3" /> Failed
                 </span>
               )}
               <Button
                 variant="outline"
-                className="h-8 px-2.5 text-[10px] border-slate-700 text-slate-300 hover:border-purple-500/40 hover:text-purple-300"
+                className="h-8 px-2.5 text-xs border-slate-700 text-slate-300 hover:border-electric-blue/40 hover:text-electric-blue"
                 onClick={() => onOpenAiAudit?.()}
               >
-                <Sparkles className="h-3 w-3 mr-1 inline" /> AI Review
+                Review
               </Button>
             </div>
           }
@@ -837,7 +837,7 @@ ${owrPlatform === "web" ?
             </div>
             <div className="flex items-center gap-2 ml-auto">
               {justQueued ? (
-                <span className="text-xs text-electric-blue font-semibold animate-pulse font-mono mr-2">Queued!</span>
+                <span className="text-xs text-electric-blue font-semibold font-mono mr-2">Queued</span>
               ) : (
                 <Button variant="outline" className="h-9 px-3 text-xs border-dashed border-slate-700 hover:border-electric-blue hover:text-electric-blue disabled:opacity-40" onClick={handleQueueJob} disabled={!isRunnable}>
                   + Queue

@@ -45,24 +45,26 @@ Slider.displayName = SliderPrimitive.Root.displayName;
 
 // Generic Card
 export function Card({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <div className={cn("rounded-xl border border-slate-800 bg-slate-900/50 text-slate-100 shadow-sm", className)}>{children}</div>;
+  return <div className={cn("rounded border border-slate-800 bg-slate-900/40 text-slate-100", className)}>{children}</div>;
 }
 export function CardHeader({ title, description, badge, tooltip }: { title: string; description?: string; badge?: React.ReactNode; tooltip?: string }) {
   return (
-    <div className="flex flex-col space-y-1.5 p-6 pb-4">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold leading-none tracking-tight flex items-center gap-2">
-          {title}
-          {tooltip && <Info className="h-4 w-4 text-slate-500 cursor-help" title={tooltip} />}
-        </h3>
-        {badge && <div>{badge}</div>}
+    <div className="flex flex-col gap-1 p-5 pb-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold text-slate-100 flex items-center gap-2">
+            {title}
+            {tooltip && <Info className="h-3.5 w-3.5 text-slate-500 cursor-help shrink-0" title={tooltip} />}
+          </h3>
+          {description && <p className="text-sm text-slate-500 mt-1">{description}</p>}
+        </div>
+        {badge}
       </div>
-      {description && <p className="text-sm text-slate-400">{description}</p>}
     </div>
   );
 }
 export function CardContent({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <div className={cn("p-6 pt-0", className)}>{children}</div>;
+  return <div className={cn("p-5 pt-0", className)}>{children}</div>;
 }
 
 // Input Forms

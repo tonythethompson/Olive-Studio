@@ -299,9 +299,9 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
              {/* Info Bar */}
              <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl border border-slate-800 bg-slate-900/40 text-xs font-mono">
                 <div className="flex items-center gap-4">
-                   <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-slate-500 animate-pulse" /> {counts.queued} Queued</div>
-                   <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-electric-blue animate-pulse" /> {counts.running} Processing</div>
-                   <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> {counts.completed} Completed</div>
+                   <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-slate-500" /> {counts.queued} Queued</div>
+                   <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-electric-blue" /> {counts.running} Processing</div>
+                   <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" /> {counts.completed} Completed</div>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -414,7 +414,7 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
                        onClick={() => setSelectedJobId(job.id)}
                        className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border cursor-pointer transition-all ${
                          isSelected 
-                           ? 'border-electric-blue bg-electric-blue/5 shadow-[0_0_15px_rgba(59,130,246,0.05)]' 
+                           ? 'border-electric-blue bg-electric-blue/5' 
                            : 'border-slate-800/80 bg-slate-900/30 hover:border-slate-700 hover:bg-slate-900/50'
                        }`}
                      >
@@ -422,7 +422,7 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
                           {/* Status Icon */}
                           <div className="mt-0.5 shrink-0">
                              {job.status === "completed" && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
-                             {job.status === "running" && <PlayCircle className="h-5 w-5 text-electric-blue animate-pulse" />}
+                             {job.status === "running" && <PlayCircle className="h-5 w-5 text-electric-blue" />}
                              {job.status === "queued" && <Clock className="h-5 w-5 text-slate-500" />}
                              {job.status === "failed" && <XCircle className="h-5 w-5 text-red-500" />}
                           </div>
@@ -539,7 +539,7 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
                         </div>
                         <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
                            <span className="text-slate-500 text-[10px] block uppercase font-bold font-mono font-mono">VRAM Size</span>
-                           <span className="text-base font-bold text-purple-400 block mt-0.5 font-mono">{selectedJob.metrics.memory}</span>
+                           <span className="text-base font-bold text-electric-blue block mt-0.5 font-mono">{selectedJob.metrics.memory}</span>
                         </div>
                         <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center font-mono">
                            <span className="text-slate-500 text-[10px] block uppercase font-bold">Compression</span>
@@ -552,7 +552,7 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
                         <span>Metrics will appear when Olive reports them in output.</span>
                      </div>
                    ) : selectedJob.status === "running" ? (
-                     <div className="p-4 rounded-lg bg-electric-blue/5 border border-electric-blue/10 flex items-center justify-between gap-3 text-xs text-electric-blue animate-pulse">
+                     <div className="p-4 rounded-lg bg-electric-blue/5 border border-electric-blue/10 flex items-center justify-between gap-3 text-xs text-electric-blue">
                         <span className="flex items-center gap-2 font-semibold">
                            <Play className="h-4 w-4 fill-electric-blue" />
                            Serial runner active...
