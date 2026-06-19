@@ -1,7 +1,7 @@
 ﻿import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
-import { Code, Play, CheckCircle2, AlertCircle, Copy, Check, Upload, FileJson, X, Github, ArrowUpRight, Search, BookOpen, Workflow, GitBranch, GitPullRequest, Globe, RefreshCw, Trash2, Download, Laptop, Smartphone, FileCode, Sliders, Cpu, Settings, AlertTriangle } from "lucide-react";
+import { Code, Play, CheckCircle2, AlertCircle, Copy, Check, Upload, FileJson, X, Github, ArrowUpRight, Search, BookOpen, Workflow, GitBranch, GitPullRequest, Globe, RefreshCw, Trash2, Download, Laptop, Smartphone, FileCode, Sliders, Cpu, Settings, AlertTriangle, CircleDot } from "lucide-react";
 import JSZip from "jszip";
 import { RecipeGraphView } from "./RecipeGraphView";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,7 @@ export function ExecutionWorkspace({ state, setState, onOpenAiAudit, onExecute: 
   const [recipeView, setRecipeView] = useState<"graph" | "json">("graph");
   const [isCopied, setIsCopied] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [showGraphDot, setShowGraphDot] = useState(true);
   const [isExportCopied, setIsExportCopied] = useState(false);
   const [justQueued, setJustQueued] = useState(false);
 
@@ -729,6 +730,20 @@ ${owrPlatform === "web" ?
                   <Code className="h-3 w-3" /> JSON Code
                 </button>
               </div>
+              {recipeView === "graph" && (
+                <button
+                  type="button"
+                  onClick={() => setShowGraphDot(v => !v)}
+                  title={showGraphDot ? "Hide flow dot" : "Show flow dot"}
+                  className={`h-8 w-8 flex items-center justify-center rounded border transition-colors cursor-pointer ${
+                    showGraphDot
+                      ? "border-electric-blue/30 text-electric-blue hover:bg-electric-blue/10"
+                      : "border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-300"
+                  }`}
+                >
+                  <CircleDot className="h-3.5 w-3.5" />
+                </button>
+              )}
               <Button variant="outline" className="h-8 px-3 text-xs border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10" onClick={() => setIsExportOpen(true)}>
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Export Recipe
               </Button>
@@ -744,7 +759,7 @@ ${owrPlatform === "web" ?
         />
         {recipeView === "graph" ? (
           <CardContent className="flex-1 overflow-hidden p-0 min-h-[420px]">
-            <RecipeGraphView state={state} setState={setState} />
+            <RecipeGraphView state={state} setState={setState} showDot={showGraphDot} />
           </CardContent>
         ) : (
           <CardContent className="flex-1 overflow-auto bg-slate-950 p-4 m-6 mt-0 rounded-lg border border-slate-800 min-h-[360px]">

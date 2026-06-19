@@ -33,6 +33,7 @@ import {
 interface RecipeGraphViewProps {
   state: UIState;
   setState: (s: Partial<UIState>) => void;
+  showDot?: boolean;
 }
 
 type GraphPoint = { x: number; y: number };
@@ -82,7 +83,7 @@ function getModelDefaultInputType(state: UIState): string {
   return "float16";
 }
 
-export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
+export function RecipeGraphView({ state, setState, showDot = true }: RecipeGraphViewProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string>("input");
   const [connections, setConnections] = useState<{ from: string; to: string }[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -197,7 +198,7 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
     const arcYTop = 28;
 
     const numSegs = activeNodes.length - 1;
-    const totalDur = Math.max(1.5, numSegs * 0.5);
+    const totalDur = Math.max(2, numSegs * 0.8);
 
     for (let i = 0; i < numSegs; i++) {
       const fromNode = activeNodes[i];
@@ -271,23 +272,25 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
           >
             <animate attributeName="stroke-dashoffset" from="12" to="0" dur="0.7s" repeatCount="indefinite" />
           </path>
-          <circle r={hasSkip ? 3 : 3.5} fill="#8DA840" opacity="0">
-            <animateMotion
-              dur={`${totalDur}s`}
-              repeatCount="indefinite"
-              path={d}
-              calcMode="linear"
-              keyPoints="0;0;1;1"
-              keyTimes={`0;${tStart};${tEnd};1`}
-            />
-            <animate
-              attributeName="opacity"
-              dur={`${totalDur}s`}
-              repeatCount="indefinite"
-              values="0;0;1;1;0;0"
-              keyTimes={`0;${tStartBefore};${tStart};${tEnd};${tEndAfter};1`}
-            />
-          </circle>
+          {showDot && (
+            <circle r={hasSkip ? 3 : 3.5} fill="#8DA840" opacity="0">
+              <animateMotion
+                dur={`${totalDur}s`}
+                repeatCount="indefinite"
+                path={d}
+                calcMode="linear"
+                keyPoints="0;0;1;1"
+                keyTimes={`0;${tStart};${tEnd};1`}
+              />
+              <animate
+                attributeName="opacity"
+                dur={`${totalDur}s`}
+                repeatCount="indefinite"
+                values="0;0;1;1;0;0"
+                keyTimes={`0;${tStartBefore};${tStart};${tEnd};${tEndAfter};1`}
+              />
+            </circle>
+          )}
         </g>
       );
     }
