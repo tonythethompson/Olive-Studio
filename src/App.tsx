@@ -3,10 +3,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { UIState } from "@/types";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import { commitUiStateUpdate } from "@/lib/pipelineValidation";
-import { BrainCircuit, Cpu, Zap, Terminal, Bot } from "lucide-react";
+import { BrainCircuit, Cpu, Terminal, Bot } from "lucide-react";
 import { InputEnvironmentPanel } from "@/components/features/InputEnvironmentPanel";
 import { IHVIntegrationPanel } from "@/components/features/IHVIntegrationPanel";
-import { OptimizationPassesPanel } from "@/components/features/OptimizationPassesPanel";
 import { ExecutionWorkspace } from "@/components/features/ExecutionWorkspace";
 import { BatchProcessingPanel } from "@/components/features/BatchProcessingPanel";
 import { GeminiSidebar } from "@/components/features/GeminiSidebar";
@@ -30,13 +29,12 @@ const defaultState: UIState = {
   passes: { ...DEFAULT_PASSES },
 };
 
-type ActiveView = "input" | "ihv" | "passes" | "execute";
+type ActiveView = "input" | "ihv" | "execute";
 
 const SECTIONS: { id: ActiveView; step: string; label: string; desc: string; icon: typeof BrainCircuit }[] = [
   { id: "input", step: "01", label: "Model source", desc: "Recipe preset or Hugging Face, local, and Azure model inputs.", icon: BrainCircuit },
   { id: "ihv", step: "02", label: "Hardware", desc: "Execution provider and accelerator target.", icon: Cpu },
-  { id: "passes", step: "03", label: "Optimization passes", desc: "Conversion, quantization, pruning, and PEFT.", icon: Zap },
-  { id: "execute", step: "04", label: "Recipe & run", desc: "Review workflow, execute, or queue batch jobs.", icon: Terminal },
+  { id: "execute", step: "03", label: "Recipe & run", desc: "Review workflow, execute, or queue batch jobs.", icon: Terminal },
 ];
 
 function Dashboard() {
@@ -157,7 +155,6 @@ function Dashboard() {
                   </header>
                   {id === "input" && <InputEnvironmentPanel state={state} setState={setState} />}
                   {id === "ihv" && <IHVIntegrationPanel state={state} setState={setState} />}
-                  {id === "passes" && <OptimizationPassesPanel state={state} setState={setState} />}
                   {id === "execute" && (
                     <div className="space-y-8">
                       <ExecutionWorkspace state={state} setState={setState} onOpenAiAudit={handleOpenAiAudit} />

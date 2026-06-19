@@ -1,4 +1,4 @@
-import { useState, useLayoutEffect, useRef, type ReactElement } from "react";
+import { useState, useLayoutEffect, useEffect, useRef, type ReactElement } from "react";
 import { UIState } from "@/types";
 import { Button, Card, CardContent, Input, Label, Slider, Select } from "@/components/ui";
 import {
@@ -67,11 +67,36 @@ function appendSegmentCurve(from: GraphPoint, to: GraphPoint): string {
   return `C ${from.x} ${c1y}, ${to.x} ${c2y}, ${to.x} ${to.y}`;
 }
 
+// Derive allowable conversionInputTargetTypes from the selected model identifier
+function getModelDefaultInputType(state: UIState): string {
+  const id = (
+    state.modelSource === "huggingface" ? state.hfModelId :
+    state.modelSource === "azure" ? state.azureModelPath :
+    state.localFiles?.[0]?.name ?? ""
+  ).toLowerCase();
+
+  if (id.includes("whisper")) return "float16";
+  if (id.includes("diffusion") || id.includes("unet") || id.includes("sdxl") || id.includes("flux")) return "float16";
+  if (id.includes("bert") || id.includes("roberta") || id.includes("t5")) return "float32";
+  // LLMs and generic default
+  return "float16";
+}
+
 export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string>("input");
   const [connections, setConnections] = useState<{ from: string; to: string }[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [layoutTick, setLayoutTick] = useState(0);
+
+  // Keep conversionInputTargetTypes in sync with the selected model family
+  useEffect(() => {
+    const defaultType = getModelDefaultInputType(state);
+    const allowed = ["float16", "bfloat16", "float32", "int8", "int32", "int64"];
+    if (!allowed.includes(state.passes.conversionInputTargetTypes)) {
+      setState({ passes: { ...state.passes, conversionInputTargetTypes: defaultType } });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.modelSource, state.hfModelId, state.azureModelPath, state.localFiles.length]);
 
   // Redraw connections when layout or pipeline changes
   useLayoutEffect(() => {
@@ -153,6 +178,14 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
   const allowedConversionFormats = getAllowedConversionFormats(state.ihvProvider);
   const allowedPruningTypes = getAllowedPruningTypes(state.ihvProvider);
   const allowedPeftMethods = getAllowedPeftMethods(state.ihvProvider);
+
+  // Per-node worst-severity conflict level for graph badge rendering
+  const nodeIssueLevel = (nodeId: string): "critical" | "warning" | null => {
+    const relevant = validation.issues.filter(i => i.affectedPasses?.includes(nodeId));
+    if (relevant.some(i => i.severity === "critical")) return "critical";
+    if (relevant.some(i => i.severity === "warning")) return "warning";
+    return null;
+  };
 
   // Render SVG wires Dynamically
   const renderSVGConnections = () => {
@@ -455,31 +488,49 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
                 const nd = getNodePreviewData(id);
                 const isSelected = selectedNodeId === id;
                 const active = pipelineSteps.find(s => s.id === id)?.active;
-                
+                const issueLevel = active ? nodeIssueLevel(id) : null;
+
                 return (
                   <button
                     key={id}
                     id={`node-btn-${id}`}
                     onClick={() => handleNodeClick(id)}
                     className={`group text-left p-2 rounded-lg border transition-all duration-300 relative flex flex-col justify-between ${
-                      isSelected 
-                      ? "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue" 
-                      : active
-                        ? "border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/60"
-                        : "border-slate-900/50 hover:border-slate-800/80 bg-slate-950/60 opacity-60 hover:opacity-85 border-dashed"
+                      isSelected
+                        ? issueLevel === "critical"
+                          ? "border-rose-500 bg-rose-950/20 ring-1 ring-rose-500"
+                          : issueLevel === "warning"
+                            ? "border-amber-500 bg-amber-950/10 ring-1 ring-amber-500"
+                            : "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue"
+                        : issueLevel === "critical"
+                          ? "border-rose-700/60 bg-rose-950/10 hover:border-rose-600"
+                          : issueLevel === "warning"
+                            ? "border-amber-700/50 bg-amber-950/5 hover:border-amber-600"
+                            : active
+                              ? "border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/60"
+                              : "border-slate-900/50 hover:border-slate-800/80 bg-slate-950/60 opacity-60 hover:opacity-85 border-dashed"
                     }`}
                   >
+                    {issueLevel && (
+                      <span className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${issueLevel === "critical" ? "bg-rose-500" : "bg-amber-400"}`} />
+                    )}
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <div className={`p-1 rounded ${active ? "bg-electric-blue/10 border border-electric-blue/20 text-electric-blue" : "bg-slate-950 border border-slate-900 text-slate-500"}`}>
+                        <div className={`p-1 rounded ${
+                          issueLevel === "critical" ? "bg-rose-950/40 border border-rose-700/40 text-rose-400"
+                          : issueLevel === "warning" ? "bg-amber-950/30 border border-amber-700/30 text-amber-400"
+                          : active ? "bg-electric-blue/10 border border-electric-blue/20 text-electric-blue"
+                          : "bg-slate-950 border border-slate-900 text-slate-500"
+                        }`}>
                           {nd.icon}
                         </div>
                         <span className={`text-[8px] font-mono px-1 py-0.2 rounded border uppercase whitespace-nowrap ${
-                          active 
-                          ? "bg-slate-950 text-electric-blue border-electric-blue/20" 
+                          issueLevel === "critical" ? "bg-rose-950/40 text-rose-400 border-rose-700/40"
+                          : issueLevel === "warning" ? "bg-amber-950/30 text-amber-400 border-amber-700/30"
+                          : active ? "bg-slate-950 text-electric-blue border-electric-blue/20"
                           : "bg-slate-950 text-slate-600 border-slate-900"
                         }`}>
-                          {active ? "Active" : "Skip"}
+                          {issueLevel === "critical" ? "Conflict" : issueLevel === "warning" ? "Warning" : active ? "Active" : "Skip"}
                         </span>
                       </div>
                       <h4 className="text-[11px] font-bold text-slate-200 truncate leading-snug">{nd.title}</h4>
@@ -502,18 +553,34 @@ export function RecipeGraphView({ state, setState }: RecipeGraphViewProps) {
               {(() => {
                 const nd = getNodePreviewData("provider");
                 const isSelected = selectedNodeId === "provider";
+                const providerIssue = nodeIssueLevel("provider");
                 return (
                   <button
                     id="node-btn-provider"
                     onClick={() => handleNodeClick("provider")}
                     className={`group w-full max-w-[240px] text-left p-3.5 rounded-xl border transition-all duration-300 relative ${
-                      isSelected 
-                      ? "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue" 
-                      : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
+                      isSelected
+                        ? providerIssue === "critical"
+                          ? "border-rose-500 bg-rose-950/20 ring-1 ring-rose-500"
+                          : providerIssue === "warning"
+                            ? "border-amber-500 bg-amber-950/10 ring-1 ring-amber-500"
+                            : "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue"
+                        : providerIssue === "critical"
+                          ? "border-rose-700/60 bg-rose-950/10 hover:border-rose-600"
+                          : providerIssue === "warning"
+                            ? "border-amber-700/50 bg-amber-950/5 hover:border-amber-600"
+                            : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
                     }`}
                   >
+                    {providerIssue && (
+                      <span className={`absolute top-2 right-2 w-2 h-2 rounded-full ${providerIssue === "critical" ? "bg-rose-500" : "bg-amber-400"}`} />
+                    )}
                     <div className="flex items-center justify-between mb-1.5">
-                      <div className="p-1.5 rounded bg-electric-blue/10 border border-electric-blue/20 group-hover:bg-electric-blue/15 transition-all duration-200">
+                      <div className={`p-1.5 rounded border transition-all duration-200 ${
+                        providerIssue === "critical" ? "bg-rose-950/40 border-rose-700/40 text-rose-400"
+                        : providerIssue === "warning" ? "bg-amber-950/30 border-amber-700/30 text-amber-400"
+                        : "bg-electric-blue/10 border-electric-blue/20 group-hover:bg-electric-blue/15"
+                      }`}>
                         {nd.icon}
                       </div>
                     </div>
