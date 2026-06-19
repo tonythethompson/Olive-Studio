@@ -777,7 +777,7 @@ export function InputEnvironmentPanel({
             <TabsList className="grid w-full grid-cols-3 h-auto rounded-lg p-1 bg-slate-950 border border-slate-900 mb-4">
               <TabsTrigger value="starter" className="text-[10px] sm:text-xs py-1.5 px-1.5 sm:px-2 rounded-md cursor-pointer">
                 <Activity className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 text-indigo-400" />
-                Curated
+                Presets
               </TabsTrigger>
               <TabsTrigger value="github" className="text-[10px] sm:text-xs py-1.5 px-1.5 sm:px-2 rounded-md cursor-pointer">
                 <Globe className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 text-cyan-400" />
@@ -801,7 +801,7 @@ export function InputEnvironmentPanel({
               </p>
             )}
 
-            {/* STARTER CURATED TAB */}
+            {/* PRESETS TAB (microsoft/olive-recipes catalog) */}
             <TabsContent value="starter" className="space-y-3 animate-in fade-in mt-0">
               <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5 space-y-2">
                 <div className="flex flex-wrap items-start justify-between gap-2">
