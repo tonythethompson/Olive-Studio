@@ -15,6 +15,14 @@ import {
 import { UIState } from "@/types";
 import { SUGGESTED_RECIPES } from "@/data/recipes";
 import {
+  deriveUiStateFromOliveRecipe,
+  fetchGitHubRecipeJson,
+  fetchOliveRecipesCatalogItem,
+  OLIVE_RECIPES_BRANCH,
+  OLIVE_RECIPES_REPO,
+  type RecipeCatalogItem,
+} from "@/lib/oliveRecipeHub";
+import {
   DownloadCloud,
   KeyRound,
   Database,
@@ -78,51 +86,45 @@ export function InputEnvironmentPanel({
   const [selectedDevice, setSelectedDevice] = useState<string>("All");
   const [syncStatus, setSyncStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [syncError, setSyncError] = useState("");
-  const [repoUrl, setRepoUrl] = useState("https://github.com/microsoft/olive-recipes");
-  const [repoBranch, setRepoBranch] = useState("main");
-  const [repoPath, setRepoPath] = useState("recipes/llama/llama_int4.json");
+  const [repoUrl, setRepoUrl] = useState(`https://github.com/${OLIVE_RECIPES_REPO}`);
+  const [repoBranch, setRepoBranch] = useState(OLIVE_RECIPES_BRANCH);
+  const [repoPath, setRepoPath] = useState(
+    "Qwen-Qwen2.5-1.5B-Instruct/NvTensorRtRtx/Qwen2.5-1.5B-Instruct_model_builder_fp16.json"
+  );
   const [importJson, setImportJson] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
   const [activeRecipeTab, setActiveRecipeTab] = useState<"starter" | "github" | "editor">("starter");
   const [recipeSuccessMsg, setRecipeSuccessMsg] = useState<string | null>(null);
+  const [applyingRecipePath, setApplyingRecipePath] = useState<string | null>(null);
 
-  const handleApplyCuratedRecipe = (item: typeof SUGGESTED_RECIPES[0]) => {
-    setState(item.state);
-    if (item.json) {
-      setImportJson(JSON.stringify(item.json, null, 2));
+  const handleApplyCuratedRecipe = async (item: RecipeCatalogItem) => {
+    setApplyingRecipePath(item.repoPath);
+    setSyncStatus("idle");
+    setSyncError("");
+
+    try {
+      const json = await fetchOliveRecipesCatalogItem(item);
+      setState(deriveUiStateFromOliveRecipe(json, state.passes));
+      setImportJson(JSON.stringify(json, null, 2));
+      setRecipeSuccessMsg(`Applied preset recipe: "${item.name}"! Config features are updated.`);
+      setTimeout(() => {
+        setRecipeSuccessMsg(null);
+      }, 4000);
+    } catch (err: any) {
+      setSyncStatus("error");
+      setSyncError(err.message || "Failed to load recipe from GitHub.");
+    } finally {
+      setApplyingRecipePath(null);
     }
-    setRecipeSuccessMsg(`Applied preset recipe: "${item.name}"! Config features are updated.`);
-    setTimeout(() => {
-      setRecipeSuccessMsg(null);
-    }, 4000);
   };
 
   const handleFetchRemote = async () => {
     setSyncStatus("loading");
     setSyncError("");
-    
-    let targetUrl = "";
-    const trimmedUrl = repoUrl.trim();
-    
-    if (trimmedUrl.startsWith("https://github.com/") && trimmedUrl.includes("/blob/")) {
-      const p = trimmedUrl
-        .replace("github.com", "raw.githubusercontent.com")
-        .replace("/blob/", "/");
-      targetUrl = p;
-    } else {
-      let cleanRepo = trimmedUrl.replace("https://github.com/", "");
-      if (cleanRepo.endsWith("/")) cleanRepo = cleanRepo.slice(0, -1);
-      const cleanPath = repoPath.startsWith("/") ? repoPath.slice(1) : repoPath;
-      targetUrl = `https://raw.githubusercontent.com/${cleanRepo}/${repoBranch}/${cleanPath}`;
-    }
 
     try {
-      const response = await fetch(targetUrl);
-      if (!response.ok) {
-        throw new Error(`Sync failed. Repository or remote path does not exist (Status ${response.status}).`);
-      }
-      const data = await response.json();
-      setImportJson(JSON.stringify(data, null, 2));
+      const { json } = await fetchGitHubRecipeJson(repoUrl, repoBranch, repoPath);
+      setImportJson(JSON.stringify(json, null, 2));
       setSyncStatus("success");
       setRecipeSuccessMsg("Downloaded remote recipe payload! Inspect in Editor tab.");
       setTimeout(() => setRecipeSuccessMsg(null), 4000);
@@ -137,50 +139,7 @@ export function InputEnvironmentPanel({
   const handleImport = () => {
     try {
       const parsed = JSON.parse(importJson);
-      
-      const incomingState: Partial<UIState> = {};
-      
-      const hfConfig = parsed.input_model?.config?.hf_config;
-      if (hfConfig) {
-        incomingState.modelSource = "huggingface" as const;
-        incomingState.hfModelId = hfConfig.model_name || "";
-      }
-      
-      const localConfig = parsed.input_model?.config;
-      if (localConfig?.local_files?.length) {
-        incomingState.modelSource = "local" as const;
-        incomingState.localFiles = localConfig.local_files.map((name: string) => ({ name, size: 2000000000 }));
-      }
-
-      if (parsed.passes) {
-        const passesState: any = { ...state.passes };
-        
-        if (parsed.passes.conversion) {
-          passesState.conversion = true;
-          if (parsed.passes.conversion.config?.precision) {
-            passesState.conversionInputTargetTypes = parsed.passes.conversion.config.precision;
-          }
-        }
-        if (parsed.passes.quantization) {
-          passesState.quantization = true;
-          if (parsed.passes.quantization.config?.weight_type) {
-            passesState.quantPrecision = parsed.passes.quantization.config.weight_type;
-          }
-        }
-        if (parsed.passes.pruning) {
-          passesState.pruning = true;
-          if (parsed.passes.pruning.config?.sparsity) {
-            passesState.pruningSparsity = parsed.passes.pruning.config.sparsity;
-          }
-        }
-        if (parsed.passes.peft) {
-          passesState.peft = true;
-        }
-        
-        incomingState.passes = passesState;
-      }
-
-      setState(incomingState);
+      setState(deriveUiStateFromOliveRecipe(parsed, state.passes));
       setImportError(null);
       setRecipeSuccessMsg("Recipe parsed and applied successfully!");
       setTimeout(() => setRecipeSuccessMsg(null), 4000);
@@ -190,15 +149,22 @@ export function InputEnvironmentPanel({
   };
 
   const filteredRecipes = SUGGESTED_RECIPES.filter((item) => {
+    const query = recipeSearch.toLowerCase();
     const matchesSearch =
-      item.name.toLowerCase().includes(recipeSearch.toLowerCase()) ||
-      item.description.toLowerCase().includes(recipeSearch.toLowerCase());
+      item.name.toLowerCase().includes(query) ||
+      item.description.toLowerCase().includes(query) ||
+      item.repoPath.toLowerCase().includes(query);
     const matchesArch =
       selectedArchitecture === "All" || item.architecture === selectedArchitecture;
     const matchesDev =
       selectedDevice === "All" || item.device === selectedDevice;
     return matchesSearch && matchesArch && matchesDev;
   });
+
+  const pathSuggestions = SUGGESTED_RECIPES.filter((item) => {
+    if (!repoPath.trim()) return true;
+    return item.repoPath.toLowerCase().includes(repoPath.toLowerCase());
+  }).slice(0, 40);
 
   // Helper to get hash from reconstructed history (or a placeholder for local files)
   const getDisplayHash = (name: string) => {
@@ -598,6 +564,7 @@ export function InputEnvironmentPanel({
                     <option value="MobileNet">MobileNet vision</option>
                     <option value="ResNet">ResNet series</option>
                     <option value="Stable Diffusion">Stable Diffusion</option>
+                    <option value="Other">Other models</option>
                   </Select>
                 </div>
 
@@ -619,9 +586,9 @@ export function InputEnvironmentPanel({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[380px] overflow-y-auto pr-1">
-                {filteredRecipes.map((item, idx) => (
+                {filteredRecipes.map((item) => (
                   <div
-                    key={idx}
+                    key={item.repoPath}
                     className="p-4 rounded-xl border border-slate-900 bg-slate-950/45 hover:border-indigo-500/25 transition-all flex flex-col justify-between h-full group gap-3 text-left"
                   >
                     <div className="space-y-1.5">
@@ -650,9 +617,16 @@ export function InputEnvironmentPanel({
                           variant="outline"
                           type="button"
                           className="h-7 px-2.5 text-[10px] bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
-                          onClick={() => {
-                            setImportJson(JSON.stringify(item.json, null, 2));
-                            setActiveRecipeTab("editor");
+                          disabled={applyingRecipePath === item.repoPath}
+                          onClick={async () => {
+                            try {
+                              const json = await fetchOliveRecipesCatalogItem(item);
+                              setImportJson(JSON.stringify(json, null, 2));
+                              setActiveRecipeTab("editor");
+                            } catch (err: any) {
+                              setSyncStatus("error");
+                              setSyncError(err.message || "Failed to load recipe JSON.");
+                            }
                           }}
                         >
                           Load JSON
@@ -660,9 +634,17 @@ export function InputEnvironmentPanel({
                         <Button
                           type="button"
                           className="h-7 px-2.5 text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white font-bold"
+                          disabled={applyingRecipePath === item.repoPath}
                           onClick={() => handleApplyCuratedRecipe(item)}
                         >
-                          Apply Recipe
+                          {applyingRecipePath === item.repoPath ? (
+                            <>
+                              <Loader2 className="h-3 w-3 mr-1 animate-spin inline" />
+                              Loading
+                            </>
+                          ) : (
+                            "Apply Recipe"
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -720,7 +702,15 @@ export function InputEnvironmentPanel({
                         value={repoPath}
                         onChange={(e) => setRepoPath(e.target.value)}
                         className="font-mono text-xs h-9"
+                        list="olive-recipe-paths"
                       />
+                      <datalist id="olive-recipe-paths">
+                        {pathSuggestions.map((item) => (
+                          <option key={item.repoPath} value={item.repoPath}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </datalist>
                     </div>
                   </div>
 
@@ -758,28 +748,28 @@ export function InputEnvironmentPanel({
                   <div className="grid grid-cols-1 gap-2.5">
                     {[
                       {
-                        label: "ResNet PTQ Module",
+                        label: "Qwen2.5 TRT-RTX FP16",
+                        repo: `https://github.com/${OLIVE_RECIPES_REPO}`,
+                        branch: OLIVE_RECIPES_BRANCH,
+                        path: "Qwen-Qwen2.5-1.5B-Instruct/NvTensorRtRtx/Qwen2.5-1.5B-Instruct_model_builder_fp16.json",
+                      },
+                      {
+                        label: "Whisper Tiny CPU INT8",
+                        repo: `https://github.com/${OLIVE_RECIPES_REPO}`,
+                        branch: OLIVE_RECIPES_BRANCH,
+                        path: "openai-whisper-tiny/cpu/whisper-tiny_cpu_int8.json",
+                      },
+                      {
+                        label: "Phi-3.5 Mini DirectML",
+                        repo: `https://github.com/${OLIVE_RECIPES_REPO}`,
+                        branch: OLIVE_RECIPES_BRANCH,
+                        path: "microsoft-Phi-3.5-mini-instruct/aitk/phi3_5_dml_config.json",
+                      },
+                      {
+                        label: "ResNet PTQ (olive repo)",
                         repo: "https://github.com/microsoft/olive",
                         branch: "main",
                         path: "examples/resnet/resnet_ptq.json",
-                      },
-                      {
-                        label: "Whisper CPU Config",
-                        repo: "https://github.com/microsoft/olive",
-                        branch: "main",
-                        path: "examples/whisper/whisper_cpu_builder.json",
-                      },
-                      {
-                        label: "BERT PTQ Quant",
-                        repo: "https://github.com/microsoft/olive",
-                        branch: "main",
-                        path: "examples/bert/bert_ptq.json",
-                      },
-                      {
-                        label: "Llama 2 CPU Config",
-                        repo: "https://github.com/microsoft/olive",
-                        branch: "main",
-                        path: "examples/llama2/llama2_cpu.json",
                       },
                     ].map((sc, i) => (
                       <button
