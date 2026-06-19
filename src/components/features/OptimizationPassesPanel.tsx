@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Card, CardContent, CardHeader, Switch, Label, Input, Slider, Select, Tabs, TabsList, TabsTrigger, TabsContent, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { UIState } from "@/types";
 import { applyIssueAutofix, getPipelineValidation, getRemainingAdvisories, getAllowedConversionFormats, getAllowedPeftMethods, getAllowedPruningTypes, getAllowedQuantMethods, isPeftAllowed } from "@/lib/pipelineValidation";
+import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { Layers, Combine, Zap, Minimize2, Workflow, Fingerprint, Info, ArrowRight, ArrowDown, Box, Settings, AlertTriangle } from "lucide-react";
 
 export function getSelectedModelInfo(state: UIState) {
@@ -157,7 +158,8 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
   };
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-6">
+      <VramEstimateBanner state={state} compact />
       
       {pipelineConflicts.length > 0 && (
         <div className="mb-6 rounded border border-amber-500/30 bg-amber-950/10 p-4 md:p-5 flex flex-col gap-4">
@@ -425,7 +427,18 @@ export function OptimizationPassesPanel({ state, setState }: { state: UIState; s
             <CardContent className="space-y-6">
                 <PipelineToggle 
                   active={state.passes.pruning} 
-                  onToggle={(v: boolean) => setState({ passes: { ...state.passes, pruning: !state.passes.pruning} })}
+                  onToggle={() => {
+                  const enabling = !state.passes.pruning;
+                  setState({
+                    passes: {
+                      ...state.passes,
+                      pruning: enabling,
+                      ...(enabling && state.passes.quantMethod === "awq"
+                        ? { quantMethod: "ptq" as const }
+                        : {}),
+                    },
+                  });
+                }}
                   title="Enable Pruning"
                   desc="Drive weights to zero to eliminate unnecessary connections."
                   icon={Combine}

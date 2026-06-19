@@ -1,4 +1,9 @@
 import { IHVProvider, UIState } from "@/types";
+import {
+  buildHfLoadKwargs,
+  buildPeftOffloadConfig,
+  isMemoryOffloadActive,
+} from "@/lib/memoryOffload";
 
 const GPU_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
@@ -69,13 +74,24 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   };
 
   const inputConfig = (recipe.input_model as { config: Record<string, unknown> }).config;
+  const useMemoryOffload = isMemoryOffloadActive(state);
 
   if (state.modelSource === "huggingface") {
-    inputConfig.hf_config = {
-      model_name: state.hfModelId || "unspecified",
-      task: inferHfTask(state.hfModelId || ""),
-      ...(state.hfDataset ? { dataset: state.hfDataset } : {}),
-    };
+    if (useMemoryOffload) {
+      (recipe.input_model as { type: string }).type = "HfModel";
+      inputConfig.model_path = state.hfModelId || "unspecified";
+      inputConfig.task = inferHfTask(state.hfModelId || "");
+      if (state.hfDataset) {
+        inputConfig.dataset = state.hfDataset;
+      }
+      inputConfig.load_kwargs = buildHfLoadKwargs(state.ihvProvider, null);
+    } else {
+      inputConfig.hf_config = {
+        model_name: state.hfModelId || "unspecified",
+        task: inferHfTask(state.hfModelId || ""),
+        ...(state.hfDataset ? { dataset: state.hfDataset } : {}),
+      };
+    }
   } else if (state.modelSource === "local") {
     inputConfig.model_path = "./local_models";
     if (state.localFiles.length > 0) {
@@ -130,7 +146,11 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
 
   if (state.passes.peft) {
     const peftType = state.passes.peftMethod === "qlora" ? "QLoRA" : "LoRA";
-    passes.peft = { type: peftType, config: { r: 8, lora_alpha: 16 } };
+    const peftConfig: Record<string, unknown> = { r: 8, lora_alpha: 16 };
+    if (useMemoryOffload) {
+      Object.assign(peftConfig, buildPeftOffloadConfig());
+    }
+    passes.peft = { type: peftType, config: peftConfig };
   }
 
   if (state.passes.pruning) {

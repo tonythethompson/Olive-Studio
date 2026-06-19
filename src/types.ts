@@ -64,6 +64,8 @@ export interface UIState {
   hfModelId: string;
   hfDataset: string;
   ihvProvider: IHVProvider;
+  /** Hugging Face load_kwargs device_map — GPU + host RAM when auto. */
+  memoryOffload: "gpu_only" | "auto";
   cudaVersion: "auto" | "cpu" | "cu118" | "cu121" | "cu124" | "cu126";
   cacheDir: string;
   azureStr: string;

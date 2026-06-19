@@ -1,4 +1,5 @@
 import { IHVProvider, UIState } from "@/types";
+import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
 
 export type IssueSeverity = "critical" | "warning" | "info";
 
@@ -47,6 +48,24 @@ export function isQuantMethodAllowed(
     return provider !== "QNNExecutionProvider";
   }
   return true;
+}
+
+/** Why a quant method toggle would not stick after commit (beyond EP hardware rules). */
+export function getQuantMethodActivationBlock(
+  method: Extract<UIState["passes"]["quantMethod"], "awq" | "qat">,
+  passes: UIState["passes"],
+  provider: IHVProvider
+): { reason: string } | null {
+  if (!isQuantMethodAllowed(method, provider)) {
+    return null;
+  }
+  if (method === "qat" && passes.splitting) {
+    return {
+      reason:
+        "QAT conflicts with model splitting. Disable splitting first, or use PTQ/AWQ instead.",
+    };
+  }
+  return null;
 }
 
 export function isConversionFormatAllowed(
@@ -152,6 +171,18 @@ export function getProviderConflicts(
   return conflicts;
 }
 
+/** Apply all provider-specific conflict autofixes for a target EP. */
+export function applyProviderConflictAutofixes(
+  providerId: IHVProvider,
+  passes: UIState["passes"]
+): UIState["passes"] {
+  let updated: UIState["passes"] = { ...passes };
+  for (const conflict of getProviderConflicts(providerId, passes)) {
+    updated = { ...updated, ...conflict.autofix() };
+  }
+  return coercePassFields(updated, providerId);
+}
+
 export function isProviderCompatibleWithPasses(
   providerId: IHVProvider,
   passes: UIState["passes"]
@@ -173,13 +204,13 @@ function getCrossPassIssues(state: UIState): PipelineIssue[] {
   if (passes.pruning && passes.quantization && passes.quantMethod === "awq") {
     issues.push({
       id: "pruning-awq",
-      severity: "critical",
-      title: "Pruning & AWQ Quantization Conflict",
+      severity: "warning",
+      title: "Pruning disabled for AWQ",
       description:
-        "Pruning destroys the tensor structures and activates scale gradients that AWQ depends on. This causes weight distribution scale mismatch.",
+        "Pruning conflicts with AWQ scale calibration. Pruning is turned off automatically when AWQ is selected.",
       affectedTabs: ["quantization", "compression"],
-      actionLabel: "Switch Quantization to PTQ",
-      autofix: { passes: { ...passes, quantMethod: "ptq" } },
+      actionLabel: "Disable pruning",
+      autofix: { passes: { ...passes, pruning: false } },
     });
   }
 
@@ -379,8 +410,8 @@ export function coercePassFields(passes: UIState["passes"], provider: IHVProvide
     next.peftMethod = "lora";
   }
 
-  if (next.pruning && next.quantization && next.quantMethod === "awq") {
-    next.quantMethod = "ptq";
+  if (next.quantization && next.quantMethod === "awq" && next.pruning) {
+    next.pruning = false;
   }
 
   if (next.peft && next.quantization && next.quantPrecision !== "fp16" && next.peftMethod === "lora") {
@@ -405,6 +436,10 @@ export function coercePassFields(passes: UIState["passes"], provider: IHVProvide
 export function sanitizePipelineState(state: UIState): UIState {
   let current: UIState = {
     ...state,
+    memoryOffload:
+      state.memoryOffload === "auto" && !isMemoryOffloadAvailable(state)
+        ? "gpu_only"
+        : state.memoryOffload,
     passes: coercePassFields(state.passes, state.ihvProvider),
   };
 

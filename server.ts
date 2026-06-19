@@ -19,6 +19,12 @@ import {
   pickRecommendedProvider,
   type HardwareProbeResult,
 } from "./src/lib/hardwareProbe.ts";
+import {
+  enrichRecipeMemoryOffloadForRun,
+  recipeUsesMemoryOffload,
+} from "./src/lib/memoryOffload.ts";
+import { getSelectedGpuVramGb } from "./src/lib/vramEstimate.ts";
+import type { IHVProvider } from "./src/types.ts";
 
 dotenv.config();
 dotenv.config({ path: ".env.local", override: true });
@@ -338,10 +344,16 @@ function inferRequiredPackages(recipe: any, cudaTag: string): PkgDef[] {
   const passes = Object.values(recipe.passes ?? {}) as any[];
   const passTypes = passes.map((p: any) => p?.type ?? "");
   const isGpu = cudaTag !== "cpu";
+  const inputType = String(recipe.input_model?.type ?? "");
+  const inputConfig = recipe.input_model?.config ?? {};
 
   // HuggingFace model source
-  if (recipe.input_model?.config?.hf_config) {
+  if (inputConfig.hf_config || inputType === "HfModel" || inputType.toLowerCase().includes("hf")) {
     pkgs.push({ importName: "transformers", installArgs: ["transformers"], label: "transformers" });
+    pkgs.push({ importName: "accelerate", installArgs: ["accelerate"], label: "accelerate" });
+  }
+
+  if (recipeUsesMemoryOffload(recipe)) {
     pkgs.push({ importName: "accelerate", installArgs: ["accelerate"], label: "accelerate" });
   }
 
@@ -378,6 +390,14 @@ function inferRequiredPackages(recipe: any, cudaTag: string): PkgDef[] {
   // Deduplicate by importName
   const seen = new Set<string>();
   return pkgs.filter(p => seen.has(p.importName) ? false : (seen.add(p.importName), true));
+}
+
+function getRecipeIhvProvider(recipe: any): IHVProvider {
+  const ep = recipe?.systems?.local_system?.config?.accelerators?.[0]?.execution_providers?.[0];
+  if (typeof ep === "string" && ep.length > 0) {
+    return ep as IHVProvider;
+  }
+  return "CUDAExecutionProvider";
 }
 
 /** Olive RunConfig parse + package scan without starting optimization. */
@@ -625,6 +645,7 @@ async function probeSystemHardware(): Promise<HardwareProbeResult> {
     arch: os.arch(),
     cpuModel: cpus[0]?.model?.trim() || "Unknown CPU",
     cpuCores: cpus.length,
+    systemRamGb: Math.round((os.totalmem() / 1024 ** 3) * 10) / 10,
   };
 
   const [nvidia, rocm] = await Promise.all([probeNvidiaGpus(), probeRocmGpus()]);
@@ -688,14 +709,25 @@ async function probeSystemHardware(): Promise<HardwareProbeResult> {
 let hardwareProbeCache: { at: number; result: HardwareProbeResult } | null = null;
 const HARDWARE_PROBE_CACHE_MS = 30_000;
 
+function enrichProbeWithSystemRam(result: HardwareProbeResult): HardwareProbeResult {
+  const systemRamGb = Math.round((os.totalmem() / 1024 ** 3) * 10) / 10;
+  return {
+    ...result,
+    platform: {
+      ...result.platform,
+      systemRamGb: result.platform.systemRamGb ?? systemRamGb,
+    },
+  };
+}
+
 app.get("/api/system/hardware-probe", async (req, res) => {
   try {
     const refresh = req.query.refresh === "1" || req.query.refresh === "true";
     const now = Date.now();
     if (!refresh && hardwareProbeCache && now - hardwareProbeCache.at < HARDWARE_PROBE_CACHE_MS) {
-      return res.json(hardwareProbeCache.result);
+      return res.json(enrichProbeWithSystemRam(hardwareProbeCache.result));
     }
-    const result = await probeSystemHardware();
+    const result = enrichProbeWithSystemRam(await probeSystemHardware());
     hardwareProbeCache = { at: now, result };
     return res.json(result);
   } catch (err) {
@@ -761,6 +793,19 @@ app.post("/api/olive/run", async (req, res) => {
     // Detect CUDA version, then infer and install recipe-specific dependencies
     let recipeObj: any = {};
     try { recipeObj = JSON.parse(recipeJson); } catch { /* malformed — olive will catch it */ }
+
+    if (recipeUsesMemoryOffload(recipeObj)) {
+      const hwProbe = await probeSystemHardware();
+      const provider = getRecipeIhvProvider(recipeObj);
+      const gpuVramGb = getSelectedGpuVramGb(hwProbe, provider) ?? 12;
+      const systemRamGb = hwProbe.platform.systemRamGb ?? os.totalmem() / 1024 ** 3;
+      recipeObj = enrichRecipeMemoryOffloadForRun(recipeObj, gpuVramGb, systemRamGb);
+      pushLog(
+        job,
+        `[mem] Hybrid offload: up to ~${gpuVramGb.toFixed(1)} GiB GPU + ~${systemRamGb.toFixed(1)} GiB host RAM (device_map auto)`,
+      );
+    }
+
     pushLog(job, "[deps] Detecting CUDA version...");
     const cudaTag = await detectCudaTag(cudaVersion, (line) => pushLog(job, line)).catch(() => "cpu");
     const requiredPkgs = inferRequiredPackages(recipeObj, cudaTag);
@@ -781,7 +826,8 @@ app.post("/api/olive/run", async (req, res) => {
 
     // Write recipe to a temp file
     const tmpFile = path.join(os.tmpdir(), `olive_recipe_${jobId}.json`);
-    fs.writeFileSync(tmpFile, recipeJson, "utf-8");
+    const recipeToRun = JSON.stringify(recipeObj, null, 2);
+    fs.writeFileSync(tmpFile, recipeToRun, "utf-8");
     pushLog(job, `[info] Recipe written to ${tmpFile}`);
 
     pushLog(job, "[preflight] Validating Olive RunConfig...");

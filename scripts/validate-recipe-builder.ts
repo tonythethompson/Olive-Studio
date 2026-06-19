@@ -17,6 +17,7 @@ const baseState: UIState = {
   hfModelId: "meta-llama/Llama-3-8B",
   hfDataset: "",
   ihvProvider: "CUDAExecutionProvider",
+  memoryOffload: "gpu_only",
   cudaVersion: "auto",
   cacheDir: "",
   azureStr: "",
@@ -56,5 +57,13 @@ assert.equal(cpuOpenVino.passes.conversionFormat, "onnx", "OpenVINO IR must be r
 
 const emptyRecipe = validateOliveRecipeStructure({});
 assert.equal(emptyRecipe.valid, false, "empty object must fail schema");
+
+const offloadPipeline = buildRecipeFromState({
+  ...baseState,
+  memoryOffload: "auto",
+});
+const inputModel = offloadPipeline.recipe.input_model as { type?: string; config?: { load_kwargs?: { device_map?: string } } };
+assert.equal(inputModel.type, "HfModel", "offload should switch to HfModel");
+assert.equal(inputModel.config?.load_kwargs?.device_map, "auto", "offload should set device_map auto");
 
 console.log("validate-recipe-builder: ok");

@@ -38,6 +38,7 @@ import {
 } from "@/lib/recipeHardwareCompatibility";
 import { getCatalogDeviceFromRecipe } from "@/lib/oliveRecipeHub";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
+import { estimateVramForCatalogPreset } from "@/lib/presetVramEstimate";
 import {
   DownloadCloud,
   KeyRound,
@@ -955,6 +956,7 @@ export function InputEnvironmentPanel({
                 {curatedRecipesWithMatch.map(({ item, match, hardware }) => {
                   const hwBlocked = hardware.tier === "unavailable";
                   const { title, meta } = presetDisplayName(item.name);
+                  const vramEst = estimateVramForCatalogPreset(item, hardwareProbe);
                   const statusParts: string[] = [];
                   if (hardware.tier === "compatible") statusParts.push("Compatible");
                   else if (hardware.tier === "unavailable") statusParts.push("Incompatible");
@@ -978,7 +980,11 @@ export function InputEnvironmentPanel({
                           {meta && <span className="text-xs text-slate-500">{meta}</span>}
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{item.description}</p>
-                        <p className="text-[11px] text-slate-600 mt-1">
+                        <p className="text-[11px] text-slate-500 font-mono mt-1">{vramEst.summaryLine}</p>
+                        {vramEst.fitHint && (
+                          <p className="text-[11px] text-amber-500/90 mt-0.5">{vramEst.fitHint}</p>
+                        )}
+                        <p className="text-[11px] text-slate-600 mt-0.5">
                           {statusParts.join(" · ")} · {item.device} · {item.architecture}
                         </p>
                         {hwBlocked && (

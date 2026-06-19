@@ -11,6 +11,7 @@ import { ExecutionWorkspace } from "@/components/features/ExecutionWorkspace";
 import { BatchProcessingPanel } from "@/components/features/BatchProcessingPanel";
 import { GeminiSidebar } from "@/components/features/GeminiSidebar";
 import { LicenseNotice } from "@/components/LicenseNotice";
+import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { cn } from "@/lib/utils";
 
 const queryClient = new QueryClient();
@@ -19,9 +20,10 @@ const defaultState: UIState = {
   modelSource: "huggingface",
   localFiles: [],
   azureModelPath: "",
-  hfModelId: "",
+  hfModelId: "meta-llama/Meta-Llama-3-8B",
   hfDataset: "",
   ihvProvider: "CPUExecutionProvider",
+  memoryOffload: "gpu_only",
   cudaVersion: "auto",
   cacheDir: "",
   azureStr: "",
@@ -99,6 +101,10 @@ function Dashboard() {
             })}
           </div>
         </nav>
+
+        <div className="shrink-0 border-t border-slate-800">
+          <VramEstimateBanner state={state} sidebar />
+        </div>
 
         <footer className="shrink-0 border-t border-slate-800 px-4 py-2.5">
           <button

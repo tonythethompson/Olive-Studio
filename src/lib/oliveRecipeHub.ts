@@ -1,5 +1,6 @@
 import { UIState, IHVProvider } from "@/types";
 import { createInactivePasses, DEFAULT_PASSES } from "@/lib/defaultPasses";
+import { memoryOffloadFromRecipe } from "@/lib/memoryOffload";
 
 export const OLIVE_RECIPES_REPO = "microsoft/olive-recipes";
 export const OLIVE_RECIPES_BRANCH = "main";
@@ -325,7 +326,11 @@ export function deriveUiStateFromOliveRecipe(
   const inputModel = parsed?.input_model;
 
   const hfConfig = inputModel?.config?.hf_config;
-  const hfModelPath = typeof inputModel?.model_path === "string" ? inputModel.model_path : null;
+  const hfModelPath = typeof inputModel?.model_path === "string"
+    ? inputModel.model_path
+    : typeof inputModel?.config?.model_path === "string"
+      ? inputModel.config.model_path
+      : null;
   const hfName = hfConfig?.model_name || hfModelPath;
 
   if (hfName) {
@@ -354,6 +359,11 @@ export function deriveUiStateFromOliveRecipe(
   const provider = mapExecutionProviderFromRecipe(parsed);
   if (provider) {
     incomingState.ihvProvider = provider;
+  }
+
+  const offloadMode = memoryOffloadFromRecipe(parsed);
+  if (offloadMode) {
+    incomingState.memoryOffload = offloadMode;
   }
 
   if (parsed?.passes && typeof parsed.passes === "object") {

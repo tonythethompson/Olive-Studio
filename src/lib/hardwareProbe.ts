@@ -13,6 +13,7 @@ export interface HardwareProbeResult {
     arch: string;
     cpuModel: string;
     cpuCores: number;
+    systemRamGb?: number;
   };
   nvidia?: {
     gpus: GpuInfo[];
@@ -109,5 +110,11 @@ export async function fetchHardwareProbe(refresh = false): Promise<HardwareProbe
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? `Hardware probe failed (${res.status})`);
   }
-  return res.json() as Promise<HardwareProbeResult>;
+  const result = (await res.json()) as HardwareProbeResult;
+
+  if (!refresh && (result.platform.systemRamGb == null || result.platform.systemRamGb <= 0)) {
+    return fetchHardwareProbe(true);
+  }
+
+  return result;
 }

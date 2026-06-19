@@ -6,6 +6,7 @@ import JSZip from "jszip";
 import { RecipeGraphView } from "./RecipeGraphView";
 import { cn } from "@/lib/utils";
 import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
+import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 
 export function ExecutionWorkspace({ state, setState, onOpenAiAudit, onExecute: _onExecute, jobId: _jobId, isRunning: _isRunning, setIsRunning: _setIsRunning }: { state: UIState; setState: (s: Partial<UIState>) => void; onOpenAiAudit?: () => void; onExecute?: () => void; jobId?: string | null; isRunning?: boolean; setIsRunning?: (v: boolean) => void }) {
   // Live execution state
@@ -793,6 +794,7 @@ ${owrPlatform === "web" ?
           }
         />
         <CardContent className="flex flex-col gap-4 p-4">
+          <VramEstimateBanner state={state} compact />
           {schema.errors.length > 0 && (
             <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3 space-y-2">
               {schema.errors.map((error) => (

@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, Select, Label, Switch, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { IHVProvider, UIState } from "@/types";
-import { getProviderConflicts, isConversionFormatAllowed, isPeftAllowed, isPeftMethodAllowed, isQuantMethodAllowed, isStructuredPruningAllowed } from "@/lib/pipelineValidation";
+import { applyProviderConflictAutofixes, getProviderConflicts, getQuantMethodActivationBlock, isConversionFormatAllowed, isPeftAllowed, isPeftMethodAllowed, isQuantMethodAllowed, isStructuredPruningAllowed } from "@/lib/pipelineValidation";
+import { isMemoryOffloadAvailable, hasHuggingFaceModel } from "@/lib/memoryOffload";
+import { isGpuProvider } from "@/lib/vramEstimate";
 import { fetchHardwareProbe, isProviderDetectedLocally, type HardwareProbeResult } from "@/lib/hardwareProbe";
+import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
+import { formatMemoryGb } from "@/lib/vramEstimate";
 import { Cpu, CpuIcon, Layers, Settings2, AlertTriangle, ShieldAlert, Check, Wand2, Activity, Lock, CheckCircle, AlertCircle, Info, Search, Sliders, Table, List, RefreshCw, HardDrive } from "lucide-react";
 
 export { getProviderConflicts };
@@ -48,7 +52,10 @@ const validations: OptimizationPassValidation[] = [
     isUnsupported: (provider) => !isQuantMethodAllowed("awq", provider),
     getIncompatibilityReason: () => "Requires NVIDIA/AMD high-performance compute host.",
     isActive: (passes) => passes.quantization && passes.quantMethod === "awq",
-    toggle: (passes, active) => active ? { ...passes, quantMethod: "ptq" } : { ...passes, quantization: true, quantMethod: "awq" },
+    toggle: (passes, active) =>
+      active
+        ? { ...passes, quantMethod: "ptq" }
+        : { ...passes, quantization: true, quantMethod: "awq", pruning: false },
     requiresExplanation: "AWQ is fine-tuned for heavy linear layers utilizing specialized CUDA or ROCm GPU acceleration matrices."
   },
   {
@@ -97,8 +104,50 @@ const validations: OptimizationPassValidation[] = [
   }
 ];
 
-export function getCellCompatibility(pass: OptimizationPassValidation, provider: IHVProvider) {
+export function getCellCompatibility(
+  pass: OptimizationPassValidation,
+  provider: IHVProvider,
+  passes?: UIState["passes"]
+) {
   const isUnsupported = pass.isUnsupported(provider);
+
+  if (
+    passes &&
+    pass.id === "awq-quantization" &&
+    !isUnsupported
+  ) {
+    const block = getQuantMethodActivationBlock("awq", passes, provider);
+    if (block) {
+      return {
+        status: "blocked" as const,
+        label: "Config blocked",
+        color: "bg-amber-500/15 border-amber-500/30 text-amber-400",
+        reason: block.reason,
+        speedup: "N/A",
+        vram: "N/A",
+        efficiency: "0%",
+      };
+    }
+  }
+
+  if (
+    passes &&
+    pass.id === "qat-quantization" &&
+    !isUnsupported
+  ) {
+    const block = getQuantMethodActivationBlock("qat", passes, provider);
+    if (block) {
+      return {
+        status: "blocked" as const,
+        label: "Config blocked",
+        color: "bg-amber-500/15 border-amber-500/30 text-amber-400",
+        reason: block.reason,
+        speedup: "N/A",
+        vram: "N/A",
+        efficiency: "0%",
+      };
+    }
+  }
   
   if (isUnsupported) {
     return {
@@ -236,11 +285,25 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                       <span className="text-slate-200">{hardwareProbe.platform.cpuModel}</span>
                       <span className="text-slate-600"> · {hardwareProbe.platform.cpuCores} cores · {hardwareProbe.platform.os} ({hardwareProbe.platform.arch})</span>
                     </p>
+                    <p>
+                      <span className="text-slate-500">System RAM:</span>{" "}
+                      <span className="text-slate-200 font-mono">
+                        {hardwareProbe.platform.systemRamGb != null
+                          ? formatMemoryGb(hardwareProbe.platform.systemRamGb)
+                          : "Unknown"}
+                      </span>
+                    </p>
                     {hardwareProbe.nvidia?.gpus.length ? (
                       <p>
                         <span className="text-slate-500">NVIDIA:</span>{" "}
                         <span className="text-slate-200">
-                          {hardwareProbe.nvidia.gpus.map((g) => g.name).join(", ")}
+                          {hardwareProbe.nvidia.gpus
+                            .map((g) =>
+                              g.vramMb
+                                ? `${g.name} (${formatMemoryGb(g.vramMb / 1024)})`
+                                : g.name,
+                            )
+                            .join(", ")}
                         </span>
                         {hardwareProbe.nvidia.cudaVersion && (
                           <span className="text-slate-600"> · driver CUDA {hardwareProbe.nvidia.cudaVersion}{hardwareProbe.nvidia.cudaTag ? ` → ${hardwareProbe.nvidia.cudaTag}` : ""}</span>
@@ -252,7 +315,15 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                     {hardwareProbe.rocm?.gpus.length ? (
                       <p>
                         <span className="text-slate-500">AMD ROCm:</span>{" "}
-                        <span className="text-slate-200">{hardwareProbe.rocm.gpus.map((g) => g.name).join(", ")}</span>
+                        <span className="text-slate-200">
+                          {hardwareProbe.rocm.gpus
+                            .map((g) =>
+                              g.vramMb
+                                ? `${g.name} (${formatMemoryGb(g.vramMb / 1024)})`
+                                : g.name,
+                            )
+                            .join(", ")}
+                        </span>
                       </p>
                     ) : null}
                     {hardwareProbe.openvino?.available ? (
@@ -299,6 +370,8 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
             </div>
           </div>
 
+          <VramEstimateBanner state={state} hardwareProbe={hardwareProbe} className="mb-6" />
+
           {/* Hardware Validation Guard Alert Summary Banner */}
           {selectedConflicts.length > 0 && (
             <div className={`mb-6 rounded-xl border p-4.5 animate-in slide-in-from-top-2 duration-300 flex flex-col gap-3.5 ${
@@ -326,11 +399,9 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                 <button
                   type="button"
                   onClick={() => {
-                    let updatedPasses = { ...state.passes };
-                    selectedConflicts.forEach(c => {
-                      updatedPasses = { ...updatedPasses, ...c.autofix() };
+                    setState({
+                      passes: applyProviderConflictAutofixes(state.ihvProvider, state.passes),
                     });
-                    setState({ passes: updatedPasses });
                   }}
                   className={`text-xs px-3 py-1.5 rounded border transition-all cursor-pointer flex items-center gap-1.5 hover:text-white ${
                     hasSelectedCritical 
@@ -353,6 +424,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
               const pConflicts = getProviderConflicts(p.id, state.passes);
               const cardHasCritical = pConflicts.some(c => c.severity === "critical");
               const cardHasWarning = pConflicts.some(c => c.severity === "warning");
+              const showSwitchAssist = pConflicts.length > 0 && (isSelected || !cardHasCritical);
               const detectedLocally = isProviderDetectedLocally(p.id, hardwareProbe);
 
               let cardClasses = "relative flex flex-col rounded-xl border p-4.5 transition-all duration-200 cursor-pointer ";
@@ -406,16 +478,18 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                 <div 
                   key={p.id}
                   onClick={() => {
-                    if (pConflicts.length > 0) {
-                      // Apply necessary fixes and activate the provider
-                      let updatedPasses = { ...state.passes };
-                      pConflicts.forEach(c => {
-                        updatedPasses = { ...updatedPasses, ...c.autofix() };
-                      });
-                      setState({ passes: updatedPasses, ihvProvider: p.id });
-                    } else {
-                      setState({ ihvProvider: p.id });
+                    if (isSelected && pConflicts.length > 0) {
+                      setState({ passes: applyProviderConflictAutofixes(p.id, state.passes) });
+                      return;
                     }
+                    if (!isSelected && pConflicts.length > 0 && !cardHasCritical) {
+                      setState({
+                        passes: applyProviderConflictAutofixes(p.id, state.passes),
+                        ihvProvider: p.id,
+                      });
+                      return;
+                    }
+                    setState({ ihvProvider: p.id });
                   }}
                   className={cardClasses}
                 >
@@ -467,11 +541,12 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                     </div>
                   </div>
 
-                  {/* Inline list of critical and warning conflicts within the provider card if any exist */}
-                  {pConflicts.length > 0 && (
+                  {/* Conflicts on the active target, or adjustable warnings on other targets */}
+                  {showSwitchAssist && (
                     <div className="mt-3.5 pt-3.5 border-t border-slate-800/60 flex flex-col gap-2.5 animate-in fade-in duration-200">
                       <p className="text-xs text-slate-500 flex items-center gap-1.5">
-                        <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" /> Validation overrides
+                        <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+                        {isSelected ? "Passes to fix on this target" : "Adjustments needed to use this target"}
                       </p>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pb-1">
@@ -490,17 +565,17 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                         ))}
                       </div>
 
-                      {/* Explicit Fix-Me button */}
                       <div className="flex justify-end pt-1">
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            let updatedPasses = { ...state.passes };
-                            pConflicts.forEach(c => {
-                              updatedPasses = { ...updatedPasses, ...c.autofix() };
-                            });
-                            setState({ passes: updatedPasses, ihvProvider: p.id });
+                            const fixedPasses = applyProviderConflictAutofixes(p.id, state.passes);
+                            setState(
+                              isSelected
+                                ? { passes: fixedPasses }
+                                : { passes: fixedPasses, ihvProvider: p.id }
+                            );
                           }}
                           className={`text-[9.5px] uppercase tracking-wider font-extrabold px-3 py-1.5 rounded border transition-all cursor-pointer flex items-center gap-1.5 ${
                             cardHasCritical 
@@ -508,40 +583,99 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                               : "border-amber-500/30 text-amber-400 bg-amber-950/20 hover:text-white hover:bg-amber-550/20"
                           }`}
                         >
-                          <Wand2 className="h-3.5 w-3.5" /> Resolve and switch to {p.name}
+                          <Wand2 className="h-3.5 w-3.5" />
+                          {isSelected
+                            ? "Fix passes for this target"
+                            : `Switch to ${p.shortName} (adjusts passes)`}
                         </button>
                       </div>
                     </div>
+                  )}
+
+                  {!isSelected && cardHasCritical && pConflicts.length > 0 && (
+                    <p className="mt-3 pt-3 border-t border-slate-800/60 text-[11px] text-slate-500 leading-relaxed">
+                      Incompatible with your current passes. Change passes in Optimization or select a compatible target above.
+                    </p>
                   )}
                 </div>
               );
             })}
           </div>
 
+          {/* Hybrid offload — visible for Hugging Face models; toggle when GPU target selected */}
+          {hasHuggingFaceModel(state) && (
+            <div className="mt-4 p-4 rounded-xl border border-slate-800/60 bg-slate-900/30">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium text-slate-200 flex items-center gap-2">
+                    <HardDrive className="h-4 w-4 text-electric-blue" />
+                    Hybrid memory offload
+                  </p>
+                  <p className="text-xs text-slate-500 leading-relaxed max-w-xl">
+                    Spreads <span className="font-mono text-slate-400">{state.hfModelId}</span> across GPU
+                    VRAM and system RAM during optimization (<code className="text-slate-400">device_map: auto</code>).
+                  </p>
+                  {!isMemoryOffloadAvailable(state) && (
+                    <p className="text-[11px] text-amber-500/90 leading-relaxed">
+                      Select <strong className="font-semibold">NVIDIA CUDA</strong>, <strong className="font-semibold">TensorRT</strong>, or{" "}
+                      <strong className="font-semibold">AMD ROCm</strong> above to enable this toggle.
+                      {hardwareProbe &&
+                        isGpuProvider(hardwareProbe.recommendedProvider) &&
+                        !isGpuProvider(state.ihvProvider) && (
+                          <button
+                            type="button"
+                            onClick={() => setState({ ihvProvider: hardwareProbe.recommendedProvider })}
+                            className="ml-2 text-electric-blue hover:text-white cursor-pointer underline underline-offset-2"
+                          >
+                            Switch to {providers.find((p) => p.id === hardwareProbe.recommendedProvider)?.name}
+                          </button>
+                        )}
+                    </p>
+                  )}
+                </div>
+                <Switch
+                  disabled={!isMemoryOffloadAvailable(state)}
+                  checked={isMemoryOffloadAvailable(state) && state.memoryOffload === "auto"}
+                  onCheckedChange={(checked) =>
+                    setState({ memoryOffload: checked ? "auto" : "gpu_only" })
+                  }
+                />
+              </div>
+            </div>
+          )}
+
+          {state.modelSource !== "huggingface" && isGpuProvider(state.ihvProvider) && (
+            <p className="mt-4 text-[11px] text-slate-600 px-1">
+              Hybrid memory offload needs a Hugging Face model in step 01 (Local/Azure sources are not supported).
+            </p>
+          )}
+
           {/* CUDA Version Override — only for GPU providers */}
           {(["CUDAExecutionProvider", "TensorrtExecutionProvider", "ROCMExecutionProvider"] as IHVProvider[]).includes(state.ihvProvider) && (
-            <div className="mt-4 p-4 rounded-xl border border-slate-800/60 bg-slate-900/30">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div>
-                  <p className="text-sm font-medium text-slate-200">PyTorch CUDA Version</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {hardwareProbe?.nvidia?.cudaTag
-                      ? <>Probed: CUDA {hardwareProbe.nvidia.cudaVersion} (<code className="text-emerald-400 bg-slate-800 px-1 py-0.5 rounded">{hardwareProbe.nvidia.cudaTag}</code>) via nvidia-smi. Override if wrong.</>
-                      : <>Auto-detect reads <code className="text-slate-400 bg-slate-800 px-1 py-0.5 rounded">nvidia-smi</code> at execute time. Override if wrong toolkit version is picked.</>}
-                  </p>
+            <div className="mt-4">
+              <div className="p-4 rounded-xl border border-slate-800/60 bg-slate-900/30">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <p className="text-sm font-medium text-slate-200">PyTorch CUDA Version</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {hardwareProbe?.nvidia?.cudaTag
+                        ? <>Probed: CUDA {hardwareProbe.nvidia.cudaVersion} (<code className="text-emerald-400 bg-slate-800 px-1 py-0.5 rounded">{hardwareProbe.nvidia.cudaTag}</code>) via nvidia-smi. Override if wrong.</>
+                        : <>Auto-detect reads <code className="text-slate-400 bg-slate-800 px-1 py-0.5 rounded">nvidia-smi</code> at execute time. Override if wrong toolkit version is picked.</>}
+                    </p>
+                  </div>
+                  <select
+                    value={state.cudaVersion ?? "auto"}
+                    onChange={e => setState({ cudaVersion: e.target.value as UIState["cudaVersion"] })}
+                    className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-electric-blue shrink-0 cursor-pointer"
+                  >
+                    <option value="auto">Auto-detect</option>
+                    <option value="cpu">CPU Only</option>
+                    <option value="cu118">CUDA 11.8</option>
+                    <option value="cu121">CUDA 12.1</option>
+                    <option value="cu124">CUDA 12.4</option>
+                    <option value="cu126">CUDA 12.6</option>
+                  </select>
                 </div>
-                <select
-                  value={state.cudaVersion ?? "auto"}
-                  onChange={e => setState({ cudaVersion: e.target.value as UIState["cudaVersion"] })}
-                  className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-electric-blue shrink-0 cursor-pointer"
-                >
-                  <option value="auto">Auto-detect</option>
-                  <option value="cpu">CPU Only</option>
-                  <option value="cu118">CUDA 11.8</option>
-                  <option value="cu121">CUDA 12.1</option>
-                  <option value="cu124">CUDA 12.4</option>
-                  <option value="cu126">CUDA 12.6</option>
-                </select>
               </div>
             </div>
           )}
@@ -676,12 +810,12 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                               key={p.id}
                               onClick={() => {
                                 const pConflicts = getProviderConflicts(p.id, state.passes);
-                                if (pConflicts.length > 0) {
-                                  let updatedPasses = { ...state.passes };
-                                  pConflicts.forEach(c => {
-                                    updatedPasses = { ...updatedPasses, ...c.autofix() };
+                                const hasCritical = pConflicts.some((c) => c.severity === "critical");
+                                if (pConflicts.length > 0 && !hasCritical) {
+                                  setState({
+                                    passes: applyProviderConflictAutofixes(p.id, state.passes),
+                                    ihvProvider: p.id,
                                   });
-                                  setState({ passes: updatedPasses, ihvProvider: p.id });
                                 } else {
                                   setState({ ihvProvider: p.id });
                                 }
@@ -768,25 +902,23 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                             {/* Column 2-6: Dynamic hardware cells */}
                             {providers.map((p) => {
                               const isSelectedProvider = p.id === state.ihvProvider;
-                              const comp = getCellCompatibility(v, p.id);
+                              const comp = getCellCompatibility(v, p.id, state.passes);
                               const isCurrentlyActiveInCore = isSelectedProvider && isActiveOnSelected;
 
                               const handleCellClick = () => {
-                                if (comp.status === "unsupported") return;
+                                if (comp.status === "unsupported" || comp.status === "blocked") return;
                                 
                                 if (isSelectedProvider) {
                                   // Toggle the pass on the active provider
                                   const updated = v.toggle(state.passes, isActiveOnSelected);
                                   setState({ passes: { ...state.passes, ...updated } });
                                 } else {
-                                  // Switch hardware provider, resolving any incompatibilities, and toggling this pass on if appropriate
                                   const pConflicts = getProviderConflicts(p.id, state.passes);
-                                  let updatedPasses = { ...state.passes };
-                                  pConflicts.forEach(c => {
-                                    updatedPasses = { ...updatedPasses, ...c.autofix() };
-                                  });
-                                  // Now set the target pass as well if it's compatible
-                                  const finalPasses = { ...updatedPasses, ...v.toggle(updatedPasses, false) };
+                                  const hasCritical = pConflicts.some((c) => c.severity === "critical");
+                                  const basePasses = hasCritical
+                                    ? state.passes
+                                    : applyProviderConflictAutofixes(p.id, state.passes);
+                                  const finalPasses = { ...basePasses, ...v.toggle(basePasses, false) };
                                   setState({ passes: finalPasses, ihvProvider: p.id });
                                 }
                               };
@@ -799,7 +931,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                                     isSelectedProvider 
                                       ? "bg-electric-blue/5 border-l border-r border-electric-blue/10" 
                                       : "hover:bg-slate-900/30"
-                                  } ${comp.status === "unsupported" ? "cursor-not-allowed" : "cursor-pointer"}`}
+                                  } ${comp.status === "unsupported" || comp.status === "blocked" ? "cursor-not-allowed" : "cursor-pointer"}`}
                                 >
                                   <TooltipProvider delayDuration={150}>
                                     <Tooltip>
@@ -825,6 +957,10 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                                               </div>
                                             )
+                                          ) : comp.status === "blocked" ? (
+                                            <div className="h-6 w-6 rounded-full bg-amber-950/40 border border-amber-500/25 flex items-center justify-center text-amber-400/80">
+                                              <AlertTriangle className="h-3 w-3" />
+                                            </div>
                                           ) : (
                                             <div className="h-6 w-6 rounded-full bg-slate-950 border border-slate-900/60 flex items-center justify-center text-slate-700/60">
                                               <Lock className="h-3 w-3" />
@@ -924,14 +1060,22 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 animate-in fade-in">
                   {filteredValidations.map((v) => {
                     const isUnsupportedOnCurrent = v.isUnsupported(state.ihvProvider);
+                    const configBlock =
+                      v.id === "awq-quantization"
+                        ? getQuantMethodActivationBlock("awq", state.passes, state.ihvProvider)
+                        : v.id === "qat-quantization"
+                          ? getQuantMethodActivationBlock("qat", state.passes, state.ihvProvider)
+                          : null;
+                    const isBlockedByConfig = !isUnsupportedOnCurrent && configBlock !== null;
                     const isActiveState = v.isActive(state.passes);
                     const reason = v.getIncompatibilityReason(state.ihvProvider);
+                    const toggleDisabled = isUnsupportedOnCurrent || isBlockedByConfig;
                     
                     return (
                       <div
                         key={v.id}
                         className={`flex flex-col justify-between p-4.5 rounded-xl border transition-all relative overflow-hidden ${
-                          isUnsupportedOnCurrent
+                          isUnsupportedOnCurrent || isBlockedByConfig
                             ? "bg-slate-950/40 border-slate-900/60 opacity-40 shadow-none hover:border-slate-800/40"
                             : isActiveState
                               ? "bg-electric-blue/5 border-electric-blue/40 shadow-[0_2px_12px_rgba(59,130,246,0.02)] hover:border-electric-blue/60"
@@ -976,6 +1120,22 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                                   </div>
                                 </TooltipContent>
                               </Tooltip>
+                            ) : isBlockedByConfig ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="cursor-help shrink-0 p-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-lg flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 leading-none">
+                                    <AlertTriangle className="h-3 w-3" /> Blocked
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-[280px] bg-slate-950 border border-slate-800 text-slate-300 p-3 shadow-xl leading-relaxed">
+                                  <div className="space-y-1">
+                                    <p className="font-bold text-amber-400 flex items-center gap-1 text-xs">
+                                      <AlertCircle className="h-3.5 w-3.5" /> Active pipeline conflict
+                                    </p>
+                                    <p className="text-slate-200 font-semibold">{configBlock?.reason}</p>
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
                             ) : (
                               <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-lg border flex items-center gap-1 leading-none shrink-0 ${
                                 isActiveState
@@ -1000,14 +1160,20 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
 
                         <div className="mt-4 pt-3 border-t border-slate-900/60 flex items-center justify-between">
                           <span className="text-[10px] font-mono text-slate-500 font-medium">
-                            {isUnsupportedOnCurrent ? "Pass locked on current backend" : `Direct toggle on ${providers.find(p => p.id === state.ihvProvider)?.name}`}
+                            {isUnsupportedOnCurrent
+                              ? v.id === "awq-quantization"
+                                ? "Requires CUDA, TensorRT, or ROCm — switch hardware target above"
+                                : "Pass locked on current backend"
+                              : isBlockedByConfig
+                                ? "Resolve the conflict in Optimization passes first"
+                                : `Direct toggle on ${providers.find(p => p.id === state.ihvProvider)?.name}`}
                           </span>
                           <Switch
-                            disabled={isUnsupportedOnCurrent}
-                            checked={isUnsupportedOnCurrent ? false : isActiveState}
+                            disabled={toggleDisabled}
+                            checked={toggleDisabled ? false : isActiveState}
                             onCheckedChange={(checked) => {
-                              if (isUnsupportedOnCurrent) return;
-                              const updated = v.toggle(state.passes, isActiveState);
+                              if (toggleDisabled) return;
+                              const updated = v.toggle(state.passes, !checked);
                               setState({ passes: { ...state.passes, ...updated } });
                             }}
                           />
