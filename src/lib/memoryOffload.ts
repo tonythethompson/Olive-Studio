@@ -6,6 +6,7 @@ export type MemoryOffloadMode = "gpu_only" | "auto";
 
 const GPU_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
+  "NvTensorRTRTXExecutionProvider",
   "TensorrtExecutionProvider",
   "ROCMExecutionProvider",
 ];

@@ -24,6 +24,23 @@ import {
   recipeUsesMemoryOffload,
 } from "./src/lib/memoryOffload.ts";
 import { getSelectedGpuVramGb } from "./src/lib/vramEstimate.ts";
+import {
+  CUDA12_RUNTIME_PACKAGES,
+  isGpuExecutionProvider,
+  pinnedOrtGpuInstallArgs,
+  pinnedOrtGpuLabel,
+} from "./src/lib/oliveGpuRuntime.ts";
+import {
+  envWithPrependedPaths,
+  isCompatibleTensorRtVersion,
+  pinnedTensorRtInstallArgs,
+  pinnedTensorRtLabel,
+  PINNED_TENSORRT_VERSION,
+} from "./src/lib/tensorrtDeps.ts";
+import {
+  tensorrtRtxInstallArgs,
+  tensorrtRtxLabel,
+} from "./src/lib/tensorrtRtxDeps.ts";
 import type { IHVProvider } from "./src/types.ts";
 
 dotenv.config();
@@ -34,6 +51,7 @@ app.use(express.json({ limit: "10mb" }));
 
 const PORT = 3000;
 const VENV_DIR = path.join(process.cwd(), ".venv");
+const OLIVE_GPU_LAUNCHER = path.join(process.cwd(), "scripts", "olive_gpu_launcher.py");
 const execFileAsync = promisify(execFile);
 
 // ─── AI Provider Config ───────────────────────────────────────────────────────
@@ -363,12 +381,18 @@ function inferRequiredPackages(recipe: any, cudaTag: string): PkgDef[] {
     : { importName: "torch", installArgs: ["torch", "--index-url", "https://download.pytorch.org/whl/cpu"], label: "torch (CPU)" }
   );
 
-  // ONNX Runtime
+  // ONNX Runtime — pin CUDA 12 build (1.27+ needs cu13 wheels not yet on PyPI)
   if (passTypes.some(t => t.includes("Onnx") || t.includes("ORT") || t.includes("Transformers"))) {
     pkgs.push(isGpu
-      ? { importName: "onnxruntime", installArgs: ["onnxruntime-gpu"], label: "onnxruntime-gpu" }
+      ? { importName: "onnxruntime", installArgs: pinnedOrtGpuInstallArgs(), label: pinnedOrtGpuLabel() }
       : { importName: "onnxruntime", installArgs: ["onnxruntime"], label: "onnxruntime" }
     );
+  }
+
+  if (isGpu) {
+    for (const pkg of CUDA12_RUNTIME_PACKAGES) {
+      pkgs.push(pkg);
+    }
   }
 
   // OpenVINO
@@ -387,32 +411,80 @@ function inferRequiredPackages(recipe: any, cudaTag: string): PkgDef[] {
     pkgs.push({ importName: "awq", installArgs: ["autoawq"], label: "autoawq" });
   }
 
+  // TensorRT RTX (consumer GeForce) — Olive v0.9.1+ / NvTensorRTRTXExecutionProvider
+  if (isGpu && getRecipeIhvProvider(recipe) === "NvTensorRTRTXExecutionProvider") {
+    pkgs.push({
+      importName: "tensorrt_rtx",
+      installArgs: tensorrtRtxInstallArgs(),
+      label: tensorrtRtxLabel(),
+    });
+  }
+
+  // Classic TensorRT SDK (nvinfer_10) — pinned to match stable onnxruntime-gpu CUDA 12 builds
+  if (isGpu && getRecipeIhvProvider(recipe) === "TensorrtExecutionProvider") {
+    pkgs.push({
+      importName: "tensorrt",
+      installArgs: pinnedTensorRtInstallArgs(),
+      label: pinnedTensorRtLabel(),
+    });
+  }
+
   // Deduplicate by importName
   const seen = new Set<string>();
   return pkgs.filter(p => seen.has(p.importName) ? false : (seen.add(p.importName), true));
 }
 
 function getRecipeIhvProvider(recipe: any): IHVProvider {
-  const ep = recipe?.systems?.local_system?.config?.accelerators?.[0]?.execution_providers?.[0];
+  const system = recipe?.systems?.local_system;
+  const accelerators = system?.config?.accelerators ?? system?.accelerators;
+  const ep = accelerators?.[0]?.execution_providers?.[0];
   if (typeof ep === "string" && ep.length > 0) {
     return ep as IHVProvider;
   }
   return "CUDAExecutionProvider";
 }
 
+function oliveSpawnArgs(configPath: string, listPackages: boolean): string[] {
+  return listPackages
+    ? ["run", "--config", configPath, "--list_required_packages"]
+    : ["run", "--config", configPath];
+}
+
+function resolveOliveCommand(provider: IHVProvider, configPath: string, listPackages: boolean): {
+  executable: string;
+  args: string[];
+} {
+  const venvPython = getVenvPython();
+  const oliveArgs = oliveSpawnArgs(configPath, listPackages);
+  if (isGpuExecutionProvider(provider) && fs.existsSync(OLIVE_GPU_LAUNCHER)) {
+    return { executable: venvPython, args: [OLIVE_GPU_LAUNCHER, ...oliveArgs] };
+  }
+  return { executable: venvPython, args: ["-m", "olive", ...oliveArgs] };
+}
+
+async function buildOliveRunEnvironment(
+  python: string,
+  provider: IHVProvider,
+  base: NodeJS.ProcessEnv
+): Promise<NodeJS.ProcessEnv> {
+  if (!isGpuExecutionProvider(provider)) {
+    return base;
+  }
+  const libPaths = await getNativeGpuLibPaths(python);
+  return envWithPrependedPaths(base, libPaths);
+}
+
 /** Olive RunConfig parse + package scan without starting optimization. */
 async function runOliveConfigPreflight(
   configPath: string,
-  onLine: (line: string) => void
+  onLine: (line: string) => void,
+  env: NodeJS.ProcessEnv = process.env,
+  provider: IHVProvider = "CUDAExecutionProvider"
 ): Promise<{ ok: boolean; error?: string }> {
-  const venvPython = getVenvPython();
+  const { executable, args } = resolveOliveCommand(provider, configPath, true);
 
   return new Promise((resolve) => {
-    const proc = spawn(
-      venvPython,
-      ["-m", "olive", "run", "--config", configPath, "--list_required_packages"],
-      { stdio: "pipe", env: process.env }
-    );
+    const proc = spawn(executable, args, { stdio: "pipe", env });
 
     let stderr = "";
     proc.stdout.on("data", (data: Buffer) => {
@@ -449,6 +521,288 @@ async function runOliveConfigPreflight(
   });
 }
 
+async function getInstalledTensorRtVersion(python: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync(python, ["-c", "import tensorrt; print(tensorrt.__version__)"]);
+    const version = stdout.trim();
+    return version || null;
+  } catch {
+    return null;
+  }
+}
+
+async function getTensorRtLibsDir(python: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync(python, [
+      "-c",
+      "import os, tensorrt_libs; print(os.path.dirname(tensorrt_libs.__file__))",
+    ]);
+    const dir = stdout.trim();
+    return dir && fs.existsSync(dir) ? dir : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getNativeGpuLibPaths(python: string): Promise<string[]> {
+  const script = `
+import os
+from pathlib import Path
+dirs = []
+try:
+    import tensorrt_libs
+    dirs.append(os.path.dirname(tensorrt_libs.__file__))
+except Exception:
+    pass
+try:
+    import tensorrt_rtx_libs
+    dirs.append(os.path.dirname(tensorrt_rtx_libs.__file__))
+except Exception:
+    pass
+try:
+    import onnxruntime as ort
+    from pathlib import Path
+    dirs.append(str(Path(ort.__file__).resolve().parent / "capi"))
+except Exception:
+    pass
+site = Path(__import__("site").getsitepackages()[0])
+nvidia = site / "nvidia"
+if nvidia.is_dir():
+    for child in nvidia.iterdir():
+        bin_dir = child / "bin"
+        if bin_dir.is_dir():
+            dirs.append(str(bin_dir))
+print(os.pathsep.join(dirs))
+`.trim();
+  try {
+    const { stdout } = await execFileAsync(python, ["-c", script]);
+    return stdout
+      .trim()
+      .split(process.platform === "win32" ? ";" : ":")
+      .map((dir) => dir.trim())
+      .filter((dir) => dir.length > 0 && fs.existsSync(dir));
+  } catch {
+    const trtLibs = await getTensorRtLibsDir(python);
+    return trtLibs ? [trtLibs] : [];
+  }
+}
+
+async function probeTensorRtLoadable(
+  python: string,
+  env: NodeJS.ProcessEnv = process.env
+): Promise<{ loadable: boolean; detail?: string }> {
+  const libPaths = await getNativeGpuLibPaths(python);
+  const probeEnv = envWithPrependedPaths(env, libPaths);
+  const script = `
+import ctypes
+import os
+import sys
+
+def fail(msg):
+    print("fail:" + msg)
+    sys.exit(1)
+
+try:
+    import tensorrt
+    ver = tensorrt.__version__
+    if not ver.startswith("10."):
+        fail("TensorRT " + ver + " installed; stable onnxruntime-gpu needs TensorRT 10.x (nvinfer_10)")
+    import tensorrt_libs
+    libs = os.path.dirname(tensorrt_libs.__file__)
+    os.environ["PATH"] = libs + os.pathsep + os.environ.get("PATH", "")
+    if sys.platform == "win32":
+        ctypes.CDLL(os.path.join(libs, "nvinfer_10.dll"))
+    else:
+        ctypes.CDLL(os.path.join(libs, "libnvinfer.so.10"))
+    import onnxruntime as ort
+    if "TensorrtExecutionProvider" not in ort.get_available_providers():
+        fail("TensorrtExecutionProvider missing from onnxruntime")
+    print("ok")
+except Exception as exc:
+    fail(str(exc).replace(chr(10), " ")[:500])
+`.trim();
+
+  try {
+    const { stdout, stderr } = await execFileAsync(python, ["-c", script], { env: probeEnv });
+    const out = `${stdout}\n${stderr}`.trim();
+    if (out.includes("ok")) {
+      return { loadable: true };
+    }
+    const detail = out.replace(/^fail:/, "").trim() || "TensorRT provider library failed to load";
+    return { loadable: false, detail };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    const detail = message.includes("fail:")
+      ? message.split("fail:").pop()?.trim()
+      : message;
+    return { loadable: false, detail: detail || "TensorRT provider library failed to load" };
+  }
+}
+
+async function ensureTensorRt(
+  onLine: (line: string) => void
+): Promise<{ ok: boolean; error?: string; libsDir?: string | null }> {
+  const venvPython = getVenvPython();
+  const pip = getVenvPip();
+
+  const probe = await probeTensorRtLoadable(venvPython);
+  if (probe.loadable) {
+    onLine("[deps] TensorRT execution provider load verified ✓");
+    return { ok: true, libsDir: (await getNativeGpuLibPaths(venvPython)).join(path.delimiter) || null };
+  }
+
+  const installed = await getInstalledTensorRtVersion(venvPython);
+  if (installed && !isCompatibleTensorRtVersion(installed)) {
+    onLine(
+      `[deps] TensorRT ${installed} is incompatible with stable onnxruntime-gpu (needs ${PINNED_TENSORRT_VERSION} / nvinfer_10) — reinstalling...`
+    );
+  } else if (!installed) {
+    onLine(
+      `[deps] Installing ${pinnedTensorRtLabel()} for TensorRT EP (large download, may take several minutes)...`
+    );
+  } else {
+    onLine(`[deps] TensorRT ${installed} present but EP not loadable — reinstalling pinned runtime...`);
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn(pip, ["install", ...pinnedTensorRtInstallArgs()], { stdio: "pipe" });
+    proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
+    proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
+    proc.on("close", (code: number | null) =>
+      code === 0 ? resolve() : reject(new Error(`pip install ${pinnedTensorRtLabel()} failed (exit ${code})`))
+    );
+  });
+  onLine(`[deps] ${pinnedTensorRtLabel()} installed ✓`);
+
+  const retry = await probeTensorRtLoadable(venvPython);
+  if (retry.loadable) {
+    onLine("[deps] TensorRT execution provider load verified after install ✓");
+    return { ok: true, libsDir: (await getNativeGpuLibPaths(venvPython)).join(path.delimiter) || null };
+  }
+
+  return {
+    ok: false,
+    error: retry.detail ?? "TensorRT SDK not loadable after install (nvinfer_10.dll missing)",
+  };
+}
+
+async function getInstalledTensorRtRtxVersion(python: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync(python, ["-c", "import tensorrt_rtx; print(tensorrt_rtx.__version__)"]);
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function getTensorRtRtxLibsDir(python: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync(python, [
+      "-c",
+      "import os, tensorrt_rtx_libs; print(os.path.dirname(tensorrt_rtx_libs.__file__))",
+    ]);
+    const dir = stdout.trim();
+    return dir && fs.existsSync(dir) ? dir : null;
+  } catch {
+    return null;
+  }
+}
+
+async function probeTensorRtRtxLoadable(
+  python: string,
+  env: NodeJS.ProcessEnv = process.env
+): Promise<{ loadable: boolean; detail?: string; version?: string }> {
+  const libsDir = await getTensorRtRtxLibsDir(python);
+  const probeEnv = envWithPrependedPaths(env, libsDir ? [libsDir] : []);
+  const script = `
+import ctypes
+import glob
+import os
+import sys
+
+def fail(msg):
+    print("fail:" + msg)
+    sys.exit(1)
+
+try:
+    import tensorrt_rtx
+    ver = tensorrt_rtx.__version__
+    import tensorrt_rtx_libs
+    libs = os.path.dirname(tensorrt_rtx_libs.__file__)
+    os.environ["PATH"] = libs + os.pathsep + os.environ.get("PATH", "")
+    runtime_dlls = glob.glob(os.path.join(libs, "tensorrt_rtx_*.dll"))
+    if sys.platform != "win32":
+        runtime_dlls = glob.glob(os.path.join(libs, "libtensorrt_rtx.so*"))
+    if not runtime_dlls:
+        fail("tensorrt_rtx runtime library missing in tensorrt_rtx_libs")
+    ctypes.CDLL(runtime_dlls[0])
+    import onnxruntime as ort
+    if not ort.get_available_providers():
+        fail("onnxruntime has no execution providers")
+    print("ok:" + ver)
+except Exception as exc:
+    fail(str(exc).replace(chr(10), " ")[:500])
+`.trim();
+
+  try {
+    const { stdout, stderr } = await execFileAsync(python, ["-c", script], { env: probeEnv });
+    const out = `${stdout}\n${stderr}`.trim();
+    if (out.includes("ok:")) {
+      const version = out.split("ok:").pop()?.trim();
+      return { loadable: true, version: version || undefined };
+    }
+    const detail = out.replace(/^fail:/, "").trim() || "TensorRT RTX runtime failed to load";
+    return { loadable: false, detail };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    const detail = message.includes("fail:")
+      ? message.split("fail:").pop()?.trim()
+      : message;
+    return { loadable: false, detail: detail || "TensorRT RTX runtime failed to load" };
+  }
+}
+
+async function ensureTensorRtRtx(
+  onLine: (line: string) => void
+): Promise<{ ok: boolean; error?: string; libsDir?: string | null }> {
+  const venvPython = getVenvPython();
+  const pip = getVenvPip();
+
+  const probe = await probeTensorRtRtxLoadable(venvPython);
+  if (probe.loadable) {
+    onLine(`[deps] TensorRT RTX runtime verified (${probe.version ?? "installed"}) ✓`);
+    return { ok: true, libsDir: await getTensorRtRtxLibsDir(venvPython) };
+  }
+
+  const installed = await getInstalledTensorRtRtxVersion(venvPython);
+  if (!installed) {
+    onLine(`[deps] Installing ${tensorrtRtxLabel()} for TensorRT RTX EP (may take a few minutes)...`);
+  } else {
+    onLine(`[deps] ${tensorrtRtxLabel()} present but runtime not loadable — reinstalling...`);
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn(pip, ["install", ...tensorrtRtxInstallArgs()], { stdio: "pipe" });
+    proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
+    proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
+    proc.on("close", (code: number | null) =>
+      code === 0 ? resolve() : reject(new Error(`pip install ${tensorrtRtxLabel()} failed (exit ${code})`))
+    );
+  });
+  onLine(`[deps] ${tensorrtRtxLabel()} installed ✓`);
+
+  const retry = await probeTensorRtRtxLoadable(venvPython);
+  if (retry.loadable) {
+    onLine(`[deps] TensorRT RTX runtime verified after install (${retry.version ?? "ok"}) ✓`);
+    return { ok: true, libsDir: await getTensorRtRtxLibsDir(venvPython) };
+  }
+
+  return {
+    ok: false,
+    error: retry.detail ?? "TensorRT RTX runtime not loadable after install",
+  };
+}
+
 async function ensureDeps(
   pkgs: PkgDef[],
   onLine: (line: string) => void
@@ -470,6 +824,49 @@ async function ensureDeps(
         }
         onLine(`[deps] torch CUDA mismatch (have ${hasGpu ? installedCuda : "CPU"}, need ${needsGpu ? "GPU" : "CPU"}) — reinstalling...`);
       } catch { /* not installed, fall through */ }
+    } else if (pkg.importName === "tensorrt") {
+      const installed = await getInstalledTensorRtVersion(venvPython);
+      if (installed && isCompatibleTensorRtVersion(installed)) {
+        const probe = await probeTensorRtLoadable(venvPython);
+        if (probe.loadable) {
+          onLine(`[deps] ${pkg.label} already installed (${installed}) ✓`);
+          continue;
+        }
+        onLine(`[deps] ${pkg.label} installed but TensorRT EP not loadable — reinstalling...`);
+      } else if (installed) {
+        onLine(`[deps] ${pkg.label} version ${installed} incompatible — installing ${PINNED_TENSORRT_VERSION}...`);
+      }
+    } else if (pkg.importName === "tensorrt_rtx") {
+      const probe = await probeTensorRtRtxLoadable(venvPython);
+      if (probe.loadable) {
+        onLine(`[deps] ${pkg.label} already installed (${probe.version ?? "ok"}) ✓`);
+        continue;
+      }
+    } else if (pkg.importName.startsWith("nvidia.")) {
+      try {
+        await execFileAsync(venvPython, [
+          "-c",
+          `import importlib; importlib.import_module(${JSON.stringify(pkg.importName)})`,
+        ]);
+        onLine(`[deps] ${pkg.label} already installed ✓`);
+        continue;
+      } catch { /* not installed */ }
+    } else if (pkg.importName === "onnxruntime") {
+      try {
+        const { stdout } = await execFileAsync(venvPython, [
+          "-c",
+          "import onnxruntime as ort; print(ort.__version__)",
+        ]);
+        const installed = stdout.trim();
+        const expected = pinnedOrtGpuInstallArgs()[0]?.split("==")[1];
+        if (installed && expected && installed === expected) {
+          onLine(`[deps] ${pkg.label} already installed ✓`);
+          continue;
+        }
+        if (installed) {
+          onLine(`[deps] onnxruntime-gpu ${installed} installed — need ${expected ?? "pinned build"}, reinstalling...`);
+        }
+      } catch { /* not installed */ }
     } else {
       try {
         await execFileAsync(venvPython, ["-c", `import ${pkg.importName}`]);
@@ -652,6 +1049,8 @@ async function probeSystemHardware(): Promise<HardwareProbeResult> {
 
   let openvino: HardwareProbeResult["openvino"];
   let onnxRuntimeProviders: string[] | undefined;
+  let tensorrt: HardwareProbeResult["tensorrt"];
+  let tensorRtRtx: HardwareProbeResult["tensorRtRtx"];
 
   const venvPython = getVenvPython();
   const pythonCandidates: string[] = [];
@@ -670,6 +1069,40 @@ async function probeSystemHardware(): Promise<HardwareProbeResult> {
         `ONNX Runtime providers probed via ${python === venvPython ? ".venv Python" : "system Python"}.`
       );
     }
+    if (!tensorrt?.loadable) {
+      const trt = await probeTensorRtLoadable(python);
+      if (trt.loadable || !tensorrt) {
+        tensorrt = trt;
+      }
+    }
+    if (!tensorRtRtx?.loadable) {
+      const rtx = await probeTensorRtRtxLoadable(python);
+      if (rtx.loadable || !tensorRtRtx) {
+        tensorRtRtx = rtx;
+      }
+    }
+  }
+
+  if (tensorRtRtx?.loadable) {
+    notes.push(
+      `TensorRT RTX runtime verified${tensorRtRtx.version ? ` (${tensorRtRtx.version})` : ""}.`,
+    );
+  } else if (nvidia?.gpus.length) {
+    notes.push(
+      tensorRtRtx?.detail
+        ? `TensorRT RTX not loadable: ${tensorRtRtx.detail}`
+        : "TensorRT RTX not installed — Olive will auto-install tensorrt-rtx on run when TRT RTX is the target.",
+    );
+  }
+
+  if (tensorrt?.loadable) {
+    notes.push("TensorRT execution provider load verified.");
+  } else if (nvidia?.gpus.length) {
+    notes.push(
+      tensorrt?.detail
+        ? `TensorRT listed by ORT but not loadable: ${tensorrt.detail}`
+        : "TensorRT not loadable — Olive will auto-install tensorrt on run when TensorRT is the hardware target.",
+    );
   }
 
   if (onnxRuntimeProviders?.length) {
@@ -691,6 +1124,8 @@ async function probeSystemHardware(): Promise<HardwareProbeResult> {
     hasNvidiaGpu: Boolean(nvidia?.gpus.length),
     hasRocmGpu: Boolean(rocm?.gpus.length),
     hasOpenVino: Boolean(openvino?.available),
+    tensorRtLoadable: tensorrt?.loadable === true,
+    tensorRtRtxLoadable: tensorRtRtx?.loadable === true,
   });
 
   return {
@@ -699,6 +1134,8 @@ async function probeSystemHardware(): Promise<HardwareProbeResult> {
     nvidia,
     rocm,
     openvino,
+    tensorrt,
+    tensorRtRtx,
     onnxRuntimeProviders,
     detectedProviders,
     recommendedProvider: pickRecommendedProvider(detectedProviders),
@@ -824,6 +1261,45 @@ app.post("/api/olive/run", async (req, res) => {
       return;
     }
 
+    const targetProvider = getRecipeIhvProvider(recipeObj);
+    if (targetProvider === "TensorrtExecutionProvider") {
+      const trtResult = await ensureTensorRt((line) => pushLog(job, line)).catch((err) => ({
+        ok: false as const,
+        error: String(err.message),
+      }));
+      if (!trtResult.ok) {
+        pushLog(job, `[error] TensorRT is not available: ${trtResult.error}`);
+        pushLog(
+          job,
+          "[hint] Switch hardware target to TensorRT RTX or CUDA in step 02, or ensure pip can install tensorrt from PyPI.",
+        );
+        job.status = "failed";
+        job.exitCode = 1;
+        for (const sub of job.subscribers) {
+          try { sub("__DONE__"); } catch { /* gone */ }
+        }
+        return;
+      }
+    } else if (targetProvider === "NvTensorRTRTXExecutionProvider") {
+      const rtxResult = await ensureTensorRtRtx((line) => pushLog(job, line)).catch((err) => ({
+        ok: false as const,
+        error: String(err.message),
+      }));
+      if (!rtxResult.ok) {
+        pushLog(job, `[error] TensorRT RTX is not available: ${rtxResult.error}`);
+        pushLog(
+          job,
+          "[hint] Switch hardware target to CUDA in step 02, or ensure pip can install tensorrt-rtx from PyPI.",
+        );
+        job.status = "failed";
+        job.exitCode = 1;
+        for (const sub of job.subscribers) {
+          try { sub("__DONE__"); } catch { /* gone */ }
+        }
+        return;
+      }
+    }
+
     // Write recipe to a temp file
     const tmpFile = path.join(os.tmpdir(), `olive_recipe_${jobId}.json`);
     const recipeToRun = JSON.stringify(recipeObj, null, 2);
@@ -831,7 +1307,21 @@ app.post("/api/olive/run", async (req, res) => {
     pushLog(job, `[info] Recipe written to ${tmpFile}`);
 
     pushLog(job, "[preflight] Validating Olive RunConfig...");
-    const preflight = await runOliveConfigPreflight(tmpFile, (line) => pushLog(job, line)).catch((err) => ({
+    const hfEnv = runtimeHfToken ? { HF_TOKEN: runtimeHfToken } : {};
+    const venvPython = getVenvPython();
+    const runEnv = await buildOliveRunEnvironment(venvPython, targetProvider, {
+      ...process.env,
+      ...hfEnv,
+    });
+    if (isGpuExecutionProvider(targetProvider)) {
+      pushLog(job, "[deps] GPU runtime PATH configured (CUDA/cuDNN + ORT preload launcher)");
+    }
+    const preflight = await runOliveConfigPreflight(
+      tmpFile,
+      (line) => pushLog(job, line),
+      runEnv,
+      targetProvider
+    ).catch((err) => ({
       ok: false,
       error: String(err.message),
     }));
@@ -849,11 +1339,10 @@ app.post("/api/olive/run", async (req, res) => {
     pushLog(job, `[info] Starting Olive optimization run...`);
 
     job.status = "running";
-    const venvPython = getVenvPython();
-    const hfEnv = runtimeHfToken ? { HF_TOKEN: runtimeHfToken } : {};
-    const proc = spawn(venvPython, ["-m", "olive", "run", "--config", tmpFile], {
+    const { executable, args } = resolveOliveCommand(targetProvider, tmpFile, false);
+    const proc = spawn(executable, args, {
       stdio: "pipe",
-      env: { ...process.env, ...hfEnv },
+      env: runEnv,
     });
     job.process = proc;
 

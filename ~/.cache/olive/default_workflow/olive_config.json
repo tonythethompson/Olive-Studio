@@ -17,7 +17,7 @@
                     {
                         "device": "gpu",
                         "execution_providers": [
-                            "TensorrtExecutionProvider"
+                            "NvTensorRTRTXExecutionProvider"
                         ],
                         "memory": null
                     }
@@ -37,7 +37,7 @@
                     {
                         "device": "gpu",
                         "execution_providers": [
-                            "TensorrtExecutionProvider"
+                            "NvTensorRTRTXExecutionProvider"
                         ],
                         "memory": null
                     }
@@ -52,7 +52,7 @@
                     {
                         "device": "gpu",
                         "execution_providers": [
-                            "TensorrtExecutionProvider"
+                            "NvTensorRTRTXExecutionProvider"
                         ],
                         "memory": null
                     }
@@ -82,8 +82,31 @@
                 "type": "onnxconversion",
                 "config": {
                     "target_opset": 14,
-                    "precision": "float32",
+                    "precision": "bfloat16",
                     "source_format": "pytorch"
+                },
+                "host": null,
+                "evaluator": null
+            }
+        ],
+        "quantization": [
+            {
+                "type": "onnxquantization",
+                "config": {
+                    "weight_type": "int8",
+                    "optimize_model": true,
+                    "quant_mode": "QLinearOps"
+                },
+                "host": null,
+                "evaluator": null
+            }
+        ],
+        "peft": [
+            {
+                "type": "qlora",
+                "config": {
+                    "r": 8,
+                    "lora_alpha": 16
                 },
                 "host": null,
                 "evaluator": null

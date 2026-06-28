@@ -36,6 +36,7 @@ import {
   assessRecipeHardwareCompatibility,
   summarizeRecipeHardwareCompatibility,
 } from "@/lib/recipeHardwareCompatibility";
+import { isNvTensorRtRtxCatalogPath } from "@/lib/tensorrtRtxDeps";
 import { getCatalogDeviceFromRecipe } from "@/lib/oliveRecipeHub";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { estimateVramForCatalogPreset } from "@/lib/presetVramEstimate";
@@ -295,7 +296,9 @@ export function InputEnvironmentPanel({
     const matchesArch =
       selectedArchitecture === "All" || item.architecture === selectedArchitecture;
     const matchesDev =
-      selectedDevice === "All" || item.device === selectedDevice;
+      selectedDevice === "All" ||
+      item.device === selectedDevice ||
+      (selectedDevice === "TensorRT RTX" && isNvTensorRtRtxCatalogPath(item.repoPath));
     return matchesSearch && matchesArch && matchesDev;
   });
 
@@ -944,7 +947,8 @@ export function InputEnvironmentPanel({
                     <option value="All">All Platforms / EPs</option>
                     <option value="CUDA">NVIDIA CUDA GPU</option>
                     <option value="DirectML">Windows DirectML</option>
-                    <option value="TensorRT">NVIDIA TensorRT</option>
+                    <option value="TensorRT">NVIDIA TensorRT (SDK)</option>
+                    <option value="TensorRT RTX">NVIDIA TensorRT RTX</option>
                     <option value="QNN">Qualcomm QNN NPU</option>
                     <option value="OpenVINO">Intel OpenVINO</option>
                     <option value="CPU">Universal CPU</option>

@@ -30,7 +30,14 @@ export interface PassConfig {
   config: Record<string, any>;
 }
 
-export type IHVProvider = "CPUExecutionProvider" | "CUDAExecutionProvider" | "TensorrtExecutionProvider" | "OpenVINOExecutionProvider" | "QNNExecutionProvider" | "ROCMExecutionProvider";
+export type IHVProvider =
+  | "CPUExecutionProvider"
+  | "CUDAExecutionProvider"
+  | "TensorrtExecutionProvider"
+  | "NvTensorRTRTXExecutionProvider"
+  | "OpenVINOExecutionProvider"
+  | "QNNExecutionProvider"
+  | "ROCMExecutionProvider";
 
 export interface BatchJob {
   id: string;

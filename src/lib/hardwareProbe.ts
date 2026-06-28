@@ -27,6 +27,15 @@ export interface HardwareProbeResult {
     available: boolean;
     version?: string;
   };
+  tensorrt?: {
+    loadable: boolean;
+    detail?: string;
+  };
+  tensorRtRtx?: {
+    loadable: boolean;
+    detail?: string;
+    version?: string;
+  };
   /** Providers reported by onnxruntime.get_available_providers() when probed. */
   onnxRuntimeProviders?: string[];
   /** EPs inferred from local probes (always includes CPU). */
@@ -39,6 +48,8 @@ const ORT_PROVIDER_MAP: Record<string, IHVProvider> = {
   CPUExecutionProvider: "CPUExecutionProvider",
   CUDAExecutionProvider: "CUDAExecutionProvider",
   TensorrtExecutionProvider: "TensorrtExecutionProvider",
+  NvTensorRTRTXExecutionProvider: "NvTensorRTRTXExecutionProvider",
+  NvTensorRtRtxExecutionProvider: "NvTensorRTRTXExecutionProvider",
   OpenVINOExecutionProvider: "OpenVINOExecutionProvider",
   ROCMExecutionProvider: "ROCMExecutionProvider",
 };
@@ -57,11 +68,21 @@ export function mergeDetectedProviders(input: {
   hasNvidiaGpu: boolean;
   hasRocmGpu: boolean;
   hasOpenVino: boolean;
+  tensorRtLoadable?: boolean;
+  tensorRtRtxLoadable?: boolean;
 }): IHVProvider[] {
   const detected = new Set<IHVProvider>(["CPUExecutionProvider"]);
+  const tensorRtOk = input.tensorRtLoadable === true;
+  const tensorRtRtxOk = input.tensorRtRtxLoadable === true;
 
   if (input.onnxRuntimeProviders?.length) {
     for (const provider of mapOrtProvidersToIhv(input.onnxRuntimeProviders)) {
+      if (provider === "TensorrtExecutionProvider" && !tensorRtOk) {
+        continue;
+      }
+      if (provider === "NvTensorRTRTXExecutionProvider" && !tensorRtRtxOk) {
+        continue;
+      }
       detected.add(provider);
     }
   }
@@ -69,7 +90,12 @@ export function mergeDetectedProviders(input: {
   // nvidia-smi / rocm-smi / openvino fill gaps when the installed ORT wheel lacks GPU EPs.
   if (input.hasNvidiaGpu) {
     detected.add("CUDAExecutionProvider");
-    detected.add("TensorrtExecutionProvider");
+    if (tensorRtRtxOk) {
+      detected.add("NvTensorRTRTXExecutionProvider");
+    }
+    if (tensorRtOk) {
+      detected.add("TensorrtExecutionProvider");
+    }
   }
   if (input.hasRocmGpu) {
     detected.add("ROCMExecutionProvider");
@@ -83,6 +109,7 @@ export function mergeDetectedProviders(input: {
 
 export function pickRecommendedProvider(detected: IHVProvider[]): IHVProvider {
   const priority: IHVProvider[] = [
+    "NvTensorRTRTXExecutionProvider",
     "TensorrtExecutionProvider",
     "CUDAExecutionProvider",
     "ROCMExecutionProvider",
@@ -106,7 +133,9 @@ function undetectedProviderReason(provider: IHVProvider): string {
     case "CUDAExecutionProvider":
       return "NVIDIA CUDA was not detected (no NVIDIA GPU or CUDA execution provider on this machine).";
     case "TensorrtExecutionProvider":
-      return "NVIDIA TensorRT was not detected (no TensorRT execution provider on this machine).";
+      return "NVIDIA TensorRT is not loadable yet (nvinfer_10 / TensorRT 10.x). Olive auto-installs the pinned SDK when you run with TensorRT, or use TensorRT RTX / CUDA instead.";
+    case "NvTensorRTRTXExecutionProvider":
+      return "NVIDIA TensorRT RTX is not loadable (tensorrt-rtx missing). Olive auto-installs it on run, or use CUDA instead.";
     case "CPUExecutionProvider":
       return "";
     default: {

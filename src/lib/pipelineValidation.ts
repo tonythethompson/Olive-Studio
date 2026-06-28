@@ -42,10 +42,15 @@ export interface HardwareConflict {
 
 const GPU_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
+  "NvTensorRTRTXExecutionProvider",
   "TensorrtExecutionProvider",
   "ROCMExecutionProvider",
 ];
-const TENSOR_CORE_PROVIDERS: IHVProvider[] = ["CUDAExecutionProvider", "TensorrtExecutionProvider"];
+const TENSOR_CORE_PROVIDERS: IHVProvider[] = [
+  "CUDAExecutionProvider",
+  "NvTensorRTRTXExecutionProvider",
+  "TensorrtExecutionProvider",
+];
 
 export function isQuantMethodAllowed(
   method: UIState["passes"]["quantMethod"],

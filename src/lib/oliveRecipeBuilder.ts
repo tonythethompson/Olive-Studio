@@ -7,6 +7,7 @@ import {
 
 const GPU_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
+  "NvTensorRTRTXExecutionProvider",
   "TensorrtExecutionProvider",
   "ROCMExecutionProvider",
 ];
@@ -120,16 +121,24 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   }
 
   if (state.passes.quantization) {
-    const quantConfig: Record<string, unknown> = {
-      weight_type: state.passes.quantPrecision,
-      optimize_model: true,
-    };
     if (state.passes.quantMethod === "awq") {
-      quantConfig.algorithm = "awq";
-    } else if (state.passes.quantMethod === "qat") {
-      quantConfig.quant_mode = "QLinearOps";
+      passes.quantization = {
+        type: "AutoAWQQuantizer",
+        config: {
+          bits: state.passes.quantPrecision === "int4" ? 4 : 8,
+          input_model_dtype: "fp16",
+        },
+      };
+    } else {
+      passes.quantization = {
+        type: "OnnxQuantization",
+        config: {
+          quant_mode: "static",
+          precision: state.passes.quantPrecision,
+          quant_preprocess: true,
+        },
+      };
     }
-    passes.quantization = { type: "OnnxQuantization", config: quantConfig };
   }
 
   if (state.passes.onnxTransforms) {

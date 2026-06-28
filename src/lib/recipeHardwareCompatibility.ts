@@ -1,5 +1,5 @@
-import type { RecipeCatalogItem } from "@/lib/oliveRecipeHub";
-import { getCatalogDeviceFromRecipe } from "@/lib/oliveRecipeHub";
+import { isNvTensorRtRtxCatalogPath } from "@/lib/tensorrtRtxDeps";
+import { getCatalogDeviceFromRecipe, type RecipeCatalogItem } from "@/lib/oliveRecipeHub";
 import {
   type HardwareProbeResult,
   isProviderDetectedLocally,
@@ -26,6 +26,8 @@ function catalogDeviceToProvider(device: string): IHVProvider | undefined {
       return "CUDAExecutionProvider";
     case "TensorRT":
       return "TensorrtExecutionProvider";
+    case "TensorRT RTX":
+      return "NvTensorRTRTXExecutionProvider";
     case "OpenVINO":
       return "OpenVINOExecutionProvider";
     case "QNN":
@@ -41,6 +43,9 @@ export function resolveRecipeTargetDevice(
   item: RecipeCatalogItem,
   parsedRecipe?: unknown,
 ): string {
+  if (isNvTensorRtRtxCatalogPath(item.repoPath)) {
+    return "TensorRT RTX";
+  }
   return getCatalogDeviceFromRecipe(parsedRecipe) ?? item.device;
 }
 

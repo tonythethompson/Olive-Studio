@@ -182,6 +182,7 @@ function peakRunMultiplier(state: UIState): number {
 export function isGpuProvider(provider: IHVProvider): boolean {
   switch (provider) {
     case "CUDAExecutionProvider":
+    case "NvTensorRTRTXExecutionProvider":
     case "TensorrtExecutionProvider":
     case "ROCMExecutionProvider":
       return true;
@@ -250,7 +251,9 @@ export function getSelectedGpuVramGb(
   const gpus =
     provider === "ROCMExecutionProvider"
       ? probe.rocm?.gpus ?? []
-      : provider === "CUDAExecutionProvider" || provider === "TensorrtExecutionProvider"
+      : provider === "CUDAExecutionProvider" ||
+          provider === "NvTensorRTRTXExecutionProvider" ||
+          provider === "TensorrtExecutionProvider"
         ? probe.nvidia?.gpus ?? []
         : [];
 

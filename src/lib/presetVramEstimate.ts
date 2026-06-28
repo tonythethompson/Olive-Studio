@@ -17,6 +17,8 @@ function catalogDeviceToProvider(device: string): IHVProvider {
       return "CUDAExecutionProvider";
     case "TensorRT":
       return "TensorrtExecutionProvider";
+    case "TensorRT RTX":
+      return "NvTensorRTRTXExecutionProvider";
     case "OpenVINO":
       return "OpenVINOExecutionProvider";
     case "QNN":

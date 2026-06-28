@@ -20,7 +20,7 @@ const PROVIDER_DEVICE = {
   cpu: "CPU",
   cuda: "CUDA",
   webgpu: "CPU",
-  nvtensorrtrtx: "TensorRT",
+  nvtensorrtrtx: "TensorRT RTX",
   tensorrt: "TensorRT",
   trt: "TensorRT",
   qnn: "QNN",

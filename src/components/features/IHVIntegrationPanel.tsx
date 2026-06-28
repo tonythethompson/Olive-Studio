@@ -480,7 +480,9 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
               }
 
               const hardwareDetail =
-                p.id === "CUDAExecutionProvider" || p.id === "TensorrtExecutionProvider"
+                p.id === "CUDAExecutionProvider" ||
+                p.id === "NvTensorRTRTXExecutionProvider" ||
+                p.id === "TensorrtExecutionProvider"
                   ? hardwareProbe?.nvidia?.gpus.map((g) => g.name).join(", ")
                   : p.id === "ROCMExecutionProvider"
                     ? hardwareProbe?.rocm?.gpus.map((g) => g.name).join(", ")
@@ -632,7 +634,9 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                   </p>
                   {!isMemoryOffloadAvailable(state) && (
                     <p className="text-[11px] text-amber-500/90 leading-relaxed">
-                      Select <strong className="font-semibold">NVIDIA CUDA</strong>, <strong className="font-semibold">TensorRT</strong>, or{" "}
+                      Select <strong className="font-semibold">NVIDIA CUDA</strong>,{" "}
+                      <strong className="font-semibold">TensorRT RTX</strong>,{" "}
+                      <strong className="font-semibold">TensorRT</strong>, or{" "}
                       <strong className="font-semibold">AMD ROCm</strong> above to enable this toggle.
                       {hardwareProbe &&
                         isGpuProvider(hardwareProbe.recommendedProvider) &&
@@ -666,7 +670,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
           )}
 
           {/* CUDA Version Override — only for GPU providers */}
-          {(["CUDAExecutionProvider", "TensorrtExecutionProvider", "ROCMExecutionProvider"] as IHVProvider[]).includes(state.ihvProvider) && (
+          {(["CUDAExecutionProvider", "NvTensorRTRTXExecutionProvider", "TensorrtExecutionProvider", "ROCMExecutionProvider"] as IHVProvider[]).includes(state.ihvProvider) && (
             <div className="mt-4">
               <div className="p-4 rounded-xl border border-slate-800/60 bg-slate-900/30">
                 <div className="flex items-center justify-between gap-4 flex-wrap">

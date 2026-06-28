@@ -10,6 +10,7 @@ import { sanitizePipelineState } from "../src/lib/pipelineValidation";
 import { validateOliveRecipeStructure } from "../src/lib/oliveRecipeSchema";
 import { getPipelineValidation, prepareProviderChange } from "../src/lib/pipelineValidation";
 import { getSelectableProviders } from "../src/lib/hardwareProbe";
+import { deriveUiStateFromOliveRecipe } from "../src/lib/oliveRecipeHub";
 import { UIState } from "../src/types";
 
 const baseState: UIState = {
@@ -41,9 +42,49 @@ assert.equal(pipeline.isRunnable, true, "pipeline should be runnable");
 const engine = pipeline.recipe.engine as { search_strategy?: unknown };
 assert.equal(engine.search_strategy, false, "engine must disable pass search without evaluators");
 assert.ok(pipeline.recipe.passes && typeof pipeline.recipe.passes === "object");
-const quantPass = (pipeline.recipe.passes as Record<string, { config?: { algorithm?: string } }>).quantization;
+const quantPass = (pipeline.recipe.passes as Record<string, { type?: string; config?: { bits?: number } }>).quantization;
 assert.ok(quantPass, "recipe must include quantization pass");
-assert.equal(quantPass.config?.algorithm, "awq", "AWQ quant method must map to algorithm field");
+assert.equal(quantPass.type, "AutoAWQQuantizer", "AWQ quant method must map to AutoAWQQuantizer pass");
+assert.equal(quantPass.config?.bits, 4, "AWQ int4 must map to bits=4");
+
+const ptqPipeline = buildRecipeFromState({
+  ...baseState,
+  passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "ptq", quantPrecision: "int8" },
+});
+const ptqPass = (ptqPipeline.recipe.passes as Record<string, { type?: string; config?: { quant_mode?: string } }>).quantization;
+assert.equal(ptqPass.type, "OnnxQuantization", "PTQ must map to OnnxQuantization pass");
+assert.equal(ptqPass.config?.quant_mode, "static", "PTQ must use static quant_mode for Olive");
+
+const catalogPtqState = sanitizePipelineState({
+  ...baseState,
+  passes: {
+    ...DEFAULT_PASSES,
+    quantization: true,
+    quantMethod: "ptq",
+    quantPrecision: "int8",
+  },
+});
+assert.equal(catalogPtqState.passes.quantMethod, "ptq", "PTQ must remain PTQ after sanitize");
+
+const importedCatalog = deriveUiStateFromOliveRecipe(
+  {
+    input_model: { type: "PyTorchModel", config: { hf_config: { model_name: "meta-llama/Llama-3-8B", task: "text-generation" } } },
+    systems: { local_system: { type: "LocalSystem", config: { accelerators: [{ device: "gpu", execution_providers: ["CUDAExecutionProvider"] }] } } },
+    passes: {
+      quantization: { type: "OnnxQuantization", config: { quant_mode: "static", precision: "int8" } },
+    },
+    engine: { search_strategy: false, host: "local_system", target: "local_system" },
+  },
+  { replacePasses: true }
+);
+assert.equal(importedCatalog.passes?.quantMethod, "ptq", "catalog static PTQ must not be misread as QAT");
+
+const rebuiltCatalog = buildRecipeFromState({
+  ...baseState,
+  passes: importedCatalog.passes as UIState["passes"],
+});
+const rebuiltQuant = (rebuiltCatalog.recipe.passes as Record<string, { config?: { quant_mode?: string } }>).quantization;
+assert.notEqual(rebuiltQuant.config?.quant_mode, "QLinearOps", "rebuilt catalog recipe must not emit invalid quant_mode");
 
 const cpuAwq = sanitizePipelineState({
   ...baseState,

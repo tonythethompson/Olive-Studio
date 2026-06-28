@@ -132,6 +132,9 @@ function mapExecutionProviderFromRecipe(parsed: any): IHVProvider | undefined {
         if (!Array.isArray(providers) || providers.length === 0) continue;
         const token = String(providers[0]).toLowerCase();
         if (token.includes("cuda")) return "CUDAExecutionProvider";
+        if (token.includes("nvtensorrtrtx") || token.includes("tensorrtrtx")) {
+          return "NvTensorRTRTXExecutionProvider";
+        }
         if (token.includes("tensorrt") || token.includes("trt")) return "TensorrtExecutionProvider";
         if (token.includes("directml") || token.includes("dml")) return "CPUExecutionProvider";
         if (token.includes("qnn")) return "QNNExecutionProvider";
@@ -156,6 +159,7 @@ export function getCatalogDeviceFromRecipe(parsed: unknown): string | undefined 
         if (!Array.isArray(providers) || providers.length === 0) continue;
         const token = String(providers[0]).toLowerCase();
         if (token.includes("directml") || token.includes("dml")) return "DirectML";
+        if (token.includes("nvtensorrtrtx") || token.includes("tensorrtrtx")) return "TensorRT RTX";
         if (token.includes("tensorrt") || token.includes("trt")) return "TensorRT";
         if (token.includes("cuda")) return "CUDA";
         if (token.includes("qnn")) return "QNN";
@@ -180,6 +184,8 @@ export function mapProviderToCatalogDevice(provider: IHVProvider): string {
       return "CUDA";
     case "TensorrtExecutionProvider":
       return "TensorRT";
+    case "NvTensorRTRTXExecutionProvider":
+      return "TensorRT RTX";
     case "OpenVINOExecutionProvider":
       return "OpenVINO";
     case "QNNExecutionProvider":
@@ -203,16 +209,24 @@ export function compareCatalogMetadataToRecipe(
   };
 }
 
-function mapQuantMethod(config: any): UIState["passes"]["quantMethod"] {
+function mapQuantMethod(config: any, passType = ""): UIState["passes"]["quantMethod"] {
+  const typeLower = passType.toLowerCase();
+  if (typeLower.includes("autoawq")) {
+    return "awq";
+  }
   const algorithm = String(config?.algorithm ?? "").toLowerCase();
   if (algorithm.includes("awq")) return "awq";
-  if (config?.quant_mode || String(config?.mode ?? "").toLowerCase().includes("qat")) {
+  const mode = String(config?.quant_mode ?? config?.mode ?? "").toLowerCase();
+  if (mode.includes("qat") || mode === "qlinearops") {
     return "qat";
   }
   return "ptq";
 }
 
 function mapQuantPrecision(config: any): UIState["passes"]["quantPrecision"] {
+  if (config?.bits != null) {
+    return Number(config.bits) <= 4 ? "int4" : "int8";
+  }
   const weight = String(config?.weight_type ?? config?.precision ?? "int8").toLowerCase();
   if (weight.includes("int4") || weight === "4") return "int4";
   if (weight.includes("fp16") || weight.includes("float16")) return "fp16";
@@ -249,9 +263,16 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
       continue;
     }
 
+    if (lowerType.includes("autoawq")) {
+      next.quantization = true;
+      next.quantMethod = "awq";
+      next.quantPrecision = mapQuantPrecision(config);
+      continue;
+    }
+
     if (lowerType.includes("quant")) {
       next.quantization = true;
-      next.quantMethod = mapQuantMethod(config);
+      next.quantMethod = mapQuantMethod(config, type);
       next.quantPrecision = mapQuantPrecision(config);
       continue;
     }

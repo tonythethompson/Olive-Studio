@@ -26,10 +26,17 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     icon: Layers,
   },
   {
+    id: "NvTensorRTRTXExecutionProvider",
+    name: "NVIDIA TensorRT RTX",
+    shortName: "TRT RTX",
+    desc: "Consumer RTX GPUs (GeForce 30xx+). JIT TensorRT engines via tensorrt-rtx — no full SDK.",
+    icon: Layers,
+  },
+  {
     id: "TensorrtExecutionProvider",
     name: "NVIDIA TensorRT",
     shortName: "TensorRT",
-    desc: "Maximum throughput on NVIDIA GPUs using TensorRT engines.",
+    desc: "Datacenter / full TensorRT SDK (nvinfer_10) for maximum throughput.",
     icon: Layers,
   },
   {

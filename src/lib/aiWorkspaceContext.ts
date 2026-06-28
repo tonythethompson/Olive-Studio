@@ -265,6 +265,7 @@ export function buildChatPresetQueries(state: UIState): string[] {
 
 const GPU_PROVIDERS = new Set([
   "CUDAExecutionProvider",
+  "NvTensorRTRTXExecutionProvider",
   "TensorrtExecutionProvider",
   "ROCMExecutionProvider",
 ]);
