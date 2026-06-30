@@ -205,7 +205,7 @@ See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ## Contributing
 
-Issues and pull requests are welcome. Please keep changes focused and run `npm run lint` and `npm run validate:recipe` before opening a PR.
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, conventions, and PR checklist.
 
 ---
 
