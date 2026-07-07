@@ -571,8 +571,10 @@ export function GeminiSidebar({ state, setState, isOpen, onClose, openToAudit, o
               <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">Configure Provider</p>
 
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Provider</label>
+                <label htmlFor="gemini-settings-provider" className="text-xs text-slate-400 mb-1 block">Provider</label>
                 <select
+                  id="gemini-settings-provider"
+                  aria-label="AI provider"
                   value={settingsProvider}
                   onChange={e => {
                     const id = e.target.value as ProviderId;
@@ -588,7 +590,7 @@ export function GeminiSidebar({ state, setState, isOpen, onClose, openToAudit, o
               </div>
 
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Model</label>
+                <label htmlFor="gemini-settings-model" className="text-xs text-slate-400 mb-1 block">Model</label>
                 {isCompatMode ? (
                   <input
                     placeholder="Model name (e.g. llama3.1:8b, deepseek-r1)"
@@ -598,6 +600,8 @@ export function GeminiSidebar({ state, setState, isOpen, onClose, openToAudit, o
                   />
                 ) : (
                   <select
+                    id="gemini-settings-model"
+                    aria-label="AI model"
                     value={settingsModel}
                     onChange={e => setSettingsModel(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue cursor-pointer"

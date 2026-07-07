@@ -57,6 +57,12 @@ function Dashboard() {
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-300 overflow-hidden font-sans">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-electric-blue focus:text-white focus:rounded-md"
+      >
+        Skip to main content
+      </a>
       <aside className="w-56 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
         <div className="h-14 flex items-center px-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -138,6 +144,7 @@ function Dashboard() {
           </header>
 
           <main
+            id="main"
             className="flex-1 overflow-y-auto px-6 py-8 md:px-10 h-full scroll-smooth"
             onScroll={(e) => {
               if (isOliveRunning) return;
@@ -151,6 +158,7 @@ function Dashboard() {
               }
             }}
           >
+            <h1 className="sr-only">Olive Studio — Recipe builder</h1>
             <div className="pb-16 space-y-16">
               {SECTIONS.map(({ id, step, label, desc }) => (
                 <section

@@ -73,8 +73,9 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
       </div>
       <div className="grid grid-cols-1 gap-3 border-l border-slate-800/50 pl-4">
         <div>
-          <Label className="text-[10px] font-mono text-slate-400">Active Platform Driver</Label>
+          <Label htmlFor="graph-provider-driver" className="text-[10px] font-mono text-slate-400">Active Platform Driver</Label>
           <Select
+            id="graph-provider-driver"
             value={state.ihvProvider}
             onChange={(e) => handleProviderChange(e.target.value as UIState["ihvProvider"])}
             className="h-8 text-xs bg-slate-950"

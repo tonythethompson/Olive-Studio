@@ -52,10 +52,10 @@ export function CardHeader({ title, description, badge, tooltip }: { title: stri
     <div className="flex flex-col gap-1 p-5 pb-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-base font-semibold text-slate-100 flex items-center gap-2">
+          <div className="text-base font-semibold text-slate-100 flex items-center gap-2">
             {title}
             {tooltip && <Info className="h-3.5 w-3.5 text-slate-500 cursor-help shrink-0" title={tooltip} />}
-          </h3>
+          </div>
           {description && <p className="text-sm text-slate-500 mt-1">{description}</p>}
         </div>
         {badge}

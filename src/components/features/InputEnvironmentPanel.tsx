@@ -922,8 +922,11 @@ export function InputEnvironmentPanel({
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <fieldset className="grid grid-cols-2 gap-2 border-0 p-0 m-0 min-w-0">
+                  <legend className="sr-only">Recipe filters</legend>
                   <Select
+                    id="recipe-architecture-filter"
+                    aria-label="Architecture filter"
                     value={selectedArchitecture}
                     onChange={(e) => setSelectedArchitecture(e.target.value)}
                     className="h-9 text-xs py-1"
@@ -940,6 +943,8 @@ export function InputEnvironmentPanel({
                     <option value="Other">Other models</option>
                   </Select>
                   <Select
+                    id="recipe-platform-filter"
+                    aria-label="Platform filter"
                     value={selectedDevice}
                     onChange={(e) => setSelectedDevice(e.target.value)}
                     className="h-9 text-xs py-1"
@@ -953,7 +958,7 @@ export function InputEnvironmentPanel({
                     <option value="OpenVINO">Intel OpenVINO</option>
                     <option value="CPU">Universal CPU</option>
                   </Select>
-                </div>
+                </fieldset>
               </div>
 
               <div className="max-h-[420px] overflow-y-auto rounded border border-slate-800 divide-y divide-slate-800/80">
@@ -1450,8 +1455,8 @@ export function InputEnvironmentPanel({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="grid gap-3">
-                  <Label>Task Type</Label>
-                  <Select>
+                  <Label htmlFor="hf-task-type">Task Type</Label>
+                  <Select id="hf-task-type">
                     <option value="text-generation">Text Generation</option>
                     <option value="text-classification">
                       Text Classification

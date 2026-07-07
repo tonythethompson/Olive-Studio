@@ -25,9 +25,9 @@ export function LicenseNotice({ open, onClose }: LicenseNoticeProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 mb-3">
-          <h2 id="license-notice-title" className="text-sm font-semibold text-slate-100">
+          <h1 id="license-notice-title" className="text-sm font-semibold text-slate-100">
             License
-          </h2>
+          </h1>
           <button
             type="button"
             onClick={onClose}

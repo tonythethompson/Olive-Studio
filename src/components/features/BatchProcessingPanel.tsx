@@ -367,16 +367,16 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
                        />
                      </div>
                      <div className="space-y-1.5">
-                       <Label>Source Provider</Label>
-                        <Select value={newSource} onChange={(e) => setNewSource(e.target.value as any)}>
+                       <Label htmlFor="batch-source-provider">Source Provider</Label>
+                        <Select id="batch-source-provider" value={newSource} onChange={(e) => setNewSource(e.target.value as any)}>
                           <option value="huggingface">Hugging Face Hub</option>
                           <option value="local">Local Files Chunked</option>
                           <option value="azure">Azure ML Asset</option>
                         </Select>
                      </div>
                      <div className="space-y-1.5">
-                       <Label>Target Execution Provider</Label>
-                        <Select value={newProvider} onChange={(e) => setNewProvider(e.target.value as IHVProvider)}>
+                       <Label htmlFor="batch-target-provider">Target Execution Provider</Label>
+                        <Select id="batch-target-provider" value={newProvider} onChange={(e) => setNewProvider(e.target.value as IHVProvider)}>
                           {selectableBatchProviders.map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.name}
@@ -387,8 +387,8 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
                   </div>
 
                   {/* Active Passes for manual additions */}
-                  <div className="space-y-2 border-t border-slate-900 pt-4">
-                     <Label className="text-xs text-slate-400 uppercase tracking-wider">Pass Pipeline Elements</Label>
+                  <fieldset className="space-y-2 border-t border-slate-900 pt-4 border-x-0 border-b-0 p-0 m-0 min-w-0">
+                     <legend className="text-xs text-slate-400 uppercase tracking-wider px-0">Pass Pipeline Elements</legend>
                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <label className="flex items-center gap-2 p-2.5 rounded bg-slate-900 border border-slate-800 text-xs text-slate-300 cursor-pointer hover:border-slate-700">
                           <input type="checkbox" checked={passConv} onChange={() => setPassConv(!passConv)} className="accent-electric-blue" />
@@ -407,7 +407,7 @@ export function BatchProcessingPanel({ state, setState }: { state: UIState; setS
                           <span>Attention Fusions</span>
                         </label>
                      </div>
-                  </div>
+                  </fieldset>
 
                   <div className="flex justify-end pt-2">
                      <Button variant="default" className="px-6 text-xs bg-electric-blue text-white" disabled={!newModelName.trim()} onClick={handleAddCustom}>

@@ -21,8 +21,9 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
       <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">Pass settings</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label className="text-xs text-slate-400">Source framework</Label>
+          <Label htmlFor="conversion-source-format" className="text-xs text-slate-400">Source framework</Label>
           <Select
+            id="conversion-source-format"
             value={state.passes.conversionSourceFormat}
             onChange={(e) =>
               setState({
@@ -40,8 +41,9 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs text-slate-400">Target format</Label>
+          <Label htmlFor="conversion-target-format" className="text-xs text-slate-400">Target format</Label>
           <Select
+            id="conversion-target-format"
             value={state.passes.conversionFormat}
             onChange={(e) =>
               setState({
@@ -61,8 +63,9 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
         </div>
         {state.passes.conversionFormat === "onnx" && (
           <div className="space-y-1.5">
-            <Label className="text-xs text-slate-400">ONNX opset</Label>
+            <Label htmlFor="conversion-onnx-opset" className="text-xs text-slate-400">ONNX opset</Label>
             <Select
+              id="conversion-onnx-opset"
               value={String(state.passes.conversionOpset)}
               onChange={(e) =>
                 setState({ passes: { ...state.passes, conversionOpset: Number(e.target.value) } })
@@ -78,8 +81,9 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
           </div>
         )}
         <div className="space-y-1.5">
-          <Label className="text-xs text-slate-400">I/O dtypes</Label>
+          <Label htmlFor="conversion-io-dtypes" className="text-xs text-slate-400">I/O dtypes</Label>
           <Select
+            id="conversion-io-dtypes"
             value={state.passes.conversionInputTargetTypes}
             onChange={(e) =>
               setState({ passes: { ...state.passes, conversionInputTargetTypes: e.target.value } })

@@ -19,8 +19,9 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
       <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">Pass settings</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label className="text-xs text-slate-400">Target precision</Label>
+          <Label htmlFor="quant-target-precision" className="text-xs text-slate-400">Target precision</Label>
           <Select
+            id="quant-target-precision"
             value={state.passes.quantPrecision}
             onChange={(e) =>
               setState({
@@ -35,8 +36,9 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs text-slate-400">Method</Label>
+          <Label htmlFor="quant-method" className="text-xs text-slate-400">Method</Label>
           <Select
+            id="quant-method"
             value={state.passes.quantMethod}
             onChange={(e) =>
               setState({

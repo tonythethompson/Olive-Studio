@@ -571,10 +571,12 @@ ${owrPlatform === "web" ?
                     </div>
 
                     <div className="space-y-1.5 pt-2">
-                      <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <Label htmlFor="owr-thread-allocation" className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                         <Cpu className="h-3.5 w-3.5 text-electric-blue" /> Runtime Thread Allocation
                       </Label>
-                      <select 
+                      <select
+                        id="owr-thread-allocation"
+                        aria-label="Runtime thread allocation"
                         value={owrThreads} 
                         onChange={(e) => setOwrThreads(e.target.value)}
                         className="w-full text-xs bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 font-sans justify-between text-slate-200 outline-none hover:border-slate-700 cursor-pointer"
@@ -590,10 +592,12 @@ ${owrPlatform === "web" ?
                     </div>
 
                     <div className="space-y-1.5 pt-2">
-                      <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <Label htmlFor="owr-vram-mode" className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                         <Sliders className="h-3.5 w-3.5 text-electric-blue" /> VRAM Optimizer Mode
                       </Label>
-                      <select 
+                      <select
+                        id="owr-vram-mode"
+                        aria-label="VRAM optimizer mode"
                         value={owrVramMode} 
                         onChange={(e) => setOwrVramMode(e.target.value as any)}
                         className="w-full text-xs bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 font-sans justify-between text-slate-200 outline-none hover:border-slate-700 cursor-pointer"

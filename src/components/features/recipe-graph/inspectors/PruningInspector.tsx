@@ -54,8 +54,9 @@ export function PruningInspector({ state, setState }: InspectorProps) {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label className="text-xs text-slate-400">Method</Label>
+          <Label htmlFor="pruning-method" className="text-xs text-slate-400">Method</Label>
           <Select
+            id="pruning-method"
             value={state.passes.pruningMethod}
             onChange={(e) =>
               setState({
@@ -70,8 +71,9 @@ export function PruningInspector({ state, setState }: InspectorProps) {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs text-slate-400">Sparsity pattern</Label>
+          <Label htmlFor="pruning-pattern" className="text-xs text-slate-400">Sparsity pattern</Label>
           <Select
+            id="pruning-pattern"
             value={state.passes.pruningType}
             onChange={(e) =>
               setState({
@@ -90,8 +92,9 @@ export function PruningInspector({ state, setState }: InspectorProps) {
         </div>
         {state.passes.pruningMethod === "magnitude" && (
           <div className="space-y-1.5 sm:col-span-2">
-            <Label className="text-xs text-slate-400">Pruning criteria</Label>
+            <Label htmlFor="pruning-criteria" className="text-xs text-slate-400">Pruning criteria</Label>
             <Select
+              id="pruning-criteria"
               value={state.passes.pruningCriteria}
               onChange={(e) =>
                 setState({

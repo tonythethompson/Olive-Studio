@@ -36,8 +36,9 @@ export function PeftInspector({ state, setState }: InspectorProps) {
         ) : state.passes.peft ? (
           <>
             <div>
-              <Label className="text-[10px] font-mono text-slate-400">Tuning Method</Label>
+              <Label htmlFor="peft-tuning-method" className="text-[10px] font-mono text-slate-400">Tuning Method</Label>
               <Select
+                id="peft-tuning-method"
                 value={state.passes.peftMethod}
                 onChange={(e) =>
                   setState({ passes: { ...state.passes, peftMethod: e.target.value as UIState["passes"]["peftMethod"] } })

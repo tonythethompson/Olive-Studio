@@ -26,8 +26,9 @@ export function InputInspector({ state, setState }: InspectorProps) {
       </div>
       <div className="grid grid-cols-1 gap-3 border-l border-slate-800/50 pl-4">
         <div>
-          <Label className="text-[10px] font-mono text-slate-400">Selected Source</Label>
+          <Label htmlFor="graph-model-source" className="text-[10px] font-mono text-slate-400">Selected Source</Label>
           <Select
+            id="graph-model-source"
             value={state.modelSource}
             onChange={(e) => setState({ modelSource: e.target.value as UIState["modelSource"] })}
             className="h-8 text-xs bg-slate-950"

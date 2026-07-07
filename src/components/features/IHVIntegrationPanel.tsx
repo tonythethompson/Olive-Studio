@@ -683,6 +683,8 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
                     </p>
                   </div>
                   <select
+                    id="cuda-version-override"
+                    aria-label="PyTorch CUDA Version"
                     value={state.cudaVersion ?? "auto"}
                     onChange={e => setState({ cudaVersion: e.target.value as UIState["cudaVersion"] })}
                     className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-electric-blue shrink-0 cursor-pointer"
@@ -810,7 +812,7 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
               /* TAB 1: VALIDATION MATRIX INTERACTIVE HEATMAP */
               <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/25 mt-2 shadow-xl animate-in fade-in duration-300">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse min-w-[720px]">
+                  <table aria-label="Pass and execution provider compatibility matrix" className="w-full text-left border-collapse min-w-[720px]">
                     <thead>
                       <tr className="border-b border-slate-800/80 bg-slate-900/30">
                         {/* Header Cell 1 */}
@@ -1219,8 +1221,8 @@ export function IHVIntegrationPanel({ state, setState }: { state: UIState; setSt
               ) : state.ihvProvider === "OpenVINOExecutionProvider" ? (
                 <>
                    <div className="flex items-center justify-between">
-                    <div><Label>Target Device</Label><p className="text-xs text-slate-500">CPU, GPU, NPU</p></div>
-                    <Select className="w-full max-w-[150px]">
+                    <div><Label htmlFor="openvino-target-device">Target Device</Label><p className="text-xs text-slate-500">CPU, GPU, NPU</p></div>
+                    <Select id="openvino-target-device" aria-label="Target Device" className="w-full max-w-[150px]">
                       <option>NPU</option>
                       <option>CPU</option>
                       <option>GPU</option>

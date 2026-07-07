@@ -22,7 +22,8 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "validate:recipe": "tsx scripts/validate-recipe-builder.ts"
+    "validate:recipe": "tsx scripts/validate-recipe-builder.ts",
+    "a11y:scan": "python tools/a11y-scan.py src"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
