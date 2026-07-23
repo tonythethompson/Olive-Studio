@@ -1,0 +1,19 @@
+.husky/commit-msg
+  s_7ec31497aea009::t_776482aa464347 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "b2fa023dcbedb73c73c6d5dcf513968af1fdceac",
+  "prompts": {},
+  "sessions": {
+    "s_7ec31497aea009": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "de47f52c-9098-4d56-be70-f0427ace76b9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
