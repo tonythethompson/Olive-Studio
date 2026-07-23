@@ -166,10 +166,7 @@ function peakRunMultiplier(state: UIState): number {
   let multiplier = 1.35;
 
   if (state.passes.quantization) {
-    multiplier =
-      state.passes.quantMethod === "awq" ? 2.2
-      : state.passes.quantMethod === "qat" ? 2.5
-      : 1.9;
+    multiplier = state.passes.quantMethod === "awq" ? 2.2 : state.passes.quantMethod === "qat" ? 2.5 : 1.9;
   }
   if (state.passes.peft) {
     multiplier = state.passes.peftMethod === "qlora" ? 2.8 : 3.2;
@@ -212,18 +209,22 @@ export function estimateVramRequirement(state: UIState): VramEstimate {
 
   const effectiveParams = effectiveParamBillions(state, paramBillions);
   const inferenceGb =
-    source.paramBillions > 0
-      ? paramsToGb(effectiveParams, deployedBytesPerParam(state))
-      : source.weightGb;
+    source.paramBillions > 0 ? paramsToGb(effectiveParams, deployedBytesPerParam(state)) : source.weightGb;
   const peakRunGb = source.weightGb * peakRunMultiplier(state);
   const usesGpu = isGpuProvider(state.ihvProvider);
 
   const passNotes: string[] = [];
   if (state.passes.peft) {
-    passNotes.push(state.passes.peftMethod === "qlora" ? "QLoRA tuning raises peak memory." : "LoRA tuning raises peak memory.");
+    passNotes.push(
+      state.passes.peftMethod === "qlora"
+        ? "QLoRA tuning raises peak memory."
+        : "LoRA tuning raises peak memory.",
+    );
   }
   if (state.passes.quantization) {
-    passNotes.push(`Quantization (${state.passes.quantMethod.toUpperCase()}) needs calibration buffers during the run.`);
+    passNotes.push(
+      `Quantization (${state.passes.quantMethod.toUpperCase()}) needs calibration buffers during the run.`,
+    );
   }
 
   return {
@@ -250,16 +251,14 @@ export function getSelectedGpuVramGb(
 
   const gpus =
     provider === "ROCMExecutionProvider"
-      ? probe.rocm?.gpus ?? []
+      ? (probe.rocm?.gpus ?? [])
       : provider === "CUDAExecutionProvider" ||
           provider === "NvTensorRTRTXExecutionProvider" ||
           provider === "TensorrtExecutionProvider"
-        ? probe.nvidia?.gpus ?? []
+        ? (probe.nvidia?.gpus ?? [])
         : [];
 
-  const vramMb = gpus
-    .map((gpu) => gpu.vramMb)
-    .filter((value): value is number => value != null && value > 0);
+  const vramMb = gpus.map((gpu) => gpu.vramMb).filter((value): value is number => value != null && value > 0);
 
   if (!vramMb.length) return null;
   return Math.max(...vramMb) / 1024;

@@ -126,8 +126,7 @@ export function estimateVramForCatalogPreset(
   let fitHint: string | null = null;
   if (estimate.usesGpu && availableGb != null) {
     const inferenceFit = compareVramFit(estimate.inferenceGb, availableGb);
-    const poolGb =
-      systemRamGb != null ? getHybridMemoryPoolGb(availableGb, systemRamGb) : availableGb;
+    const poolGb = systemRamGb != null ? getHybridMemoryPoolGb(availableGb, systemRamGb) : availableGb;
     const runFit = compareVramFit(estimate.peakRunGb, poolGb);
 
     if (runFit === "insufficient") {

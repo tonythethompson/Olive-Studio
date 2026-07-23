@@ -31,7 +31,7 @@ export interface DeriveUiStateOptions {
 export function parseGitHubRecipeTarget(
   repoInput: string,
   branchInput: string,
-  pathInput: string
+  pathInput: string,
 ): ParsedGitHubTarget {
   const trimmed = repoInput.trim();
 
@@ -57,7 +57,7 @@ export function parseGitHubRecipeTarget(
     };
   }
 
-  let cleanRepo = trimmed
+  const cleanRepo = trimmed
     .replace(/^https:\/\/github.com\//, "")
     .replace(/\.git$/i, "")
     .replace(/\/$/, "");
@@ -90,7 +90,7 @@ export function buildGitHubRawApiUrl(target: ParsedGitHubTarget): string {
 export async function fetchGitHubRecipeJson(
   repoInput: string,
   branchInput: string,
-  pathInput: string
+  pathInput: string,
 ): Promise<{ json: unknown; target: ParsedGitHubTarget }> {
   const target = parseGitHubRecipeTarget(repoInput, branchInput, pathInput);
   if (!target.path.trim()) {
@@ -114,12 +114,13 @@ export async function fetchGitHubRecipeJson(
 export async function fetchOliveRecipesCatalogItem(
   item: RecipeCatalogItem,
   repo = OLIVE_RECIPES_REPO,
-  branch = OLIVE_RECIPES_BRANCH
+  branch = OLIVE_RECIPES_BRANCH,
 ): Promise<unknown> {
   const { json } = await fetchGitHubRecipeJson(repo, branch, item.repoPath);
   return json;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapExecutionProviderFromRecipe(parsed: any): IHVProvider | undefined {
   const systems = parsed?.systems;
   if (systems && typeof systems === "object") {
@@ -198,7 +199,7 @@ export function mapProviderToCatalogDevice(provider: IHVProvider): string {
 
 export function compareCatalogMetadataToRecipe(
   item: RecipeCatalogItem,
-  parsed: unknown
+  parsed: unknown,
 ): { catalogDevice: string; recipeDevice?: string; matches: boolean } {
   const provider = getExecutionProviderFromRecipe(parsed);
   const recipeDevice = provider ? mapProviderToCatalogDevice(provider) : undefined;
@@ -209,6 +210,7 @@ export function compareCatalogMetadataToRecipe(
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapQuantMethod(config: any, passType = ""): UIState["passes"]["quantMethod"] {
   const typeLower = passType.toLowerCase();
   if (typeLower.includes("autoawq")) {
@@ -216,6 +218,8 @@ function mapQuantMethod(config: any, passType = ""): UIState["passes"]["quantMet
   }
   const algorithm = String(config?.algorithm ?? "").toLowerCase();
   if (algorithm.includes("awq")) return "awq";
+  if (typeLower.includes("gptq")) return "gptq";
+  if (algorithm.includes("gptq")) return "gptq";
   const mode = String(config?.quant_mode ?? config?.mode ?? "").toLowerCase();
   if (mode.includes("qat") || mode === "qlinearops") {
     return "qat";
@@ -223,6 +227,7 @@ function mapQuantMethod(config: any, passType = ""): UIState["passes"]["quantMet
   return "ptq";
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapQuantPrecision(config: any): UIState["passes"]["quantPrecision"] {
   if (config?.bits != null) {
     return Number(config.bits) <= 4 ? "int4" : "int8";
@@ -233,19 +238,15 @@ function mapQuantPrecision(config: any): UIState["passes"]["quantPrecision"] {
   return "int8";
 }
 
-function mapPruningMethod(type: string): UIState["passes"]["pruningMethod"] {
-  const lower = type.toLowerCase();
-  if (lower.includes("sparsegpt")) return "sparsegpt";
-  if (lower.includes("wanda")) return "wanda";
-  return "magnitude";
-}
-
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes"] {
   const next = createInactivePasses();
 
   for (const [key, pass] of Object.entries(recipePasses)) {
     if (!pass || typeof pass !== "object") continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const type = String((pass as any).type ?? "");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const config = (pass as any).config ?? {};
     const lowerType = type.toLowerCase();
 
@@ -267,6 +268,19 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
       next.quantization = true;
       next.quantMethod = "awq";
       next.quantPrecision = mapQuantPrecision(config);
+      if (config.group_size != null) next.awqGroupSize = Number(config.group_size);
+      if (config.damp_percent != null) next.awqDampPercent = Number(config.damp_percent);
+      if (config.sym != null) next.awqSym = Boolean(config.sym);
+      continue;
+    }
+
+    if (lowerType.includes("gptq")) {
+      next.quantization = true;
+      next.quantMethod = "gptq";
+      next.quantPrecision = mapQuantPrecision(config);
+      if (config.block_size != null) next.gptqBlockSize = Number(config.block_size);
+      if (config.group_size != null) next.gptqGroupSize = Number(config.group_size);
+      if (config.desc_act != null) next.gptqDescAct = Boolean(config.desc_act);
       continue;
     }
 
@@ -321,11 +335,7 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
       continue;
     }
 
-    if (
-      lowerType.includes("transform") ||
-      key === "transformer_opt" ||
-      key === "transformers_optimization"
-    ) {
+    if (lowerType.includes("transform") || key === "transformer_opt" || key === "transformers_optimization") {
       next.onnxTransforms = true;
       continue;
     }
@@ -339,19 +349,18 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
   return next;
 }
 
-export function deriveUiStateFromOliveRecipe(
-  parsed: any,
-  options?: DeriveUiStateOptions
-): Partial<UIState> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function deriveUiStateFromOliveRecipe(parsed: any, options?: DeriveUiStateOptions): Partial<UIState> {
   const incomingState: Partial<UIState> = {};
   const inputModel = parsed?.input_model;
 
   const hfConfig = inputModel?.config?.hf_config;
-  const hfModelPath = typeof inputModel?.model_path === "string"
-    ? inputModel.model_path
-    : typeof inputModel?.config?.model_path === "string"
-      ? inputModel.config.model_path
-      : null;
+  const hfModelPath =
+    typeof inputModel?.model_path === "string"
+      ? inputModel.model_path
+      : typeof inputModel?.config?.model_path === "string"
+        ? inputModel.config.model_path
+        : null;
   const hfName = hfConfig?.model_name || hfModelPath;
 
   if (hfName) {

@@ -271,11 +271,19 @@ export function GraphCanvas({
                       : "bg-slate-950 text-slate-600 border-slate-900"
               }`}
             >
-              {issueLevel === "critical" ? "Conflict" : issueLevel === "warning" ? "Warning" : active ? "Active" : "Skip"}
+              {issueLevel === "critical"
+                ? "Conflict"
+                : issueLevel === "warning"
+                  ? "Warning"
+                  : active
+                    ? "Active"
+                    : "Skip"}
             </span>
           </div>
           <h4 className="text-[11px] font-bold text-slate-200 truncate leading-snug">{nd.title}</h4>
-          <p className="text-[10px] text-slate-400 leading-tight font-mono line-clamp-2 mt-1 min-h-[20px]">{nd.desc}</p>
+          <p className="text-[10px] text-slate-400 leading-tight font-mono line-clamp-2 mt-1 min-h-[20px]">
+            {nd.desc}
+          </p>
         </div>
       </button>
     );
@@ -313,7 +321,9 @@ export function GraphCanvas({
               />
             )}
             <div className="flex items-center justify-between mb-1.5">
-              <div className="p-1.5 rounded border border-electric-blue/20 bg-electric-blue/10">{providerNd.icon}</div>
+              <div className="p-1.5 rounded border border-electric-blue/20 bg-electric-blue/10">
+                {providerNd.icon}
+              </div>
             </div>
             <h4 className="text-[11px] font-semibold text-slate-100">{providerNd.title}</h4>
             <p className="text-[10px] font-mono text-slate-400 leading-snug truncate">{providerNd.desc}</p>
@@ -332,7 +342,9 @@ export function GraphCanvas({
             }`}
           >
             <div className="flex items-center justify-between mb-1.5">
-              <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">{outputNd.icon}</div>
+              <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                {outputNd.icon}
+              </div>
               <span className="text-[9px] px-1.5 py-0.2 bg-emerald-950 text-emerald-300 rounded border border-emerald-500/20 font-mono">
                 {outputNd.badge}
               </span>
@@ -376,7 +388,9 @@ export function GraphCanvas({
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <div className="p-1.5 rounded bg-electric-blue/10 border border-electric-blue/20">{nd.icon}</div>
+                  <div className="p-1.5 rounded bg-electric-blue/10 border border-electric-blue/20">
+                    {nd.icon}
+                  </div>
                   <span className="text-[9px] px-2 py-0.5 bg-slate-900 border border-electric-blue/20 text-electric-blue rounded font-mono">
                     {nd.badge}
                   </span>

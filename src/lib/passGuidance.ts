@@ -112,9 +112,7 @@ const GUIDANCE: Record<string, PassGuidance> = {
       "CPU, OpenVINO, QNN, and broad GPU support.",
       "When you already have a trained model and representative sample inputs.",
     ],
-    whenNotToUse: [
-      "When PTQ accuracy drops too much and you can afford QAT retraining.",
-    ],
+    whenNotToUse: ["When PTQ accuracy drops too much and you can afford QAT retraining."],
   },
   quantization_awq: {
     title: "AWQ (activation-aware quantization)",
@@ -155,9 +153,7 @@ const GUIDANCE: Record<string, PassGuidance> = {
       "Hugging Face for popular open models and Olive HF integrations.",
       "Local for custom checkpoints or air-gapped environments.",
     ],
-    whenNotToUse: [
-      "N/A — every recipe needs a model source.",
-    ],
+    whenNotToUse: ["N/A — every recipe needs a model source."],
   },
   provider: {
     title: "Execution provider",
@@ -199,9 +195,7 @@ export function getPassGuidanceForNode(nodeId: string, state: UIState): PassGuid
         "Intel OpenVINO execution provider only.",
         "Deploying on Intel CPU, iGPU, or supported NPU paths.",
       ];
-      base.whenNotToUse = [
-        "NVIDIA CUDA, TensorRT, AMD ROCm, or Qualcomm QNN — use ONNX.",
-      ];
+      base.whenNotToUse = ["NVIDIA CUDA, TensorRT, AMD ROCm, or Qualcomm QNN — use ONNX."];
     }
     return base;
   }

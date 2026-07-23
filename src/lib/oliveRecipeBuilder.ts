@@ -1,9 +1,5 @@
 import { IHVProvider, UIState } from "@/types";
-import {
-  buildHfLoadKwargs,
-  buildPeftOffloadConfig,
-  isMemoryOffloadActive,
-} from "@/lib/memoryOffload";
+import { buildHfLoadKwargs, buildPeftOffloadConfig, isMemoryOffloadActive } from "@/lib/memoryOffload";
 
 const GPU_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
@@ -38,14 +34,11 @@ export function inferModelType(modelId: string): string {
   return "gpt2";
 }
 
-export function providerToAccelerator(
-  provider: IHVProvider
-): { device: string; execution_providers: string[] } {
-  const device = GPU_PROVIDERS.includes(provider)
-    ? "gpu"
-    : NPU_PROVIDERS.includes(provider)
-      ? "npu"
-      : "cpu";
+export function providerToAccelerator(provider: IHVProvider): {
+  device: string;
+  execution_providers: string[];
+} {
+  const device = GPU_PROVIDERS.includes(provider) ? "gpu" : NPU_PROVIDERS.includes(provider) ? "npu" : "cpu";
   return { device, execution_providers: [provider] };
 }
 
@@ -111,7 +104,7 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
         type: "OnnxConversion",
         config: {
           target_opset: state.passes.conversionOpset,
-          precision: state.passes.conversionInputTargetTypes,
+          input_model_dtype: state.passes.conversionInputTargetTypes,
           source_format: state.passes.conversionSourceFormat,
         },
       };
@@ -122,32 +115,71 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
 
   if (state.passes.quantization) {
     if (state.passes.quantMethod === "awq") {
+      const awqConfig: Record<string, unknown> = {
+        bits: state.passes.quantPrecision === "int4" ? 4 : 8,
+        input_model_dtype: state.passes.conversionInputTargetTypes || "fp16",
+        group_size: state.passes.awqGroupSize,
+        damp_percent: state.passes.awqDampPercent,
+        sym: state.passes.awqSym,
+      };
+      if (state.hfDataset) {
+        awqConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
+      }
+      if (state.userScript) {
+        awqConfig.user_script = state.userScript;
+      }
       passes.quantization = {
         type: "AutoAWQQuantizer",
-        config: {
-          bits: state.passes.quantPrecision === "int4" ? 4 : 8,
-          input_model_dtype: "fp16",
-        },
+        config: awqConfig,
+      };
+    } else if (state.passes.quantMethod === "gptq") {
+      const gptqConfig: Record<string, unknown> = {
+        bits: state.passes.quantPrecision === "int4" ? 4 : 8,
+        input_model_dtype: state.passes.conversionInputTargetTypes || "fp16",
+        block_size: state.passes.gptqBlockSize,
+        group_size: state.passes.gptqGroupSize,
+        desc_act: state.passes.gptqDescAct,
+      };
+      if (state.hfDataset) {
+        gptqConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
+      }
+      if (state.userScript) {
+        gptqConfig.user_script = state.userScript;
+      }
+      passes.quantization = {
+        type: "GPTQQuantizer",
+        config: gptqConfig,
       };
     } else {
+      const quantConfig: Record<string, unknown> = {
+        quant_mode: "static",
+        precision: state.passes.quantPrecision,
+        quant_preprocess: true,
+      };
+      if (state.hfDataset) {
+        quantConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
+      }
+      if (state.userScript) {
+        quantConfig.user_script = state.userScript;
+      }
       passes.quantization = {
         type: "OnnxQuantization",
-        config: {
-          quant_mode: "static",
-          precision: state.passes.quantPrecision,
-          quant_preprocess: true,
-        },
+        config: quantConfig,
       };
     }
   }
 
   if (state.passes.onnxTransforms) {
+    const ortConfig: Record<string, unknown> = {
+      model_type: inferModelType(state.hfModelId || ""),
+      use_gpu: GPU_PROVIDERS.includes(state.ihvProvider),
+    };
+    if (state.userScript) {
+      ortConfig.user_script = state.userScript;
+    }
     passes.transformer_opt = {
       type: "OrtTransformersOptimization",
-      config: {
-        model_type: inferModelType(state.hfModelId || ""),
-        use_gpu: GPU_PROVIDERS.includes(state.ihvProvider),
-      },
+      config: ortConfig,
     };
   }
 
@@ -157,7 +189,7 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
 
   if (state.passes.peft) {
     const peftType = state.passes.peftMethod === "qlora" ? "QLoRA" : "LoRA";
-    const peftConfig: Record<string, unknown> = { r: 8, lora_alpha: 16 };
+    const peftConfig: Record<string, unknown> = { r: 8, alpha: 16 };
     if (state.passes.diffusionLora) {
       peftConfig.diffusion_lora = true;
     }
@@ -176,15 +208,25 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
           : "Prune";
     const config: Record<string, unknown> = { sparsity: state.passes.pruningSparsity };
 
-    if (state.passes.pruningType === "structured") {
-      config.semi_sparse_acc = true;
-    }
-
-    if (pType === "Prune") {
-      config.pruning_criteria = state.passes.pruningCriteria;
+    if (state.userScript) {
+      config.user_script = state.userScript;
     }
 
     passes.pruning = { type: pType, config };
+  }
+
+  // Evaluators block for custom metrics (required by some passes for search/eval).
+  if (state.userScript && state.hfDataset) {
+    (recipe as Record<string, unknown>).evaluators = {
+      common_evaluator: {
+        type: "Accuracy",
+        config: {
+          user_script: state.userScript,
+          eval_func: "eval_accuracy",
+          data_config: state.hfDataset ? { data_dir: state.hfDataset, batch_size: 1 } : undefined,
+        },
+      },
+    };
   }
 
   return recipe;

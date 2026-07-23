@@ -12,7 +12,9 @@ export interface OliveRecipe {
       };
     };
   };
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   systems: Record<string, any>;
+  /* eslint-enable @typescript-eslint/no-explicit-any */
   evaluators?: Record<string, unknown>;
   passes: Record<string, PassConfig>;
   engine: {
@@ -27,6 +29,7 @@ export interface OliveRecipe {
 
 export interface PassConfig {
   type: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   config: Record<string, any>;
 }
 
@@ -77,6 +80,8 @@ export interface UIState {
   cacheDir: string;
   azureStr: string;
   distributedCaching: boolean;
+  /** Path to a user-provided Python script for calibration, evaluation, or training. */
+  userScript?: string;
   batchJobs?: BatchJob[];
   /** Active olive job ID for the Execute Live button */
   activeJobId?: string | null;
@@ -87,8 +92,20 @@ export interface UIState {
     conversionOpset: number;
     conversionInputTargetTypes: string;
     quantization: boolean;
-    quantMethod: "ptq" | "awq" | "qat";
+    quantMethod: "ptq" | "awq" | "qat" | "gptq";
     quantPrecision: "int4" | "int8" | "fp16";
+    /** GPTQ block size for weight grouping (e.g. 128, 32). Only applies when quantMethod === "gptq". */
+    gptqBlockSize: number;
+    /** GPTQ activation ordering — improves accuracy at the cost of slower calibration. Only applies when quantMethod === "gptq". */
+    gptqDescAct: boolean;
+    /** GPTQ group size for quantization (e.g. 128, 64, 32). Only applies when quantMethod === "gptq". */
+    gptqGroupSize: number;
+    /** AWQ group size for weight quantization (e.g. 128, 64, 32). Only applies when quantMethod === "awq". */
+    awqGroupSize: number;
+    /** AWQ dampening factor for calibration (e.g. 0.01). Only applies when quantMethod === "awq". */
+    awqDampPercent: number;
+    /** AWQ symmetric quantization — constrains zero-point to 0 for faster inference. Only applies when quantMethod === "awq". */
+    awqSym: boolean;
     pruning: boolean;
     pruningSparsity: number;
     pruningType: "structured" | "unstructured";
@@ -99,5 +116,5 @@ export interface UIState {
     peft: boolean;
     peftMethod: "lora" | "qlora";
     diffusionLora: boolean;
-  }
+  };
 }

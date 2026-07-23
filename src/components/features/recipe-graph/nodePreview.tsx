@@ -1,12 +1,4 @@
-import {
-  Database,
-  Workflow,
-  Minimize2,
-  Layers,
-  Cpu,
-  Package,
-  Sparkles,
-} from "lucide-react";
+import { Database, Workflow, Minimize2, Layers, Cpu, Package, Sparkles } from "lucide-react";
 import type { ReactElement } from "react";
 import { UIState } from "@/types";
 
@@ -69,9 +61,7 @@ export function getNodePreviewData(state: UIState, nodeId: string): NodePreviewD
     case "peft":
       return {
         title: "PEFT / LoRA Tuning",
-        desc: state.passes.peft
-          ? `${state.passes.peftMethod.toUpperCase()} Adapters`
-          : "Bypassed Baseline",
+        desc: state.passes.peft ? `${state.passes.peftMethod.toUpperCase()} Adapters` : "Bypassed Baseline",
         icon: <Layers className="h-5 w-5 text-electric-blue group-hover:text-electric-blue/80" />,
         colorTheme: state.passes.peft
           ? "border-electric-blue/30 text-electric-blue bg-electric-blue/5"

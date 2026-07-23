@@ -17,11 +17,7 @@ export function isToggleablePass(nodeId: string): nodeId is ToggleablePassId {
   return (TOGGLEABLE_PASSES as readonly string[]).includes(nodeId);
 }
 
-export function getPassToggleBlockReason(
-  nodeId: string,
-  state: UIState,
-  activating: boolean,
-): string | null {
+export function getPassToggleBlockReason(nodeId: string, state: UIState, activating: boolean): string | null {
   if (!activating) return null;
 
   if (nodeId === "peft" && !isPeftAllowed(state.ihvProvider)) {

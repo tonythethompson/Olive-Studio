@@ -1,0 +1,21 @@
+# Generated files – hand-authored, not formatted
+src/data/olive-recipes-catalog.ts
+server.ts
+
+# Dependencies
+node_modules/
+dist/
+build/
+coverage/
+
+# Environment
+.env*
+!.env.example
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cache
+.firecrawl/

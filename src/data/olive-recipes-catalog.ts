@@ -21,7 +21,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "alibaba-nlp-gte-large-en-v1.5/quant/config.json",
-    description: "Official microsoft/olive-recipes run config for alibaba-nlp-gte-large-en-v1.5 (quant/config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for alibaba-nlp-gte-large-en-v1.5 (quant/config.json).",
     metadataSource: "folder",
   },
   {
@@ -29,7 +30,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "allenai-Olmo-3-7B-Instruct/baseline/allenai-Olmo-3-7B-Instruct_pytorch_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (baseline/allenai-Olmo-3-7B-Instruct_pytorch_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (baseline/allenai-Olmo-3-7B-Instruct_pytorch_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -37,7 +39,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "allenai-Olmo-3-7B-Instruct/cpu/allenai-Olmo-3-7B-Instruct_cpu_fp32_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (cpu/allenai-Olmo-3-7B-Instruct_cpu_fp32_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (cpu/allenai-Olmo-3-7B-Instruct_cpu_fp32_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -45,7 +48,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "allenai-Olmo-3-7B-Instruct/cpu/allenai-Olmo-3-7B-Instruct_cpu_fp32.json",
-    description: "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (cpu/allenai-Olmo-3-7B-Instruct_cpu_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (cpu/allenai-Olmo-3-7B-Instruct_cpu_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -53,7 +57,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "allenai-Olmo-3-7B-Instruct/cpu/allenai-Olmo-3-7B-Instruct_cpu_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (cpu/allenai-Olmo-3-7B-Instruct_cpu_int4_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (cpu/allenai-Olmo-3-7B-Instruct_cpu_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -61,7 +66,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "allenai-Olmo-3-7B-Instruct/cpu/allenai-Olmo-3-7B-Instruct_cpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (cpu/allenai-Olmo-3-7B-Instruct_cpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (cpu/allenai-Olmo-3-7B-Instruct_cpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -69,7 +75,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CUDA",
     repoPath: "allenai-Olmo-3-7B-Instruct/cuda/allenai-Olmo-3-7B-Instruct_cuda_fp16_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (cuda/allenai-Olmo-3-7B-Instruct_cuda_fp16_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (cuda/allenai-Olmo-3-7B-Instruct_cuda_fp16_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -77,7 +84,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CUDA",
     repoPath: "allenai-Olmo-3-7B-Instruct/cuda/allenai-Olmo-3-7B-Instruct_cuda_fp16.json",
-    description: "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (cuda/allenai-Olmo-3-7B-Instruct_cuda_fp16.json).",
+    description:
+      "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (cuda/allenai-Olmo-3-7B-Instruct_cuda_fp16.json).",
     metadataSource: "folder",
   },
   {
@@ -85,7 +93,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CUDA",
     repoPath: "allenai-Olmo-3-7B-Instruct/cuda/allenai-Olmo-3-7B-Instruct_cuda_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (cuda/allenai-Olmo-3-7B-Instruct_cuda_int4_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (cuda/allenai-Olmo-3-7B-Instruct_cuda_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -93,7 +102,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CUDA",
     repoPath: "allenai-Olmo-3-7B-Instruct/cuda/allenai-Olmo-3-7B-Instruct_cuda_int4.json",
-    description: "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (cuda/allenai-Olmo-3-7B-Instruct_cuda_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (cuda/allenai-Olmo-3-7B-Instruct_cuda_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -101,7 +111,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "allenai-Olmo-3-7B-Instruct/webgpu/allenai-Olmo-3-7B-Instruct_webgpu_fp16_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (webgpu/allenai-Olmo-3-7B-Instruct_webgpu_fp16_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (webgpu/allenai-Olmo-3-7B-Instruct_webgpu_fp16_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -109,7 +120,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "allenai-Olmo-3-7B-Instruct/webgpu/allenai-Olmo-3-7B-Instruct_webgpu_fp16.json",
-    description: "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (webgpu/allenai-Olmo-3-7B-Instruct_webgpu_fp16.json).",
+    description:
+      "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (webgpu/allenai-Olmo-3-7B-Instruct_webgpu_fp16.json).",
     metadataSource: "folder",
   },
   {
@@ -117,7 +129,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "allenai-Olmo-3-7B-Instruct/webgpu/allenai-Olmo-3-7B-Instruct_webgpu_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (webgpu/allenai-Olmo-3-7B-Instruct_webgpu_int4_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (webgpu/allenai-Olmo-3-7B-Instruct_webgpu_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -125,7 +138,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "allenai-Olmo-3-7B-Instruct/webgpu/allenai-Olmo-3-7B-Instruct_webgpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (webgpu/allenai-Olmo-3-7B-Instruct_webgpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for allenai-Olmo-3-7B-Instruct (webgpu/allenai-Olmo-3-7B-Instruct_webgpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -133,7 +147,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "OpenVINO",
     repoPath: "codellama-CodeLlama-7b-Instruct-hf/VitisAI/CodeLlama-7b-Instruct-hf_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for codellama-CodeLlama-7b-Instruct-hf (VitisAI/CodeLlama-7b-Instruct-hf_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for codellama-CodeLlama-7b-Instruct-hf (VitisAI/CodeLlama-7b-Instruct-hf_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -141,7 +156,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "CPU",
     repoPath: "compvis-stable-diffusion-v1-4/olive/config_safety_checker.json",
-    description: "Official microsoft/olive-recipes run config for compvis-stable-diffusion-v1-4 (olive/config_safety_checker.json).",
+    description:
+      "Official microsoft/olive-recipes run config for compvis-stable-diffusion-v1-4 (olive/config_safety_checker.json).",
     metadataSource: "folder",
   },
   {
@@ -149,7 +165,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "CPU",
     repoPath: "compvis-stable-diffusion-v1-4/olive/config_text_encoder.json",
-    description: "Official microsoft/olive-recipes run config for compvis-stable-diffusion-v1-4 (olive/config_text_encoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for compvis-stable-diffusion-v1-4 (olive/config_text_encoder.json).",
     metadataSource: "folder",
   },
   {
@@ -157,7 +174,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "CPU",
     repoPath: "compvis-stable-diffusion-v1-4/olive/config_unet.json",
-    description: "Official microsoft/olive-recipes run config for compvis-stable-diffusion-v1-4 (olive/config_unet.json).",
+    description:
+      "Official microsoft/olive-recipes run config for compvis-stable-diffusion-v1-4 (olive/config_unet.json).",
     metadataSource: "folder",
   },
   {
@@ -165,7 +183,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "CPU",
     repoPath: "compvis-stable-diffusion-v1-4/olive/config_vae_decoder.json",
-    description: "Official microsoft/olive-recipes run config for compvis-stable-diffusion-v1-4 (olive/config_vae_decoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for compvis-stable-diffusion-v1-4 (olive/config_vae_decoder.json).",
     metadataSource: "folder",
   },
   {
@@ -173,7 +192,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "CPU",
     repoPath: "compvis-stable-diffusion-v1-4/olive/config_vae_encoder.json",
-    description: "Official microsoft/olive-recipes run config for compvis-stable-diffusion-v1-4 (olive/config_vae_encoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for compvis-stable-diffusion-v1-4 (olive/config_vae_encoder.json).",
     metadataSource: "folder",
   },
   {
@@ -181,7 +201,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Llama-8B/aitk/deepseek_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Llama-8B (aitk/deepseek_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Llama-8B (aitk/deepseek_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -189,7 +210,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Llama-8B/aitk/deepseek_ov_npu_config.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Llama-8B (aitk/deepseek_ov_npu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Llama-8B (aitk/deepseek_ov_npu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -197,23 +219,28 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Llama-8B/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Llama-8B (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Llama-8B (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
     name: "deepseek-ai-DeepSeek-R1-Distill-Llama-8B · NvTensorRtRtx · DeepSeek-R1-Distill-Llama-8B_model_builder_int4",
     architecture: "Llama",
     device: "TensorRT",
-    repoPath: "deepseek-ai-DeepSeek-R1-Distill-Llama-8B/NvTensorRtRtx/DeepSeek-R1-Distill-Llama-8B_model_builder_int4.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Llama-8B (NvTensorRtRtx/DeepSeek-R1-Distill-Llama-8B_model_builder_int4.json).",
+    repoPath:
+      "deepseek-ai-DeepSeek-R1-Distill-Llama-8B/NvTensorRtRtx/DeepSeek-R1-Distill-Llama-8B_model_builder_int4.json",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Llama-8B (NvTensorRtRtx/DeepSeek-R1-Distill-Llama-8B_model_builder_int4.json).",
     metadataSource: "folder",
   },
   {
     name: "deepseek-ai-DeepSeek-R1-Distill-Llama-8B · VitisAI · DeepSeek-R1-Distill-Llama-8B_quark_vitisai_llm",
     architecture: "Llama",
     device: "OpenVINO",
-    repoPath: "deepseek-ai-DeepSeek-R1-Distill-Llama-8B/VitisAI/DeepSeek-R1-Distill-Llama-8B_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Llama-8B (VitisAI/DeepSeek-R1-Distill-Llama-8B_quark_vitisai_llm.json).",
+    repoPath:
+      "deepseek-ai-DeepSeek-R1-Distill-Llama-8B/VitisAI/DeepSeek-R1-Distill-Llama-8B_quark_vitisai_llm.json",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Llama-8B (VitisAI/DeepSeek-R1-Distill-Llama-8B_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -221,7 +248,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B/aitk/deepseek_dml_config.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/deepseek_dml_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/deepseek_dml_config.json).",
     metadataSource: "folder",
   },
   {
@@ -229,7 +257,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B/aitk/deepseek_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/deepseek_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/deepseek_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -237,7 +266,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B/aitk/deepseek_ov_gpu_config.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/deepseek_ov_gpu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/deepseek_ov_gpu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -245,7 +275,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B/aitk/deepseek_qnn_config.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/deepseek_qnn_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/deepseek_qnn_config.json).",
     metadataSource: "folder",
   },
   {
@@ -253,7 +284,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B/aitk/deepseek_qnn_gpu_config.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/deepseek_qnn_gpu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/deepseek_qnn_gpu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -261,7 +293,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B/aitk/deepseek_trtrtx_config.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/deepseek_trtrtx_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/deepseek_trtrtx_config.json).",
     metadataSource: "folder",
   },
   {
@@ -269,7 +302,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B/aitk/deepseek_vitis_ai_config.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/deepseek_vitis_ai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/deepseek_vitis_ai_config.json).",
     metadataSource: "folder",
   },
   {
@@ -277,7 +311,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B/aitk/genai_config.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/genai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/genai_config.json).",
     metadataSource: "folder",
   },
   {
@@ -285,15 +320,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
     name: "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B · NvTensorRtRtx · DeepSeek-R1-Distill-Qwen-1.5B_model_builder_fp16",
     architecture: "Qwen",
     device: "TensorRT",
-    repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B/NvTensorRtRtx/DeepSeek-R1-Distill-Qwen-1.5B_model_builder_fp16.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (NvTensorRtRtx/DeepSeek-R1-Distill-Qwen-1.5B_model_builder_fp16.json).",
+    repoPath:
+      "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B/NvTensorRtRtx/DeepSeek-R1-Distill-Qwen-1.5B_model_builder_fp16.json",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (NvTensorRtRtx/DeepSeek-R1-Distill-Qwen-1.5B_model_builder_fp16.json).",
     metadataSource: "folder",
   },
   {
@@ -301,7 +339,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B/olive/mixed.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (olive/mixed.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (olive/mixed.json).",
     metadataSource: "folder",
   },
   {
@@ -309,7 +348,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "QNN",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B/QNN/config_gpu_ctxbin.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (QNN/config_gpu_ctxbin.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (QNN/config_gpu_ctxbin.json).",
     metadataSource: "folder",
   },
   {
@@ -317,15 +357,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "QNN",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B/QNN/config_gpu.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (QNN/config_gpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (QNN/config_gpu.json).",
     metadataSource: "folder",
   },
   {
     name: "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B · VitisAI · DeepSeek-R1-Distill-Qwen-1.5B_quark_vitisai_llm",
     architecture: "Qwen",
     device: "OpenVINO",
-    repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B/VitisAI/DeepSeek-R1-Distill-Qwen-1.5B_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (VitisAI/DeepSeek-R1-Distill-Qwen-1.5B_quark_vitisai_llm.json).",
+    repoPath:
+      "deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B/VitisAI/DeepSeek-R1-Distill-Qwen-1.5B_quark_vitisai_llm.json",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-1.5B (VitisAI/DeepSeek-R1-Distill-Qwen-1.5B_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -333,7 +376,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-14B/aitk/deepseek_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-14B (aitk/deepseek_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-14B (aitk/deepseek_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -341,7 +385,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-14B/aitk/deepseek_ov_npu_config.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-14B (aitk/deepseek_ov_npu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-14B (aitk/deepseek_ov_npu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -349,7 +394,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-14B/aitk/deepseek_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-14B (aitk/deepseek_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-14B (aitk/deepseek_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -357,15 +403,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-14B/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-14B (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-14B (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
     name: "deepseek-ai-DeepSeek-R1-Distill-Qwen-14B · NvTensorRtRtx · DeepSeek-R1-Distill-Qwen-14B_nvmo_int4_awq",
     architecture: "Qwen",
     device: "TensorRT",
-    repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-14B/NvTensorRtRtx/DeepSeek-R1-Distill-Qwen-14B_nvmo_int4_awq.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-14B (NvTensorRtRtx/DeepSeek-R1-Distill-Qwen-14B_nvmo_int4_awq.json).",
+    repoPath:
+      "deepseek-ai-DeepSeek-R1-Distill-Qwen-14B/NvTensorRtRtx/DeepSeek-R1-Distill-Qwen-14B_nvmo_int4_awq.json",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-14B (NvTensorRtRtx/DeepSeek-R1-Distill-Qwen-14B_nvmo_int4_awq.json).",
     metadataSource: "folder",
   },
   {
@@ -373,7 +422,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/aitk/deepseek_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-7B (aitk/deepseek_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-7B (aitk/deepseek_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -381,7 +431,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/aitk/deepseek_ov_npu_config.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-7B (aitk/deepseek_ov_npu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-7B (aitk/deepseek_ov_npu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -389,7 +440,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/aitk/deepseek_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-7B (aitk/deepseek_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-7B (aitk/deepseek_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -397,7 +449,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/aitk/deepseek_vitis_ai_config.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-7B (aitk/deepseek_vitis_ai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-7B (aitk/deepseek_vitis_ai_config.json).",
     metadataSource: "folder",
   },
   {
@@ -405,23 +458,28 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-7B (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-7B (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
     name: "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B · NvTensorRtRtx · DeepSeek-R1-Distill-Qwen-7B_nvmo_int4_rtn",
     architecture: "Qwen",
     device: "TensorRT",
-    repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/NvTensorRtRtx/DeepSeek-R1-Distill-Qwen-7B_nvmo_int4_rtn.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-7B (NvTensorRtRtx/DeepSeek-R1-Distill-Qwen-7B_nvmo_int4_rtn.json).",
+    repoPath:
+      "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/NvTensorRtRtx/DeepSeek-R1-Distill-Qwen-7B_nvmo_int4_rtn.json",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-7B (NvTensorRtRtx/DeepSeek-R1-Distill-Qwen-7B_nvmo_int4_rtn.json).",
     metadataSource: "folder",
   },
   {
     name: "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B · VitisAI · DeepSeek-R1-Distill-Qwen-7B_quark_vitisai_llm",
     architecture: "Qwen",
     device: "OpenVINO",
-    repoPath: "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/VitisAI/DeepSeek-R1-Distill-Qwen-7B_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-7B (VitisAI/DeepSeek-R1-Distill-Qwen-7B_quark_vitisai_llm.json).",
+    repoPath:
+      "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/VitisAI/DeepSeek-R1-Distill-Qwen-7B_quark_vitisai_llm.json",
+    description:
+      "Official microsoft/olive-recipes run config for deepseek-ai-DeepSeek-R1-Distill-Qwen-7B (VitisAI/DeepSeek-R1-Distill-Qwen-7B_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -436,8 +494,10 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     name: "google-bert-bert-base-multilingual-cased · aitk · bert-base-multilingual-cased_context_ov_static",
     architecture: "BERT",
     device: "DirectML",
-    repoPath: "google-bert-bert-base-multilingual-cased/aitk/bert-base-multilingual-cased_context_ov_static.json",
-    description: "Official microsoft/olive-recipes run config for google-bert-bert-base-multilingual-cased (aitk/bert-base-multilingual-cased_context_ov_static.json).",
+    repoPath:
+      "google-bert-bert-base-multilingual-cased/aitk/bert-base-multilingual-cased_context_ov_static.json",
+    description:
+      "Official microsoft/olive-recipes run config for google-bert-bert-base-multilingual-cased (aitk/bert-base-multilingual-cased_context_ov_static.json).",
     metadataSource: "folder",
   },
   {
@@ -445,7 +505,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "DirectML",
     repoPath: "google-bert-bert-base-multilingual-cased/aitk/bert-base-multilingual-cased_dml.json",
-    description: "Official microsoft/olive-recipes run config for google-bert-bert-base-multilingual-cased (aitk/bert-base-multilingual-cased_dml.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-bert-bert-base-multilingual-cased (aitk/bert-base-multilingual-cased_dml.json).",
     metadataSource: "folder",
   },
   {
@@ -453,7 +514,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "DirectML",
     repoPath: "google-bert-bert-base-multilingual-cased/aitk/bert-base-multilingual-cased_migraphx.json",
-    description: "Official microsoft/olive-recipes run config for google-bert-bert-base-multilingual-cased (aitk/bert-base-multilingual-cased_migraphx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-bert-bert-base-multilingual-cased (aitk/bert-base-multilingual-cased_migraphx.json).",
     metadataSource: "folder",
   },
   {
@@ -461,7 +523,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "DirectML",
     repoPath: "google-bert-bert-base-multilingual-cased/aitk/bert-base-multilingual-cased_qdq_amd.json",
-    description: "Official microsoft/olive-recipes run config for google-bert-bert-base-multilingual-cased (aitk/bert-base-multilingual-cased_qdq_amd.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-bert-bert-base-multilingual-cased (aitk/bert-base-multilingual-cased_qdq_amd.json).",
     metadataSource: "folder",
   },
   {
@@ -469,7 +532,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "DirectML",
     repoPath: "google-bert-bert-base-multilingual-cased/aitk/bert-base-multilingual-cased_qdq_qnn.json",
-    description: "Official microsoft/olive-recipes run config for google-bert-bert-base-multilingual-cased (aitk/bert-base-multilingual-cased_qdq_qnn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-bert-bert-base-multilingual-cased (aitk/bert-base-multilingual-cased_qdq_qnn.json).",
     metadataSource: "folder",
   },
   {
@@ -477,7 +541,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "DirectML",
     repoPath: "google-bert-bert-base-multilingual-cased/aitk/bert-base-multilingual-cased_qnn_gpu.json",
-    description: "Official microsoft/olive-recipes run config for google-bert-bert-base-multilingual-cased (aitk/bert-base-multilingual-cased_qnn_gpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-bert-bert-base-multilingual-cased (aitk/bert-base-multilingual-cased_qnn_gpu.json).",
     metadataSource: "folder",
   },
   {
@@ -485,7 +550,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "DirectML",
     repoPath: "google-bert-bert-base-multilingual-cased/aitk/bert-base-multilingual-cased_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for google-bert-bert-base-multilingual-cased (aitk/bert-base-multilingual-cased_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-bert-bert-base-multilingual-cased (aitk/bert-base-multilingual-cased_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -493,7 +559,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "QNN",
     repoPath: "google-bert-bert-base-multilingual-cased/QNN/config_gpu_fp32.json",
-    description: "Official microsoft/olive-recipes run config for google-bert-bert-base-multilingual-cased (QNN/config_gpu_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-bert-bert-base-multilingual-cased (QNN/config_gpu_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -501,7 +568,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "OpenVINO",
     repoPath: "google-gemma-3-1b-it/OpenVINO/gemma_3_1b_it_context_ov_gpu_config.json",
-    description: "Official microsoft/olive-recipes run config for google-gemma-3-1b-it (OpenVINO/gemma_3_1b_it_context_ov_gpu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-gemma-3-1b-it (OpenVINO/gemma_3_1b_it_context_ov_gpu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -509,7 +577,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "OpenVINO",
     repoPath: "google-gemma-3-1b-it/OpenVINO/gemma_3_1b_it_context_ov_npu_config.json",
-    description: "Official microsoft/olive-recipes run config for google-gemma-3-1b-it (OpenVINO/gemma_3_1b_it_context_ov_npu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-gemma-3-1b-it (OpenVINO/gemma_3_1b_it_context_ov_npu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -549,7 +618,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "google-gemma/olive/gemma-3-1b-it_model_builder_cpu_fp32.json",
-    description: "Official microsoft/olive-recipes run config for google-gemma (olive/gemma-3-1b-it_model_builder_cpu_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-gemma (olive/gemma-3-1b-it_model_builder_cpu_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -557,7 +627,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "google-vit-base-patch16-224/aitk/vit_base_patch16_224_context_ov_static.json",
-    description: "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (aitk/vit_base_patch16_224_context_ov_static.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (aitk/vit_base_patch16_224_context_ov_static.json).",
     metadataSource: "folder",
   },
   {
@@ -565,7 +636,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "google-vit-base-patch16-224/aitk/vit-base-patch16-224_dml.json",
-    description: "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (aitk/vit-base-patch16-224_dml.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (aitk/vit-base-patch16-224_dml.json).",
     metadataSource: "folder",
   },
   {
@@ -573,7 +645,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "google-vit-base-patch16-224/aitk/vit-base-patch16-224_migraphx.json",
-    description: "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (aitk/vit-base-patch16-224_migraphx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (aitk/vit-base-patch16-224_migraphx.json).",
     metadataSource: "folder",
   },
   {
@@ -581,7 +654,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "google-vit-base-patch16-224/aitk/vit-base-patch16-224_qdq_amd.json",
-    description: "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (aitk/vit-base-patch16-224_qdq_amd.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (aitk/vit-base-patch16-224_qdq_amd.json).",
     metadataSource: "folder",
   },
   {
@@ -589,7 +663,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "google-vit-base-patch16-224/aitk/vit-base-patch16-224_qdq_qnn.json",
-    description: "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (aitk/vit-base-patch16-224_qdq_qnn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (aitk/vit-base-patch16-224_qdq_qnn.json).",
     metadataSource: "folder",
   },
   {
@@ -597,7 +672,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "google-vit-base-patch16-224/aitk/vit-base-patch16-224_qnn_gpu.json",
-    description: "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (aitk/vit-base-patch16-224_qnn_gpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (aitk/vit-base-patch16-224_qnn_gpu.json).",
     metadataSource: "folder",
   },
   {
@@ -605,7 +681,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "google-vit-base-patch16-224/aitk/vit-base-patch16-224_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (aitk/vit-base-patch16-224_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (aitk/vit-base-patch16-224_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -613,7 +690,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "OpenVINO",
     repoPath: "google-vit-base-patch16-224/OpenVINO/vit_base_patch16_224_context_ov_static.json",
-    description: "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (OpenVINO/vit_base_patch16_224_context_ov_static.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (OpenVINO/vit_base_patch16_224_context_ov_static.json).",
     metadataSource: "folder",
   },
   {
@@ -621,7 +699,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "QNN",
     repoPath: "google-vit-base-patch16-224/QNN/config_gpu_fp32.json",
-    description: "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (QNN/config_gpu_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (QNN/config_gpu_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -629,7 +708,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "QNN",
     repoPath: "google-vit-base-patch16-224/QNN/val_tiny_imagenet/vit_id2label.json",
-    description: "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (QNN/vit_id2label.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (QNN/vit_id2label.json).",
     metadataSource: "folder",
   },
   {
@@ -637,7 +717,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "QNN",
     repoPath: "google-vit-base-patch16-224/QNN/vit_qnn_fp32_ctx.json",
-    description: "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (QNN/vit_qnn_fp32_ctx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for google-vit-base-patch16-224 (QNN/vit_qnn_fp32_ctx.json).",
     metadataSource: "folder",
   },
   {
@@ -645,7 +726,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "OpenVINO",
     repoPath: "gpt-oss-20b/VitisAI/gpt-oss-20b_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for gpt-oss-20b (VitisAI/gpt-oss-20b_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for gpt-oss-20b (VitisAI/gpt-oss-20b_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -653,7 +735,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "HuggingFaceTB-SmolLM3-3B/baseline/HuggingFaceTB-SmolLM3-3B_pytorch_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (baseline/HuggingFaceTB-SmolLM3-3B_pytorch_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (baseline/HuggingFaceTB-SmolLM3-3B_pytorch_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -661,7 +744,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "HuggingFaceTB-SmolLM3-3B/cpu/HuggingFaceTB-SmolLM3-3B_cpu_fp32_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (cpu/HuggingFaceTB-SmolLM3-3B_cpu_fp32_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (cpu/HuggingFaceTB-SmolLM3-3B_cpu_fp32_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -669,7 +753,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "HuggingFaceTB-SmolLM3-3B/cpu/HuggingFaceTB-SmolLM3-3B_cpu_fp32.json",
-    description: "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (cpu/HuggingFaceTB-SmolLM3-3B_cpu_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (cpu/HuggingFaceTB-SmolLM3-3B_cpu_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -677,7 +762,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "HuggingFaceTB-SmolLM3-3B/cpu/HuggingFaceTB-SmolLM3-3B_cpu_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (cpu/HuggingFaceTB-SmolLM3-3B_cpu_int4_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (cpu/HuggingFaceTB-SmolLM3-3B_cpu_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -685,7 +771,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "HuggingFaceTB-SmolLM3-3B/cpu/HuggingFaceTB-SmolLM3-3B_cpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (cpu/HuggingFaceTB-SmolLM3-3B_cpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (cpu/HuggingFaceTB-SmolLM3-3B_cpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -693,7 +780,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CUDA",
     repoPath: "HuggingFaceTB-SmolLM3-3B/cuda/HuggingFaceTB-SmolLM3-3B_cuda_fp16_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (cuda/HuggingFaceTB-SmolLM3-3B_cuda_fp16_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (cuda/HuggingFaceTB-SmolLM3-3B_cuda_fp16_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -701,7 +789,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CUDA",
     repoPath: "HuggingFaceTB-SmolLM3-3B/cuda/HuggingFaceTB-SmolLM3-3B_cuda_fp16.json",
-    description: "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (cuda/HuggingFaceTB-SmolLM3-3B_cuda_fp16.json).",
+    description:
+      "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (cuda/HuggingFaceTB-SmolLM3-3B_cuda_fp16.json).",
     metadataSource: "folder",
   },
   {
@@ -709,7 +798,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CUDA",
     repoPath: "HuggingFaceTB-SmolLM3-3B/cuda/HuggingFaceTB-SmolLM3-3B_cuda_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (cuda/HuggingFaceTB-SmolLM3-3B_cuda_int4_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (cuda/HuggingFaceTB-SmolLM3-3B_cuda_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -717,7 +807,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CUDA",
     repoPath: "HuggingFaceTB-SmolLM3-3B/cuda/HuggingFaceTB-SmolLM3-3B_cuda_int4.json",
-    description: "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (cuda/HuggingFaceTB-SmolLM3-3B_cuda_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (cuda/HuggingFaceTB-SmolLM3-3B_cuda_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -725,7 +816,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "HuggingFaceTB-SmolLM3-3B/webgpu/HuggingFaceTB-SmolLM3-3B_webgpu_fp16_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (webgpu/HuggingFaceTB-SmolLM3-3B_webgpu_fp16_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (webgpu/HuggingFaceTB-SmolLM3-3B_webgpu_fp16_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -733,7 +825,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "HuggingFaceTB-SmolLM3-3B/webgpu/HuggingFaceTB-SmolLM3-3B_webgpu_fp16.json",
-    description: "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (webgpu/HuggingFaceTB-SmolLM3-3B_webgpu_fp16.json).",
+    description:
+      "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (webgpu/HuggingFaceTB-SmolLM3-3B_webgpu_fp16.json).",
     metadataSource: "folder",
   },
   {
@@ -741,7 +834,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "HuggingFaceTB-SmolLM3-3B/webgpu/HuggingFaceTB-SmolLM3-3B_webgpu_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (webgpu/HuggingFaceTB-SmolLM3-3B_webgpu_int4_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (webgpu/HuggingFaceTB-SmolLM3-3B_webgpu_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -749,7 +843,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "HuggingFaceTB-SmolLM3-3B/webgpu/HuggingFaceTB-SmolLM3-3B_webgpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (webgpu/HuggingFaceTB-SmolLM3-3B_webgpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for HuggingFaceTB-SmolLM3-3B (webgpu/HuggingFaceTB-SmolLM3-3B_webgpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -757,7 +852,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "DirectML",
     repoPath: "intel-bert-base-uncased-mrpc/aitk/bert_dml.json",
-    description: "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (aitk/bert_dml.json).",
+    description:
+      "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (aitk/bert_dml.json).",
     metadataSource: "folder",
   },
   {
@@ -765,7 +861,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "DirectML",
     repoPath: "intel-bert-base-uncased-mrpc/aitk/bert_migraphx.json",
-    description: "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (aitk/bert_migraphx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (aitk/bert_migraphx.json).",
     metadataSource: "folder",
   },
   {
@@ -773,7 +870,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "DirectML",
     repoPath: "intel-bert-base-uncased-mrpc/aitk/bert_ov.json",
-    description: "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (aitk/bert_ov.json).",
+    description:
+      "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (aitk/bert_ov.json).",
     metadataSource: "folder",
   },
   {
@@ -781,7 +879,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "DirectML",
     repoPath: "intel-bert-base-uncased-mrpc/aitk/bert_qdq_amd.json",
-    description: "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (aitk/bert_qdq_amd.json).",
+    description:
+      "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (aitk/bert_qdq_amd.json).",
     metadataSource: "folder",
   },
   {
@@ -789,7 +888,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "DirectML",
     repoPath: "intel-bert-base-uncased-mrpc/aitk/bert_qdq_qnn.json",
-    description: "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (aitk/bert_qdq_qnn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (aitk/bert_qdq_qnn.json).",
     metadataSource: "folder",
   },
   {
@@ -797,7 +897,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "DirectML",
     repoPath: "intel-bert-base-uncased-mrpc/aitk/bert_qnn_gpu.json",
-    description: "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (aitk/bert_qnn_gpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (aitk/bert_qnn_gpu.json).",
     metadataSource: "folder",
   },
   {
@@ -805,7 +906,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "DirectML",
     repoPath: "intel-bert-base-uncased-mrpc/aitk/bert_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (aitk/bert_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (aitk/bert_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -813,7 +915,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "CPU",
     repoPath: "intel-bert-base-uncased-mrpc/oci/cpu/inc_smooth_quant.json",
-    description: "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (oci/inc_smooth_quant.json).",
+    description:
+      "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (oci/inc_smooth_quant.json).",
     metadataSource: "folder",
   },
   {
@@ -821,7 +924,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "CPU",
     repoPath: "intel-bert-base-uncased-mrpc/oci/cpu/ptq.json",
-    description: "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (oci/ptq.json).",
+    description:
+      "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (oci/ptq.json).",
     metadataSource: "folder",
   },
   {
@@ -829,7 +933,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "CPU",
     repoPath: "intel-bert-base-uncased-mrpc/oci/gpu/cuda/inc_quant.json",
-    description: "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (oci/inc_quant.json).",
+    description:
+      "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (oci/inc_quant.json).",
     metadataSource: "folder",
   },
   {
@@ -837,7 +942,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "CPU",
     repoPath: "intel-bert-base-uncased-mrpc/oci/gpu/cuda/ptq.json",
-    description: "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (oci/ptq.json).",
+    description:
+      "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (oci/ptq.json).",
     metadataSource: "folder",
   },
   {
@@ -845,7 +951,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "CPU",
     repoPath: "intel-bert-base-uncased-mrpc/oci/olive_ci.json",
-    description: "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (oci/olive_ci.json).",
+    description:
+      "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (oci/olive_ci.json).",
     metadataSource: "folder",
   },
   {
@@ -853,7 +960,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "QNN",
     repoPath: "intel-bert-base-uncased-mrpc/QNN/config_gpu_fp32.json",
-    description: "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (QNN/config_gpu_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for intel-bert-base-uncased-mrpc (QNN/config_gpu_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -861,7 +969,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "laion-CLIP-ViT-B-32-laion2B-s34B-b79K/aitk/laion_clip_dml.json",
-    description: "Official microsoft/olive-recipes run config for laion-CLIP-ViT-B-32-laion2B-s34B-b79K (aitk/laion_clip_dml.json).",
+    description:
+      "Official microsoft/olive-recipes run config for laion-CLIP-ViT-B-32-laion2B-s34B-b79K (aitk/laion_clip_dml.json).",
     metadataSource: "folder",
   },
   {
@@ -869,7 +978,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "laion-CLIP-ViT-B-32-laion2B-s34B-b79K/aitk/laion_clip_migraphx.json",
-    description: "Official microsoft/olive-recipes run config for laion-CLIP-ViT-B-32-laion2B-s34B-b79K (aitk/laion_clip_migraphx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for laion-CLIP-ViT-B-32-laion2B-s34B-b79K (aitk/laion_clip_migraphx.json).",
     metadataSource: "folder",
   },
   {
@@ -877,7 +987,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "laion-CLIP-ViT-B-32-laion2B-s34B-b79K/aitk/laion_clip_ov.json",
-    description: "Official microsoft/olive-recipes run config for laion-CLIP-ViT-B-32-laion2B-s34B-b79K (aitk/laion_clip_ov.json).",
+    description:
+      "Official microsoft/olive-recipes run config for laion-CLIP-ViT-B-32-laion2B-s34B-b79K (aitk/laion_clip_ov.json).",
     metadataSource: "folder",
   },
   {
@@ -885,7 +996,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "laion-CLIP-ViT-B-32-laion2B-s34B-b79K/aitk/laion_clip_qdq_amd.json",
-    description: "Official microsoft/olive-recipes run config for laion-CLIP-ViT-B-32-laion2B-s34B-b79K (aitk/laion_clip_qdq_amd.json).",
+    description:
+      "Official microsoft/olive-recipes run config for laion-CLIP-ViT-B-32-laion2B-s34B-b79K (aitk/laion_clip_qdq_amd.json).",
     metadataSource: "folder",
   },
   {
@@ -893,7 +1005,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "laion-CLIP-ViT-B-32-laion2B-s34B-b79K/aitk/laion_clip_qnn_gpu.json",
-    description: "Official microsoft/olive-recipes run config for laion-CLIP-ViT-B-32-laion2B-s34B-b79K (aitk/laion_clip_qnn_gpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for laion-CLIP-ViT-B-32-laion2B-s34B-b79K (aitk/laion_clip_qnn_gpu.json).",
     metadataSource: "folder",
   },
   {
@@ -901,7 +1014,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "laion-CLIP-ViT-B-32-laion2B-s34B-b79K/aitk/laion_clip_qnn.json",
-    description: "Official microsoft/olive-recipes run config for laion-CLIP-ViT-B-32-laion2B-s34B-b79K (aitk/laion_clip_qnn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for laion-CLIP-ViT-B-32-laion2B-s34B-b79K (aitk/laion_clip_qnn.json).",
     metadataSource: "folder",
   },
   {
@@ -909,7 +1023,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "laion-CLIP-ViT-B-32-laion2B-s34B-b79K/aitk/laion_clip_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for laion-CLIP-ViT-B-32-laion2B-s34B-b79K (aitk/laion_clip_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for laion-CLIP-ViT-B-32-laion2B-s34B-b79K (aitk/laion_clip_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -917,7 +1032,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "QNN",
     repoPath: "laion-CLIP-ViT-B-32-laion2B-s34B-b79K/QNN/config_gpu_fp32.json",
-    description: "Official microsoft/olive-recipes run config for laion-CLIP-ViT-B-32-laion2B-s34B-b79K (QNN/config_gpu_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for laion-CLIP-ViT-B-32-laion2B-s34B-b79K (QNN/config_gpu_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -925,7 +1041,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "OpenVINO",
     repoPath: "meta-llama-Llama-2-7b-chat-hf/VitisAI/Llama-2-7b-chat-hf_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-2-7b-chat-hf (VitisAI/Llama-2-7b-chat-hf_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-2-7b-chat-hf (VitisAI/Llama-2-7b-chat-hf_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -933,7 +1050,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "OpenVINO",
     repoPath: "meta-llama-Llama-2-7b-hf/VitisAI/Llama-2-7b-hf_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-2-7b-hf (VitisAI/Llama-2-7b-hf_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-2-7b-hf (VitisAI/Llama-2-7b-hf_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -941,7 +1059,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "meta-llama-Llama-3.1-8B-Instruct/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -949,7 +1068,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "meta-llama-Llama-3.1-8B-Instruct/aitk/llama3_1_dml_config.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (aitk/llama3_1_dml_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (aitk/llama3_1_dml_config.json).",
     metadataSource: "folder",
   },
   {
@@ -957,7 +1077,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "meta-llama-Llama-3.1-8B-Instruct/aitk/llama3_1_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (aitk/llama3_1_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (aitk/llama3_1_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -965,7 +1086,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "meta-llama-Llama-3.1-8B-Instruct/aitk/llama3_1_ov_gpu_config.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (aitk/llama3_1_ov_gpu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (aitk/llama3_1_ov_gpu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -973,7 +1095,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "meta-llama-Llama-3.1-8B-Instruct/aitk/llama3_1_qnn_config.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (aitk/llama3_1_qnn_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (aitk/llama3_1_qnn_config.json).",
     metadataSource: "folder",
   },
   {
@@ -981,7 +1104,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "meta-llama-Llama-3.1-8B-Instruct/aitk/llama3_1_qnn_gpu.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (aitk/llama3_1_qnn_gpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (aitk/llama3_1_qnn_gpu.json).",
     metadataSource: "folder",
   },
   {
@@ -989,7 +1113,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "meta-llama-Llama-3.1-8B-Instruct/aitk/llama3_1_trtrtx_config.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (aitk/llama3_1_trtrtx_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (aitk/llama3_1_trtrtx_config.json).",
     metadataSource: "folder",
   },
   {
@@ -997,7 +1122,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "meta-llama-Llama-3.1-8B-Instruct/aitk/llama3_1_vitis_ai_config.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (aitk/llama3_1_vitis_ai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (aitk/llama3_1_vitis_ai_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1005,7 +1131,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "TensorRT",
     repoPath: "meta-llama-Llama-3.1-8B-Instruct/NvTensorRtRtx/Llama-3.1-8B-Instruct_model_builder_int4.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (NvTensorRtRtx/Llama-3.1-8B-Instruct_model_builder_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (NvTensorRtRtx/Llama-3.1-8B-Instruct_model_builder_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -1013,7 +1140,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "QNN",
     repoPath: "meta-llama-Llama-3.1-8B-Instruct/QAIRT/config/mixed_precision_config/exceptions.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (QAIRT/exceptions.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (QAIRT/exceptions.json).",
     metadataSource: "folder",
   },
   {
@@ -1021,7 +1149,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "QNN",
     repoPath: "meta-llama-Llama-3.1-8B-Instruct/QAIRT/htp_sc8380xp.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (QAIRT/htp_sc8380xp.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (QAIRT/htp_sc8380xp.json).",
     metadataSource: "folder",
   },
   {
@@ -1029,7 +1158,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "QNN",
     repoPath: "meta-llama-Llama-3.1-8B-Instruct/QAIRT/htp_sc8480xp.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (QAIRT/htp_sc8480xp.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (QAIRT/htp_sc8480xp.json).",
     metadataSource: "folder",
   },
   {
@@ -1037,7 +1167,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "QNN",
     repoPath: "meta-llama-Llama-3.1-8B-Instruct/QNN/x_elite_config.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (QNN/x_elite_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (QNN/x_elite_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1045,7 +1176,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "QNN",
     repoPath: "meta-llama-Llama-3.1-8B-Instruct/QNN/x2_elite_config.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (QNN/x2_elite_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (QNN/x2_elite_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1053,7 +1185,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "OpenVINO",
     repoPath: "meta-llama-Llama-3.1-8B-Instruct/VitisAI/Llama-3.1-8B-Instruct_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (VitisAI/Llama-3.1-8B-Instruct_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B-Instruct (VitisAI/Llama-3.1-8B-Instruct_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -1061,7 +1194,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "OpenVINO",
     repoPath: "meta-llama-Llama-3.1-8B/VitisAI/Meta-Llama-3.1-8B_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B (VitisAI/Meta-Llama-3.1-8B_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.1-8B (VitisAI/Meta-Llama-3.1-8B_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -1069,7 +1203,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -1077,7 +1212,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/aitk/llama3_2_dml_config.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (aitk/llama3_2_dml_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (aitk/llama3_2_dml_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1085,7 +1221,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/aitk/llama3_2_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (aitk/llama3_2_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (aitk/llama3_2_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1093,7 +1230,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/aitk/llama3_2_ov_gpu_config.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (aitk/llama3_2_ov_gpu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (aitk/llama3_2_ov_gpu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1101,7 +1239,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/aitk/llama3_2_qnn_config.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (aitk/llama3_2_qnn_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (aitk/llama3_2_qnn_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1109,7 +1248,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/aitk/llama3_2_qnn_gpu_config.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (aitk/llama3_2_qnn_gpu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (aitk/llama3_2_qnn_gpu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1117,7 +1257,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/aitk/llama3_2_trtrtx_config.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (aitk/llama3_2_trtrtx_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (aitk/llama3_2_trtrtx_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1125,7 +1266,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/aitk/llama3_2_vitis_ai_config.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (aitk/llama3_2_vitis_ai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (aitk/llama3_2_vitis_ai_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1133,7 +1275,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "TensorRT",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/NvTensorRtRtx/Llama-3.2-1B-Instruct_model_builder_fp16.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (NvTensorRtRtx/Llama-3.2-1B-Instruct_model_builder_fp16.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (NvTensorRtRtx/Llama-3.2-1B-Instruct_model_builder_fp16.json).",
     metadataSource: "folder",
   },
   {
@@ -1141,7 +1284,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/olive/dora.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/dora.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/dora.json).",
     metadataSource: "folder",
   },
   {
@@ -1149,7 +1293,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/olive/hqq.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/hqq.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/hqq.json).",
     metadataSource: "folder",
   },
   {
@@ -1157,7 +1302,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/olive/lmeval_onnx.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/lmeval_onnx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/lmeval_onnx.json).",
     metadataSource: "folder",
   },
   {
@@ -1165,7 +1311,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/olive/lmeval.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/lmeval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/lmeval.json).",
     metadataSource: "folder",
   },
   {
@@ -1173,7 +1320,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/olive/loha.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/loha.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/loha.json).",
     metadataSource: "folder",
   },
   {
@@ -1181,7 +1329,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/olive/lokr.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/lokr.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/lokr.json).",
     metadataSource: "folder",
   },
   {
@@ -1189,7 +1338,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/olive/mixed.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/mixed.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/mixed.json).",
     metadataSource: "folder",
   },
   {
@@ -1197,7 +1347,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/olive/qlora.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/qlora.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/qlora.json).",
     metadataSource: "folder",
   },
   {
@@ -1205,7 +1356,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/olive/rtn.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/rtn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (olive/rtn.json).",
     metadataSource: "folder",
   },
   {
@@ -1213,7 +1365,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "QNN",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/QNN/config_gpu_ctxbin.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (QNN/config_gpu_ctxbin.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (QNN/config_gpu_ctxbin.json).",
     metadataSource: "folder",
   },
   {
@@ -1221,7 +1374,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "QNN",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/QNN/config_gpu.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (QNN/config_gpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (QNN/config_gpu.json).",
     metadataSource: "folder",
   },
   {
@@ -1229,7 +1383,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "OpenVINO",
     repoPath: "meta-llama-Llama-3.2-1B-Instruct/VitisAI/Llama-3.2-1B-Instruct_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (VitisAI/Llama-3.2-1B-Instruct_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B-Instruct (VitisAI/Llama-3.2-1B-Instruct_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -1237,7 +1392,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "OpenVINO",
     repoPath: "meta-llama-Llama-3.2-1B/VitisAI/Llama-3.2-1B_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B (VitisAI/Llama-3.2-1B_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-1B (VitisAI/Llama-3.2-1B_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -1245,7 +1401,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "OpenVINO",
     repoPath: "meta-llama-Llama-3.2-3B-Instruct/VitisAI/Llama-3.2-3B-Instruct_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-3B-Instruct (VitisAI/Llama-3.2-3B-Instruct_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-3B-Instruct (VitisAI/Llama-3.2-3B-Instruct_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -1253,7 +1410,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "OpenVINO",
     repoPath: "meta-llama-Llama-3.2-3B/VitisAI/Llama-3.2-3B_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-3B (VitisAI/Llama-3.2-3B_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Llama-3.2-3B (VitisAI/Llama-3.2-3B_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -1261,7 +1419,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "meta-llama-Meta-Llama-3-8B/olive/config.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Meta-Llama-3-8B (olive/config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Meta-Llama-3-8B (olive/config.json).",
     metadataSource: "folder",
   },
   {
@@ -1269,7 +1428,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "OpenVINO",
     repoPath: "meta-llama-Meta-Llama-3-8B/VitisAI/Meta-Llama-3-8B_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for meta-llama-Meta-Llama-3-8B (VitisAI/Meta-Llama-3-8B_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for meta-llama-Meta-Llama-3-8B (VitisAI/Meta-Llama-3-8B_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -1277,7 +1437,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "BERT",
     device: "CPU",
     repoPath: "microsoft-deberta-base-mnli/aml/deberta.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-deberta-base-mnli (aml/deberta.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-deberta-base-mnli (aml/deberta.json).",
     metadataSource: "folder",
   },
   {
@@ -1285,7 +1446,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3-mini-128k-instruct/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -1293,7 +1455,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3-mini-128k-instruct/aitk/phi3_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (aitk/phi3_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (aitk/phi3_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1301,7 +1464,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3-mini-128k-instruct/aitk/phi3_ov_npu_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (aitk/phi3_ov_npu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (aitk/phi3_ov_npu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1309,7 +1473,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3-mini-128k-instruct/aitk/phi3_qnn.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (aitk/phi3_qnn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (aitk/phi3_qnn.json).",
     metadataSource: "folder",
   },
   {
@@ -1317,7 +1482,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3-mini-128k-instruct/aitk/phi3_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (aitk/phi3_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (aitk/phi3_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -1325,7 +1491,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3-mini-128k-instruct/aitk/phi3_vitis_ai_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (aitk/phi3_vitis_ai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (aitk/phi3_vitis_ai_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1333,7 +1500,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "TensorRT",
     repoPath: "microsoft-Phi-3-mini-128k-instruct/NvTensorRtRtx/Phi-3-mini-128k-instruct_nvmo_int4_rtn.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (NvTensorRtRtx/Phi-3-mini-128k-instruct_nvmo_int4_rtn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (NvTensorRtRtx/Phi-3-mini-128k-instruct_nvmo_int4_rtn.json).",
     metadataSource: "folder",
   },
   {
@@ -1341,7 +1509,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "QNN",
     repoPath: "microsoft-Phi-3-mini-128k-instruct/QNN/config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (QNN/config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (QNN/config.json).",
     metadataSource: "folder",
   },
   {
@@ -1349,7 +1518,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "OpenVINO",
     repoPath: "microsoft-Phi-3-mini-128k-instruct/VitisAI/Phi-3-mini-128k-instruct_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (VitisAI/Phi-3-mini-128k-instruct_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-128k-instruct (VitisAI/Phi-3-mini-128k-instruct_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -1357,7 +1527,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3-mini-4k-instruct/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -1365,7 +1536,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3-mini-4k-instruct/aitk/phi3_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (aitk/phi3_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (aitk/phi3_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1373,7 +1545,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3-mini-4k-instruct/aitk/phi3_ov_npu_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (aitk/phi3_ov_npu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (aitk/phi3_ov_npu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1381,7 +1554,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3-mini-4k-instruct/aitk/phi3_qnn.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (aitk/phi3_qnn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (aitk/phi3_qnn.json).",
     metadataSource: "folder",
   },
   {
@@ -1389,7 +1563,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3-mini-4k-instruct/aitk/phi3_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (aitk/phi3_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (aitk/phi3_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -1397,7 +1572,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3-mini-4k-instruct/aitk/phi3_vitis_ai_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (aitk/phi3_vitis_ai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (aitk/phi3_vitis_ai_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1405,7 +1581,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "TensorRT",
     repoPath: "microsoft-Phi-3-mini-4k-instruct/NvTensorRtRtx/Phi-3-mini-4k-instruct_model_builder_int4.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (NvTensorRtRtx/Phi-3-mini-4k-instruct_model_builder_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (NvTensorRtRtx/Phi-3-mini-4k-instruct_model_builder_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -1413,7 +1590,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "QNN",
     repoPath: "microsoft-Phi-3-mini-4k-instruct/QNN/config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (QNN/config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (QNN/config.json).",
     metadataSource: "folder",
   },
   {
@@ -1421,7 +1599,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "OpenVINO",
     repoPath: "microsoft-Phi-3-mini-4k-instruct/VitisAI/Phi-3-mini-4k-instruct_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (VitisAI/Phi-3-mini-4k-instruct_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3-mini-4k-instruct (VitisAI/Phi-3-mini-4k-instruct_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -1429,7 +1608,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3.5-mini-instruct/aitk/genai_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/genai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/genai_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1437,7 +1617,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3.5-mini-instruct/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -1445,7 +1626,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3.5-mini-instruct/aitk/phi3_5_dml_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/phi3_5_dml_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/phi3_5_dml_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1453,7 +1635,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3.5-mini-instruct/aitk/phi3_5_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/phi3_5_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/phi3_5_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1461,7 +1644,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3.5-mini-instruct/aitk/phi3_5_ov_gpu_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/phi3_5_ov_gpu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/phi3_5_ov_gpu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1469,7 +1653,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3.5-mini-instruct/aitk/phi3_5_qnn_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/phi3_5_qnn_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/phi3_5_qnn_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1477,7 +1662,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3.5-mini-instruct/aitk/phi3_5_qnn_gpu_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/phi3_5_qnn_gpu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/phi3_5_qnn_gpu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1485,7 +1671,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3.5-mini-instruct/aitk/phi3_5_trtrtx_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/phi3_5_trtrtx_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/phi3_5_trtrtx_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1493,7 +1680,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-3.5-mini-instruct/aitk/phi3_5_vitis_ai_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/phi3_5_vitis_ai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (aitk/phi3_5_vitis_ai_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1501,7 +1689,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "TensorRT",
     repoPath: "microsoft-Phi-3.5-mini-instruct/NvTensorRtRtx/Phi-3.5-mini-instruct_model_builder_int4.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (NvTensorRtRtx/Phi-3.5-mini-instruct_model_builder_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (NvTensorRtRtx/Phi-3.5-mini-instruct_model_builder_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -1509,7 +1698,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "CPU",
     repoPath: "microsoft-Phi-3.5-mini-instruct/olive/mixed.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (olive/mixed.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (olive/mixed.json).",
     metadataSource: "folder",
   },
   {
@@ -1517,7 +1707,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "QNN",
     repoPath: "microsoft-Phi-3.5-mini-instruct/QNN/config_gpu_ctxbin.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (QNN/config_gpu_ctxbin.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (QNN/config_gpu_ctxbin.json).",
     metadataSource: "folder",
   },
   {
@@ -1525,7 +1716,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "QNN",
     repoPath: "microsoft-Phi-3.5-mini-instruct/QNN/config_gpu.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (QNN/config_gpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (QNN/config_gpu.json).",
     metadataSource: "folder",
   },
   {
@@ -1533,7 +1725,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "QNN",
     repoPath: "microsoft-Phi-3.5-mini-instruct/QNN/x_elite_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (QNN/x_elite_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (QNN/x_elite_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1541,7 +1734,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "QNN",
     repoPath: "microsoft-Phi-3.5-mini-instruct/QNN/x2_elite_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (QNN/x2_elite_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (QNN/x2_elite_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1549,7 +1743,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "OpenVINO",
     repoPath: "microsoft-Phi-3.5-mini-instruct/VitisAI/Phi-3.5-mini-instruct_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (VitisAI/Phi-3.5-mini-instruct_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-3.5-mini-instruct (VitisAI/Phi-3.5-mini-instruct_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -1557,7 +1752,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-4-mini-instruct/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -1565,7 +1761,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-4-mini-instruct/aitk/phi4_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (aitk/phi4_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (aitk/phi4_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1573,7 +1770,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-4-mini-instruct/aitk/phi4_ov_npu_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (aitk/phi4_ov_npu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (aitk/phi4_ov_npu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1581,7 +1779,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-4-mini-instruct/aitk/phi4_qnn.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (aitk/phi4_qnn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (aitk/phi4_qnn.json).",
     metadataSource: "folder",
   },
   {
@@ -1589,7 +1788,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-4-mini-instruct/aitk/phi4_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (aitk/phi4_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (aitk/phi4_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -1597,15 +1797,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-4-mini-instruct/aitk/phi4_vitis_ai_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (aitk/phi4_vitis_ai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (aitk/phi4_vitis_ai_config.json).",
     metadataSource: "folder",
   },
   {
     name: "microsoft-Phi-4-mini-instruct · NvTensorRtRtx · microsoft-Phi-4-mini-instruct_nvmo_ptq_mixed_precision_awq_lite",
     architecture: "Phi",
     device: "TensorRT",
-    repoPath: "microsoft-Phi-4-mini-instruct/NvTensorRtRtx/microsoft-Phi-4-mini-instruct_nvmo_ptq_mixed_precision_awq_lite.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (NvTensorRtRtx/microsoft-Phi-4-mini-instruct_nvmo_ptq_mixed_precision_awq_lite.json).",
+    repoPath:
+      "microsoft-Phi-4-mini-instruct/NvTensorRtRtx/microsoft-Phi-4-mini-instruct_nvmo_ptq_mixed_precision_awq_lite.json",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (NvTensorRtRtx/microsoft-Phi-4-mini-instruct_nvmo_ptq_mixed_precision_awq_lite.json).",
     metadataSource: "folder",
   },
   {
@@ -1613,7 +1816,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "CPU",
     repoPath: "microsoft-Phi-4-mini-instruct/olive/mixed-tied.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (olive/mixed-tied.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (olive/mixed-tied.json).",
     metadataSource: "folder",
   },
   {
@@ -1621,15 +1825,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "CPU",
     repoPath: "microsoft-Phi-4-mini-instruct/olive/mixed.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (olive/mixed.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (olive/mixed.json).",
     metadataSource: "folder",
   },
   {
     name: "microsoft-Phi-4-mini-instruct · OpenVINO · Phi_4_mini_instruct_context_ov_dynamic_sym_gs128_bkp_int8_sym",
     architecture: "Phi",
     device: "OpenVINO",
-    repoPath: "microsoft-Phi-4-mini-instruct/OpenVINO/Phi_4_mini_instruct_context_ov_dynamic_sym_gs128_bkp_int8_sym.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (OpenVINO/Phi_4_mini_instruct_context_ov_dynamic_sym_gs128_bkp_int8_sym.json).",
+    repoPath:
+      "microsoft-Phi-4-mini-instruct/OpenVINO/Phi_4_mini_instruct_context_ov_dynamic_sym_gs128_bkp_int8_sym.json",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (OpenVINO/Phi_4_mini_instruct_context_ov_dynamic_sym_gs128_bkp_int8_sym.json).",
     metadataSource: "folder",
   },
   {
@@ -1637,7 +1844,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "OpenVINO",
     repoPath: "microsoft-Phi-4-mini-instruct/OpenVINO/Phi-4-mini-instruct-gpu-context-dy.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (OpenVINO/Phi-4-mini-instruct-gpu-context-dy.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (OpenVINO/Phi-4-mini-instruct-gpu-context-dy.json).",
     metadataSource: "folder",
   },
   {
@@ -1645,7 +1853,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "QNN",
     repoPath: "microsoft-Phi-4-mini-instruct/QNN/phi4_mini_qnn_docker.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (QNN/phi4_mini_qnn_docker.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (QNN/phi4_mini_qnn_docker.json).",
     metadataSource: "folder",
   },
   {
@@ -1653,7 +1862,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "OpenVINO",
     repoPath: "microsoft-Phi-4-mini-instruct/VitisAI/Phi-4-mini-instruct_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (VitisAI/Phi-4-mini-instruct_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-instruct (VitisAI/Phi-4-mini-instruct_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -1661,7 +1871,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-4-mini-reasoning/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-reasoning (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-reasoning (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -1669,7 +1880,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-4-mini-reasoning/aitk/phi4_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-reasoning (aitk/phi4_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-reasoning (aitk/phi4_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1677,7 +1889,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-4-mini-reasoning/aitk/phi4_ov_gpu_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-reasoning (aitk/phi4_ov_gpu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-reasoning (aitk/phi4_ov_gpu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1685,7 +1898,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-4-mini-reasoning/aitk/phi4_vitis_ai_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-reasoning (aitk/phi4_vitis_ai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-reasoning (aitk/phi4_vitis_ai_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1693,15 +1907,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "OpenVINO",
     repoPath: "microsoft-Phi-4-mini-reasoning/OpenVINO/Phi_4_mini_reasoning_gpu_context_dy.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-reasoning (OpenVINO/Phi_4_mini_reasoning_gpu_context_dy.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-reasoning (OpenVINO/Phi_4_mini_reasoning_gpu_context_dy.json).",
     metadataSource: "folder",
   },
   {
     name: "microsoft-Phi-4-mini-reasoning · OpenVINO · Phi-4-mini-reasoning_context_ov_dynamic_sym_gs128_bkp_int8_sym",
     architecture: "Phi",
     device: "OpenVINO",
-    repoPath: "microsoft-Phi-4-mini-reasoning/OpenVINO/Phi-4-mini-reasoning_context_ov_dynamic_sym_gs128_bkp_int8_sym.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-reasoning (OpenVINO/Phi-4-mini-reasoning_context_ov_dynamic_sym_gs128_bkp_int8_sym.json).",
+    repoPath:
+      "microsoft-Phi-4-mini-reasoning/OpenVINO/Phi-4-mini-reasoning_context_ov_dynamic_sym_gs128_bkp_int8_sym.json",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-reasoning (OpenVINO/Phi-4-mini-reasoning_context_ov_dynamic_sym_gs128_bkp_int8_sym.json).",
     metadataSource: "folder",
   },
   {
@@ -1709,7 +1926,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "OpenVINO",
     repoPath: "microsoft-Phi-4-mini-reasoning/VitisAI/Phi-4-mini-reasoning_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-reasoning (VitisAI/Phi-4-mini-reasoning_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-mini-reasoning (VitisAI/Phi-4-mini-reasoning_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -1717,7 +1935,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-4-reasoning-plus/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning-plus (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning-plus (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -1725,15 +1944,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-4-reasoning-plus/aitk/phi4_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning-plus (aitk/phi4_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning-plus (aitk/phi4_ov_config.json).",
     metadataSource: "folder",
   },
   {
     name: "microsoft-Phi-4-reasoning-plus · OpenVINO · Phi-4-reasoning-plus_context_ov_dynamic_sym_gs128_bkp_int8_sym",
     architecture: "Phi",
     device: "OpenVINO",
-    repoPath: "microsoft-Phi-4-reasoning-plus/OpenVINO/Phi-4-reasoning-plus_context_ov_dynamic_sym_gs128_bkp_int8_sym.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning-plus (OpenVINO/Phi-4-reasoning-plus_context_ov_dynamic_sym_gs128_bkp_int8_sym.json).",
+    repoPath:
+      "microsoft-Phi-4-reasoning-plus/OpenVINO/Phi-4-reasoning-plus_context_ov_dynamic_sym_gs128_bkp_int8_sym.json",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning-plus (OpenVINO/Phi-4-reasoning-plus_context_ov_dynamic_sym_gs128_bkp_int8_sym.json).",
     metadataSource: "folder",
   },
   {
@@ -1741,7 +1963,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-4-reasoning/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -1749,15 +1972,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-4-reasoning/aitk/phi4_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning (aitk/phi4_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning (aitk/phi4_ov_config.json).",
     metadataSource: "folder",
   },
   {
     name: "microsoft-Phi-4-reasoning · OpenVINO · Phi-4-reasoning_context_ov_dynamic_sym_gs128_bkp_int8_sym",
     architecture: "Phi",
     device: "OpenVINO",
-    repoPath: "microsoft-Phi-4-reasoning/OpenVINO/Phi-4-reasoning_context_ov_dynamic_sym_gs128_bkp_int8_sym.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning (OpenVINO/Phi-4-reasoning_context_ov_dynamic_sym_gs128_bkp_int8_sym.json).",
+    repoPath:
+      "microsoft-Phi-4-reasoning/OpenVINO/Phi-4-reasoning_context_ov_dynamic_sym_gs128_bkp_int8_sym.json",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning (OpenVINO/Phi-4-reasoning_context_ov_dynamic_sym_gs128_bkp_int8_sym.json).",
     metadataSource: "folder",
   },
   {
@@ -1765,7 +1991,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "QNN",
     repoPath: "microsoft-Phi-4-reasoning/QAIRT/config/mixed_precision_config/exceptions.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning (QAIRT/exceptions.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning (QAIRT/exceptions.json).",
     metadataSource: "folder",
   },
   {
@@ -1773,7 +2000,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "QNN",
     repoPath: "microsoft-Phi-4-reasoning/QAIRT/htp_sc8380xp.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning (QAIRT/htp_sc8380xp.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning (QAIRT/htp_sc8380xp.json).",
     metadataSource: "folder",
   },
   {
@@ -1781,7 +2009,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "QNN",
     repoPath: "microsoft-Phi-4-reasoning/QAIRT/htp_sc8480xp.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning (QAIRT/htp_sc8480xp.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning (QAIRT/htp_sc8480xp.json).",
     metadataSource: "folder",
   },
   {
@@ -1789,7 +2018,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "QNN",
     repoPath: "microsoft-Phi-4-reasoning/QNN/x_elite_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning (QNN/x_elite_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning (QNN/x_elite_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1797,7 +2027,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "QNN",
     repoPath: "microsoft-Phi-4-reasoning/QNN/x2_elite_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning (QNN/x2_elite_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4-reasoning (QNN/x2_elite_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1805,7 +2036,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-4/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4 (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4 (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -1813,7 +2045,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "DirectML",
     repoPath: "microsoft-Phi-4/aitk/phi4_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4 (aitk/phi4_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4 (aitk/phi4_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1829,7 +2062,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "TensorRT",
     repoPath: "microsoft-Phi-4/NvTensorRtRtx/phi-4_model_builder_int4.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4 (NvTensorRtRtx/phi-4_model_builder_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4 (NvTensorRtRtx/phi-4_model_builder_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -1837,7 +2071,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Phi",
     device: "OpenVINO",
     repoPath: "microsoft-Phi-4/OpenVINO/phi_4_gpu_context_dy.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-Phi-4 (OpenVINO/phi_4_gpu_context_dy.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-Phi-4 (OpenVINO/phi_4_gpu_context_dy.json).",
     metadataSource: "folder",
   },
   {
@@ -1845,7 +2080,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "ResNet",
     device: "DirectML",
     repoPath: "microsoft-resnet-50/aitk/resnet_context_ov_static.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-resnet-50 (aitk/resnet_context_ov_static.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-resnet-50 (aitk/resnet_context_ov_static.json).",
     metadataSource: "folder",
   },
   {
@@ -1853,7 +2089,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "ResNet",
     device: "DirectML",
     repoPath: "microsoft-resnet-50/aitk/resnet_dml.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-resnet-50 (aitk/resnet_dml.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-resnet-50 (aitk/resnet_dml.json).",
     metadataSource: "folder",
   },
   {
@@ -1861,7 +2098,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "ResNet",
     device: "DirectML",
     repoPath: "microsoft-resnet-50/aitk/resnet_migraphx.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-resnet-50 (aitk/resnet_migraphx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-resnet-50 (aitk/resnet_migraphx.json).",
     metadataSource: "folder",
   },
   {
@@ -1869,7 +2107,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "ResNet",
     device: "DirectML",
     repoPath: "microsoft-resnet-50/aitk/resnet_qdq_amd.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-resnet-50 (aitk/resnet_qdq_amd.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-resnet-50 (aitk/resnet_qdq_amd.json).",
     metadataSource: "folder",
   },
   {
@@ -1877,7 +2116,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "ResNet",
     device: "DirectML",
     repoPath: "microsoft-resnet-50/aitk/resnet_qdq_qnn.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-resnet-50 (aitk/resnet_qdq_qnn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-resnet-50 (aitk/resnet_qdq_qnn.json).",
     metadataSource: "folder",
   },
   {
@@ -1885,7 +2125,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "ResNet",
     device: "DirectML",
     repoPath: "microsoft-resnet-50/aitk/resnet_qnn_gpu.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-resnet-50 (aitk/resnet_qnn_gpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-resnet-50 (aitk/resnet_qnn_gpu.json).",
     metadataSource: "folder",
   },
   {
@@ -1893,7 +2134,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "ResNet",
     device: "DirectML",
     repoPath: "microsoft-resnet-50/aitk/resnet_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-resnet-50 (aitk/resnet_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-resnet-50 (aitk/resnet_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -1901,7 +2143,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "ResNet",
     device: "TensorRT",
     repoPath: "microsoft-resnet-50/NvTensorRtRtx/resnet_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-resnet-50 (NvTensorRtRtx/resnet_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-resnet-50 (NvTensorRtRtx/resnet_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -1909,7 +2152,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "ResNet",
     device: "CPU",
     repoPath: "microsoft-resnet-50/olive/resnet_cpu.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-resnet-50 (olive/resnet_cpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-resnet-50 (olive/resnet_cpu.json).",
     metadataSource: "folder",
   },
   {
@@ -1917,7 +2161,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "ResNet",
     device: "CPU",
     repoPath: "microsoft-resnet-50/olive/resnet_ov_npu.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-resnet-50 (olive/resnet_ov_npu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-resnet-50 (olive/resnet_ov_npu.json).",
     metadataSource: "folder",
   },
   {
@@ -1925,7 +2170,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "ResNet",
     device: "QNN",
     repoPath: "microsoft-resnet-50/QNN/config_gpu_fp32.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-resnet-50 (QNN/config_gpu_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-resnet-50 (QNN/config_gpu_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -1933,7 +2179,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "ResNet",
     device: "QNN",
     repoPath: "microsoft-resnet-50/QNN/resnet_qnn_fp32_ctx.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-resnet-50 (QNN/resnet_qnn_fp32_ctx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-resnet-50 (QNN/resnet_qnn_fp32_ctx.json).",
     metadataSource: "folder",
   },
   {
@@ -1941,7 +2188,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "ResNet",
     device: "QNN",
     repoPath: "microsoft-resnet-50/QNN/resnet_qnn_fp32.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-resnet-50 (QNN/resnet_qnn_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-resnet-50 (QNN/resnet_qnn_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -1949,7 +2197,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "QNN",
     repoPath: "microsoft-table-transformer-detection/QNN/ttd_config.json",
-    description: "Official microsoft/olive-recipes run config for microsoft-table-transformer-detection (QNN/ttd_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for microsoft-table-transformer-detection (QNN/ttd_config.json).",
     metadataSource: "folder",
   },
   {
@@ -1957,7 +2206,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "OpenVINO",
     repoPath: "mistralai-Mistral-7B-Instruct-v0.1/VitisAI/Mistral-7B-Instruct-v0.1_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.1 (VitisAI/Mistral-7B-Instruct-v0.1_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.1 (VitisAI/Mistral-7B-Instruct-v0.1_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -1965,7 +2215,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "mistralai-Mistral-7B-Instruct-v0.2/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.2 (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.2 (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -1973,7 +2224,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "mistralai-Mistral-7B-Instruct-v0.2/aitk/Mistral_7B_Instruct_v0.2_gpu_context_ov_dy.json",
-    description: "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.2 (aitk/Mistral_7B_Instruct_v0.2_gpu_context_ov_dy.json).",
+    description:
+      "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.2 (aitk/Mistral_7B_Instruct_v0.2_gpu_context_ov_dy.json).",
     metadataSource: "folder",
   },
   {
@@ -1981,7 +2233,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "mistralai-Mistral-7B-Instruct-v0.2/aitk/Mistral_7B_Instruct_v0.2_npu_context_ov_dy.json",
-    description: "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.2 (aitk/Mistral_7B_Instruct_v0.2_npu_context_ov_dy.json).",
+    description:
+      "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.2 (aitk/Mistral_7B_Instruct_v0.2_npu_context_ov_dy.json).",
     metadataSource: "folder",
   },
   {
@@ -1989,7 +2242,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "mistralai-Mistral-7B-Instruct-v0.2/aitk/Mistral_7B_Instruct_v0.2_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.2 (aitk/Mistral_7B_Instruct_v0.2_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.2 (aitk/Mistral_7B_Instruct_v0.2_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -1997,15 +2251,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "mistralai-Mistral-7B-Instruct-v0.2/aitk/Mistral_7B_Instruct_v0.2_vitis_ai_config.json",
-    description: "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.2 (aitk/Mistral_7B_Instruct_v0.2_vitis_ai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.2 (aitk/Mistral_7B_Instruct_v0.2_vitis_ai_config.json).",
     metadataSource: "folder",
   },
   {
     name: "mistralai-Mistral-7B-Instruct-v0.2 · NvTensorRtRtx · Mistral-7B-Instruct-v0.2_model_builder_int4",
     architecture: "Llama",
     device: "TensorRT",
-    repoPath: "mistralai-Mistral-7B-Instruct-v0.2/NvTensorRtRtx/Mistral-7B-Instruct-v0.2_model_builder_int4.json",
-    description: "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.2 (NvTensorRtRtx/Mistral-7B-Instruct-v0.2_model_builder_int4.json).",
+    repoPath:
+      "mistralai-Mistral-7B-Instruct-v0.2/NvTensorRtRtx/Mistral-7B-Instruct-v0.2_model_builder_int4.json",
+    description:
+      "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.2 (NvTensorRtRtx/Mistral-7B-Instruct-v0.2_model_builder_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -2013,7 +2270,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "OpenVINO",
     repoPath: "mistralai-Mistral-7B-Instruct-v0.2/VitisAI/Mistral-7B-Instruct-v0.2_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.2 (VitisAI/Mistral-7B-Instruct-v0.2_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.2 (VitisAI/Mistral-7B-Instruct-v0.2_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -2021,7 +2279,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "DirectML",
     repoPath: "mistralai-Mistral-7B-Instruct-v0.3/aitk/mistral-7b-instruct-v0.3-ov.json",
-    description: "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.3 (aitk/mistral-7b-instruct-v0.3-ov.json).",
+    description:
+      "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.3 (aitk/mistral-7b-instruct-v0.3-ov.json).",
     metadataSource: "folder",
   },
   {
@@ -2029,7 +2288,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "OpenVINO",
     repoPath: "mistralai-Mistral-7B-Instruct-v0.3/VitisAI/Mistral-7B-Instruct-v0.3_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.3 (VitisAI/Mistral-7B-Instruct-v0.3_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-Instruct-v0.3 (VitisAI/Mistral-7B-Instruct-v0.3_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -2037,7 +2297,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "OpenVINO",
     repoPath: "mistralai-Mistral-7B-v0.3/VitisAI/Mistral-7B-v0.3_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-v0.3 (VitisAI/Mistral-7B-v0.3_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for mistralai-Mistral-7B-v0.3 (VitisAI/Mistral-7B-v0.3_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -2045,15 +2306,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "mit-ast-finetuned-speech-commands-v2/olive/ast.json",
-    description: "Official microsoft/olive-recipes run config for mit-ast-finetuned-speech-commands-v2 (olive/ast.json).",
+    description:
+      "Official microsoft/olive-recipes run config for mit-ast-finetuned-speech-commands-v2 (olive/ast.json).",
     metadataSource: "folder",
   },
   {
     name: "nvidia-Mistral-NeMo-12B-Instruct · baseline · nvidia-Mistral-NeMo-12B-Instruct_pytorch_with_eval",
     architecture: "Llama",
     device: "CPU",
-    repoPath: "nvidia-Mistral-NeMo-12B-Instruct/baseline/nvidia-Mistral-NeMo-12B-Instruct_pytorch_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (baseline/nvidia-Mistral-NeMo-12B-Instruct_pytorch_with_eval.json).",
+    repoPath:
+      "nvidia-Mistral-NeMo-12B-Instruct/baseline/nvidia-Mistral-NeMo-12B-Instruct_pytorch_with_eval.json",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (baseline/nvidia-Mistral-NeMo-12B-Instruct_pytorch_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -2061,7 +2325,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "nvidia-Mistral-NeMo-12B-Instruct/cpu/nvidia-Mistral-NeMo-12B-Instruct_cpu_fp32_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (cpu/nvidia-Mistral-NeMo-12B-Instruct_cpu_fp32_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (cpu/nvidia-Mistral-NeMo-12B-Instruct_cpu_fp32_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -2069,7 +2334,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "nvidia-Mistral-NeMo-12B-Instruct/cpu/nvidia-Mistral-NeMo-12B-Instruct_cpu_fp32.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (cpu/nvidia-Mistral-NeMo-12B-Instruct_cpu_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (cpu/nvidia-Mistral-NeMo-12B-Instruct_cpu_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -2077,7 +2343,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "nvidia-Mistral-NeMo-12B-Instruct/cpu/nvidia-Mistral-NeMo-12B-Instruct_cpu_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (cpu/nvidia-Mistral-NeMo-12B-Instruct_cpu_int4_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (cpu/nvidia-Mistral-NeMo-12B-Instruct_cpu_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -2085,15 +2352,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "nvidia-Mistral-NeMo-12B-Instruct/cpu/nvidia-Mistral-NeMo-12B-Instruct_cpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (cpu/nvidia-Mistral-NeMo-12B-Instruct_cpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (cpu/nvidia-Mistral-NeMo-12B-Instruct_cpu_int4.json).",
     metadataSource: "folder",
   },
   {
     name: "nvidia-Mistral-NeMo-12B-Instruct · cuda · nvidia-Mistral-NeMo-12B-Instruct_cuda_fp16_with_eval",
     architecture: "Llama",
     device: "CUDA",
-    repoPath: "nvidia-Mistral-NeMo-12B-Instruct/cuda/nvidia-Mistral-NeMo-12B-Instruct_cuda_fp16_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (cuda/nvidia-Mistral-NeMo-12B-Instruct_cuda_fp16_with_eval.json).",
+    repoPath:
+      "nvidia-Mistral-NeMo-12B-Instruct/cuda/nvidia-Mistral-NeMo-12B-Instruct_cuda_fp16_with_eval.json",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (cuda/nvidia-Mistral-NeMo-12B-Instruct_cuda_fp16_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -2101,15 +2371,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CUDA",
     repoPath: "nvidia-Mistral-NeMo-12B-Instruct/cuda/nvidia-Mistral-NeMo-12B-Instruct_cuda_fp16.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (cuda/nvidia-Mistral-NeMo-12B-Instruct_cuda_fp16.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (cuda/nvidia-Mistral-NeMo-12B-Instruct_cuda_fp16.json).",
     metadataSource: "folder",
   },
   {
     name: "nvidia-Mistral-NeMo-12B-Instruct · cuda · nvidia-Mistral-NeMo-12B-Instruct_cuda_int4_with_eval",
     architecture: "Llama",
     device: "CUDA",
-    repoPath: "nvidia-Mistral-NeMo-12B-Instruct/cuda/nvidia-Mistral-NeMo-12B-Instruct_cuda_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (cuda/nvidia-Mistral-NeMo-12B-Instruct_cuda_int4_with_eval.json).",
+    repoPath:
+      "nvidia-Mistral-NeMo-12B-Instruct/cuda/nvidia-Mistral-NeMo-12B-Instruct_cuda_int4_with_eval.json",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (cuda/nvidia-Mistral-NeMo-12B-Instruct_cuda_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -2117,15 +2390,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CUDA",
     repoPath: "nvidia-Mistral-NeMo-12B-Instruct/cuda/nvidia-Mistral-NeMo-12B-Instruct_cuda_int4.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (cuda/nvidia-Mistral-NeMo-12B-Instruct_cuda_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (cuda/nvidia-Mistral-NeMo-12B-Instruct_cuda_int4.json).",
     metadataSource: "folder",
   },
   {
     name: "nvidia-Mistral-NeMo-12B-Instruct · webgpu · nvidia-Mistral-NeMo-12B-Instruct_webgpu_fp16_with_eval",
     architecture: "Llama",
     device: "CPU",
-    repoPath: "nvidia-Mistral-NeMo-12B-Instruct/webgpu/nvidia-Mistral-NeMo-12B-Instruct_webgpu_fp16_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (webgpu/nvidia-Mistral-NeMo-12B-Instruct_webgpu_fp16_with_eval.json).",
+    repoPath:
+      "nvidia-Mistral-NeMo-12B-Instruct/webgpu/nvidia-Mistral-NeMo-12B-Instruct_webgpu_fp16_with_eval.json",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (webgpu/nvidia-Mistral-NeMo-12B-Instruct_webgpu_fp16_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -2133,15 +2409,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "nvidia-Mistral-NeMo-12B-Instruct/webgpu/nvidia-Mistral-NeMo-12B-Instruct_webgpu_fp16.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (webgpu/nvidia-Mistral-NeMo-12B-Instruct_webgpu_fp16.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (webgpu/nvidia-Mistral-NeMo-12B-Instruct_webgpu_fp16.json).",
     metadataSource: "folder",
   },
   {
     name: "nvidia-Mistral-NeMo-12B-Instruct · webgpu · nvidia-Mistral-NeMo-12B-Instruct_webgpu_int4_with_eval",
     architecture: "Llama",
     device: "CPU",
-    repoPath: "nvidia-Mistral-NeMo-12B-Instruct/webgpu/nvidia-Mistral-NeMo-12B-Instruct_webgpu_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (webgpu/nvidia-Mistral-NeMo-12B-Instruct_webgpu_int4_with_eval.json).",
+    repoPath:
+      "nvidia-Mistral-NeMo-12B-Instruct/webgpu/nvidia-Mistral-NeMo-12B-Instruct_webgpu_int4_with_eval.json",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (webgpu/nvidia-Mistral-NeMo-12B-Instruct_webgpu_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -2149,7 +2428,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Llama",
     device: "CPU",
     repoPath: "nvidia-Mistral-NeMo-12B-Instruct/webgpu/nvidia-Mistral-NeMo-12B-Instruct_webgpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (webgpu/nvidia-Mistral-NeMo-12B-Instruct_webgpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-Mistral-NeMo-12B-Instruct (webgpu/nvidia-Mistral-NeMo-12B-Instruct_webgpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -2157,7 +2437,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "nvidia-nemotron-asr-streaming-multilingual-0.6b/src/nemotron_decoder_fp32_cpu.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-nemotron-asr-streaming-multilingual-0.6b (src/nemotron_decoder_fp32_cpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-nemotron-asr-streaming-multilingual-0.6b (src/nemotron_decoder_fp32_cpu.json).",
     metadataSource: "folder",
   },
   {
@@ -2165,7 +2446,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "nvidia-nemotron-asr-streaming-multilingual-0.6b/src/nemotron_encoder_int4_cpu.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-nemotron-asr-streaming-multilingual-0.6b (src/nemotron_encoder_int4_cpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-nemotron-asr-streaming-multilingual-0.6b (src/nemotron_encoder_int4_cpu.json).",
     metadataSource: "folder",
   },
   {
@@ -2173,7 +2455,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "nvidia-nemotron-asr-streaming-multilingual-0.6b/src/nemotron_encoder_int8_cpu.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-nemotron-asr-streaming-multilingual-0.6b (src/nemotron_encoder_int8_cpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-nemotron-asr-streaming-multilingual-0.6b (src/nemotron_encoder_int8_cpu.json).",
     metadataSource: "folder",
   },
   {
@@ -2181,7 +2464,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "nvidia-nemotron-asr-streaming-multilingual-0.6b/src/nemotron_joint_fp32_cpu.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-nemotron-asr-streaming-multilingual-0.6b (src/nemotron_joint_fp32_cpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-nemotron-asr-streaming-multilingual-0.6b (src/nemotron_joint_fp32_cpu.json).",
     metadataSource: "folder",
   },
   {
@@ -2189,7 +2473,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "nvidia-nemotron-speech-streaming-en-0.6b/cpu/nemotron_decoder_fp32_cpu.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-nemotron-speech-streaming-en-0.6b (cpu/nemotron_decoder_fp32_cpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-nemotron-speech-streaming-en-0.6b (cpu/nemotron_decoder_fp32_cpu.json).",
     metadataSource: "folder",
   },
   {
@@ -2197,7 +2482,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "nvidia-nemotron-speech-streaming-en-0.6b/cpu/nemotron_encoder_int4_cpu.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-nemotron-speech-streaming-en-0.6b (cpu/nemotron_encoder_int4_cpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-nemotron-speech-streaming-en-0.6b (cpu/nemotron_encoder_int4_cpu.json).",
     metadataSource: "folder",
   },
   {
@@ -2205,7 +2491,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "nvidia-nemotron-speech-streaming-en-0.6b/cpu/nemotron_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-nemotron-speech-streaming-en-0.6b (cpu/nemotron_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-nemotron-speech-streaming-en-0.6b (cpu/nemotron_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2213,7 +2500,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "nvidia-nemotron-speech-streaming-en-0.6b/cpu/nemotron_joint_fp32_cpu.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-nemotron-speech-streaming-en-0.6b (cpu/nemotron_joint_fp32_cpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-nemotron-speech-streaming-en-0.6b (cpu/nemotron_joint_fp32_cpu.json).",
     metadataSource: "folder",
   },
   {
@@ -2221,7 +2509,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "nvidia-parakeet-tdt-0.6b-v2/src/parakeet_decoder_fp32.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-parakeet-tdt-0.6b-v2 (src/parakeet_decoder_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-parakeet-tdt-0.6b-v2 (src/parakeet_decoder_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -2229,7 +2518,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "nvidia-parakeet-tdt-0.6b-v2/src/parakeet_encoder_int4.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-parakeet-tdt-0.6b-v2 (src/parakeet_encoder_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-parakeet-tdt-0.6b-v2 (src/parakeet_encoder_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -2237,7 +2527,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "nvidia-parakeet-tdt-0.6b-v2/src/parakeet_joint_fp32.json",
-    description: "Official microsoft/olive-recipes run config for nvidia-parakeet-tdt-0.6b-v2 (src/parakeet_joint_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for nvidia-parakeet-tdt-0.6b-v2 (src/parakeet_joint_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -2245,7 +2536,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "OFA-Sys-chinese-clip-vit-base-patch16/aitk/openai_clip_ov.json",
-    description: "Official microsoft/olive-recipes run config for OFA-Sys-chinese-clip-vit-base-patch16 (aitk/openai_clip_ov.json).",
+    description:
+      "Official microsoft/olive-recipes run config for OFA-Sys-chinese-clip-vit-base-patch16 (aitk/openai_clip_ov.json).",
     metadataSource: "folder",
   },
   {
@@ -2253,7 +2545,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-base-patch16/aitk/openai_clip_dml.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch16 (aitk/openai_clip_dml.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch16 (aitk/openai_clip_dml.json).",
     metadataSource: "folder",
   },
   {
@@ -2261,7 +2554,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-base-patch16/aitk/openai_clip_migraphx.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch16 (aitk/openai_clip_migraphx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch16 (aitk/openai_clip_migraphx.json).",
     metadataSource: "folder",
   },
   {
@@ -2269,7 +2563,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-base-patch16/aitk/openai_clip_ov.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch16 (aitk/openai_clip_ov.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch16 (aitk/openai_clip_ov.json).",
     metadataSource: "folder",
   },
   {
@@ -2277,7 +2572,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-base-patch16/aitk/openai_clip_qdq_amd.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch16 (aitk/openai_clip_qdq_amd.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch16 (aitk/openai_clip_qdq_amd.json).",
     metadataSource: "folder",
   },
   {
@@ -2285,7 +2581,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-base-patch16/aitk/openai_clip_qnn_gpu.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch16 (aitk/openai_clip_qnn_gpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch16 (aitk/openai_clip_qnn_gpu.json).",
     metadataSource: "folder",
   },
   {
@@ -2293,7 +2590,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-base-patch16/aitk/openai_clip_qnn.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch16 (aitk/openai_clip_qnn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch16 (aitk/openai_clip_qnn.json).",
     metadataSource: "folder",
   },
   {
@@ -2301,7 +2599,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-base-patch16/aitk/openai_clip_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch16 (aitk/openai_clip_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch16 (aitk/openai_clip_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -2309,7 +2608,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "QNN",
     repoPath: "openai-clip-vit-base-patch16/QNN/config_gpu_fp32.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch16 (QNN/config_gpu_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch16 (QNN/config_gpu_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -2317,7 +2617,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-base-patch32/aitk/openai_clip_dml.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch32 (aitk/openai_clip_dml.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch32 (aitk/openai_clip_dml.json).",
     metadataSource: "folder",
   },
   {
@@ -2325,7 +2626,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-base-patch32/aitk/openai_clip_migraphx.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch32 (aitk/openai_clip_migraphx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch32 (aitk/openai_clip_migraphx.json).",
     metadataSource: "folder",
   },
   {
@@ -2333,7 +2635,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-base-patch32/aitk/openai_clip_ov.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch32 (aitk/openai_clip_ov.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch32 (aitk/openai_clip_ov.json).",
     metadataSource: "folder",
   },
   {
@@ -2341,7 +2644,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-base-patch32/aitk/openai_clip_qdq_amd.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch32 (aitk/openai_clip_qdq_amd.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch32 (aitk/openai_clip_qdq_amd.json).",
     metadataSource: "folder",
   },
   {
@@ -2349,7 +2653,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-base-patch32/aitk/openai_clip_qnn_gpu.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch32 (aitk/openai_clip_qnn_gpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch32 (aitk/openai_clip_qnn_gpu.json).",
     metadataSource: "folder",
   },
   {
@@ -2357,7 +2662,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-base-patch32/aitk/openai_clip_qnn.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch32 (aitk/openai_clip_qnn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch32 (aitk/openai_clip_qnn.json).",
     metadataSource: "folder",
   },
   {
@@ -2365,7 +2671,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-base-patch32/aitk/openai_clip_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch32 (aitk/openai_clip_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch32 (aitk/openai_clip_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -2373,7 +2680,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "QNN",
     repoPath: "openai-clip-vit-base-patch32/QNN/config_gpu_fp32.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch32 (QNN/config_gpu_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-base-patch32 (QNN/config_gpu_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -2381,7 +2689,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-large-patch14/aitk/openai_clip_dml.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-large-patch14 (aitk/openai_clip_dml.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-large-patch14 (aitk/openai_clip_dml.json).",
     metadataSource: "folder",
   },
   {
@@ -2389,7 +2698,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-large-patch14/aitk/openai_clip_migraphx.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-large-patch14 (aitk/openai_clip_migraphx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-large-patch14 (aitk/openai_clip_migraphx.json).",
     metadataSource: "folder",
   },
   {
@@ -2397,7 +2707,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-large-patch14/aitk/openai_clip_ov.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-large-patch14 (aitk/openai_clip_ov.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-large-patch14 (aitk/openai_clip_ov.json).",
     metadataSource: "folder",
   },
   {
@@ -2405,7 +2716,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-large-patch14/aitk/openai_clip_qdq_amd.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-large-patch14 (aitk/openai_clip_qdq_amd.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-large-patch14 (aitk/openai_clip_qdq_amd.json).",
     metadataSource: "folder",
   },
   {
@@ -2413,7 +2725,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-large-patch14/aitk/openai_clip_qnn.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-large-patch14 (aitk/openai_clip_qnn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-large-patch14 (aitk/openai_clip_qnn.json).",
     metadataSource: "folder",
   },
   {
@@ -2421,7 +2734,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "openai-clip-vit-large-patch14/aitk/openai_clip_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for openai-clip-vit-large-patch14 (aitk/openai_clip_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-clip-vit-large-patch14 (aitk/openai_clip_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -2429,7 +2743,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-base.en/cpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-base.en (cpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-base.en (cpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2437,7 +2752,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-base.en/cpu/whisper-base.en_cpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-base.en (cpu/whisper-base.en_cpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-base.en (cpu/whisper-base.en_cpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2445,7 +2761,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-base.en/cuda/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-base.en (cuda/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-base.en (cuda/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2453,7 +2770,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-base.en/cuda/whisper-base.en_cuda_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-base.en (cuda/whisper-base.en_cuda_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-base.en (cuda/whisper-base.en_cuda_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2461,7 +2779,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-base.en/webgpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-base.en (webgpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-base.en (webgpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2469,7 +2788,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-base.en/webgpu/whisper-base.en_webgpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-base.en (webgpu/whisper-base.en_webgpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-base.en (webgpu/whisper-base.en_webgpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2477,7 +2797,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-base/cpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-base (cpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-base (cpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2485,7 +2806,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-base/cpu/whisper-base_cpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-base (cpu/whisper-base_cpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-base (cpu/whisper-base_cpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2493,7 +2815,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-base/cuda/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-base (cuda/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-base (cuda/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2501,7 +2824,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-base/cuda/whisper-base_cuda_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-base (cuda/whisper-base_cuda_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-base (cuda/whisper-base_cuda_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2509,7 +2833,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-base/webgpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-base (webgpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-base (webgpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2517,7 +2842,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-base/webgpu/whisper-base_webgpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-base (webgpu/whisper-base_webgpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-base (webgpu/whisper-base_webgpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2525,7 +2851,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v2/cpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v2 (cpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v2 (cpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2533,7 +2860,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v2/cpu/whisper-large-v2_cpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v2 (cpu/whisper-large-v2_cpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v2 (cpu/whisper-large-v2_cpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2541,7 +2869,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-large-v2/cuda/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v2 (cuda/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v2 (cuda/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2549,7 +2878,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-large-v2/cuda/whisper-large-v2_cuda_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v2 (cuda/whisper-large-v2_cuda_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v2 (cuda/whisper-large-v2_cuda_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2557,7 +2887,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v2/webgpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v2 (webgpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v2 (webgpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2565,7 +2896,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v2/webgpu/whisper-large-v2_webgpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v2 (webgpu/whisper-large-v2_webgpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v2 (webgpu/whisper-large-v2_webgpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2573,7 +2905,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "DirectML",
     repoPath: "openai-whisper-large-v3-turbo/aitk/audio_processor_config_default.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/audio_processor_config_default.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/audio_processor_config_default.json).",
     metadataSource: "folder",
   },
   {
@@ -2581,7 +2914,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "DirectML",
     repoPath: "openai-whisper-large-v3-turbo/aitk/ov_npu_workflow.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/ov_npu_workflow.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/ov_npu_workflow.json).",
     metadataSource: "folder",
   },
   {
@@ -2589,7 +2923,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "DirectML",
     repoPath: "openai-whisper-large-v3-turbo/aitk/ov_workflow.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/ov_workflow.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/ov_workflow.json).",
     metadataSource: "folder",
   },
   {
@@ -2597,7 +2932,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "DirectML",
     repoPath: "openai-whisper-large-v3-turbo/aitk/qnn_workflow.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/qnn_workflow.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/qnn_workflow.json).",
     metadataSource: "folder",
   },
   {
@@ -2605,7 +2941,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "DirectML",
     repoPath: "openai-whisper-large-v3-turbo/aitk/whisper_large_v3_turbo_decoder_fp32.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/whisper_large_v3_turbo_decoder_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/whisper_large_v3_turbo_decoder_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -2613,7 +2950,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "DirectML",
     repoPath: "openai-whisper-large-v3-turbo/aitk/whisper_large_v3_turbo_decoder_qdq.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/whisper_large_v3_turbo_decoder_qdq.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/whisper_large_v3_turbo_decoder_qdq.json).",
     metadataSource: "folder",
   },
   {
@@ -2621,7 +2959,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "DirectML",
     repoPath: "openai-whisper-large-v3-turbo/aitk/whisper_large_v3_turbo_default_ov_npu.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/whisper_large_v3_turbo_default_ov_npu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/whisper_large_v3_turbo_default_ov_npu.json).",
     metadataSource: "folder",
   },
   {
@@ -2629,7 +2968,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "DirectML",
     repoPath: "openai-whisper-large-v3-turbo/aitk/whisper_large_v3_turbo_encapsulate.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/whisper_large_v3_turbo_encapsulate.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/whisper_large_v3_turbo_encapsulate.json).",
     metadataSource: "folder",
   },
   {
@@ -2637,7 +2977,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "DirectML",
     repoPath: "openai-whisper-large-v3-turbo/aitk/whisper_large_v3_turbo_encoder_fp32.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/whisper_large_v3_turbo_encoder_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/whisper_large_v3_turbo_encoder_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -2645,7 +2986,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "DirectML",
     repoPath: "openai-whisper-large-v3-turbo/aitk/whisper_large_v3_turbo_encoder_qdq.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/whisper_large_v3_turbo_encoder_qdq.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (aitk/whisper_large_v3_turbo_encoder_qdq.json).",
     metadataSource: "folder",
   },
   {
@@ -2653,7 +2995,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v3-turbo/cpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (cpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (cpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2661,7 +3004,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v3-turbo/cpu/whisper-large-v3-turbo_cpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (cpu/whisper-large-v3-turbo_cpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (cpu/whisper-large-v3-turbo_cpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2669,7 +3013,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-large-v3-turbo/cuda/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (cuda/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (cuda/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2677,7 +3022,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-large-v3-turbo/cuda/whisper-large-v3-turbo_cuda_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (cuda/whisper-large-v3-turbo_cuda_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (cuda/whisper-large-v3-turbo_cuda_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2685,7 +3031,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v3-turbo/olive/whisper_large_v3_turbo_decoder_fp32.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (olive/whisper_large_v3_turbo_decoder_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (olive/whisper_large_v3_turbo_decoder_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -2693,7 +3040,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v3-turbo/olive/whisper_large_v3_turbo_decoder_qdq_ctx.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (olive/whisper_large_v3_turbo_decoder_qdq_ctx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (olive/whisper_large_v3_turbo_decoder_qdq_ctx.json).",
     metadataSource: "folder",
   },
   {
@@ -2701,7 +3049,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v3-turbo/olive/whisper_large_v3_turbo_decoder_qdq.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (olive/whisper_large_v3_turbo_decoder_qdq.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (olive/whisper_large_v3_turbo_decoder_qdq.json).",
     metadataSource: "folder",
   },
   {
@@ -2709,7 +3058,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v3-turbo/olive/whisper_large_v3_turbo_encoder_fp32.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (olive/whisper_large_v3_turbo_encoder_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (olive/whisper_large_v3_turbo_encoder_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -2717,7 +3067,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v3-turbo/olive/whisper_large_v3_turbo_encoder_qdq_ctx.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (olive/whisper_large_v3_turbo_encoder_qdq_ctx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (olive/whisper_large_v3_turbo_encoder_qdq_ctx.json).",
     metadataSource: "folder",
   },
   {
@@ -2725,7 +3076,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v3-turbo/olive/whisper_large_v3_turbo_encoder_qdq.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (olive/whisper_large_v3_turbo_encoder_qdq.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (olive/whisper_large_v3_turbo_encoder_qdq.json).",
     metadataSource: "folder",
   },
   {
@@ -2733,7 +3085,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "OpenVINO",
     repoPath: "openai-whisper-large-v3-turbo/OpenVINO/audio_processor_config_default.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (OpenVINO/audio_processor_config_default.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (OpenVINO/audio_processor_config_default.json).",
     metadataSource: "folder",
   },
   {
@@ -2741,7 +3094,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "OpenVINO",
     repoPath: "openai-whisper-large-v3-turbo/OpenVINO/whisper_large_v3_turbo_default_ov_npu.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (OpenVINO/whisper_large_v3_turbo_default_ov_npu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (OpenVINO/whisper_large_v3_turbo_default_ov_npu.json).",
     metadataSource: "folder",
   },
   {
@@ -2749,7 +3103,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "OpenVINO",
     repoPath: "openai-whisper-large-v3-turbo/OpenVINO/whisper_large_v3_turbo_encapsulate.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (OpenVINO/whisper_large_v3_turbo_encapsulate.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (OpenVINO/whisper_large_v3_turbo_encapsulate.json).",
     metadataSource: "folder",
   },
   {
@@ -2757,7 +3112,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v3-turbo/webgpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (webgpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (webgpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2765,7 +3121,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v3-turbo/webgpu/whisper-large-v3-turbo_webgpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (webgpu/whisper-large-v3-turbo_webgpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3-turbo (webgpu/whisper-large-v3-turbo_webgpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2773,7 +3130,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v3/cpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3 (cpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3 (cpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2781,7 +3139,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v3/cpu/whisper-large-v3_cpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3 (cpu/whisper-large-v3_cpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3 (cpu/whisper-large-v3_cpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2789,7 +3148,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-large-v3/cuda/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3 (cuda/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3 (cuda/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2797,7 +3157,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-large-v3/cuda/whisper-large-v3_cuda_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3 (cuda/whisper-large-v3_cuda_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3 (cuda/whisper-large-v3_cuda_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2805,7 +3166,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v3/webgpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3 (webgpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3 (webgpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2813,7 +3175,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large-v3/webgpu/whisper-large-v3_webgpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large-v3 (webgpu/whisper-large-v3_webgpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large-v3 (webgpu/whisper-large-v3_webgpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2821,7 +3184,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large/cpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large (cpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large (cpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2829,7 +3193,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large/cpu/whisper-large_cpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large (cpu/whisper-large_cpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large (cpu/whisper-large_cpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2837,7 +3202,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-large/cuda/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large (cuda/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large (cuda/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2845,7 +3211,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-large/cuda/whisper-large_cuda_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large (cuda/whisper-large_cuda_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large (cuda/whisper-large_cuda_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2853,7 +3220,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large/webgpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large (webgpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large (webgpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2861,7 +3229,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-large/webgpu/whisper-large_webgpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-large (webgpu/whisper-large_webgpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-large (webgpu/whisper-large_webgpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2869,7 +3238,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-medium.en/cpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-medium.en (cpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-medium.en (cpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2877,7 +3247,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-medium.en/cpu/whisper-medium.en_cpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-medium.en (cpu/whisper-medium.en_cpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-medium.en (cpu/whisper-medium.en_cpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2885,7 +3256,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-medium.en/cuda/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-medium.en (cuda/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-medium.en (cuda/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2893,7 +3265,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-medium.en/cuda/whisper-medium.en_cuda_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-medium.en (cuda/whisper-medium.en_cuda_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-medium.en (cuda/whisper-medium.en_cuda_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2901,7 +3274,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-medium.en/webgpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-medium.en (webgpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-medium.en (webgpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2909,7 +3283,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-medium.en/webgpu/whisper-medium.en_webgpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-medium.en (webgpu/whisper-medium.en_webgpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-medium.en (webgpu/whisper-medium.en_webgpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2917,7 +3292,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-medium/cpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-medium (cpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-medium (cpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2925,7 +3301,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-medium/cpu/whisper-medium_cpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-medium (cpu/whisper-medium_cpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-medium (cpu/whisper-medium_cpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2933,7 +3310,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-medium/cuda/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-medium (cuda/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-medium (cuda/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2941,7 +3319,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-medium/cuda/whisper-medium_cuda_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-medium (cuda/whisper-medium_cuda_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-medium (cuda/whisper-medium_cuda_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2949,7 +3328,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-medium/webgpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-medium (webgpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-medium (webgpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2957,7 +3337,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-medium/webgpu/whisper-medium_webgpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-medium (webgpu/whisper-medium_webgpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-medium (webgpu/whisper-medium_webgpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2965,7 +3346,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-small.en/cpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-small.en (cpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-small.en (cpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2973,7 +3355,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-small.en/cpu/whisper-small.en_cpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-small.en (cpu/whisper-small.en_cpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-small.en (cpu/whisper-small.en_cpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2981,7 +3364,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-small.en/cuda/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-small.en (cuda/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-small.en (cuda/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -2989,7 +3373,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-small.en/cuda/whisper-small.en_cuda_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-small.en (cuda/whisper-small.en_cuda_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-small.en (cuda/whisper-small.en_cuda_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -2997,7 +3382,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-small.en/webgpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-small.en (webgpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-small.en (webgpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -3005,7 +3391,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-small.en/webgpu/whisper-small.en_webgpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-small.en (webgpu/whisper-small.en_webgpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-small.en (webgpu/whisper-small.en_webgpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -3013,7 +3400,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-small/cpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-small (cpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-small (cpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -3021,7 +3409,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-small/cpu/whisper-small_cpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-small (cpu/whisper-small_cpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-small (cpu/whisper-small_cpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -3029,7 +3418,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-small/cuda/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-small (cuda/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-small (cuda/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -3037,7 +3427,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-small/cuda/whisper-small_cuda_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-small (cuda/whisper-small_cuda_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-small (cuda/whisper-small_cuda_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -3045,7 +3436,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-small/webgpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-small (webgpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-small (webgpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -3053,7 +3445,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-small/webgpu/whisper-small_webgpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-small (webgpu/whisper-small_webgpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-small (webgpu/whisper-small_webgpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -3061,7 +3454,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-tiny.en/cpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-tiny.en (cpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-tiny.en (cpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -3069,7 +3463,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-tiny.en/cpu/whisper-tiny.en_cpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-tiny.en (cpu/whisper-tiny.en_cpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-tiny.en (cpu/whisper-tiny.en_cpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -3077,7 +3472,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-tiny.en/cuda/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-tiny.en (cuda/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-tiny.en (cuda/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -3085,7 +3481,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-tiny.en/cuda/whisper-tiny.en_cuda_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-tiny.en (cuda/whisper-tiny.en_cuda_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-tiny.en (cuda/whisper-tiny.en_cuda_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -3093,7 +3490,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-tiny.en/webgpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-tiny.en (webgpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-tiny.en (webgpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -3101,7 +3499,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-tiny.en/webgpu/whisper-tiny.en_webgpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-tiny.en (webgpu/whisper-tiny.en_webgpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-tiny.en (webgpu/whisper-tiny.en_webgpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -3109,7 +3508,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-tiny/cpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-tiny (cpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-tiny (cpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -3117,7 +3517,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-tiny/cpu/whisper-tiny_cpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-tiny (cpu/whisper-tiny_cpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-tiny (cpu/whisper-tiny_cpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -3125,7 +3526,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-tiny/cuda/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-tiny (cuda/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-tiny (cuda/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -3133,7 +3535,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CUDA",
     repoPath: "openai-whisper-tiny/cuda/whisper-tiny_cuda_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-tiny (cuda/whisper-tiny_cuda_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-tiny (cuda/whisper-tiny_cuda_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -3141,7 +3544,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-tiny/webgpu/whisper_eval_wer.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-tiny (webgpu/whisper_eval_wer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-tiny (webgpu/whisper_eval_wer.json).",
     metadataSource: "folder",
   },
   {
@@ -3149,7 +3553,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Whisper",
     device: "CPU",
     repoPath: "openai-whisper-tiny/webgpu/whisper-tiny_webgpu_int8.json",
-    description: "Official microsoft/olive-recipes run config for openai-whisper-tiny (webgpu/whisper-tiny_webgpu_int8.json).",
+    description:
+      "Official microsoft/olive-recipes run config for openai-whisper-tiny (webgpu/whisper-tiny_webgpu_int8.json).",
     metadataSource: "folder",
   },
   {
@@ -3157,7 +3562,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "OpenVINO",
     repoPath: "Qwen-Qwen1.5-7B-Chat/VitisAI/Qwen1.5-7B-Chat_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen1.5-7B-Chat (VitisAI/Qwen1.5-7B-Chat_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen1.5-7B-Chat (VitisAI/Qwen1.5-7B-Chat_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -3165,7 +3571,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "OpenVINO",
     repoPath: "Qwen-Qwen2-1.5B/VitisAI/Qwen2-1.5B_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2-1.5B (VitisAI/Qwen2-1.5B_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2-1.5B (VitisAI/Qwen2-1.5B_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -3173,7 +3580,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "OpenVINO",
     repoPath: "Qwen-Qwen2-7B/VitisAI/Qwen2-7B_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2-7B (VitisAI/Qwen2-7B_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2-7B (VitisAI/Qwen2-7B_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -3181,7 +3589,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-0.5B-Instruct/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B-Instruct (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B-Instruct (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -3189,7 +3598,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-0.5B-Instruct/aitk/qwen2_5_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B-Instruct (aitk/qwen2_5_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B-Instruct (aitk/qwen2_5_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3197,7 +3607,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-0.5B-Instruct/aitk/qwen2_5_ov_npu_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3205,7 +3616,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-0.5B-Instruct/aitk/qwen2_5_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B-Instruct (aitk/qwen2_5_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B-Instruct (aitk/qwen2_5_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -3213,7 +3625,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-0.5B-Instruct/aitk/qwen2_5_vitis_ai_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B-Instruct (aitk/qwen2_5_vitis_ai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B-Instruct (aitk/qwen2_5_vitis_ai_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3221,7 +3634,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "TensorRT",
     repoPath: "Qwen-Qwen2.5-0.5B-Instruct/NvTensorRtRtx/Qwen2.5-0.5B-Instruct_model_builder_fp16.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B-Instruct (NvTensorRtRtx/Qwen2.5-0.5B-Instruct_model_builder_fp16.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B-Instruct (NvTensorRtRtx/Qwen2.5-0.5B-Instruct_model_builder_fp16.json).",
     metadataSource: "folder",
   },
   {
@@ -3229,7 +3643,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "QNN",
     repoPath: "Qwen-Qwen2.5-0.5B-Instruct/QNN/config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B-Instruct (QNN/config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B-Instruct (QNN/config.json).",
     metadataSource: "folder",
   },
   {
@@ -3237,7 +3652,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "OpenVINO",
     repoPath: "Qwen-Qwen2.5-0.5B-Instruct/VitisAI/Qwen2.5-0.5B-Instruct_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B-Instruct (VitisAI/Qwen2.5-0.5B-Instruct_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B-Instruct (VitisAI/Qwen2.5-0.5B-Instruct_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -3245,7 +3661,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-0.5B/aitk/qwen2_5_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B (aitk/qwen2_5_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-0.5B (aitk/qwen2_5_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3253,7 +3670,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-1.5B-Instruct/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -3261,7 +3679,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-1.5B-Instruct/aitk/qwen2_5_dml_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (aitk/qwen2_5_dml_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (aitk/qwen2_5_dml_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3269,7 +3688,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-1.5B-Instruct/aitk/qwen2_5_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (aitk/qwen2_5_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (aitk/qwen2_5_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3277,7 +3697,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-1.5B-Instruct/aitk/qwen2_5_ov_gpu_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (aitk/qwen2_5_ov_gpu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (aitk/qwen2_5_ov_gpu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3285,7 +3706,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-1.5B-Instruct/aitk/qwen2_5_qnn_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (aitk/qwen2_5_qnn_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (aitk/qwen2_5_qnn_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3293,7 +3715,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-1.5B-Instruct/aitk/qwen2_5_qnn_gpu_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (aitk/qwen2_5_qnn_gpu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (aitk/qwen2_5_qnn_gpu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3301,7 +3724,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-1.5B-Instruct/aitk/qwen2_5_trtrtx_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (aitk/qwen2_5_trtrtx_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (aitk/qwen2_5_trtrtx_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3309,7 +3733,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-1.5B-Instruct/aitk/qwen2_5_vitis_ai_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (aitk/qwen2_5_vitis_ai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (aitk/qwen2_5_vitis_ai_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3317,7 +3742,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "TensorRT",
     repoPath: "Qwen-Qwen2.5-1.5B-Instruct/NvTensorRtRtx/Qwen2.5-1.5B-Instruct_model_builder_fp16.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (NvTensorRtRtx/Qwen2.5-1.5B-Instruct_model_builder_fp16.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (NvTensorRtRtx/Qwen2.5-1.5B-Instruct_model_builder_fp16.json).",
     metadataSource: "folder",
   },
   {
@@ -3325,7 +3751,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen2.5-1.5B-Instruct/olive/mixed.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (olive/mixed.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (olive/mixed.json).",
     metadataSource: "folder",
   },
   {
@@ -3333,7 +3760,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "QNN",
     repoPath: "Qwen-Qwen2.5-1.5B-Instruct/QNN/config_gpu_ctxbin.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (QNN/config_gpu_ctxbin.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (QNN/config_gpu_ctxbin.json).",
     metadataSource: "folder",
   },
   {
@@ -3341,7 +3769,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "QNN",
     repoPath: "Qwen-Qwen2.5-1.5B-Instruct/QNN/config_gpu.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (QNN/config_gpu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (QNN/config_gpu.json).",
     metadataSource: "folder",
   },
   {
@@ -3349,7 +3778,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "QNN",
     repoPath: "Qwen-Qwen2.5-1.5B-Instruct/QNN/config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (QNN/config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (QNN/config.json).",
     metadataSource: "folder",
   },
   {
@@ -3357,7 +3787,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "OpenVINO",
     repoPath: "Qwen-Qwen2.5-1.5B-Instruct/VitisAI/Qwen2.5-1.5B-Instruct_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (VitisAI/Qwen2.5-1.5B-Instruct_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-1.5B-Instruct (VitisAI/Qwen2.5-1.5B-Instruct_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -3365,7 +3796,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-14B-Instruct/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-14B-Instruct (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-14B-Instruct (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -3373,7 +3805,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-14B-Instruct/aitk/qwen2_5_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-14B-Instruct (aitk/qwen2_5_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-14B-Instruct (aitk/qwen2_5_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3381,7 +3814,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-14B-Instruct/aitk/qwen2_5_ov_npu_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-14B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-14B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3389,7 +3823,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-14B-Instruct/aitk/qwen2_5_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-14B-Instruct (aitk/qwen2_5_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-14B-Instruct (aitk/qwen2_5_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -3397,7 +3832,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "TensorRT",
     repoPath: "Qwen-Qwen2.5-14B-Instruct/NvTensorRtRtx/Qwen2.5-14B-Instruct_model_builder_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-14B-Instruct (NvTensorRtRtx/Qwen2.5-14B-Instruct_model_builder_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-14B-Instruct (NvTensorRtRtx/Qwen2.5-14B-Instruct_model_builder_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3405,7 +3841,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-3B-Instruct/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-3B-Instruct (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-3B-Instruct (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -3413,7 +3850,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-3B-Instruct/aitk/qwen2_5_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-3B-Instruct (aitk/qwen2_5_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-3B-Instruct (aitk/qwen2_5_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3421,7 +3859,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-3B-Instruct/aitk/qwen2_5_ov_npu_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-3B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-3B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3429,7 +3868,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "OpenVINO",
     repoPath: "Qwen-Qwen2.5-3B-Instruct/VitisAI/Qwen2.5-3B-Instruct_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-3B-Instruct (VitisAI/Qwen2.5-3B-Instruct_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-3B-Instruct (VitisAI/Qwen2.5-3B-Instruct_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -3437,7 +3877,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "OpenVINO",
     repoPath: "Qwen-Qwen2.5-3B/VitisAI/Qwen2.5-3B_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-3B (VitisAI/Qwen2.5-3B_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-3B (VitisAI/Qwen2.5-3B_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -3445,7 +3886,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-7B-Instruct/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -3453,7 +3895,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-7B-Instruct/aitk/qwen2_5_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (aitk/qwen2_5_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (aitk/qwen2_5_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3461,7 +3904,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-7B-Instruct/aitk/qwen2_5_ov_npu_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3469,7 +3913,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-7B-Instruct/aitk/qwen2_5_qnn_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (aitk/qwen2_5_qnn_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (aitk/qwen2_5_qnn_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3477,7 +3922,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-7B-Instruct/aitk/qwen2_5_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (aitk/qwen2_5_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (aitk/qwen2_5_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -3485,7 +3931,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-7B-Instruct/aitk/qwen2_5_vitis_ai_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (aitk/qwen2_5_vitis_ai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (aitk/qwen2_5_vitis_ai_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3493,7 +3940,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "TensorRT",
     repoPath: "Qwen-Qwen2.5-7B-Instruct/NvTensorRtRtx/Qwen2.5-7B-Instruct_model_builder_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (NvTensorRtRtx/Qwen2.5-7B-Instruct_model_builder_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (NvTensorRtRtx/Qwen2.5-7B-Instruct_model_builder_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3501,7 +3949,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "QNN",
     repoPath: "Qwen-Qwen2.5-7B-Instruct/QNN/config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (QNN/config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (QNN/config.json).",
     metadataSource: "folder",
   },
   {
@@ -3509,7 +3958,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "OpenVINO",
     repoPath: "Qwen-Qwen2.5-7B-Instruct/VitisAI/Qwen2.5-7B-Instruct_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (VitisAI/Qwen2.5-7B-Instruct_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-7B-Instruct (VitisAI/Qwen2.5-7B-Instruct_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -3517,7 +3967,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-0.5B-Instruct/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-0.5B-Instruct (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-0.5B-Instruct (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -3525,7 +3976,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-0.5B-Instruct/aitk/qwen2_5_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-0.5B-Instruct (aitk/qwen2_5_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-0.5B-Instruct (aitk/qwen2_5_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3533,7 +3985,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-0.5B-Instruct/aitk/qwen2_5_ov_npu_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-0.5B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-0.5B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3541,7 +3994,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-0.5B-Instruct/aitk/qwen2_5_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-0.5B-Instruct (aitk/qwen2_5_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-0.5B-Instruct (aitk/qwen2_5_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -3549,15 +4003,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-0.5B-Instruct/aitk/qwen2_5_vitis_ai_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-0.5B-Instruct (aitk/qwen2_5_vitis_ai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-0.5B-Instruct (aitk/qwen2_5_vitis_ai_config.json).",
     metadataSource: "folder",
   },
   {
     name: "Qwen-Qwen2.5-Coder-0.5B-Instruct · NvTensorRtRtx · Qwen2.5-Coder-0.5B-Instruct_model_builder_fp16",
     architecture: "Qwen",
     device: "TensorRT",
-    repoPath: "Qwen-Qwen2.5-Coder-0.5B-Instruct/NvTensorRtRtx/Qwen2.5-Coder-0.5B-Instruct_model_builder_fp16.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-0.5B-Instruct (NvTensorRtRtx/Qwen2.5-Coder-0.5B-Instruct_model_builder_fp16.json).",
+    repoPath:
+      "Qwen-Qwen2.5-Coder-0.5B-Instruct/NvTensorRtRtx/Qwen2.5-Coder-0.5B-Instruct_model_builder_fp16.json",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-0.5B-Instruct (NvTensorRtRtx/Qwen2.5-Coder-0.5B-Instruct_model_builder_fp16.json).",
     metadataSource: "folder",
   },
   {
@@ -3565,7 +4022,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "QNN",
     repoPath: "Qwen-Qwen2.5-Coder-0.5B-Instruct/QNN/config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-0.5B-Instruct (QNN/config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-0.5B-Instruct (QNN/config.json).",
     metadataSource: "folder",
   },
   {
@@ -3573,7 +4031,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "OpenVINO",
     repoPath: "Qwen-Qwen2.5-Coder-0.5B-Instruct/VitisAI/Qwen2.5-Coder-0.5B-Instruct_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-0.5B-Instruct (VitisAI/Qwen2.5-Coder-0.5B-Instruct_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-0.5B-Instruct (VitisAI/Qwen2.5-Coder-0.5B-Instruct_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -3581,7 +4040,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-1.5B-Instruct/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-1.5B-Instruct (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-1.5B-Instruct (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -3589,7 +4049,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-1.5B-Instruct/aitk/qwen2_5_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-1.5B-Instruct (aitk/qwen2_5_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-1.5B-Instruct (aitk/qwen2_5_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3597,7 +4058,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-1.5B-Instruct/aitk/qwen2_5_ov_npu_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-1.5B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-1.5B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3605,7 +4067,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-1.5B-Instruct/aitk/qwen2_5_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-1.5B-Instruct (aitk/qwen2_5_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-1.5B-Instruct (aitk/qwen2_5_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -3613,15 +4076,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-1.5B-Instruct/aitk/qwen2_5_vitis_ai_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-1.5B-Instruct (aitk/qwen2_5_vitis_ai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-1.5B-Instruct (aitk/qwen2_5_vitis_ai_config.json).",
     metadataSource: "folder",
   },
   {
     name: "Qwen-Qwen2.5-Coder-1.5B-Instruct · NvTensorRtRtx · Qwen2.5-Coder-1.5B-Instruct_model_builder_fp16",
     architecture: "Qwen",
     device: "TensorRT",
-    repoPath: "Qwen-Qwen2.5-Coder-1.5B-Instruct/NvTensorRtRtx/Qwen2.5-Coder-1.5B-Instruct_model_builder_fp16.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-1.5B-Instruct (NvTensorRtRtx/Qwen2.5-Coder-1.5B-Instruct_model_builder_fp16.json).",
+    repoPath:
+      "Qwen-Qwen2.5-Coder-1.5B-Instruct/NvTensorRtRtx/Qwen2.5-Coder-1.5B-Instruct_model_builder_fp16.json",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-1.5B-Instruct (NvTensorRtRtx/Qwen2.5-Coder-1.5B-Instruct_model_builder_fp16.json).",
     metadataSource: "folder",
   },
   {
@@ -3629,7 +4095,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "QNN",
     repoPath: "Qwen-Qwen2.5-Coder-1.5B-Instruct/QNN/config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-1.5B-Instruct (QNN/config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-1.5B-Instruct (QNN/config.json).",
     metadataSource: "folder",
   },
   {
@@ -3637,7 +4104,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "OpenVINO",
     repoPath: "Qwen-Qwen2.5-Coder-1.5B-Instruct/VitisAI/Qwen2.5-Coder-1.5B-Instruct_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-1.5B-Instruct (VitisAI/Qwen2.5-Coder-1.5B-Instruct_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-1.5B-Instruct (VitisAI/Qwen2.5-Coder-1.5B-Instruct_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -3645,7 +4113,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-14B-Instruct/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-14B-Instruct (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-14B-Instruct (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -3653,7 +4122,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-14B-Instruct/aitk/qwen2_5_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-14B-Instruct (aitk/qwen2_5_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-14B-Instruct (aitk/qwen2_5_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3661,7 +4131,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-14B-Instruct/aitk/qwen2_5_ov_npu_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-14B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-14B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3669,15 +4140,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-14B-Instruct/aitk/qwen2_5_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-14B-Instruct (aitk/qwen2_5_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-14B-Instruct (aitk/qwen2_5_trtrtx.json).",
     metadataSource: "folder",
   },
   {
     name: "Qwen-Qwen2.5-Coder-14B-Instruct · NvTensorRtRtx · Qwen2.5-Coder-14B-Instruct_model_builder_int4",
     architecture: "Qwen",
     device: "TensorRT",
-    repoPath: "Qwen-Qwen2.5-Coder-14B-Instruct/NvTensorRtRtx/Qwen2.5-Coder-14B-Instruct_model_builder_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-14B-Instruct (NvTensorRtRtx/Qwen2.5-Coder-14B-Instruct_model_builder_int4.json).",
+    repoPath:
+      "Qwen-Qwen2.5-Coder-14B-Instruct/NvTensorRtRtx/Qwen2.5-Coder-14B-Instruct_model_builder_int4.json",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-14B-Instruct (NvTensorRtRtx/Qwen2.5-Coder-14B-Instruct_model_builder_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3685,7 +4159,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-3B-Instruct/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-3B-Instruct (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-3B-Instruct (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -3693,7 +4168,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-3B-Instruct/aitk/qwen2_5_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-3B-Instruct (aitk/qwen2_5_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-3B-Instruct (aitk/qwen2_5_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3701,7 +4177,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-3B-Instruct/aitk/qwen2_5_ov_npu_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-3B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-3B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3709,7 +4186,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-7B-Instruct/aitk/inference_model.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-7B-Instruct (aitk/inference_model.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-7B-Instruct (aitk/inference_model.json).",
     metadataSource: "folder",
   },
   {
@@ -3717,7 +4195,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-7B-Instruct/aitk/qwen2_5_ov_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-7B-Instruct (aitk/qwen2_5_ov_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-7B-Instruct (aitk/qwen2_5_ov_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3725,7 +4204,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-7B-Instruct/aitk/qwen2_5_ov_npu_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-7B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-7B-Instruct (aitk/qwen2_5_ov_npu_config.json).",
     metadataSource: "folder",
   },
   {
@@ -3733,7 +4213,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-7B-Instruct/aitk/qwen2_5_trtrtx.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-7B-Instruct (aitk/qwen2_5_trtrtx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-7B-Instruct (aitk/qwen2_5_trtrtx.json).",
     metadataSource: "folder",
   },
   {
@@ -3741,15 +4222,18 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "DirectML",
     repoPath: "Qwen-Qwen2.5-Coder-7B-Instruct/aitk/qwen2_5_vitis_ai_config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-7B-Instruct (aitk/qwen2_5_vitis_ai_config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-7B-Instruct (aitk/qwen2_5_vitis_ai_config.json).",
     metadataSource: "folder",
   },
   {
     name: "Qwen-Qwen2.5-Coder-7B-Instruct · NvTensorRtRtx · Qwen2.5-Coder-7B-Instruct_model_builder_int4",
     architecture: "Qwen",
     device: "TensorRT",
-    repoPath: "Qwen-Qwen2.5-Coder-7B-Instruct/NvTensorRtRtx/Qwen2.5-Coder-7B-Instruct_model_builder_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-7B-Instruct (NvTensorRtRtx/Qwen2.5-Coder-7B-Instruct_model_builder_int4.json).",
+    repoPath:
+      "Qwen-Qwen2.5-Coder-7B-Instruct/NvTensorRtRtx/Qwen2.5-Coder-7B-Instruct_model_builder_int4.json",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-7B-Instruct (NvTensorRtRtx/Qwen2.5-Coder-7B-Instruct_model_builder_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3757,7 +4241,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "QNN",
     repoPath: "Qwen-Qwen2.5-Coder-7B-Instruct/QNN/config.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-7B-Instruct (QNN/config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-7B-Instruct (QNN/config.json).",
     metadataSource: "folder",
   },
   {
@@ -3765,7 +4250,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "OpenVINO",
     repoPath: "Qwen-Qwen2.5-Coder-7B-Instruct/VitisAI/Qwen2.5-Coder-7B-Instruct_quark_vitisai_llm.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-7B-Instruct (VitisAI/Qwen2.5-Coder-7B-Instruct_quark_vitisai_llm.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen2.5-Coder-7B-Instruct (VitisAI/Qwen2.5-Coder-7B-Instruct_quark_vitisai_llm.json).",
     metadataSource: "folder",
   },
   {
@@ -3773,7 +4259,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-0.6B/cpu/Qwen-Qwen3-0.6B_cpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-0.6B (cpu/Qwen-Qwen3-0.6B_cpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-0.6B (cpu/Qwen-Qwen3-0.6B_cpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3781,7 +4268,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CUDA",
     repoPath: "Qwen-Qwen3-0.6B/cuda/Qwen-Qwen3-0.6B_cuda_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-0.6B (cuda/Qwen-Qwen3-0.6B_cuda_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-0.6B (cuda/Qwen-Qwen3-0.6B_cuda_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3789,7 +4277,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-0.6B/webgpu/Qwen-Qwen3-0.6B_webgpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-0.6B (webgpu/Qwen-Qwen3-0.6B_webgpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-0.6B (webgpu/Qwen-Qwen3-0.6B_webgpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3797,7 +4286,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-1.7B/cpu/Qwen-Qwen3-1.7B_cpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-1.7B (cpu/Qwen-Qwen3-1.7B_cpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-1.7B (cpu/Qwen-Qwen3-1.7B_cpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3805,7 +4295,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CUDA",
     repoPath: "Qwen-Qwen3-1.7B/cuda/Qwen-Qwen3-1.7B_cuda_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-1.7B (cuda/Qwen-Qwen3-1.7B_cuda_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-1.7B (cuda/Qwen-Qwen3-1.7B_cuda_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3813,7 +4304,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-1.7B/webgpu/Qwen-Qwen3-1.7B_webgpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-1.7B (webgpu/Qwen-Qwen3-1.7B_webgpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-1.7B (webgpu/Qwen-Qwen3-1.7B_webgpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3821,7 +4313,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-14B/cpu/Qwen-Qwen3-14B_cpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-14B (cpu/Qwen-Qwen3-14B_cpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-14B (cpu/Qwen-Qwen3-14B_cpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3829,7 +4322,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CUDA",
     repoPath: "Qwen-Qwen3-14B/cuda/Qwen-Qwen3-14B_cuda_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-14B (cuda/Qwen-Qwen3-14B_cuda_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-14B (cuda/Qwen-Qwen3-14B_cuda_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3837,7 +4331,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-14B/webgpu/Qwen-Qwen3-14B_webgpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-14B (webgpu/Qwen-Qwen3-14B_webgpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-14B (webgpu/Qwen-Qwen3-14B_webgpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3845,7 +4340,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-4B/cpu/Qwen-Qwen3-4B_cpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-4B (cpu/Qwen-Qwen3-4B_cpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-4B (cpu/Qwen-Qwen3-4B_cpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3853,7 +4349,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CUDA",
     repoPath: "Qwen-Qwen3-4B/cuda/Qwen-Qwen3-4B_cuda_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-4B (cuda/Qwen-Qwen3-4B_cuda_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-4B (cuda/Qwen-Qwen3-4B_cuda_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3861,7 +4358,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-4B/webgpu/Qwen-Qwen3-4B_webgpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-4B (webgpu/Qwen-Qwen3-4B_webgpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-4B (webgpu/Qwen-Qwen3-4B_webgpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3869,7 +4367,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-8B/cpu/Qwen-Qwen3-8B_cpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-8B (cpu/Qwen-Qwen3-8B_cpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-8B (cpu/Qwen-Qwen3-8B_cpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3877,7 +4376,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CUDA",
     repoPath: "Qwen-Qwen3-8B/cuda/Qwen-Qwen3-8B_cuda_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-8B (cuda/Qwen-Qwen3-8B_cuda_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-8B (cuda/Qwen-Qwen3-8B_cuda_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3885,7 +4385,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-8B/webgpu/Qwen-Qwen3-8B_webgpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-8B (webgpu/Qwen-Qwen3-8B_webgpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-8B (webgpu/Qwen-Qwen3-8B_webgpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3893,7 +4394,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-0.6B/baseline/Qwen-Qwen3-Embedding-0.6B_pytorch_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (baseline/Qwen-Qwen3-Embedding-0.6B_pytorch_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (baseline/Qwen-Qwen3-Embedding-0.6B_pytorch_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -3901,7 +4403,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-0.6B/cpu/Qwen-Qwen3-Embedding-0.6B_cpu_fp32_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (cpu/Qwen-Qwen3-Embedding-0.6B_cpu_fp32_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (cpu/Qwen-Qwen3-Embedding-0.6B_cpu_fp32_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -3909,7 +4412,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-0.6B/cpu/Qwen-Qwen3-Embedding-0.6B_cpu_fp32.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (cpu/Qwen-Qwen3-Embedding-0.6B_cpu_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (cpu/Qwen-Qwen3-Embedding-0.6B_cpu_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -3917,7 +4421,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-0.6B/cpu/Qwen-Qwen3-Embedding-0.6B_cpu_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (cpu/Qwen-Qwen3-Embedding-0.6B_cpu_int4_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (cpu/Qwen-Qwen3-Embedding-0.6B_cpu_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -3925,7 +4430,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-0.6B/cpu/Qwen-Qwen3-Embedding-0.6B_cpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (cpu/Qwen-Qwen3-Embedding-0.6B_cpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (cpu/Qwen-Qwen3-Embedding-0.6B_cpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3933,7 +4439,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CUDA",
     repoPath: "Qwen-Qwen3-Embedding-0.6B/cuda/Qwen-Qwen3-Embedding-0.6B_cuda_fp16_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (cuda/Qwen-Qwen3-Embedding-0.6B_cuda_fp16_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (cuda/Qwen-Qwen3-Embedding-0.6B_cuda_fp16_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -3941,7 +4448,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CUDA",
     repoPath: "Qwen-Qwen3-Embedding-0.6B/cuda/Qwen-Qwen3-Embedding-0.6B_cuda_fp16.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (cuda/Qwen-Qwen3-Embedding-0.6B_cuda_fp16.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (cuda/Qwen-Qwen3-Embedding-0.6B_cuda_fp16.json).",
     metadataSource: "folder",
   },
   {
@@ -3949,7 +4457,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CUDA",
     repoPath: "Qwen-Qwen3-Embedding-0.6B/cuda/Qwen-Qwen3-Embedding-0.6B_cuda_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (cuda/Qwen-Qwen3-Embedding-0.6B_cuda_int4_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (cuda/Qwen-Qwen3-Embedding-0.6B_cuda_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -3957,7 +4466,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CUDA",
     repoPath: "Qwen-Qwen3-Embedding-0.6B/cuda/Qwen-Qwen3-Embedding-0.6B_cuda_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (cuda/Qwen-Qwen3-Embedding-0.6B_cuda_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (cuda/Qwen-Qwen3-Embedding-0.6B_cuda_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3965,7 +4475,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-0.6B/webgpu/Qwen-Qwen3-Embedding-0.6B_webgpu_fp16_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (webgpu/Qwen-Qwen3-Embedding-0.6B_webgpu_fp16_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (webgpu/Qwen-Qwen3-Embedding-0.6B_webgpu_fp16_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -3973,7 +4484,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-0.6B/webgpu/Qwen-Qwen3-Embedding-0.6B_webgpu_fp16.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (webgpu/Qwen-Qwen3-Embedding-0.6B_webgpu_fp16.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (webgpu/Qwen-Qwen3-Embedding-0.6B_webgpu_fp16.json).",
     metadataSource: "folder",
   },
   {
@@ -3981,7 +4493,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-0.6B/webgpu/Qwen-Qwen3-Embedding-0.6B_webgpu_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (webgpu/Qwen-Qwen3-Embedding-0.6B_webgpu_int4_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (webgpu/Qwen-Qwen3-Embedding-0.6B_webgpu_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -3989,7 +4502,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-0.6B/webgpu/Qwen-Qwen3-Embedding-0.6B_webgpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (webgpu/Qwen-Qwen3-Embedding-0.6B_webgpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-0.6B (webgpu/Qwen-Qwen3-Embedding-0.6B_webgpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -3997,7 +4511,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-8B/baseline/Qwen-Qwen3-Embedding-8B_pytorch_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (baseline/Qwen-Qwen3-Embedding-8B_pytorch_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (baseline/Qwen-Qwen3-Embedding-8B_pytorch_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -4005,7 +4520,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-8B/cpu/Qwen-Qwen3-Embedding-8B_cpu_fp32_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (cpu/Qwen-Qwen3-Embedding-8B_cpu_fp32_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (cpu/Qwen-Qwen3-Embedding-8B_cpu_fp32_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -4013,7 +4529,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-8B/cpu/Qwen-Qwen3-Embedding-8B_cpu_fp32.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (cpu/Qwen-Qwen3-Embedding-8B_cpu_fp32.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (cpu/Qwen-Qwen3-Embedding-8B_cpu_fp32.json).",
     metadataSource: "folder",
   },
   {
@@ -4021,7 +4538,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-8B/cpu/Qwen-Qwen3-Embedding-8B_cpu_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (cpu/Qwen-Qwen3-Embedding-8B_cpu_int4_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (cpu/Qwen-Qwen3-Embedding-8B_cpu_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -4029,7 +4547,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-8B/cpu/Qwen-Qwen3-Embedding-8B_cpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (cpu/Qwen-Qwen3-Embedding-8B_cpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (cpu/Qwen-Qwen3-Embedding-8B_cpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -4037,7 +4556,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CUDA",
     repoPath: "Qwen-Qwen3-Embedding-8B/cuda/Qwen-Qwen3-Embedding-8B_cuda_fp16_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (cuda/Qwen-Qwen3-Embedding-8B_cuda_fp16_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (cuda/Qwen-Qwen3-Embedding-8B_cuda_fp16_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -4045,7 +4565,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CUDA",
     repoPath: "Qwen-Qwen3-Embedding-8B/cuda/Qwen-Qwen3-Embedding-8B_cuda_fp16.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (cuda/Qwen-Qwen3-Embedding-8B_cuda_fp16.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (cuda/Qwen-Qwen3-Embedding-8B_cuda_fp16.json).",
     metadataSource: "folder",
   },
   {
@@ -4053,7 +4574,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CUDA",
     repoPath: "Qwen-Qwen3-Embedding-8B/cuda/Qwen-Qwen3-Embedding-8B_cuda_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (cuda/Qwen-Qwen3-Embedding-8B_cuda_int4_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (cuda/Qwen-Qwen3-Embedding-8B_cuda_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -4061,7 +4583,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CUDA",
     repoPath: "Qwen-Qwen3-Embedding-8B/cuda/Qwen-Qwen3-Embedding-8B_cuda_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (cuda/Qwen-Qwen3-Embedding-8B_cuda_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (cuda/Qwen-Qwen3-Embedding-8B_cuda_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -4069,7 +4592,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-8B/webgpu/Qwen-Qwen3-Embedding-8B_webgpu_fp16_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (webgpu/Qwen-Qwen3-Embedding-8B_webgpu_fp16_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (webgpu/Qwen-Qwen3-Embedding-8B_webgpu_fp16_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -4077,7 +4601,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-8B/webgpu/Qwen-Qwen3-Embedding-8B_webgpu_fp16.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (webgpu/Qwen-Qwen3-Embedding-8B_webgpu_fp16.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (webgpu/Qwen-Qwen3-Embedding-8B_webgpu_fp16.json).",
     metadataSource: "folder",
   },
   {
@@ -4085,7 +4610,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-8B/webgpu/Qwen-Qwen3-Embedding-8B_webgpu_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (webgpu/Qwen-Qwen3-Embedding-8B_webgpu_int4_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (webgpu/Qwen-Qwen3-Embedding-8B_webgpu_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -4093,7 +4619,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3-Embedding-8B/webgpu/Qwen-Qwen3-Embedding-8B_webgpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (webgpu/Qwen-Qwen3-Embedding-8B_webgpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3-Embedding-8B (webgpu/Qwen-Qwen3-Embedding-8B_webgpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -4101,7 +4628,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3.5-2B/baseline/Qwen-Qwen3.5-2B_baseline_mmlu.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3.5-2B (baseline/Qwen-Qwen3.5-2B_baseline_mmlu.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3.5-2B (baseline/Qwen-Qwen3.5-2B_baseline_mmlu.json).",
     metadataSource: "folder",
   },
   {
@@ -4109,7 +4637,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3.5-2B/cpu/Qwen-Qwen3.5-2B_cpu_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3.5-2B (cpu/Qwen-Qwen3.5-2B_cpu_int4_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3.5-2B (cpu/Qwen-Qwen3.5-2B_cpu_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -4117,7 +4646,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3.5-2B/cpu/Qwen-Qwen3.5-2B_cpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3.5-2B (cpu/Qwen-Qwen3.5-2B_cpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3.5-2B (cpu/Qwen-Qwen3.5-2B_cpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -4125,7 +4655,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CUDA",
     repoPath: "Qwen-Qwen3.5-2B/cuda/Qwen-Qwen3.5-2B_cuda_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3.5-2B (cuda/Qwen-Qwen3.5-2B_cuda_int4_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3.5-2B (cuda/Qwen-Qwen3.5-2B_cuda_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -4133,7 +4664,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CUDA",
     repoPath: "Qwen-Qwen3.5-2B/cuda/Qwen-Qwen3.5-2B_cuda_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3.5-2B (cuda/Qwen-Qwen3.5-2B_cuda_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3.5-2B (cuda/Qwen-Qwen3.5-2B_cuda_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -4141,7 +4673,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3.5-2B/webgpu/Qwen-Qwen3.5-2B_webgpu_int4_with_eval.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3.5-2B (webgpu/Qwen-Qwen3.5-2B_webgpu_int4_with_eval.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3.5-2B (webgpu/Qwen-Qwen3.5-2B_webgpu_int4_with_eval.json).",
     metadataSource: "folder",
   },
   {
@@ -4149,7 +4682,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Qwen",
     device: "CPU",
     repoPath: "Qwen-Qwen3.5-2B/webgpu/Qwen-Qwen3.5-2B_webgpu_int4.json",
-    description: "Official microsoft/olive-recipes run config for Qwen-Qwen3.5-2B (webgpu/Qwen-Qwen3.5-2B_webgpu_int4.json).",
+    description:
+      "Official microsoft/olive-recipes run config for Qwen-Qwen3.5-2B (webgpu/Qwen-Qwen3.5-2B_webgpu_int4.json).",
     metadataSource: "folder",
   },
   {
@@ -4157,7 +4691,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "sam-vit-base/aitk/sam_mask_decoder_qnn.json",
-    description: "Official microsoft/olive-recipes run config for sam-vit-base (aitk/sam_mask_decoder_qnn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sam-vit-base (aitk/sam_mask_decoder_qnn.json).",
     metadataSource: "folder",
   },
   {
@@ -4173,7 +4708,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "DirectML",
     repoPath: "sam-vit-base/aitk/sam_vision_encoder_qnn.json",
-    description: "Official microsoft/olive-recipes run config for sam-vit-base (aitk/sam_vision_encoder_qnn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sam-vit-base (aitk/sam_vision_encoder_qnn.json).",
     metadataSource: "folder",
   },
   {
@@ -4181,7 +4717,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "QNN",
     repoPath: "sam-vit-base/QNN/sam_mask_box_decoder_qnn_fp16.json",
-    description: "Official microsoft/olive-recipes run config for sam-vit-base (QNN/sam_mask_box_decoder_qnn_fp16.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sam-vit-base (QNN/sam_mask_box_decoder_qnn_fp16.json).",
     metadataSource: "folder",
   },
   {
@@ -4189,7 +4726,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "QNN",
     repoPath: "sam-vit-base/QNN/sam_mask_decoder_qnn_fp16_ctx.json",
-    description: "Official microsoft/olive-recipes run config for sam-vit-base (QNN/sam_mask_decoder_qnn_fp16_ctx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sam-vit-base (QNN/sam_mask_decoder_qnn_fp16_ctx.json).",
     metadataSource: "folder",
   },
   {
@@ -4197,7 +4735,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "QNN",
     repoPath: "sam-vit-base/QNN/sam_mask_point_decoder_qnn_fp16.json",
-    description: "Official microsoft/olive-recipes run config for sam-vit-base (QNN/sam_mask_point_decoder_qnn_fp16.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sam-vit-base (QNN/sam_mask_point_decoder_qnn_fp16.json).",
     metadataSource: "folder",
   },
   {
@@ -4205,7 +4744,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "QNN",
     repoPath: "sam-vit-base/QNN/sam_vision_encoder_qnn_w8a8_ctx.json",
-    description: "Official microsoft/olive-recipes run config for sam-vit-base (QNN/sam_vision_encoder_qnn_w8a8_ctx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sam-vit-base (QNN/sam_vision_encoder_qnn_w8a8_ctx.json).",
     metadataSource: "folder",
   },
   {
@@ -4213,7 +4753,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "DirectML",
     repoPath: "sam2.1-hiera-small/aitk/sam2_qnn_workflow.json",
-    description: "Official microsoft/olive-recipes run config for sam2.1-hiera-small (aitk/sam2_qnn_workflow.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sam2.1-hiera-small (aitk/sam2_qnn_workflow.json).",
     metadataSource: "folder",
   },
   {
@@ -4221,7 +4762,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "DirectML",
     repoPath: "sam2.1-hiera-small/aitk/sam21_mask_decoder_qnn.json",
-    description: "Official microsoft/olive-recipes run config for sam2.1-hiera-small (aitk/sam21_mask_decoder_qnn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sam2.1-hiera-small (aitk/sam21_mask_decoder_qnn.json).",
     metadataSource: "folder",
   },
   {
@@ -4229,7 +4771,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "DirectML",
     repoPath: "sam2.1-hiera-small/aitk/sam21_vision_encoder_qnn.json",
-    description: "Official microsoft/olive-recipes run config for sam2.1-hiera-small (aitk/sam21_vision_encoder_qnn.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sam2.1-hiera-small (aitk/sam21_vision_encoder_qnn.json).",
     metadataSource: "folder",
   },
   {
@@ -4237,7 +4780,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "QNN",
     repoPath: "sam2.1-hiera-small/QNN/sam21_mask_decoder_qnn_ctx.json",
-    description: "Official microsoft/olive-recipes run config for sam2.1-hiera-small (QNN/sam21_mask_decoder_qnn_ctx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sam2.1-hiera-small (QNN/sam21_mask_decoder_qnn_ctx.json).",
     metadataSource: "folder",
   },
   {
@@ -4245,7 +4789,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "QNN",
     repoPath: "sam2.1-hiera-small/QNN/sam21_vision_encoder_qnn_ctx.json",
-    description: "Official microsoft/olive-recipes run config for sam2.1-hiera-small (QNN/sam21_vision_encoder_qnn_ctx.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sam2.1-hiera-small (QNN/sam21_vision_encoder_qnn_ctx.json).",
     metadataSource: "folder",
   },
   {
@@ -4253,7 +4798,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "DirectML",
     repoPath: "sd-legacy-stable-diffusion-v1-5/aitk/config_safety_checker.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (aitk/config_safety_checker.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (aitk/config_safety_checker.json).",
     metadataSource: "folder",
   },
   {
@@ -4261,7 +4807,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "DirectML",
     repoPath: "sd-legacy-stable-diffusion-v1-5/aitk/config_text_encoder.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (aitk/config_text_encoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (aitk/config_text_encoder.json).",
     metadataSource: "folder",
   },
   {
@@ -4269,7 +4816,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "DirectML",
     repoPath: "sd-legacy-stable-diffusion-v1-5/aitk/config_unet.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (aitk/config_unet.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (aitk/config_unet.json).",
     metadataSource: "folder",
   },
   {
@@ -4277,7 +4825,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "DirectML",
     repoPath: "sd-legacy-stable-diffusion-v1-5/aitk/config_vae_decoder.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (aitk/config_vae_decoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (aitk/config_vae_decoder.json).",
     metadataSource: "folder",
   },
   {
@@ -4285,7 +4834,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "DirectML",
     repoPath: "sd-legacy-stable-diffusion-v1-5/aitk/config_vae_encoder.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (aitk/config_vae_encoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (aitk/config_vae_encoder.json).",
     metadataSource: "folder",
   },
   {
@@ -4293,7 +4843,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "DirectML",
     repoPath: "sd-legacy-stable-diffusion-v1-5/aitk/sd_ov_npu_workflow.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (aitk/sd_ov_npu_workflow.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (aitk/sd_ov_npu_workflow.json).",
     metadataSource: "folder",
   },
   {
@@ -4301,7 +4852,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "DirectML",
     repoPath: "sd-legacy-stable-diffusion-v1-5/aitk/sd_ov_workflow.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (aitk/sd_ov_workflow.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (aitk/sd_ov_workflow.json).",
     metadataSource: "folder",
   },
   {
@@ -4309,7 +4861,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "DirectML",
     repoPath: "sd-legacy-stable-diffusion-v1-5/aitk/sd_qnn_workflow.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (aitk/sd_qnn_workflow.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (aitk/sd_qnn_workflow.json).",
     metadataSource: "folder",
   },
   {
@@ -4317,7 +4870,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "CPU",
     repoPath: "sd-legacy-stable-diffusion-v1-5/olive/config_safety_checker.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (olive/config_safety_checker.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (olive/config_safety_checker.json).",
     metadataSource: "folder",
   },
   {
@@ -4325,7 +4879,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "CPU",
     repoPath: "sd-legacy-stable-diffusion-v1-5/olive/config_text_encoder.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (olive/config_text_encoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (olive/config_text_encoder.json).",
     metadataSource: "folder",
   },
   {
@@ -4333,7 +4888,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "CPU",
     repoPath: "sd-legacy-stable-diffusion-v1-5/olive/config_unet.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (olive/config_unet.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (olive/config_unet.json).",
     metadataSource: "folder",
   },
   {
@@ -4341,7 +4897,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "CPU",
     repoPath: "sd-legacy-stable-diffusion-v1-5/olive/config_vae_decoder.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (olive/config_vae_decoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (olive/config_vae_decoder.json).",
     metadataSource: "folder",
   },
   {
@@ -4349,7 +4906,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "CPU",
     repoPath: "sd-legacy-stable-diffusion-v1-5/olive/config_vae_encoder.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (olive/config_vae_encoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (olive/config_vae_encoder.json).",
     metadataSource: "folder",
   },
   {
@@ -4357,7 +4915,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "OpenVINO",
     repoPath: "sd-legacy-stable-diffusion-v1-5/VitisAI/config_safety_checker.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (VitisAI/config_safety_checker.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (VitisAI/config_safety_checker.json).",
     metadataSource: "folder",
   },
   {
@@ -4365,7 +4924,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "OpenVINO",
     repoPath: "sd-legacy-stable-diffusion-v1-5/VitisAI/config_text_encoder.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (VitisAI/config_text_encoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (VitisAI/config_text_encoder.json).",
     metadataSource: "folder",
   },
   {
@@ -4373,7 +4933,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "OpenVINO",
     repoPath: "sd-legacy-stable-diffusion-v1-5/VitisAI/config_unet.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (VitisAI/config_unet.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (VitisAI/config_unet.json).",
     metadataSource: "folder",
   },
   {
@@ -4381,7 +4942,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "OpenVINO",
     repoPath: "sd-legacy-stable-diffusion-v1-5/VitisAI/config_vae_decoder.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (VitisAI/config_vae_decoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (VitisAI/config_vae_decoder.json).",
     metadataSource: "folder",
   },
   {
@@ -4389,7 +4951,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "OpenVINO",
     repoPath: "sd-legacy-stable-diffusion-v1-5/VitisAI/config_vae_encoder.json",
-    description: "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (VitisAI/config_vae_encoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd-legacy-stable-diffusion-v1-5 (VitisAI/config_vae_encoder.json).",
     metadataSource: "folder",
   },
   {
@@ -4397,7 +4960,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "DirectML",
     repoPath: "sd2-community-stable-diffusion-2-1/aitk/config_safety_checker.json",
-    description: "Official microsoft/olive-recipes run config for sd2-community-stable-diffusion-2-1 (aitk/config_safety_checker.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd2-community-stable-diffusion-2-1 (aitk/config_safety_checker.json).",
     metadataSource: "folder",
   },
   {
@@ -4405,7 +4969,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "DirectML",
     repoPath: "sd2-community-stable-diffusion-2-1/aitk/config_text_encoder.json",
-    description: "Official microsoft/olive-recipes run config for sd2-community-stable-diffusion-2-1 (aitk/config_text_encoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd2-community-stable-diffusion-2-1 (aitk/config_text_encoder.json).",
     metadataSource: "folder",
   },
   {
@@ -4413,7 +4978,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "DirectML",
     repoPath: "sd2-community-stable-diffusion-2-1/aitk/config_unet.json",
-    description: "Official microsoft/olive-recipes run config for sd2-community-stable-diffusion-2-1 (aitk/config_unet.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd2-community-stable-diffusion-2-1 (aitk/config_unet.json).",
     metadataSource: "folder",
   },
   {
@@ -4421,7 +4987,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "DirectML",
     repoPath: "sd2-community-stable-diffusion-2-1/aitk/config_vae_decoder.json",
-    description: "Official microsoft/olive-recipes run config for sd2-community-stable-diffusion-2-1 (aitk/config_vae_decoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd2-community-stable-diffusion-2-1 (aitk/config_vae_decoder.json).",
     metadataSource: "folder",
   },
   {
@@ -4429,7 +4996,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "DirectML",
     repoPath: "sd2-community-stable-diffusion-2-1/aitk/config_vae_encoder.json",
-    description: "Official microsoft/olive-recipes run config for sd2-community-stable-diffusion-2-1 (aitk/config_vae_encoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd2-community-stable-diffusion-2-1 (aitk/config_vae_encoder.json).",
     metadataSource: "folder",
   },
   {
@@ -4437,7 +5005,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "DirectML",
     repoPath: "sd2-community-stable-diffusion-2-1/aitk/sd_ov_npu_workflow.json",
-    description: "Official microsoft/olive-recipes run config for sd2-community-stable-diffusion-2-1 (aitk/sd_ov_npu_workflow.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd2-community-stable-diffusion-2-1 (aitk/sd_ov_npu_workflow.json).",
     metadataSource: "folder",
   },
   {
@@ -4445,7 +5014,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "DirectML",
     repoPath: "sd2-community-stable-diffusion-2-1/aitk/sd_ov_workflow.json",
-    description: "Official microsoft/olive-recipes run config for sd2-community-stable-diffusion-2-1 (aitk/sd_ov_workflow.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd2-community-stable-diffusion-2-1 (aitk/sd_ov_workflow.json).",
     metadataSource: "folder",
   },
   {
@@ -4453,7 +5023,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "DirectML",
     repoPath: "sd2-community-stable-diffusion-2-1/aitk/sd_qnn_workflow.json",
-    description: "Official microsoft/olive-recipes run config for sd2-community-stable-diffusion-2-1 (aitk/sd_qnn_workflow.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sd2-community-stable-diffusion-2-1 (aitk/sd_qnn_workflow.json).",
     metadataSource: "folder",
   },
   {
@@ -4461,7 +5032,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "QNN",
     repoPath: "sentence-transformers-all-MiniLM-L6-v2/QNN/sentence_transformer.json",
-    description: "Official microsoft/olive-recipes run config for sentence-transformers-all-MiniLM-L6-v2 (QNN/sentence_transformer.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sentence-transformers-all-MiniLM-L6-v2 (QNN/sentence_transformer.json).",
     metadataSource: "folder",
   },
   {
@@ -4469,7 +5041,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Other",
     device: "CPU",
     repoPath: "sshleifer-tiny-gpt2/olive/sparsegpt.json",
-    description: "Official microsoft/olive-recipes run config for sshleifer-tiny-gpt2 (olive/sparsegpt.json).",
+    description:
+      "Official microsoft/olive-recipes run config for sshleifer-tiny-gpt2 (olive/sparsegpt.json).",
     metadataSource: "folder",
   },
   {
@@ -4477,7 +5050,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "CPU",
     repoPath: "stabilityai-stable-diffusion-xl-base-1.0/olive/config_text_encoder_2.json",
-    description: "Official microsoft/olive-recipes run config for stabilityai-stable-diffusion-xl-base-1.0 (olive/config_text_encoder_2.json).",
+    description:
+      "Official microsoft/olive-recipes run config for stabilityai-stable-diffusion-xl-base-1.0 (olive/config_text_encoder_2.json).",
     metadataSource: "folder",
   },
   {
@@ -4485,7 +5059,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "CPU",
     repoPath: "stabilityai-stable-diffusion-xl-base-1.0/olive/config_text_encoder.json",
-    description: "Official microsoft/olive-recipes run config for stabilityai-stable-diffusion-xl-base-1.0 (olive/config_text_encoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for stabilityai-stable-diffusion-xl-base-1.0 (olive/config_text_encoder.json).",
     metadataSource: "folder",
   },
   {
@@ -4493,7 +5068,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "CPU",
     repoPath: "stabilityai-stable-diffusion-xl-base-1.0/olive/config_unet.json",
-    description: "Official microsoft/olive-recipes run config for stabilityai-stable-diffusion-xl-base-1.0 (olive/config_unet.json).",
+    description:
+      "Official microsoft/olive-recipes run config for stabilityai-stable-diffusion-xl-base-1.0 (olive/config_unet.json).",
     metadataSource: "folder",
   },
   {
@@ -4501,7 +5077,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "CPU",
     repoPath: "stabilityai-stable-diffusion-xl-base-1.0/olive/config_vae_decoder.json",
-    description: "Official microsoft/olive-recipes run config for stabilityai-stable-diffusion-xl-base-1.0 (olive/config_vae_decoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for stabilityai-stable-diffusion-xl-base-1.0 (olive/config_vae_decoder.json).",
     metadataSource: "folder",
   },
   {
@@ -4509,7 +5086,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "Stable Diffusion",
     device: "CPU",
     repoPath: "stabilityai-stable-diffusion-xl-base-1.0/olive/config_vae_encoder.json",
-    description: "Official microsoft/olive-recipes run config for stabilityai-stable-diffusion-xl-base-1.0 (olive/config_vae_encoder.json).",
+    description:
+      "Official microsoft/olive-recipes run config for stabilityai-stable-diffusion-xl-base-1.0 (olive/config_vae_encoder.json).",
     metadataSource: "folder",
   },
   {
@@ -4517,7 +5095,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "CPU",
     repoPath: "timm-mobilenetv3_small_100.lamb_in1k/olive/config.json",
-    description: "Official microsoft/olive-recipes run config for timm-mobilenetv3_small_100.lamb_in1k (olive/config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for timm-mobilenetv3_small_100.lamb_in1k (olive/config.json).",
     metadataSource: "folder",
   },
   {
@@ -4525,7 +5104,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "QNN",
     repoPath: "timm-mobilenetv3_small_100.lamb_in1k/QNN/mobilenet_qnn_ep.json",
-    description: "Official microsoft/olive-recipes run config for timm-mobilenetv3_small_100.lamb_in1k (QNN/mobilenet_qnn_ep.json).",
+    description:
+      "Official microsoft/olive-recipes run config for timm-mobilenetv3_small_100.lamb_in1k (QNN/mobilenet_qnn_ep.json).",
     metadataSource: "folder",
   },
   {
@@ -4533,7 +5113,8 @@ export const OLIVE_RECIPES_CATALOG: RecipeCatalogItem[] = [
     architecture: "MobileNet",
     device: "OpenVINO",
     repoPath: "timm-mobilenetv3_small_100.lamb_in1k/VitisAI/config.json",
-    description: "Official microsoft/olive-recipes run config for timm-mobilenetv3_small_100.lamb_in1k (VitisAI/config.json).",
+    description:
+      "Official microsoft/olive-recipes run config for timm-mobilenetv3_small_100.lamb_in1k (VitisAI/config.json).",
     metadataSource: "folder",
   },
 ];

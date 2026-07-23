@@ -22,9 +22,7 @@ export function GraphConflictBanner({
         <div className="rounded-lg border border-amber-500/30 bg-amber-950/10 p-3 space-y-2">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-400" />
-            <span className="text-xs font-bold text-amber-300">
-              Performance notes ({advisories.length})
-            </span>
+            <span className="text-xs font-bold text-amber-300">Performance notes ({advisories.length})</span>
           </div>
           <ul className="list-disc pl-5 space-y-1">
             {advisories.map((issue) => (
@@ -40,9 +38,7 @@ export function GraphConflictBanner({
         <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3 space-y-3">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-rose-400" />
-            <span className="text-xs font-bold text-rose-300">
-              Pass conflicts ({autofixIssues.length})
-            </span>
+            <span className="text-xs font-bold text-rose-300">Pass conflicts ({autofixIssues.length})</span>
           </div>
           <p className="text-[11px] text-slate-500">
             These settings conflict with your hardware target and may fail at run time.

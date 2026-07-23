@@ -27,7 +27,13 @@ export function RecipeGraphView({ state, setState, showDot = true }: RecipeGraph
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.modelSource, state.hfModelId, state.azureModelPath, state.localFiles.length, state.localFiles[0]?.name]);
+  }, [
+    state.modelSource,
+    state.hfModelId,
+    state.azureModelPath,
+    state.localFiles.length,
+    state.localFiles[0]?.name,
+  ]);
 
   return (
     <div className="flex flex-col h-full overflow-x-auto">

@@ -69,7 +69,9 @@ function collectActivePassLabels(passes: UIState["passes"]): string[] {
     labels.push(`quantization (${passes.quantMethod} ${passes.quantPrecision})`);
   }
   if (passes.pruning) {
-    labels.push(`pruning (${passes.pruningMethod}, ${Math.round(passes.pruningSparsity * 100)}% ${passes.pruningType})`);
+    labels.push(
+      `pruning (${passes.pruningMethod}, ${Math.round(passes.pruningSparsity * 100)}% ${passes.pruningType})`,
+    );
   }
   if (passes.onnxTransforms) labels.push("onnx transforms");
   if (passes.splitting) labels.push("graph splitting");
@@ -184,9 +186,7 @@ export function formatAiWorkspaceContextForPrompt(ctx: AiWorkspaceContext): stri
 export function buildWorkspaceContextSummary(ctx: AiWorkspaceContext): string {
   const model = shortModelName(ctx.model.displayName);
   const passes =
-    ctx.activePassLabels.length > 0
-      ? ctx.activePassLabels.slice(0, 2).join(" · ")
-      : "no passes enabled";
+    ctx.activePassLabels.length > 0 ? ctx.activePassLabels.slice(0, 2).join(" · ") : "no passes enabled";
   const val =
     ctx.validation.criticalCount > 0
       ? `${ctx.validation.criticalCount} blocking`
@@ -245,7 +245,11 @@ export function buildChatPresetQueries(state: UIState): string[] {
     queries.push("What should I watch for in the running batch job logs?");
   }
 
-  if (ctx.passes.quantization && ctx.passes.quantMethod === "awq" && !GPU_PROVIDERS.has(ctx.hardware.executionProvider)) {
+  if (
+    ctx.passes.quantization &&
+    ctx.passes.quantMethod === "awq" &&
+    !GPU_PROVIDERS.has(ctx.hardware.executionProvider)
+  ) {
     queries.push(`Why is AWQ a poor fit for ${ep}?`);
   }
 

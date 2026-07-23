@@ -25,11 +25,8 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
   }, []);
 
   const selectableProviders = useMemo(
-    () =>
-      PROVIDER_CATALOG.filter((provider) =>
-        getSelectableProviders(hardwareProbe).includes(provider.id)
-      ),
-    [hardwareProbe]
+    () => PROVIDER_CATALOG.filter((provider) => getSelectableProviders(hardwareProbe).includes(provider.id)),
+    [hardwareProbe],
   );
 
   const providerOptions = useMemo(() => {
@@ -65,7 +62,9 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
         </p>
         <button
           type="button"
-          onClick={() => document.getElementById("ihv")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          onClick={() =>
+            document.getElementById("ihv")?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
           className="mt-2 text-[10px] text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer"
         >
           Full hardware options in step 02
@@ -73,7 +72,9 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
       </div>
       <div className="grid grid-cols-1 gap-3 border-l border-slate-800/50 pl-4">
         <div>
-          <Label htmlFor="graph-provider-driver" className="text-[10px] font-mono text-slate-400">Active Platform Driver</Label>
+          <Label htmlFor="graph-provider-driver" className="text-[10px] font-mono text-slate-400">
+            Active Platform Driver
+          </Label>
           <Select
             id="graph-provider-driver"
             value={state.ihvProvider}

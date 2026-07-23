@@ -146,9 +146,7 @@ function undetectedProviderReason(provider: IHVProvider): string {
 }
 
 /** Providers the user may select after local hardware detection. */
-export function getSelectableProviders(
-  probe: HardwareProbeResult | null | undefined
-): IHVProvider[] {
+export function getSelectableProviders(probe: HardwareProbeResult | null | undefined): IHVProvider[] {
   if (!probe) {
     return ["CPUExecutionProvider"];
   }
@@ -158,15 +156,14 @@ export function getSelectableProviders(
 /** Block selection when a provider is absent from the local probe. */
 export function getProviderAvailabilityBlock(
   provider: IHVProvider,
-  probe: HardwareProbeResult | null | undefined
+  probe: HardwareProbeResult | null | undefined,
 ): { reason: string } | null {
   if (provider === "CPUExecutionProvider") {
     return null;
   }
   if (!probe) {
     return {
-      reason:
-        "Hardware detection is still running. Only CPU can be selected until probing finishes.",
+      reason: "Hardware detection is still running. Only CPU can be selected until probing finishes.",
     };
   }
   if (!probe.detectedProviders.includes(provider)) {
@@ -177,7 +174,7 @@ export function getProviderAvailabilityBlock(
 
 export function isProviderDetectedLocally(
   provider: IHVProvider,
-  probe: HardwareProbeResult | null | undefined
+  probe: HardwareProbeResult | null | undefined,
 ): boolean {
   if (provider === "CPUExecutionProvider") {
     return true;

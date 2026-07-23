@@ -61,7 +61,9 @@ export function getCatalogFolderSlug(repoPath: string): string {
   return repoPath.split("/")[0] ?? "";
 }
 
-export function parseLocalModelHintsFromConfig(configText: string): Pick<LocalModelHints, "hfModelIds" | "architectureHints"> {
+export function parseLocalModelHintsFromConfig(
+  configText: string,
+): Pick<LocalModelHints, "hfModelIds" | "architectureHints"> {
   try {
     const json = JSON.parse(configText) as Record<string, unknown>;
     const hfModelIds: string[] = [];
@@ -96,14 +98,20 @@ export function parseLocalModelHintsFromConfig(configText: string): Pick<LocalMo
 }
 
 export function buildLocalModelHints(fileNames: string[], configText?: string): LocalModelHints {
-  const parsed = configText ? parseLocalModelHintsFromConfig(configText) : { hfModelIds: [], architectureHints: [] };
+  const parsed = configText
+    ? parseLocalModelHintsFromConfig(configText)
+    : { hfModelIds: [], architectureHints: [] };
 
   const slugCandidates = uniqueStrings([
     ...parsed.hfModelIds.map(hfIdToCatalogSlug),
     ...parsed.hfModelIds,
     ...fileNames
       .map((name) => name.replace(/\.[^.]+$/, ""))
-      .filter((base) => base.length > 3 && !["config", "tokenizer", "model", "pytorch_model", "tokenizer_config"].includes(base.toLowerCase())),
+      .filter(
+        (base) =>
+          base.length > 3 &&
+          !["config", "tokenizer", "model", "pytorch_model", "tokenizer_config"].includes(base.toLowerCase()),
+      ),
   ]);
 
   const displayName =
@@ -167,8 +175,7 @@ export function scoreRecipeMatchForLocal(hints: LocalModelHints, item: RecipeCat
     }
   }
 
-  const tier: RecipeMatchTier =
-    bestScore >= 65 ? "match" : bestScore >= 40 ? "possible" : "none";
+  const tier: RecipeMatchTier = bestScore >= 65 ? "match" : bestScore >= 40 ? "possible" : "none";
 
   return { score: bestScore, tier, reason: bestReason };
 }

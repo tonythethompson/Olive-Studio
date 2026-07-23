@@ -18,7 +18,9 @@ export function InputInspector({ state, setState }: InspectorProps) {
         </p>
         <button
           type="button"
-          onClick={() => document.getElementById("input")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          onClick={() =>
+            document.getElementById("input")?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
           className="mt-2 text-[10px] text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer"
         >
           Full model options in step 01
@@ -26,7 +28,9 @@ export function InputInspector({ state, setState }: InspectorProps) {
       </div>
       <div className="grid grid-cols-1 gap-3 border-l border-slate-800/50 pl-4">
         <div>
-          <Label htmlFor="graph-model-source" className="text-[10px] font-mono text-slate-400">Selected Source</Label>
+          <Label htmlFor="graph-model-source" className="text-[10px] font-mono text-slate-400">
+            Selected Source
+          </Label>
           <Select
             id="graph-model-source"
             value={state.modelSource}

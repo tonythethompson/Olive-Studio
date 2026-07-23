@@ -1,5 +1,5 @@
-import type { LucideIcon } from "lucide-react";
-import { Cpu, CpuIcon, Layers } from "lucide-react";
+import { type LucideIcon, Cpu, CpuIcon, Layers } from "lucide-react";
+
 import type { IHVProvider } from "@/types";
 
 export interface ProviderCatalogEntry {

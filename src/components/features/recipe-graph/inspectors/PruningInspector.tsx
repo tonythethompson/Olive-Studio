@@ -1,4 +1,12 @@
-import { Label, Select, Slider, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
+import {
+  Label,
+  Select,
+  Slider,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui";
 import { getAllowedPruningTypes } from "@/lib/pipelineValidation";
 import { UIState } from "@/types";
 import { Info } from "lucide-react";
@@ -54,13 +62,18 @@ export function PruningInspector({ state, setState }: InspectorProps) {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label htmlFor="pruning-method" className="text-xs text-slate-400">Method</Label>
+          <Label htmlFor="pruning-method" className="text-xs text-slate-400">
+            Method
+          </Label>
           <Select
             id="pruning-method"
             value={state.passes.pruningMethod}
             onChange={(e) =>
               setState({
-                passes: { ...state.passes, pruningMethod: e.target.value as UIState["passes"]["pruningMethod"] },
+                passes: {
+                  ...state.passes,
+                  pruningMethod: e.target.value as UIState["passes"]["pruningMethod"],
+                },
               })
             }
             className="h-9 text-xs bg-slate-950"
@@ -71,7 +84,9 @@ export function PruningInspector({ state, setState }: InspectorProps) {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="pruning-pattern" className="text-xs text-slate-400">Sparsity pattern</Label>
+          <Label htmlFor="pruning-pattern" className="text-xs text-slate-400">
+            Sparsity pattern
+          </Label>
           <Select
             id="pruning-pattern"
             value={state.passes.pruningType}
@@ -85,14 +100,14 @@ export function PruningInspector({ state, setState }: InspectorProps) {
             {allowedPruningTypes.includes("unstructured") && (
               <option value="unstructured">Unstructured</option>
             )}
-            {allowedPruningTypes.includes("structured") && (
-              <option value="structured">Structured 2:4</option>
-            )}
+            {allowedPruningTypes.includes("structured") && <option value="structured">Structured 2:4</option>}
           </Select>
         </div>
         {state.passes.pruningMethod === "magnitude" && (
           <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="pruning-criteria" className="text-xs text-slate-400">Pruning criteria</Label>
+            <Label htmlFor="pruning-criteria" className="text-xs text-slate-400">
+              Pruning criteria
+            </Label>
             <Select
               id="pruning-criteria"
               value={state.passes.pruningCriteria}

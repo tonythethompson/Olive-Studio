@@ -22,14 +22,14 @@ export function isCompatibleTensorRtVersion(version: string): boolean {
 
 export function envWithTensorRtLibs(
   base: NodeJS.ProcessEnv,
-  libsDir: string | null | undefined
+  libsDir: string | null | undefined,
 ): NodeJS.ProcessEnv {
   return envWithPrependedPaths(base, libsDir ? [libsDir] : []);
 }
 
 export function envWithPrependedPaths(
   base: NodeJS.ProcessEnv,
-  dirs: Array<string | null | undefined>
+  dirs: Array<string | null | undefined>,
 ): NodeJS.ProcessEnv {
   const prepend = dirs.filter((dir): dir is string => Boolean(dir && dir.length > 0));
   if (prepend.length === 0) return base;

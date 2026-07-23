@@ -21,7 +21,9 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
       <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">Pass settings</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label htmlFor="conversion-source-format" className="text-xs text-slate-400">Source framework</Label>
+          <Label htmlFor="conversion-source-format" className="text-xs text-slate-400">
+            Source framework
+          </Label>
           <Select
             id="conversion-source-format"
             value={state.passes.conversionSourceFormat}
@@ -41,7 +43,9 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="conversion-target-format" className="text-xs text-slate-400">Target format</Label>
+          <Label htmlFor="conversion-target-format" className="text-xs text-slate-400">
+            Target format
+          </Label>
           <Select
             id="conversion-target-format"
             value={state.passes.conversionFormat}
@@ -56,14 +60,14 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
             className="h-9 text-xs bg-slate-950"
           >
             <option value="onnx">ONNX</option>
-            {allowedConversionFormats.includes("openvino") && (
-              <option value="openvino">OpenVINO IR</option>
-            )}
+            {allowedConversionFormats.includes("openvino") && <option value="openvino">OpenVINO IR</option>}
           </Select>
         </div>
         {state.passes.conversionFormat === "onnx" && (
           <div className="space-y-1.5">
-            <Label htmlFor="conversion-onnx-opset" className="text-xs text-slate-400">ONNX opset</Label>
+            <Label htmlFor="conversion-onnx-opset" className="text-xs text-slate-400">
+              ONNX opset
+            </Label>
             <Select
               id="conversion-onnx-opset"
               value={String(state.passes.conversionOpset)}
@@ -81,7 +85,9 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
           </div>
         )}
         <div className="space-y-1.5">
-          <Label htmlFor="conversion-io-dtypes" className="text-xs text-slate-400">I/O dtypes</Label>
+          <Label htmlFor="conversion-io-dtypes" className="text-xs text-slate-400">
+            I/O dtypes
+          </Label>
           <Select
             id="conversion-io-dtypes"
             value={state.passes.conversionInputTargetTypes}

@@ -10,6 +10,7 @@ import { ExecutionWorkspace } from "@/components/features/ExecutionWorkspace";
 import { BatchProcessingPanel } from "@/components/features/BatchProcessingPanel";
 import { GeminiSidebar } from "@/components/features/GeminiSidebar";
 import { LicenseNotice } from "@/components/LicenseNotice";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { cn } from "@/lib/utils";
 
@@ -34,9 +35,21 @@ const defaultState: UIState = {
 type ActiveView = "input" | "ihv" | "execute";
 
 const SECTIONS: { id: ActiveView; step: string; label: string; desc: string; icon: typeof BrainCircuit }[] = [
-  { id: "input", step: "01", label: "Model source", desc: "Recipe preset or Hugging Face, local, and Azure model inputs.", icon: BrainCircuit },
+  {
+    id: "input",
+    step: "01",
+    label: "Model source",
+    desc: "Recipe preset or Hugging Face, local, and Azure model inputs.",
+    icon: BrainCircuit,
+  },
   { id: "ihv", step: "02", label: "Hardware", desc: "Execution provider and accelerator target.", icon: Cpu },
-  { id: "execute", step: "03", label: "Recipe & run", desc: "Review workflow, execute, or queue batch jobs.", icon: Terminal },
+  {
+    id: "execute",
+    step: "03",
+    label: "Recipe & run",
+    desc: "Review workflow, execute, or queue batch jobs.",
+    icon: Terminal,
+  },
 ];
 
 function Dashboard() {
@@ -52,8 +65,7 @@ function Dashboard() {
     setTriggerAiAudit(true);
   };
 
-  const setState = (partial: Partial<UIState>) =>
-    setStateRaw((prev) => commitUiStateUpdate(prev, partial));
+  const setState = (partial: Partial<UIState>) => setStateRaw((prev) => commitUiStateUpdate(prev, partial));
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-300 overflow-hidden font-sans">
@@ -98,10 +110,17 @@ function Dashboard() {
                       : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/40",
                   )}
                 >
-                  <span className={cn("text-[11px] tabular-nums shrink-0 w-5", isActive ? "text-electric-blue" : "text-slate-600")}>
+                  <span
+                    className={cn(
+                      "text-[11px] tabular-nums shrink-0 w-5",
+                      isActive ? "text-electric-blue" : "text-slate-600",
+                    )}
+                  >
                     {step}
                   </span>
-                  <Icon className={cn("w-3.5 h-3.5 shrink-0", isActive ? "text-electric-blue" : "text-slate-600")} />
+                  <Icon
+                    className={cn("w-3.5 h-3.5 shrink-0", isActive ? "text-electric-blue" : "text-slate-600")}
+                  />
                   <span className="truncate">{label}</span>
                 </button>
               );
@@ -161,33 +180,43 @@ function Dashboard() {
             <h1 className="sr-only">Olive Studio — Recipe builder</h1>
             <div className="pb-16 space-y-16">
               {SECTIONS.map(({ id, step, label, desc }) => (
-                <section
-                  key={id}
-                  id={id}
-                  className="mx-auto w-full max-w-7xl"
-                >
+                <section key={id} id={id} className="mx-auto w-full max-w-7xl">
                   <header className="mb-5 pb-4 border-b border-slate-800">
                     <p className="text-xs text-electric-blue mb-1">{step}</p>
                     <h2 className="text-lg font-semibold text-slate-100">{label}</h2>
                     <p className="text-sm text-slate-500 mt-0.5">{desc}</p>
                   </header>
-                  {id === "input" && <InputEnvironmentPanel state={state} setState={setState} />}
-                  {id === "ihv" && <IHVIntegrationPanel state={state} setState={setState} />}
+                  {id === "input" && (
+                    <ErrorBoundary label="Model source">
+                      <InputEnvironmentPanel state={state} setState={setState} />
+                    </ErrorBoundary>
+                  )}
+                  {id === "ihv" && (
+                    <ErrorBoundary label="Hardware">
+                      <IHVIntegrationPanel state={state} setState={setState} />
+                    </ErrorBoundary>
+                  )}
                   {id === "execute" && (
                     <div className="space-y-8">
-                      <ExecutionWorkspace
-                        state={state}
-                        setState={setState}
-                        onOpenAiAudit={handleOpenAiAudit}
-                        onRunStateChange={(running) => {
-                          setIsOliveRunning(running);
-                          if (running) {
-                            setActiveView("execute");
-                            document.getElementById("execute")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                          }
-                        }}
-                      />
-                      <BatchProcessingPanel state={state} setState={setState} />
+                      <ErrorBoundary label="Recipe &amp; run">
+                        <ExecutionWorkspace
+                          state={state}
+                          setState={setState}
+                          onOpenAiAudit={handleOpenAiAudit}
+                          onRunStateChange={(running) => {
+                            setIsOliveRunning(running);
+                            if (running) {
+                              setActiveView("execute");
+                              document
+                                .getElementById("execute")
+                                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }
+                          }}
+                        />
+                      </ErrorBoundary>
+                      <ErrorBoundary label="Batch queue">
+                        <BatchProcessingPanel state={state} setState={setState} />
+                      </ErrorBoundary>
                     </div>
                   )}
                 </section>
@@ -196,14 +225,16 @@ function Dashboard() {
           </main>
         </div>
 
-        <GeminiSidebar
-          state={state}
-          setState={setState}
-          isOpen={isAiSidebarOpen}
-          onClose={() => setIsAiSidebarOpen(false)}
-          openToAudit={triggerAiAudit}
-          onAuditOpened={() => setTriggerAiAudit(false)}
-        />
+        <ErrorBoundary label="Assistant">
+          <GeminiSidebar
+            state={state}
+            setState={setState}
+            isOpen={isAiSidebarOpen}
+            onClose={() => setIsAiSidebarOpen(false)}
+            openToAudit={triggerAiAudit}
+            onAuditOpened={() => setTriggerAiAudit(false)}
+          />
+        </ErrorBoundary>
       </div>
 
       <LicenseNotice open={licenseOpen} onClose={() => setLicenseOpen(false)} />

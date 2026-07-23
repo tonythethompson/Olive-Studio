@@ -5,11 +5,7 @@ import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProb
 import { getRemainingAdvisories, getPipelineValidation } from "@/lib/pipelineValidation";
 import { UIState } from "@/types";
 import { Info, Plus, Settings, X } from "lucide-react";
-import {
-  getPassToggleBlockReason,
-  isToggleablePass,
-  togglePassInState,
-} from "./graphPassControls";
+import { getPassToggleBlockReason, isToggleablePass, togglePassInState } from "./graphPassControls";
 import { getPassGuidanceForNode } from "@/lib/passGuidance";
 import { PassGuidanceCard } from "./PassGuidanceCard";
 import { ConversionInspector } from "./inspectors/ConversionInspector";
@@ -101,7 +97,9 @@ export function StepInspector({ state, setState, selectedNodeId, pipelineSteps }
           {selectedNodeId === "peft" && <PeftInspector state={state} setState={setState} />}
           {selectedNodeId === "conversion" && <ConversionInspector state={state} setState={setState} />}
           {selectedNodeId === "pruning" && <PruningInspector state={state} setState={setState} />}
-          {selectedNodeId === "transformer_opt" && <OrtTransformsInspector state={state} setState={setState} />}
+          {selectedNodeId === "transformer_opt" && (
+            <OrtTransformsInspector state={state} setState={setState} />
+          )}
           {selectedNodeId === "quantization" && <QuantizationInspector state={state} setState={setState} />}
           {selectedNodeId === "provider" && <ProviderInspector state={state} setState={setState} />}
           {selectedNodeId === "output" && <OutputInspector state={state} setState={setState} />}

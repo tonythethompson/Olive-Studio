@@ -93,7 +93,7 @@ export function validateOliveRecipeStructure(recipe: unknown): OliveRecipeSchema
         }
         if (!Array.isArray(acc.execution_providers) || acc.execution_providers.length === 0) {
           errors.push(
-            `systems.${host}.config.accelerators[${i}].execution_providers must be a non-empty array`
+            `systems.${host}.config.accelerators[${i}].execution_providers must be a non-empty array`,
           );
         }
       }

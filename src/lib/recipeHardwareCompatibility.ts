@@ -1,9 +1,6 @@
 import { isNvTensorRtRtxCatalogPath } from "@/lib/tensorrtRtxDeps";
 import { getCatalogDeviceFromRecipe, type RecipeCatalogItem } from "@/lib/oliveRecipeHub";
-import {
-  type HardwareProbeResult,
-  isProviderDetectedLocally,
-} from "@/lib/hardwareProbe";
+import { type HardwareProbeResult, isProviderDetectedLocally } from "@/lib/hardwareProbe";
 import type { IHVProvider } from "@/types";
 
 export type RecipeHardwareCompatTier = "compatible" | "unavailable" | "unknown";
@@ -39,10 +36,7 @@ function catalogDeviceToProvider(device: string): IHVProvider | undefined {
   }
 }
 
-export function resolveRecipeTargetDevice(
-  item: RecipeCatalogItem,
-  parsedRecipe?: unknown,
-): string {
+export function resolveRecipeTargetDevice(item: RecipeCatalogItem, parsedRecipe?: unknown): string {
   if (isNvTensorRtRtxCatalogPath(item.repoPath)) {
     return "TensorRT RTX";
   }
@@ -112,10 +106,7 @@ export function assessRecipeHardwareCompatibility(
   }
 
   if (isProviderDetectedLocally(requiredProvider, probe)) {
-    const gpuHint =
-      probe.nvidia?.gpus[0]?.name ??
-      probe.rocm?.gpus[0]?.name ??
-      probe.platform.cpuModel;
+    const gpuHint = probe.nvidia?.gpus[0]?.name ?? probe.rocm?.gpus[0]?.name ?? probe.platform.cpuModel;
     return {
       tier: "compatible",
       targetDevice,
@@ -124,9 +115,7 @@ export function assessRecipeHardwareCompatibility(
     };
   }
 
-  const detected = probe.detectedProviders
-    .map((p) => p.replace("ExecutionProvider", ""))
-    .join(", ");
+  const detected = probe.detectedProviders.map((p) => p.replace("ExecutionProvider", "")).join(", ");
 
   return {
     tier: "unavailable",

@@ -22,5 +22,14 @@ jobs:
       - name: Typecheck
         run: npm run lint
 
+      - name: Formatting check
+        run: npm run format:check
+
+      - name: ESLint
+        run: npm run eslint
+
+      - name: Tests
+        run: npm test
+
       - name: Recipe builder smoke test
         run: npm run validate:recipe

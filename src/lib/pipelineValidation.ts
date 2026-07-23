@@ -1,9 +1,6 @@
 import { IHVProvider, UIState } from "@/types";
 import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
-import {
-  getProviderAvailabilityBlock,
-  type HardwareProbeResult,
-} from "@/lib/hardwareProbe";
+import { getProviderAvailabilityBlock, type HardwareProbeResult } from "@/lib/hardwareProbe";
 
 export type PipelineValidationOptions = {
   hardwareProbe?: HardwareProbeResult | null;
@@ -54,9 +51,12 @@ const TENSOR_CORE_PROVIDERS: IHVProvider[] = [
 
 export function isQuantMethodAllowed(
   method: UIState["passes"]["quantMethod"],
-  provider: IHVProvider
+  provider: IHVProvider,
 ): boolean {
   if (method === "awq") {
+    return GPU_PROVIDERS.includes(provider);
+  }
+  if (method === "gptq") {
     return GPU_PROVIDERS.includes(provider);
   }
   if (method === "qat") {
@@ -67,17 +67,16 @@ export function isQuantMethodAllowed(
 
 /** Why a quant method toggle would not stick after commit (beyond EP hardware rules). */
 export function getQuantMethodActivationBlock(
-  method: Extract<UIState["passes"]["quantMethod"], "awq" | "qat">,
+  method: Extract<UIState["passes"]["quantMethod"], "awq" | "gptq" | "qat">,
   passes: UIState["passes"],
-  provider: IHVProvider
+  provider: IHVProvider,
 ): { reason: string } | null {
   if (!isQuantMethodAllowed(method, provider)) {
     return null;
   }
   if (method === "qat" && passes.splitting) {
     return {
-      reason:
-        "QAT conflicts with model splitting. Disable splitting first, or use PTQ/AWQ instead.",
+      reason: "QAT conflicts with model splitting. Disable splitting first, or use PTQ/AWQ instead.",
     };
   }
   return null;
@@ -85,7 +84,7 @@ export function getQuantMethodActivationBlock(
 
 export function isConversionFormatAllowed(
   format: UIState["passes"]["conversionFormat"],
-  provider: IHVProvider
+  provider: IHVProvider,
 ): boolean {
   if (format === "openvino") {
     return provider === "OpenVINOExecutionProvider";
@@ -101,38 +100,45 @@ export function isPeftAllowed(provider: IHVProvider): boolean {
   return !["QNNExecutionProvider", "OpenVINOExecutionProvider"].includes(provider);
 }
 
-export function isPeftMethodAllowed(
-  method: UIState["passes"]["peftMethod"],
-  provider: IHVProvider
-): boolean {
+export function isPeftMethodAllowed(method: UIState["passes"]["peftMethod"], provider: IHVProvider): boolean {
   if (method === "qlora") {
     return GPU_PROVIDERS.includes(provider);
   }
   return true;
 }
 
-export function getProviderConflicts(
-  providerId: IHVProvider,
-  passes: UIState["passes"]
-): HardwareConflict[] {
+export function getProviderConflicts(providerId: IHVProvider, passes: UIState["passes"]): HardwareConflict[] {
   const conflicts: HardwareConflict[] = [];
 
   const add = (active: boolean, conflict: HardwareConflict) => {
     if (active) conflicts.push(conflict);
   };
 
-  add(passes.conversion && passes.conversionFormat === "openvino" && !isConversionFormatAllowed("openvino", providerId), {
-    passKey: "conversionFormat",
-    passName: "OpenVINO IR Conversion",
-    reason: "OpenVINO IR requires the Intel OpenVINO execution provider.",
-    severity: "critical",
-    autofix: () => ({ conversionFormat: "onnx" }),
-  });
+  add(
+    passes.conversion &&
+      passes.conversionFormat === "openvino" &&
+      !isConversionFormatAllowed("openvino", providerId),
+    {
+      passKey: "conversionFormat",
+      passName: "OpenVINO IR Conversion",
+      reason: "OpenVINO IR requires the Intel OpenVINO execution provider.",
+      severity: "critical",
+      autofix: () => ({ conversionFormat: "onnx" }),
+    },
+  );
 
   add(passes.quantization && passes.quantMethod === "awq" && !isQuantMethodAllowed("awq", providerId), {
     passKey: "quantMethod",
     passName: "AWQ Quantization",
     reason: "AWQ requires NVIDIA CUDA, TensorRT, or AMD ROCm GPU acceleration.",
+    severity: "critical",
+    autofix: () => ({ quantMethod: "ptq" }),
+  });
+
+  add(passes.quantization && passes.quantMethod === "gptq" && !isQuantMethodAllowed("gptq", providerId), {
+    passKey: "quantMethod",
+    passName: "GPTQ Quantization",
+    reason: "GPTQ requires NVIDIA CUDA, TensorRT, or AMD ROCm GPU acceleration for calibration.",
     severity: "critical",
     autofix: () => ({ quantMethod: "ptq" }),
   });
@@ -145,16 +151,13 @@ export function getProviderConflicts(
     autofix: () => ({ quantMethod: "ptq" }),
   });
 
-  add(
-    passes.pruning && passes.pruningType === "structured" && !isStructuredPruningAllowed(providerId),
-    {
-      passKey: "pruningType",
-      passName: "Structured 2:4 Sparsity",
-      reason: "Structured sparsity requires NVIDIA CUDA or TensorRT tensor-core hardware.",
-      severity: "warning",
-      autofix: () => ({ pruningType: "unstructured" }),
-    }
-  );
+  add(passes.pruning && passes.pruningType === "structured" && !isStructuredPruningAllowed(providerId), {
+    passKey: "pruningType",
+    passName: "Structured 2:4 Sparsity",
+    reason: "Structured sparsity requires NVIDIA CUDA or TensorRT tensor-core hardware.",
+    severity: "warning",
+    autofix: () => ({ pruningType: "unstructured" }),
+  });
 
   add(passes.peft && !isPeftAllowed(providerId), {
     passKey: "peft",
@@ -189,7 +192,7 @@ export function getProviderConflicts(
 /** Apply all provider-specific conflict autofixes for a target EP. */
 export function applyProviderConflictAutofixes(
   providerId: IHVProvider,
-  passes: UIState["passes"]
+  passes: UIState["passes"],
 ): UIState["passes"] {
   let updated: UIState["passes"] = { ...passes };
   for (const conflict of getProviderConflicts(providerId, passes)) {
@@ -198,24 +201,18 @@ export function applyProviderConflictAutofixes(
   return coercePassFields(updated, providerId);
 }
 
-export function isProviderCompatibleWithPasses(
-  providerId: IHVProvider,
-  passes: UIState["passes"]
-): boolean {
+export function isProviderCompatibleWithPasses(providerId: IHVProvider, passes: UIState["passes"]): boolean {
   return getProviderConflicts(providerId, passes).every((c) => c.severity !== "critical");
 }
 
-export function hasProviderCriticalConflicts(
-  providerId: IHVProvider,
-  passes: UIState["passes"]
-): boolean {
+export function hasProviderCriticalConflicts(providerId: IHVProvider, passes: UIState["passes"]): boolean {
   return getProviderConflicts(providerId, passes).some((c) => c.severity === "critical");
 }
 
 /** Providers absent from the local hardware probe cannot be selected or run. */
 export function getProviderHardwareBlock(
   providerId: IHVProvider,
-  probe: HardwareProbeResult | null | undefined
+  probe: HardwareProbeResult | null | undefined,
 ): { reason: string } | null {
   return getProviderAvailabilityBlock(providerId, probe);
 }
@@ -223,7 +220,7 @@ export function getProviderHardwareBlock(
 export function getProviderSelectionBlockReason(
   providerId: IHVProvider,
   _passes: UIState["passes"],
-  probe?: HardwareProbeResult | null
+  probe?: HardwareProbeResult | null,
 ): string | null {
   return getProviderHardwareBlock(providerId, probe)?.reason ?? null;
 }
@@ -232,7 +229,7 @@ export function getProviderSelectionBlockReason(
 export function prepareProviderChange(
   state: UIState,
   providerId: IHVProvider,
-  probe?: HardwareProbeResult | null
+  probe?: HardwareProbeResult | null,
 ): Partial<UIState> | null {
   if (getProviderHardwareBlock(providerId, probe)) {
     return null;
@@ -287,7 +284,12 @@ function getCrossPassIssues(state: UIState): PipelineIssue[] {
     });
   }
 
-  if (passes.peft && passes.quantization && passes.quantPrecision !== "fp16" && passes.peftMethod === "lora") {
+  if (
+    passes.peft &&
+    passes.quantization &&
+    passes.quantPrecision !== "fp16" &&
+    passes.peftMethod === "lora"
+  ) {
     issues.push({
       id: "peft-lora-quant",
       severity: "critical",
@@ -399,10 +401,7 @@ function getProviderIssues(state: UIState): PipelineIssue[] {
   }));
 }
 
-function getProviderHardwareIssues(
-  state: UIState,
-  probe?: HardwareProbeResult | null
-): PipelineIssue[] {
+function getProviderHardwareIssues(state: UIState, probe?: HardwareProbeResult | null): PipelineIssue[] {
   if (!probe) {
     return [];
   }
@@ -430,7 +429,11 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
   const issues: PipelineIssue[] = [];
   const { passes } = state;
 
-  if (passes.quantization && passes.quantPrecision === "int4" && state.ihvProvider === "CPUExecutionProvider") {
+  if (
+    passes.quantization &&
+    passes.quantPrecision === "int4" &&
+    state.ihvProvider === "CPUExecutionProvider"
+  ) {
     issues.push({
       id: "int4-cpu-advisory",
       severity: "warning",
@@ -457,7 +460,7 @@ function dedupeIssues(issues: PipelineIssue[]): PipelineIssue[] {
 
 export function getPipelineValidation(
   state: UIState,
-  options?: PipelineValidationOptions
+  options?: PipelineValidationOptions,
 ): PipelineValidationResult {
   const issues = dedupeIssues([
     ...getCrossPassIssues(state),
@@ -509,7 +512,7 @@ export function mergeUiState(state: UIState, patch: Partial<UIState>): UIState {
 
 /** Strip pass/EP combinations that cannot run — applied on every state commit. */
 export function coercePassFields(passes: UIState["passes"], provider: IHVProvider): UIState["passes"] {
-  let next: UIState["passes"] = { ...passes };
+  const next: UIState["passes"] = { ...passes };
 
   if (next.conversion && !isConversionFormatAllowed(next.conversionFormat, provider)) {
     next.conversionFormat = "onnx";
@@ -558,9 +561,7 @@ export function sanitizePipelineState(state: UIState): UIState {
   let current: UIState = {
     ...state,
     memoryOffload:
-      state.memoryOffload === "auto" && !isMemoryOffloadAvailable(state)
-        ? "gpu_only"
-        : state.memoryOffload,
+      state.memoryOffload === "auto" && !isMemoryOffloadAvailable(state) ? "gpu_only" : state.memoryOffload,
     passes: coercePassFields(state.passes, state.ihvProvider),
   };
 
@@ -571,9 +572,7 @@ export function sanitizePipelineState(state: UIState): UIState {
       break;
     }
 
-    const issue =
-      fixable.find((candidate) => candidate.severity === "critical") ??
-      fixable[0];
+    const issue = fixable.find((candidate) => candidate.severity === "critical") ?? fixable[0];
 
     const patch = applyIssueAutofix(current, issue);
     if (!patch.passes && !patch.ihvProvider && Object.keys(patch).length === 0) {
@@ -595,7 +594,7 @@ export function commitUiStateUpdate(prev: UIState, partial: Partial<UIState>): U
 }
 
 export function getAllowedQuantMethods(provider: IHVProvider): UIState["passes"]["quantMethod"][] {
-  const methods: UIState["passes"]["quantMethod"][] = ["ptq", "awq", "qat"];
+  const methods: UIState["passes"]["quantMethod"][] = ["ptq", "awq", "gptq", "qat"];
   return methods.filter((method) => isQuantMethodAllowed(method, provider));
 }
 
@@ -611,14 +610,12 @@ export function getAllowedPeftMethods(provider: IHVProvider): UIState["passes"][
 
 export function getAllowedPruningTypes(provider: IHVProvider): UIState["passes"]["pruningType"][] {
   const types: UIState["passes"]["pruningType"][] = ["unstructured", "structured"];
-  return types.filter(
-    (type) => type === "unstructured" || isStructuredPruningAllowed(provider)
-  );
+  return types.filter((type) => type === "unstructured" || isStructuredPruningAllowed(provider));
 }
 
 /** Issues that remain after sanitization (informational only). */
 export function getRemainingAdvisories(state: UIState): PipelineIssue[] {
   return getPipelineValidation(state).issues.filter(
-    (issue) => issue.severity === "warning" && !issue.autofix
+    (issue) => issue.severity === "warning" && !issue.autofix,
   );
 }

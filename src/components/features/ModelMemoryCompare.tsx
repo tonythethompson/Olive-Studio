@@ -43,9 +43,7 @@ export function ModelMemoryCompare({
           <ArrowRight className="inline h-3 w-3 mx-1 text-slate-600 align-middle" />
           <span className="text-slate-500">After</span>{" "}
           <span className="font-mono text-slate-200 tabular-nums">~{formatMemoryGb(afterGb)}</span>
-          {showSavings && (
-            <span className="text-emerald-500/90 ml-1">(−{savedPct}%)</span>
-          )}
+          {showSavings && <span className="text-emerald-500/90 ml-1">(−{savedPct}%)</span>}
           {showGrowth && (
             <span className="text-amber-500/90 ml-1">(+{grewPct}% — check quant/precision)</span>
           )}
@@ -104,9 +102,7 @@ export function ModelMemoryCompare({
               style={{ width: `${Math.min(100, (afterGb / beforeGb) * 100)}%` }}
             />
           </div>
-          <p className="text-[9px] text-slate-600 mt-1">
-            Bar width = base model; fill = optimized size
-          </p>
+          <p className="text-[9px] text-slate-600 mt-1">Bar width = base model; fill = optimized size</p>
         </div>
       )}
     </div>

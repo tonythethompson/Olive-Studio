@@ -18,8 +18,8 @@ export function PeftInspector({ state, setState }: InspectorProps) {
           Parameter-Efficient Fine-Tuning (PEFT)
         </h4>
         <p className="text-xs text-slate-400 leading-relaxed">
-          Applies custom LoRA or QLoRA adapter layers to freeze the base model parameters while adding a
-          small pool of trainable weights.
+          Applies custom LoRA or QLoRA adapter layers to freeze the base model parameters while adding a small
+          pool of trainable weights.
         </p>
         {!peftAllowed && (
           <span className="inline-block mt-2 text-[10px] font-mono text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded">
@@ -30,24 +30,29 @@ export function PeftInspector({ state, setState }: InspectorProps) {
       <div className="grid grid-cols-2 gap-3 border-l border-slate-800/50 pl-4">
         {!peftAllowed ? (
           <div className="col-span-2 flex items-center justify-center text-xs text-slate-500 font-mono italic text-center px-4">
-            PEFT is not supported on the selected execution provider. Change target in step 02 or the
-            provider node below.
+            PEFT is not supported on the selected execution provider. Change target in step 02 or the provider
+            node below.
           </div>
         ) : state.passes.peft ? (
           <>
             <div>
-              <Label htmlFor="peft-tuning-method" className="text-[10px] font-mono text-slate-400">Tuning Method</Label>
+              <Label htmlFor="peft-tuning-method" className="text-[10px] font-mono text-slate-400">
+                Tuning Method
+              </Label>
               <Select
                 id="peft-tuning-method"
                 value={state.passes.peftMethod}
                 onChange={(e) =>
-                  setState({ passes: { ...state.passes, peftMethod: e.target.value as UIState["passes"]["peftMethod"] } })
+                  setState({
+                    passes: {
+                      ...state.passes,
+                      peftMethod: e.target.value as UIState["passes"]["peftMethod"],
+                    },
+                  })
                 }
                 className="h-8 text-xs bg-slate-950"
               >
-                {allowedPeftMethods.includes("lora") && (
-                  <option value="lora">LoRA Standard Adapters</option>
-                )}
+                {allowedPeftMethods.includes("lora") && <option value="lora">LoRA Standard Adapters</option>}
                 {allowedPeftMethods.includes("qlora") && (
                   <option value="qlora">QLoRA Quantized Adapters</option>
                 )}

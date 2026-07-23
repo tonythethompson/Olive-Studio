@@ -26,7 +26,7 @@ export interface RecipePipelineResult {
 /** Single source of truth: UI state → sanitized recipe artifact. */
 export function buildRecipeFromState(
   state: UIState,
-  options?: PipelineValidationOptions
+  options?: PipelineValidationOptions,
 ): RecipePipelineResult {
   const sanitized = sanitizePipelineState(state);
   const recipe = buildOliveRecipe(sanitized);
@@ -55,7 +55,7 @@ export function buildRecipeJsonFromState(state: UIState): string {
 
 export function buildOliveRecipeFromBatchJob(
   job: Pick<BatchJob, "modelSource" | "modelIdentifier" | "provider" | "recipeJson">,
-  fallbackState: UIState
+  fallbackState: UIState,
 ): Record<string, unknown> {
   if (job.recipeJson) {
     try {
@@ -79,7 +79,10 @@ export function buildOliveRecipeFromBatchJob(
 }
 
 /** Parse imported JSON and validate structure (compatibility sanitization happens via setState). */
-export function parseRecipeJson(text: string): { recipe: Record<string, unknown>; schema: OliveRecipeSchemaResult } {
+export function parseRecipeJson(text: string): {
+  recipe: Record<string, unknown>;
+  schema: OliveRecipeSchemaResult;
+} {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -102,7 +105,7 @@ export function assertRunnableRecipe(state: UIState): RecipePipelineResult {
   }
   if (pipeline.validation.isBlocked) {
     throw new Error(
-      `Pipeline blocked: ${pipeline.validation.criticalCount} compatibility issue(s) remain after sanitization`
+      `Pipeline blocked: ${pipeline.validation.criticalCount} compatibility issue(s) remain after sanitization`,
     );
   }
   assertValidOliveRecipeStructure(pipeline.recipe);

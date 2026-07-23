@@ -31,16 +31,13 @@ export function VramEstimateBanner({
   sidebar = false,
   className,
 }: VramEstimateBannerProps) {
-  const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(
-    hardwareProbeProp ?? null,
-  );
+  const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(hardwareProbeProp ?? null);
 
   useEffect(() => {
     if (hardwareProbeProp !== undefined) {
       const missingRam =
         hardwareProbeProp != null &&
-        (hardwareProbeProp.platform.systemRamGb == null ||
-          hardwareProbeProp.platform.systemRamGb <= 0);
+        (hardwareProbeProp.platform.systemRamGb == null || hardwareProbeProp.platform.systemRamGb <= 0);
       if (missingRam) {
         void fetchHardwareProbe(true)
           .then(setHardwareProbe)
@@ -65,45 +62,40 @@ export function VramEstimateBanner({
   const systemRamGb = hardwareProbe?.platform.systemRamGb ?? null;
   const offloadActive = isMemoryOffloadActive(state);
   const hybridPoolGb =
-    availableGb != null && systemRamGb != null
-      ? getHybridMemoryPoolGb(availableGb, systemRamGb)
-      : null;
+    availableGb != null && systemRamGb != null ? getHybridMemoryPoolGb(availableGb, systemRamGb) : null;
 
   const inferenceFit =
-    estimate.usesGpu && availableGb != null
-      ? compareVramFit(estimate.inferenceGb, availableGb)
-      : "unknown";
+    estimate.usesGpu && availableGb != null ? compareVramFit(estimate.inferenceGb, availableGb) : "unknown";
   const runFit =
     estimate.usesGpu && (offloadActive ? hybridPoolGb != null : availableGb != null)
-      ? compareVramFit(
-          estimate.peakRunGb,
-          offloadActive ? hybridPoolGb! : availableGb!,
-        )
+      ? compareVramFit(estimate.peakRunGb, offloadActive ? hybridPoolGb! : availableGb!)
       : "unknown";
 
   const fitLabel =
-    inferenceFit === "fits" ? "Optimized model fits GPU"
-    : inferenceFit === "tight" ? "Tight fit (optimized)"
-    : inferenceFit === "insufficient" ? "Optimized model may exceed GPU"
-    : null;
+    inferenceFit === "fits"
+      ? "Optimized model fits GPU"
+      : inferenceFit === "tight"
+        ? "Tight fit (optimized)"
+        : inferenceFit === "insufficient"
+          ? "Optimized model may exceed GPU"
+          : null;
 
   const fitClass =
-    inferenceFit === "fits" ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/5"
-    : inferenceFit === "tight" ? "text-amber-400 border-amber-500/30 bg-amber-500/5"
-    : inferenceFit === "insufficient" ? "text-rose-400 border-rose-500/30 bg-rose-500/5"
-    : "";
+    inferenceFit === "fits"
+      ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/5"
+      : inferenceFit === "tight"
+        ? "text-amber-400 border-amber-500/30 bg-amber-500/5"
+        : inferenceFit === "insufficient"
+          ? "text-rose-400 border-rose-500/30 bg-rose-500/5"
+          : "";
 
-  const runMayExceedGpu =
-    runFit === "insufficient" || runFit === "tight";
+  const runMayExceedGpu = runFit === "insufficient" || runFit === "tight";
   const showOffloadGuidance =
-    estimate.usesGpu &&
-    availableGb != null &&
-    (inferenceFit === "insufficient" || runFit === "insufficient");
+    estimate.usesGpu && availableGb != null && (inferenceFit === "insufficient" || runFit === "insufficient");
 
-  const offloadGuidance =
-    offloadActive
-      ? "GPU + CPU RAM offload is enabled via Hugging Face device_map for this run."
-      : "GPU runs do not automatically offload to system RAM. Enable hybrid offload in Hardware (Hugging Face models) or use quantization / CPU target.";
+  const offloadGuidance = offloadActive
+    ? "GPU + CPU RAM offload is enabled via Hugging Face device_map for this run."
+    : "GPU runs do not automatically offload to system RAM. Enable hybrid offload in Hardware (Hugging Face models) or use quantization / CPU target.";
 
   const showRunWarning =
     estimate.usesGpu &&
@@ -123,15 +115,11 @@ export function VramEstimateBanner({
         <div className="space-y-1.5">
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-[11px] text-slate-500">Before optimization</span>
-            <span className="text-xs font-mono text-slate-400 tabular-nums">
-              ~{formatMemoryGb(beforeGb)}
-            </span>
+            <span className="text-xs font-mono text-slate-400 tabular-nums">~{formatMemoryGb(beforeGb)}</span>
           </div>
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-[11px] text-slate-500">After optimization</span>
-            <span className="text-xs font-mono text-slate-200 tabular-nums">
-              ~{formatMemoryGb(afterGb)}
-            </span>
+            <span className="text-xs font-mono text-slate-200 tabular-nums">~{formatMemoryGb(afterGb)}</span>
           </div>
           {estimate.usesGpu ? (
             <>
@@ -220,12 +208,7 @@ export function VramEstimateBanner({
   }
 
   return (
-    <div
-      className={cn(
-        "rounded border border-slate-800 bg-slate-950/40 p-4",
-        className,
-      )}
-    >
+    <div className={cn("rounded border border-slate-800 bg-slate-950/40 p-4", className)}>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <HardDrive className="h-4 w-4 text-electric-blue shrink-0" />
@@ -241,11 +224,7 @@ export function VramEstimateBanner({
             {estimate.confidence} confidence
           </span>
         </div>
-        {fitLabel && (
-          <span className={cn("text-xs px-2 py-0.5 rounded border", fitClass)}>
-            {fitLabel}
-          </span>
-        )}
+        {fitLabel && <span className={cn("text-xs px-2 py-0.5 rounded border", fitClass)}>{fitLabel}</span>}
       </div>
 
       <ModelMemoryCompare
@@ -260,8 +239,9 @@ export function VramEstimateBanner({
 
       {showRunWarning && (
         <p className="text-[11px] text-amber-500/90 mt-2 leading-relaxed">
-          The optimized model should fit, but the Olive run for <span className="font-mono text-amber-400/90">{modelShortName}</span> may
-          temporarily need ~{formatMemoryGb(estimate.peakRunGb)} peak VRAM.
+          The optimized model should fit, but the Olive run for{" "}
+          <span className="font-mono text-amber-400/90">{modelShortName}</span> may temporarily need ~
+          {formatMemoryGb(estimate.peakRunGb)} peak VRAM.
         </p>
       )}
 
@@ -271,7 +251,8 @@ export function VramEstimateBanner({
 
       {offloadActive && hybridPoolGb != null && (
         <p className="text-[11px] text-emerald-500/90 mt-2 leading-relaxed">
-          Hybrid offload active — optimization run can spread across ~{formatMemoryGb(hybridPoolGb)} GPU + host RAM.
+          Hybrid offload active — optimization run can spread across ~{formatMemoryGb(hybridPoolGb)} GPU +
+          host RAM.
         </p>
       )}
 
@@ -280,9 +261,7 @@ export function VramEstimateBanner({
           <p className="text-[11px] text-slate-500">
             {estimate.usesGpu ? "Peak VRAM (Olive run)" : "Peak RAM (Olive run)"}
           </p>
-          <p className="text-sm font-mono text-electric-blue mt-0.5">
-            ~{formatMemoryGb(estimate.peakRunGb)}
-          </p>
+          <p className="text-sm font-mono text-electric-blue mt-0.5">~{formatMemoryGb(estimate.peakRunGb)}</p>
           <p className="text-[9px] text-slate-600 mt-0.5">Temporary during optimization</p>
         </div>
         {estimate.usesGpu && (
