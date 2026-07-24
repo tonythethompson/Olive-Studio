@@ -1,0 +1,19 @@
+.mcp.json
+  s_b3a00fbc85fb2e::t_1ab80e0391d3c4 1-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "37bf8e8c3a53ebb4f855e1f243dec333f256160e",
+  "prompts": {},
+  "sessions": {
+    "s_b3a00fbc85fb2e": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_b3a00fbc85fb2e",
+        "model": "unknown"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
