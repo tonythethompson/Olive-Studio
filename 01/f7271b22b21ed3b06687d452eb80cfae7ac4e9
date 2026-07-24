@@ -1,0 +1,85 @@
+olive-mcp-server/mcp_server.py
+  s_61bac31605ceba::t_64e7e79cd5bbb9 1-46
+olive-mcp-server/tools/__init__.py
+  s_61bac31605ceba::t_d0a7538fb9702a 1-38
+olive-mcp-server/tools/config_generator.py
+  s_61bac31605ceba::t_dfe69d51845605 1-129
+olive-mcp-server/tools/hardware_guide.py
+  s_61bac31605ceba::t_448cf6945ff278 1-81
+olive-mcp-server/tools/pass_catalog.py
+  s_61bac31605ceba::t_5b51ecfcc4f8dd 1-29
+olive-mcp-server/tools/pass_chain.py
+  s_61bac31605ceba::t_738bb7be419186 1-108
+olive-mcp-server/tools/strategy_advisor.py
+  s_61bac31605ceba::t_df6df25ab10907 1-206
+olive-mcp-server/.gitignore
+  s_a66678eb994a98::t_8ad2a53b13adc6 1-5
+olive-mcp-server/README.md
+  s_a66678eb994a98::t_dbd7ddf85b56e5 1-83
+olive-mcp-server/fetchers/__init__.py
+  s_a66678eb994a98::t_4a6a0dc11357b2 1-7
+olive-mcp-server/fetchers/github_scraper.py
+  s_a66678eb994a98::t_b4c89e9f4fba04 1-26
+olive-mcp-server/fetchers/official_docs_fetcher.py
+  s_a66678eb994a98::t_6a6f354e6d1b9b 1-23
+olive-mcp-server/fetchers/onnx_runtime_fetcher.py
+  s_a66678eb994a98::t_530002d1eef575 1-30
+olive-mcp-server/knowledge_base/compatibility_matrix.json
+  s_a66678eb994a98::t_94045bdbba46ef 1-55
+olive-mcp-server/knowledge_base/hardware_profiles.json
+  s_a66678eb994a98::t_510cbe1635694f 1-356
+olive-mcp-server/knowledge_base/passes.json
+  s_a66678eb994a98::t_e72b3d00250bf7 1-1563
+olive-mcp-server/knowledge_base/quirks.json
+  s_a66678eb994a98::t_94e42e2c0f9e4f 1-112
+olive-mcp-server/knowledge_base/troubleshooting.json
+  s_a66678eb994a98::t_03eaefc0c07fcf 1-513
+olive-mcp-server/pyproject.toml
+  s_a66678eb994a98::t_ecee375f22295f 1-20
+olive-mcp-server/scripts/expand_kb.py
+  s_a66678eb994a98::t_2a2746639a6ffd 1-680
+olive-mcp-server/scripts/update_kb.py
+  s_a66678eb994a98::t_4120483f21c009 1-33
+olive-mcp-server/tests/test_integration.py
+  s_a66678eb994a98::t_890ae14a7f3c70 1-66
+olive-mcp-server/tests/test_tools.py
+  s_a66678eb994a98::t_9e69e29c18619f 1-159
+olive-mcp-server/tools/cli_helper.py
+  s_a66678eb994a98::t_09a9b3d00274e3 1-69
+olive-mcp-server/tools/compatibility.py
+  s_a66678eb994a98::t_fabcd94c7a473b 1-76
+olive-mcp-server/tools/data_config.py
+  s_a66678eb994a98::t_58f8e2e1f4f413 1-90
+olive-mcp-server/tools/docs_search.py
+  s_a66678eb994a98::t_00b95450944842 1-68
+olive-mcp-server/tools/pass_parameters.py
+  s_a66678eb994a98::t_ec42b9052d3f5a 1-47
+olive-mcp-server/tools/tradeoff.py
+  s_a66678eb994a98::t_23ada49da4d23d 1-93
+olive-mcp-server/tools/troubleshooting.py
+  s_a66678eb994a98::t_b3515a72f62cda 1-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "01f7271b22b21ed3b06687d452eb80cfae7ac4e9",
+  "prompts": {},
+  "sessions": {
+    "s_61bac31605ceba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "55298470-9634-4d86-8362-bdee9e0c3499",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    },
+    "s_a66678eb994a98": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_a66678eb994a98",
+        "model": "unknown"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
