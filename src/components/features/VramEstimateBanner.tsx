@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { UIState } from "@/types";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import {
@@ -24,7 +24,7 @@ interface VramEstimateBannerProps {
   className?: string;
 }
 
-export function VramEstimateBanner({
+export const VramEstimateBanner = memo(function VramEstimateBanner({
   state,
   hardwareProbe: hardwareProbeProp,
   compact = false,
@@ -288,4 +288,4 @@ export function VramEstimateBanner({
       </p>
     </div>
   );
-}
+});

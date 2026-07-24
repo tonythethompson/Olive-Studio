@@ -296,6 +296,7 @@ export function IHVIntegrationPanel({
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: on-mount hardware probe
     void runHardwareProbe(false);
   }, [runHardwareProbe]);
 

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Button } from "@/components/ui";
 import { applyIssueAutofix, type PipelineIssue } from "@/lib/pipelineValidation";
 import { UIState } from "@/types";
@@ -10,7 +11,7 @@ interface GraphConflictBannerProps {
   advisories: PipelineIssue[];
 }
 
-export function GraphConflictBanner({
+export const GraphConflictBanner = memo(function GraphConflictBanner({
   state,
   setState,
   autofixIssues,
@@ -85,4 +86,4 @@ export function GraphConflictBanner({
       )}
     </>
   );
-}
+});

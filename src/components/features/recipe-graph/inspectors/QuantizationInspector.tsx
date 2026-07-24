@@ -2,7 +2,7 @@ import { Label, Select, Switch } from "@/components/ui";
 import { getAllowedQuantMethods } from "@/lib/pipelineValidation";
 import { UIState } from "@/types";
 import type { InspectorProps } from "./types";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { RecipeDiffOverlay } from "./RecipeDiffOverlay";
 import { RefreshCw, AlertTriangle, Save } from "lucide-react";
 import {
@@ -205,12 +205,7 @@ const DELETE_PREFIX = "__delete__:";
 export function QuantizationInspector({ state, setState }: InspectorProps) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
-  const [customPresets, setCustomPresets] = useState<CustomQuantPreset[]>([]);
-
-  // Load custom presets from localStorage on mount
-  useEffect(() => {
-    setCustomPresets(loadCustomPresets());
-  }, []);
+  const [customPresets, setCustomPresets] = useState<CustomQuantPreset[]>(() => loadCustomPresets());
 
   const allowedQuantMethods = getAllowedQuantMethods(state.ihvProvider);
   const isGptq = state.passes.quantMethod === "gptq";

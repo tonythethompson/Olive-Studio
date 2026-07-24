@@ -50,6 +50,7 @@ export function RecipeDiffOverlay({ state }: DiffOverlayProps) {
 
   // Snapshot on first render
   const hasSnapshotted = useRef(false);
+  // eslint-disable-next-line react-hooks/refs -- intentional: one-time init guard, runs only before mount completes
   if (!hasSnapshotted.current) {
     hasSnapshotted.current = true;
     // Delay snapshot slightly so mount doesn't trigger a false diff
@@ -67,6 +68,7 @@ export function RecipeDiffOverlay({ state }: DiffOverlayProps) {
     const lines = diffJson(prevConfig, currentConfig);
     const hasChanges = lines.some((l) => l.kind !== "same");
     if (hasChanges) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: update diff from parameter comparison
       setDiff(lines);
       setVisible(true);
     }
