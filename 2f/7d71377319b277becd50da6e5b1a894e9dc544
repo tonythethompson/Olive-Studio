@@ -1,0 +1,25 @@
+OLIVE_COMPREHENSIVE_API_REFERENCE.md
+  s_61bac31605ceba::t_69951694525ea7 1-629
+OLIVE_MCP_PROMPT_FOR_DEVELOPER.md
+  s_61bac31605ceba::t_5460bdd8b46d1e 1-393
+src/components/features/BatchProcessingPanel.tsx
+  s_61bac31605ceba::t_37f79889727dd4 1,42,287-288,329,390
+src/components/features/GeminiSidebar.tsx
+  s_61bac31605ceba::t_83e08612b31e90 94-139,232-262,438,440
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "2f7d71377319b277becd50da6e5b1a894e9dc544",
+  "prompts": {},
+  "sessions": {
+    "s_61bac31605ceba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "55298470-9634-4d86-8362-bdee9e0c3499",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
