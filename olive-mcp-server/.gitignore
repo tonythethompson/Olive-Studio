@@ -1,0 +1,5 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+knowledge_base/update_report.json

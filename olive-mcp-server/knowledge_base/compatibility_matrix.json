@@ -1,0 +1,55 @@
+{
+  "version": "0.2.0",
+  "last_updated": "2026-07-24",
+  "models": [
+    {
+      "model": "Mistral 7B",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "NVIDIA RTX 4090": {
+          "OnnxQuantization": {"support": "warning", "note": "INT8 can drop 10-15% perplexity; prefer NVModelOpt AWQ int4.", "typical_accuracy_drop": "1-3% with AWQ"},
+          "NVModelOptQuantization": {"support": "supported", "note": "Best path for NVIDIA; use TensorRT.", "typical_accuracy_drop": "<2%"},
+          "LoRA": {"support": "warning", "note": "ONNX limitation: re-export base model after adapter merge.", "typical_accuracy_drop": "n/a"}
+        },
+        "Qualcomm Snapdragon NPU": {
+          "OnnxQuantization": {"support": "warning", "note": "15GB+ model; needs aggressive pruning or int4.", "typical_accuracy_drop": "5-10%"},
+          "QNNQuantization": {"support": "supported", "note": "Use int4 weights and verify op whitelist.", "typical_accuracy_drop": "3-5%"}
+        }
+      }
+    },
+    {
+      "model": "Phi-3-mini",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "NVIDIA RTX 4090": {
+          "OnnxQuantization": {"support": "supported", "note": "INT8 QDQ works well; TensorRT recommended.", "typical_accuracy_drop": "<1%"},
+          "NVModelOptQuantization": {"support": "supported", "note": "AWQ int4 is stable for Phi-3.", "typical_accuracy_drop": "<1.5%"},
+          "CoreML": {"support": "warning", "note": "Fix dynamic sequence length; CoreML has GQA limits.", "typical_accuracy_drop": "2-4%"}
+        }
+      }
+    },
+    {
+      "model": "ResNet-50",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "Intel Core i9 CPU": {
+          "OnnxStaticQuantization": {"support": "supported", "note": "INT8 static quantization is highly stable for CNNs.", "typical_accuracy_drop": "<0.5%"},
+          "OpenVINOExecutionProvider": {"support": "supported", "note": "OpenVINO INT8 is a strong alternative.", "typical_accuracy_drop": "<0.5%"}
+        },
+        "Qualcomm Snapdragon NPU": {
+          "QNNQuantization": {"support": "supported", "note": "Per-channel symmetric required; typical ImageNet drop <1%.", "typical_accuracy_drop": "<1%"}
+        }
+      }
+    },
+    {
+      "model": "Whisper",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "NVIDIA T4": {
+          "OnnxConversion": {"support": "warning", "note": "Dynamic sequence length for audio; use dynamic_axes.", "typical_accuracy_drop": "n/a"},
+          "OnnxStaticQuantization": {"support": "supported", "note": "Encoder can be static INT8; decoder often needs dynamic quantization.", "typical_accuracy_drop": "1-3%"}
+        }
+      }
+    }
+  ]
+}

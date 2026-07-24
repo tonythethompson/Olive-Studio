@@ -1,0 +1,356 @@
+{
+  "version": "0.2.0",
+  "last_updated": "2026-07-24",
+  "profiles": [
+    {
+      "target": "NVIDIA RTX 4090",
+      "accelerator": "gpu",
+      "execution_providers": [
+        "TensorrtExecutionProvider",
+        "CUDAExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "NVModelOptQuantization",
+        "OnnxFloatToFloat16"
+      ],
+      "typical_speedup": "8-15x",
+      "calibration_size": 300,
+      "optimal_batch_size": 32,
+      "memory_gb": 24,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention",
+        "LayerNormalization",
+        "GELU"
+      ],
+      "known_issues": [
+        "TensorRT requires per-engine calibration for INT8; build can be slow."
+      ],
+      "notes": "Use TensorRT for maximum throughput; AWQ int4 from NVModelOpt is best for LLMs."
+    },
+    {
+      "target": "NVIDIA T4",
+      "accelerator": "gpu",
+      "execution_providers": [
+        "TensorrtExecutionProvider",
+        "CUDAExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "NVModelOptQuantization",
+        "OnnxStaticQuantization"
+      ],
+      "typical_speedup": "4-8x",
+      "calibration_size": 256,
+      "optimal_batch_size": 16,
+      "memory_gb": 16,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention",
+        "LayerNormalization"
+      ],
+      "known_issues": [
+        "Limited INT8 tensor core support; verify QDQ placement."
+      ],
+      "notes": "T4 benefits from TensorRT INT8 but smaller batch sizes due to memory."
+    },
+    {
+      "target": "Intel Core i9 CPU",
+      "accelerator": "cpu",
+      "execution_providers": [
+        "CPUExecutionProvider",
+        "OpenVINOExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OnnxStaticQuantization",
+        "OnnxModelOptimizer"
+      ],
+      "typical_speedup": "2-4x",
+      "calibration_size": 128,
+      "optimal_batch_size": 1,
+      "memory_gb": 64,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention",
+        "MaxPool",
+        "AveragePool"
+      ],
+      "known_issues": [
+        "OpenVINO EP on CPU can silently fall back to CPUExecutionProvider for unsupported ops."
+      ],
+      "notes": "Static INT8 with QOperator is fastest on CPU; OpenVINO for CNNs."
+    },
+    {
+      "target": "Qualcomm Snapdragon NPU",
+      "accelerator": "npu",
+      "execution_providers": [
+        "QNNExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OnnxModelOptimizer",
+        "QNNQuantization"
+      ],
+      "typical_speedup": "5-10x",
+      "calibration_size": 128,
+      "optimal_batch_size": 1,
+      "memory_gb": 8,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Transpose",
+        "Reshape",
+        "Softmax"
+      ],
+      "known_issues": [
+        "Operator whitelist is narrow; LayerNorm and GELU may need replacement.",
+        "Requires symmetric per-channel quantization."
+      ],
+      "notes": "Use QNNPreprocess if available; verify opset compatibility."
+    },
+    {
+      "target": "Apple M2/M3 (CoreML)",
+      "accelerator": "npu",
+      "execution_providers": [
+        "CoreMLExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OnnxStaticQuantization",
+        "OnnxModelOptimizer"
+      ],
+      "typical_speedup": "3-7x",
+      "calibration_size": 100,
+      "optimal_batch_size": 1,
+      "memory_gb": 16,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention",
+        "LayerNormalization",
+        "GELU"
+      ],
+      "known_issues": [
+        "CoreML requires per-channel quantization for some layers.",
+        "Dynamic shapes are limited; fix input shapes."
+      ],
+      "notes": "CoreML works best for CNN and transformer models with fixed input sizes."
+    },
+    {
+      "target": "Android NNAPI",
+      "accelerator": "npu",
+      "execution_providers": [
+        "NNAPIExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OnnxStaticQuantization",
+        "OnnxModelOptimizer"
+      ],
+      "typical_speedup": "2-6x",
+      "calibration_size": 64,
+      "optimal_batch_size": 1,
+      "memory_gb": 4,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "MaxPool",
+        "AveragePool",
+        "Softmax"
+      ],
+      "known_issues": [
+        "NNAPI has strict quantization limits (often uint8 only).",
+        "Many ops not accelerated; fallback common."
+      ],
+      "notes": "Keep model small and avoid unsupported ops."
+    },
+    {
+      "target": "Intel iGPU / OpenVINO",
+      "accelerator": "gpu",
+      "execution_providers": [
+        "OpenVINOExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OpenVINOConversion",
+        "OnnxStaticQuantization"
+      ],
+      "typical_speedup": "3-6x",
+      "calibration_size": 100,
+      "optimal_batch_size": 8,
+      "memory_gb": 8,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention",
+        "LayerNormalization"
+      ],
+      "known_issues": [
+        "OpenVINO plugin must be installed separately."
+      ],
+      "notes": "Use FP16 or INT8 on Intel iGPUs for best throughput."
+    },
+    {
+      "target": "Xilinx Vitis AI DPU",
+      "accelerator": "npu",
+      "execution_providers": [
+        "VitisAIExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OnnxModelOptimizer",
+        "VitisAIQuantization"
+      ],
+      "typical_speedup": "5-12x",
+      "calibration_size": 128,
+      "optimal_batch_size": 4,
+      "memory_gb": 4,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "MaxPool",
+        "AveragePool",
+        "ReLU"
+      ],
+      "known_issues": [
+        "Power-of-2 scale constraint limits accuracy; use calibration carefully."
+      ],
+      "notes": "Best for edge CNN workloads on Xilinx boards."
+    },
+    {
+      "target": "NVIDIA A100",
+      "accelerator": "gpu",
+      "execution_providers": [
+        "CUDAExecutionProvider",
+        "TensorrtExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "NVModelOptQuantization",
+        "OnnxFloatToFloat16"
+      ],
+      "typical_speedup": "10-20x",
+      "calibration_size": 512,
+      "optimal_batch_size": 64,
+      "memory_gb": 80,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention",
+        "LayerNormalization",
+        "GELU"
+      ],
+      "known_issues": [
+        "Large batch sizes may need gradient checkpointing during calibration."
+      ],
+      "notes": "A100 supports FP16/INT8/TensorRT; best for large LLMs and batch inference."
+    },
+    {
+      "target": "AMD MI300X / ROCm",
+      "accelerator": "gpu",
+      "execution_providers": [
+        "ROCMExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OnnxStaticQuantization",
+        "OnnxModelOptimizer"
+      ],
+      "typical_speedup": "3-6x",
+      "calibration_size": 256,
+      "optimal_batch_size": 16,
+      "memory_gb": 192,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention"
+      ],
+      "known_issues": [
+        "Operator coverage lags CUDA; verify with ROCm EP whitelist."
+      ],
+      "notes": "Use ONNX Runtime ROCm EP; MI300X has large HBM for big models."
+    },
+    {
+      "target": "NVIDIA Jetson Orin",
+      "accelerator": "gpu",
+      "execution_providers": [
+        "TensorrtExecutionProvider",
+        "CUDAExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OnnxStaticQuantization",
+        "OnnxFloatToFloat16"
+      ],
+      "typical_speedup": "4-8x",
+      "calibration_size": 128,
+      "optimal_batch_size": 1,
+      "memory_gb": 32,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention"
+      ],
+      "known_issues": [
+        "Limited memory; use external data format for large models."
+      ],
+      "notes": "Best for edge vision models with TensorRT INT8."
+    },
+    {
+      "target": "Intel Arc A770",
+      "accelerator": "gpu",
+      "execution_providers": [
+        "OpenVINOExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OpenVINOConversion",
+        "OnnxStaticQuantization"
+      ],
+      "typical_speedup": "3-6x",
+      "calibration_size": 128,
+      "optimal_batch_size": 8,
+      "memory_gb": 16,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention",
+        "LayerNormalization"
+      ],
+      "known_issues": [
+        "OpenVINO GPU plugin must be installed."
+      ],
+      "notes": "Use OpenVINO FP16 or INT8 for Arc GPUs."
+    },
+    {
+      "target": "Raspberry Pi 5 (CPU)",
+      "accelerator": "cpu",
+      "execution_providers": [
+        "CPUExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OnnxStaticQuantization",
+        "OnnxModelOptimizer"
+      ],
+      "typical_speedup": "2-3x",
+      "calibration_size": 64,
+      "optimal_batch_size": 1,
+      "memory_gb": 8,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "MaxPool"
+      ],
+      "known_issues": [
+        "Very limited memory; small models and small calibration sets only."
+      ],
+      "notes": "Quantize to INT8 and keep the model under 2GB."
+    }
+  ]
+}
