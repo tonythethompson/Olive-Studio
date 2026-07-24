@@ -1,0 +1,19 @@
+src/lib/passCatalog.ts
+  s_a22c598bafc723::t_f7dfd7c1b0528e 1-530
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "692ba939678f81756cae7bb93b1cd067e0c07b56",
+  "prompts": {},
+  "sessions": {
+    "s_a22c598bafc723": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "55911daa-fac9-4b78-b20b-757ba8e33f20",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
