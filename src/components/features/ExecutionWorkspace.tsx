@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect } from "react";
+﻿import { useState, useRef, useEffect, Suspense, lazy } from "react";
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
 import {
@@ -24,13 +24,32 @@ import {
   Gauge,
 } from "lucide-react";
 import JSZip from "jszip";
-import { RecipeGraphView } from "./RecipeGraphView";
 import { cn } from "@/lib/utils";
+
 import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
-import { InBrowserValidation } from "@/components/features/InBrowserValidation";
-import { WebGpuBenchmarkPanel } from "@/components/features/WebGpuBenchmarkPanel";
+
+const RecipeGraphView = lazy(() => import("./RecipeGraphView").then((m) => ({ default: m.RecipeGraphView })));
+
+const InBrowserValidation = lazy(() =>
+  import("@/components/features/InBrowserValidation").then((m) => ({ default: m.InBrowserValidation })),
+);
+
+const WebGpuBenchmarkPanel = lazy(() =>
+  import("@/components/features/WebGpuBenchmarkPanel").then((m) => ({ default: m.WebGpuBenchmarkPanel })),
+);
+
+function LoadingFallback({ label, minH }: { label: string; minH?: string }) {
+  return (
+    <div className="flex items-center justify-center w-full" style={minH ? { minHeight: minH } : undefined}>
+      <div className="flex flex-col items-center gap-3 py-16">
+        <RefreshCw className="h-5 w-5 text-electric-blue animate-spin" />
+        <p className="text-sm text-slate-500">{label}</p>
+      </div>
+    </div>
+  );
+}
 
 export function ExecutionWorkspace({
   state,
@@ -908,15 +927,21 @@ ${
         />
         {recipeView === "graph" ? (
           <CardContent className="flex-1 overflow-hidden p-0 min-h-[420px]">
-            <RecipeGraphView state={state} setState={setState} showDot={showGraphDot} />
+            <Suspense fallback={<LoadingFallback label="Loading graph editor..." minH="520px" />}>
+              <RecipeGraphView state={state} setState={setState} showDot={showGraphDot} />
+            </Suspense>
           </CardContent>
         ) : recipeView === "browser-test" ? (
           <CardContent className="flex-1 overflow-auto p-6">
-            <InBrowserValidation recipeJson={JSON.stringify(recipe, null, 2)} />
+            <Suspense fallback={<LoadingFallback label="Loading inference panel..." />}>
+              <InBrowserValidation recipeJson={JSON.stringify(recipe, null, 2)} />
+            </Suspense>
           </CardContent>
         ) : recipeView === "benchmark" ? (
           <CardContent className="flex-1 overflow-auto p-6">
-            <WebGpuBenchmarkPanel />
+            <Suspense fallback={<LoadingFallback label="Loading benchmark panel..." />}>
+              <WebGpuBenchmarkPanel />
+            </Suspense>
           </CardContent>
         ) : (
           <CardContent className="flex-1 overflow-auto bg-slate-950 p-4 m-6 mt-0 rounded-lg border border-slate-800 min-h-[360px]">

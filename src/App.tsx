@@ -1,18 +1,40 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { UIState } from "@/types";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import { commitUiStateUpdate } from "@/lib/pipelineValidation";
-import { BrainCircuit, Cpu, Terminal, Bot } from "lucide-react";
+import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw } from "lucide-react";
 import { InputEnvironmentPanel } from "@/components/features/InputEnvironmentPanel";
 import { IHVIntegrationPanel } from "@/components/features/IHVIntegrationPanel";
 import { ExecutionWorkspace } from "@/components/features/ExecutionWorkspace";
-import { BatchProcessingPanel } from "@/components/features/BatchProcessingPanel";
-import { GeminiSidebar } from "@/components/features/GeminiSidebar";
 import { LicenseNotice } from "@/components/LicenseNotice";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { cn } from "@/lib/utils";
+
+const BatchProcessingPanel = lazy(() =>
+  import("@/components/features/BatchProcessingPanel").then((m) => ({ default: m.BatchProcessingPanel })),
+);
+
+const GeminiSidebar = lazy(() =>
+  import("@/components/features/GeminiSidebar").then((m) => ({ default: m.GeminiSidebar })),
+);
+
+function SidebarFallback() {
+  return (
+    <div className="w-80 border-l border-slate-800 bg-slate-900/40 flex items-center justify-center">
+      <RefreshCw className="h-5 w-5 text-electric-blue animate-spin" />
+    </div>
+  );
+}
+
+function BatchPanelFallback() {
+  return (
+    <div className="rounded border border-slate-800 bg-slate-900/40 p-12 flex items-center justify-center">
+      <RefreshCw className="h-5 w-5 text-electric-blue animate-spin" />
+    </div>
+  );
+}
 
 const queryClient = new QueryClient();
 
@@ -215,7 +237,9 @@ function Dashboard() {
                         />
                       </ErrorBoundary>
                       <ErrorBoundary label="Batch queue">
-                        <BatchProcessingPanel state={state} setState={setState} />
+                        <Suspense fallback={<BatchPanelFallback />}>
+                          <BatchProcessingPanel state={state} setState={setState} />
+                        </Suspense>
                       </ErrorBoundary>
                     </div>
                   )}
@@ -226,14 +250,16 @@ function Dashboard() {
         </div>
 
         <ErrorBoundary label="Assistant">
-          <GeminiSidebar
-            state={state}
-            setState={setState}
-            isOpen={isAiSidebarOpen}
-            onClose={() => setIsAiSidebarOpen(false)}
-            openToAudit={triggerAiAudit}
-            onAuditOpened={() => setTriggerAiAudit(false)}
-          />
+          <Suspense fallback={<SidebarFallback />}>
+            <GeminiSidebar
+              state={state}
+              setState={setState}
+              isOpen={isAiSidebarOpen}
+              onClose={() => setIsAiSidebarOpen(false)}
+              openToAudit={triggerAiAudit}
+              onAuditOpened={() => setTriggerAiAudit(false)}
+            />
+          </Suspense>
         </ErrorBoundary>
       </div>
 
