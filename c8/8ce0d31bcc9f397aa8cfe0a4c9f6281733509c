@@ -1,0 +1,47 @@
+olive-mcp-server/olive_mcp_server/mcp_server.py
+  s_61bac31605ceba::t_055422b548005a 7-8,13-24
+olive-mcp-server/scripts/update_kb.py
+  s_61bac31605ceba::t_3a56efe9127235 7,16
+.commit_msg2.txt
+  s_5857b142405691::t_6f381e9d06ef7c 1-13
+olive-mcp-server/.gitignore
+  s_5857b142405691::t_4ba7a5fa88f1fc 5-8
+olive-mcp-server/README.md
+  s_5857b142405691::t_8649a125d1149c 23,29-33
+olive-mcp-server/olive_mcp_server/__init__.py
+  s_5857b142405691::t_e462d853edb5b3 1-3
+olive-mcp-server/olive_mcp_server/__main__.py
+  s_5857b142405691::t_e08dbb55489159 1-6
+olive-mcp-server/pyproject.toml
+  s_5857b142405691::t_55d0fc5038d28c 19-28
+olive-mcp-server/scripts/expand_kb.py
+  s_5857b142405691::t_8ffd8f379b856b 6
+olive-mcp-server/tests/test_integration.py
+  s_5857b142405691::t_1a99f45cb34c18 6
+olive-mcp-server/tests/test_tools.py
+  s_5857b142405691::t_08f09d951a8e8e 5-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "c88ce0d31bcc9f397aa8cfe0a4c9f6281733509c",
+  "prompts": {},
+  "sessions": {
+    "s_5857b142405691": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_5857b142405691",
+        "model": "unknown"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    },
+    "s_61bac31605ceba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "55298470-9634-4d86-8362-bdee9e0c3499",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
