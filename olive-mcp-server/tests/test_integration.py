@@ -3,7 +3,7 @@
 import asyncio
 import json
 
-from mcp_server import mcp
+from olive_mcp_server.mcp_server import mcp
 
 
 def _run(coro):

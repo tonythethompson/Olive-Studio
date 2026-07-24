@@ -16,5 +16,15 @@ dev = [
     "pytest>=8.0.0",
 ]
 
+[project.scripts]
+olive-mcp-server = "olive_mcp_server.mcp_server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["olive_mcp_server*"]
+
+[tool.setuptools.package-data]
+olive_mcp_server = ["knowledge_base/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

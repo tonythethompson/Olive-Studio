@@ -2,4 +2,7 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-knowledge_base/update_report.json
+*.egg-info/
+build/
+dist/
+olive_mcp_server/knowledge_base/update_report.json

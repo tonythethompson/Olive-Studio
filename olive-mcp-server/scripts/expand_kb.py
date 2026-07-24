@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-KB_DIR = Path(__file__).parent.parent / "knowledge_base"
+KB_DIR = Path(__file__).parent.parent / "olive_mcp_server" / "knowledge_base"
 
 
 def load(name: str) -> dict:

@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fetchers import fetch_github_issues, fetch_official_docs, fetch_onnx_runtime_docs
+from olive_mcp_server.fetchers import fetch_github_issues, fetch_official_docs, fetch_onnx_runtime_docs
 
 
 def main() -> None:
@@ -13,7 +13,7 @@ def main() -> None:
     This is a stub. In production it should parse the fetched content,
     update JSON files, and flag deprecations.
     """
-    kb_dir = Path(__file__).parent.parent / "knowledge_base"
+    kb_dir = Path(__file__).parent.parent / "olive_mcp_server" / "knowledge_base"
     report = {
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "sources": {

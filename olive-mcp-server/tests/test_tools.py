@@ -2,18 +2,18 @@
 
 import pytest
 
-from tools.cli_helper import get_cli_command
-from tools.compatibility import get_model_compatibility
-from tools.config_generator import get_pass_config_template
-from tools.data_config import get_data_config_template
-from tools.docs_search import search_olive_documentation
-from tools.hardware_guide import get_hardware_optimization_guide
-from tools.pass_catalog import get_olive_passes
-from tools.pass_chain import get_pass_chain
-from tools.pass_parameters import get_pass_parameters
-from tools.strategy_advisor import get_quantization_strategy
-from tools.tradeoff import evaluate_optimization_tradeoff
-from tools.troubleshooting import troubleshoot_olive_error
+from olive_mcp_server.tools.cli_helper import get_cli_command
+from olive_mcp_server.tools.compatibility import get_model_compatibility
+from olive_mcp_server.tools.config_generator import get_pass_config_template
+from olive_mcp_server.tools.data_config import get_data_config_template
+from olive_mcp_server.tools.docs_search import search_olive_documentation
+from olive_mcp_server.tools.hardware_guide import get_hardware_optimization_guide
+from olive_mcp_server.tools.pass_catalog import get_olive_passes
+from olive_mcp_server.tools.pass_chain import get_pass_chain
+from olive_mcp_server.tools.pass_parameters import get_pass_parameters
+from olive_mcp_server.tools.strategy_advisor import get_quantization_strategy
+from olive_mcp_server.tools.tradeoff import evaluate_optimization_tradeoff
+from olive_mcp_server.tools.troubleshooting import troubleshoot_olive_error
 
 
 def test_get_olive_passes_no_filter():
