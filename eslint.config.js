@@ -38,7 +38,7 @@ export default [
 
       // ----- Catch empty catch blocks or useless expressions -----
       "no-empty": ["warn", { allowEmptyCatch: true }],
-      "no-unused-expressions": "warn",
+      "@typescript-eslint/no-unused-expressions": "warn",
 
       // ----- Stray console.log in production code -----
       "no-console": ["warn", { allow: ["warn", "error"] }],

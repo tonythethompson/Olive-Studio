@@ -21,6 +21,7 @@ import {
   Cpu,
   AlertTriangle,
   CircleDot,
+  Gauge,
 } from "lucide-react";
 import JSZip from "jszip";
 import { RecipeGraphView } from "./RecipeGraphView";
@@ -28,6 +29,8 @@ import { cn } from "@/lib/utils";
 import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
+import { InBrowserValidation } from "@/components/features/InBrowserValidation";
+import { WebGpuBenchmarkPanel } from "@/components/features/WebGpuBenchmarkPanel";
 
 export function ExecutionWorkspace({
   state,
@@ -55,7 +58,7 @@ export function ExecutionWorkspace({
   const [executionStatus, setExecutionStatus] = useState<"idle" | "running" | "completed" | "failed">("idle");
   const [executionExitCode, setExecutionExitCode] = useState<number | null>(null);
   const liveSourceRef = useRef<EventSource | null>(null);
-  const [recipeView, setRecipeView] = useState<"graph" | "json">("graph");
+  const [recipeView, setRecipeView] = useState<"graph" | "json" | "browser-test" | "benchmark">("graph");
   const [_isCopied, setIsCopied] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [showGraphDot, setShowGraphDot] = useState(true);
@@ -849,6 +852,28 @@ ${
                 >
                   <Code className="h-3 w-3" /> JSON Code
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setRecipeView("browser-test")}
+                  className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${
+                    recipeView === "browser-test"
+                      ? "bg-electric-blue text-white"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <Globe className="h-3 w-3" /> Browser Test
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecipeView("benchmark")}
+                  className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${
+                    recipeView === "benchmark"
+                      ? "bg-electric-blue text-white"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <Gauge className="h-3 w-3" /> Benchmark
+                </button>
               </div>
               {recipeView === "graph" && (
                 <button
@@ -884,6 +909,14 @@ ${
         {recipeView === "graph" ? (
           <CardContent className="flex-1 overflow-hidden p-0 min-h-[420px]">
             <RecipeGraphView state={state} setState={setState} showDot={showGraphDot} />
+          </CardContent>
+        ) : recipeView === "browser-test" ? (
+          <CardContent className="flex-1 overflow-auto p-6">
+            <InBrowserValidation recipeJson={JSON.stringify(recipe, null, 2)} />
+          </CardContent>
+        ) : recipeView === "benchmark" ? (
+          <CardContent className="flex-1 overflow-auto p-6">
+            <WebGpuBenchmarkPanel />
           </CardContent>
         ) : (
           <CardContent className="flex-1 overflow-auto bg-slate-950 p-4 m-6 mt-0 rounded-lg border border-slate-800 min-h-[360px]">

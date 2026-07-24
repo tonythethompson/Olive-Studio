@@ -7,11 +7,7 @@ import {
   PipelineValidationOptions,
   sanitizePipelineState,
 } from "@/lib/pipelineValidation";
-import {
-  assertValidOliveRecipeStructure,
-  OliveRecipeSchemaResult,
-  validateOliveRecipeStructure,
-} from "@/lib/oliveRecipeSchema";
+import { OliveRecipeSchemaResult, validateOliveRecipeStructure } from "@/lib/oliveRecipeSchema";
 
 export interface RecipePipelineResult {
   state: UIState;
@@ -108,7 +104,6 @@ export function assertRunnableRecipe(state: UIState): RecipePipelineResult {
       `Pipeline blocked: ${pipeline.validation.criticalCount} compatibility issue(s) remain after sanitization`,
     );
   }
-  assertValidOliveRecipeStructure(pipeline.recipe);
   return pipeline;
 }
 

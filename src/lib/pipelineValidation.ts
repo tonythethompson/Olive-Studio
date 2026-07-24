@@ -42,6 +42,7 @@ const GPU_PROVIDERS: IHVProvider[] = [
   "NvTensorRTRTXExecutionProvider",
   "TensorrtExecutionProvider",
   "ROCMExecutionProvider",
+  "WebGpuExecutionProvider",
 ];
 const TENSOR_CORE_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
@@ -62,12 +63,19 @@ export function isQuantMethodAllowed(
   if (method === "qat") {
     return provider !== "QNNExecutionProvider";
   }
+  if (method === "hqq") {
+    // OnnxHqqQuantization — no GPU required for HQQ (docs: olive quantize CLI table shows ❌ GPU).
+    return true;
+  }
+  if (method === "spinquant" || method === "quarot") {
+    return GPU_PROVIDERS.includes(provider);
+  }
   return true;
 }
 
 /** Why a quant method toggle would not stick after commit (beyond EP hardware rules). */
 export function getQuantMethodActivationBlock(
-  method: Extract<UIState["passes"]["quantMethod"], "awq" | "gptq" | "qat">,
+  method: Extract<UIState["passes"]["quantMethod"], "awq" | "gptq" | "qat" | "hqq" | "spinquant" | "quarot">,
   passes: UIState["passes"],
   provider: IHVProvider,
 ): { reason: string } | null {
@@ -150,6 +158,30 @@ export function getProviderConflicts(providerId: IHVProvider, passes: UIState["p
     severity: "critical",
     autofix: () => ({ quantMethod: "ptq" }),
   });
+
+  add(passes.quantization && passes.quantMethod === "hqq" && !isQuantMethodAllowed("hqq", providerId), {
+    passKey: "quantMethod",
+    passName: "HQQ Quantization",
+    reason: "HQQ requires GPU acceleration — not available on CPU.",
+    severity: "critical",
+    autofix: () => ({ quantMethod: "ptq" }),
+  });
+
+  add(
+    passes.quantization &&
+      (passes.quantMethod === "spinquant" || passes.quantMethod === "quarot") &&
+      !isQuantMethodAllowed(passes.quantMethod, providerId),
+    {
+      passKey: "quantMethod",
+      passName: passes.quantMethod === "spinquant" ? "SpinQuant Quantization" : "QuaRot Quantization",
+      reason:
+        passes.quantMethod === "spinquant"
+          ? "SpinQuant requires NVIDIA CUDA, TensorRT, or AMD ROCm GPU acceleration."
+          : "QuaRot requires NVIDIA CUDA, TensorRT, or AMD ROCm GPU acceleration.",
+      severity: "critical",
+      autofix: () => ({ quantMethod: "ptq" }),
+    },
+  );
 
   add(passes.pruning && passes.pruningType === "structured" && !isStructuredPruningAllowed(providerId), {
     passKey: "pruningType",
@@ -594,7 +626,16 @@ export function commitUiStateUpdate(prev: UIState, partial: Partial<UIState>): U
 }
 
 export function getAllowedQuantMethods(provider: IHVProvider): UIState["passes"]["quantMethod"][] {
-  const methods: UIState["passes"]["quantMethod"][] = ["ptq", "awq", "gptq", "qat"];
+  const methods: UIState["passes"]["quantMethod"][] = [
+    "ptq",
+    "awq",
+    "gptq",
+    "qat",
+    "hqq",
+    "rtn",
+    "spinquant",
+    "quarot",
+  ];
   return methods.filter((method) => isQuantMethodAllowed(method, provider));
 }
 

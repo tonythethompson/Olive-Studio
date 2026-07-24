@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "expo-horizon": {
+      "source": "software-mansion-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/expo-horizon/SKILL.md",
+      "computedHash": "e98ecd4ffcaaa16728c1826cb3b04705dc5f3282e1d6184ec0a81bb42b6a7377"
+    },
+    "react-native-best-practices": {
+      "source": "software-mansion-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-native-best-practices/SKILL.md",
+      "computedHash": "d86c2fa6f353b2b126d99351967427536765f8b6ee4d1de9ec13502c860df186"
+    },
+    "typegpu": {
+      "source": "software-mansion-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/typegpu/SKILL.md",
+      "computedHash": "d13ead73f47b890ea3e94e6b7f85d08412a7acf41f333da1f75341b8d5ea7b4e"
+    }
+  }
+}

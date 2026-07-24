@@ -40,7 +40,8 @@ export type IHVProvider =
   | "NvTensorRTRTXExecutionProvider"
   | "OpenVINOExecutionProvider"
   | "QNNExecutionProvider"
-  | "ROCMExecutionProvider";
+  | "ROCMExecutionProvider"
+  | "WebGpuExecutionProvider";
 
 export interface BatchJob {
   id: string;
@@ -92,7 +93,7 @@ export interface UIState {
     conversionOpset: number;
     conversionInputTargetTypes: string;
     quantization: boolean;
-    quantMethod: "ptq" | "awq" | "qat" | "gptq";
+    quantMethod: "ptq" | "awq" | "qat" | "gptq" | "hqq" | "rtn" | "spinquant" | "quarot";
     quantPrecision: "int4" | "int8" | "fp16";
     /** GPTQ block size for weight grouping (e.g. 128, 32). Only applies when quantMethod === "gptq". */
     gptqBlockSize: number;
@@ -106,6 +107,14 @@ export interface UIState {
     awqDampPercent: number;
     /** AWQ symmetric quantization — constrains zero-point to 0 for faster inference. Only applies when quantMethod === "awq". */
     awqSym: boolean;
+    /** QAT target precision (e.g. "int4" or "int8"). Only applies when quantMethod === "qat". */
+    qatQuantPrecision: "int4" | "int8";
+    /** QAT calibration method. Only applies when quantMethod === "qat". */
+    qatCalibrateMethod: "minmax" | "percentile" | "entropy";
+    /** QAT calibration steps. Only applies when quantMethod === "qat". */
+    qatCalibrateSteps: number;
+    /** Name of the last applied quantization preset, or empty string if custom/manual. */
+    quantPreset: string;
     pruning: boolean;
     pruningSparsity: number;
     pruningType: "structured" | "unstructured";

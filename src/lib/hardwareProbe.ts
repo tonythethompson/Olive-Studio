@@ -52,6 +52,7 @@ const ORT_PROVIDER_MAP: Record<string, IHVProvider> = {
   NvTensorRtRtxExecutionProvider: "NvTensorRTRTXExecutionProvider",
   OpenVINOExecutionProvider: "OpenVINOExecutionProvider",
   ROCMExecutionProvider: "ROCMExecutionProvider",
+  WebGpuExecutionProvider: "WebGpuExecutionProvider",
 };
 
 export function mapOrtProvidersToIhv(providers: string[]): IHVProvider[] {
@@ -114,6 +115,7 @@ export function pickRecommendedProvider(detected: IHVProvider[]): IHVProvider {
     "CUDAExecutionProvider",
     "ROCMExecutionProvider",
     "OpenVINOExecutionProvider",
+    "WebGpuExecutionProvider",
     "CPUExecutionProvider",
   ];
   for (const provider of priority) {
@@ -136,6 +138,8 @@ function undetectedProviderReason(provider: IHVProvider): string {
       return "NVIDIA TensorRT is not loadable yet (nvinfer_10 / TensorRT 10.x). Olive auto-installs the pinned SDK when you run with TensorRT, or use TensorRT RTX / CUDA instead.";
     case "NvTensorRTRTXExecutionProvider":
       return "NVIDIA TensorRT RTX is not loadable (tensorrt-rtx missing). Olive auto-installs it on run, or use CUDA instead.";
+    case "WebGpuExecutionProvider":
+      return "WebGPU requires a browser environment with the WebGPU API (Chrome 113+ / Edge 113+ / Firefox Nightly). Not available in node-based probing contexts.";
     case "CPUExecutionProvider":
       return "";
     default: {

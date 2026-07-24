@@ -344,7 +344,7 @@ describe("buildOliveRecipe", () => {
     const recipe = buildOliveRecipe(state);
     const passes = recipe.passes as Record<string, unknown>;
     const q = passes.quantization as Record<string, unknown>;
-    expect(q.type).toBe("GPTQQuantizer");
+    expect(q.type).toBe("GptqQuantizer");
     const cfg = q.config as Record<string, unknown>;
     expect(cfg.bits).toBe(4);
     expect(cfg.block_size).toBe(64);
@@ -455,7 +455,7 @@ describe("buildOliveRecipe", () => {
     });
     const recipe = buildOliveRecipe(state);
     const passes = recipe.passes as Record<string, unknown>;
-    expect((passes.splitting as Record<string, unknown>).type).toBe("ModelSplitting");
+    expect((passes.splitting as Record<string, unknown>).type).toBe("SplitModel");
   });
 
   it("creates LoRA pass with correct config", () => {

@@ -60,6 +60,13 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     desc: "High-performance compute on AMD Instinct and Radeon GPUs.",
     icon: Layers,
   },
+  {
+    id: "WebGpuExecutionProvider",
+    name: "WebGPU (Browser)",
+    shortName: "WebGPU",
+    desc: "ONNX Runtime Web's WebGPU provider for in-browser GPU inference via the WebGPU API.",
+    icon: Layers,
+  },
 ];
 
 export function getProviderCatalogEntry(id: IHVProvider): ProviderCatalogEntry | undefined {

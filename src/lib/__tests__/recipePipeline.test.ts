@@ -128,12 +128,17 @@ describe("serializeRecipe", () => {
 describe("parseRecipeJson", () => {
   const validRecipe = {
     input_model: { type: "PyTorchModel", config: {} },
-    systems: { local_system: { type: "LocalSystem", config: { accelerators: [] } } },
+    systems: {
+      local_system: {
+        type: "LocalSystem",
+        config: { accelerators: [{ device: "cpu", execution_providers: ["CPUExecutionProvider"] }] },
+      },
+    },
     passes: {},
     engine: {
       search_strategy: false,
-      host: "local",
-      target: "local",
+      host: "local_system",
+      target: "local_system",
       cache_dir: "./cache",
       output_dir: "./out",
     },
@@ -182,12 +187,17 @@ describe("parseRecipeJson", () => {
 describe("buildOliveRecipeFromBatchJob", () => {
   const validRecipe = {
     input_model: { type: "PyTorchModel", config: {} },
-    systems: { local_system: { type: "LocalSystem", config: { accelerators: [] } } },
+    systems: {
+      local_system: {
+        type: "LocalSystem",
+        config: { accelerators: [{ device: "cpu", execution_providers: ["CPUExecutionProvider"] }] },
+      },
+    },
     passes: {},
     engine: {
       search_strategy: false,
-      host: "local",
-      target: "local",
+      host: "local_system",
+      target: "local_system",
       cache_dir: "./cache",
       output_dir: "./out",
     },

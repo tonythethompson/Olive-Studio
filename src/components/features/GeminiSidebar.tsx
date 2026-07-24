@@ -168,6 +168,7 @@ export function GeminiSidebar({
     if (isOpen && !analysis && providerStatus.source !== "none") {
       handleRunAnalysis();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- analysis + handleRunAnalysis intentionally excluded to avoid re-trigger loops
   }, [isOpen, providerStatus.source]);
 
   useEffect(() => {

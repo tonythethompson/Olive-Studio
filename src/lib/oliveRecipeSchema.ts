@@ -1,3 +1,5 @@
+import { isKnownPassName } from "@/lib/passCatalog";
+
 export interface OliveRecipeSchemaResult {
   valid: boolean;
   errors: string[];
@@ -60,6 +62,13 @@ export function validateOliveRecipeStructure(recipe: unknown): OliveRecipeSchema
     if (passValue.config !== undefined && !isObject(passValue.config)) {
       errors.push(`passes.${passName}.config must be an object when present`);
     }
+    // Validate pass type name against the 0.12.1 pass catalog
+    if (!isKnownPassName(passValue.type)) {
+      errors.push(
+        `passes.${passName}.type "${passValue.type}" is not a known Olive 0.12.1 pass. ` +
+          `Run \`olive run-pass --list-passes\` to see the full list.`,
+      );
+    }
   }
 
   if (!requireObject(recipe.engine, "engine", errors)) {
@@ -72,33 +81,40 @@ export function validateOliveRecipeStructure(recipe: unknown): OliveRecipeSchema
     return { valid: false, errors };
   }
 
-  const host = recipe.engine.host;
-  if (typeof host === "string" && isObject(recipe.systems[host])) {
-    const system = recipe.systems[host] as Record<string, unknown>;
-    if (!requireObject(system.config, `systems.${host}.config`, errors)) {
-      return { valid: false, errors };
+  function validateSystemRef(systems: Record<string, unknown>, ref: string, label: string): void {
+    const system = systems[ref];
+    if (!isObject(system)) {
+      errors.push(`engine.${label} references "${ref}" which is not a valid system key`);
+      return;
     }
-    const accelerators = (system.config as Record<string, unknown>).accelerators;
+    const typed = system as Record<string, unknown>;
+    if (!requireObject(typed.config, `systems.${ref}.config`, errors)) {
+      return;
+    }
+    const accelerators = (typed.config as Record<string, unknown>).accelerators;
     if (!Array.isArray(accelerators) || accelerators.length === 0) {
-      errors.push(`systems.${host}.config.accelerators must be a non-empty array`);
+      errors.push(`systems.${ref}.config.accelerators must be a non-empty array`);
     } else {
       for (let i = 0; i < accelerators.length; i++) {
         const acc = accelerators[i];
         if (!isObject(acc)) {
-          errors.push(`systems.${host}.config.accelerators[${i}] must be an object`);
+          errors.push(`systems.${ref}.config.accelerators[${i}] must be an object`);
           continue;
         }
-        if (!requireString(acc.device, `systems.${host}.config.accelerators[${i}].device`, errors)) {
+        if (!requireString(acc.device, `systems.${ref}.config.accelerators[${i}].device`, errors)) {
           continue;
         }
         if (!Array.isArray(acc.execution_providers) || acc.execution_providers.length === 0) {
           errors.push(
-            `systems.${host}.config.accelerators[${i}].execution_providers must be a non-empty array`,
+            `systems.${ref}.config.accelerators[${i}].execution_providers must be a non-empty array`,
           );
         }
       }
     }
   }
+
+  validateSystemRef(recipe.systems, recipe.engine.host, "host");
+  validateSystemRef(recipe.systems, recipe.engine.target, "target");
 
   return { valid: errors.length === 0, errors };
 }

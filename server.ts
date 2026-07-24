@@ -10,19 +10,13 @@ import { v4 as uuidv4 } from "uuid";
 
 import { validateOliveRecipeStructure } from "./src/lib/oliveRecipeSchema.ts";
 import { parseJsonFromAiResponse, readEnvApiKey } from "./src/lib/aiResponse.ts";
-import {
-  buildAiWorkspaceContext,
-  formatAiWorkspaceContextForPrompt,
-} from "./src/lib/aiWorkspaceContext.ts";
+import { buildAiWorkspaceContext, formatAiWorkspaceContextForPrompt } from "./src/lib/aiWorkspaceContext.ts";
 import {
   mergeDetectedProviders,
   pickRecommendedProvider,
   type HardwareProbeResult,
 } from "./src/lib/hardwareProbe.ts";
-import {
-  enrichRecipeMemoryOffloadForRun,
-  recipeUsesMemoryOffload,
-} from "./src/lib/memoryOffload.ts";
+import { enrichRecipeMemoryOffloadForRun, recipeUsesMemoryOffload } from "./src/lib/memoryOffload.ts";
 import { getSelectedGpuVramGb } from "./src/lib/vramEstimate.ts";
 import {
   CUDA12_RUNTIME_PACKAGES,
@@ -37,10 +31,7 @@ import {
   pinnedTensorRtLabel,
   PINNED_TENSORRT_VERSION,
 } from "./src/lib/tensorrtDeps.ts";
-import {
-  tensorrtRtxInstallArgs,
-  tensorrtRtxLabel,
-} from "./src/lib/tensorrtRtxDeps.ts";
+import { tensorrtRtxInstallArgs, tensorrtRtxLabel } from "./src/lib/tensorrtRtxDeps.ts";
 import type { IHVProvider } from "./src/types.ts";
 
 dotenv.config();
@@ -102,34 +93,55 @@ function getAiProvider(): ProviderConfig | null {
   return runtimeAiProvider ?? detectEnvProvider();
 }
 
-async function callGemini(cfg: ProviderConfig, system: string, messages: AIChatMessage[], wantJson: boolean): Promise<string> {
+/* eslint-disable @typescript-eslint/no-explicit-any -- external API response shape unknown */
+async function callGemini(
+  cfg: ProviderConfig,
+  system: string,
+  messages: AIChatMessage[],
+  wantJson: boolean,
+): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${cfg.apiKey}`;
   const body: any = {
     system_instruction: { parts: [{ text: system }] },
-    contents: messages.map(m => ({
+    contents: messages.map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     })),
   };
   if (wantJson) body.generationConfig = { responseMimeType: "application/json" };
-  const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
     throw new Error(`Gemini ${resp.status}: ${(err as any)?.error?.message ?? resp.statusText}`);
   }
-  const data = await resp.json() as any;
+  const data = (await resp.json()) as any;
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   if (!text.trim()) {
     throw new Error("Gemini returned an empty response.");
   }
   return text;
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
-async function callOpenAICompat(cfg: ProviderConfig, system: string, messages: AIChatMessage[], wantJson: boolean): Promise<string> {
-  const base = cfg.baseUrl ?? (cfg.provider === "mistral" ? "https://api.mistral.ai/v1" : "https://api.openai.com/v1");
+/* eslint-disable @typescript-eslint/no-explicit-any -- external API response shape unknown */
+async function callOpenAICompat(
+  cfg: ProviderConfig,
+  system: string,
+  messages: AIChatMessage[],
+  wantJson: boolean,
+): Promise<string> {
+  const base =
+    cfg.baseUrl ?? (cfg.provider === "mistral" ? "https://api.mistral.ai/v1" : "https://api.openai.com/v1");
   const body: any = {
     model: cfg.model,
-    messages: [{ role: "system", content: system }, ...messages.map(m => ({ role: m.role, content: m.content }))],
+    messages: [
+      { role: "system", content: system },
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+    ],
   };
   if (wantJson) body.response_format = { type: "json_object" };
   const resp = await fetch(`${base}/chat/completions`, {
@@ -141,35 +153,61 @@ async function callOpenAICompat(cfg: ProviderConfig, system: string, messages: A
     const err = await resp.json().catch(() => ({}));
     throw new Error(`${cfg.provider} ${resp.status}: ${(err as any)?.error?.message ?? resp.statusText}`);
   }
-  const data = await resp.json() as any;
+  const data = (await resp.json()) as any;
   return data?.choices?.[0]?.message?.content ?? "";
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
-async function callAnthropic(cfg: ProviderConfig, system: string, messages: AIChatMessage[], wantJson: boolean): Promise<string> {
-  const sysText = wantJson ? `${system}\n\nIMPORTANT: Respond with valid JSON only. No markdown, no text outside the JSON object.` : system;
+/* eslint-disable @typescript-eslint/no-explicit-any -- external API response shape unknown */
+async function callAnthropic(
+  cfg: ProviderConfig,
+  system: string,
+  messages: AIChatMessage[],
+  wantJson: boolean,
+): Promise<string> {
+  const sysText = wantJson
+    ? `${system}\n\nIMPORTANT: Respond with valid JSON only. No markdown, no text outside the JSON object.`
+    : system;
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "x-api-key": cfg.apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-    body: JSON.stringify({ model: cfg.model, max_tokens: 4096, system: sysText, messages: messages.map(m => ({ role: m.role, content: m.content })) }),
+    headers: {
+      "x-api-key": cfg.apiKey,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: cfg.model,
+      max_tokens: 4096,
+      system: sysText,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    }),
   });
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
     throw new Error(`Anthropic ${resp.status}: ${(err as any)?.error?.message ?? resp.statusText}`);
   }
-  const data = await resp.json() as any;
+  const data = (await resp.json()) as any;
   return data?.content?.[0]?.text ?? "";
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 async function callAI(system: string, messages: AIChatMessage[], wantJson = false): Promise<string> {
   const cfg = getAiProvider();
-  if (!cfg) throw new Error("No AI provider configured. Add an API key in the AI Copilot settings or set GEMINI_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY / MISTRAL_API_KEY in your environment.");
+  if (!cfg)
+    throw new Error(
+      "No AI provider configured. Add an API key in the AI Copilot settings or set GEMINI_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY / MISTRAL_API_KEY in your environment.",
+    );
   switch (cfg.provider) {
-    case "gemini": return callGemini(cfg, system, messages, wantJson);
-    case "anthropic": return callAnthropic(cfg, system, messages, wantJson);
+    case "gemini":
+      return callGemini(cfg, system, messages, wantJson);
+    case "anthropic":
+      return callAnthropic(cfg, system, messages, wantJson);
     case "openai":
     case "mistral":
-    case "openai-compat": return callOpenAICompat(cfg, system, messages, wantJson);
-    default: throw new Error(`Unknown provider: ${cfg.provider}`);
+    case "openai-compat":
+      return callOpenAICompat(cfg, system, messages, wantJson);
+    default:
+      throw new Error(`Unknown provider: ${cfg.provider}`);
   }
 }
 
@@ -192,7 +230,11 @@ let runtimeHfToken: string | null = null;
 function pushLog(job: OliveJob, line: string) {
   job.logs.push(line);
   for (const sub of job.subscribers) {
-    try { sub(line); } catch { /* subscriber gone */ }
+    try {
+      sub(line);
+    } catch {
+      /* subscriber gone */
+    }
   }
 }
 
@@ -217,7 +259,9 @@ async function findSystemPython(): Promise<string | null> {
     try {
       await execFileAsync(cmd, ["--version"]);
       return cmd;
-    } catch { /* not found */ }
+    } catch {
+      /* not found */
+    }
   }
   return null;
 }
@@ -242,7 +286,9 @@ async function ensureVenv(onLine: (line: string) => void): Promise<{ ok: boolean
       const proc = spawn(systemPython, ["-m", "venv", VENV_DIR], { stdio: "pipe" });
       proc.stdout.on("data", (d) => onLine("[setup] " + d.toString().trim()));
       proc.stderr.on("data", (d) => onLine("[setup] " + d.toString().trim()));
-      proc.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`venv creation failed (exit ${code})`))));
+      proc.on("close", (code) =>
+        code === 0 ? resolve() : reject(new Error(`venv creation failed (exit ${code})`)),
+      );
     });
     onLine("[setup] Virtual environment created.");
   }
@@ -253,7 +299,9 @@ async function ensureVenv(onLine: (line: string) => void): Promise<{ ok: boolean
   try {
     await execFileAsync(venvPython, ["-c", "import olive"]);
     oliveInstalled = true;
-  } catch { /* not installed */ }
+  } catch {
+    /* not installed */
+  }
 
   if (!oliveInstalled) {
     onLine("[setup] Installing olive-ai (this may take a few minutes)...");
@@ -261,7 +309,9 @@ async function ensureVenv(onLine: (line: string) => void): Promise<{ ok: boolean
       const pip = spawn(getVenvPip(), ["install", "olive-ai"], { stdio: "pipe" });
       pip.stdout.on("data", (d) => onLine("[setup] " + d.toString().trim()));
       pip.stderr.on("data", (d) => onLine("[setup] " + d.toString().trim()));
-      pip.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`pip install failed (exit ${code})`))));
+      pip.on("close", (code) =>
+        code === 0 ? resolve() : reject(new Error(`pip install failed (exit ${code})`)),
+      );
     });
     onLine("[setup] olive-ai installed successfully.");
   }
@@ -275,7 +325,9 @@ async function ensureVenv(onLine: (line: string) => void): Promise<{ ok: boolean
       const pip = spawn(getVenvPip(), ["install", "requests"], { stdio: "pipe" });
       pip.stdout.on("data", (d) => onLine("[setup] " + d.toString().trim()));
       pip.stderr.on("data", (d) => onLine("[setup] " + d.toString().trim()));
-      pip.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`requests install failed (exit ${code})`))));
+      pip.on("close", (code) =>
+        code === 0 ? resolve() : reject(new Error(`requests install failed (exit ${code})`)),
+      );
     });
   }
 
@@ -341,6 +393,7 @@ app.get("/api/github/raw", async (req, res) => {
         error: "Remote file is not valid JSON.",
       });
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error shape
   } catch (error: any) {
     console.error("GitHub raw proxy error:", error);
     return res.status(502).json({
@@ -357,6 +410,7 @@ interface PkgDef {
   label: string;
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any -- recipe object has dynamic shape from user JSON */
 function inferRequiredPackages(recipe: any, cudaTag: string): PkgDef[] {
   const pkgs: PkgDef[] = [];
   const passes = Object.values(recipe.passes ?? {}) as any[];
@@ -376,16 +430,26 @@ function inferRequiredPackages(recipe: any, cudaTag: string): PkgDef[] {
   }
 
   // PyTorch — CPU wheel or CUDA-specific wheel
-  pkgs.push(isGpu
-    ? { importName: "torch", installArgs: ["torch", "--index-url", `https://download.pytorch.org/whl/${cudaTag}`], label: `torch (${cudaTag})` }
-    : { importName: "torch", installArgs: ["torch", "--index-url", "https://download.pytorch.org/whl/cpu"], label: "torch (CPU)" }
+  pkgs.push(
+    isGpu
+      ? {
+          importName: "torch",
+          installArgs: ["torch", "--index-url", `https://download.pytorch.org/whl/${cudaTag}`],
+          label: `torch (${cudaTag})`,
+        }
+      : {
+          importName: "torch",
+          installArgs: ["torch", "--index-url", "https://download.pytorch.org/whl/cpu"],
+          label: "torch (CPU)",
+        },
   );
 
   // ONNX Runtime — pin CUDA 12 build (1.27+ needs cu13 wheels not yet on PyPI)
-  if (passTypes.some(t => t.includes("Onnx") || t.includes("ORT") || t.includes("Transformers"))) {
-    pkgs.push(isGpu
-      ? { importName: "onnxruntime", installArgs: pinnedOrtGpuInstallArgs(), label: pinnedOrtGpuLabel() }
-      : { importName: "onnxruntime", installArgs: ["onnxruntime"], label: "onnxruntime" }
+  if (passTypes.some((t) => t.includes("Onnx") || t.includes("ORT") || t.includes("Transformers"))) {
+    pkgs.push(
+      isGpu
+        ? { importName: "onnxruntime", installArgs: pinnedOrtGpuInstallArgs(), label: pinnedOrtGpuLabel() }
+        : { importName: "onnxruntime", installArgs: ["onnxruntime"], label: "onnxruntime" },
     );
   }
 
@@ -396,18 +460,18 @@ function inferRequiredPackages(recipe: any, cudaTag: string): PkgDef[] {
   }
 
   // OpenVINO
-  if (passTypes.some(t => t.includes("OpenVINO"))) {
+  if (passTypes.some((t) => t.includes("OpenVINO"))) {
     pkgs.push({ importName: "openvino", installArgs: ["openvino"], label: "openvino" });
     pkgs.push({ importName: "optimum", installArgs: ["optimum[openvino]"], label: "optimum[openvino]" });
   }
 
   // PEFT (LoRA / QLoRA)
-  if (passTypes.some(t => t === "LoRA" || t === "QLoRA")) {
+  if (passTypes.some((t) => t === "LoRA" || t === "QLoRA")) {
     pkgs.push({ importName: "peft", installArgs: ["peft"], label: "peft" });
   }
 
   // AutoAWQ
-  if (passTypes.some(t => t.toLowerCase().includes("awq"))) {
+  if (passTypes.some((t) => t.toLowerCase().includes("awq"))) {
     pkgs.push({ importName: "awq", installArgs: ["autoawq"], label: "autoawq" });
   }
 
@@ -431,9 +495,11 @@ function inferRequiredPackages(recipe: any, cudaTag: string): PkgDef[] {
 
   // Deduplicate by importName
   const seen = new Set<string>();
-  return pkgs.filter(p => seen.has(p.importName) ? false : (seen.add(p.importName), true));
+  return pkgs.filter((p) => (seen.has(p.importName) ? false : (seen.add(p.importName), true)));
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
+/* eslint-disable @typescript-eslint/no-explicit-any -- recipe object has dynamic shape */
 function getRecipeIhvProvider(recipe: any): IHVProvider {
   const system = recipe?.systems?.local_system;
   const accelerators = system?.config?.accelerators ?? system?.accelerators;
@@ -443,6 +509,7 @@ function getRecipeIhvProvider(recipe: any): IHVProvider {
   }
   return "CUDAExecutionProvider";
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 function oliveSpawnArgs(configPath: string, listPackages: boolean): string[] {
   return listPackages
@@ -450,7 +517,11 @@ function oliveSpawnArgs(configPath: string, listPackages: boolean): string[] {
     : ["run", "--config", configPath];
 }
 
-function resolveOliveCommand(provider: IHVProvider, configPath: string, listPackages: boolean): {
+function resolveOliveCommand(
+  provider: IHVProvider,
+  configPath: string,
+  listPackages: boolean,
+): {
   executable: string;
   args: string[];
 } {
@@ -465,7 +536,7 @@ function resolveOliveCommand(provider: IHVProvider, configPath: string, listPack
 async function buildOliveRunEnvironment(
   python: string,
   provider: IHVProvider,
-  base: NodeJS.ProcessEnv
+  base: NodeJS.ProcessEnv,
 ): Promise<NodeJS.ProcessEnv> {
   if (!isGpuExecutionProvider(provider)) {
     return base;
@@ -479,7 +550,7 @@ async function runOliveConfigPreflight(
   configPath: string,
   onLine: (line: string) => void,
   env: NodeJS.ProcessEnv = process.env,
-  provider: IHVProvider = "CUDAExecutionProvider"
+  provider: IHVProvider = "CUDAExecutionProvider",
 ): Promise<{ ok: boolean; error?: string }> {
   const { executable, args } = resolveOliveCommand(provider, configPath, true);
 
@@ -589,7 +660,7 @@ print(os.pathsep.join(dirs))
 
 async function probeTensorRtLoadable(
   python: string,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<{ loadable: boolean; detail?: string }> {
   const libPaths = await getNativeGpuLibPaths(python);
   const probeEnv = envWithPrependedPaths(env, libPaths);
@@ -632,15 +703,13 @@ except Exception as exc:
     return { loadable: false, detail };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    const detail = message.includes("fail:")
-      ? message.split("fail:").pop()?.trim()
-      : message;
+    const detail = message.includes("fail:") ? message.split("fail:").pop()?.trim() : message;
     return { loadable: false, detail: detail || "TensorRT provider library failed to load" };
   }
 }
 
 async function ensureTensorRt(
-  onLine: (line: string) => void
+  onLine: (line: string) => void,
 ): Promise<{ ok: boolean; error?: string; libsDir?: string | null }> {
   const venvPython = getVenvPython();
   const pip = getVenvPip();
@@ -654,11 +723,11 @@ async function ensureTensorRt(
   const installed = await getInstalledTensorRtVersion(venvPython);
   if (installed && !isCompatibleTensorRtVersion(installed)) {
     onLine(
-      `[deps] TensorRT ${installed} is incompatible with stable onnxruntime-gpu (needs ${PINNED_TENSORRT_VERSION} / nvinfer_10) — reinstalling...`
+      `[deps] TensorRT ${installed} is incompatible with stable onnxruntime-gpu (needs ${PINNED_TENSORRT_VERSION} / nvinfer_10) — reinstalling...`,
     );
   } else if (!installed) {
     onLine(
-      `[deps] Installing ${pinnedTensorRtLabel()} for TensorRT EP (large download, may take several minutes)...`
+      `[deps] Installing ${pinnedTensorRtLabel()} for TensorRT EP (large download, may take several minutes)...`,
     );
   } else {
     onLine(`[deps] TensorRT ${installed} present but EP not loadable — reinstalling pinned runtime...`);
@@ -669,7 +738,9 @@ async function ensureTensorRt(
     proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
     proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
     proc.on("close", (code: number | null) =>
-      code === 0 ? resolve() : reject(new Error(`pip install ${pinnedTensorRtLabel()} failed (exit ${code})`))
+      code === 0
+        ? resolve()
+        : reject(new Error(`pip install ${pinnedTensorRtLabel()} failed (exit ${code})`)),
     );
   });
   onLine(`[deps] ${pinnedTensorRtLabel()} installed ✓`);
@@ -688,7 +759,10 @@ async function ensureTensorRt(
 
 async function getInstalledTensorRtRtxVersion(python: string): Promise<string | null> {
   try {
-    const { stdout } = await execFileAsync(python, ["-c", "import tensorrt_rtx; print(tensorrt_rtx.__version__)"]);
+    const { stdout } = await execFileAsync(python, [
+      "-c",
+      "import tensorrt_rtx; print(tensorrt_rtx.__version__)",
+    ]);
     return stdout.trim() || null;
   } catch {
     return null;
@@ -710,7 +784,7 @@ async function getTensorRtRtxLibsDir(python: string): Promise<string | null> {
 
 async function probeTensorRtRtxLoadable(
   python: string,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<{ loadable: boolean; detail?: string; version?: string }> {
   const libsDir = await getTensorRtRtxLibsDir(python);
   const probeEnv = envWithPrependedPaths(env, libsDir ? [libsDir] : []);
@@ -755,15 +829,13 @@ except Exception as exc:
     return { loadable: false, detail };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    const detail = message.includes("fail:")
-      ? message.split("fail:").pop()?.trim()
-      : message;
+    const detail = message.includes("fail:") ? message.split("fail:").pop()?.trim() : message;
     return { loadable: false, detail: detail || "TensorRT RTX runtime failed to load" };
   }
 }
 
 async function ensureTensorRtRtx(
-  onLine: (line: string) => void
+  onLine: (line: string) => void,
 ): Promise<{ ok: boolean; error?: string; libsDir?: string | null }> {
   const venvPython = getVenvPython();
   const pip = getVenvPip();
@@ -786,7 +858,7 @@ async function ensureTensorRtRtx(
     proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
     proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
     proc.on("close", (code: number | null) =>
-      code === 0 ? resolve() : reject(new Error(`pip install ${tensorrtRtxLabel()} failed (exit ${code})`))
+      code === 0 ? resolve() : reject(new Error(`pip install ${tensorrtRtxLabel()} failed (exit ${code})`)),
     );
   });
   onLine(`[deps] ${tensorrtRtxLabel()} installed ✓`);
@@ -805,7 +877,7 @@ async function ensureTensorRtRtx(
 
 async function ensureDeps(
   pkgs: PkgDef[],
-  onLine: (line: string) => void
+  onLine: (line: string) => void,
 ): Promise<{ ok: boolean; error?: string }> {
   const venvPython = getVenvPython();
   const pip = getVenvPip();
@@ -814,7 +886,10 @@ async function ensureDeps(
     // Torch: check installed CUDA version matches what we need (GPU vs CPU)
     if (pkg.importName === "torch") {
       try {
-        const { stdout } = await execFileAsync(venvPython, ["-c", "import torch; print(torch.version.cuda or 'NONE')"]);
+        const { stdout } = await execFileAsync(venvPython, [
+          "-c",
+          "import torch; print(torch.version.cuda or 'NONE')",
+        ]);
         const installedCuda = stdout.trim();
         const needsGpu = !pkg.installArgs.includes("cpu");
         const hasGpu = installedCuda !== "NONE" && installedCuda !== "";
@@ -822,8 +897,12 @@ async function ensureDeps(
           onLine(`[deps] torch already installed (CUDA: ${hasGpu ? installedCuda : "none/CPU"}) ✓`);
           continue;
         }
-        onLine(`[deps] torch CUDA mismatch (have ${hasGpu ? installedCuda : "CPU"}, need ${needsGpu ? "GPU" : "CPU"}) — reinstalling...`);
-      } catch { /* not installed, fall through */ }
+        onLine(
+          `[deps] torch CUDA mismatch (have ${hasGpu ? installedCuda : "CPU"}, need ${needsGpu ? "GPU" : "CPU"}) — reinstalling...`,
+        );
+      } catch {
+        /* not installed, fall through */
+      }
     } else if (pkg.importName === "tensorrt") {
       const installed = await getInstalledTensorRtVersion(venvPython);
       if (installed && isCompatibleTensorRtVersion(installed)) {
@@ -834,7 +913,9 @@ async function ensureDeps(
         }
         onLine(`[deps] ${pkg.label} installed but TensorRT EP not loadable — reinstalling...`);
       } else if (installed) {
-        onLine(`[deps] ${pkg.label} version ${installed} incompatible — installing ${PINNED_TENSORRT_VERSION}...`);
+        onLine(
+          `[deps] ${pkg.label} version ${installed} incompatible — installing ${PINNED_TENSORRT_VERSION}...`,
+        );
       }
     } else if (pkg.importName === "tensorrt_rtx") {
       const probe = await probeTensorRtRtxLoadable(venvPython);
@@ -850,7 +931,9 @@ async function ensureDeps(
         ]);
         onLine(`[deps] ${pkg.label} already installed ✓`);
         continue;
-      } catch { /* not installed */ }
+      } catch {
+        /* not installed */
+      }
     } else if (pkg.importName === "onnxruntime") {
       try {
         const { stdout } = await execFileAsync(venvPython, [
@@ -864,15 +947,21 @@ async function ensureDeps(
           continue;
         }
         if (installed) {
-          onLine(`[deps] onnxruntime-gpu ${installed} installed — need ${expected ?? "pinned build"}, reinstalling...`);
+          onLine(
+            `[deps] onnxruntime-gpu ${installed} installed — need ${expected ?? "pinned build"}, reinstalling...`,
+          );
         }
-      } catch { /* not installed */ }
+      } catch {
+        /* not installed */
+      }
     } else {
       try {
         await execFileAsync(venvPython, ["-c", `import ${pkg.importName}`]);
         onLine(`[deps] ${pkg.label} already installed ✓`);
         continue;
-      } catch { /* not installed */ }
+      } catch {
+        /* not installed */
+      }
     }
 
     onLine(`[deps] Installing ${pkg.label}...`);
@@ -881,7 +970,7 @@ async function ensureDeps(
       proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
       proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
       proc.on("close", (code: number | null) =>
-        code === 0 ? resolve() : reject(new Error(`pip install ${pkg.label} failed (exit ${code})`))
+        code === 0 ? resolve() : reject(new Error(`pip install ${pkg.label} failed (exit ${code})`)),
       );
     });
     onLine(`[deps] ${pkg.label} installed ✓`);
@@ -913,10 +1002,7 @@ function pickCudaTag(major: number, minor: number): string {
   return "cu118";
 }
 
-async function detectCudaTag(
-  preferred: string,
-  onLine: (line: string) => void
-): Promise<string> {
+async function detectCudaTag(preferred: string, onLine: (line: string) => void): Promise<string> {
   if (preferred && preferred !== "auto") {
     onLine(`[deps] CUDA version override: ${preferred}`);
     return preferred;
@@ -925,7 +1011,10 @@ async function detectCudaTag(
   // Check existing torch in venv first — avoids reinstall when already correct
   const venvPython = getVenvPython();
   try {
-    const { stdout } = await execFileAsync(venvPython, ["-c", "import torch; print(torch.version.cuda or 'NONE')"]);
+    const { stdout } = await execFileAsync(venvPython, [
+      "-c",
+      "import torch; print(torch.version.cuda or 'NONE')",
+    ]);
     const existing = stdout.trim();
     if (existing !== "NONE" && existing) {
       const parts = existing.split(".");
@@ -933,7 +1022,9 @@ async function detectCudaTag(
       onLine(`[deps] Existing torch CUDA ${existing} → using ${tag}`);
       return tag;
     }
-  } catch { /* torch not installed */ }
+  } catch {
+    /* torch not installed */
+  }
 
   // Auto-detect via nvidia-smi
   try {
@@ -943,7 +1034,9 @@ async function detectCudaTag(
       onLine(`[deps] nvidia-smi detected CUDA ${parsed.cudaVersion} → ${parsed.cudaTag}`);
       return parsed.cudaTag;
     }
-  } catch { /* no GPU or nvidia-smi not in PATH */ }
+  } catch {
+    /* no GPU or nvidia-smi not in PATH */
+  }
 
   onLine(`[deps] No GPU detected → CPU torch`);
   return "cpu";
@@ -986,7 +1079,9 @@ async function probeNvidiaGpus(): Promise<HardwareProbeResult["nvidia"] | undefi
         cudaVersion = parsed.cudaVersion;
         cudaTag = parsed.cudaTag;
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     return { gpus, cudaVersion, cudaTag };
   } catch {
@@ -1010,7 +1105,7 @@ async function probeRocmGpus(): Promise<HardwareProbeResult["rocm"] | undefined>
 }
 
 async function probePythonRuntime(
-  python: string
+  python: string,
 ): Promise<Pick<HardwareProbeResult, "openvino" | "onnxRuntimeProviders">> {
   const result: Pick<HardwareProbeResult, "openvino" | "onnxRuntimeProviders"> = {};
 
@@ -1029,7 +1124,9 @@ async function probePythonRuntime(
     ]);
     const providers = stdout.trim().split(",").filter(Boolean);
     if (providers.length > 0) result.onnxRuntimeProviders = providers;
-  } catch { /* onnxruntime not installed */ }
+  } catch {
+    /* onnxruntime not installed */
+  }
 
   return result;
 }
@@ -1066,7 +1163,7 @@ async function probeSystemHardware(): Promise<HardwareProbeResult> {
     if (pyResult.onnxRuntimeProviders?.length && !onnxRuntimeProviders?.length) {
       onnxRuntimeProviders = pyResult.onnxRuntimeProviders;
       notes.push(
-        `ONNX Runtime providers probed via ${python === venvPython ? ".venv Python" : "system Python"}.`
+        `ONNX Runtime providers probed via ${python === venvPython ? ".venv Python" : "system Python"}.`,
       );
     }
     if (!tensorrt?.loadable) {
@@ -1084,9 +1181,7 @@ async function probeSystemHardware(): Promise<HardwareProbeResult> {
   }
 
   if (tensorRtRtx?.loadable) {
-    notes.push(
-      `TensorRT RTX runtime verified${tensorRtRtx.version ? ` (${tensorRtRtx.version})` : ""}.`,
-    );
+    notes.push(`TensorRT RTX runtime verified${tensorRtRtx.version ? ` (${tensorRtRtx.version})` : ""}.`);
   } else if (nvidia?.gpus.length) {
     notes.push(
       tensorRtRtx?.detail
@@ -1108,7 +1203,9 @@ async function probeSystemHardware(): Promise<HardwareProbeResult> {
   if (onnxRuntimeProviders?.length) {
     notes.push(`ORT execution providers: ${onnxRuntimeProviders.join(", ")}`);
     if (nvidia && !onnxRuntimeProviders.includes("CUDAExecutionProvider")) {
-      notes.push("NVIDIA GPU detected but ONNX Runtime CUDA EP is not installed in Python (try onnxruntime-gpu in .venv).");
+      notes.push(
+        "NVIDIA GPU detected but ONNX Runtime CUDA EP is not installed in Python (try onnxruntime-gpu in .venv).",
+      );
     }
   } else if (nvidia) {
     notes.push("ONNX Runtime not installed in Python — NVIDIA GPU inferred from nvidia-smi.");
@@ -1222,14 +1319,23 @@ app.post("/api/olive/run", async (req, res) => {
       job.status = "failed";
       job.exitCode = 1;
       for (const sub of job.subscribers) {
-        try { sub("__DONE__"); } catch { /* gone */ }
+        try {
+          sub("__DONE__");
+        } catch {
+          /* gone */
+        }
       }
       return;
     }
 
     // Detect CUDA version, then infer and install recipe-specific dependencies
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- parsed JSON shape is dynamic
     let recipeObj: any = {};
-    try { recipeObj = JSON.parse(recipeJson); } catch { /* malformed — olive will catch it */ }
+    try {
+      recipeObj = JSON.parse(recipeJson);
+    } catch {
+      /* malformed — olive will catch it */
+    }
 
     if (recipeUsesMemoryOffload(recipeObj)) {
       const hwProbe = await probeSystemHardware();
@@ -1256,7 +1362,11 @@ app.post("/api/olive/run", async (req, res) => {
       job.status = "failed";
       job.exitCode = 1;
       for (const sub of job.subscribers) {
-        try { sub("__DONE__"); } catch { /* gone */ }
+        try {
+          sub("__DONE__");
+        } catch {
+          /* gone */
+        }
       }
       return;
     }
@@ -1276,7 +1386,11 @@ app.post("/api/olive/run", async (req, res) => {
         job.status = "failed";
         job.exitCode = 1;
         for (const sub of job.subscribers) {
-          try { sub("__DONE__"); } catch { /* gone */ }
+          try {
+            sub("__DONE__");
+          } catch {
+            /* gone */
+          }
         }
         return;
       }
@@ -1294,7 +1408,11 @@ app.post("/api/olive/run", async (req, res) => {
         job.status = "failed";
         job.exitCode = 1;
         for (const sub of job.subscribers) {
-          try { sub("__DONE__"); } catch { /* gone */ }
+          try {
+            sub("__DONE__");
+          } catch {
+            /* gone */
+          }
         }
         return;
       }
@@ -1320,7 +1438,7 @@ app.post("/api/olive/run", async (req, res) => {
       tmpFile,
       (line) => pushLog(job, line),
       runEnv,
-      targetProvider
+      targetProvider,
     ).catch((err) => ({
       ok: false,
       error: String(err.message),
@@ -1329,9 +1447,17 @@ app.post("/api/olive/run", async (req, res) => {
       pushLog(job, `[error] Preflight failed: ${preflight.error}`);
       job.status = "failed";
       job.exitCode = 1;
-      try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
+      try {
+        fs.unlinkSync(tmpFile);
+      } catch {
+        /* ignore */
+      }
       for (const sub of job.subscribers) {
-        try { sub("__DONE__"); } catch { /* gone */ }
+        try {
+          sub("__DONE__");
+        } catch {
+          /* gone */
+        }
       }
       return;
     }
@@ -1360,10 +1486,18 @@ app.post("/api/olive/run", async (req, res) => {
       job.status = code === 0 ? "completed" : "failed";
       pushLog(job, `[done] Olive process exited with code ${code}.`);
       // Cleanup temp file
-      try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
+      try {
+        fs.unlinkSync(tmpFile);
+      } catch {
+        /* ignore */
+      }
       // Signal end to all subscribers
       for (const sub of job.subscribers) {
-        try { sub("__DONE__"); } catch { /* gone */ }
+        try {
+          sub("__DONE__");
+        } catch {
+          /* gone */
+        }
       }
     });
 
@@ -1372,7 +1506,11 @@ app.post("/api/olive/run", async (req, res) => {
       job.status = "failed";
       job.exitCode = 1;
       for (const sub of job.subscribers) {
-        try { sub("__DONE__"); } catch { /* gone */ }
+        try {
+          sub("__DONE__");
+        } catch {
+          /* gone */
+        }
       }
     });
   })();
@@ -1475,7 +1613,12 @@ app.get("/api/ai/provider", (_req, res) => {
 });
 
 app.post("/api/ai/provider", (req, res) => {
-  const { provider, apiKey: key, model, baseUrl } = req.body as {
+  const {
+    provider,
+    apiKey: key,
+    model,
+    baseUrl,
+  } = req.body as {
     provider?: string;
     apiKey?: string;
     model?: string;
@@ -1496,7 +1639,12 @@ app.post("/api/ai/provider", (req, res) => {
     model: model.trim(),
     baseUrl: baseUrl?.trim() || undefined,
   };
-  return res.json({ ok: true, source: "user", provider: runtimeAiProvider.provider, model: runtimeAiProvider.model });
+  return res.json({
+    ok: true,
+    source: "user",
+    provider: runtimeAiProvider.provider,
+    model: runtimeAiProvider.model,
+  });
 });
 
 app.delete("/api/ai/provider", (_req, res) => {
@@ -1514,11 +1662,18 @@ Respond with ONLY valid JSON:
 {"valid":true|false,"severity":"success"|"warning"|"error","summary":"<1-2 sentences>","issues":[{"type":"critical"|"warning"|"info","title":"<short>","explanation":"<detail>","fix":"<action>"}],"suggestions":["<tip>"]}`;
 
   try {
-    const text = await callAI(system, [{
-      role: "user",
-      content: `Validate this Olive recipe for hardware '${ihvProvider || "CPUExecutionProvider"}':\n\n${recipeJson}`,
-    }], true);
+    const text = await callAI(
+      system,
+      [
+        {
+          role: "user",
+          content: `Validate this Olive recipe for hardware '${ihvProvider || "CPUExecutionProvider"}':\n\n${recipeJson}`,
+        },
+      ],
+      true,
+    );
     return res.json(parseJsonFromAiResponse(text));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
   } catch (err: any) {
     console.error("AI Validate Error:", err);
     return res.status(500).json({ error: err.message });
@@ -1555,8 +1710,13 @@ Respond with ONLY valid JSON:
 {"score":<0-100>,"level":"Optimized"|"Suboptimal"|"Unoptimized"|"Critical Mismatch","summary":"<2 sentences>","suggestions":[{"title":"<short>","description":"<why+what>","impact":"High"|"Medium"|"Low","type":"warning"|"success"|"suggestion"|"info","autofix":{"pass":"<path>","value":"<val>"}}]}`;
 
   try {
-    const text = await callAI(system, [{ role: "user", content: `Pipeline JSON:\n${JSON.stringify(workspace, null, 2)}` }], true);
+    const text = await callAI(
+      system,
+      [{ role: "user", content: `Pipeline JSON:\n${JSON.stringify(workspace, null, 2)}` }],
+      true,
+    );
     return res.json(parseJsonFromAiResponse(text));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
   } catch (err: any) {
     console.error("AI Analyze Error:", err);
     return res.status(500).json({ error: err.message });
@@ -1570,12 +1730,11 @@ app.post("/api/ai/chat", async (req, res) => {
 
   const workspace = workspaceContext ?? (state ? buildAiWorkspaceContext(state) : null);
 
-  const contextBlock = workspace
-    ? `\n\n${formatAiWorkspaceContextForPrompt(workspace)}`
-    : "";
+  const contextBlock = workspace ? `\n\n${formatAiWorkspaceContextForPrompt(workspace)}` : "";
 
   const system = `You are "Olive AI Assistant", an expert Microsoft Olive compiler specialist. Deep expertise in quantization (AWQ, GPTQ, PTQ, QAT, SmoothQuant), pruning (magnitude, SparseGPT, Wanda), PEFT (LoRA, QLoRA), ONNX Runtime, and hardware execution providers (CUDA, TensorRT, DirectML, OpenVINO, QNN/Snapdragon). Give professional, accurate, concise answers. When relevant, provide Olive config snippets or CLI commands. Treat the workspace block below as the user's live pipeline — do not invent a different model, provider, or pass list.${contextBlock}`;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- chat messages from request body
   const history: AIChatMessage[] = (chatHistory || []).map((m: any) => ({
     role: m.role === "assistant" ? "assistant" : "user",
     content: m.content,
@@ -1584,6 +1743,7 @@ app.post("/api/ai/chat", async (req, res) => {
   try {
     const text = await callAI(system, [...history, { role: "user", content: message }], false);
     return res.json({ text: text || "No response generated." });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
   } catch (err: any) {
     console.error("AI Chat Error:", err);
     return res.status(500).json({ error: err.message });
@@ -1621,6 +1781,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
+    // eslint-disable-next-line no-console -- intentional server startup message
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }

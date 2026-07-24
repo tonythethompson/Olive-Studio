@@ -6,6 +6,7 @@ const GPU_PROVIDERS: IHVProvider[] = [
   "NvTensorRTRTXExecutionProvider",
   "TensorrtExecutionProvider",
   "ROCMExecutionProvider",
+  "WebGpuExecutionProvider",
 ];
 const NPU_PROVIDERS: IHVProvider[] = ["QNNExecutionProvider"];
 
@@ -147,8 +148,88 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
         gptqConfig.user_script = state.userScript;
       }
       passes.quantization = {
-        type: "GPTQQuantizer",
+        type: "GptqQuantizer",
         config: gptqConfig,
+      };
+    } else if (state.passes.quantMethod === "qat") {
+      const qatConfig: Record<string, unknown> = {
+        precision: state.passes.qatQuantPrecision,
+        calibrate_method: state.passes.qatCalibrateMethod,
+        calibrate_steps: state.passes.qatCalibrateSteps,
+      };
+      if (state.hfDataset) {
+        qatConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
+      }
+      if (state.userScript) {
+        qatConfig.user_script = state.userScript;
+      }
+      passes.quantization = {
+        type: "QATQuantizer",
+        config: qatConfig,
+      };
+    } else if (state.passes.quantMethod === "hqq") {
+      // Docs: https://microsoft.github.io/Olive/0.12.1/reference/options.html -> OnnxHqqQuantization
+      const hqqConfig: Record<string, unknown> = {
+        precision: state.passes.quantPrecision === "int4" ? "int4" : "int8",
+      };
+      if (state.hfDataset) {
+        hqqConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
+      }
+      if (state.userScript) {
+        hqqConfig.user_script = state.userScript;
+      }
+      passes.quantization = {
+        type: "OnnxHqqQuantization",
+        config: hqqConfig,
+      };
+    } else if (state.passes.quantMethod === "rtn") {
+      // Docs: https://microsoft.github.io/Olive/0.12.1/reference/options.html -> OnnxBlockWiseRtnQuantization
+      const rtnConfig: Record<string, unknown> = {
+        bits: state.passes.quantPrecision === "int4" ? 4 : 8,
+        block_size: 128,
+        is_symmetric: true,
+      };
+      if (state.hfDataset) {
+        rtnConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
+      }
+      if (state.userScript) {
+        rtnConfig.user_script = state.userScript;
+      }
+      passes.quantization = {
+        type: "OnnxBlockWiseRtnQuantization",
+        config: rtnConfig,
+      };
+    } else if (state.passes.quantMethod === "spinquant") {
+      // Docs: https://microsoft.github.io/Olive/0.12.1/features/quantization.html -> SpinQuant
+      // Only supports HuggingFace transformer PyTorch models.
+      const spinConfig: Record<string, unknown> = {
+        rotate_mode: "hadamard",
+      };
+      if (state.hfDataset) {
+        spinConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
+      }
+      if (state.userScript) {
+        spinConfig.user_script = state.userScript;
+      }
+      passes.quantization = {
+        type: "SpinQuant",
+        config: spinConfig,
+      };
+    } else if (state.passes.quantMethod === "quarot") {
+      // Docs: https://microsoft.github.io/Olive/0.12.1/features/quantization.html -> QuaRot
+      // Only supports HuggingFace transformer PyTorch models.
+      const quarotConfig: Record<string, unknown> = {
+        rotate_mode: "hadamard",
+      };
+      if (state.hfDataset) {
+        quarotConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
+      }
+      if (state.userScript) {
+        quarotConfig.user_script = state.userScript;
+      }
+      passes.quantization = {
+        type: "QuaRot",
+        config: quarotConfig,
       };
     } else {
       const quantConfig: Record<string, unknown> = {
@@ -184,7 +265,7 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   }
 
   if (state.passes.splitting) {
-    passes.splitting = { type: "ModelSplitting", config: {} };
+    passes.splitting = { type: "SplitModel", config: {} };
   }
 
   if (state.passes.peft) {
@@ -215,16 +296,25 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
     passes.pruning = { type: pType, config };
   }
 
-  // Evaluators block for custom metrics (required by some passes for search/eval).
+  // Evaluators block for custom metrics (required for accuracy evaluation).
   if (state.userScript && state.hfDataset) {
+    (recipe as Record<string, unknown>).data_configs = [
+      {
+        name: "eval_data_config",
+        user_script: state.userScript,
+        data_dir: state.hfDataset,
+      },
+    ];
     (recipe as Record<string, unknown>).evaluators = {
       common_evaluator: {
-        type: "Accuracy",
-        config: {
-          user_script: state.userScript,
-          eval_func: "eval_accuracy",
-          data_config: state.hfDataset ? { data_dir: state.hfDataset, batch_size: 1 } : undefined,
-        },
+        metrics: [
+          {
+            name: "accuracy",
+            type: "accuracy",
+            data_config: "eval_data_config",
+            sub_types: [{ name: "accuracy_score", priority: 1 }],
+          },
+        ],
       },
     };
   }

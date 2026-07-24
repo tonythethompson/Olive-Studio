@@ -114,6 +114,66 @@ const GUIDANCE: Record<string, PassGuidance> = {
     ],
     whenNotToUse: ["When PTQ accuracy drops too much and you can afford QAT retraining."],
   },
+  quantization_hqq: {
+    title: "HQQ (half-quadratic quantization)",
+    summary: "Outlier-robust PTQ using half-quadratic optimization.",
+    whatItDoes:
+      "Uses half-quadratic minimization to find optimal quantization grids, particularly robust to weight outliers in large models.",
+    whenToUse: [
+      "LLMs with noticeable outlier activations where AWQ/GPTQ degrades.",
+      "Aggressive INT4 compression without retraining — runs on any GPU.",
+      "Quick alternative to GPTQ when calibration data is limited.",
+    ],
+    whenNotToUse: [
+      "CPU-only targets — HQQ requires GPU for the quantization step.",
+      "When maximum throughput is required and PTQ's speed is sufficient.",
+    ],
+  },
+  quantization_rtn: {
+    title: "RTN (round-to-nearest)",
+    summary: "Simplest quantization — rounds weights to nearest value.",
+    whatItDoes:
+      "Maps each weight to its nearest quantized value without optimization or calibration. Fastest setup, lowest accuracy.",
+    whenToUse: [
+      "Quick feasibility checks before investing in GPTQ/HQQ calibration.",
+      "Hardware with limited calibration pipeline support.",
+      "When benchmark speed matters more than per-task accuracy.",
+    ],
+    whenNotToUse: [
+      "Production deployment where every accuracy point counts.",
+      "Models with wide weight distributions that RTN handles poorly.",
+    ],
+  },
+  quantization_spinquant: {
+    title: "SpinQuant — rotation-based quantization",
+    summary: "Applies orthogonal rotations before quantization to reduce outlier impact.",
+    whatItDoes:
+      "Pre-processes weights with learned orthogonal spin transformations to smooth outliers, then quantizes with minimal accuracy loss.",
+    whenToUse: [
+      "Very large LLMs (70B+) where outlier channels dominate quantization error.",
+      "GPU targets (CUDA, TensorRT, ROCm) with calibration budget.",
+      "When GPTQ quality is acceptable but you need faster calibration.",
+    ],
+    whenNotToUse: [
+      "CPU-only or OpenVINO targets — requires GPU for rotation optimization.",
+      "Small models where plain PTQ already achieves target accuracy.",
+    ],
+  },
+  quantization_quarot: {
+    title: "QuaRot — quaternion rotation quantization",
+    summary: "Hadamard-domain rotation to whiten weights before quantization.",
+    whatItDoes:
+      "Applies random Hadamard transforms to rotate weight matrices into a more quantizable distribution, reducing outlier magnitudes.",
+    whenToUse: [
+      "LLMs where AWQ or GPTQ still show outlier degradation.",
+      "GPU calibration pipelines targeting INT4 with high retention.",
+      "Research or development exploring different rotation bases.",
+    ],
+    whenNotToUse: [
+      "CPU-only targets — requires GPU for rotation computation.",
+      "When SpinQuant is already giving good results (similar approach).",
+    ],
+  },
   quantization_awq: {
     title: "AWQ (activation-aware quantization)",
     summary: "Protects salient weights during INT4/INT8 compression.",
@@ -185,6 +245,10 @@ export function getPassGuidanceForNode(nodeId: string, state: UIState): PassGuid
     if (method === "awq" && GUIDANCE.quantization_awq) return GUIDANCE.quantization_awq;
     if (method === "qat" && GUIDANCE.quantization_qat) return GUIDANCE.quantization_qat;
     if (method === "ptq" && GUIDANCE.quantization_ptq) return GUIDANCE.quantization_ptq;
+    if (method === "hqq" && GUIDANCE.quantization_hqq) return GUIDANCE.quantization_hqq;
+    if (method === "rtn" && GUIDANCE.quantization_rtn) return GUIDANCE.quantization_rtn;
+    if (method === "spinquant" && GUIDANCE.quantization_spinquant) return GUIDANCE.quantization_spinquant;
+    if (method === "quarot" && GUIDANCE.quantization_quarot) return GUIDANCE.quantization_quarot;
   }
 
   if (nodeId === "conversion" && state.passes.conversion) {

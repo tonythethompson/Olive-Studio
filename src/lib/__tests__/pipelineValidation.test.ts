@@ -82,6 +82,26 @@ describe("isQuantMethodAllowed", () => {
     expect(isQuantMethodAllowed("qat", "CPUExecutionProvider")).toBe(true);
     expect(isQuantMethodAllowed("qat", "QNNExecutionProvider")).toBe(false);
   });
+
+  it("allows HQQ on any provider (no GPU required per docs)", () => {
+    expect(isQuantMethodAllowed("hqq", "CUDAExecutionProvider")).toBe(true);
+    expect(isQuantMethodAllowed("hqq", "ROCMExecutionProvider")).toBe(true);
+    expect(isQuantMethodAllowed("hqq", "CPUExecutionProvider")).toBe(true);
+    expect(isQuantMethodAllowed("hqq", "QNNExecutionProvider")).toBe(true);
+  });
+
+  it("allows RTN on any provider", () => {
+    expect(isQuantMethodAllowed("rtn", "CPUExecutionProvider")).toBe(true);
+    expect(isQuantMethodAllowed("rtn", "CUDAExecutionProvider")).toBe(true);
+    expect(isQuantMethodAllowed("rtn", "QNNExecutionProvider")).toBe(true);
+  });
+
+  it("allows SpinQuant and QuaRot only on GPU providers", () => {
+    expect(isQuantMethodAllowed("spinquant", "CUDAExecutionProvider")).toBe(true);
+    expect(isQuantMethodAllowed("spinquant", "CPUExecutionProvider")).toBe(false);
+    expect(isQuantMethodAllowed("quarot", "CUDAExecutionProvider")).toBe(true);
+    expect(isQuantMethodAllowed("quarot", "CPUExecutionProvider")).toBe(false);
+  });
 });
 
 // ─── isConversionFormatAllowed ────────────────────────────────
@@ -135,14 +155,23 @@ describe("isPeftMethodAllowed", () => {
 // ─── getAllowed* ──────────────────────────────────────────────
 
 describe("getAllowedQuantMethods", () => {
-  it("returns all 4 for CUDA", () => {
-    expect(getAllowedQuantMethods("CUDAExecutionProvider")).toEqual(["ptq", "awq", "gptq", "qat"]);
+  it("returns all 8 for CUDA", () => {
+    expect(getAllowedQuantMethods("CUDAExecutionProvider")).toEqual([
+      "ptq",
+      "awq",
+      "gptq",
+      "qat",
+      "hqq",
+      "rtn",
+      "spinquant",
+      "quarot",
+    ]);
   });
-  it("excludes AWQ and GPTQ for CPU", () => {
-    expect(getAllowedQuantMethods("CPUExecutionProvider")).toEqual(["ptq", "qat"]);
+  it("excludes AWQ, GPTQ, SpinQuant, QuaRot for CPU (keeps ptq, qat, hqq, rtn)", () => {
+    expect(getAllowedQuantMethods("CPUExecutionProvider")).toEqual(["ptq", "qat", "hqq", "rtn"]);
   });
-  it("excludes all but PTQ for QNN", () => {
-    expect(getAllowedQuantMethods("QNNExecutionProvider")).toEqual(["ptq"]);
+  it("excludes AWQ, GPTQ, QAT, SpinQuant, QuaRot for QNN (keeps ptq, hqq, rtn)", () => {
+    expect(getAllowedQuantMethods("QNNExecutionProvider")).toEqual(["ptq", "hqq", "rtn"]);
   });
 });
 

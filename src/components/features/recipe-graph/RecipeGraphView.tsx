@@ -18,6 +18,7 @@ export function RecipeGraphView({ state, setState, showDot = true }: RecipeGraph
 
   const bumpLayout = useCallback(() => setLayoutTick((prev) => prev + 1), []);
 
+  /* eslint-disable react-hooks/exhaustive-deps -- state.passes setter + complex dependency expression intentional */
   useEffect(() => {
     const modelInfo = getSelectedModelInfo(state);
     const validValues = modelInfo.types.map((t) => t.value);
@@ -26,7 +27,6 @@ export function RecipeGraphView({ state, setState, showDot = true }: RecipeGraph
         passes: { ...state.passes, conversionInputTargetTypes: modelInfo.defaultType },
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     state.modelSource,
     state.hfModelId,
@@ -34,6 +34,7 @@ export function RecipeGraphView({ state, setState, showDot = true }: RecipeGraph
     state.localFiles.length,
     state.localFiles[0]?.name,
   ]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   return (
     <div className="flex flex-col h-full overflow-x-auto">

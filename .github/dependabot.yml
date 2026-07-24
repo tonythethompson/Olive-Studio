@@ -1,0 +1,86 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+      - "ci"
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    versioning-strategy: "increase"
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+    labels:
+      - "dependencies"
+    groups:
+      eslint:
+        patterns:
+          - "eslint*"
+          - "@eslint/*"
+          - "@typescript-eslint/*"
+        update-types:
+          - "patch"
+          - "minor"
+      react:
+        patterns:
+          - "react*"
+          - "@types/react*"
+        update-types:
+          - "patch"
+          - "minor"
+      vite:
+        patterns:
+          - "vite*"
+          - "@vitejs/*"
+        update-types:
+          - "patch"
+          - "minor"
+      testing:
+        patterns:
+          - "vitest*"
+          - "@vitest/*"
+        update-types:
+          - "patch"
+          - "minor"
+      commitlint:
+        patterns:
+          - "@commitlint/*"
+        update-types:
+          - "patch"
+          - "minor"
+      prettier:
+        patterns:
+          - "prettier*"
+        update-types:
+          - "patch"
+          - "minor"
+      olive:
+        patterns:
+          - "@microsoft/*"
+        update-types:
+          - "patch"
+          - "minor"
+      all:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+    ignore:
+      - dependency-name: "pnpm"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"

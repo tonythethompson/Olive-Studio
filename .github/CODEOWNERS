@@ -1,0 +1,19 @@
+# CI/CD pipeline and dependency management
+.github/workflows/*        @tonythethompson
+.github/dependabot.yml     @tonythethompson
+
+# Code quality — linting, formatting, type checking
+eslint.config.js           @tonythethompson
+commitlint.config.js       @tonythethompson
+.prettierrc*               @tonythethompson
+.prettierignore            @tonythethompson
+
+# Pre-commit hooks and git tooling
+.husky/*                   @tonythethompson
+
+# Build and test configuration
+tsconfig.json              @tonythethompson
+vitest.config.ts           @tonythethompson
+
+# Project metadata
+package.json               @tonythethompson

@@ -26,6 +26,10 @@ export const DEFAULT_PASSES: UIState["passes"] = {
   peft: false,
   peftMethod: "lora",
   diffusionLora: false,
+  qatQuantPrecision: "int4",
+  qatCalibrateMethod: "minmax",
+  qatCalibrateSteps: 10,
+  quantPreset: "",
 };
 
 export function createInactivePasses(): UIState["passes"] {

@@ -66,7 +66,16 @@ function collectActivePassLabels(passes: UIState["passes"]): string[] {
     labels.push(`conversion (${passes.conversionFormat}, opset ${passes.conversionOpset})`);
   }
   if (passes.quantization) {
-    labels.push(`quantization (${passes.quantMethod} ${passes.quantPrecision})`);
+    const preset = passes.quantPreset ? `, preset: ${passes.quantPreset}` : "";
+    const extra =
+      passes.quantMethod === "gptq"
+        ? ` block=${passes.gptqBlockSize} group=${passes.gptqGroupSize} desc_act=${passes.gptqDescAct}`
+        : passes.quantMethod === "awq"
+          ? ` group=${passes.awqGroupSize} damp=${passes.awqDampPercent} sym=${passes.awqSym}`
+          : passes.quantMethod === "qat"
+            ? ` precision=${passes.qatQuantPrecision} method=${passes.qatCalibrateMethod} steps=${passes.qatCalibrateSteps}`
+            : "";
+    labels.push(`quantization (${passes.quantMethod} ${passes.quantPrecision}${preset}${extra})`);
   }
   if (passes.pruning) {
     labels.push(
@@ -162,6 +171,26 @@ export function formatAiWorkspaceContextForPrompt(ctx: AiWorkspaceContext): stri
     lines.push("- IHV pass conflicts on selected provider:");
     for (const c of ctx.providerConflicts) {
       lines.push(`  • [${c.severity}] ${c.passName}: ${c.reason}`);
+    }
+  }
+
+  // Quantization preset & advanced parameters
+  if (ctx.passes.quantization) {
+    const preset = ctx.passes.quantPreset || "(custom/manual)";
+    lines.push(`- Quantization preset: ${preset}`);
+    lines.push(`- Quant method: ${ctx.passes.quantMethod}`);
+    if (ctx.passes.quantMethod === "gptq") {
+      lines.push(
+        `  ├ block_size=${ctx.passes.gptqBlockSize}  group_size=${ctx.passes.gptqGroupSize}  desc_act=${ctx.passes.gptqDescAct}`,
+      );
+    } else if (ctx.passes.quantMethod === "awq") {
+      lines.push(
+        `  ├ group_size=${ctx.passes.awqGroupSize}  damp_percent=${ctx.passes.awqDampPercent}  sym=${ctx.passes.awqSym}`,
+      );
+    } else if (ctx.passes.quantMethod === "qat") {
+      lines.push(
+        `  ├ quant_precision=${ctx.passes.qatQuantPrecision}  calibrate_method=${ctx.passes.qatCalibrateMethod}  calibrate_steps=${ctx.passes.qatCalibrateSteps}`,
+      );
     }
   }
 
