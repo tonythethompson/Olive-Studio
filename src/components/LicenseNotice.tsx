@@ -2,7 +2,7 @@ import { X } from "lucide-react";
 
 const REPO_URL = "https://github.com/tonythethompson/Olive-Studio";
 const LICENSE_URL = `${REPO_URL}/blob/main/LICENSE`;
-const AGPL_URL = "https://www.gnu.org/licenses/agpl-3.0.html";
+const MIT_URL = "https://opensource.org/licenses/MIT";
 
 interface LicenseNoticeProps {
   open: boolean;
@@ -41,22 +41,18 @@ export function LicenseNotice({ open, onClose }: LicenseNoticeProps) {
           <p>
             <span className="text-slate-200">Olive Studio</span> is free software licensed under the{" "}
             <a
-              href={AGPL_URL}
+              href={MIT_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="text-electric-blue hover:underline"
             >
-              GNU Affero General Public License v3.0
+              MIT License
             </a>
             .
           </p>
           <p>
             You may use, study, modify, and redistribute this program under the terms of that license.
-            Modified versions must remain under the same license.
-          </p>
-          <p>
-            If you run a modified version as a network service, AGPL section 13 requires you to offer
-            corresponding source code to users interacting with it over the network.
+            Modified versions may be relicensed under a different license at your discretion.
           </p>
           <p className="text-[11px] text-slate-500">
             Copyright © 2026 Anthony Thompson. Source:{" "}

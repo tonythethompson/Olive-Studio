@@ -160,7 +160,7 @@ function Dashboard() {
             onClick={() => setLicenseOpen(true)}
             className="text-[10px] text-slate-600 hover:text-slate-400 cursor-pointer"
           >
-            AGPL-3.0
+            MIT
           </button>
         </footer>
       </aside>

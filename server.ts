@@ -48,7 +48,20 @@ const execFileAsync = promisify(execFile);
 // ─── AI Provider Config ───────────────────────────────────────────────────────
 
 interface ProviderConfig {
-  provider: "gemini" | "openai" | "anthropic" | "mistral" | "openai-compat";
+  provider:
+    | "gemini"
+    | "openai"
+    | "anthropic"
+    | "mistral"
+    | "openai-compat"
+    | "xai"
+    | "openrouter"
+    | "groq"
+    | "together"
+    | "chatgpt-sub"
+    | "copilot"
+    | "devin"
+    | "kilocode";
   apiKey: string;
   model: string;
   baseUrl?: string;
@@ -65,6 +78,14 @@ const ALLOWED_AI_PROVIDERS = new Set<ProviderConfig["provider"]>([
   "anthropic",
   "mistral",
   "openai-compat",
+  "xai",
+  "openrouter",
+  "groq",
+  "together",
+  "chatgpt-sub",
+  "copilot",
+  "devin",
+  "kilocode",
 ]);
 
 function detectEnvProvider(): ProviderConfig | null {
@@ -83,6 +104,37 @@ function detectEnvProvider(): ProviderConfig | null {
   const mistralKey = readEnvApiKey("MISTRAL_API_KEY");
   if (mistralKey) {
     return { provider: "mistral", apiKey: mistralKey, model: "mistral-large-latest" };
+  }
+  const xaiKey = readEnvApiKey("XAI_API_KEY");
+  if (xaiKey) {
+    return { provider: "xai", apiKey: xaiKey, model: "grok-3", baseUrl: "https://api.x.ai/v1" };
+  }
+  const openrouterKey = readEnvApiKey("OPENROUTER_API_KEY");
+  if (openrouterKey) {
+    return {
+      provider: "openrouter",
+      apiKey: openrouterKey,
+      model: "openai/gpt-4o",
+      baseUrl: "https://openrouter.ai/api/v1",
+    };
+  }
+  const groqKey = readEnvApiKey("GROQ_API_KEY");
+  if (groqKey) {
+    return {
+      provider: "groq",
+      apiKey: groqKey,
+      model: "llama-4-scout-17b-16e-instruct",
+      baseUrl: "https://api.groq.com/openai/v1",
+    };
+  }
+  const togetherKey = readEnvApiKey("TOGETHER_API_KEY");
+  if (togetherKey) {
+    return {
+      provider: "together",
+      apiKey: togetherKey,
+      model: "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+      baseUrl: "https://api.together.xyz/v1",
+    };
   }
   return null;
 }
@@ -205,6 +257,14 @@ async function callAI(system: string, messages: AIChatMessage[], wantJson = fals
     case "openai":
     case "mistral":
     case "openai-compat":
+    case "xai":
+    case "openrouter":
+    case "groq":
+    case "together":
+    case "chatgpt-sub":
+    case "copilot":
+    case "devin":
+    case "kilocode":
       return callOpenAICompat(cfg, system, messages, wantJson);
     default:
       throw new Error(`Unknown provider: ${cfg.provider}`);
@@ -1694,38 +1754,67 @@ app.delete("/api/ai/provider", (_req, res) => {
   return res.json({ ok: true });
 });
 
-// ─── GET /api/ai/local-models ──────────────────────────────────────────────────
-/** Path to the Llmster (LM Studio) CLI binary */
+// ─── LM Studio (Llmster) Integration ─────────────────────────────────────────
+const LM_STUDIO_PORT = 1234;
+
+/** Read the LM Studio API token from LM_API_TOKEN env var */
+function getLmStudioToken(): string | null {
+  return process.env.LM_API_TOKEN || process.env.LM_STUDIO_API_KEY || null;
+}
+
+/** Build common fetch options for LM Studio HTTP API calls */
+function lmStudioFetchInit(signal?: AbortSignal): RequestInit {
+  const init: RequestInit = {};
+  if (signal) init.signal = signal;
+  const token = getLmStudioToken();
+  if (token) {
+    init.headers = { Authorization: `Bearer ${token}` };
+  }
+  return init;
+}
+
+/** Find the Llmster (LM Studio) CLI binary, cached at module level */
+let cachedLmsCli: string | null | undefined; // undefined = not yet searched
 function findLmsCli(): string | null {
+  if (cachedLmsCli !== undefined) return cachedLmsCli;
   const home = os.homedir();
   const candidates =
     process.platform === "win32"
       ? [path.join(home, ".lmstudio", "bin", "lms.exe"), path.join(home, ".lmstudio", "bin", "lms")]
       : [path.join(home, ".lmstudio", "bin", "lms"), "/usr/local/bin/lms", "/opt/homebrew/bin/lms"];
   for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
+    if (fs.existsSync(c)) {
+      cachedLmsCli = c;
+      return cachedLmsCli;
+    }
   }
-  // Try PATH
+  // Try PATH via synchronous which/where
   try {
-    const { stdout } = require("child_process")
-      .execSync("which lms 2>/dev/null || where lms 2>nul", { encoding: "utf-8" })
-      .trim();
-    if (stdout && fs.existsSync(stdout)) return stdout;
+    const { execSync } = require("child_process") as typeof import("child_process");
+    const result: string = execSync("which lms 2>/dev/null || where lms 2>nul", {
+      encoding: "utf-8",
+      timeout: 2000,
+    }).trim();
+    if (result && fs.existsSync(result)) {
+      cachedLmsCli = result;
+      return cachedLmsCli;
+    }
   } catch {
     /* not on PATH */
   }
-  return null;
+  cachedLmsCli = null;
+  return cachedLmsCli;
 }
 
 app.get("/api/ai/local-models", async (_req, res) => {
-  const LM_STUDIO_PORT = 1234;
   try {
     // 1) Try LM Studio HTTP API (loaded models)
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2000);
-    const response = await fetch(`http://localhost:${LM_STUDIO_PORT}/v1/models`, {
-      signal: controller.signal,
-    });
+    const response = await fetch(
+      `http://localhost:${LM_STUDIO_PORT}/v1/models`,
+      lmStudioFetchInit(controller.signal),
+    );
     clearTimeout(timeout);
     if (response.ok) {
       const data = (await response.json()) as { data?: Array<{ id: string }> };
@@ -1736,9 +1825,15 @@ app.get("/api/ai/local-models", async (_req, res) => {
       let downloadedModels: string[] = [];
       if (lms) {
         try {
-          const { stdout } = await execFileAsync(lms, ["ls", "--output", "json"], { timeout: 5000 });
-          const parsed = JSON.parse(stdout) as { models?: Array<{ identifier?: string; path?: string }> };
-          downloadedModels = (parsed.models || []).map((m) => m.identifier || m.path || "").filter(Boolean);
+          const { stdout } = await execFileAsync(lms, ["ls", "--json"], { timeout: 5000 });
+          const parsed = JSON.parse(stdout) as Array<{
+            modelKey?: string;
+            sizeBytes?: number;
+            indexedModelIdentifier?: string;
+          }>;
+          downloadedModels = (Array.isArray(parsed) ? parsed : [])
+            .map((m) => m.modelKey || m.indexedModelIdentifier || "")
+            .filter(Boolean);
         } catch {
           // Fall back to loaded models only
           downloadedModels = loadedModels;
@@ -1746,11 +1841,122 @@ app.get("/api/ai/local-models", async (_req, res) => {
       }
 
       const allModels = [...new Set([...downloadedModels, ...loadedModels])];
-      return res.json({ lmStudioRunning: true, installedModels: allModels });
+      return res.json({ lmStudioRunning: true, ollamaRunning: true, installedModels: allModels });
     }
-    return res.json({ lmStudioRunning: false, installedModels: [] });
+    return res.json({ lmStudioRunning: false, ollamaRunning: false, installedModels: [] });
   } catch {
-    return res.json({ lmStudioRunning: false, installedModels: [] });
+    return res.json({ lmStudioRunning: false, ollamaRunning: false, installedModels: [] });
+  }
+});
+
+// ─── GET /api/ai/local-model-sizes ─────────────────────────────────────────────
+app.get("/api/ai/local-model-sizes", async (_req, res) => {
+  const lms = findLmsCli();
+  if (!lms) {
+    return res.json({ sizes: {} });
+  }
+  try {
+    const { stdout } = await execFileAsync(lms, ["ls", "--json"], { timeout: 5000 });
+    const parsed = JSON.parse(stdout) as Array<{
+      modelKey?: string;
+      sizeBytes?: number;
+      indexedModelIdentifier?: string;
+      displayName?: string;
+      paramsString?: string;
+    }>;
+    const sizes: Record<string, number> = {};
+    if (Array.isArray(parsed)) {
+      for (const m of parsed) {
+        const key = m.modelKey || m.indexedModelIdentifier || "";
+        if (key && typeof m.sizeBytes === "number") {
+          sizes[key] = m.sizeBytes;
+        }
+      }
+    }
+    return res.json({ sizes });
+  } catch {
+    return res.json({ sizes: {} });
+  }
+});
+
+// ─── GET /api/ai/local-health ──────────────────────────────────────────────────
+app.get("/api/ai/local-health", async (_req, res) => {
+  const lms = findLmsCli();
+  if (!lms) {
+    return res.json({
+      healthy: false,
+      lmsInstalled: false,
+      serverRunning: false,
+      error: "Llmster CLI not found",
+    });
+  }
+
+  try {
+    // Check if LM Studio server is responding on port 1234
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const response = await fetch(
+      `http://localhost:${LM_STUDIO_PORT}/v1/models`,
+      lmStudioFetchInit(controller.signal),
+    );
+    clearTimeout(timeout);
+
+    // Any HTTP response means the server is running, even 401 (auth required)
+    const serverRunning = response.status > 0;
+    if (serverRunning) {
+      return res.json({ healthy: true, lmsInstalled: true, serverRunning: true, needsToken: !response.ok });
+    }
+    return res.json({
+      healthy: false,
+      lmsInstalled: true,
+      serverRunning: false,
+      error: `Server responded with ${response.status}`,
+    });
+  } catch {
+    return res.json({
+      healthy: false,
+      lmsInstalled: true,
+      serverRunning: false,
+      error: "LM Studio server not responding on port " + LM_STUDIO_PORT,
+    });
+  }
+});
+
+// ─── POST /api/ai/local-load ──────────────────────────────────────────────────
+app.post("/api/ai/local-load", async (req, res) => {
+  const { modelTag } = req.body as { modelTag?: string };
+  if (!modelTag) return res.status(400).json({ error: "modelTag is required." });
+
+  const lms = findLmsCli();
+  if (!lms) {
+    return res.status(500).json({ error: "LM Studio (Llmster) not found." });
+  }
+
+  try {
+    const { stdout, stderr } = await execFileAsync(lms, ["load", modelTag], { timeout: 30000 });
+    return res.json({ ok: true, output: stdout || stderr });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: `Failed to load model: ${msg}` });
+  }
+});
+
+// ─── POST /api/ai/local-unload ────────────────────────────────────────────────
+app.post("/api/ai/local-unload", async (req, res) => {
+  const { modelTag } = req.body as { modelTag?: string };
+  if (!modelTag) return res.status(400).json({ error: "modelTag is required." });
+
+  const lms = findLmsCli();
+  if (!lms) {
+    return res.status(500).json({ error: "LM Studio (Llmster) not found." });
+  }
+
+  try {
+    const { stdout, stderr } = await execFileAsync(lms, ["unload", modelTag], { timeout: 10000 });
+    return res.json({ ok: true, output: stdout || stderr });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: `Failed to unload model: ${msg}` });
   }
 });
 
@@ -1789,6 +1995,13 @@ app.post("/api/ai/local-pull", async (req, res) => {
       return res.status(500).json({
         error: `LM Studio model download failed (exit ${exitCode}): ${stderr || stdout}`,
       });
+    }
+
+    // Auto-load the model into LM Studio memory so it's ready for immediate use
+    try {
+      await execFileAsync(lms, ["load", modelTag], { timeout: 30000 });
+    } catch {
+      // Load failure is non-fatal — model is downloaded, user can load manually
     }
 
     // Configure the AI provider to use LM Studio's OpenAI-compatible server

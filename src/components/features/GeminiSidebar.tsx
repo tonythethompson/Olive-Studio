@@ -20,15 +20,33 @@ import {
   Settings2,
   Key,
   Download,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
-const PROVIDER_OPTIONS = [
+interface ProviderOption {
+  readonly id: string;
+  readonly name: string;
+  readonly models: readonly string[];
+  readonly keyEnvVar: string;
+  readonly docsUrl: string;
+  /** Pre-configured base URL for OpenAI-compatible providers. */
+  readonly baseUrl?: string;
+  /** Category for grouping in the dropdown. */
+  readonly category: "direct" | "router" | "subscription" | "custom";
+  /** Human-readable description shown below the provider name. */
+  readonly description?: string;
+}
+
+const PROVIDER_OPTIONS: readonly ProviderOption[] = [
+  // ── Direct API Providers ─────────────────────────────────────────────
   {
     id: "gemini",
     name: "Google Gemini",
     models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
     keyEnvVar: "GEMINI_API_KEY or GOOGLE_API_KEY",
     docsUrl: "aistudio.google.com",
+    category: "direct",
   },
   {
     id: "openai",
@@ -36,6 +54,7 @@ const PROVIDER_OPTIONS = [
     models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
     keyEnvVar: "OPENAI_API_KEY",
     docsUrl: "platform.openai.com/api-keys",
+    category: "direct",
   },
   {
     id: "anthropic",
@@ -43,6 +62,7 @@ const PROVIDER_OPTIONS = [
     models: ["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-4-8"],
     keyEnvVar: "ANTHROPIC_API_KEY",
     docsUrl: "console.anthropic.com",
+    category: "direct",
   },
   {
     id: "mistral",
@@ -50,17 +70,120 @@ const PROVIDER_OPTIONS = [
     models: ["mistral-large-latest", "mistral-medium-latest", "ministral-8b-latest"],
     keyEnvVar: "MISTRAL_API_KEY",
     docsUrl: "console.mistral.ai",
+    category: "direct",
   },
+  {
+    id: "xai",
+    name: "xAI (Grok)",
+    models: ["grok-3", "grok-3-mini", "grok-2"],
+    keyEnvVar: "XAI_API_KEY",
+    docsUrl: "console.x.ai",
+    baseUrl: "https://api.x.ai/v1",
+    category: "direct",
+    description: "Grok models by xAI",
+  },
+  // ── API Routers & Aggregators ────────────────────────────────────────
+  {
+    id: "openrouter",
+    name: "OpenRouter",
+    models: [
+      "openai/gpt-4o",
+      "anthropic/claude-sonnet-4-6",
+      "google/gemini-2.5-flash",
+      "meta-llama/llama-4-scout",
+      "deepseek/deepseek-r1",
+      "qwen/qwen3-235b-a22b",
+    ],
+    keyEnvVar: "OPENROUTER_API_KEY",
+    docsUrl: "openrouter.ai/keys",
+    baseUrl: "https://openrouter.ai/api/v1",
+    category: "router",
+    description: "Access 200+ models via one API key",
+  },
+  {
+    id: "groq",
+    name: "Groq",
+    models: ["llama-4-scout-17b-16e-instruct", "gemma2-9b-it", "mixtral-8x7b-32768"],
+    keyEnvVar: "GROQ_API_KEY",
+    docsUrl: "console.groq.com/keys",
+    baseUrl: "https://api.groq.com/openai/v1",
+    category: "router",
+    description: "Ultra-fast inference on Groq LPU",
+  },
+  {
+    id: "together",
+    name: "Together AI",
+    models: [
+      "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+      "deepseek-ai/DeepSeek-R1",
+      "Qwen/Qwen3-235B-A22B-Instruct-2507",
+    ],
+    keyEnvVar: "TOGETHER_API_KEY",
+    docsUrl: "api.together.xyz/settings/api-keys",
+    baseUrl: "https://api.together.xyz/v1",
+    category: "router",
+    description: "Open-source model hosting & inference",
+  },
+  // ── Subscription Services ────────────────────────────────────────────
+  {
+    id: "chatgpt-sub",
+    name: "ChatGPT Subscription",
+    models: ["gpt-4o", "gpt-4o-mini"],
+    keyEnvVar: "OPENAI_API_KEY",
+    docsUrl: "platform.openai.com/api-keys",
+    category: "subscription",
+    description: "Use your ChatGPT Plus/Pro API credits",
+  },
+  {
+    id: "copilot",
+    name: "GitHub Copilot",
+    models: ["gpt-4o", "gpt-4o-mini", "claude-3.5-sonnet"],
+    keyEnvVar: "GITHUB_TOKEN",
+    docsUrl: "github.com/settings/tokens",
+    baseUrl: "https://api.githubcopilot.com/v1",
+    category: "subscription",
+    description: "Copilot Pro subscription API access",
+  },
+  {
+    id: "devin",
+    name: "Devin",
+    models: ["devin-latest"],
+    keyEnvVar: "DEVIN_API_KEY",
+    docsUrl: "devin.ai/settings",
+    baseUrl: "https://api.devin.ai/v1",
+    category: "subscription",
+    description: "Cognition AI's autonomous coding agent",
+  },
+  {
+    id: "kilocode",
+    name: "Kilo Code",
+    models: [],
+    keyEnvVar: "",
+    docsUrl: "kilocode.ai",
+    category: "subscription",
+    description: "AI coding assistant — uses your own API key",
+  },
+  // ── Custom / Self-Hosted ─────────────────────────────────────────────
   {
     id: "openai-compat",
     name: "OpenAI-Compatible",
     models: [],
     keyEnvVar: "",
     docsUrl: "",
+    category: "custom",
+    description: "Ollama, vLLM, LiteLLM, or any OpenAI-compatible endpoint",
   },
 ] as const;
 
 type ProviderId = (typeof PROVIDER_OPTIONS)[number]["id"];
+
+/** Category labels for the dropdown optgroup headers. */
+const CATEGORY_LABELS: Record<string, string> = {
+  direct: "Direct API Providers",
+  router: "API Routers & Aggregators",
+  subscription: "Subscription Services",
+  custom: "Custom / Self-Hosted",
+};
 
 interface GeminiSidebarProps {
   state: UIState;
@@ -92,6 +215,15 @@ interface ProviderStatus {
   model?: string;
 }
 
+/** Format bytes to human-readable size string. */
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const size = bytes / Math.pow(1024, i);
+  return `${size.toFixed(i > 1 ? 1 : 0)} ${units[i]}`;
+}
+
 const ProviderErrorBlock = ({ msg, onGoSettings }: { msg: string; onGoSettings: () => void }) => {
   const isProviderErr =
     msg.includes("not configured") ||
@@ -119,10 +251,11 @@ const ProviderErrorBlock = ({ msg, onGoSettings }: { msg: string; onGoSettings: 
       <p className="text-slate-500 text-[10px]">
         Or set an env var (
         <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">GEMINI_API_KEY</code>,{" "}
-        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">GOOGLE_API_KEY</code>,{" "}
         <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">OPENAI_API_KEY</code>,{" "}
         <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">ANTHROPIC_API_KEY</code>,{" "}
-        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">MISTRAL_API_KEY</code>) in{" "}
+        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">XAI_API_KEY</code>,{" "}
+        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">OPENROUTER_API_KEY</code>,{" "}
+        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">GROQ_API_KEY</code>) in{" "}
         <code className="font-mono">.env</code> or <code className="font-mono">.env.local</code>, then restart{" "}
         <code className="font-mono">npm run dev</code>.
       </p>
@@ -137,6 +270,246 @@ const ProviderErrorBlock = ({ msg, onGoSettings }: { msg: string; onGoSettings: 
     </div>
   );
 };
+
+function LocalModelManager({ activeModel, isOpen }: { activeModel?: string; isOpen: boolean }) {
+  const [models, setModels] = useState<Array<{ id: string; loaded: boolean }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [collapsedPublishers, setCollapsedPublishers] = useState<Set<string>>(new Set());
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const togglePublisher = (publisher: string) => {
+    setCollapsedPublishers((prev) => {
+      const next = new Set(prev);
+      if (next.has(publisher)) next.delete(publisher);
+      else next.add(publisher);
+      return next;
+    });
+  };
+
+  // Global Cmd+K / Ctrl+K to focus search input (only when sidebar is open)
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isOpen]);
+
+  const filteredModels = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return models;
+    return models.filter((m) => m.id.toLowerCase().includes(q));
+  }, [models, searchQuery]);
+
+  // Group filtered models by publisher (first segment of model ID)
+  const groupedModels = useMemo(() => {
+    const groups = new Map<string, Array<{ id: string; loaded: boolean }>>();
+    for (const m of filteredModels) {
+      const parts = m.id.split("/");
+      const publisher = parts.length > 1 ? parts[0] : "Other";
+      if (!groups.has(publisher)) groups.set(publisher, []);
+      groups.get(publisher)!.push(m);
+    }
+    // Sort publishers alphabetically, 'Other' last
+    return Array.from(groups.entries()).sort(([a], [b]) => {
+      if (a === "Other") return 1;
+      if (b === "Other") return -1;
+      return a.localeCompare(b);
+    });
+  }, [filteredModels]);
+
+  const refresh = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch("/api/ai/local-models");
+      const d = await r.json();
+      const loaded = d.loadedModels || [];
+      const installed = d.installedModels || [];
+      const all = [...new Set([...installed, ...loaded])];
+      setModels(all.map((id: string) => ({ id, loaded: loaded.includes(id) })));
+    } catch {
+      /* ignore */
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  const handleLoad = async (modelTag: string) => {
+    setBusy(modelTag);
+    setError("");
+    try {
+      const r = await fetch("/api/ai/local-load", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modelTag }),
+      });
+      if (!r.ok) {
+        const d = await r.json();
+        throw new Error(d.error || `HTTP ${r.status}`);
+      }
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Load failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleUnload = async (modelTag: string) => {
+    setBusy(modelTag);
+    setError("");
+    try {
+      const r = await fetch("/api/ai/local-unload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modelTag }),
+      });
+      if (!r.ok) {
+        const d = await r.json();
+        throw new Error(d.error || `HTTP ${r.status}`);
+      }
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unload failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (models.length === 0 && !loading) return null;
+
+  return (
+    <div className="mt-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">
+          Installed Models
+        </p>
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          disabled={loading}
+          className="text-[10px] text-slate-500 hover:text-electric-blue transition-colors cursor-pointer"
+        >
+          {loading ? "Refreshing…" : "Refresh"}
+        </button>
+      </div>
+      <div className="space-y-1.5">
+        {models.length > 3 && (
+          <div className="relative">
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search models… (⌘K)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setSearchQuery("");
+                  searchInputRef.current?.blur();
+                }
+              }}
+              className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 pr-5 text-[10px] text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-slate-600"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-slate-500 hover:text-slate-300 cursor-pointer"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
+        <div className="space-y-2 max-h-48 overflow-y-auto">
+          {groupedModels.map(([publisher, pubModels]) => {
+            const isCollapsed = collapsedPublishers.has(publisher);
+            return (
+              <div key={publisher}>
+                <button
+                  type="button"
+                  onClick={() => togglePublisher(publisher)}
+                  aria-expanded={!isCollapsed}
+                  className="w-full flex items-center gap-1.5 text-[10px] text-slate-400 hover:text-slate-200 font-mono font-bold uppercase tracking-wider cursor-pointer py-0.5"
+                >
+                  {isCollapsed ? (
+                    <ChevronRight className="h-3 w-3 shrink-0" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3 shrink-0" />
+                  )}
+                  <span>{publisher}</span>
+                  <span className="text-slate-600 font-normal">({pubModels.length})</span>
+                </button>
+                {!isCollapsed && (
+                  <div className="space-y-1 mt-0.5">
+                    {pubModels.map((m) => (
+                      <div
+                        key={m.id}
+                        className="flex items-center justify-between gap-2 p-2 rounded-lg border border-slate-800 bg-slate-950/60 text-[11px]"
+                      >
+                        <span
+                          className="font-mono text-slate-300 truncate flex-1 flex items-center gap-1.5"
+                          title={m.id}
+                        >
+                          {activeModel &&
+                            (m.id === activeModel ||
+                              activeModel.endsWith(m.id) ||
+                              m.id.endsWith(activeModel)) && (
+                              <span
+                                className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"
+                                title="Active model"
+                              />
+                            )}
+                          {m.id.split("/").pop() || m.id}
+                        </span>
+                        {m.loaded ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleUnload(m.id)}
+                            disabled={busy === m.id}
+                            className="text-[10px] px-2 py-0.5 rounded border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+                          >
+                            {busy === m.id ? "…" : "Unload"}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => void handleLoad(m.id)}
+                            disabled={busy === m.id}
+                            className="text-[10px] px-2 py-0.5 rounded border border-electric-blue/30 text-electric-blue hover:bg-electric-blue/10 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+                          >
+                            {busy === m.id ? "…" : "Load"}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {searchQuery.trim() && filteredModels.length === 0 && (
+          <p className="text-[10px] text-slate-500 italic text-center py-1">
+            No models match "{searchQuery}"
+          </p>
+        )}
+      </div>
+      {error && <p className="text-[11px] text-rose-400">{error}</p>}
+    </div>
+  );
+}
 
 export function GeminiSidebar({
   state,
@@ -183,6 +556,7 @@ export function GeminiSidebar({
   const [providerSaveError, setProviderSaveError] = useState("");
   const [pullingModel, setPullingModel] = useState<string | null>(null);
   const [localPullError, setLocalPullError] = useState<string>("");
+  const [modelSizes, setModelSizes] = useState<Record<string, number>>({});
 
   const handlePullLocalModel = async (modelTag: string) => {
     setPullingModel(modelTag);
@@ -208,7 +582,7 @@ export function GeminiSidebar({
   };
 
   const providerOption = PROVIDER_OPTIONS.find((p) => p.id === settingsProvider)!;
-  const isCompatMode = settingsProvider === "openai-compat";
+  const isCompatMode = settingsProvider === "openai-compat" || !!providerOption.baseUrl;
 
   const fetchProviderStatus = async (): Promise<ProviderStatus> => {
     try {
@@ -263,6 +637,16 @@ export function GeminiSidebar({
   };
 
   // ── Effects ──
+
+  // Fetch model sizes from LM Studio on mount
+  useEffect(() => {
+    void fetch("/api/ai/local-model-sizes")
+      .then((r) => r.json())
+      .then((d: { sizes?: Record<string, number> }) => {
+        if (d.sizes) setModelSizes(d.sizes);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -362,7 +746,7 @@ export function GeminiSidebar({
       setProviderSaveError(isCompatMode ? "Enter a model name." : "Select a model.");
       return;
     }
-    if (isCompatMode && !settingsBaseUrl.trim()) {
+    if (isCompatMode && !settingsBaseUrl.trim() && !providerOption.baseUrl) {
       setProviderSaveError("Base URL is required for OpenAI-compatible providers.");
       return;
     }
@@ -376,7 +760,7 @@ export function GeminiSidebar({
           provider: settingsProvider,
           apiKey: key,
           model,
-          baseUrl: settingsBaseUrl.trim() || undefined,
+          baseUrl: settingsBaseUrl.trim() || providerOption.baseUrl || undefined,
         }),
       });
       const contentType = r.headers.get("content-type") ?? "";
@@ -787,59 +1171,75 @@ export function GeminiSidebar({
                   offline with zero cloud keys:
                 </p>
                 <div className="space-y-2">
-                  {[
-                    {
-                      tag: "lmstudio-community/Qwen2.5-Coder-1.5B-Instruct-GGUF",
-                      name: "Qwen2.5-Coder (1.5B)",
-                      desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
-                      size: "1.1 GB",
-                    },
-                    {
-                      tag: "lmstudio-community/Meta-Llama-3.2-1B-Instruct-GGUF",
-                      name: "Llama-3.2 (1B)",
-                      desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
-                      size: "800 MB",
-                    },
-                    {
-                      tag: "lmstudio-community/Phi-3.5-Mini-Instruct-GGUF",
-                      name: "Phi-3.5-Mini (3.8B)",
-                      desc: "🧠 Advanced Reasoning: Complex compiler co-design",
-                      size: "2.2 GB",
-                    },
-                  ].map((m) => (
-                    <div
-                      key={m.tag}
-                      className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60 flex flex-col gap-1.5"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold text-xs text-slate-100">{m.name}</span>
-                        <span className="text-[10px] font-mono text-slate-400 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded">
-                          {m.size}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-400 leading-normal">{m.desc}</p>
-                      <button
-                        type="button"
-                        onClick={() => handlePullLocalModel(m.tag)}
-                        disabled={pullingModel === m.tag}
-                        className="mt-1 w-full h-7 bg-electric-blue/10 hover:bg-electric-blue/20 text-electric-blue border border-electric-blue/30 rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  {(
+                    [
+                      {
+                        tag: "lmstudio-community/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+                        name: "Qwen2.5-Coder (1.5B)",
+                        desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
+                        fallbackSize: "1.1 GB",
+                      },
+                      {
+                        tag: "lmstudio-community/Meta-Llama-3.2-1B-Instruct-GGUF",
+                        name: "Llama-3.2 (1B)",
+                        desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
+                        fallbackSize: "800 MB",
+                      },
+                      {
+                        tag: "lmstudio-community/Phi-3.5-Mini-Instruct-GGUF",
+                        name: "Phi-3.5-Mini (3.8B)",
+                        desc: "🧠 Advanced Reasoning: Complex compiler co-design",
+                        fallbackSize: "2.2 GB",
+                      },
+                    ] as const
+                  ).map((m) => {
+                    // Find actual size by matching tag against LM Studio model keys
+                    const sizeBytes = Object.entries(modelSizes).find(
+                      ([key]) =>
+                        key
+                          .toLowerCase()
+                          .includes(m.tag.split("/").pop()?.toLowerCase().split("-")[0] ?? "") ||
+                        m.tag.toLowerCase().includes(key.toLowerCase().split("/").pop() ?? ""),
+                    )?.[1];
+                    const displaySize = sizeBytes ? formatBytes(sizeBytes) : m.fallbackSize;
+                    return (
+                      <div
+                        key={m.tag}
+                        className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60 flex flex-col gap-1.5"
                       >
-                        {pullingModel === m.tag ? (
-                          <>
-                            <RefreshCw className="h-3 w-3 animate-spin" />
-                            <span>Pulling & Activating...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Download className="h-3 w-3" />
-                            <span>1-Click Download & Enable</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  ))}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-xs text-slate-100">{m.name}</span>
+                          <span className="text-[10px] font-mono text-slate-400 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded">
+                            {displaySize}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-normal">{m.desc}</p>
+                        <button
+                          type="button"
+                          onClick={() => handlePullLocalModel(m.tag)}
+                          disabled={pullingModel === m.tag}
+                          className="mt-1 w-full h-7 bg-electric-blue/10 hover:bg-electric-blue/20 text-electric-blue border border-electric-blue/30 rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          {pullingModel === m.tag ? (
+                            <>
+                              <RefreshCw className="h-3 w-3 animate-spin" />
+                              <span>Pulling & Activating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Download className="h-3 w-3" />
+                              <span>1-Click Download & Enable</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
                 {localPullError && <p className="text-xs text-rose-400 mt-1">{localPullError}</p>}
+
+                {/* Load/Unloaded models list */}
+                <LocalModelManager activeModel={providerStatus.model} isOpen={isOpen} />
               </div>
 
               {/* Configure new provider */}
@@ -862,14 +1262,32 @@ export function GeminiSidebar({
                       const opt = PROVIDER_OPTIONS.find((p) => p.id === id)!;
                       setSettingsModel(opt.models[0] ?? "");
                       setCustomModel("");
+                      setSettingsBaseUrl(opt.baseUrl ?? "");
                     }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue cursor-pointer"
                   >
-                    {PROVIDER_OPTIONS.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
+                    {PROVIDER_OPTIONS.reduce<React.ReactNode[]>((acc, p, i) => {
+                      const prev = i > 0 ? PROVIDER_OPTIONS[i - 1] : null;
+                      if (!prev || prev.category !== p.category) {
+                        acc.push(
+                          <option
+                            key={`cat-${p.category}`}
+                            value=""
+                            disabled
+                            className="text-slate-500 font-bold"
+                          >
+                            ── {CATEGORY_LABELS[p.category] ?? p.category} ──
+                          </option>,
+                        );
+                      }
+                      acc.push(
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                          {p.description ? ` — ${p.description}` : ""}
+                        </option>,
+                      );
+                      return acc;
+                    }, [])}
                   </select>
                 </div>
 

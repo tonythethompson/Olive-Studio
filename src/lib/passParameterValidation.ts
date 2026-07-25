@@ -45,6 +45,8 @@ function hardwareLabel(provider: IHVProvider): string {
       return "NVIDIA TensorRT";
     case "NvTensorRTRTXExecutionProvider":
       return "NVIDIA TensorRT RTX";
+    case "ROCMExecutionProvider":
+      return "AMD ROCm";
     case "CPUExecutionProvider":
       return "CPU";
     default:
@@ -74,6 +76,8 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
           }
           return null;
         },
+        autofix: { passes: { quantMethod: "awq", awqSym: true } },
+        actionLabel: "Enable AWQ symmetric",
       },
       {
         name: "QNN prefers INT4 over INT8 for LLMs",
@@ -83,6 +87,8 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
           }
           return null;
         },
+        autofix: { passes: { quantPrecision: "int4" } },
+        actionLabel: "Switch to INT4",
       },
     ];
     rules["OnnxQuantization"] = [
@@ -99,6 +105,8 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
           }
           return null;
         },
+        autofix: { passes: { quantMethod: "awq", awqSym: true } },
+        actionLabel: "Enable AWQ symmetric",
       },
     ];
   }
@@ -188,6 +196,33 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
         },
         autofix: { passes: { quantMethod: "awq" } },
         actionLabel: "Switch to AWQ",
+      },
+    ];
+  }
+
+  if (provider === "ROCMExecutionProvider") {
+    rules["OnnxQuantization"] = [
+      {
+        name: "AWQ has limited ROCm support",
+        check: (passes) => {
+          if (passes.quantMethod === "awq") {
+            return "AWQ quantization has limited support on AMD ROCm GPUs. GPTQ is the recommended quantization method for AMD hardware with better ROCm compatibility and performance.";
+          }
+          return null;
+        },
+        autofix: { passes: { quantMethod: "gptq" } },
+        actionLabel: "Switch to GPTQ",
+      },
+      {
+        name: "ROCm prefers GPTQ INT4 for LLMs",
+        check: (passes) => {
+          if (passes.quantPrecision === "int8") {
+            return "AMD ROCm GPUs work best with GPTQ INT4 quantization for LLMs. INT4 reduces VRAM usage and GPTQ provides better ROCm compatibility and faster inference on AMD GPUs than PTQ INT8.";
+          }
+          return null;
+        },
+        autofix: { passes: { quantPrecision: "int4", quantMethod: "gptq" } },
+        actionLabel: "Switch to GPTQ INT4",
       },
     ];
   }

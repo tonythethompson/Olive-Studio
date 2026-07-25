@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -281,19 +281,30 @@ export function IHVIntegrationPanel({
   const [probeLoading, setProbeLoading] = useState(true);
   const [probeError, setProbeError] = useState<string | null>(null);
 
-  const runHardwareProbe = useCallback(async (refresh = false) => {
-    setProbeLoading(true);
-    setProbeError(null);
-    try {
-      const result = await fetchHardwareProbe(refresh);
-      setHardwareProbe(result);
-    } catch (err) {
-      setProbeError(err instanceof Error ? err.message : "Hardware probe failed.");
-      setHardwareProbe(null);
-    } finally {
-      setProbeLoading(false);
-    }
-  }, []);
+  const hasAutoAppliedRef = useRef(false);
+
+  const runHardwareProbe = useCallback(
+    async (refresh = false) => {
+      setProbeLoading(true);
+      setProbeError(null);
+      try {
+        const result = await fetchHardwareProbe(refresh);
+        setHardwareProbe(result);
+
+        // Auto-apply recommended provider on first probe completion
+        if (!hasAutoAppliedRef.current && result.recommendedProvider) {
+          hasAutoAppliedRef.current = true;
+          setState({ ihvProvider: result.recommendedProvider });
+        }
+      } catch (err) {
+        setProbeError(err instanceof Error ? err.message : "Hardware probe failed.");
+        setHardwareProbe(null);
+      } finally {
+        setProbeLoading(false);
+      }
+    },
+    [setState],
+  );
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: on-mount hardware probe
@@ -515,248 +526,292 @@ export function IHVIntegrationPanel({
                 Probing NVIDIA, AMD, Intel, and CPU runtimes…
               </div>
             ) : (
-              selectableProviders.map((p) => {
-                const isSelected = state.ihvProvider === p.id;
-                const Icon = p.icon;
+              <TooltipProvider delayDuration={200}>
+                {selectableProviders.map((p) => {
+                  const isSelected = state.ihvProvider === p.id;
+                  const Icon = p.icon;
 
-                // Compute conflicts for this particular card to implement visual disabled indicators & warnings
-                const pConflicts = getProviderConflicts(p.id, state.passes);
-                const cardHasCritical = pConflicts.some((c) => c.severity === "critical");
-                const cardHardwareBlocked =
-                  Boolean(getProviderHardwareBlock(p.id, hardwareProbe)) ||
-                  (p.id === "CPUExecutionProvider" && !hardwareProbe);
-                const cardBlocked = cardHasCritical || cardHardwareBlocked;
-                const cardHasWarning = pConflicts.some((c) => c.severity === "warning");
-                const showSwitchAssist = pConflicts.length > 0 && (isSelected || !cardBlocked);
-                const detectedLocally = isProviderDetectedLocally(p.id, hardwareProbe);
+                  // Compute conflicts for this particular card to implement visual disabled indicators & warnings
+                  const pConflicts = getProviderConflicts(p.id, state.passes);
+                  const cardHasCritical = pConflicts.some((c) => c.severity === "critical");
+                  const cardHardwareBlocked =
+                    Boolean(getProviderHardwareBlock(p.id, hardwareProbe)) ||
+                    (p.id === "CPUExecutionProvider" && !hardwareProbe);
+                  const cardBlocked = cardHasCritical || cardHardwareBlocked;
+                  const cardHasWarning = pConflicts.some((c) => c.severity === "warning");
+                  const showSwitchAssist = pConflicts.length > 0 && (isSelected || !cardBlocked);
+                  const detectedLocally = isProviderDetectedLocally(p.id, hardwareProbe);
 
-                let cardClasses =
-                  "relative flex flex-col rounded-xl border p-4.5 transition-all duration-200 cursor-pointer ";
-                let badgeText = "";
-                let badgeColor = "";
+                  let cardClasses =
+                    "relative flex flex-col rounded-xl border p-4.5 transition-all duration-200 cursor-pointer ";
+                  let badgeText = "";
+                  let badgeColor = "";
 
-                if (isSelected) {
-                  if (cardBlocked) {
-                    cardClasses += "border-rose-500 bg-rose-500/5";
-                    badgeText = cardHardwareBlocked ? "Unavailable hardware" : "Critical Conflict";
-                    badgeColor = "bg-rose-500/10 text-rose-400 border-rose-550/25";
+                  if (isSelected) {
+                    if (cardBlocked) {
+                      cardClasses += "border-rose-500 bg-rose-500/5";
+                      badgeText = cardHardwareBlocked ? "Unavailable hardware" : "Critical Conflict";
+                      badgeColor = "bg-rose-500/10 text-rose-400 border-rose-550/25";
+                    } else if (cardHasWarning) {
+                      cardClasses += "border-amber-500 bg-amber-500/5";
+                      badgeText = "Warning Conflict";
+                      badgeColor = "bg-amber-500/10 text-amber-400 border-amber-550/25";
+                    } else {
+                      cardClasses += "border-electric-blue bg-electric-blue/5";
+                      badgeText = !detectedLocally && !probeLoading ? "Active (not local)" : "Active Target";
+                      badgeColor = "bg-electric-blue/10 text-electric-blue border-electric-blue/20";
+                    }
+                  } else if (cardHardwareBlocked) {
+                    cardClasses +=
+                      "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-75 hover:border-slate-700";
+                    badgeText = "Not on this system";
+                    badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
+                  } else if (!detectedLocally && !probeLoading) {
+                    cardClasses +=
+                      "border-slate-850/60 bg-zinc-950/30 opacity-80 hover:opacity-100 hover:border-slate-700";
+                    badgeText = "Not on this system";
+                    badgeColor = "bg-slate-800/80 text-slate-500 border-slate-700/60";
+                  } else if (cardHasCritical) {
+                    cardClasses +=
+                      "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-100 hover:border-rose-500/40";
+                    badgeText = "Incompatible";
+                    badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
                   } else if (cardHasWarning) {
-                    cardClasses += "border-amber-500 bg-amber-500/5";
-                    badgeText = "Warning Conflict";
-                    badgeColor = "bg-amber-500/10 text-amber-400 border-amber-550/25";
+                    cardClasses +=
+                      "border-amber-950/35 bg-zinc-950/40 opacity-75 hover:opacity-100 hover:border-amber-500/40";
+                    badgeText = "Needs Adjust";
+                    badgeColor = "bg-amber-500/5 text-amber-400/80 border-amber-550/15";
                   } else {
-                    cardClasses += "border-electric-blue bg-electric-blue/5";
-                    badgeText = !detectedLocally && !probeLoading ? "Active (not local)" : "Active Target";
-                    badgeColor = "bg-electric-blue/10 text-electric-blue border-electric-blue/20";
+                    cardClasses +=
+                      "border-slate-800/80 bg-slate-900/40 hover:bg-slate-900 hover:border-slate-700";
+                    badgeText = "Compatible with active passes";
+                    badgeColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/15";
                   }
-                } else if (cardHardwareBlocked) {
-                  cardClasses +=
-                    "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-75 hover:border-slate-700";
-                  badgeText = "Not on this system";
-                  badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
-                } else if (!detectedLocally && !probeLoading) {
-                  cardClasses +=
-                    "border-slate-850/60 bg-zinc-950/30 opacity-80 hover:opacity-100 hover:border-slate-700";
-                  badgeText = "Not on this system";
-                  badgeColor = "bg-slate-800/80 text-slate-500 border-slate-700/60";
-                } else if (cardHasCritical) {
-                  cardClasses +=
-                    "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-100 hover:border-rose-500/40";
-                  badgeText = "Incompatible";
-                  badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
-                } else if (cardHasWarning) {
-                  cardClasses +=
-                    "border-amber-950/35 bg-zinc-950/40 opacity-75 hover:opacity-100 hover:border-amber-500/40";
-                  badgeText = "Needs Adjust";
-                  badgeColor = "bg-amber-500/5 text-amber-400/80 border-amber-550/15";
-                } else {
-                  cardClasses +=
-                    "border-slate-800/80 bg-slate-900/40 hover:bg-slate-900 hover:border-slate-700";
-                  badgeText = "Compatible with active passes";
-                  badgeColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/15";
-                }
 
-                const hardwareDetail =
-                  p.id === "CUDAExecutionProvider" ||
-                  p.id === "NvTensorRTRTXExecutionProvider" ||
-                  p.id === "TensorrtExecutionProvider"
-                    ? hardwareProbe?.nvidia?.gpus.map((g) => g.name).join(", ")
-                    : p.id === "ROCMExecutionProvider"
-                      ? hardwareProbe?.rocm?.gpus.map((g) => g.name).join(", ")
-                      : p.id === "OpenVINOExecutionProvider" && hardwareProbe?.openvino?.available
-                        ? `OpenVINO ${hardwareProbe.openvino.version ?? ""}`.trim()
-                        : p.id === "CPUExecutionProvider" && hardwareProbe
-                          ? hardwareProbe.platform.cpuModel
-                          : null;
+                  const hardwareDetail =
+                    p.id === "CUDAExecutionProvider" ||
+                    p.id === "NvTensorRTRTXExecutionProvider" ||
+                    p.id === "TensorrtExecutionProvider"
+                      ? hardwareProbe?.nvidia?.gpus.map((g) => g.name).join(", ")
+                      : p.id === "ROCMExecutionProvider"
+                        ? hardwareProbe?.rocm?.gpus.map((g) => g.name).join(", ")
+                        : p.id === "OpenVINOExecutionProvider" && hardwareProbe?.openvino?.available
+                          ? `OpenVINO ${hardwareProbe.openvino.version ?? ""}`.trim()
+                          : p.id === "CPUExecutionProvider" && hardwareProbe
+                            ? hardwareProbe.platform.cpuModel
+                            : null;
 
-                return (
-                  <div
-                    key={p.id}
-                    onClick={() => {
-                      if (isSelected && pConflicts.length > 0) {
-                        setState({ passes: applyProviderConflictAutofixes(p.id, state.passes) });
-                        return;
-                      }
-                      // Allow selecting undetected providers for cross-compile / remote targets
-                      const detected = detectedProviders.includes(p.id);
-                      if (!detected) {
-                        setState({ ihvProvider: p.id });
-                        return;
-                      }
-                      const patch = prepareProviderChange(state, p.id, hardwareProbe);
-                      if (patch) {
-                        setState(patch);
-                      }
-                    }}
-                    className={cardClasses}
-                  >
-                    <div className="flex items-start gap-4">
-                      <div
-                        className={`mt-0.5 shrink-0 rounded-xl p-2.5 transition-all ${
-                          isSelected
-                            ? cardHasCritical
-                              ? "bg-rose-500/20 text-rose-400"
-                              : cardHasWarning
-                                ? "bg-amber-500/20 text-amber-400"
-                                : "bg-electric-blue/20 text-electric-blue"
-                            : "bg-slate-850 text-slate-400 group-hover:text-slate-300"
-                        }`}
-                      >
-                        <Icon className="h-5 w-5" />
-                      </div>
-
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold text-slate-200 text-sm md:text-base leading-none">
-                            {p.name}
-                          </p>
-                          <span
-                            className={`text-[9px] font-mono uppercase tracking-wider font-extrabold px-2 py-0.5 rounded border ${badgeColor}`}
-                          >
-                            {badgeText}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-400 leading-relaxed pr-6">{p.desc}</p>
-                        {detectedLocally && hardwareDetail && (
-                          <p className="text-[11px] text-emerald-400/90 font-mono">{hardwareDetail}</p>
-                        )}
-                        {!detectedLocally && !probeLoading && (
-                          <p className="text-[11px] text-slate-600">
-                            {p.id === "CPUExecutionProvider"
-                              ? "Hardware detection unavailable — CPU status is unknown."
-                              : "No matching hardware found locally — you can still select for remote/cross-compile targets."}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="flex items-center justify-center shrink-0">
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => {
+                        if (isSelected && pConflicts.length > 0) {
+                          setState({ passes: applyProviderConflictAutofixes(p.id, state.passes) });
+                          return;
+                        }
+                        // Allow selecting undetected providers for cross-compile / remote targets
+                        const detected = detectedProviders.includes(p.id);
+                        if (!detected) {
+                          setState({ ihvProvider: p.id });
+                          return;
+                        }
+                        const patch = prepareProviderChange(state, p.id, hardwareProbe);
+                        if (patch) {
+                          setState(patch);
+                        }
+                      }}
+                      className={cardClasses}
+                    >
+                      <div className="flex items-start gap-4">
                         <div
-                          className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                          className={`mt-0.5 shrink-0 rounded-xl p-2.5 transition-all ${
                             isSelected
                               ? cardHasCritical
-                                ? "border-rose-500 text-rose-500"
+                                ? "bg-rose-500/20 text-rose-400"
                                 : cardHasWarning
-                                  ? "border-amber-500 text-amber-500"
-                                  : "border-electric-blue text-electric-blue"
-                              : "border-slate-700 hover:border-slate-500"
+                                  ? "bg-amber-500/20 text-amber-400"
+                                  : "bg-electric-blue/20 text-electric-blue"
+                              : "bg-slate-850 text-slate-400 group-hover:text-slate-300"
                           }`}
                         >
-                          {isSelected && (
-                            <div
-                              className={`h-2.5 w-2.5 rounded-full ${
-                                cardHasCritical
-                                  ? "bg-rose-500"
-                                  : cardHasWarning
-                                    ? "bg-amber-500"
-                                    : "bg-electric-blue"
-                              }`}
-                            />
+                          <Icon className="h-5 w-5" />
+                        </div>
+
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-slate-200 text-sm md:text-base leading-none">
+                              {p.name}
+                            </p>
+                            <span
+                              className={`text-[9px] font-mono uppercase tracking-wider font-extrabold px-2 py-0.5 rounded border ${badgeColor}`}
+                            >
+                              {badgeText}
+                            </span>
+                          </div>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <p className="text-xs text-slate-400 leading-relaxed pr-6 cursor-help border-b border-dashed border-slate-700 hover:border-slate-500 transition-colors">
+                                {p.desc}
+                              </p>
+                            </TooltipTrigger>
+                            <TooltipContent
+                              side="bottom"
+                              className="max-w-[360px] bg-slate-950 border border-slate-800 text-slate-300 p-4 shadow-2xl leading-relaxed z-50"
+                            >
+                              <div className="space-y-3">
+                                <div className="border-b border-slate-900 pb-2">
+                                  <p className="text-xs font-bold text-electric-blue uppercase tracking-wide">
+                                    {p.name}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-mono uppercase text-slate-500 mb-1">
+                                    Requirements
+                                  </p>
+                                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                                    {p.tooltip.requirements}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-mono uppercase text-slate-500 mb-1">
+                                    Quantization Methods
+                                  </p>
+                                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                                    {p.tooltip.quantMethods}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-mono uppercase text-slate-500 mb-1">
+                                    Recommendation
+                                  </p>
+                                  <p className="text-[11px] text-emerald-400/90 leading-relaxed">
+                                    {p.tooltip.recommendation}
+                                  </p>
+                                </div>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                          {detectedLocally && hardwareDetail && (
+                            <p className="text-[11px] text-emerald-400/90 font-mono">{hardwareDetail}</p>
+                          )}
+                          {!detectedLocally && !probeLoading && (
+                            <p className="text-[11px] text-slate-600">
+                              {p.id === "CPUExecutionProvider"
+                                ? "Hardware detection unavailable — CPU status is unknown."
+                                : "No matching hardware found locally — you can still select for remote/cross-compile targets."}
+                            </p>
                           )}
                         </div>
-                      </div>
-                    </div>
 
-                    {/* Conflicts on the active target, or adjustable warnings on other targets */}
-                    {showSwitchAssist && (
-                      <div className="mt-3.5 pt-3.5 border-t border-slate-800/60 flex flex-col gap-2.5 animate-in fade-in duration-200">
-                        <p className="text-xs text-slate-500 flex items-center gap-1.5">
-                          <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
-                          {isSelected
-                            ? "Passes to fix on this target"
-                            : "Adjustments needed to use this target"}
-                        </p>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pb-1">
-                          {pConflicts.map((c, idx) => (
-                            <div
-                              key={idx}
-                              className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-900 flex items-start gap-2 text-xs"
-                            >
-                              <span
-                                className={`inline-block h-1.5 w-1.5 rounded-full mt-1.5 shrink-0 ${
-                                  c.severity === "critical" ? "bg-rose-500" : "bg-amber-400"
-                                }`}
-                              />
-                              <div className="leading-tight">
-                                <span
-                                  className={`font-bold block text-[11px] mb-0.5 ${
-                                    c.severity === "critical" ? "text-rose-300" : "text-amber-400"
-                                  }`}
-                                >
-                                  {c.passName}
-                                </span>
-                                <span className="text-slate-450 text-[10.5px] font-medium leading-relaxed">
-                                  {c.reason}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="flex justify-end pt-1">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (isSelected) {
-                                setState({ passes: applyProviderConflictAutofixes(p.id, state.passes) });
-                                return;
-                              }
-                              // Allow switching to undetected providers for cross-compile / remote targets
-                              const detected = detectedProviders.includes(p.id);
-                              if (!detected) {
-                                setState({ ihvProvider: p.id });
-                                return;
-                              }
-                              const patch = prepareProviderChange(state, p.id, hardwareProbe);
-                              if (patch) {
-                                setState(patch);
-                              }
-                            }}
-                            className={`text-[9.5px] uppercase tracking-wider font-extrabold px-3 py-1.5 rounded border transition-all cursor-pointer flex items-center gap-1.5 ${
-                              cardHasCritical
-                                ? "border-rose-550/30 text-rose-400 bg-rose-950/20 hover:text-white hover:bg-rose-500/20"
-                                : "border-amber-500/30 text-amber-400 bg-amber-950/20 hover:text-white hover:bg-amber-550/20"
+                        <div className="flex items-center justify-center shrink-0">
+                          <div
+                            className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                              isSelected
+                                ? cardHasCritical
+                                  ? "border-rose-500 text-rose-500"
+                                  : cardHasWarning
+                                    ? "border-amber-500 text-amber-500"
+                                    : "border-electric-blue text-electric-blue"
+                                : "border-slate-700 hover:border-slate-500"
                             }`}
                           >
-                            <Wand2 className="h-3.5 w-3.5" />
-                            {isSelected
-                              ? "Fix passes for this target"
-                              : `Switch to ${p.shortName} (adjusts passes)`}
-                          </button>
+                            {isSelected && (
+                              <div
+                                className={`h-2.5 w-2.5 rounded-full ${
+                                  cardHasCritical
+                                    ? "bg-rose-500"
+                                    : cardHasWarning
+                                      ? "bg-amber-500"
+                                      : "bg-electric-blue"
+                                }`}
+                              />
+                            )}
+                          </div>
                         </div>
                       </div>
-                    )}
 
-                    {!isSelected && cardHasCritical && pConflicts.length > 0 && (
-                      <p className="mt-3 pt-3 border-t border-slate-800/60 text-[11px] text-slate-500 leading-relaxed">
-                        Incompatible with your current passes. Change passes in Optimization or select a
-                        compatible target above.
-                      </p>
-                    )}
-                  </div>
-                );
-              })
+                      {/* Conflicts on the active target, or adjustable warnings on other targets */}
+                      {showSwitchAssist && (
+                        <div className="mt-3.5 pt-3.5 border-t border-slate-800/60 flex flex-col gap-2.5 animate-in fade-in duration-200">
+                          <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                            <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+                            {isSelected
+                              ? "Passes to fix on this target"
+                              : "Adjustments needed to use this target"}
+                          </p>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pb-1">
+                            {pConflicts.map((c, idx) => (
+                              <div
+                                key={idx}
+                                className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-900 flex items-start gap-2 text-xs"
+                              >
+                                <span
+                                  className={`inline-block h-1.5 w-1.5 rounded-full mt-1.5 shrink-0 ${
+                                    c.severity === "critical" ? "bg-rose-500" : "bg-amber-400"
+                                  }`}
+                                />
+                                <div className="leading-tight">
+                                  <span
+                                    className={`font-bold block text-[11px] mb-0.5 ${
+                                      c.severity === "critical" ? "text-rose-300" : "text-amber-400"
+                                    }`}
+                                  >
+                                    {c.passName}
+                                  </span>
+                                  <span className="text-slate-450 text-[10.5px] font-medium leading-relaxed">
+                                    {c.reason}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="flex justify-end pt-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isSelected) {
+                                  setState({ passes: applyProviderConflictAutofixes(p.id, state.passes) });
+                                  return;
+                                }
+                                // Allow switching to undetected providers for cross-compile / remote targets
+                                const detected = detectedProviders.includes(p.id);
+                                if (!detected) {
+                                  setState({ ihvProvider: p.id });
+                                  return;
+                                }
+                                const patch = prepareProviderChange(state, p.id, hardwareProbe);
+                                if (patch) {
+                                  setState(patch);
+                                }
+                              }}
+                              className={`text-[9.5px] uppercase tracking-wider font-extrabold px-3 py-1.5 rounded border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                cardHasCritical
+                                  ? "border-rose-550/30 text-rose-400 bg-rose-950/20 hover:text-white hover:bg-rose-500/20"
+                                  : "border-amber-500/30 text-amber-400 bg-amber-950/20 hover:text-white hover:bg-amber-550/20"
+                              }`}
+                            >
+                              <Wand2 className="h-3.5 w-3.5" />
+                              {isSelected
+                                ? "Fix passes for this target"
+                                : `Switch to ${p.shortName} (adjusts passes)`}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {!isSelected && cardHasCritical && pConflicts.length > 0 && (
+                        <p className="mt-3 pt-3 border-t border-slate-800/60 text-[11px] text-slate-500 leading-relaxed">
+                          Incompatible with your current passes. Change passes in Optimization or select a
+                          compatible target above.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </TooltipProvider>
             )}
           </div>
 
