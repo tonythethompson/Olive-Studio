@@ -1,10 +1,9 @@
 """Tool: search_olive_documentation."""
 
 import json
-from pathlib import Path
 from typing import Any
 
-_KB_DIR = Path(__file__).parent.parent / "knowledge_base"
+from . import KB_DIR
 
 
 def _flatten(obj: Any, prefix: str = "") -> list[tuple[str, str]]:
@@ -23,7 +22,7 @@ def _flatten(obj: Any, prefix: str = "") -> list[tuple[str, str]]:
 
 def _load_kb_text() -> list[tuple[str, str]]:
     all_text: list[tuple[str, str]] = []
-    for file in _KB_DIR.glob("*.json"):
+    for file in KB_DIR.glob("*.json"):
         try:
             with open(file, "r", encoding="utf-8") as f:
                 data = json.load(f)
