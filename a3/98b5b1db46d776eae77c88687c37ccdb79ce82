@@ -1,0 +1,27 @@
+olive-mcp-server/olive_mcp_server/tools/__init__.py
+  s_821f54a78fd635::t_d132670b629308 34-71
+olive-mcp-server/olive_mcp_server/tools/normalization.py
+  s_821f54a78fd635::t_40bb3f1b5822f3 27-36,92-97
+olive-mcp-server/olive_mcp_server/tools/strategy_advisor.py
+  s_821f54a78fd635::t_3abae16fb39c12 17
+server.ts
+  s_821f54a78fd635::t_355c81d399702b 1755-1758,1763-1764,1766,1784-1790,1799-1818,1893
+src/lib/passParameterValidation.ts
+  s_821f54a78fd635::t_48b768973da3c9 9-10,149-180,190-193,196-201
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "a398b5b1db46d776eae77c88687c37ccdb79ce82",
+  "prompts": {},
+  "sessions": {
+    "s_821f54a78fd635": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_821f54a78fd635",
+        "model": "unknown"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
