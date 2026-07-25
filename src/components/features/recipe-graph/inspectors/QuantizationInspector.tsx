@@ -4,11 +4,14 @@ import { UIState } from "@/types";
 import type { InspectorProps } from "./types";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { RecipeDiffOverlay } from "./RecipeDiffOverlay";
-import { RefreshCw, AlertTriangle, Save } from "lucide-react";
+import { RefreshCw, AlertTriangle, Save, Download, Upload } from "lucide-react";
 import {
   loadCustomPresets,
   saveCustomPreset,
   deleteCustomPreset,
+  replaceAllCustomPresets,
+  exportPresetsJSON,
+  importPresetsJSON,
   type CustomQuantPreset,
 } from "@/lib/quantPresets";
 
@@ -257,6 +260,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
   const [customPresets, setCustomPresets] = useState<CustomQuantPreset[]>(() => loadCustomPresets());
+  const [importError, setImportError] = useState("");
 
   const currentPreset = useMemo(() => getCurrentQuantPreset(state), [state]);
   const allowedQuantMethods = getAllowedQuantMethods(state.ihvProvider);
@@ -335,6 +339,42 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
       createdAt: Date.now(),
     });
     refreshCustomPresets();
+  };
+
+  const handleExportPresets = () => {
+    if (customPresets.length === 0) return;
+    const json = exportPresetsJSON(customPresets);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "quantization-presets.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportPresets = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string;
+        const result = importPresetsJSON(text, customPresets);
+        if ("error" in result) {
+          setImportError(result.error);
+          setTimeout(() => setImportError(""), 4000);
+        } else {
+          replaceAllCustomPresets(result.presets);
+          setCustomPresets(result.presets);
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
   };
 
   const handleAskAi = async () => {
@@ -437,7 +477,36 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
           >
             <Save className="h-4 w-4" />
           </button>
+          <button
+            type="button"
+            onClick={handleExportPresets}
+            disabled={customPresets.length === 0}
+            className="h-9 w-9 rounded-lg border border-slate-700 bg-slate-950 hover:bg-slate-900 flex items-center justify-center text-slate-400 hover:text-electric-blue transition-colors shrink-0 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+            title={
+              customPresets.length === 0
+                ? "No custom presets to export"
+                : "Export custom presets as JSON file"
+            }
+            aria-label="Export presets"
+          >
+            <Download className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleImportPresets}
+            className="h-9 w-9 rounded-lg border border-slate-700 bg-slate-950 hover:bg-slate-900 flex items-center justify-center text-slate-400 hover:text-electric-blue transition-colors shrink-0 cursor-pointer"
+            title="Import presets from JSON file"
+            aria-label="Import presets"
+          >
+            <Upload className="h-4 w-4" />
+          </button>
         </div>
+        {importError && (
+          <div className="flex items-start gap-1.5 text-[10px] text-amber-400 mt-1">
+            <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+            <span>{importError}</span>
+          </div>
+        )}
         {aiError && (
           <div className="flex items-start gap-1.5 text-[10px] text-rose-400 mt-1">
             <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
