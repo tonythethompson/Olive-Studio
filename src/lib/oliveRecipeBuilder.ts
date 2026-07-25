@@ -231,6 +231,18 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
         type: "QuaRot",
         config: quarotConfig,
       };
+    } else if (state.passes.conversionFormat === "openvino") {
+      const ovQuantConfig: Record<string, unknown> = {};
+      if (state.hfDataset) {
+        ovQuantConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
+      }
+      if (state.userScript) {
+        ovQuantConfig.user_script = state.userScript;
+      }
+      passes.quantization = {
+        type: state.passes.quantPrecision === "int4" ? "OpenVINOWeightCompression" : "OpenVINOQuantization",
+        config: ovQuantConfig,
+      };
     } else {
       const quantConfig: Record<string, unknown> = {
         quant_mode: "static",
@@ -251,17 +263,24 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   }
 
   if (state.passes.onnxTransforms) {
-    const ortConfig: Record<string, unknown> = {
-      model_type: inferModelType(state.hfModelId || ""),
-      use_gpu: GPU_PROVIDERS.includes(state.ihvProvider),
-    };
-    if (state.userScript) {
-      ortConfig.user_script = state.userScript;
+    if (state.passes.conversionFormat === "openvino") {
+      passes.transformer_opt = {
+        type: "OpenVINOIoUpdate",
+        config: {},
+      };
+    } else {
+      const ortConfig: Record<string, unknown> = {
+        model_type: inferModelType(state.hfModelId || ""),
+        use_gpu: GPU_PROVIDERS.includes(state.ihvProvider),
+      };
+      if (state.userScript) {
+        ortConfig.user_script = state.userScript;
+      }
+      passes.transformer_opt = {
+        type: "OrtTransformersOptimization",
+        config: ortConfig,
+      };
     }
-    passes.transformer_opt = {
-      type: "OrtTransformersOptimization",
-      config: ortConfig,
-    };
   }
 
   if (state.passes.splitting) {

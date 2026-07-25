@@ -61,25 +61,26 @@ def get_pass_chain(pass_names: list[str], source_format: str = "") -> dict[str, 
             "known": True,
         })
 
-        # Quantization passes that need ONNX must follow OnnxConversion (unless source is already ONNX).
-        if ptype == "quantization" and "onnx" in meta.get("input_formats", []):
-            if "OnnxConversion" not in seen_pass_names:
-                # Check if source is already ONNX
+        # Quantization passes check: verify input format compatibility with preceding conversion pass or source format.
+        if ptype == "quantization":
+            has_compatible_conversion = False
+            for prev in resolved:
+                if prev.get("type") == "conversion":
+                    if any(fmt in meta.get("input_formats", []) for fmt in prev.get("output_formats", [])):
+                        has_compatible_conversion = True
+                        break
+            if not has_compatible_conversion:
                 normalized_source = normalize_framework(source_format).lower()
-                if normalized_source == "onnx":
-                    # Source is already ONNX, no conversion needed
-                    pass
-                elif normalized_source in ("torch", "pytorch", "tf", "tensorflow"):
-                    # Explicitly non-ONNX source, require conversion
-                    errors.append(
-                        f"Pass '{name}' requires an ONNX input but no OnnxConversion precedes it in the chain."
-                    )
-                else:
-                    # Unknown/unspecified source format, emit warning instead of error
-                    warnings.append(
-                        f"Pass '{name}' requires an ONNX input but no OnnxConversion precedes it. "
-                        f"If your source model is already ONNX, this is fine; otherwise add OnnxConversion."
-                    )
+                if normalized_source not in meta.get("input_formats", []):
+                    if normalized_source in ("torch", "pytorch", "tf", "tensorflow"):
+                        errors.append(
+                            f"Pass '{name}' requires input format in {meta.get('input_formats', [])} but no compatible conversion pass precedes it in the chain."
+                        )
+                    else:
+                        warnings.append(
+                            f"Pass '{name}' requires input format in {meta.get('input_formats', [])}. "
+                            f"If your source model is already compatible, this is fine; otherwise add a conversion pass."
+                        )
 
         # Graph optimizations are more effective before quantization.
         if ptype == "graph_optimization" and "quantization" in seen_types:
