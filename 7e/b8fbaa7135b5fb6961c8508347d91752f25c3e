@@ -1,0 +1,27 @@
+olive-mcp-server/olive_mcp_server/mcp_server.py
+  s_61bac31605ceba::t_4c93c6ff55f0f1 28-44
+olive-mcp-server/olive_mcp_server/tools/__init__.py
+  s_61bac31605ceba::t_2cc18811afa798 7,10-11,17,21,25,29,33
+olive-mcp-server/olive_mcp_server/tools/config_generator.py
+  s_61bac31605ceba::t_815336864567ab 88-92
+olive-mcp-server/olive_mcp_server/tools/pass_chain.py
+  s_61bac31605ceba::t_643ab3274bdafd 6,68,72
+olive-mcp-server/olive_mcp_server/tools/strategy_advisor.py
+  s_61bac31605ceba::t_8da739edffa24e 205-207
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "7eb8fbaa7135b5fb6961c8508347d91752f25c3e",
+  "prompts": {},
+  "sessions": {
+    "s_61bac31605ceba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "55298470-9634-4d86-8362-bdee9e0c3499",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
