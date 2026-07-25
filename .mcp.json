@@ -2,8 +2,8 @@
   "mcpServers": {
     "olive": {
       "type": "stdio",
-      "command": "${CLAUDE_PROJECT_DIR}/olive-mcp-server/.venv/Scripts/python.exe",
-      "args": ["-m", "olive_mcp_server"],
+      "command": "bash",
+      "args": ["${CLAUDE_PROJECT_DIR}/olive-mcp-server/run.sh"],
       "env": {
         "PYTHONPATH": "${CLAUDE_PROJECT_DIR}/olive-mcp-server"
       }

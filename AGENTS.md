@@ -3712,26 +3712,46 @@ This repo also contains `olive-mcp-server/`, a Python MCP server for Microsoft O
 
 ### Setup
 
+Windows:
 ```bash
 cd olive-mcp-server
 python -m venv .venv
 .venv\Scripts\pip install -e ".[dev]"
 ```
 
-On Linux or macOS use `.venv/bin/pip` and `.venv/bin/python`.
+Linux/macOS:
+```bash
+cd olive-mcp-server
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+```
 
 ### Test
 
+Windows:
 ```bash
 .venv\Scripts\python -m pytest tests -q
 ```
 
+Linux/macOS:
+```bash
+.venv/bin/python -m pytest tests -q
+```
+
 ### Run the server
 
+Windows:
 ```bash
 .venv\Scripts\python -m olive_mcp_server
 # or
 .venv\Scripts\olive-mcp-server
+```
+
+Linux/macOS:
+```bash
+.venv/bin/python -m olive_mcp_server
+# or
+.venv/bin/olive-mcp-server
 ```
 
 ### Project layout
@@ -3749,5 +3769,12 @@ Edit the JSON files directly or run `python -m scripts.expand_kb` from `olive-mc
 
 ### Claude Code integration
 
-The repo root has `.mcp.json`, which registers the server in Claude Code. It points to `olive-mcp-server/.venv/Scripts/python.exe`; reinstall the package if the venv is recreated.
+The repo root has `.mcp.json`, which registers the server in Claude Code. By default it uses `run.sh` (works on Linux/macOS and Windows with Git Bash/WSL). Windows users without bash should edit `.mcp.json` to use `run.bat`:
+
+```json
+"command": "cmd.exe",
+"args": ["/c", "${CLAUDE_PROJECT_DIR}/olive-mcp-server/run.bat"]
+```
+
+Reinstall the package if the venv is recreated.
 
