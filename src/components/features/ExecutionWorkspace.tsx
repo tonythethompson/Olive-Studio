@@ -24,6 +24,7 @@ import {
   Gauge,
   History,
   Square,
+  Wrench,
 } from "lucide-react";
 import JSZip from "jszip";
 import { cn } from "@/lib/utils";
@@ -91,6 +92,44 @@ export function ExecutionWorkspace({
   const [showGraphDot, setShowGraphDot] = useState(true);
   const [isExportCopied, setIsExportCopied] = useState(false);
   const [justQueued, setJustQueued] = useState(false);
+
+  // MCP Diagnostic State
+  interface McpDiagnostic {
+    matched_entry: string | null;
+    title: string;
+    root_cause: string;
+    workaround: string;
+    updated_config?: Record<string, unknown>;
+    relevant_quirks?: string[];
+  }
+  const [mcpDiagnostic, setMcpDiagnostic] = useState<McpDiagnostic | null>(null);
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
+
+  const fetchMcpDiagnostic = async (logs: string[]) => {
+    if (logs.length === 0) return;
+    setIsDiagnosing(true);
+    try {
+      const errorSnippet = logs.slice(-20).join("\n");
+      const resp = await fetch("/api/mcp/tool", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toolName: "troubleshoot_olive_error",
+          args: { error_message: errorSnippet },
+        }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && !data.error) {
+          setMcpDiagnostic(data);
+        }
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setIsDiagnosing(false);
+    }
+  };
 
   const isUnmountedRef = useRef(false);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -551,6 +590,12 @@ ${
           evtSource.close();
           liveSourceRef.current = null;
           recordJobCompletion(targetJobId, finalStatus, exitCode);
+          if (finalStatus === "failed") {
+            setExecutionLogs((currentLogs) => {
+              fetchMcpDiagnostic(currentLogs);
+              return currentLogs;
+            });
+          }
         });
 
         evtSource.onerror = async () => {
@@ -578,6 +623,12 @@ ${
                 setIsRunning(false);
                 onRunStateChange?.(false);
                 recordJobCompletion(targetJobId, finalStatus, statusData.exitCode);
+                if (finalStatus === "failed") {
+                  setExecutionLogs((currentLogs) => {
+                    fetchMcpDiagnostic(currentLogs);
+                    return currentLogs;
+                  });
+                }
                 return;
               } else if (statusData.status === "running" || statusData.status === "setting_up") {
                 serverSaysRunning = true;
@@ -1254,6 +1305,41 @@ ${
               ))
             )}
           </div>
+
+          {/* MCP Diagnostic & Auto-Fix Card */}
+          {executionStatus === "failed" && (
+            <div className="mt-2 p-3.5 rounded-lg border border-rose-500/30 bg-rose-950/20 text-slate-200 animate-in fade-in space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 font-semibold text-rose-300 text-xs">
+                  <Wrench className="h-4 w-4 text-rose-400 shrink-0" />
+                  <span>Olive MCP Error Diagnostic & Fix</span>
+                </div>
+                {isDiagnosing && (
+                  <span className="text-[10px] text-slate-400 animate-pulse">Diagnosing with MCP KB...</span>
+                )}
+              </div>
+              {mcpDiagnostic ? (
+                <div className="space-y-1.5 text-xs font-sans">
+                  <div>
+                    <span className="font-semibold text-rose-300">Issue: </span>
+                    <span className="text-slate-200">{mcpDiagnostic.title}</span>
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-400">Root Cause: </span>
+                    <span className="text-slate-300">{mcpDiagnostic.root_cause}</span>
+                  </div>
+                  <div>
+                    <span className="font-semibold text-emerald-400">Recommended Fix: </span>
+                    <span className="text-slate-300">{mcpDiagnostic.workaround}</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-400 italic">
+                  Querying Olive MCP Knowledge Base for matching error patterns...
+                </p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

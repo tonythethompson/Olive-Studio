@@ -64,3 +64,33 @@ def test_pass_chain_via_server():
     data = json.loads(result[0].text)
     assert data["valid"] is True
     assert len(data["chain"]) == 3
+
+
+def test_troubleshoot_olive_error_via_server():
+    # Test matched entry
+    result, _ = _run(
+        mcp.call_tool(
+            "troubleshoot_olive_error",
+            {
+                "error_message": "ValueError: The model file size is larger than 2GB. Please use use_external_data_format=True",
+                "pass_name": "OnnxConversion",
+            },
+        )
+    )
+    data = json.loads(result[0].text)
+    assert data["matched_entry"] == "onnx-export-external-data"
+    assert "use_external_data_format" in data["workaround"]
+
+    # Test unmatched entry
+    result_unmatched, _ = _run(
+        mcp.call_tool(
+            "troubleshoot_olive_error",
+            {
+                "error_message": "Some random unique unknown failure message 12345",
+            },
+        )
+    )
+    data_unmatched = json.loads(result_unmatched[0].text)
+    assert data_unmatched["matched_entry"] is None
+    assert data_unmatched["title"] == "No exact match found"
+

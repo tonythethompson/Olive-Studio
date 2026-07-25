@@ -1,8 +1,9 @@
 import { Label, Select, Switch } from "@/components/ui";
 import { getAllowedQuantMethods } from "@/lib/pipelineValidation";
 import { UIState } from "@/types";
+import { ImportConfirmDialog } from "./ImportConfirmDialog";
 import type { InspectorProps } from "./types";
-import { useCallback, useMemo, useRef, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { RecipeDiffOverlay } from "./RecipeDiffOverlay";
 import { RefreshCw, AlertTriangle, Save, Download, Upload } from "lucide-react";
 import {
@@ -267,13 +268,6 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
     collisions: string[];
     mergedPresets: CustomQuantPreset[];
   } | null>(null);
-  const cancelBtnRef = useRef<HTMLButtonElement>(null);
-
-  // Focus the Cancel button when the confirmation dialog opens
-  useEffect(() => {
-    if (importConfirm) cancelBtnRef.current?.focus();
-  }, [importConfirm]);
-
   const currentPreset = useMemo(() => getCurrentQuantPreset(state), [state]);
   const allowedQuantMethods = getAllowedQuantMethods(state.ihvProvider);
   const isGptq = state.passes.quantMethod === "gptq";
@@ -518,68 +512,21 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
           </button>
         </div>
         {importConfirm && (
-          <div
-            className="rounded-lg border border-slate-700 bg-slate-900/90 p-3 space-y-2"
-            onKeyDown={(e) => {
-              if (e.key === "Escape") setImportConfirm(null);
+          <ImportConfirmDialog<CustomQuantPreset>
+            importedPresets={importConfirm.importedPresets}
+            collisions={importConfirm.collisions}
+            mergedPresets={importConfirm.mergedPresets}
+            presetDetail={(p) => {
+              const f = p.fields;
+              return `${f.quantMethod?.toUpperCase() ?? "PTQ"} · ${f.quantPrecision?.toUpperCase() ?? "INT8"}`;
             }}
-          >
-            <p className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
-              Import {importConfirm.importedPresets.length} preset
-              {importConfirm.importedPresets.length !== 1 ? "s" : ""}
-            </p>
-            <div className="space-y-1.5 max-h-40 overflow-y-auto">
-              {importConfirm.importedPresets.map((preset) => {
-                const isCollision = importConfirm.collisions.includes(preset.label);
-                const fields = preset.fields;
-                const detail = `${fields.quantMethod?.toUpperCase() ?? "PTQ"} · ${fields.quantPrecision?.toUpperCase() ?? "INT8"}`;
-                return (
-                  <div
-                    key={preset.label}
-                    className={`rounded px-2 py-1 ${isCollision ? "bg-amber-500/5" : "bg-slate-800/50"}`}
-                  >
-                    <div className="flex items-center gap-1.5 text-[11px]">
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${isCollision ? "bg-amber-400" : "bg-emerald-400"}`}
-                      />
-                      <span className={`font-medium ${isCollision ? "text-amber-300" : "text-slate-300"}`}>
-                        {preset.label}
-                      </span>
-                      {isCollision && <span className="text-[9px] text-amber-500/70">will overwrite</span>}
-                    </div>
-                    <div className="ml-3 text-[9px] text-slate-500 font-mono">{detail}</div>
-                  </div>
-                );
-              })}
-            </div>
-            {importConfirm.collisions.length > 0 && (
-              <p className="text-[10px] text-amber-400/80">
-                {importConfirm.collisions.length} preset{importConfirm.collisions.length !== 1 ? "s" : ""}{" "}
-                will overwrite existing custom presets with the same name.
-              </p>
-            )}
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  replaceAllCustomPresets(importConfirm.mergedPresets);
-                  setCustomPresets(importConfirm.mergedPresets);
-                  setImportConfirm(null);
-                }}
-                className="h-7 px-3 text-[10px] font-medium rounded border border-electric-blue/50 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 transition-colors"
-              >
-                Import
-              </button>
-              <button
-                ref={cancelBtnRef}
-                type="button"
-                onClick={() => setImportConfirm(null)}
-                className="h-7 px-3 text-[10px] font-medium rounded border border-slate-600 bg-slate-800 text-slate-400 hover:text-slate-300 hover:border-slate-500 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+            onImport={(merged) => {
+              replaceAllCustomPresets(merged);
+              setCustomPresets(merged);
+              setImportConfirm(null);
+            }}
+            onCancel={() => setImportConfirm(null)}
+          />
         )}
         {importError && (
           <div className="flex items-start gap-1.5 text-[10px] text-amber-400 mt-1">
