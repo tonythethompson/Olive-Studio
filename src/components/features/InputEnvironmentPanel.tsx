@@ -171,6 +171,7 @@ export function InputEnvironmentPanel({
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: on-mount hardware probe
     setHardwareProbeLoading(true);
     void fetchHardwareProbe(false)
       .then((result) => {
@@ -302,6 +303,7 @@ export function InputEnvironmentPanel({
 
   useEffect(() => {
     if (state.localFiles.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset hints when no files
       setLocalModelHints(null);
       setLocalHintsLoading(false);
       setShowLocalRecipeMatchesOnly(false);

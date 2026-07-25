@@ -287,7 +287,10 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
         : state.passes.pruningMethod === "wanda"
           ? "Wanda"
           : "Prune";
-    const config: Record<string, unknown> = { sparsity: state.passes.pruningSparsity };
+    const config: Record<string, unknown> = {
+      sparsity: state.passes.pruningSparsity,
+      pruning_criteria: state.passes.pruningCriteria,
+    };
 
     if (state.userScript) {
       config.user_script = state.userScript;

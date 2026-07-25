@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { formatMemoryGb } from "@/lib/vramEstimate";
 import { cn } from "@/lib/utils";
 import { ArrowRight } from "lucide-react";
@@ -13,7 +14,7 @@ interface ModelMemoryCompareProps {
 }
 
 /** Before → after model memory with model name context. */
-export function ModelMemoryCompare({
+export const ModelMemoryCompare = memo(function ModelMemoryCompare({
   beforeGb,
   afterGb,
   modelShortName,
@@ -107,4 +108,4 @@ export function ModelMemoryCompare({
       )}
     </div>
   );
-}
+});
