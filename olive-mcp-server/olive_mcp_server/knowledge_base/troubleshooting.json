@@ -114,8 +114,11 @@
         "passes": {
           "OnnxQuantization": {
             "params": {
-              "calibration_sampling_size": 32,
-              "batch_size": 1,
+              "calibration_sampling_size": 32
+            }
+          },
+          "OnnxConversion": {
+            "params": {
               "use_external_data_format": true
             }
           }

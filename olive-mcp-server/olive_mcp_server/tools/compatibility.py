@@ -3,31 +3,7 @@
 from typing import Any
 
 from . import load_compatibility_matrix, load_passes
-
-
-def _normalize_model(name: str) -> str:
-    n = name.lower()
-    # Only normalize exact known aliases; return original name for unsupported variants
-    if "mistral" in n and "7b" in n:
-        return "Mistral 7B"
-    if "phi-3-mini" in n or "phi3-mini" in n or (n == "phi-3" or n == "phi3"):
-        return "Phi-3-mini"
-    if "resnet" in n and "50" in n:
-        return "ResNet-50"
-    if "whisper" in n:
-        return "Whisper"
-    return name
-
-
-def _normalize_framework(framework: str) -> str:
-    f = framework.lower()
-    if f in ("pytorch", "torch", "hf", "huggingface"):
-        return "PyTorch"
-    if f in ("onnx",):
-        return "ONNX"
-    if f in ("tf", "tensorflow"):
-        return "TensorFlow"
-    return framework
+from .normalization import normalize_framework, normalize_model
 
 
 def get_model_compatibility(
@@ -46,8 +22,8 @@ def get_model_compatibility(
         Compatibility matrix for supported passes, known issues, and expected performance.
     """
     models = load_compatibility_matrix()
-    key = _normalize_model(model_name)
-    fw = _normalize_framework(framework)
+    key = normalize_model(model_name)
+    fw = normalize_framework(framework)
     passes = {p["name"]: p for p in load_passes()}
 
     matched = [m for m in models if m["model"] == key]

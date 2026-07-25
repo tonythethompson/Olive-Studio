@@ -5,7 +5,7 @@ from typing import Any
 from . import load_passes
 
 
-def get_olive_passes(filter: str | None = None) -> dict[str, Any]:
+def get_olive_passes(filter: str | None = None) -> dict[str, Any]:  # noqa: A002
     """List available Olive optimization passes, optionally filtered by category.
 
     Args:

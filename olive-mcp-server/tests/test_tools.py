@@ -134,8 +134,10 @@ def test_get_cli_command():
 
 def test_get_data_config_template():
     result = get_data_config_template(data_source="huggingface", task="calibration")
-    assert result["data_config"]["calibration_data"]["type"] == "HuggingFaceContainer"
-    assert "calibration_sampling_size" in result["data_config"]
+    assert len(result["data_configs"]) > 0
+    assert result["data_configs"][0]["type"] == "HuggingFaceContainer"
+    assert result["data_configs"][0]["name"] == "calibration_data"
+    assert "sampling" in result["data_configs"][0]
 
 
 def test_search_olive_documentation():
