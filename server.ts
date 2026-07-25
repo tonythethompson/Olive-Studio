@@ -1695,20 +1695,62 @@ app.delete("/api/ai/provider", (_req, res) => {
 });
 
 // ─── GET /api/ai/local-models ──────────────────────────────────────────────────
-app.get("/api/ai/local-models", async (_req, res) => {
+/** Path to the Llmster (LM Studio) CLI binary */
+function findLmsCli(): string | null {
+  const home = os.homedir();
+  const candidates =
+    process.platform === "win32"
+      ? [path.join(home, ".lmstudio", "bin", "lms.exe"), path.join(home, ".lmstudio", "bin", "lms")]
+      : [path.join(home, ".lmstudio", "bin", "lms"), "/usr/local/bin/lms", "/opt/homebrew/bin/lms"];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  // Try PATH
   try {
+    const { stdout } = require("child_process")
+      .execSync("which lms 2>/dev/null || where lms 2>nul", { encoding: "utf-8" })
+      .trim();
+    if (stdout && fs.existsSync(stdout)) return stdout;
+  } catch {
+    /* not on PATH */
+  }
+  return null;
+}
+
+app.get("/api/ai/local-models", async (_req, res) => {
+  const LM_STUDIO_PORT = 1234;
+  try {
+    // 1) Try LM Studio HTTP API (loaded models)
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2000);
-    const response = await fetch("http://localhost:11434/api/tags", { signal: controller.signal });
+    const response = await fetch(`http://localhost:${LM_STUDIO_PORT}/v1/models`, {
+      signal: controller.signal,
+    });
     clearTimeout(timeout);
-    if (!response.ok) {
-      return res.json({ ollamaRunning: false, installedModels: [] });
+    if (response.ok) {
+      const data = (await response.json()) as { data?: Array<{ id: string }> };
+      const loadedModels = (data.data || []).map((m) => m.id);
+
+      // 2) Also try `lms ls` for all downloaded models
+      const lms = findLmsCli();
+      let downloadedModels: string[] = [];
+      if (lms) {
+        try {
+          const { stdout } = await execFileAsync(lms, ["ls", "--output", "json"], { timeout: 5000 });
+          const parsed = JSON.parse(stdout) as { models?: Array<{ identifier?: string; path?: string }> };
+          downloadedModels = (parsed.models || []).map((m) => m.identifier || m.path || "").filter(Boolean);
+        } catch {
+          // Fall back to loaded models only
+          downloadedModels = loadedModels;
+        }
+      }
+
+      const allModels = [...new Set([...downloadedModels, ...loadedModels])];
+      return res.json({ lmStudioRunning: true, installedModels: allModels });
     }
-    const data = (await response.json()) as { models?: Array<{ name: string }> };
-    const installedModels = (data.models || []).map((m) => m.name);
-    return res.json({ ollamaRunning: true, installedModels });
+    return res.json({ lmStudioRunning: false, installedModels: [] });
   } catch {
-    return res.json({ ollamaRunning: false, installedModels: [] });
+    return res.json({ lmStudioRunning: false, installedModels: [] });
   }
 });
 
@@ -1717,23 +1759,44 @@ app.post("/api/ai/local-pull", async (req, res) => {
   const { modelTag } = req.body as { modelTag?: string };
   if (!modelTag) return res.status(400).json({ error: "modelTag is required." });
 
+  const LM_STUDIO_PORT = 1234;
+  const lms = findLmsCli();
+
+  if (!lms) {
+    return res.status(500).json({
+      error: "LM Studio (Llmster) not found. Install it from https://lmstudio.ai/install.sh",
+    });
+  }
+
   try {
-    const pullResp = await fetch("http://localhost:11434/api/pull", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: modelTag, stream: false }),
+    // Use `lms get` to download the model via LM Studio CLI
+    const getProc = spawn(lms, ["get", modelTag], { stdio: "pipe" });
+    let stdout = "";
+    let stderr = "";
+    getProc.stdout?.on("data", (d: Buffer) => {
+      stdout += d.toString();
+    });
+    getProc.stderr?.on("data", (d: Buffer) => {
+      stderr += d.toString();
     });
 
-    if (!pullResp.ok) {
-      const errText = await pullResp.text();
-      return res.status(500).json({ error: `Ollama pull failed: ${errText}` });
+    const exitCode = await new Promise<number>((resolve) => {
+      getProc.on("close", (code) => resolve(code ?? 1));
+      getProc.on("error", () => resolve(1));
+    });
+
+    if (exitCode !== 0) {
+      return res.status(500).json({
+        error: `LM Studio model download failed (exit ${exitCode}): ${stderr || stdout}`,
+      });
     }
 
+    // Configure the AI provider to use LM Studio's OpenAI-compatible server
     runtimeAiProvider = {
       provider: "openai-compat",
-      baseUrl: "http://localhost:11434/v1",
+      baseUrl: `http://localhost:${LM_STUDIO_PORT}/v1`,
       model: modelTag,
-      apiKey: "ollama",
+      apiKey: "lm-studio",
     };
 
     return res.json({
@@ -1744,7 +1807,7 @@ app.post("/api/ai/local-pull", async (req, res) => {
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
   } catch (err: any) {
-    return res.status(500).json({ error: `Failed to connect to local Ollama service: ${err.message}` });
+    return res.status(500).json({ error: `Failed to download model via LM Studio: ${err.message}` });
   }
 });
 

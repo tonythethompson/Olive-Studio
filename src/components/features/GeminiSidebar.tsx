@@ -776,32 +776,32 @@ export function GeminiSidebar({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 font-bold text-xs text-electric-blue">
                     <Download className="h-4 w-4" />
-                    <span>1-Click Local AI Setup (Ollama)</span>
+                    <span>1-Click Local AI Setup (LM Studio)</span>
                   </div>
                   <span className="text-[10px] bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-1.5 py-0.5 rounded font-mono">
                     Local & Private
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  Download & enable a local model to run Olive Studio AI features offline with zero cloud
-                  keys:
+                  Download & enable a local model via LM Studio (Llmster) to run Olive Studio AI features
+                  offline with zero cloud keys:
                 </p>
                 <div className="space-y-2">
                   {[
                     {
-                      tag: "qwen2.5-coder:1.5b",
+                      tag: "lmstudio-community/Qwen2.5-Coder-1.5B-Instruct-GGUF",
                       name: "Qwen2.5-Coder (1.5B)",
                       desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
                       size: "1.1 GB",
                     },
                     {
-                      tag: "llama3.2:1b",
+                      tag: "lmstudio-community/Meta-Llama-3.2-1B-Instruct-GGUF",
                       name: "Llama-3.2 (1B)",
                       desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
                       size: "800 MB",
                     },
                     {
-                      tag: "phi3.5:mini",
+                      tag: "lmstudio-community/Phi-3.5-Mini-Instruct-GGUF",
                       name: "Phi-3.5-Mini (3.8B)",
                       desc: "🧠 Advanced Reasoning: Complex compiler co-design",
                       size: "2.2 GB",
@@ -912,7 +912,7 @@ export function GeminiSidebar({
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
                     />
                     <p className="text-[10px] text-slate-600 mt-1">
-                      Works with LM Studio, vLLM, Ollama, etc. (default: http://localhost:1234/v1)
+                      Works with LM Studio, vLLM, Ollama, etc. (default: http://localhost:11434/v1)
                     </p>
                   </div>
                 )}
