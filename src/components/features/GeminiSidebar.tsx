@@ -19,6 +19,7 @@ import {
   Check,
   Settings2,
   Key,
+  Download,
 } from "lucide-react";
 
 const PROVIDER_OPTIONS = [
@@ -173,6 +174,31 @@ export function GeminiSidebar({
   const [customModel, setCustomModel] = useState("");
   const [isSavingProvider, setIsSavingProvider] = useState(false);
   const [providerSaveError, setProviderSaveError] = useState("");
+  const [pullingModel, setPullingModel] = useState<string | null>(null);
+  const [localPullError, setLocalPullError] = useState<string>("");
+
+  const handlePullLocalModel = async (modelTag: string) => {
+    setPullingModel(modelTag);
+    setLocalPullError("");
+    try {
+      const r = await fetch("/api/ai/local-pull", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modelTag }),
+      });
+      const contentType = r.headers.get("content-type") ?? "";
+      const data = contentType.includes("application/json") ? await r.json().catch(() => ({})) : {};
+      if (!r.ok) throw new Error((data as { error?: string }).error || `HTTP ${r.status}`);
+      await fetchProviderStatus();
+      setAnalysis(null);
+      setActiveTab("audit");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      setLocalPullError(err.message || "Failed to pull local model.");
+    } finally {
+      setPullingModel(null);
+    }
+  };
 
   const providerOption = PROVIDER_OPTIONS.find((p) => p.id === settingsProvider)!;
   const isCompatMode = settingsProvider === "openai-compat";
@@ -233,7 +259,6 @@ export function GeminiSidebar({
 
   useEffect(() => {
     if (!isOpen) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initialize sidebar state on mount
     fetchProviderStatus().then((status) => {
       if (status.source === "none") setActiveTab("settings");
     });
@@ -730,10 +755,81 @@ export function GeminiSidebar({
                 )}
               </div>
 
+              {/* 1-Click Local Model Setup */}
+              <div className="p-3.5 rounded-xl border border-electric-blue/20 bg-electric-blue/5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-xs text-electric-blue">
+                    <Download className="h-4 w-4" />
+                    <span>1-Click Local AI Setup (Ollama)</span>
+                  </div>
+                  <span className="text-[10px] bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-1.5 py-0.5 rounded font-mono">
+                    Local & Private
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Download & enable a local model to run Olive Studio AI features offline with zero cloud
+                  keys:
+                </p>
+                <div className="space-y-2">
+                  {[
+                    {
+                      tag: "qwen2.5-coder:1.5b",
+                      name: "Qwen2.5-Coder (1.5B)",
+                      desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
+                      size: "1.1 GB",
+                    },
+                    {
+                      tag: "llama3.2:1b",
+                      name: "Llama-3.2 (1B)",
+                      desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
+                      size: "800 MB",
+                    },
+                    {
+                      tag: "phi3.5:mini",
+                      name: "Phi-3.5-Mini (3.8B)",
+                      desc: "🧠 Advanced Reasoning: Complex compiler co-design",
+                      size: "2.2 GB",
+                    },
+                  ].map((m) => (
+                    <div
+                      key={m.tag}
+                      className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60 flex flex-col gap-1.5"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-xs text-slate-100">{m.name}</span>
+                        <span className="text-[10px] font-mono text-slate-400 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded">
+                          {m.size}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-normal">{m.desc}</p>
+                      <button
+                        type="button"
+                        onClick={() => handlePullLocalModel(m.tag)}
+                        disabled={pullingModel === m.tag}
+                        className="mt-1 w-full h-7 bg-electric-blue/10 hover:bg-electric-blue/20 text-electric-blue border border-electric-blue/30 rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {pullingModel === m.tag ? (
+                          <>
+                            <RefreshCw className="h-3 w-3 animate-spin" />
+                            <span>Pulling & Activating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Download className="h-3 w-3" />
+                            <span>1-Click Download & Enable</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {localPullError && <p className="text-xs text-rose-400 mt-1">{localPullError}</p>}
+              </div>
+
               {/* Configure new provider */}
               <div className="space-y-3">
                 <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">
-                  Configure Provider
+                  Manual Provider Setup
                 </p>
 
                 <div>

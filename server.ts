@@ -1694,6 +1694,60 @@ app.delete("/api/ai/provider", (_req, res) => {
   return res.json({ ok: true });
 });
 
+// ─── GET /api/ai/local-models ──────────────────────────────────────────────────
+app.get("/api/ai/local-models", async (_req, res) => {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const response = await fetch("http://localhost:11434/api/tags", { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!response.ok) {
+      return res.json({ ollamaRunning: false, installedModels: [] });
+    }
+    const data = (await response.json()) as { models?: Array<{ name: string }> };
+    const installedModels = (data.models || []).map((m) => m.name);
+    return res.json({ ollamaRunning: true, installedModels });
+  } catch {
+    return res.json({ ollamaRunning: false, installedModels: [] });
+  }
+});
+
+// ─── POST /api/ai/local-pull ───────────────────────────────────────────────────
+app.post("/api/ai/local-pull", async (req, res) => {
+  const { modelTag } = req.body as { modelTag?: string };
+  if (!modelTag) return res.status(400).json({ error: "modelTag is required." });
+
+  try {
+    const pullResp = await fetch("http://localhost:11434/api/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: modelTag, stream: false }),
+    });
+
+    if (!pullResp.ok) {
+      const errText = await pullResp.text();
+      return res.status(500).json({ error: `Ollama pull failed: ${errText}` });
+    }
+
+    runtimeAiProvider = {
+      provider: "openai-compat",
+      baseUrl: "http://localhost:11434/v1",
+      model: modelTag,
+      apiKey: "ollama",
+    };
+
+    return res.json({
+      ok: true,
+      source: "user",
+      provider: "openai-compat",
+      model: modelTag,
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
+  } catch (err: any) {
+    return res.status(500).json({ error: `Failed to connect to local Ollama service: ${err.message}` });
+  }
+});
+
 // ─── Olive MCP Integration Helper ──────────────────────────────────────────────
 /** Invokes a tool function in olive_mcp_server and returns its result */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP JSON responses vary
@@ -1902,6 +1956,52 @@ app.post("/api/ai/chat", async (req, res) => {
   } catch (err: any) {
     console.error("AI Chat Error:", err);
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/validate-recipe (MCP pass-chain validation) ─────────────────────
+app.post("/api/validate-recipe", async (req, res) => {
+  const { passNames, sourceFormat = "" } = req.body as {
+    passNames?: string[];
+    sourceFormat?: string;
+  };
+
+  if (!Array.isArray(passNames) || passNames.length === 0) {
+    return res.status(400).json({ error: "Missing or empty passNames array." });
+  }
+
+  try {
+    const scriptPath = path.join(process.cwd(), "scripts", "validate_pass_chain.py");
+    const python = getVenvPython();
+    const exists = fs.existsSync(python);
+    const systemPython = exists ? python : "python";
+
+    const passNamesJson = JSON.stringify(passNames);
+    const { stdout, stderr } = await execFileAsync(systemPython, [scriptPath, passNamesJson, sourceFormat]);
+
+    const output = stdout.trim();
+    if (!output) {
+      return res.status(500).json({
+        error: "MCP validation returned empty output.",
+        stderr: stderr.trim() || undefined,
+      });
+    }
+
+    try {
+      const result = JSON.parse(output);
+      return res.json(result);
+    } catch {
+      return res.status(500).json({
+        error: "MCP validation returned invalid JSON.",
+        raw: output.slice(0, 500),
+      });
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
+  } catch (err: any) {
+    console.error("MCP validation error:", err);
+    return res.status(500).json({
+      error: err?.message || "MCP validation failed.",
+    });
   }
 });
 

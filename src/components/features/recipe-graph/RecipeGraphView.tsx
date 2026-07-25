@@ -3,6 +3,7 @@ import { getSelectedModelInfo } from "@/lib/modelFamily";
 import { UIState } from "@/types";
 import { buildPipelineSteps } from "./graphLayout";
 import { GraphCanvas } from "./GraphCanvas";
+import { RecipeValidationPanel } from "./RecipeValidationPanel";
 import { StepInspector } from "./StepInspector";
 
 export interface RecipeGraphViewProps {
@@ -46,6 +47,9 @@ export function RecipeGraphView({ state, setState, showDot = true }: RecipeGraph
         layoutTick={layoutTick}
         onLayoutTick={bumpLayout}
       />
+      <div className="px-3 py-2">
+        <RecipeValidationPanel state={state} setState={setState} />
+      </div>
       <StepInspector
         state={state}
         setState={setState}
