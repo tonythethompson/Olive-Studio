@@ -202,18 +202,9 @@ def get_quantization_strategy(
             # Skip override if parsing fails
             pass
 
-    # Assemble quirks defensively
-    relevant_quirks = []
-    quantization_quirks = quirks.get("quantization", [])
-    if len(quantization_quirks) > 0:
-        relevant_quirks.append(quantization_quirks[0].get("title", ""))
-    if len(quantization_quirks) > 1:
-        relevant_quirks.append(quantization_quirks[1].get("title", ""))
-    pass_ordering_quirks = quirks.get("pass_ordering", [])
-    if len(pass_ordering_quirks) > 0:
-        relevant_quirks.append(pass_ordering_quirks[0].get("title", ""))
-    # Filter out empty strings
-    relevant_quirks = [q for q in relevant_quirks if q]
+    # Pull the top quirks from the most relevant categories.
+    candidates = quirks.get("quantization", [])[:2] + quirks.get("pass_ordering", [])[:1]
+    relevant_quirks = [title for q in candidates if (title := q.get("title", ""))]
 
     return {
         "model_type": mt,

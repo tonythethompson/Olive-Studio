@@ -3,6 +3,7 @@
 from typing import Any
 
 from . import load_passes
+from .normalization import normalize_framework
 
 
 # Canonical ordering constraints: each pass type should appear after its
@@ -64,11 +65,11 @@ def get_pass_chain(pass_names: list[str], source_format: str = "") -> dict[str, 
         if ptype == "quantization" and "onnx" in meta.get("input_formats", []):
             if "OnnxConversion" not in seen_pass_names:
                 # Check if source is already ONNX
-                normalized_source = source_format.lower()
+                normalized_source = normalize_framework(source_format).lower()
                 if normalized_source == "onnx":
                     # Source is already ONNX, no conversion needed
                     pass
-                elif normalized_source in ("torch", "pytorch", "hf", "huggingface"):
+                elif normalized_source in ("torch", "pytorch", "tf", "tensorflow"):
                     # Explicitly non-ONNX source, require conversion
                     errors.append(
                         f"Pass '{name}' requires an ONNX input but no OnnxConversion precedes it in the chain."

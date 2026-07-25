@@ -25,18 +25,23 @@ from olive_mcp_server.tools.troubleshooting import troubleshoot_olive_error
 
 mcp = FastMCP("olive-mcp-server")
 
-mcp.tool()(get_olive_passes)
-mcp.tool()(get_pass_config_template)
-mcp.tool()(get_quantization_strategy)
-mcp.tool()(get_hardware_optimization_guide)
-mcp.tool()(get_pass_chain)
-mcp.tool()(troubleshoot_olive_error)
-mcp.tool()(get_model_compatibility)
-mcp.tool()(get_cli_command)
-mcp.tool()(get_data_config_template)
-mcp.tool()(search_olive_documentation)
-mcp.tool()(get_pass_parameters)
-mcp.tool()(evaluate_optimization_tradeoff)
+TOOLS = [
+    get_olive_passes,
+    get_pass_config_template,
+    get_quantization_strategy,
+    get_hardware_optimization_guide,
+    get_pass_chain,
+    troubleshoot_olive_error,
+    get_model_compatibility,
+    get_cli_command,
+    get_data_config_template,
+    search_olive_documentation,
+    get_pass_parameters,
+    evaluate_optimization_tradeoff,
+]
+
+for tool in TOOLS:
+    mcp.tool()(tool)
 
 
 def main() -> None:
