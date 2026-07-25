@@ -20,17 +20,28 @@ The fetchers are stubs; wire them to requests/firecrawl for live updates.
 ```bash
 cd olive-mcp-server
 python -m venv .venv
+
+# Windows
 .venv\Scripts\pip install -e ".[dev]"
+
+# Linux/macOS
+.venv/bin/pip install -e ".[dev]"
 ```
 
 ## Run
 
 ```bash
-# Module entry point
+# Module entry point (Windows)
 .venv\Scripts\python -m olive_mcp_server
 
-# Console script (after install)
+# Module entry point (Linux/macOS)
+.venv/bin/python -m olive_mcp_server
+
+# Console script after install (Windows)
 .venv\Scripts\olive-mcp-server
+
+# Console script after install (Linux/macOS)
+.venv/bin/olive-mcp-server
 ```
 
 The server uses stdio transport by default and exposes the registered tools.
@@ -38,7 +49,11 @@ The server uses stdio transport by default and exposes the registered tools.
 ## Test
 
 ```bash
+# Windows
 .venv\Scripts\python -m pytest tests -q
+
+# Linux/macOS
+.venv/bin/python -m pytest tests -q
 ```
 
 ## Tools

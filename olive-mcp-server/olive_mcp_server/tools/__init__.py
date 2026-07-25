@@ -15,15 +15,15 @@ def _load_json(name: str) -> dict[str, Any]:
 
 
 def load_passes() -> list[dict[str, Any]]:
-    return _load_json("passes.json")["passes"]
+    return _load_json("passes.json").get("passes", [])
 
 
 def load_hardware_profiles() -> list[dict[str, Any]]:
-    return _load_json("hardware_profiles.json")["profiles"]
+    return _load_json("hardware_profiles.json").get("profiles", [])
 
 
 def load_quirks() -> dict[str, Any]:
-    return _load_json("quirks.json")["categories"]
+    return _load_json("quirks.json").get("categories", {})
 
 
 def load_json(name: str) -> dict[str, Any]:

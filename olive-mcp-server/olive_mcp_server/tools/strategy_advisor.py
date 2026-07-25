@@ -4,21 +4,27 @@ import re
 from typing import Any
 
 from . import load_hardware_profiles, load_quirks
+from .normalization import normalize_hardware as _normalize_hardware_base
 
 
 def _normalize_hardware(target: str) -> str:
-    t = target.lower()
-    if "nvidia" in t or "rtx" in t or "tesla" in t:
+    """Normalize hardware to category (nvidia/intel/qualcomm/etc) for strategy selection."""
+    # Use the base normalization first
+    normalized = _normalize_hardware_base(target)
+
+    # Map to strategy categories
+    n = normalized.lower()
+    if "nvidia" in n or "rtx" in n or "tesla" in n or "t4" in n:
         return "nvidia"
-    if "intel" in t or "openvino" in t or "core" in t:
+    if "intel" in n or "openvino" in n or "core" in n:
         return "intel"
-    if "qualcomm" in t or "qnn" in t or "snapdragon" in t:
+    if "qualcomm" in n or "qnn" in n or "snapdragon" in n:
         return "qualcomm"
-    if "apple" in t or "coreml" in t or "m2" in t or "m3" in t:
+    if "apple" in n or "coreml" in n or "m2" in n or "m3" in n:
         return "apple"
-    if "android" in t or "nnapi" in t:
+    if "android" in n or "nnapi" in n:
         return "android"
-    if "xilinx" in t or "vitis" in t:
+    if "xilinx" in n or "vitis" in n:
         return "xilinx"
     return "generic"
 
@@ -190,6 +196,19 @@ def get_quantization_strategy(
         algorithm = algorithm.replace("int4", "int8") + " (tight accuracy target)"
         risks.append("Tight accuracy target requires larger calibration set and per-channel weights.")
 
+    # Assemble quirks defensively
+    relevant_quirks = []
+    quantization_quirks = quirks.get("quantization", [])
+    if len(quantization_quirks) > 0:
+        relevant_quirks.append(quantization_quirks[0].get("title", ""))
+    if len(quantization_quirks) > 1:
+        relevant_quirks.append(quantization_quirks[1].get("title", ""))
+    pass_ordering_quirks = quirks.get("pass_ordering", [])
+    if len(pass_ordering_quirks) > 0:
+        relevant_quirks.append(pass_ordering_quirks[0].get("title", ""))
+    # Filter out empty strings
+    relevant_quirks = [q for q in relevant_quirks if q]
+
     return {
         "model_type": mt,
         "target_hardware": hw,
@@ -200,9 +219,5 @@ def get_quantization_strategy(
         "expected_outcomes": expected,
         "risks": risks,
         "pass_chain": pass_chain,
-        "relevant_quirks": [
-            quirks["calibration"][0]["title"],
-            quirks["calibration"][1]["title"],
-            quirks["pass_ordering"][0]["title"],
-        ],
+        "relevant_quirks": relevant_quirks,
     }

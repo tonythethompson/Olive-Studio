@@ -19,5 +19,5 @@ def fetch_official_docs(pages: list[str] | None = None) -> dict[str, Any]:
         "status": "stub",
         "source": OFFICIAL_DOCS_URL,
         "note": "Implement with requests/firecrawl to pull live docs. Use context7 or firecrawl for production.",
-        "pages": pages or ["index", "passes", "tutorials"],
+        "pages": pages if pages is not None else ["index", "passes", "tutorials"],
     }

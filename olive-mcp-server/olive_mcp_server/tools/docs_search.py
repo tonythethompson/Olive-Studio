@@ -39,11 +39,14 @@ def search_olive_documentation(query: str, top_k: int = 5) -> dict[str, Any]:
 
     Args:
         query: Search query, e.g. "calibrate static quantization".
-        top_k: Maximum number of results.
+        top_k: Maximum number of results (must be >= 0).
 
     Returns:
         Ranked results with snippet, source path, and relevance score.
     """
+    if top_k < 0:
+        raise ValueError(f"top_k must be >= 0, got {top_k}")
+
     terms = [t.lower() for t in query.split() if t]
     kb = _load_kb_text()
 

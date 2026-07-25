@@ -227,7 +227,11 @@
       },
       "hardware_requirements": [
         "CPUExecutionProvider",
-        "TensorrtExecutionProvider"
+        "TensorrtExecutionProvider",
+        "CoreMLExecutionProvider",
+        "NNAPIExecutionProvider",
+        "ROCMExecutionProvider",
+        "OpenVINOExecutionProvider"
       ],
       "typical_compression": "70-80%",
       "gotchas": [
