@@ -2058,6 +2058,82 @@ app.post("/api/validate-compatibility", async (req, res) => {
   }
 });
 
+// ─── POST /api/mcp/tool (generic MCP tool invocation) ─────────────────────────
+app.post("/api/mcp/tool", async (req, res) => {
+  const { toolName, args = {} } = req.body as {
+    toolName?: string;
+    args?: Record<string, unknown>;
+  };
+
+  // Map tool names to CLI scripts
+  const toolScripts: Record<string, string> = {
+    troubleshoot_olive_error: "troubleshoot_olive_error.py",
+    get_pass_chain: "validate_pass_chain.py",
+    get_model_compatibility: "validate_model_compatibility.py",
+  };
+
+  if (!toolName || !toolScripts[toolName]) {
+    return res.status(400).json({
+      error: `Unknown or unsupported MCP tool: '${toolName ?? ""}'. Supported: ${Object.keys(toolScripts).join(", ")}`,
+    });
+  }
+
+  try {
+    const scriptPath = path.join(process.cwd(), "scripts", toolScripts[toolName]);
+    const python = getVenvPython();
+    const exists = fs.existsSync(python);
+    const systemPython = exists ? python : "python";
+
+    // Build CLI args based on tool
+    const cliArgs: string[] = [scriptPath];
+    if (toolName === "troubleshoot_olive_error") {
+      const errorMsg = String(args.error_message || "");
+      if (!errorMsg.trim()) {
+        return res
+          .status(400)
+          .json({ error: "Missing or empty error_message for troubleshoot_olive_error." });
+      }
+      // Truncate to ~4000 chars to stay within CLI arg limits (Windows ~8KB, Linux ~128KB)
+      cliArgs.push(errorMsg.slice(0, 4000));
+      if (args.pass_name) cliArgs.push(String(args.pass_name));
+      if (args.config_context) cliArgs.push(String(args.config_context));
+    } else if (toolName === "get_pass_chain") {
+      cliArgs.push(JSON.stringify(args.pass_names || []));
+      if (args.source_format) cliArgs.push(String(args.source_format));
+    } else if (toolName === "get_model_compatibility") {
+      cliArgs.push(String(args.model_name || ""));
+      cliArgs.push(String(args.framework || ""));
+      if (args.hardware_target) cliArgs.push(String(args.hardware_target));
+    }
+
+    const { stdout, stderr } = await execFileAsync(systemPython, cliArgs);
+
+    const output = stdout.trim();
+    if (!output) {
+      return res.status(500).json({
+        error: `MCP tool '${toolName}' returned empty output.`,
+        stderr: stderr.trim() || undefined,
+      });
+    }
+
+    try {
+      const result = JSON.parse(output);
+      return res.json(result);
+    } catch {
+      return res.status(500).json({
+        error: `MCP tool '${toolName}' returned invalid JSON.`,
+        raw: output.slice(0, 500),
+      });
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
+  } catch (err: any) {
+    console.error(`MCP tool '${toolName}' error:`, err);
+    return res.status(500).json({
+      error: err?.message || `MCP tool '${toolName}' failed.`,
+    });
+  }
+});
+
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "API route not found." });
 });

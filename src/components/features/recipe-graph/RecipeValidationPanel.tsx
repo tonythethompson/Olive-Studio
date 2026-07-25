@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getPipelineValidation, applyIssueAutofix, type PipelineIssue } from "@/lib/pipelineValidation";
+import { validatePassParameters } from "@/lib/passParameterValidation";
 import { buildPipelineSteps } from "./graphLayout";
 import { UIState } from "@/types";
 import { AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Info, Zap } from "lucide-react";
@@ -116,38 +117,37 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   }, [activePassNames]);
 
   // Call MCP server for model-hardware compatibility check
-   
   useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;
 
-    // Determine model name and framework from UIState
-    const modelName = state.hfModelId || (state.localFiles.length > 0 ? state.localFiles[0].name : "");
-    const framework = state.passes.conversionSourceFormat === "pytorch" ? "PyTorch" : "ONNX";
-    const hardwareTarget =
-      state.ihvProvider === "CUDAExecutionProvider"
-        ? "NVIDIA RTX 4090"
-        : state.ihvProvider === "TensorrtExecutionProvider"
-          ? "NVIDIA RTX 4090"
-          : state.ihvProvider === "NvTensorRTRTXExecutionProvider"
-            ? "NVIDIA RTX 4090"
-            : state.ihvProvider === "OpenVINOExecutionProvider"
-              ? "Intel Core i9 CPU"
-              : state.ihvProvider === "QNNExecutionProvider"
-                ? "Qualcomm Snapdragon NPU"
-                : "";
-
-    if (!modelName) {
-      if (!cancelled) {
-        setCompatResult(null);
-        setCompatError(null);
-        setCompatLoading(false);
-        setCompatValidated(true);
-      }
-      return;
-    }
-
     const timer = setTimeout(async () => {
+      // Determine model name and framework from UIState
+      const modelName = state.hfModelId || (state.localFiles.length > 0 ? state.localFiles[0].name : "");
+      const framework = state.passes.conversionSourceFormat === "pytorch" ? "PyTorch" : "ONNX";
+      const hardwareTarget =
+        state.ihvProvider === "CUDAExecutionProvider"
+          ? "NVIDIA RTX 4090"
+          : state.ihvProvider === "TensorrtExecutionProvider"
+            ? "NVIDIA RTX 4090"
+            : state.ihvProvider === "NvTensorRTRTXExecutionProvider"
+              ? "NVIDIA RTX 4090"
+              : state.ihvProvider === "OpenVINOExecutionProvider"
+                ? "Intel Core i9 CPU"
+                : state.ihvProvider === "QNNExecutionProvider"
+                  ? "Qualcomm Snapdragon NPU"
+                  : "";
+
+      if (!modelName) {
+        if (!cancelled) {
+          setCompatResult(null);
+          setCompatError(null);
+          setCompatLoading(false);
+          setCompatValidated(true);
+        }
+        return;
+      }
+
       setCompatLoading(true);
       setCompatError(null);
 
@@ -192,6 +192,9 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     const patch = applyIssueAutofix(state, issue);
     setState(patch);
   };
+
+  // Hardware-specific parameter validation (synchronous, cheap — runs every render with state)
+  const paramWarnings = validatePassParameters(state, activePassNames);
 
   // Build compatibility warnings for active passes
   const compatWarnings = compatResult?.compatibility_warnings ?? [];
@@ -240,6 +243,14 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
           },
         ]
       : []),
+    // Hardware-specific parameter warnings
+    ...paramWarnings.map((w) => ({
+      id: w.id,
+      severity: w.severity as "warning" | "critical",
+      title: w.title,
+      description: w.description,
+      source: "parameter" as const,
+    })),
   ];
 
   const criticalCount = allIssues.filter((i) => i.severity === "critical").length;
