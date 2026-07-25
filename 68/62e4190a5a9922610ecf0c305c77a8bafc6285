@@ -1,0 +1,19 @@
+.husky/pre-push
+  s_61bac31605ceba::t_bd3a4dfb742928 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "6862e4190a5a9922610ecf0c305c77a8bafc6285",
+  "prompts": {},
+  "sessions": {
+    "s_61bac31605ceba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "55298470-9634-4d86-8362-bdee9e0c3499",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
