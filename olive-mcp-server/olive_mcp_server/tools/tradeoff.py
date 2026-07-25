@@ -1,8 +1,42 @@
 """Tool: evaluate_optimization_tradeoff."""
 
+import re
 from typing import Any
 
 from . import load_passes
+
+
+def _parse_compression_factor(value: str | None) -> float | None:
+    """Convert a typical_compression string (e.g. '70-80%', '4x', '4x-8x') into a size multiplier.
+
+    Returns None when the metadata is not numeric or not applicable.
+    """
+    if not value:
+        return None
+
+    text = re.sub(r"\s*\(.*?\)", "", value).lower().strip()
+    if text in ("", "n/a", "varies"):
+        return None
+
+    if "x" in text:
+        # e.g. '4x' or '4x-8x': a 4x compression means ~25% of original size.
+        parts = [p.strip() for p in text.replace("x", "").split("-") if p.strip()]
+        try:
+            ratios = [1.0 / float(p) for p in parts]
+            return sum(ratios) / len(ratios)
+        except ValueError:
+            return None
+
+    if "%" in text:
+        # e.g. '70-80%' means the model is compressed by 70-80%, so remaining size is 20-30%.
+        parts = [p.strip() for p in text.replace("%", "").split("-") if p.strip()]
+        try:
+            percentages = [float(p) for p in parts]
+            return 1.0 - (sum(percentages) / len(percentages)) / 100.0
+        except ValueError:
+            return None
+
+    return None
 
 
 def evaluate_optimization_tradeoff(
@@ -36,32 +70,37 @@ def evaluate_optimization_tradeoff(
             continue
 
         ptype = meta.get("type")
+        compression = _parse_compression_factor(meta.get("typical_compression"))
+        gotchas = meta.get("gotchas", [])
+
         if ptype == "quantization":
-            size *= 0.25
+            size *= compression if compression is not None else 0.25
             latency *= 0.35
             accuracy -= 1.5
-            risks.append(f"{name}: quantization can drop accuracy if calibration data is poor.")
+            risks.append(f"{name}: {gotchas[0] if gotchas else 'quantization can drop accuracy if calibration data is poor.'}")
         elif ptype == "graph_optimization":
+            size *= compression if compression is not None else 0.95
             latency *= 0.85
-            size *= 0.95
-            risks.append(f"{name}: graph optimization is usually safe but can change numerics.")
+            risks.append(f"{name}: {gotchas[0] if gotchas else 'graph optimization is usually safe but can change numerics.'}")
         elif ptype == "conversion":
+            size *= compression if compression is not None else 1.0
             latency *= 1.05
-            size *= 1.0
         elif ptype == "pruning":
-            size *= (1 - 0.3)
+            size *= compression if compression is not None else 0.7
             latency *= 0.8
             accuracy -= 2.0
-            risks.append(f"{name}: pruning accuracy loss often requires fine-tuning to recover.")
+            risks.append(f"{name}: {gotchas[0] if gotchas else 'pruning accuracy loss often requires fine-tuning to recover.'}")
         elif ptype == "finetuning":
-            size *= 1.05
+            size *= compression if compression is not None else 1.05
             latency *= 1.05
             accuracy += 1.0
         elif ptype == "distillation":
-            size *= 0.9
+            size *= compression if compression is not None else 0.9
             latency *= 0.9
             accuracy += 0.5
             risks.append(f"{name}: distillation is slow and depends on teacher-student compatibility.")
+        else:
+            size *= compression if compression is not None else 1.0
 
     predicted = {
         "accuracy": round(max(0.0, accuracy), 2),
