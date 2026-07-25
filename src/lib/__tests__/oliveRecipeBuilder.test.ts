@@ -507,23 +507,42 @@ describe("buildOliveRecipe", () => {
     expect((passes.peft as Record<string, unknown>).config).toHaveProperty("diffusion_lora", true);
   });
 
-  it("creates SparseGPT pruning pass", () => {
+  it("creates SparseGPT pruning pass with explicit criteria", () => {
     const state = baseState({
-      passes: { ...DEFAULT_PASSES, pruning: true, pruningMethod: "sparsegpt", pruningSparsity: 0.5 },
+      passes: {
+        ...DEFAULT_PASSES,
+        pruning: true,
+        pruningMethod: "sparsegpt",
+        pruningSparsity: 0.5,
+        pruningCriteria: "l2_norm",
+      },
     });
     const recipe = buildOliveRecipe(state);
     const passes = recipe.passes as Record<string, unknown>;
     const p = passes.pruning as Record<string, unknown>;
     expect(p.type).toBe("SparseGPT");
-    expect((p.config as Record<string, unknown>).sparsity).toBe(0.5);
+    const cfg = p.config as Record<string, unknown>;
+    expect(cfg.sparsity).toBe(0.5);
+    expect(cfg.pruning_criteria).toBe("l2_norm");
   });
 
-  it("creates Wanda pruning pass", () => {
+  it("creates Wanda pruning pass with explicit criteria", () => {
     const state = baseState({
-      passes: { ...DEFAULT_PASSES, pruning: true, pruningMethod: "wanda", pruningSparsity: 0.3 },
+      passes: {
+        ...DEFAULT_PASSES,
+        pruning: true,
+        pruningMethod: "wanda",
+        pruningSparsity: 0.3,
+        pruningCriteria: "l1_norm",
+      },
     });
     const recipe = buildOliveRecipe(state);
-    expect((recipe.passes as Record<string, unknown>).pruning).toHaveProperty("type", "Wanda");
+    const passes = recipe.passes as Record<string, unknown>;
+    const p = passes.pruning as Record<string, unknown>;
+    expect(p.type).toBe("Wanda");
+    const cfg = p.config as Record<string, unknown>;
+    expect(cfg.sparsity).toBe(0.3);
+    expect(cfg.pruning_criteria).toBe("l1_norm");
   });
 
   it("creates magnitude-based Prune pass for magnitude method", () => {
