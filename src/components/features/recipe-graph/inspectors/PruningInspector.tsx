@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { useAutoClearError } from "@/lib/hooks";
+import { useAutoClearError, useImportPresets, useExportPresets } from "@/lib/hooks";
 import {
   Label,
   Select,
@@ -88,11 +88,15 @@ export function PruningInspector({ state, setState }: InspectorProps) {
   const [newPresetName, setNewPresetName] = useState("");
   const [importError, setImportError] = useAutoClearError(4000);
 
-  const [importConfirm, setImportConfirm] = useState<{
-    importedPresets: CustomPruningPreset[];
-    collisions: string[];
-    mergedPresets: CustomPruningPreset[];
-  } | null>(null);
+  const {
+    handleImport: handleImportPresets,
+    importConfirm,
+    setImportConfirm,
+  } = useImportPresets<CustomPruningPreset>({
+    customPresets,
+    setError: setImportError,
+    parseImport: importPresetsJSON,
+  });
   const persistCustomPresets = useCallback((presets: CustomPruningPreset[]) => {
     setCustomPresets(presets);
     saveCustomPresets(presets);
@@ -127,44 +131,11 @@ export function PruningInspector({ state, setState }: InspectorProps) {
     [customPresets, persistCustomPresets],
   );
 
-  const handleExportPresets = useCallback(() => {
-    if (customPresets.length === 0) return;
-    const json = exportPresetsJSON(customPresets);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "pruning-presets.json";
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [customPresets]);
-
-  const handleImportPresets = useCallback(() => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const text = ev.target?.result as string;
-        const result = importPresetsJSON(text, customPresets);
-        if (result.ok === false) {
-          setImportError(result.error);
-        } else {
-          setImportConfirm({
-            importedPresets: result.importedPresets,
-            collisions: result.collisions,
-            mergedPresets: result.presets,
-          });
-        }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
-  }, [customPresets, setImportError]);
-
+  const { handleExport: handleExportPresets, isEmpty: exportEmpty } = useExportPresets<CustomPruningPreset>({
+    presets: customPresets,
+    serialize: exportPresetsJSON,
+    filename: "pruning-presets.json",
+  });
   if (!state.passes.pruning) {
     return (
       <p className="text-sm text-slate-500 font-mono italic text-center py-4">
@@ -203,11 +174,9 @@ export function PruningInspector({ state, setState }: InspectorProps) {
           <button
             type="button"
             onClick={handleExportPresets}
-            disabled={customPresets.length === 0}
+            disabled={exportEmpty}
             className="text-[10px] text-slate-500 hover:text-electric-blue transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            title={
-              customPresets.length === 0 ? "No custom presets to export" : "Export custom presets as JSON"
-            }
+            title={exportEmpty ? "No custom presets to export" : "Export custom presets as JSON"}
             aria-label="Export presets"
           >
             <Download className="h-3 w-3" />

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, Suspense, lazy, type MouseEvent as ReactMouseEvent } from "react";
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
-import { useMcpDiagnostic } from "@/lib/hooks";
+import { useAutoClearError, useMcpDiagnostic } from "@/lib/hooks";
 import { mapMcpConfigToUiState } from "@/lib/mcpConfigMapping";
 import { DiagnosisHistory, type DiagnosisEntry } from "./DiagnosisHistory";
 import {
@@ -97,7 +97,7 @@ export function ExecutionWorkspace({
   const [justQueued, setJustQueued] = useState(false);
 
   const { diagnostic: mcpDiagnostic, isDiagnosing, fetchDiagnostic: fetchMcpDiagnostic } = useMcpDiagnostic();
-  const [mcpFixApplied, setMcpFixApplied] = useState(false);
+  const [mcpFixApplied, setMcpFixApplied] = useAutoClearError(3000);
   // Diagnosis history for comparing across runs
   const [diagnosisHistory, setDiagnosisHistory] = useState<DiagnosisEntry[]>([]);
   const [activeHistoryIndex, setActiveHistoryIndex] = useState(-1);
@@ -122,8 +122,7 @@ export function ExecutionWorkspace({
       .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
       .join(", ");
     setExecutionLogs((prev) => [...prev, `[MCP FIX] Applied diagnostic config: ${configSummary}`]);
-    setMcpFixApplied(true);
-    setTimeout(() => setMcpFixApplied(false), 3000);
+    setMcpFixApplied("applied");
   };
 
   // Clear log selection when logs change (new run starts)
@@ -186,7 +185,7 @@ export function ExecutionWorkspace({
 
   const handleDiagnoseSelected = () => {
     if (selectedLogIndices.size === 0) return;
-    setMcpFixApplied(false);
+    setMcpFixApplied("");
     const selectedLogs = Array.from(selectedLogIndices)
       .sort((a: number, b: number) => a - b)
       .map((i: number) => executionLogs[i]);
@@ -195,7 +194,7 @@ export function ExecutionWorkspace({
 
   const handleDiagnoseAll = () => {
     if (executionLogs.length === 0) return;
-    setMcpFixApplied(false);
+    setMcpFixApplied("");
     fetchMcpDiagnostic(executionLogs);
   };
 
@@ -685,7 +684,7 @@ ${
           liveSourceRef.current = null;
           recordJobCompletion(targetJobId, finalStatus, exitCode);
           if (finalStatus === "failed") {
-            setMcpFixApplied(false);
+            setMcpFixApplied("");
             setExecutionLogs((currentLogs) => {
               fetchMcpDiagnostic(currentLogs);
               return currentLogs;
@@ -719,7 +718,7 @@ ${
                 onRunStateChange?.(false);
                 recordJobCompletion(targetJobId, finalStatus, statusData.exitCode);
                 if (finalStatus === "failed") {
-                  setMcpFixApplied(false);
+                  setMcpFixApplied("");
                   setExecutionLogs((currentLogs) => {
                     fetchMcpDiagnostic(currentLogs);
                     return currentLogs;
@@ -1508,14 +1507,14 @@ ${
                     <button
                       type="button"
                       onClick={handleApplyMcpFix}
-                      disabled={mcpFixApplied}
+                      disabled={mcpFixApplied !== ""}
                       className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold rounded border transition-all cursor-pointer ${
-                        mcpFixApplied
+                        mcpFixApplied !== ""
                           ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400"
                           : "border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50"
                       }`}
                     >
-                      {mcpFixApplied ? (
+                      {mcpFixApplied !== "" ? (
                         <>
                           <Check className="h-3 w-3" /> Fix Applied
                         </>

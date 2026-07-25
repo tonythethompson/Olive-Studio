@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, Button, Label, Input, Select } from "@/components/ui";
 import { UIState, BatchJob, IHVProvider, ModelSource, type McpDiagnostic } from "@/types";
-import { useMcpDiagnostic } from "@/lib/hooks";
+import { useAutoClearError, useMcpDiagnostic } from "@/lib/hooks";
 import { mapMcpConfigToUiState } from "@/lib/mcpConfigMapping";
 import { buildRecipeJsonFromState, buildOliveRecipeFromBatchJob } from "@/lib/recipePipeline";
 import { parseOliveMetricsFromLogs } from "@/lib/oliveLogMetrics";
@@ -48,7 +48,7 @@ export function BatchProcessingPanel({
   // MCP Diagnostic State — keyed by job ID
   const [batchDiagnostics, setBatchDiagnostics] = useState<Record<string, McpDiagnostic>>({});
   const [diagnosingJobs, setDiagnosingJobs] = useState<Record<string, boolean>>({});
-  const [appliedFixes, setAppliedFixes] = useState<Record<string, boolean>>({});
+  const [appliedFixJobId, setAppliedFixJobId] = useAutoClearError(3000);
   const { fetchDiagnostic } = useMcpDiagnostic();
 
   const fetchBatchMcpDiagnostic = useCallback(
@@ -831,20 +831,16 @@ export function BatchProcessingPanel({
                                 if (Object.keys(patches).length > 0) {
                                   setState(patches);
                                 }
-                                setAppliedFixes((prev) => ({ ...prev, [selectedJob.id]: true }));
-                                setTimeout(
-                                  () => setAppliedFixes((prev) => ({ ...prev, [selectedJob.id]: false })),
-                                  3000,
-                                );
+                                setAppliedFixJobId(selectedJob.id);
                               }}
-                              disabled={appliedFixes[selectedJob.id]}
+                              disabled={appliedFixJobId === selectedJob.id}
                               className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold rounded border transition-all cursor-pointer ${
-                                appliedFixes[selectedJob.id]
+                                appliedFixJobId === selectedJob.id
                                   ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400"
                                   : "border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50"
                               }`}
                             >
-                              {appliedFixes[selectedJob.id] ? (
+                              {appliedFixJobId === selectedJob.id ? (
                                 <>
                                   <Check className="h-3 w-3" /> Fix Applied
                                 </>

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { getPipelineValidation, applyIssueAutofix, type PipelineIssue } from "@/lib/pipelineValidation";
 import { validatePassParameters } from "@/lib/passParameterValidation";
 import { validateMcpParams, clearParamCache, type McpParamWarning } from "@/lib/mcpParamValidation";
+import { useMcpDiagnostic } from "@/lib/hooks";
 import { buildPipelineSteps } from "./graphLayout";
 import { UIState } from "@/types";
 import { AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Info, RefreshCw, Zap } from "lucide-react";
@@ -46,6 +47,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const [showCompatDetails, setShowCompatDetails] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const forceRefreshRef = useRef(false);
+  const { diagnostic: mcpDiagnostic, isDiagnosing: mcpDiagnosing, fetchDiagnostic } = useMcpDiagnostic();
 
   const validation = getPipelineValidation(state);
   const pipelineSteps = buildPipelineSteps(state.passes);
@@ -164,6 +166,18 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     // eslint-disable-next-line react-hooks/exhaustive-deps -- activePassNames is derived from state.passes via buildPipelineSteps; join() stabilizes the reference
   }, [state.passes, activePassNames.join(","), refreshKey]);
 
+  // MCP error diagnostics — auto-fetch when critical pipeline issues are detected
+  const prevIssueCountRef = useRef(0);
+  useEffect(() => {
+    const criticalIssues = validation.issues.filter((i) => i.severity === "critical");
+    const count = criticalIssues.length;
+    if (count === 0 || count === prevIssueCountRef.current) return;
+    prevIssueCountRef.current = count;
+
+    const logLines = criticalIssues.map((i) => `[VALIDATION] ${i.title}: ${i.description}`);
+    fetchDiagnostic(logLines);
+  }, [validation.issues, fetchDiagnostic]);
+
   // Hardware-specific parameter validation (synchronous, cheap — runs every render with state)
   const paramWarnings = validatePassParameters(state, activePassNames);
 
@@ -216,6 +230,30 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
       description: w.description,
       source: "mcp-param" as const,
     })),
+    // MCP error diagnostic — known error patterns from the troubleshooting knowledge base
+    ...(mcpDiagnostic
+      ? [
+          {
+            id: `mcp-diag-${mcpDiagnostic.matched_entry ?? "unknown"}`,
+            severity: "critical" as const,
+            title: `[MCP] ${mcpDiagnostic.title}`,
+            description: `Root cause: ${mcpDiagnostic.root_cause}. Workaround: ${mcpDiagnostic.workaround}`,
+            source: "mcp-diagnostic" as const,
+          },
+        ]
+      : []),
+    // MCP diagnostic loading indicator
+    ...(mcpDiagnosing
+      ? [
+          {
+            id: "mcp-diag-loading",
+            severity: "warning" as const,
+            title: "Querying MCP knowledge base for known solutions...",
+            description: "Checking if this error pattern has a documented workaround.",
+            source: "mcp-diagnostic" as const,
+          },
+        ]
+      : []),
   ];
 
   const criticalCount = allIssues.filter((i) => i.severity === "critical").length;
@@ -226,7 +264,10 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
 
   if (allIssues.length === 0 && !isLoading && !hasError && compatValidated) {
     return (
-      <div className="rounded-lg border border-emerald-800/50 bg-emerald-950/20 p-3">
+      <div
+        data-testid="recipe-validation-panel"
+        className="rounded-lg border border-emerald-800/50 bg-emerald-950/20 p-3"
+      >
         <div className="flex items-center gap-2 text-emerald-400">
           <CheckCircle className="h-4 w-4" />
           <span className="text-xs font-medium">Recipe validated — no issues found</span>
@@ -236,7 +277,10 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   }
 
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-900/80 overflow-hidden">
+    <div
+      data-testid="recipe-validation-panel"
+      className="rounded-lg border border-slate-700 bg-slate-900/80 overflow-hidden"
+    >
       {/* Header */}
       <button
         type="button"

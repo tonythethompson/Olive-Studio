@@ -4,7 +4,7 @@ import { UIState } from "@/types";
 import { ImportConfirmDialog } from "./ImportConfirmDialog";
 import type { InspectorProps } from "./types";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { useAutoClearError } from "@/lib/hooks";
+import { useAutoClearError, useImportPresets, useExportPresets } from "@/lib/hooks";
 import { RecipeDiffOverlay } from "./RecipeDiffOverlay";
 import { RefreshCw, AlertTriangle, Save, Download, Upload } from "lucide-react";
 import {
@@ -263,12 +263,15 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
   const [aiError, setAiError] = useState("");
   const [customPresets, setCustomPresets] = useState<CustomQuantPreset[]>(() => loadCustomPresets());
   const [importError, setImportError] = useAutoClearError(4000);
-
-  const [importConfirm, setImportConfirm] = useState<{
-    importedPresets: CustomQuantPreset[];
-    collisions: string[];
-    mergedPresets: CustomQuantPreset[];
-  } | null>(null);
+  const {
+    handleImport: handleImportPresets,
+    importConfirm,
+    setImportConfirm,
+  } = useImportPresets<CustomQuantPreset>({
+    customPresets,
+    setError: setImportError,
+    parseImport: importPresetsJSON,
+  });
   const currentPreset = useMemo(() => getCurrentQuantPreset(state), [state]);
   const allowedQuantMethods = getAllowedQuantMethods(state.ihvProvider);
   const isGptq = state.passes.quantMethod === "gptq";
@@ -348,44 +351,11 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
     refreshCustomPresets();
   };
 
-  const handleExportPresets = () => {
-    if (customPresets.length === 0) return;
-    const json = exportPresetsJSON(customPresets);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "quantization-presets.json";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportPresets = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const text = ev.target?.result as string;
-        const result = importPresetsJSON(text, customPresets);
-        if (result.ok === false) {
-          setImportError(result.error);
-        } else {
-          setImportConfirm({
-            importedPresets: result.importedPresets,
-            collisions: result.collisions,
-            mergedPresets: result.presets,
-          });
-        }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
-  };
-
+  const { handleExport: handleExportPresets, isEmpty: exportEmpty } = useExportPresets<CustomQuantPreset>({
+    presets: customPresets,
+    serialize: exportPresetsJSON,
+    filename: "quantization-presets.json",
+  });
   const handleAskAi = async () => {
     setAiLoading(true);
     setAiError("");
@@ -489,13 +459,9 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
           <button
             type="button"
             onClick={handleExportPresets}
-            disabled={customPresets.length === 0}
+            disabled={exportEmpty}
             className="h-9 w-9 rounded-lg border border-slate-700 bg-slate-950 hover:bg-slate-900 flex items-center justify-center text-slate-400 hover:text-electric-blue transition-colors shrink-0 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-            title={
-              customPresets.length === 0
-                ? "No custom presets to export"
-                : "Export custom presets as JSON file"
-            }
+            title={exportEmpty ? "No custom presets to export" : "Export custom presets as JSON file"}
             aria-label="Export presets"
           >
             <Download className="h-4 w-4" />
