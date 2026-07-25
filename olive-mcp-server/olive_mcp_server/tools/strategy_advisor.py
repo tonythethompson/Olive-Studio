@@ -82,7 +82,7 @@ def get_quantization_strategy(
                 "AWQ can hurt perplexity on small models; validate with perplexity metric.",
                 "TensorRT engine build is slow and device-specific.",
             ]
-            pass_chain = ["OnnxConversion", "NVModelOptQuantization", "OnnxFloatToFloat16"]
+            pass_chain = ["OnnxConversion", "NVModelOptQuantization"]
         elif hw == "apple":
             algorithm = "CoreML INT8 static quantization (QDQ)"
             calibration = "100-200 representative samples, symmetric per-channel"
