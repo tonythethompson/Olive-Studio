@@ -191,10 +191,16 @@ def get_quantization_strategy(
         risks.append("Pruning + quantization compound accuracy loss; fine-tune if possible.")
 
     # Accuracy constraint override.
-    match = re.search(r"([\d.]+)\s*%", accuracy_threshold)
-    if match and float(match.group(1)) <= 1.0:
-        algorithm = algorithm.replace("int4", "int8") + " (tight accuracy target)"
-        risks.append("Tight accuracy target requires larger calibration set and per-channel weights.")
+    match = re.search(r"(\d+(?:\.\d+)?)\s*%", accuracy_threshold)
+    if match:
+        try:
+            threshold_value = float(match.group(1))
+            if threshold_value <= 1.0:
+                algorithm = algorithm.replace("int4", "int8") + " (tight accuracy target)"
+                risks.append("Tight accuracy target requires larger calibration set and per-channel weights.")
+        except ValueError:
+            # Skip override if parsing fails
+            pass
 
     # Assemble quirks defensively
     relevant_quirks = []
