@@ -248,7 +248,6 @@
         "onnx"
       ],
       "required_params": [
-        "algorithm"
       ],
       "optional_params": {
         "algorithm": {
