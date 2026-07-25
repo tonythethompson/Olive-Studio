@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   Label,
   Select,
@@ -9,39 +9,19 @@ import {
   TooltipTrigger,
 } from "@/components/ui";
 import { getAllowedPruningTypes } from "@/lib/pipelineValidation";
+import {
+  loadCustomPresets,
+  saveCustomPresets,
+  replaceAllCustomPresets,
+  exportPresetsJSON,
+  importPresetsJSON,
+  type CustomPruningPreset,
+} from "@/lib/pruningPresets";
 import { UIState } from "@/types";
-import { Info, Plus, X } from "lucide-react";
+import { Info, Plus, X, Download, Upload, AlertTriangle } from "lucide-react";
 import type { InspectorProps } from "./types";
 
-// ── Custom preset storage ──────────────────────────────────────
-
-interface CustomPreset {
-  id: string;
-  label: string;
-  method: UIState["passes"]["pruningMethod"];
-  criteria: UIState["passes"]["pruningCriteria"];
-  sparsity: number;
-}
-
-const STORAGE_KEY = "olive-pruning-custom-presets";
 const MAX_CUSTOM_PRESETS = 5;
-
-function loadCustomPresets(): CustomPreset[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveCustomPresets(presets: CustomPreset[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
-  } catch {
-    // localStorage unavailable or quota exceeded — fail silently
-  }
-}
 
 // ── Built-in presets ───────────────────────────────────────────
 
@@ -81,11 +61,9 @@ const PRUNING_PRESETS = [
 ] as const;
 
 type PruningPreset = (typeof PRUNING_PRESETS)[number];
+type AnyPreset = PruningPreset | CustomPruningPreset;
 
-function getActivePresetId(
-  state: UIState,
-  allPresets: readonly (PruningPreset | CustomPreset)[],
-): string | null {
+function getActivePresetId(state: UIState, allPresets: readonly AnyPreset[]): string | null {
   for (const preset of allPresets) {
     if (
       state.passes.pruningMethod === preset.method &&
@@ -103,11 +81,24 @@ export function PruningInspector({ state, setState }: InspectorProps) {
   const awqBlocksPruning = state.passes.quantMethod === "awq";
 
   // ── Custom preset state ──
-  const [customPresets, setCustomPresets] = useState<CustomPreset[]>(loadCustomPresets);
+  const [customPresets, setCustomPresets] = useState<CustomPruningPreset[]>(loadCustomPresets);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [newPresetName, setNewPresetName] = useState("");
+  const [importError, setImportError] = useState("");
+  const importErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [importConfirm, setImportConfirm] = useState<{
+    importedPresets: CustomPruningPreset[];
+    collisions: string[];
+    mergedPresets: CustomPruningPreset[];
+  } | null>(null);
+  const cancelBtnRef = useRef<HTMLButtonElement>(null);
 
-  const persistCustomPresets = useCallback((presets: CustomPreset[]) => {
+  // Focus the Cancel button when the confirmation dialog opens
+  useEffect(() => {
+    if (importConfirm) cancelBtnRef.current?.focus();
+  }, [importConfirm]);
+
+  const persistCustomPresets = useCallback((presets: CustomPruningPreset[]) => {
     setCustomPresets(presets);
     saveCustomPresets(presets);
   }, []);
@@ -122,7 +113,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
     if (!name || customPresets.length >= MAX_CUSTOM_PRESETS) return;
     if (customPresets.some((p) => p.label.toLowerCase() === name.toLowerCase())) return;
 
-    const preset: CustomPreset = {
+    const preset: CustomPruningPreset = {
       id: `custom-${Date.now()}`,
       label: name,
       method: state.passes.pruningMethod,
@@ -140,6 +131,46 @@ export function PruningInspector({ state, setState }: InspectorProps) {
     },
     [customPresets, persistCustomPresets],
   );
+
+  const handleExportPresets = useCallback(() => {
+    if (customPresets.length === 0) return;
+    const json = exportPresetsJSON(customPresets);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "pruning-presets.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [customPresets]);
+
+  const handleImportPresets = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string;
+        const result = importPresetsJSON(text, customPresets);
+        if (result.ok === false) {
+          if (importErrorTimerRef.current !== null) clearTimeout(importErrorTimerRef.current);
+          setImportError(result.error);
+          importErrorTimerRef.current = setTimeout(() => setImportError(""), 4000);
+        } else {
+          setImportConfirm({
+            importedPresets: result.importedPresets,
+            collisions: result.collisions,
+            mergedPresets: result.presets,
+          });
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }, [customPresets]);
 
   if (!state.passes.pruning) {
     return (
@@ -176,7 +207,98 @@ export function PruningInspector({ state, setState }: InspectorProps) {
               </span>
             )}
           </button>
+          <button
+            type="button"
+            onClick={handleExportPresets}
+            disabled={customPresets.length === 0}
+            className="text-[10px] text-slate-500 hover:text-electric-blue transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            title={
+              customPresets.length === 0 ? "No custom presets to export" : "Export custom presets as JSON"
+            }
+            aria-label="Export presets"
+          >
+            <Download className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            onClick={handleImportPresets}
+            className="text-[10px] text-slate-500 hover:text-electric-blue transition-colors"
+            title="Import presets from JSON file"
+            aria-label="Import presets"
+          >
+            <Upload className="h-3 w-3" />
+          </button>
         </div>
+        {importConfirm && (
+          <div
+            className="rounded-lg border border-slate-700 bg-slate-900/90 p-3 space-y-2"
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setImportConfirm(null);
+            }}
+          >
+            <p className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
+              Import {importConfirm.importedPresets.length} preset
+              {importConfirm.importedPresets.length !== 1 ? "s" : ""}
+            </p>
+            <div className="space-y-1.5 max-h-40 overflow-y-auto">
+              {importConfirm.importedPresets.map((preset) => {
+                const isCollision = importConfirm.collisions.includes(preset.label);
+                return (
+                  <div
+                    key={preset.label}
+                    className={`rounded px-2 py-1 ${isCollision ? "bg-amber-500/5" : "bg-slate-800/50"}`}
+                  >
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${isCollision ? "bg-amber-400" : "bg-emerald-400"}`}
+                      />
+                      <span className={`font-medium ${isCollision ? "text-amber-300" : "text-slate-300"}`}>
+                        {preset.label}
+                      </span>
+                      {isCollision && <span className="text-[9px] text-amber-500/70">will overwrite</span>}
+                    </div>
+                    <div className="ml-3 text-[9px] text-slate-500 font-mono">
+                      {preset.method} · {preset.criteria} · {(preset.sparsity * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {importConfirm.collisions.length > 0 && (
+              <p className="text-[10px] text-amber-400/80">
+                {importConfirm.collisions.length} preset{importConfirm.collisions.length !== 1 ? "s" : ""}{" "}
+                will overwrite existing custom presets with the same name.
+              </p>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  replaceAllCustomPresets(importConfirm.mergedPresets);
+                  setCustomPresets(importConfirm.mergedPresets);
+                  setImportConfirm(null);
+                }}
+                className="h-7 px-3 text-[10px] font-medium rounded border border-electric-blue/50 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 transition-colors"
+              >
+                Import
+              </button>
+              <button
+                ref={cancelBtnRef}
+                type="button"
+                onClick={() => setImportConfirm(null)}
+                className="h-7 px-3 text-[10px] font-medium rounded border border-slate-600 bg-slate-800 text-slate-400 hover:text-slate-300 hover:border-slate-500 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {importError && (
+          <div className="flex items-start gap-1.5 text-[10px] text-amber-400 mt-1">
+            <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+            <span>{importError}</span>
+          </div>
+        )}
         {showSaveDialog && (
           <div className="flex items-center gap-2">
             <input

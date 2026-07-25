@@ -1694,12 +1694,82 @@ app.delete("/api/ai/provider", (_req, res) => {
   return res.json({ ok: true });
 });
 
+// ─── Olive MCP Integration Helper ──────────────────────────────────────────────
+/** Invokes a tool function in olive_mcp_server and returns its result */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP JSON responses vary
+async function callOliveMcpTool(toolName: string, args: Record<string, unknown> = {}): Promise<any> {
+  const python = getVenvPython() || (await findSystemPython());
+  if (!python) {
+    return { error: "Python environment not found." };
+  }
+
+  const script = `import json, sys
+from olive_mcp_server import tools
+
+tool_name = sys.argv[1]
+kwargs = json.loads(sys.argv[2])
+if not hasattr(tools, tool_name):
+    print(json.dumps({"error": f"Tool '{tool_name}' not found in olive_mcp_server.tools"}))
+    sys.exit(0)
+
+func = getattr(tools, tool_name)
+try:
+    res = func(**kwargs)
+    print(json.dumps(res))
+except Exception as e:
+    print(json.dumps({"error": str(e)}))
+`;
+
+  try {
+    const { stdout } = await execFileAsync(python, ["-c", script, toolName, JSON.stringify(args)]);
+    return JSON.parse(stdout.trim());
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
+  } catch (err: any) {
+    console.warn(`[MCP Tool Warning] ${toolName} call failed:`, err.message);
+    return { error: err.message };
+  }
+}
+
+// ─── POST /api/mcp/tool ───────────────────────────────────────────────────────
+app.post("/api/mcp/tool", async (req, res) => {
+  const { toolName, args } = req.body as { toolName?: string; args?: Record<string, unknown> };
+  if (!toolName) return res.status(400).json({ error: "toolName is required." });
+  try {
+    const result = await callOliveMcpTool(toolName, args || {});
+    return res.json(result);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── POST /api/ai/validate ────────────────────────────────────────────────────
 app.post("/api/ai/validate", async (req, res) => {
   const { recipeJson, ihvProvider } = req.body;
   if (!recipeJson) return res.status(400).json({ error: "No recipe JSON provided." });
 
-  const system = `You are an expert Microsoft Olive compiler engineer. Analyze the recipe and detect execution failures, suboptimal settings, or compatibility issues.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP pass chain response
+  let mcpChainResult: any = null;
+  try {
+    const parsed = JSON.parse(recipeJson);
+    const passes = parsed.passes || {};
+    const passNames = Object.keys(passes);
+    if (passNames.length > 0) {
+      mcpChainResult = await callOliveMcpTool("get_pass_chain", {
+        pass_names: passNames,
+        source_format: "torch",
+      });
+    }
+  } catch {
+    /* ignore parse error */
+  }
+
+  const mcpContext =
+    mcpChainResult && !mcpChainResult.error
+      ? `\n\nOfficial Olive Pass Chain Audit from Olive MCP Server:\n${JSON.stringify(mcpChainResult, null, 2)}`
+      : "";
+
+  const system = `You are an expert Microsoft Olive compiler engineer. Analyze the recipe and detect execution failures, suboptimal settings, or compatibility issues.${mcpContext}
 Respond with ONLY valid JSON:
 {"valid":true|false,"severity":"success"|"warning"|"error","summary":"<1-2 sentences>","issues":[{"type":"critical"|"warning"|"info","title":"<short>","explanation":"<detail>","fix":"<action>"}],"suggestions":["<tip>"]}`;
 
@@ -1729,9 +1799,32 @@ app.post("/api/ai/analyze-state", async (req, res) => {
 
   const workspace = buildAiWorkspaceContext(state);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP guide responses
+  let hwGuide: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP strategy responses
+  let quantStrat: any = null;
+  try {
+    const targetHw = state.ihvProvider || "CPUExecutionProvider";
+    const modelType = state.hfModelId || "LLM";
+    [hwGuide, quantStrat] = await Promise.all([
+      callOliveMcpTool("get_hardware_optimization_guide", { target_hardware: targetHw }),
+      callOliveMcpTool("get_quantization_strategy", {
+        model_type: modelType,
+        target_hardware: targetHw,
+      }),
+    ]);
+  } catch {
+    /* ignore MCP query error */
+  }
+
+  const mcpAdvice =
+    (hwGuide && !hwGuide.error) || (quantStrat && !quantStrat.error)
+      ? `\n\nOfficial Olive MCP Server Optimization Guidance:\nHardware Guide: ${JSON.stringify(hwGuide)}\nQuantization Strategy: ${JSON.stringify(quantStrat)}`
+      : "";
+
   const system = `You are "Olive Optimization Advisor", an expert Microsoft Olive compiler and hardware co-design specialist. Analyze the pipeline configuration and give specific, actionable advice.
 
-${formatAiWorkspaceContextForPrompt(workspace)}
+${formatAiWorkspaceContextForPrompt(workspace)}${mcpAdvice}
 
 autofix.pass MUST be one of these exact strings:
 ihvProvider (value: CPUExecutionProvider|CUDAExecutionProvider|TensorrtExecutionProvider|OpenVINOExecutionProvider|QNNExecutionProvider|ROCMExecutionProvider)
@@ -1774,7 +1867,27 @@ app.post("/api/ai/chat", async (req, res) => {
 
   const contextBlock = workspace ? `\n\n${formatAiWorkspaceContextForPrompt(workspace)}` : "";
 
-  const system = `You are "Olive AI Assistant", an expert Microsoft Olive compiler specialist. Deep expertise in quantization (AWQ, GPTQ, PTQ, QAT, SmoothQuant), pruning (magnitude, SparseGPT, Wanda), PEFT (LoRA, QLoRA), ONNX Runtime, and hardware execution providers (CUDA, TensorRT, DirectML, OpenVINO, QNN/Snapdragon). Give professional, accurate, concise answers. When relevant, provide Olive config snippets or CLI commands. Treat the workspace block below as the user's live pipeline — do not invent a different model, provider, or pass list.${contextBlock}`;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP knowledge match
+  let mcpKnowledge: any = null;
+  if (typeof message === "string" && message.length > 5) {
+    try {
+      const isErrorMsg = /error|fail|exception|invalid|oom|traceback/i.test(message);
+      if (isErrorMsg) {
+        mcpKnowledge = await callOliveMcpTool("troubleshoot_olive_error", { error_message: message });
+      } else {
+        mcpKnowledge = await callOliveMcpTool("search_olive_documentation", { query: message });
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const mcpBlock =
+    mcpKnowledge && !mcpKnowledge.error
+      ? `\n\nOfficial Olive MCP Server Knowledge Base Match:\n${JSON.stringify(mcpKnowledge, null, 2)}`
+      : "";
+
+  const system = `You are "Olive AI Assistant", an expert Microsoft Olive compiler specialist. Deep expertise in quantization (AWQ, GPTQ, PTQ, QAT, SmoothQuant), pruning (magnitude, SparseGPT, Wanda), PEFT (LoRA, QLoRA), ONNX Runtime, and hardware execution providers (CUDA, TensorRT, DirectML, OpenVINO, QNN/Snapdragon). Give professional, accurate, concise answers. When relevant, provide Olive config snippets or CLI commands. Treat the workspace block below as the user's live pipeline — do not invent a different model, provider, or pass list.${contextBlock}${mcpBlock}`;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- chat messages from request body
   const history: AIChatMessage[] = (chatHistory || []).map((m: any) => ({

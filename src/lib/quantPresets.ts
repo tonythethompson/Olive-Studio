@@ -82,7 +82,9 @@ const KNOWN_QUANT_KEYS = new Set([
 export function importPresetsJSON(
   json: string,
   existingPresets: CustomQuantPreset[],
-): { ok: true; presets: CustomQuantPreset[] } | { ok: false; error: string } {
+):
+  | { ok: true; presets: CustomQuantPreset[]; importedPresets: CustomQuantPreset[]; collisions: string[] }
+  | { ok: false; error: string } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
@@ -137,5 +139,14 @@ export function importPresetsJSON(
     }
   }
 
-  return { ok: true, presets: Array.from(labelSet.values()) };
+  // Compute collisions: labels that exist in both imported and current presets
+  const importedLabels = new Set(validated.map((p) => p.label));
+  const collisionLabels = existingPresets.filter((p) => importedLabels.has(p.label)).map((p) => p.label);
+
+  return {
+    ok: true,
+    presets: Array.from(labelSet.values()),
+    importedPresets: validated,
+    collisions: collisionLabels,
+  };
 }
