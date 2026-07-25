@@ -214,7 +214,7 @@ async function callAI(system: string, messages: AIChatMessage[], wantJson = fals
 // ─── Olive Job Registry ───────────────────────────────────────────────────────
 interface OliveJob {
   id: string;
-  status: "setting_up" | "running" | "completed" | "failed";
+  status: "setting_up" | "running" | "completed" | "failed" | "cancelled";
   exitCode: number | null;
   logs: string[];
   // SSE subscriber queues: each subscriber is a function that receives new log lines
@@ -1530,7 +1530,7 @@ app.get("/api/olive/stream/:jobId", (req, res) => {
 
   const send = (line: string) => {
     if (line === "__DONE__") {
-      res.write("event: done\ndata: {}\n\n");
+      res.write(`event: done\ndata: ${JSON.stringify({ exitCode: job.exitCode })}\n\n`);
       res.end();
     } else {
       res.write(`data: ${JSON.stringify({ line })}\n\n`);
@@ -1543,8 +1543,8 @@ app.get("/api/olive/stream/:jobId", (req, res) => {
   }
 
   // If already finished, send done immediately
-  if (job.status === "completed" || job.status === "failed") {
-    res.write("event: done\ndata: {}\n\n");
+  if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
+    res.write(`event: done\ndata: ${JSON.stringify({ exitCode: job.exitCode })}\n\n`);
     res.end();
     return;
   }
@@ -1570,17 +1570,59 @@ app.get("/api/olive/status/:jobId", (req, res) => {
   });
 });
 
-// ─── DELETE /api/olive/cancel/:jobId ──────────────────────────────────────────
-app.delete("/api/olive/cancel/:jobId", (req, res) => {
-  const job = jobRegistry.get(req.params.jobId);
-  if (!job) return res.status(404).json({ error: "Job not found." });
-  if (job.process && job.status === "running") {
-    job.process.kill("SIGTERM");
-    job.status = "failed";
+// ─── POST & DELETE /api/olive/cancel ──────────────────────────────────────────
+function cancelJobById(jobId: string): { ok: boolean; message?: string } {
+  const job = jobRegistry.get(jobId);
+  if (!job) return { ok: false, message: "Job not found." };
+
+  if (job.status === "running" || job.status === "setting_up") {
+    job.status = "cancelled";
     job.exitCode = -1;
     pushLog(job, "[info] Job cancelled by user.");
+
+    if (job.process && job.process.pid) {
+      try {
+        if (process.platform === "win32") {
+          const { spawnSync } = require("child_process");
+          spawnSync("taskkill", ["/F", "/T", "/PID", String(job.process.pid)]);
+        } else {
+          job.process.kill("SIGKILL");
+        }
+      } catch (err) {
+        pushLog(job, `[warn] Error signaling process termination: ${String(err)}`);
+      }
+    }
+
+    for (const sub of job.subscribers) {
+      try {
+        sub("__DONE__");
+      } catch {
+        /* gone */
+      }
+    }
   }
-  res.json({ ok: true });
+
+  return { ok: true };
+}
+
+app.post("/api/olive/cancel", (req, res) => {
+  const { jobId } = req.body as { jobId?: string };
+  if (!jobId) return res.status(400).json({ error: "Missing jobId in request body." });
+  const result = cancelJobById(jobId);
+  if (!result.ok) return res.status(404).json({ error: result.message });
+  return res.json({ ok: true, jobId, status: "cancelled" });
+});
+
+app.post("/api/olive/cancel/:jobId", (req, res) => {
+  const result = cancelJobById(req.params.jobId);
+  if (!result.ok) return res.status(404).json({ error: result.message });
+  return res.json({ ok: true, jobId: req.params.jobId, status: "cancelled" });
+});
+
+app.delete("/api/olive/cancel/:jobId", (req, res) => {
+  const result = cancelJobById(req.params.jobId);
+  if (!result.ok) return res.status(404).json({ error: result.message });
+  return res.json({ ok: true, jobId: req.params.jobId, status: "cancelled" });
 });
 
 // ─── HuggingFace Token Management ────────────────────────────────────────────
