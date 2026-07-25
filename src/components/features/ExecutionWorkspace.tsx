@@ -174,6 +174,7 @@ export function ExecutionWorkspace({
 
   const handleDiagnoseSelected = () => {
     if (selectedLogIndices.size === 0) return;
+    setMcpFixApplied(false);
     const selectedLogs = Array.from(selectedLogIndices)
       .sort((a: number, b: number) => a - b)
       .map((i: number) => executionLogs[i]);
@@ -182,6 +183,7 @@ export function ExecutionWorkspace({
 
   const handleDiagnoseAll = () => {
     if (executionLogs.length === 0) return;
+    setMcpFixApplied(false);
     fetchMcpDiagnostic(executionLogs);
   };
 
