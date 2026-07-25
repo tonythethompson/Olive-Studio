@@ -16,6 +16,7 @@ from olive_mcp_server.tools.config_generator import get_pass_config_template
 from olive_mcp_server.tools.data_config import get_data_config_template
 from olive_mcp_server.tools.docs_search import search_olive_documentation
 from olive_mcp_server.tools.hardware_guide import get_hardware_optimization_guide
+from olive_mcp_server.tools.integration_recipes import get_integration_recipe
 from olive_mcp_server.tools.pass_catalog import get_olive_passes
 from olive_mcp_server.tools.pass_chain import get_pass_chain
 from olive_mcp_server.tools.pass_parameters import get_pass_parameters
@@ -36,6 +37,7 @@ TOOLS = [
     get_cli_command,
     get_data_config_template,
     search_olive_documentation,
+    get_integration_recipe,
     get_pass_parameters,
     evaluate_optimization_tradeoff,
 ]

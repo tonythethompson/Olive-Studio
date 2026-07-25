@@ -58,20 +58,21 @@ The server uses stdio transport by default and exposes the registered tools.
 
 ## Tools
 
-| Tool | Purpose |
-|------|---------|
-| `get_olive_passes` | List available passes, filtered by category |
-| `get_pass_config_template` | Generate scaffold Olive workflow JSON for a pass |
-| `get_quantization_strategy` | Recommend quantization algorithm for model + hardware |
-| `get_hardware_optimization_guide` | Hardware-specific pass chain and settings |
-| `get_pass_chain` | Validate and explain pass ordering |
-| `troubleshoot_olive_error` | Diagnose common errors with workarounds |
-| `get_model_compatibility` | Check model x pass x hardware compatibility |
-| `get_cli_command` | Generate ready-to-run Olive CLI commands |
-| `get_data_config_template` | Generate DataConfig JSON for calibration/evaluation |
-| `search_olive_documentation` | Full-text search over local knowledge base |
-| `get_pass_parameters` | Deep-dive into a pass parameter schema |
-| `evaluate_optimization_tradeoff` | Predict accuracy/latency/size tradeoffs |
+| Tool                              | Purpose                                               |
+| --------------------------------- | ----------------------------------------------------- |
+| `get_olive_passes`                | List available passes, filtered by category           |
+| `get_pass_config_template`        | Generate scaffold Olive workflow JSON for a pass      |
+| `get_quantization_strategy`       | Recommend quantization algorithm for model + hardware |
+| `get_hardware_optimization_guide` | Hardware-specific pass chain and settings             |
+| `get_pass_chain`                  | Validate and explain pass ordering                    |
+| `troubleshoot_olive_error`        | Diagnose common errors with workarounds               |
+| `get_model_compatibility`         | Check model x pass x hardware compatibility           |
+| `get_cli_command`                 | Generate ready-to-run Olive CLI commands              |
+| `get_data_config_template`        | Generate DataConfig JSON for calibration/evaluation   |
+| `search_olive_documentation`      | Full-text search over local knowledge base            |
+| `get_pass_parameters`             | Deep-dive into a pass parameter schema                |
+| `evaluate_optimization_tradeoff`  | Predict accuracy/latency/size tradeoffs               |
+| `get_integration_recipe`          | List or retrieve ready-to-run Olive recipe templates  |
 
 ## Knowledge Base
 
@@ -80,6 +81,7 @@ The server uses stdio transport by default and exposes the registered tools.
 - `knowledge_base/quirks.json` - common behaviors and pitfalls
 - `knowledge_base/troubleshooting.json` - error diagnosis rules
 - `knowledge_base/compatibility_matrix.json` - model compatibility matrix
+- `knowledge_base/integration_recipes.json` - ready-to-run Olive recipe templates
 
 ## Fetchers / Update Mechanism
 
@@ -97,6 +99,5 @@ To run the update stub:
 ## Roadmap
 
 - Wire fetchers to requests/firecrawl for live updates
-- Add integration recipes JSON and tool
 - Add deployment docs (Docker / serverless)
 - Expand compatibility matrix with more models

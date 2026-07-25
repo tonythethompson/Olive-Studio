@@ -8,6 +8,7 @@ from olive_mcp_server.tools.config_generator import get_pass_config_template
 from olive_mcp_server.tools.data_config import get_data_config_template
 from olive_mcp_server.tools.docs_search import search_olive_documentation
 from olive_mcp_server.tools.hardware_guide import get_hardware_optimization_guide
+from olive_mcp_server.tools.integration_recipes import get_integration_recipe
 from olive_mcp_server.tools.pass_catalog import get_olive_passes
 from olive_mcp_server.tools.pass_chain import get_pass_chain
 from olive_mcp_server.tools.pass_parameters import get_pass_parameters
@@ -191,3 +192,35 @@ def test_get_pass_chain_onnx_source_no_conversion_required():
     result = get_pass_chain(["OnnxQuantization"], source_format="onnx")
     assert result["valid"] is True
     assert len(result["errors"]) == 0
+
+
+def test_get_integration_recipe_list():
+    result = get_integration_recipe()
+    assert "recipes" in result
+    assert result["count"] > 0
+    assert all("id" in r for r in result["recipes"])
+
+
+def test_get_integration_recipe_filter_by_model_type():
+    result = get_integration_recipe(model_type="LLM")
+    assert result["count"] > 0
+    assert all("LLM" in r.get("model_type", []) for r in result["recipes"])
+
+
+def test_get_integration_recipe_filter_by_target_hardware():
+    result = get_integration_recipe(target_hardware="CPU")
+    assert result["count"] > 0
+    assert any("CPU" in hardware for r in result["recipes"] for hardware in r["target_hardware"])
+
+
+def test_get_integration_recipe_detail():
+    result = get_integration_recipe(recipe_id="resnet50_cpu_ptq")
+    assert "error" not in result
+    assert result["recipe_id"] == "resnet50_cpu_ptq"
+    assert "recipe" in result
+    assert "passes" in result["recipe"]
+
+
+def test_get_integration_recipe_not_found():
+    result = get_integration_recipe(recipe_id="not-a-real-recipe")
+    assert "error" in result

@@ -1,0 +1,517 @@
+{
+  "version": "0.1.0",
+  "last_updated": "2026-07-25",
+  "source": "https://microsoft.github.io/Olive/",
+  "recipes": [
+    {
+      "id": "resnet50_cpu_ptq",
+      "name": "ResNet-50 INT8 CPU",
+      "description": "Static PTQ pipeline for a vision CNN targeting Intel/AMD CPUs with the ONNX Runtime CPU Execution Provider.",
+      "model_type": ["CNN", "Vision"],
+      "target_hardware": ["Intel Core i9 CPU", "AMD EPYC CPU", "CPU"],
+      "source_format": "PyTorch",
+      "passes": ["OnnxConversion", "OnnxStaticQuantization", "OnnxModelOptimizer"],
+      "recipe": {
+        "input_model": {
+          "type": "PyTorchModel",
+          "config": {
+            "model_path": "resnet50.pt",
+            "io_config": {
+              "input_names": ["input"],
+              "output_names": ["output"],
+              "input_shapes": [[1, 3, 224, 224]]
+            }
+          }
+        },
+        "systems": {
+          "local_system": {
+            "type": "LocalSystem",
+            "config": {
+              "accelerators": [
+                {
+                  "device": "cpu",
+                  "execution_providers": ["CPUExecutionProvider"]
+                }
+              ]
+            }
+          }
+        },
+        "data_configs": [
+          {
+            "name": "imagenet_calib",
+            "type": "HuggingfaceContainer",
+            "params_config": {
+              "data_path": "imagenet/val",
+              "batch_size": 1
+            }
+          }
+        ],
+        "passes": {
+          "convert": {
+            "type": "OnnxConversion",
+            "config": {
+              "target_opset": 14
+            }
+          },
+          "static_quant": {
+            "type": "OnnxStaticQuantization",
+            "config": {
+              "quant_format": "QDQ",
+              "per_channel": false,
+              "data_config": "imagenet_calib"
+            }
+          },
+          "optimize": {
+            "type": "OnnxModelOptimizer"
+          }
+        },
+        "evaluators": {
+          "common_eval": {
+            "metrics": [
+              {
+                "name": "accuracy",
+                "type": "accuracy",
+                "data_config": "imagenet_calib"
+              }
+            ]
+          }
+        },
+        "engine": {
+          "search_strategy": false,
+          "host": "local_system",
+          "target": "local_system",
+          "evaluator": "common_eval",
+          "cache_dir": ".cache",
+          "output_dir": "outputs/resnet50_cpu_ptq"
+        }
+      },
+      "notes": "Replace model_path and data_path with your own ResNet-50 checkpoint and calibration dataset."
+    },
+    {
+      "id": "bert_cpu_static",
+      "name": "BERT INT8 CPU",
+      "description": "Static INT8 quantization of a Hugging Face BERT encoder for CPU inference.",
+      "model_type": ["Transformer", "NLP", "BERT"],
+      "target_hardware": ["Intel Core i9 CPU", "CPU"],
+      "source_format": "HuggingFace",
+      "passes": ["OnnxConversion", "OrtTransformersOptimization", "OnnxStaticQuantization"],
+      "recipe": {
+        "input_model": {
+          "type": "HuggingfaceModel",
+          "config": {
+            "model_path": "bert-base-uncased",
+            "task": "text-classification",
+            "load_kwargs": {
+              "torch_dtype": "float32"
+            }
+          }
+        },
+        "systems": {
+          "local_system": {
+            "type": "LocalSystem",
+            "config": {
+              "accelerators": [
+                {
+                  "device": "cpu",
+                  "execution_providers": ["CPUExecutionProvider"]
+                }
+              ]
+            }
+          }
+        },
+        "data_configs": [
+          {
+            "name": "glue_calib",
+            "type": "HuggingfaceContainer",
+            "params_config": {
+              "data_path": "glue/mrpc",
+              "batch_size": 1,
+              "max_seq_len": 128
+            }
+          }
+        ],
+        "passes": {
+          "convert": {
+            "type": "OnnxConversion",
+            "config": {
+              "target_opset": 14
+            }
+          },
+          "transformers_opt": {
+            "type": "OrtTransformersOptimization",
+            "config": {
+              "optimization_level": 1,
+              "use_gpu": false
+            }
+          },
+          "static_quant": {
+            "type": "OnnxStaticQuantization",
+            "config": {
+              "quant_format": "QDQ",
+              "data_config": "glue_calib"
+            }
+          }
+        },
+        "evaluators": {
+          "common_eval": {
+            "metrics": [
+              {
+                "name": "accuracy",
+                "type": "accuracy",
+                "data_config": "glue_calib"
+              }
+            ]
+          }
+        },
+        "engine": {
+          "search_strategy": false,
+          "host": "local_system",
+          "target": "local_system",
+          "evaluator": "common_eval",
+          "cache_dir": ".cache",
+          "output_dir": "outputs/bert_cpu_static"
+        }
+      },
+      "notes": "Best for BERT-like encoders. Update model_path and task for your specific checkpoint."
+    },
+    {
+      "id": "llama3_cuda_awq",
+      "name": "Llama-3 AWQ INT4 CUDA",
+      "description": "AWQ INT4 weight-only quantization of a Llama-3 Hugging Face model for NVIDIA GPUs.",
+      "model_type": ["LLM", "Transformer"],
+      "target_hardware": ["NVIDIA RTX 4090", "NVIDIA T4", "NVIDIA A100"],
+      "source_format": "HuggingFace",
+      "passes": ["AutoAWQQuantizer", "OnnxConversion", "OnnxModelOptimizer"],
+      "recipe": {
+        "input_model": {
+          "type": "HuggingfaceModel",
+          "config": {
+            "model_path": "meta-llama/Meta-Llama-3-8B",
+            "task": "text-generation",
+            "load_kwargs": {
+              "torch_dtype": "float16"
+            }
+          }
+        },
+        "systems": {
+          "local_system": {
+            "type": "LocalSystem",
+            "config": {
+              "accelerators": [
+                {
+                  "device": "gpu",
+                  "execution_providers": ["CUDAExecutionProvider"]
+                }
+              ]
+            }
+          }
+        },
+        "data_configs": [
+          {
+            "name": "wikitext2",
+            "type": "HuggingfaceContainer",
+            "params_config": {
+              "data_path": "wikitext",
+              "subset": "wikitext-2-raw-v1",
+              "split": "train",
+              "batch_size": 1,
+              "max_seq_len": 2048
+            }
+          }
+        ],
+        "passes": {
+          "awq": {
+            "type": "AutoAWQQuantizer",
+            "config": {
+              "bits": 4,
+              "group_size": 128,
+              "zero_point": true,
+              "data_config": "wikitext2"
+            }
+          },
+          "convert": {
+            "type": "OnnxConversion",
+            "config": {
+              "target_opset": 14
+            }
+          },
+          "optimize": {
+            "type": "OnnxModelOptimizer"
+          }
+        },
+        "evaluators": {
+          "common_eval": {
+            "metrics": [
+              {
+                "name": "perplexity",
+                "type": "perplexity",
+                "data_config": "wikitext2"
+              }
+            ]
+          }
+        },
+        "engine": {
+          "search_strategy": false,
+          "host": "local_system",
+          "target": "local_system",
+          "evaluator": "common_eval",
+          "cache_dir": ".cache",
+          "output_dir": "outputs/llama3_cuda_awq"
+        }
+      },
+      "notes": "Requires AWQ support and significant GPU memory. Replace model_path with your Llama checkpoint."
+    },
+    {
+      "id": "llama_nvidia_int4",
+      "name": "Llama-3 NVModelOpt INT4",
+      "description": "INT4 quantization using NVIDIA ModelOpt for Llama-style LLMs on NVIDIA GPUs.",
+      "model_type": ["LLM", "Transformer"],
+      "target_hardware": ["NVIDIA RTX 4090", "NVIDIA A100", "NVIDIA T4"],
+      "source_format": "HuggingFace",
+      "passes": ["OnnxConversion", "NVModelOptQuantization", "OnnxFloatToFloat16"],
+      "recipe": {
+        "input_model": {
+          "type": "HuggingfaceModel",
+          "config": {
+            "model_path": "meta-llama/Meta-Llama-3-8B",
+            "task": "text-generation",
+            "load_kwargs": {
+              "torch_dtype": "float16"
+            }
+          }
+        },
+        "systems": {
+          "local_system": {
+            "type": "LocalSystem",
+            "config": {
+              "accelerators": [
+                {
+                  "device": "gpu",
+                  "execution_providers": ["CUDAExecutionProvider", "TensorrtExecutionProvider"]
+                }
+              ]
+            }
+          }
+        },
+        "data_configs": [
+          {
+            "name": "wikitext2",
+            "type": "HuggingfaceContainer",
+            "params_config": {
+              "data_path": "wikitext",
+              "subset": "wikitext-2-raw-v1",
+              "split": "train",
+              "batch_size": 1,
+              "max_seq_len": 2048
+            }
+          }
+        ],
+        "passes": {
+          "convert": {
+            "type": "OnnxConversion",
+            "config": {
+              "target_opset": 14
+            }
+          },
+          "nv_quant": {
+            "type": "NVModelOptQuantization",
+            "config": {
+              "algorithm": "INT4_AWQ",
+              "awq_block_size": 128,
+              "data_config": "wikitext2"
+            }
+          },
+          "fp16": {
+            "type": "OnnxFloatToFloat16"
+          }
+        },
+        "evaluators": {
+          "common_eval": {
+            "metrics": [
+              {
+                "name": "perplexity",
+                "type": "perplexity",
+                "data_config": "wikitext2"
+              }
+            ]
+          }
+        },
+        "engine": {
+          "search_strategy": false,
+          "host": "local_system",
+          "target": "local_system",
+          "evaluator": "common_eval",
+          "cache_dir": ".cache",
+          "output_dir": "outputs/llama_nvidia_int4"
+        }
+      },
+      "notes": "INT4 AWQ requires NVIDIA ModelOpt. Ensure the target GPU supports the selected execution provider."
+    },
+    {
+      "id": "stable_diffusion_cuda_fp16",
+      "name": "Stable Diffusion v1.4 FP16 CUDA",
+      "description": "FP16 conversion and optimization for Stable Diffusion UNet on NVIDIA GPUs.",
+      "model_type": ["Diffusion", "Vision"],
+      "target_hardware": ["NVIDIA RTX 4090", "NVIDIA A100"],
+      "source_format": "PyTorch",
+      "passes": ["OnnxConversion", "OnnxFloatToFloat16", "OnnxModelOptimizer"],
+      "recipe": {
+        "input_model": {
+          "type": "PyTorchModel",
+          "config": {
+            "model_path": "CompVis/stable-diffusion-v1-4",
+            "io_config": {
+              "input_names": ["sample", "timestep", "encoder_hidden_states"],
+              "output_names": ["noise_pred"],
+              "input_shapes": [[1, 4, 64, 64], [1], [1, 77, 768]]
+            }
+          }
+        },
+        "systems": {
+          "local_system": {
+            "type": "LocalSystem",
+            "config": {
+              "accelerators": [
+                {
+                  "device": "gpu",
+                  "execution_providers": ["CUDAExecutionProvider"]
+                }
+              ]
+            }
+          }
+        },
+        "passes": {
+          "convert": {
+            "type": "OnnxConversion",
+            "config": {
+              "target_opset": 14,
+              "use_external_data_format": true
+            }
+          },
+          "fp16": {
+            "type": "OnnxFloatToFloat16"
+          },
+          "optimize": {
+            "type": "OnnxModelOptimizer"
+          }
+        },
+        "engine": {
+          "search_strategy": false,
+          "host": "local_system",
+          "target": "local_system",
+          "cache_dir": ".cache",
+          "output_dir": "outputs/stable_diffusion_cuda_fp16"
+        }
+      },
+      "notes": "FP16 halves memory and can speed up UNet inference on Tensor Cores. Set use_external_data_format=True for >2GB weights."
+    },
+    {
+      "id": "phi4_cpu_int4",
+      "name": "Phi-4 INT4 CPU",
+      "description": "Block-wise RTN INT4 quantization of a Phi-4 Hugging Face model for CPU inference.",
+      "model_type": ["LLM", "Transformer"],
+      "target_hardware": ["Intel Core i9 CPU", "AMD EPYC CPU", "CPU"],
+      "source_format": "HuggingFace",
+      "passes": ["OnnxBlockWiseRtnQuantization", "OnnxModelOptimizer"],
+      "recipe": {
+        "input_model": {
+          "type": "HuggingfaceModel",
+          "config": {
+            "model_path": "microsoft/phi-4",
+            "task": "text-generation",
+            "load_kwargs": {
+              "torch_dtype": "float32"
+            }
+          }
+        },
+        "systems": {
+          "local_system": {
+            "type": "LocalSystem",
+            "config": {
+              "accelerators": [
+                {
+                  "device": "cpu",
+                  "execution_providers": ["CPUExecutionProvider"]
+                }
+              ]
+            }
+          }
+        },
+        "passes": {
+          "rtn_quant": {
+            "type": "OnnxBlockWiseRtnQuantization",
+            "config": {
+              "bits": 4,
+              "block_size": 32,
+              "is_symmetric": true
+            }
+          },
+          "optimize": {
+            "type": "OnnxModelOptimizer"
+          }
+        },
+        "engine": {
+          "search_strategy": false,
+          "host": "local_system",
+          "target": "local_system",
+          "cache_dir": ".cache",
+          "output_dir": "outputs/phi4_cpu_int4"
+        }
+      },
+      "notes": "RTN is fast but may reduce accuracy more than AWQ/GPTQ. Validate perplexity on your dataset."
+    },
+    {
+      "id": "openvino_llm",
+      "name": "OpenVINO INT8 LLM",
+      "description": "OpenVINO optimum conversion and weight compression for Intel CPUs/iGPUs.",
+      "model_type": ["LLM", "Transformer"],
+      "target_hardware": ["Intel Core i9 CPU", "Intel Arc GPU", "CPU"],
+      "source_format": "HuggingFace",
+      "passes": ["OpenVINOOptimumConversion", "OpenVINOWeightCompression"],
+      "recipe": {
+        "input_model": {
+          "type": "HuggingfaceModel",
+          "config": {
+            "model_path": "microsoft/phi-4",
+            "task": "text-generation",
+            "load_kwargs": {
+              "torch_dtype": "float32"
+            }
+          }
+        },
+        "systems": {
+          "local_system": {
+            "type": "LocalSystem",
+            "config": {
+              "accelerators": [
+                {
+                  "device": "cpu",
+                  "execution_providers": ["OpenVINOExecutionProvider"]
+                }
+              ]
+            }
+          }
+        },
+        "passes": {
+          "convert": {
+            "type": "OpenVINOOptimumConversion"
+          },
+          "compress": {
+            "type": "OpenVINOWeightCompression",
+            "config": {
+              "bits": 8
+            }
+          }
+        },
+        "engine": {
+          "search_strategy": false,
+          "host": "local_system",
+          "target": "local_system",
+          "cache_dir": ".cache",
+          "output_dir": "outputs/openvino_llm"
+        }
+      },
+      "notes": "Requires OpenVINO environment. Use this recipe for Intel hardware deployments."
+    }
+  ]
+}

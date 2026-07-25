@@ -33,6 +33,10 @@ def load_compatibility_matrix() -> list[dict[str, Any]]:
     return load_json("compatibility_matrix.json").get("models", [])
 
 
+def load_integration_recipes() -> list[dict[str, Any]]:
+    return load_json("integration_recipes.json").get("recipes", [])
+
+
 # Tool functions exposed for callers that import the tools package directly
 # (e.g. server.ts's generic MCP caller).
 from .cli_helper import get_cli_command
@@ -41,6 +45,7 @@ from .config_generator import get_pass_config_template
 from .data_config import get_data_config_template
 from .docs_search import search_olive_documentation
 from .hardware_guide import get_hardware_optimization_guide
+from .integration_recipes import get_integration_recipe
 from .pass_catalog import get_olive_passes
 from .pass_chain import get_pass_chain
 from .pass_parameters import get_pass_parameters
@@ -55,6 +60,7 @@ __all__ = [
     "get_data_config_template",
     "search_olive_documentation",
     "get_hardware_optimization_guide",
+    "get_integration_recipe",
     "get_olive_passes",
     "get_pass_chain",
     "get_pass_parameters",
@@ -68,4 +74,5 @@ __all__ = [
     "load_quirks",
     "load_troubleshooting",
     "load_compatibility_matrix",
+    "load_integration_recipes",
 ]
