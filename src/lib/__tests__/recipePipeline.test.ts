@@ -28,7 +28,7 @@ function baseState(overrides?: Partial<UIState>): UIState {
     activeJobId: null,
     passes: {
       ...DEFAULT_PASSES,
-      ...(overrides?.passes ?? {}),
+      ...overrides?.passes,
     },
     ...overrides,
   };

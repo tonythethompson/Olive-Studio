@@ -27,7 +27,7 @@ function baseState(overrides?: Partial<UIState>): UIState {
     ...overrides,
     passes: {
       ...DEFAULT_PASSES,
-      ...(overrides?.passes ?? {}),
+      ...overrides?.passes,
     },
   };
 }

@@ -12,7 +12,7 @@ function getQuantConfig(state: UIState): Record<string, unknown> {
   const quant = passes?.quantization as { type?: string; config?: Record<string, unknown> } | undefined;
   return {
     pass_type: quant?.type ?? "none",
-    ...(quant?.config ?? {}),
+    ...quant?.config,
   };
 }
 
