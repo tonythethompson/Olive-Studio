@@ -229,6 +229,8 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
       title: w.title,
       description: w.description,
       source: "parameter" as const,
+      actionLabel: w.actionLabel,
+      autofix: w.autofix as PipelineIssue["autofix"],
     })),
     // MCP parameter constraint warnings (required_params, valid_range, interactions)
     ...mcpParamWarnings.map((w) => ({

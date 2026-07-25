@@ -311,10 +311,8 @@ export function IHVIntegrationPanel({
 
   // Real-time conflicts of the selected hardware provider
   const selectedConflicts = getProviderConflicts(state.ihvProvider, state.passes);
-  const selectableProviders = useMemo(
-    () => providers.filter((p) => getSelectableProviders(hardwareProbe).includes(p.id)),
-    [hardwareProbe],
-  );
+  const selectableProviders = useMemo(() => providers, []);
+  const detectedProviders = useMemo(() => getSelectableProviders(hardwareProbe), [hardwareProbe]);
   const hasSelectedCritical = selectedConflicts.some((c) => c.severity === "critical");
 
   return (
@@ -503,7 +501,7 @@ export function IHVIntegrationPanel({
           <p className="text-[11px] text-slate-500 mb-3">
             {probeLoading
               ? "Detecting local execution providers…"
-              : `Showing ${selectableProviders.length} provider${selectableProviders.length === 1 ? "" : "s"} detected on this machine. Undetected hardware is hidden.`}
+              : `Showing all ${selectableProviders.length} providers. ${detectedProviders.length} detected locally — undetected targets are still selectable for cross-compile / remote builds.`}
           </p>
 
           <div className="grid gap-4 mt-2">
@@ -546,7 +544,8 @@ export function IHVIntegrationPanel({
                     badgeColor = "bg-electric-blue/10 text-electric-blue border-electric-blue/20";
                   }
                 } else if (cardHardwareBlocked) {
-                  cardClasses += "border-rose-950/35 bg-zinc-950/40 opacity-55 cursor-not-allowed";
+                  cardClasses +=
+                    "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-75 hover:border-slate-700";
                   badgeText = "Not on this system";
                   badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
                 } else if (!detectedLocally && !probeLoading) {
@@ -590,6 +589,12 @@ export function IHVIntegrationPanel({
                     onClick={() => {
                       if (isSelected && pConflicts.length > 0) {
                         setState({ passes: applyProviderConflictAutofixes(p.id, state.passes) });
+                        return;
+                      }
+                      // Allow selecting undetected providers for cross-compile / remote targets
+                      const detected = detectedProviders.includes(p.id);
+                      if (!detected) {
+                        setState({ ihvProvider: p.id });
                         return;
                       }
                       const patch = prepareProviderChange(state, p.id, hardwareProbe);
@@ -708,6 +713,12 @@ export function IHVIntegrationPanel({
                               e.stopPropagation();
                               if (isSelected) {
                                 setState({ passes: applyProviderConflictAutofixes(p.id, state.passes) });
+                                return;
+                              }
+                              // Allow switching to undetected providers for cross-compile / remote targets
+                              const detected = detectedProviders.includes(p.id);
+                              if (!detected) {
+                                setState({ ihvProvider: p.id });
                                 return;
                               }
                               const patch = prepareProviderChange(state, p.id, hardwareProbe);
@@ -985,6 +996,12 @@ export function IHVIntegrationPanel({
                             <th
                               key={p.id}
                               onClick={() => {
+                                // Allow selecting undetected providers for cross-compile / remote targets
+                                const detected = detectedProviders.includes(p.id);
+                                if (!detected) {
+                                  setState({ ihvProvider: p.id });
+                                  return;
+                                }
                                 const patch = prepareProviderChange(state, p.id, hardwareProbe);
                                 if (patch) {
                                   setState(patch);

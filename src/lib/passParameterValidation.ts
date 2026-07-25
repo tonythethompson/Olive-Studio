@@ -15,6 +15,8 @@ export interface ParameterWarning {
   title: string;
   description: string;
   passName: string;
+  actionLabel?: string;
+  autofix?: { passes?: Partial<UIState["passes"]> };
 }
 
 interface ParamRule {
@@ -22,6 +24,10 @@ interface ParamRule {
   name: string;
   /** Check function: returns null if ok, warning message if not */
   check: (passes: UIState["passes"]) => string | null;
+  /** Optional state patch applied when the user clicks the autofix button */
+  autofix?: { passes?: Partial<UIState["passes"]> };
+  /** Button label for the autofix action */
+  actionLabel?: string;
 }
 
 /**
@@ -169,6 +175,8 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
           }
           return null;
         },
+        autofix: { passes: { quantPrecision: "int4", quantMethod: "awq" } },
+        actionLabel: "Switch to AWQ INT4",
       },
       {
         name: "TensorRT RTX INT8 requires QDQ format",
@@ -178,6 +186,8 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
           }
           return null;
         },
+        autofix: { passes: { quantMethod: "awq" } },
+        actionLabel: "Switch to AWQ",
       },
     ];
   }
@@ -263,6 +273,8 @@ export function validatePassParameters(state: UIState, activePassNames: string[]
           title: `${hardwareLabel(provider)}: ${rule.name}`,
           description: message,
           passName,
+          autofix: rule.autofix,
+          actionLabel: rule.actionLabel,
         });
       }
     }
