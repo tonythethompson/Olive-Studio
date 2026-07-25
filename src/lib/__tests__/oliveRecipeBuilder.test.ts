@@ -526,6 +526,22 @@ describe("buildOliveRecipe", () => {
     expect(cfg.pruning_criteria).toBe("l2_norm");
   });
 
+  it("creates SparseGPT pruning pass with l1_norm criteria", () => {
+    const state = baseState({
+      passes: {
+        ...DEFAULT_PASSES,
+        pruning: true,
+        pruningMethod: "sparsegpt",
+        pruningSparsity: 0.5,
+        pruningCriteria: "l1_norm",
+      },
+    });
+    const recipe = buildOliveRecipe(state);
+    const cfg = ((recipe.passes as Record<string, unknown>).pruning as Record<string, unknown>)
+      .config as Record<string, unknown>;
+    expect(cfg.pruning_criteria).toBe("l1_norm");
+  });
+
   it("creates Wanda pruning pass with explicit criteria", () => {
     const state = baseState({
       passes: {
@@ -543,6 +559,22 @@ describe("buildOliveRecipe", () => {
     const cfg = p.config as Record<string, unknown>;
     expect(cfg.sparsity).toBe(0.3);
     expect(cfg.pruning_criteria).toBe("l1_norm");
+  });
+
+  it("creates Wanda pruning pass with l2_norm criteria", () => {
+    const state = baseState({
+      passes: {
+        ...DEFAULT_PASSES,
+        pruning: true,
+        pruningMethod: "wanda",
+        pruningSparsity: 0.3,
+        pruningCriteria: "l2_norm",
+      },
+    });
+    const recipe = buildOliveRecipe(state);
+    const cfg = ((recipe.passes as Record<string, unknown>).pruning as Record<string, unknown>)
+      .config as Record<string, unknown>;
+    expect(cfg.pruning_criteria).toBe("l2_norm");
   });
 
   it("creates magnitude-based Prune pass for magnitude method", () => {
@@ -677,6 +709,17 @@ describe("buildOliveRecipe", () => {
     expect(imported.passes?.pruningCriteria).toBe("l2_norm");
   });
 
+  it("preserves pruning_criteria through recipe import round-trip (sparsegpt l1_norm)", () => {
+    const state = baseState({
+      passes: { ...DEFAULT_PASSES, pruning: true, pruningMethod: "sparsegpt", pruningCriteria: "l1_norm" },
+    });
+    const recipe = buildOliveRecipe(state);
+    const imported = deriveUiStateFromOliveRecipe(recipe, { replacePasses: true });
+    expect(imported.passes?.pruning).toBe(true);
+    expect(imported.passes?.pruningMethod).toBe("sparsegpt");
+    expect(imported.passes?.pruningCriteria).toBe("l1_norm");
+  });
+
   it("preserves pruning_criteria through recipe import round-trip (wanda)", () => {
     const state = baseState({
       passes: { ...DEFAULT_PASSES, pruning: true, pruningMethod: "wanda", pruningCriteria: "l1_norm" },
@@ -686,6 +729,17 @@ describe("buildOliveRecipe", () => {
     expect(imported.passes?.pruning).toBe(true);
     expect(imported.passes?.pruningMethod).toBe("wanda");
     expect(imported.passes?.pruningCriteria).toBe("l1_norm");
+  });
+
+  it("preserves pruning_criteria through recipe import round-trip (wanda l2_norm)", () => {
+    const state = baseState({
+      passes: { ...DEFAULT_PASSES, pruning: true, pruningMethod: "wanda", pruningCriteria: "l2_norm" },
+    });
+    const recipe = buildOliveRecipe(state);
+    const imported = deriveUiStateFromOliveRecipe(recipe, { replacePasses: true });
+    expect(imported.passes?.pruning).toBe(true);
+    expect(imported.passes?.pruningMethod).toBe("wanda");
+    expect(imported.passes?.pruningCriteria).toBe("l2_norm");
   });
 
   it("includes evaluators block when userScript and hfDataset are both set", () => {
