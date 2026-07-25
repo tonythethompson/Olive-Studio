@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "@storybook/test";
+import { expect, fn, userEvent, within } from "@storybook/test";
 import { MCPDiagnosticCard } from "./MCPDiagnosticCard";
 import type { McpDiagnostic } from "@/types";
 
@@ -116,6 +116,18 @@ export const WithoutConfigOrQuirks: Story = {
       },
     },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // Verify core fields are rendered
+    await expect(canvas.getByText("Quantization Precision Not Supported by Provider")).toBeInTheDocument();
+    await expect(canvas.getByText("Root Cause:")).toBeInTheDocument();
+    await expect(canvas.getByText("Recommended Fix:")).toBeInTheDocument();
+
+    // Verify config/quirks sections are NOT present
+    await expect(canvas.queryByText("Config Changes:")).not.toBeInTheDocument();
+    await expect(canvas.queryByText("Known Quirks:")).not.toBeInTheDocument();
+  },
 };
 
 export const FixApplied: Story = {
@@ -132,5 +144,80 @@ export const FixApplied: Story = {
           "After the user clicks 'Apply Fix', the button transforms to a green 'Fix Applied' state with a checkmark. The button is disabled until the auto-clear timer resets.",
       },
     },
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // Verify "Fix Applied" button is shown and disabled
+    const fixAppliedButton = canvas.getByRole("button", { name: /Fix Applied/ });
+    await expect(fixAppliedButton).toBeDisabled();
+
+    // Verify onApplyFix was NOT called (button is disabled)
+    await expect(args.onApplyFix).not.toHaveBeenCalled();
+  },
+};
+
+// ── Interaction tests ────────────────────────────────────────────
+
+export const ApplyFixInteraction: Story = {
+  name: "Apply Fix Click Interaction",
+  args: {
+    diagnostic: MOCK_DIAGNOSTIC,
+    isDiagnosing: false,
+    fixApplied: "",
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Interactive test: clicks 'Apply Fix' and verifies the onApplyFix callback fires exactly once. Also verifies the button is clickable and the callback receives no arguments.",
+      },
+    },
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // Find the Apply Fix button
+    const applyFixButton = canvas.getByRole("button", { name: /Apply Fix/ });
+    await expect(applyFixButton).toBeInTheDocument();
+    await expect(applyFixButton).toBeEnabled();
+
+    // Click it
+    await userEvent.click(applyFixButton);
+
+    // Verify callback fired exactly once
+    await expect(args.onApplyFix).toHaveBeenCalledTimes(1);
+    await expect(args.onApplyFix).toHaveBeenCalledWith();
+  },
+};
+
+export const RunDiagnosisInteraction: Story = {
+  name: "Run Diagnosis Click Interaction",
+  args: {
+    diagnostic: null,
+    isDiagnosing: false,
+    fixApplied: "",
+    onRunDiagnosis: fn(),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Interactive test: when onRunDiagnosis is provided and no diagnostic exists, clicking 'Run MCP Diagnosis' fires the callback.",
+      },
+    },
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // Verify the Run MCP Diagnosis button appears
+    const runDiagnosisButton = canvas.getByRole("button", { name: /Run MCP Diagnosis/ });
+    await expect(runDiagnosisButton).toBeInTheDocument();
+
+    // Click it
+    await userEvent.click(runDiagnosisButton);
+
+    // Verify callback fired exactly once
+    await expect(args.onRunDiagnosis).toHaveBeenCalledTimes(1);
   },
 };
