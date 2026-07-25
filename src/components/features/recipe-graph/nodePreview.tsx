@@ -85,9 +85,14 @@ export function getNodePreviewData(state: UIState, nodeId: string): NodePreviewD
     case "pruning":
       return {
         title: "Sparsity Pruning",
-        desc: state.passes.pruning
-          ? `${(state.passes.pruningSparsity * 100).toFixed(0)}% (${state.passes.pruningMethod})`
-          : "Bypassed Baseline",
+        desc: (() => {
+          if (!state.passes.pruning) return "Bypassed Baseline";
+          const pct = (state.passes.pruningSparsity * 100).toFixed(0);
+          const method = state.passes.pruningMethod;
+          const criteriaSuffix =
+            method === "magnitude" ? ` · ${state.passes.pruningCriteria === "l2_norm" ? "L2" : "L1"}` : "";
+          return `${pct}% (${method}${criteriaSuffix})`;
+        })(),
         icon: <Minimize2 className="h-5 w-5 text-amber-500 group-hover:text-amber-400" />,
         colorTheme: state.passes.pruning
           ? "border-amber-500/30 text-amber-500 bg-amber-500/5"
