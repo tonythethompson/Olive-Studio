@@ -139,22 +139,26 @@ export async function saveJobHistory(record: JobHistoryRecord): Promise<void> {
   }
 }
 
+export async function getJobHistoryRaw(): Promise<JobHistoryRecord[]> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.getAll();
+
+    req.onsuccess = () => {
+      const results = req.result as JobHistoryRecord[];
+      // Sort descending by timestamp
+      results.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      resolve(results);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
 export async function getJobHistory(): Promise<JobHistoryRecord[]> {
   try {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readonly");
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.getAll();
-
-      req.onsuccess = () => {
-        const results = req.result as JobHistoryRecord[];
-        // Sort descending by timestamp
-        results.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        resolve(results);
-      };
-      req.onerror = () => reject(req.error);
-    });
+    return await getJobHistoryRaw();
   } catch (err) {
     console.error("Failed to fetch job history from IndexedDB:", err);
     return [];
@@ -191,10 +195,16 @@ export async function clearAllJobHistory(): Promise<void> {
   }
 }
 
-/** Export the full job history as a JSON string. */
+export interface JobHistoryExportEnvelope {
+  version: number;
+  records: JobHistoryRecord[];
+}
+
+/** Export the full job history as a versioned JSON envelope. */
 export async function exportJobHistory(): Promise<string> {
-  const records = await getJobHistory();
-  return JSON.stringify(records, null, 2);
+  const records = await getJobHistoryRaw();
+  const envelope: JobHistoryExportEnvelope = { version: 1, records };
+  return JSON.stringify(envelope, null, 2);
 }
 
 /** Trigger a browser download of the job history as JSON. */
@@ -211,14 +221,21 @@ export async function exportJobHistoryToFile(filename = "olive-job-history.json"
   URL.revokeObjectURL(url);
 }
 
+function isValidExportEnvelope(value: unknown): value is JobHistoryExportEnvelope {
+  if (typeof value !== "object" || value === null) return false;
+  const obj = value as Record<string, unknown>;
+  return isNumber(obj.version) && obj.version === 1 && Array.isArray(obj.records);
+}
+
 /**
- * Import an array of JobHistoryRecord objects into IndexedDB.
- * Invalid entries are skipped; valid entries are written via put (overwrites
- * existing records with the same id).
+ * Import a versioned job-history envelope into IndexedDB.
+ * Unsupported or malformed envelopes are rejected explicitly.
+ * Invalid entries inside a valid version-1 envelope are skipped.
+ * Valid entries are written via put (overwrites existing records with the same id).
  */
 export async function importJobHistory(data: unknown): Promise<{ imported: number; skipped: number }> {
-  if (!Array.isArray(data)) {
-    throw new Error("Expected an array of job history records.");
+  if (!isValidExportEnvelope(data)) {
+    throw new Error("Invalid job history export: expected { version: 1, records: [...] }.");
   }
 
   const db = await openDB();
@@ -228,7 +245,7 @@ export async function importJobHistory(data: unknown): Promise<{ imported: numbe
     let imported = 0;
     let skipped = 0;
 
-    for (const item of data) {
+    for (const item of data.records) {
       if (isJobHistoryRecord(item)) {
         store.put(item);
         imported += 1;

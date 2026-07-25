@@ -6,6 +6,8 @@ human-readable frequency label so callers can distinguish transient from
 persistent errors.
 """
 
+import pytest
+
 from olive_mcp_server.tools.troubleshooting import (
     reset_frequency_store,
     troubleshoot_olive_error,
@@ -223,3 +225,9 @@ def test_error_frequency_summary_respects_limit():
     summary = get_error_frequency_summary(limit=3)
     assert summary["total_tracked"] == 5
     assert len(summary["entries"]) == 3
+
+
+def test_error_frequency_summary_rejects_negative_limit():
+    _setup()
+    with pytest.raises(ValueError, match="limit must be non-negative"):
+        get_error_frequency_summary(limit=-1)

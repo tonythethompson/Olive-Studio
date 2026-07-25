@@ -212,9 +212,19 @@ def get_error_frequency_summary(limit: int = 10) -> dict[str, Any]:
 
     Returns:
         Object containing the total number of tracked errors and the top entries.
+
+    Raises:
+        ValueError: If limit is negative.
     """
+    if limit < 0:
+        raise ValueError("limit must be non-negative")
+
+    # Snapshot keys and data copies while holding the lock so subsequent
+    # _record_occurrence mutations cannot affect this summary.
     with _lock:
-        items = list(_frequency_store.items())
+        items: list[tuple[str, dict[str, Any]]] = [
+            (key, dict(data)) for key, data in _frequency_store.items()
+        ]
 
     # Sort by occurrence count descending, then by last seen descending
     items.sort(key=lambda kv: (kv[1]["occurrence_count"], kv[1]["last_seen"]), reverse=True)
