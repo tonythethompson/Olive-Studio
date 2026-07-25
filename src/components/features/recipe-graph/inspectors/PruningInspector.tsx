@@ -112,6 +112,11 @@ export function PruningInspector({ state, setState }: InspectorProps) {
     saveCustomPresets(presets);
   }, []);
 
+  const duplicateName =
+    showSaveDialog && newPresetName.trim()
+      ? customPresets.some((p) => p.label.toLowerCase() === newPresetName.trim().toLowerCase())
+      : false;
+
   const handleSaveCustomPreset = useCallback(() => {
     const name = newPresetName.trim();
     if (!name || customPresets.length >= MAX_CUSTOM_PRESETS) return;
@@ -192,8 +197,12 @@ export function PruningInspector({ state, setState }: InspectorProps) {
             <button
               type="button"
               onClick={handleSaveCustomPreset}
-              disabled={!newPresetName.trim() || customPresets.length >= MAX_CUSTOM_PRESETS}
-              className="h-7 px-2 text-[10px] font-medium rounded border border-amber-500/50 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              disabled={!newPresetName.trim() || duplicateName || customPresets.length >= MAX_CUSTOM_PRESETS}
+              className={`h-7 px-2 text-[10px] font-medium rounded border transition-colors ${
+                duplicateName
+                  ? "border-red-500/50 bg-red-500/10 text-red-400"
+                  : "border-amber-500/50 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+              } disabled:opacity-40 disabled:cursor-not-allowed`}
             >
               Save
             </button>
