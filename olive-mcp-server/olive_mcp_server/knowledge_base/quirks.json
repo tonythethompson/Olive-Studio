@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "last_updated": "2026-07-24",
   "categories": {
-    "calibration": [
+    "quantization": [
       {
         "id": "calib-static-vs-dynamic",
         "title": "Static vs Dynamic Quantization",

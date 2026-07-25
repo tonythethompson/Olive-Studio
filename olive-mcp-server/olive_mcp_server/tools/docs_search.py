@@ -46,18 +46,21 @@ def _load_kb_text() -> list[tuple[str, str]]:
 
 
 def search_olive_documentation(query: str, top_k: int = 5) -> dict[str, Any]:
-    """
-    Search the local Olive knowledge base for entries matching the query terms.
-    
-    Parameters:
-        query (str): Terms to search for.
-        top_k (int): Maximum number of ranked results to include.
-    
+    """Full-text search across the local Olive knowledge base.
+
+    Args:
+        query: Search query, e.g. "calibrate static quantization".
+        top_k: Maximum number of results to include (must be >= 0).
+
+
     Returns:
         dict[str, Any]: A mapping containing the original query, total matching
             entry count, ranked results with source paths, snippets, and relevance
             scores, and a link to the official Olive documentation.
     """
+    if top_k < 0:
+        raise ValueError(f"top_k must be >= 0, got {top_k}")
+
     terms = [t.lower() for t in query.split() if t]
     kb = _load_kb_text()
 

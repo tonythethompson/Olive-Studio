@@ -4,34 +4,7 @@ from typing import Any
 
 from . import load_hardware_profiles
 
-
-def _normalize_target(target: str) -> str:
-    """Normalize a hardware target description to its canonical profile name.
-    
-    Parameters:
-        target (str): User-provided hardware target description.
-    
-    Returns:
-        str: Canonical hardware profile name, or the original target when no profile matches.
-    """
-    t = target.lower()
-    if "rtx 4090" in t:
-        return "NVIDIA RTX 4090"
-    if "t4" in t:
-        return "NVIDIA T4"
-    if "intel" in t and "cpu" in t:
-        return "Intel Core i9 CPU"
-    if "qualcomm" in t or "snapdragon" in t or "qnn" in t:
-        return "Qualcomm Snapdragon NPU"
-    if "apple" in t or "coreml" in t or "m2" in t or "m3" in t:
-        return "Apple M2/M3 (CoreML)"
-    if "android" in t or "nnapi" in t:
-        return "Android NNAPI"
-    if "openvino" in t:
-        return "Intel iGPU / OpenVINO"
-    if "xilinx" in t or "vitis" in t:
-        return "Xilinx Vitis AI DPU"
-    return target
+from .normalization import normalize_hardware
 
 
 def get_hardware_optimization_guide(
@@ -53,7 +26,7 @@ def get_hardware_optimization_guide(
         dict[str, Any]: The selected profile, optimization settings, scaled calibration and batch sizes, performance goals, and optional metadata. If no matching profile exists, contains an error message and available profile names.
     """
     profiles = {p["target"]: p for p in load_hardware_profiles()}
-    key = _normalize_target(target_hardware)
+    key = normalize_hardware(target_hardware)
     profile = profiles.get(key)
     if not profile:
         available = sorted(profiles.keys())

@@ -33,13 +33,14 @@ def _type_index(pass_type: str) -> int:
         return len(_TYPE_ORDER)
 
 
-def get_pass_chain(pass_names: list[str]) -> dict[str, Any]:
-    """
-    Validate an ordered list of pass names and identify dependency or ordering issues.
-    
-    Parameters:
-        pass_names (list[str]): Pass names in intended execution order.
-    
+def get_pass_chain(pass_names: list[str], source_format: str = "") -> dict[str, Any]:
+    """Validate an ordered list of pass names and identify dependency or ordering issues.
+
+    Args:
+        pass_names: List of pass names in intended execution order.
+        source_format: Optional source model format ("onnx", "torch", "hf", etc.).
+                      If not specified, infers from chain or emits warnings.
+
     Returns:
         dict[str, Any]: A validation result containing `valid`, `errors`, `warnings`,
             resolved per-pass metadata in `chain`, and the canonical pass type
@@ -69,12 +70,25 @@ def get_pass_chain(pass_names: list[str]) -> dict[str, Any]:
             "known": True,
         })
 
-        # Quantization passes that need ONNX must follow OnnxConversion.
+        # Quantization passes that need ONNX must follow OnnxConversion (unless source is already ONNX).
         if ptype == "quantization" and "onnx" in meta.get("input_formats", []):
             if "OnnxConversion" not in seen_pass_names:
-                errors.append(
-                    f"Pass '{name}' requires an ONNX input but no OnnxConversion precedes it in the chain."
-                )
+                # Check if source is already ONNX
+                normalized_source = source_format.lower()
+                if normalized_source == "onnx":
+                    # Source is already ONNX, no conversion needed
+                    pass
+                elif normalized_source in ("torch", "pytorch", "hf", "huggingface"):
+                    # Explicitly non-ONNX source, require conversion
+                    errors.append(
+                        f"Pass '{name}' requires an ONNX input but no OnnxConversion precedes it in the chain."
+                    )
+                else:
+                    # Unknown/unspecified source format, emit warning instead of error
+                    warnings.append(
+                        f"Pass '{name}' requires an ONNX input but no OnnxConversion precedes it. "
+                        f"If your source model is already ONNX, this is fine; otherwise add OnnxConversion."
+                    )
 
         # Graph optimizations are more effective before quantization.
         if ptype == "graph_optimization" and "quantization" in seen_types:

@@ -25,29 +25,29 @@ def _load_json(name: str) -> dict[str, Any]:
 
 def load_passes() -> list[dict[str, Any]]:
     """Load the available optimization passes from the knowledge base.
-    
+
     Returns:
-        list[dict[str, Any]]: The configured optimization passes.
+        list[dict[str, Any]]: The configured optimization passes, or an empty list when none are defined.
     """
-    return _load_json("passes.json")["passes"]
+    return _load_json("passes.json").get("passes", [])
 
 
 def load_hardware_profiles() -> list[dict[str, Any]]:
     """Load the available hardware profiles.
-    
+
     Returns:
-        list[dict[str, Any]]: The hardware profile definitions.
+        list[dict[str, Any]]: The hardware profile definitions, or an empty list when none are defined.
     """
-    return _load_json("hardware_profiles.json")["profiles"]
+    return _load_json("hardware_profiles.json").get("profiles", [])
 
 
 def load_quirks() -> dict[str, Any]:
     """Load the categorized hardware and software quirks from the knowledge base.
-    
+
     Returns:
-        dict[str, Any]: The quirk categories and their associated data.
+        dict[str, Any]: The quirk categories and their associated data, or an empty dict when none are defined.
     """
-    return _load_json("quirks.json")["categories"]
+    return _load_json("quirks.json").get("categories", {})
 
 
 def load_json(name: str) -> dict[str, Any]:

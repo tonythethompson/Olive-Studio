@@ -227,7 +227,11 @@
       },
       "hardware_requirements": [
         "CPUExecutionProvider",
-        "TensorrtExecutionProvider"
+        "TensorrtExecutionProvider",
+        "CoreMLExecutionProvider",
+        "NNAPIExecutionProvider",
+        "ROCMExecutionProvider",
+        "OpenVINOExecutionProvider"
       ],
       "typical_compression": "70-80%",
       "gotchas": [
@@ -582,9 +586,7 @@
       "output_formats": [
         "torch"
       ],
-      "required_params": [
-        "target_sparsity"
-      ],
+      "required_params": [],
       "optional_params": {
         "pruning_type": {
           "type": "str",
@@ -753,11 +755,6 @@
         "teacher_model"
       ],
       "optional_params": {
-        "teacher_model": {
-          "type": "str",
-          "default": null,
-          "description": "Path or name of teacher model."
-        },
         "criterion_type": {
           "type": "str",
           "default": "KL",
@@ -947,9 +944,7 @@
       "output_formats": [
         "onnx"
       ],
-      "required_params": [
-        "target_opset"
-      ],
+      "required_params": [],
       "optional_params": {
         "target_opset": {
           "type": "int",
@@ -1457,10 +1452,6 @@
         "compute_target"
       ],
       "optional_params": {
-        "compute_target": {
-          "type": "str",
-          "default": ""
-        },
         "conda_environment": {
           "type": "str",
           "default": ""

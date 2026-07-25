@@ -23,8 +23,7 @@
       "hardware": {
         "NVIDIA RTX 4090": {
           "OnnxQuantization": {"support": "supported", "note": "INT8 QDQ works well; TensorRT recommended.", "typical_accuracy_drop": "<1%"},
-          "NVModelOptQuantization": {"support": "supported", "note": "AWQ int4 is stable for Phi-3.", "typical_accuracy_drop": "<1.5%"},
-          "CoreML": {"support": "warning", "note": "Fix dynamic sequence length; CoreML has GQA limits.", "typical_accuracy_drop": "2-4%"}
+          "NVModelOptQuantization": {"support": "supported", "note": "AWQ int4 is stable for Phi-3.", "typical_accuracy_drop": "<1.5%"}
         }
       }
     },
@@ -34,7 +33,7 @@
       "hardware": {
         "Intel Core i9 CPU": {
           "OnnxStaticQuantization": {"support": "supported", "note": "INT8 static quantization is highly stable for CNNs.", "typical_accuracy_drop": "<0.5%"},
-          "OpenVINOExecutionProvider": {"support": "supported", "note": "OpenVINO INT8 is a strong alternative.", "typical_accuracy_drop": "<0.5%"}
+          "IncStaticQuantization": {"support": "supported", "note": "OpenVINO INT8 is a strong alternative.", "typical_accuracy_drop": "<0.5%"}
         },
         "Qualcomm Snapdragon NPU": {
           "QNNQuantization": {"support": "supported", "note": "Per-channel symmetric required; typical ImageNet drop <1%.", "typical_accuracy_drop": "<1%"}

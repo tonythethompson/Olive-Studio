@@ -15,7 +15,7 @@ def fetch_onnx_runtime_docs(execution_providers: list[str] | None = None) -> dic
     Returns:
         dict[str, Any]: A stub response containing the status, documentation source URL, implementation note, and execution provider names.
     """
-    eps = execution_providers or [
+    eps = execution_providers if execution_providers is not None else [
         "CPUExecutionProvider",
         "CUDAExecutionProvider",
         "TensorrtExecutionProvider",

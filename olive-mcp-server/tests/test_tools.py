@@ -100,7 +100,7 @@ def test_get_pass_chain_valid():
 
 
 def test_get_pass_chain_invalid_order():
-    result = get_pass_chain(["OnnxQuantization", "OnnxConversion"])
+    result = get_pass_chain(["OnnxQuantization", "OnnxConversion"], source_format="PyTorch")
     assert result["valid"] is False
     assert len(result["errors"]) > 0
 
@@ -134,8 +134,10 @@ def test_get_cli_command():
 
 def test_get_data_config_template():
     result = get_data_config_template(data_source="huggingface", task="calibration")
-    assert result["data_config"]["calibration_data"]["type"] == "HuggingFaceContainer"
-    assert "calibration_sampling_size" in result["data_config"]
+    assert len(result["data_configs"]) > 0
+    assert result["data_configs"][0]["type"] == "HuggingFaceContainer"
+    assert result["data_configs"][0]["name"] == "calibration_data"
+    assert "sampling" in result["data_configs"][0]
 
 
 def test_search_olive_documentation():
@@ -157,3 +159,9 @@ def test_evaluate_optimization_tradeoff():
     )
     assert result["predicted_outcomes"]["size"] < 100
     assert result["predicted_outcomes"]["latency"] < 1.0
+
+
+def test_get_pass_chain_onnx_source_no_conversion_required():
+    result = get_pass_chain(["OnnxQuantization"], source_format="onnx")
+    assert result["valid"] is True
+    assert len(result["errors"]) == 0

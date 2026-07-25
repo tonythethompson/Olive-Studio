@@ -40,7 +40,12 @@ def get_cli_command(
         "onnx-graph-capture": "olive onnx-graph-capture",
         "generate-adapter": "olive generate-adapter",
     }
-    base = accepted.get(goal, "olive optimize")
+    if goal not in accepted:
+        raise ValueError(
+            f"Unrecognized optimization_goal '{goal}'. "
+            f"Must be one of: {', '.join(accepted.keys())}"
+        )
+    base = accepted[goal]
 
     flags = [
         f'--config "{config_path}"',
@@ -48,7 +53,7 @@ def get_cli_command(
         f'--output-dir "{output_dir}"',
         f'--accelerator {target}',
     ]
-    if batch_size:
+    if batch_size is not None:
         flags.append(f"--batch-size {batch_size}")
 
     command = f"{base} " + " ".join(flags)

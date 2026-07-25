@@ -62,29 +62,27 @@ def get_data_config_template(
 
     sampling_size = 100 if task == "calibration" else 1000
 
-    config = {
-        f"{task}_data": {
-            "type": container_type,
-            "load_dataset_config": load_cfg,
-            "pre_process_data_config": pre_process,
-            "dataloader_config": {
-                "batch_size": 1,
-                "drop_last": False,
-                "num_workers": 0,
-            },
-            "post_process_data_config": {
-                "output_cols": ["output"],
-            },
-        }
+    # Build a proper Olive data_configs entry
+    data_config_entry = {
+        "name": f"{task}_data",
+        "type": container_type,
+        "load_dataset_config": load_cfg,
+        "pre_process_data_config": pre_process,
+        "dataloader_config": {
+            "batch_size": 1,
+            "drop_last": False,
+            "num_workers": 0,
+        },
+        "post_process_data_config": {
+            "output_cols": ["output"],
+        },
     }
 
     if task == "calibration":
-        config["calibration_sampling_size"] = sampling_size
+        data_config_entry["sampling"] = sampling_size
 
     return {
-        "task": task,
-        "data_source": source,
-        "data_config": config,
+        "data_configs": [data_config_entry],
         "notes": [
             "Calibration data must match the inference distribution.",
             "For static quantization, 100-300 samples are usually sufficient.",

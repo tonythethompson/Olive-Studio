@@ -24,20 +24,23 @@ _TARGET_DEFAULTS = {
 }
 
 
-def _apply_target_defaults(pass_name: str, params: dict[str, Any], target: str) -> dict[str, Any]:
-    """
-    Merge optimization-target defaults with the provided pass parameters.
-    
-    Parameters:
-        params (dict[str, Any]): Parameter values that override the target defaults.
-        target (str): Optimization target used to select defaults. Unknown targets use the balanced defaults.
-    
+def _apply_target_defaults(params: dict[str, Any], target: str) -> dict[str, Any]:
+    """Merge optimization-target defaults with the provided pass parameters.
+
+    Target-specific values take precedence over pass defaults.
+
+    Args:
+        params: Pass parameter defaults.
+        target: Optimization target used to select defaults. Unknown targets use the balanced defaults.
+
     Returns:
-        dict[str, Any]: A merged parameter dictionary.
+        dict[str, Any]: Merged parameters, with target-specific defaults taking precedence over pass params.
     """
-    defaults = _TARGET_DEFAULTS.get(target, _TARGET_DEFAULTS["balanced"]).copy()
-    merged = defaults.copy()
-    merged.update(params)
+    target_defaults = _TARGET_DEFAULTS.get(target, _TARGET_DEFAULTS["balanced"]).copy()
+
+    # Merge pass params first, then override with target defaults
+    merged = params.copy()
+    merged.update(target_defaults)
     return merged
 
 
@@ -79,7 +82,9 @@ def get_pass_config_template(
     }
     # Keep only non-null defaults.
     defaults = {k: v for k, v in defaults.items() if v is not None}
-    params = _apply_target_defaults(pass_name, defaults, target)
+
+    # Apply target-specific defaults (target values take precedence)
+    params = _apply_target_defaults(defaults, target)
 
     # Framework-specific input model type.
     framework_map = {
