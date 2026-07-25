@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, Suspense, lazy, type MouseEvent as ReactMo
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
 import { useMcpDiagnostic } from "@/lib/hooks";
+import { mapMcpConfigToUiState } from "@/lib/mcpConfigMapping";
 import {
   Code,
   Play,
@@ -103,39 +104,17 @@ export function ExecutionWorkspace({
 
   const handleApplyMcpFix = () => {
     if (!mcpDiagnostic?.updated_config) return;
-    const config = mcpDiagnostic.updated_config;
-    const patches: Partial<UIState> = {};
+    const { patches, logs } = mapMcpConfigToUiState(mcpDiagnostic.updated_config, state.passes);
 
-    // Map known MCP config keys to UIState fields
-    if ("use_external_data_format" in config) {
-      // OnnxConversion param — no direct UIState equivalent, but we can log it
-      setExecutionLogs((prev) => [
-        ...prev,
-        `[MCP FIX] Applied: use_external_data_format = ${config.use_external_data_format}`,
-      ]);
+    if (logs.length > 0) {
+      setExecutionLogs((prev) => [...prev, ...logs]);
     }
-    if ("precision" in config && typeof config.precision === "string") {
-      const precision = config.precision;
-      if (precision === "int4" || precision === "int8" || precision === "fp16") {
-        patches.passes = { ...state.passes, quantPrecision: precision };
-      }
-    }
-    if ("quant_mode" in config && typeof config.quant_mode === "string") {
-      if (config.quant_mode === "static") {
-        patches.passes = { ...(patches.passes ?? state.passes), quantMethod: "ptq" };
-      }
-    }
-    if ("sym" in config && typeof config.sym === "boolean") {
-      patches.passes = { ...(patches.passes ?? state.passes), awqSym: config.sym };
-    }
-
-    // Apply any mapped patches
     if (Object.keys(patches).length > 0) {
       setState(patches);
     }
 
     // Log all applied config for transparency
-    const configSummary = Object.entries(config)
+    const configSummary = Object.entries(mcpDiagnostic.updated_config)
       .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
       .join(", ");
     setExecutionLogs((prev) => [...prev, `[MCP FIX] Applied diagnostic config: ${configSummary}`]);

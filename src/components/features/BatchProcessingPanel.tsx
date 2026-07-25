@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, Button, Label, Input, Select } from "@/components/ui";
 import { UIState, BatchJob, IHVProvider, ModelSource, type McpDiagnostic } from "@/types";
 import { useMcpDiagnostic } from "@/lib/hooks";
+import { mapMcpConfigToUiState } from "@/lib/mcpConfigMapping";
 import { buildRecipeJsonFromState, buildOliveRecipeFromBatchJob } from "@/lib/recipePipeline";
 import { parseOliveMetricsFromLogs } from "@/lib/oliveLogMetrics";
 import { commitUiStateUpdate, getPipelineValidation } from "@/lib/pipelineValidation";
@@ -825,29 +826,8 @@ export function BatchProcessingPanel({
                             <button
                               type="button"
                               onClick={() => {
-                                // Apply the fix to the global UIState for the next run
                                 const config = batchDiagnostics[selectedJob.id].updated_config!;
-                                const patches: Partial<UIState> = {};
-                                if ("precision" in config && typeof config.precision === "string") {
-                                  const precision = config.precision;
-                                  if (precision === "int4" || precision === "int8" || precision === "fp16") {
-                                    patches.passes = { ...state.passes, quantPrecision: precision };
-                                  }
-                                }
-                                if ("quant_mode" in config && typeof config.quant_mode === "string") {
-                                  if (config.quant_mode === "static") {
-                                    patches.passes = {
-                                      ...(patches.passes ?? state.passes),
-                                      quantMethod: "ptq",
-                                    };
-                                  }
-                                }
-                                if ("sym" in config && typeof config.sym === "boolean") {
-                                  patches.passes = {
-                                    ...(patches.passes ?? state.passes),
-                                    awqSym: config.sym,
-                                  };
-                                }
+                                const { patches } = mapMcpConfigToUiState(config, state.passes);
                                 if (Object.keys(patches).length > 0) {
                                   setState(patches);
                                 }
