@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { getPipelineValidation, applyIssueAutofix, type PipelineIssue } from "@/lib/pipelineValidation";
 import { buildPipelineSteps } from "./graphLayout";
 import { UIState } from "@/types";
@@ -20,6 +20,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const [mcpResult, setMcpResult] = useState<McpValidationResult | null>(null);
   const [mcpLoading, setMcpLoading] = useState(false);
   const [mcpError, setMcpError] = useState<string | null>(null);
+  const [mcpValidated, setMcpValidated] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const [showMcpDetails, setShowMcpDetails] = useState(false);
 
@@ -29,43 +30,61 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     .filter((s) => s.active && s.id !== "input" && s.id !== "output" && s.id !== "provider")
     .map((s) => s.id);
 
-  // Call MCP server for deeper validation
-  const validateWithMcp = useCallback(async () => {
-    if (activePassNames.length === 0) {
-      setMcpResult(null);
-      return;
-    }
+  // Call MCP server for deeper validation with request cancellation
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
 
-    setMcpLoading(true);
-    setMcpError(null);
-
-    try {
-      const res = await fetch("/api/validate-recipe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ passNames: activePassNames }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${res.status}`);
+    const timer = setTimeout(async () => {
+      if (activePassNames.length === 0) {
+        if (!cancelled) {
+          setMcpResult(null);
+          setMcpError(null);
+          setMcpLoading(false);
+          setMcpValidated(true);
+        }
+        return;
       }
 
-      const result = await res.json();
-      setMcpResult(result);
-    } catch (err) {
-      setMcpError(err instanceof Error ? err.message : "MCP validation failed");
-      setMcpResult(null);
-    } finally {
-      setMcpLoading(false);
-    }
-  }, [activePassNames]);
+      setMcpLoading(true);
+      setMcpError(null);
 
-  // Auto-validate when passes change
-  useEffect(() => {
-    const timer = setTimeout(validateWithMcp, 500);
-    return () => clearTimeout(timer);
-  }, [validateWithMcp]);
+      try {
+        const res = await fetch("/api/validate-recipe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ passNames: activePassNames }),
+          signal: controller.signal,
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `HTTP ${res.status}`);
+        }
+
+        const result = await res.json();
+        if (!cancelled) {
+          setMcpResult(result);
+          setMcpValidated(true);
+        }
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        if (!cancelled) {
+          setMcpError(err instanceof Error ? err.message : "MCP validation failed");
+          setMcpResult(null);
+          setMcpValidated(true);
+        }
+      } finally {
+        if (!cancelled) setMcpLoading(false);
+      }
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [activePassNames]);
 
   const handleApplyAutofix = (issue: PipelineIssue) => {
     const patch = applyIssueAutofix(state, issue);
@@ -74,15 +93,15 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
 
   const allIssues = [
     ...validation.issues,
-    ...(mcpResult?.errors.map((e) => ({
-      id: `mcp-error-${e}`,
+    ...(mcpResult?.errors.map((e, i) => ({
+      id: `mcp-error-${i}-${e}`,
       severity: "critical" as const,
       title: e,
       description: "Detected by MCP pass chain validator",
       source: "mcp" as const,
     })) ?? []),
-    ...(mcpResult?.warnings.map((w) => ({
-      id: `mcp-warning-${w}`,
+    ...(mcpResult?.warnings.map((w, i) => ({
+      id: `mcp-warning-${i}-${w}`,
       severity: "warning" as const,
       title: w,
       description: "Detected by MCP pass chain validator",
@@ -93,7 +112,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const criticalCount = allIssues.filter((i) => i.severity === "critical").length;
   const warningCount = allIssues.filter((i) => i.severity === "warning").length;
 
-  if (allIssues.length === 0 && !mcpLoading && !mcpError) {
+  if (allIssues.length === 0 && !mcpLoading && !mcpError && mcpValidated) {
     return (
       <div className="rounded-lg border border-emerald-800/50 bg-emerald-950/20 p-3">
         <div className="flex items-center gap-2 text-emerald-400">
