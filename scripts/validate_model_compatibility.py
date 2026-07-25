@@ -29,32 +29,12 @@ def main() -> None:
     framework = sys.argv[2]
     hardware_target = sys.argv[3] if len(sys.argv) > 3 else ""
 
-    result = get_model_compatibility(model_name=model_name, framework=framework)
-    
-    # If hardware_target is provided, filter the response to show only that hardware's compatibility
-    if hardware_target and "hardware_profiles" in result:
-        hardware_profiles = result["hardware_profiles"]
-        if hardware_target in hardware_profiles:
-            # Extract compatibility info for the specified hardware
-            hw_compat = hardware_profiles[hardware_target]
-            result["selected_hardware"] = hardware_target
-            result["hardware_compatibility"] = hw_compat
-            
-            # Generate warnings for passes that aren't supported
-            warnings = []
-            for pass_name, pass_info in hw_compat.items():
-                if pass_info.get("support") == "warning":
-                    warnings.append({
-                        "pass_name": pass_name,
-                        "note": pass_info.get("note", ""),
-                        "typical_accuracy_drop": pass_info.get("typical_accuracy_drop", "")
-                    })
-            result["compatibility_warnings"] = warnings
-        else:
-            result["selected_hardware"] = hardware_target
-            result["compatibility_warnings"] = []
-            result["hardware_note"] = f"No compatibility data for {hardware_target}"
-    
+    result = get_model_compatibility(
+        model_name=model_name,
+        framework=framework,
+        hardware_target=hardware_target,
+    )
+
     print(json.dumps(result))
 
 

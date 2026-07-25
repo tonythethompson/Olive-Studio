@@ -122,6 +122,17 @@ def test_get_model_compatibility_known():
     assert "hardware_profiles" in result
 
 
+def test_get_model_compatibility_filtered_by_hardware():
+    result = get_model_compatibility(
+        model_name="Mistral 7B",
+        framework="PyTorch",
+        hardware_target="NVIDIA RTX 4090",
+    )
+    assert result["selected_hardware"] == "NVIDIA RTX 4090"
+    assert "hardware_compatibility" in result
+    assert isinstance(result["compatibility_warnings"], list)
+
+
 def test_get_cli_command():
     result = get_cli_command(
         optimization_goal="quantize",
