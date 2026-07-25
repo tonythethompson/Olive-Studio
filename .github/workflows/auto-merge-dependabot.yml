@@ -32,6 +32,12 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Ensure approved label exists
+        if: steps.metadata.outputs.update-type != 'version-update:semver-patch'
+        run: gh label create approved --color 0E8A16 --description "Dependabot-approved, awaiting human merge" 2>/dev/null || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Label non-patch PRs as approved — needs human merge
         if: steps.metadata.outputs.update-type != 'version-update:semver-patch'
         run: gh pr edit "$PR_URL" --add-label "approved"
