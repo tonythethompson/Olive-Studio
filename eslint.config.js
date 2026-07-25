@@ -4,7 +4,7 @@ import reactHooksPlugin from "eslint-plugin-react-hooks";
 
 /** @type {import("eslint").Linter.Config[]} */
 export default [
-  { ignores: ["node_modules/", "dist/", "build/", "coverage/", ".firecrawl/", "*.config.*", "src/data/olive-recipes-catalog.ts"] },
+  { ignores: ["node_modules/", "dist/", "build/", "storybook-static/", "coverage/", ".firecrawl/", "*.config.*", "src/data/olive-recipes-catalog.ts"] },
   {
     files: ["src/**/*.{ts,tsx}", "server.ts"],
     languageOptions: {
