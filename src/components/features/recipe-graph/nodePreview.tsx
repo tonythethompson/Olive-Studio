@@ -97,7 +97,9 @@ export function getNodePreviewData(state: UIState, nodeId: string): NodePreviewD
         colorTheme: state.passes.pruning
           ? "border-amber-500/30 text-amber-500 bg-amber-500/5"
           : "border-slate-800 text-slate-500",
-        badge: state.passes.pruning ? "Active" : "Skipped",
+        badge: state.passes.pruning
+          ? `Active${state.passes.pruningMethod === "magnitude" ? ` · ${state.passes.pruningCriteria === "l2_norm" ? "L2" : "L1"}` : ""}`
+          : "Skipped",
       };
     case "transformer_opt":
       return {
