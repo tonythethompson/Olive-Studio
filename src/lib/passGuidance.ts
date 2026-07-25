@@ -72,6 +72,36 @@ const GUIDANCE: Record<string, PassGuidance> = {
       "Structured sparsity on CPUs or non-NVIDIA GPUs — use unstructured or skip.",
     ],
   },
+  pruning_l1_norm: {
+    title: "Pruning criteria: L1 norm",
+    summary: "Ranks weights by absolute value sum — produces sparser, blockier distributions.",
+    whatItDoes:
+      "Measures weight importance using the L1 norm (sum of absolute values). Weights with smaller absolute magnitudes are pruned first, leading to aggressive sparsity with sharper transitions between kept and zeroed weights.",
+    whenToUse: [
+      "When you want aggressively zeroed weights and can tolerate some accuracy loss.",
+      "Edge deployments where sparse storage format efficiency matters.",
+      "Models where you want a clean separation between important and unimportant weights.",
+    ],
+    whenNotToUse: [
+      "When accuracy preservation is critical — L2 norm is gentler.",
+      "Models with smooth weight distributions where L1's sharp cutoff causes more accuracy regression.",
+    ],
+  },
+  pruning_l2_norm: {
+    title: "Pruning criteria: L2 norm",
+    summary: "Ranks weights by squared magnitude — preserves relative magnitudes more evenly.",
+    whatItDoes:
+      "Measures weight importance using the L2 norm (sum of squared values). Penalizes larger weights more heavily, resulting in a smoother pruning profile that preserves the relative importance of kept weights.",
+    whenToUse: [
+      "When you need gentler pruning with smoother accuracy degradation.",
+      "Models where maintaining relative weight magnitudes matters for output quality.",
+      "When you want less aggressive pruning that preserves more model behavior.",
+    ],
+    whenNotToUse: [
+      "When maximum sparsity is the priority over accuracy retention.",
+      "For very aggressive pruning targets (>80%) where L1 norm may be more effective.",
+    ],
+  },
   transformer_opt: {
     title: "ONNX Runtime transforms",
     summary: "Fuses operators for faster inference on ORT backends.",
@@ -262,6 +292,16 @@ export function getPassGuidanceForNode(nodeId: string, state: UIState): PassGuid
       base.whenNotToUse = ["NVIDIA CUDA, TensorRT, AMD ROCm, or Qualcomm QNN — use ONNX."];
     }
     return base;
+  }
+
+  if (nodeId === "pruning" && state.passes.pruning) {
+    const method = state.passes.pruningMethod;
+    if (method === "magnitude") {
+      const criteria = state.passes.pruningCriteria;
+      if (criteria === "l2_norm" && GUIDANCE.pruning_l2_norm) return GUIDANCE.pruning_l2_norm;
+      if (criteria === "l1_norm" && GUIDANCE.pruning_l1_norm) return GUIDANCE.pruning_l1_norm;
+    }
+    return GUIDANCE.pruning;
   }
 
   return GUIDANCE[nodeId] ?? null;

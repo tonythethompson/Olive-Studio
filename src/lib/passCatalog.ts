@@ -263,7 +263,8 @@ export const PASS_CATALOG: PassCatalogEntry[] = [
   {
     name: "Prune",
     category: "pruning",
-    description: "Magnitude-based weight pruning pass.",
+    description:
+      "Magnitude-based weight pruning pass — supports L1 norm (sparser, blockier distributions) and L2 norm (smoother magnitude preservation) criteria for weight ranking.",
     inputs: ["handler.pytorch.PyTorchModelHandler"],
     outputs: ["handler.pytorch.PyTorchModelHandler"],
   },
