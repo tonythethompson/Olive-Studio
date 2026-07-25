@@ -85,6 +85,11 @@ def get_pass_config_template(
     # Apply target-specific defaults (target values take precedence)
     params = _apply_target_defaults(defaults, target)
 
+    # Fill in placeholders for any required params not already covered.
+    for req in meta.get("required_params", []):
+        if req not in params:
+            params[req] = f"<REQUIRED: set {req}>"
+
     # Framework-specific input model type.
     framework_map = {
         "torch": "PyTorchModel",
@@ -126,11 +131,6 @@ def get_pass_config_template(
             "output_dir": "./models/optimized",
         },
     }
-
-    # Adjust required_params.
-    for req in meta.get("required_params", []):
-        if req not in params:
-            params[req] = f"<REQUIRED: set {req}>"
 
     return {
         "pass_name": pass_name,

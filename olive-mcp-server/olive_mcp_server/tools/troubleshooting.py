@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from . import load_json, load_quirks
+from . import load_quirks, load_troubleshooting
 
 
 def _score(entry: dict[str, Any], error_message: str, pass_name: str, config_context: str) -> int:
@@ -25,8 +25,7 @@ def troubleshoot_olive_error(
     Returns:
         Root cause, workaround, and updated config snippet.
     """
-    data = load_json("troubleshooting.json")
-    entries = data.get("entries", [])
+    entries = load_troubleshooting()
 
     scored = [(entry, _score(entry, error_message, pass_name, config_context)) for entry in entries]
     scored.sort(key=lambda x: x[1], reverse=True)
@@ -49,5 +48,5 @@ def troubleshoot_olive_error(
         "root_cause": best.get("root_cause", ""),
         "workaround": best.get("solution", ""),
         "updated_config": best.get("updated_config", {}),
-        "relevant_quirks": [q["title"] for q in load_quirks().get("calibration", [])[:2]],
+        "relevant_quirks": [q["title"] for q in load_quirks().get("quantization", [])[:2]],
     }
