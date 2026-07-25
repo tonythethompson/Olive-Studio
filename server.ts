@@ -1991,52 +1991,6 @@ app.post("/api/ai/chat", async (req, res) => {
   }
 });
 
-// ─── POST /api/validate-recipe (MCP pass-chain validation) ─────────────────────
-app.post("/api/validate-recipe", async (req, res) => {
-  const { passNames, sourceFormat = "" } = req.body as {
-    passNames?: string[];
-    sourceFormat?: string;
-  };
-
-  if (!Array.isArray(passNames) || passNames.length === 0) {
-    return res.status(400).json({ error: "Missing or empty passNames array." });
-  }
-
-  try {
-    const scriptPath = path.join(process.cwd(), "scripts", "validate_pass_chain.py");
-    const python = getVenvPython();
-    const exists = fs.existsSync(python);
-    const systemPython = exists ? python : "python";
-
-    const passNamesJson = JSON.stringify(passNames);
-    const { stdout, stderr } = await execFileAsync(systemPython, [scriptPath, passNamesJson, sourceFormat]);
-
-    const output = stdout.trim();
-    if (!output) {
-      return res.status(500).json({
-        error: "MCP validation returned empty output.",
-        stderr: stderr.trim() || undefined,
-      });
-    }
-
-    try {
-      const result = JSON.parse(output);
-      return res.json(result);
-    } catch {
-      return res.status(500).json({
-        error: "MCP validation returned invalid JSON.",
-        raw: output.slice(0, 500),
-      });
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
-  } catch (err: any) {
-    console.error("MCP validation error:", err);
-    return res.status(500).json({
-      error: err?.message || "MCP validation failed.",
-    });
-  }
-});
-
 // ─── POST /api/validate-compatibility (MCP model-hardware compatibility) ────────
 app.post("/api/validate-compatibility", async (req, res) => {
   const {

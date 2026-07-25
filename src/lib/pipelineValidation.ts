@@ -1,6 +1,8 @@
-import { IHVProvider, UIState } from "@/types";
+import { IHVProvider, UIState, OliveRecipe } from "@/types";
 import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
 import { getProviderAvailabilityBlock, type HardwareProbeResult } from "@/lib/hardwareProbe";
+import { buildOliveRecipe } from "@/lib/oliveRecipeBuilder";
+import passCatalog from "../../olive-mcp-server/olive_mcp_server/knowledge_base/passes.json";
 
 export type PipelineValidationOptions = {
   hardwareProbe?: HardwareProbeResult | null;
@@ -49,6 +51,11 @@ const TENSOR_CORE_PROVIDERS: IHVProvider[] = [
   "NvTensorRTRTXExecutionProvider",
   "TensorrtExecutionProvider",
 ];
+
+/** Set of known Olive pass names from the MCP knowledge-base pass catalog. */
+const KNOWN_OLIVE_PASSES = new Set<string>(
+  (passCatalog as { passes?: Array<{ name: string }> }).passes?.map((p) => p.name) ?? [],
+);
 
 export function isQuantMethodAllowed(
   method: UIState["passes"]["quantMethod"],
@@ -479,6 +486,27 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
   return issues;
 }
 
+function getPassCatalogIssues(state: UIState): PipelineIssue[] {
+  const issues: PipelineIssue[] = [];
+  const recipe = buildOliveRecipe(state) as unknown as OliveRecipe;
+
+  for (const [stepId, passConfig] of Object.entries(recipe.passes ?? {})) {
+    const passType = (passConfig as { type?: string }).type;
+    if (!passType || KNOWN_OLIVE_PASSES.has(passType)) continue;
+
+    issues.push({
+      id: `unknown-pass-type-${stepId}`,
+      severity: "critical",
+      title: `Unknown Olive pass type: ${passType}`,
+      description: `The generated pass type ${passType} for step ${stepId} is not in the Olive MCP pass catalog. This recipe may fail at runtime.`,
+      affectedTabs: [stepId],
+      affectedPasses: [stepId],
+    });
+  }
+
+  return issues;
+}
+
 function dedupeIssues(issues: PipelineIssue[]): PipelineIssue[] {
   const byId = new Map<string, PipelineIssue>();
   for (const issue of issues) {
@@ -499,6 +527,7 @@ export function getPipelineValidation(
     ...getProviderIssues(state),
     ...getProviderHardwareIssues(state, options?.hardwareProbe),
     ...getAdvisoryIssues(state),
+    ...getPassCatalogIssues(state),
   ]);
 
   const criticalCount = issues.filter((i) => i.severity === "critical").length;
