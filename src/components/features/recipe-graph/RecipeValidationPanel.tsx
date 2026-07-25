@@ -11,6 +11,30 @@ interface McpValidationResult {
   chain: Array<{ name: string; type: string; known: boolean }>;
 }
 
+interface CompatibilityWarning {
+  pass_name: string;
+  note: string;
+  typical_accuracy_drop: string;
+}
+
+interface PassCompat {
+  support: string;
+  note: string;
+  typical_accuracy_drop: string;
+}
+
+interface CompatibilityResult {
+  model?: string;
+  framework?: string;
+  framework_supported?: boolean;
+  hardware_profiles?: Record<string, Record<string, PassCompat>>;
+  selected_hardware?: string;
+  hardware_compatibility?: Record<string, PassCompat>;
+  compatibility_warnings?: CompatibilityWarning[];
+  note?: string;
+  hardware_note?: string;
+}
+
 interface RecipeValidationPanelProps {
   state: UIState;
   setState: (s: Partial<UIState>) => void;
@@ -21,8 +45,13 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const [mcpLoading, setMcpLoading] = useState(false);
   const [mcpError, setMcpError] = useState<string | null>(null);
   const [mcpValidated, setMcpValidated] = useState(false);
+  const [compatResult, setCompatResult] = useState<CompatibilityResult | null>(null);
+  const [compatLoading, setCompatLoading] = useState(false);
+  const [compatError, setCompatError] = useState<string | null>(null);
+  const [compatValidated, setCompatValidated] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const [showMcpDetails, setShowMcpDetails] = useState(false);
+  const [showCompatDetails, setShowCompatDetails] = useState(false);
 
   const validation = getPipelineValidation(state);
   const pipelineSteps = buildPipelineSteps(state.passes);
@@ -86,10 +115,93 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     };
   }, [activePassNames]);
 
+  // Call MCP server for model-hardware compatibility check
+   
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
+    // Determine model name and framework from UIState
+    const modelName = state.hfModelId || (state.localFiles.length > 0 ? state.localFiles[0].name : "");
+    const framework = state.passes.conversionSourceFormat === "pytorch" ? "PyTorch" : "ONNX";
+    const hardwareTarget =
+      state.ihvProvider === "CUDAExecutionProvider"
+        ? "NVIDIA RTX 4090"
+        : state.ihvProvider === "TensorrtExecutionProvider"
+          ? "NVIDIA RTX 4090"
+          : state.ihvProvider === "NvTensorRTRTXExecutionProvider"
+            ? "NVIDIA RTX 4090"
+            : state.ihvProvider === "OpenVINOExecutionProvider"
+              ? "Intel Core i9 CPU"
+              : state.ihvProvider === "QNNExecutionProvider"
+                ? "Qualcomm Snapdragon NPU"
+                : "";
+
+    if (!modelName) {
+      if (!cancelled) {
+        setCompatResult(null);
+        setCompatError(null);
+        setCompatLoading(false);
+        setCompatValidated(true);
+      }
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setCompatLoading(true);
+      setCompatError(null);
+
+      try {
+        const res = await fetch("/api/validate-compatibility", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ modelName, framework, hardwareTarget }),
+          signal: controller.signal,
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `HTTP ${res.status}`);
+        }
+
+        const result = await res.json();
+        if (!cancelled) {
+          setCompatResult(result);
+          setCompatValidated(true);
+        }
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        if (!cancelled) {
+          setCompatError(err instanceof Error ? err.message : "Compatibility check failed");
+          setCompatResult(null);
+          setCompatValidated(true);
+        }
+      } finally {
+        if (!cancelled) setCompatLoading(false);
+      }
+    }, 600);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [state.hfModelId, state.localFiles, state.passes.conversionSourceFormat, state.ihvProvider]);
+
   const handleApplyAutofix = (issue: PipelineIssue) => {
     const patch = applyIssueAutofix(state, issue);
     setState(patch);
   };
+
+  // Build compatibility warnings for active passes
+  const compatWarnings = compatResult?.compatibility_warnings ?? [];
+  const activePassWarnings = compatWarnings.filter((w) =>
+    activePassNames.some(
+      (n) =>
+        n.toLowerCase().includes(w.pass_name.toLowerCase()) ||
+        w.pass_name.toLowerCase().includes(n.toLowerCase()),
+    ),
+  );
 
   const allIssues = [
     ...validation.issues,
@@ -107,12 +219,36 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
       description: "Detected by MCP pass chain validator",
       source: "mcp" as const,
     })) ?? []),
+    ...activePassWarnings.map((w, i) => ({
+      id: `compat-${i}-${w.pass_name}`,
+      severity: "warning" as const,
+      title: `${w.pass_name}: ${w.note}`,
+      description: w.typical_accuracy_drop
+        ? `Expected accuracy impact: ${w.typical_accuracy_drop}`
+        : "Check compatibility matrix",
+      source: "compatibility" as const,
+    })),
+    // Framework not supported warning
+    ...(compatResult && compatResult.framework_supported === false
+      ? [
+          {
+            id: "compat-framework-unsupported",
+            severity: "warning" as const,
+            title: `Framework '${compatResult.framework}' may not be fully supported for this model`,
+            description: "Consider converting to ONNX first",
+            source: "compatibility" as const,
+          },
+        ]
+      : []),
   ];
 
   const criticalCount = allIssues.filter((i) => i.severity === "critical").length;
   const warningCount = allIssues.filter((i) => i.severity === "warning").length;
 
-  if (allIssues.length === 0 && !mcpLoading && !mcpError && mcpValidated) {
+  const isLoading = mcpLoading || compatLoading;
+  const hasError = mcpError || compatError;
+
+  if (allIssues.length === 0 && !isLoading && !hasError && mcpValidated && compatValidated) {
     return (
       <div className="rounded-lg border border-emerald-800/50 bg-emerald-950/20 p-3">
         <div className="flex items-center gap-2 text-emerald-400">
@@ -146,7 +282,9 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
                 ? `${warningCount} warning${warningCount !== 1 ? "s" : ""}`
                 : "All checks passed"}
           </span>
-          {mcpLoading && <span className="text-[10px] text-slate-500 animate-pulse">MCP checking...</span>}
+          {(mcpLoading || compatLoading) && (
+            <span className="text-[10px] text-slate-500 animate-pulse">MCP checking...</span>
+          )}
         </div>
         {expanded ? (
           <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
@@ -227,9 +365,63 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
             </div>
           )}
 
-          {/* MCP error */}
-          {mcpError && (
-            <div className="px-3 py-2 text-[10px] text-slate-500">MCP validation unavailable: {mcpError}</div>
+          {/* Compatibility details toggle */}
+          {compatResult && (
+            <div className="px-3 py-2">
+              <button
+                type="button"
+                onClick={() => setShowCompatDetails(!showCompatDetails)}
+                className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-400 transition-colors"
+              >
+                {showCompatDetails ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+                Model compatibility ({compatResult.model ?? "unknown"} / {compatResult.framework})
+              </button>
+              {showCompatDetails && (
+                <div className="mt-2 space-y-1">
+                  {compatResult.selected_hardware && (
+                    <div className="text-[10px]">
+                      <span className="text-slate-500">Hardware: </span>
+                      <span className="text-slate-300">{compatResult.selected_hardware}</span>
+                    </div>
+                  )}
+                  {compatResult.hardware_compatibility &&
+                    Object.entries(compatResult.hardware_compatibility).map(
+                      ([passName, info]: [string, PassCompat]) => (
+                        <div key={passName} className="flex items-start gap-2 text-[10px]">
+                          <span
+                            className={info.support === "supported" ? "text-emerald-400" : "text-amber-400"}
+                          >
+                            {info.support === "supported" ? "✓" : "⚠"}
+                          </span>
+                          <div className="flex-1">
+                            <span className="text-slate-300 font-medium">{passName}</span>
+                            <span className="text-slate-500 ml-1">({info.support})</span>
+                            {info.note && <p className="text-slate-400 mt-0.5">{info.note}</p>}
+                            {info.typical_accuracy_drop && info.typical_accuracy_drop !== "n/a" && (
+                              <p className="text-slate-500">Accuracy: {info.typical_accuracy_drop}</p>
+                            )}
+                          </div>
+                        </div>
+                      ),
+                    )}
+                  {compatResult.note && (
+                    <div className="text-[10px] text-slate-400 mt-1">{compatResult.note}</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* MCP errors */}
+          {(mcpError || compatError) && (
+            <div className="px-3 py-2 text-[10px] text-slate-500">
+              {mcpError && <div>MCP validation: {mcpError}</div>}
+              {compatError && <div>Compatibility check: {compatError}</div>}
+            </div>
           )}
         </div>
       )}

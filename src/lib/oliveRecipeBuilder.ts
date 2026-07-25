@@ -109,6 +109,10 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
           source_format: state.passes.conversionSourceFormat,
         },
       };
+    } else if (state.passes.conversionFormat === "qnn") {
+      passes.conversion = { type: "QNNConversion", config: {} };
+    } else if (state.passes.conversionFormat === "tensorrt") {
+      passes.conversion = { type: "TensorRTConversion", config: {} };
     } else {
       passes.conversion = { type: "OpenVINOConversion", config: {} };
     }
@@ -200,11 +204,7 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
         config: rtnConfig,
       };
     } else if (state.passes.quantMethod === "spinquant") {
-      // Docs: https://microsoft.github.io/Olive/0.12.1/features/quantization.html -> SpinQuant
-      // Only supports HuggingFace transformer PyTorch models.
-      const spinConfig: Record<string, unknown> = {
-        rotate_mode: "hadamard",
-      };
+      const spinConfig: Record<string, unknown> = { rotate_mode: "hadamard" };
       if (state.hfDataset) {
         spinConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
       }
@@ -216,11 +216,7 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
         config: spinConfig,
       };
     } else if (state.passes.quantMethod === "quarot") {
-      // Docs: https://microsoft.github.io/Olive/0.12.1/features/quantization.html -> QuaRot
-      // Only supports HuggingFace transformer PyTorch models.
-      const quarotConfig: Record<string, unknown> = {
-        rotate_mode: "hadamard",
-      };
+      const quarotConfig: Record<string, unknown> = { rotate_mode: "hadamard" };
       if (state.hfDataset) {
         quarotConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
       }
@@ -231,7 +227,10 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
         type: "QuaRot",
         config: quarotConfig,
       };
-    } else if (state.passes.conversionFormat === "openvino") {
+    } else if (
+      state.passes.conversionFormat === "openvino" ||
+      state.ihvProvider === "OpenVINOExecutionProvider"
+    ) {
       const ovQuantConfig: Record<string, unknown> = {};
       if (state.hfDataset) {
         ovQuantConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
@@ -242,6 +241,33 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
       passes.quantization = {
         type: state.passes.quantPrecision === "int4" ? "OpenVINOWeightCompression" : "OpenVINOQuantization",
         config: ovQuantConfig,
+      };
+    } else if (state.passes.conversionFormat === "qnn" || state.ihvProvider === "QNNExecutionProvider") {
+      const qnnQuantConfig: Record<string, unknown> = {};
+      if (state.hfDataset) {
+        qnnQuantConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
+      }
+      if (state.userScript) {
+        qnnQuantConfig.user_script = state.userScript;
+      }
+      passes.quantization = {
+        type: "QNNQuantization",
+        config: qnnQuantConfig,
+      };
+    } else if (
+      state.passes.conversionFormat === "tensorrt" ||
+      state.ihvProvider === "TensorrtExecutionProvider"
+    ) {
+      const trtQuantConfig: Record<string, unknown> = {};
+      if (state.hfDataset) {
+        trtQuantConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
+      }
+      if (state.userScript) {
+        trtQuantConfig.user_script = state.userScript;
+      }
+      passes.quantization = {
+        type: state.passes.quantPrecision === "int4" ? "Nvfp4Quantizer" : "OnnxQuantization",
+        config: trtQuantConfig,
       };
     } else {
       const quantConfig: Record<string, unknown> = {
@@ -263,10 +289,23 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   }
 
   if (state.passes.onnxTransforms) {
-    if (state.passes.conversionFormat === "openvino") {
+    if (state.passes.conversionFormat === "openvino" || state.ihvProvider === "OpenVINOExecutionProvider") {
       passes.transformer_opt = {
         type: "OpenVINOIoUpdate",
         config: {},
+      };
+    } else if (state.passes.conversionFormat === "qnn" || state.ihvProvider === "QNNExecutionProvider") {
+      passes.transformer_opt = {
+        type: "QNNPreprocess",
+        config: {},
+      };
+    } else if (
+      state.passes.conversionFormat === "tensorrt" ||
+      state.ihvProvider === "TensorrtExecutionProvider"
+    ) {
+      passes.transformer_opt = {
+        type: "NVModelOptGraphSurgery",
+        config: { surgeries: ["replace-gqa"] },
       };
     } else {
       const ortConfig: Record<string, unknown> = {

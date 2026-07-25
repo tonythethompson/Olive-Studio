@@ -216,6 +216,53 @@ def test_match_torchscript_export_fail():
     assert resp["matched_entry"] == "torchscript-export-fail"
 
 
+def test_match_openvino_fallback():
+    """openvino-fallback: patterns include 'OpenVINO', 'fallback', 'CPUExecutionProvider'."""
+    resp = _call_direct(
+        error_message="OpenVINO silently falls back to CPUExecutionProvider — op not supported",
+        pass_name="",
+    )
+    assert resp["matched_entry"] == "openvino-fallback"
+    assert "OpenVINO" in resp["workaround"] or "openvino" in json.dumps(resp["updated_config"]).lower()
+
+
+def test_match_calibration_distribution_mismatch():
+    """calibration-distribution-mismatch: patterns include 'calibration', 'distribution', 'domain shift'."""
+    resp = _call_direct(
+        error_message="Calibration data distribution does not match inference inputs — domain shift detected",
+        pass_name="OnnxStaticQuantization",
+    )
+    assert resp["matched_entry"] == "calibration-distribution-mismatch"
+
+
+def test_match_search_local_optima():
+    """search-local-optima: patterns include 'search', 'local optima', 'latency vs accuracy'."""
+    resp = _call_direct(
+        error_message="Search found a local optima — latency vs accuracy tradeoff not converged",
+        pass_name="",
+    )
+    assert resp["matched_entry"] == "search-local-optima"
+
+
+def test_match_coreml_dynamic_shape():
+    """coreml-dynamic-shape: patterns include 'CoreML', 'dynamic shape', 'input shape'."""
+    resp = _call_direct(
+        error_message="CoreML conversion fails with dynamic shape on input — flexible shape not supported",
+        pass_name="",
+    )
+    assert resp["matched_entry"] == "coreml-dynamic-shape"
+
+
+def test_match_lora_merge_fail():
+    """lora-merge-fail: patterns include 'LoRA', 'merge', 'adapter', 'base model', 'merge_weights'."""
+    resp = _call_direct(
+        error_message="LoRA adapter cannot be merged into quantized base model — merge_weights not supported",
+        pass_name="LoRA",
+    )
+    assert resp["matched_entry"] == "lora-merge-fail"
+    assert "merge" in resp["workaround"].lower() or "merge" in json.dumps(resp["updated_config"]).lower()
+
+
 # ---------------------------------------------------------------------------
 # Scoring: pass_name context should boost the correct match
 # ---------------------------------------------------------------------------

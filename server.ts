@@ -2005,6 +2005,59 @@ app.post("/api/validate-recipe", async (req, res) => {
   }
 });
 
+// ─── POST /api/validate-compatibility (MCP model-hardware compatibility) ────────
+app.post("/api/validate-compatibility", async (req, res) => {
+  const {
+    modelName,
+    framework,
+    hardwareTarget = "",
+  } = req.body as {
+    modelName?: string;
+    framework?: string;
+    hardwareTarget?: string;
+  };
+
+  if (!modelName || !framework) {
+    return res.status(400).json({ error: "Missing modelName or framework." });
+  }
+
+  try {
+    const scriptPath = path.join(process.cwd(), "scripts", "validate_model_compatibility.py");
+    const python = getVenvPython();
+    const exists = fs.existsSync(python);
+    const systemPython = exists ? python : "python";
+
+    const args = [scriptPath, modelName, framework];
+    if (hardwareTarget) args.push(hardwareTarget);
+
+    const { stdout, stderr } = await execFileAsync(systemPython, args);
+
+    const output = stdout.trim();
+    if (!output) {
+      return res.status(500).json({
+        error: "MCP compatibility check returned empty output.",
+        stderr: stderr.trim() || undefined,
+      });
+    }
+
+    try {
+      const result = JSON.parse(output);
+      return res.json(result);
+    } catch {
+      return res.status(500).json({
+        error: "MCP compatibility check returned invalid JSON.",
+        raw: output.slice(0, 500),
+      });
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
+  } catch (err: any) {
+    console.error("MCP compatibility error:", err);
+    return res.status(500).json({
+      error: err?.message || "MCP compatibility check failed.",
+    });
+  }
+});
+
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "API route not found." });
 });
