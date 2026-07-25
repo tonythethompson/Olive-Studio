@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, Suspense, lazy } from "react";
+import { useState, useRef, useEffect, Suspense, lazy, type MouseEvent as ReactMouseEvent } from "react";
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
+import { useMcpDiagnostic } from "@/lib/hooks";
 import {
   Code,
   Play,
@@ -93,42 +94,95 @@ export function ExecutionWorkspace({
   const [isExportCopied, setIsExportCopied] = useState(false);
   const [justQueued, setJustQueued] = useState(false);
 
-  // MCP Diagnostic State
-  interface McpDiagnostic {
-    matched_entry: string | null;
-    title: string;
-    root_cause: string;
-    workaround: string;
-    updated_config?: Record<string, unknown>;
-    relevant_quirks?: string[];
-  }
-  const [mcpDiagnostic, setMcpDiagnostic] = useState<McpDiagnostic | null>(null);
-  const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const { diagnostic: mcpDiagnostic, isDiagnosing, fetchDiagnostic: fetchMcpDiagnostic } = useMcpDiagnostic();
+  const [mcpFixApplied, setMcpFixApplied] = useState(false);
 
-  const fetchMcpDiagnostic = async (logs: string[]) => {
-    if (logs.length === 0) return;
-    setIsDiagnosing(true);
-    try {
-      const errorSnippet = logs.slice(-20).join("\n");
-      const resp = await fetch("/api/mcp/tool", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          toolName: "troubleshoot_olive_error",
-          args: { error_message: errorSnippet },
-        }),
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data && !data.error) {
-          setMcpDiagnostic(data);
-        }
-      }
-    } catch {
-      /* ignore */
-    } finally {
-      setIsDiagnosing(false);
+  // Log line selection state for manual diagnosis
+  const [selectedLogIndices, setSelectedLogIndices] = useState<Set<number>>(new Set());
+  const lastClickedIndexRef = useRef<number | null>(null);
+
+  const handleApplyMcpFix = () => {
+    if (!mcpDiagnostic?.updated_config) return;
+    const config = mcpDiagnostic.updated_config;
+    const patches: Partial<UIState> = {};
+
+    // Map known MCP config keys to UIState fields
+    if ("use_external_data_format" in config) {
+      // OnnxConversion param — no direct UIState equivalent, but we can log it
+      setExecutionLogs((prev) => [
+        ...prev,
+        `[MCP FIX] Applied: use_external_data_format = ${config.use_external_data_format}`,
+      ]);
     }
+    if ("precision" in config && typeof config.precision === "string") {
+      const precision = config.precision;
+      if (precision === "int4" || precision === "int8" || precision === "fp16") {
+        patches.passes = { ...state.passes, quantPrecision: precision };
+      }
+    }
+    if ("quant_mode" in config && typeof config.quant_mode === "string") {
+      if (config.quant_mode === "static") {
+        patches.passes = { ...(patches.passes ?? state.passes), quantMethod: "ptq" };
+      }
+    }
+    if ("sym" in config && typeof config.sym === "boolean") {
+      patches.passes = { ...(patches.passes ?? state.passes), awqSym: config.sym };
+    }
+
+    // Apply any mapped patches
+    if (Object.keys(patches).length > 0) {
+      setState(patches);
+    }
+
+    // Log all applied config for transparency
+    const configSummary = Object.entries(config)
+      .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+      .join(", ");
+    setExecutionLogs((prev) => [...prev, `[MCP FIX] Applied diagnostic config: ${configSummary}`]);
+    setMcpFixApplied(true);
+    setTimeout(() => setMcpFixApplied(false), 3000);
+  };
+
+  // Clear log selection when logs change (new run starts)
+  useEffect(() => {
+    setSelectedLogIndices(new Set());
+    lastClickedIndexRef.current = null;
+  }, [executionLogs.length]);
+
+  // Log line selection for manual diagnosis
+  const handleLogLineClick = (index: number, e: ReactMouseEvent<HTMLParagraphElement>) => {
+    setSelectedLogIndices((prev) => {
+      const next = new Set(prev);
+      if (e.shiftKey && lastClickedIndexRef.current !== null) {
+        // Range select from last clicked to current
+        const start = Math.min(lastClickedIndexRef.current, index);
+        const end = Math.max(lastClickedIndexRef.current, index);
+        for (let i = start; i <= end; i++) next.add(i);
+      } else if (e.ctrlKey || e.metaKey) {
+        // Toggle individual line
+        if (next.has(index)) next.delete(index);
+        else next.add(index);
+      } else {
+        // Plain click: select only this line
+        next.clear();
+        next.add(index);
+      }
+      return next;
+    });
+    lastClickedIndexRef.current = index;
+  };
+
+  const handleDiagnoseSelected = () => {
+    if (selectedLogIndices.size === 0) return;
+    const selectedLogs = Array.from(selectedLogIndices)
+      .sort((a: number, b: number) => a - b)
+      .map((i: number) => executionLogs[i]);
+    fetchMcpDiagnostic(selectedLogs);
+  };
+
+  const handleDiagnoseAll = () => {
+    if (executionLogs.length === 0) return;
+    fetchMcpDiagnostic(executionLogs);
   };
 
   const isUnmountedRef = useRef(false);
@@ -492,9 +546,9 @@ ${
         const errData = await resp.json().catch(() => ({ error: "Failed to cancel" }));
         setExecutionLogs((prev) => [...prev, `[ERROR] Cancel failed: ${errData.error}`]);
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      setExecutionLogs((prev) => [...prev, `[ERROR] Failed to send cancel signal: ${err.message}`]);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setExecutionLogs((prev) => [...prev, `[ERROR] Failed to send cancel signal: ${message}`]);
     }
   };
 
@@ -663,8 +717,9 @@ ${
       };
 
       connectSSE(jobId);
-    } catch (err: any) {
-      setExecutionLogs((prev) => [...prev, `[ERROR] ${err.message}`]);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setExecutionLogs((prev) => [...prev, `[ERROR] ${message}`]);
       setExecutionStatus("failed");
       setIsRunning(false);
       onRunStateChange?.(false);
@@ -896,8 +951,7 @@ ${
                           id="owr-vram-mode"
                           aria-label="VRAM optimizer mode"
                           value={owrVramMode}
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          onChange={(e) => setOwrVramMode(e.target.value as any)}
+                          onChange={(e) => setOwrVramMode(e.target.value as "performance" | "memory")}
                           className="w-full text-xs bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 font-sans justify-between text-slate-200 outline-none hover:border-slate-700 cursor-pointer"
                         >
                           <option value="performance">Performance Focus (Accelerated)</option>
@@ -1279,31 +1333,75 @@ ${
               </Button>
             </div>
           </div>
-          <div className="bg-slate-950 border border-slate-800 rounded-md p-4 font-mono text-xs text-emerald-400 space-y-0.5 h-[220px] overflow-y-auto">
-            {executionLogs.length === 0 ? (
-              <p className="text-slate-500 italic">
-                Ready — click &quot;Execute Live&quot; to begin an Olive optimization run.
-              </p>
-            ) : (
-              executionLogs.map((line, i) => (
-                <p
-                  key={i}
-                  className={
-                    line.includes("[ERROR]")
-                      ? "text-red-400"
-                      : line.includes("[WARN]")
-                        ? "text-amber-300"
-                        : line.includes("[SETUP]")
-                          ? "text-amber-400"
-                          : line.includes("[DONE]") || line.includes("[info] Job cancelled")
-                            ? "text-emerald-300 font-bold"
-                            : "text-emerald-400"
-                  }
-                >
-                  {line}
-                </p>
-              ))
+          {/* Log panel with selection and manual diagnosis */}
+          <div className="space-y-1.5">
+            {executionLogs.length > 0 && (
+              <div className="flex items-center justify-between gap-2 px-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {selectedLogIndices.size > 0
+                      ? `${selectedLogIndices.size} line${selectedLogIndices.size > 1 ? "s" : ""} selected`
+                      : `${executionLogs.length} lines`}
+                  </span>
+                  <span className="text-[10px] text-slate-600 hidden sm:inline">
+                    Click to select · Shift+click for range · Ctrl/Cmd+click for multi
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {selectedLogIndices.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleDiagnoseSelected}
+                      disabled={isDiagnosing}
+                      className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded border border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      <Wrench className="h-3 w-3" /> Diagnose Selected
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleDiagnoseAll}
+                    disabled={isDiagnosing || executionLogs.length === 0}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <Wrench className="h-3 w-3" /> Diagnose All
+                  </button>
+                </div>
+              </div>
             )}
+            <div className="bg-slate-950 border border-slate-800 rounded-md p-4 font-mono text-xs text-emerald-400 space-y-0.5 h-[220px] overflow-y-auto">
+              {executionLogs.length === 0 ? (
+                <p className="text-slate-500 italic">
+                  Ready — click &quot;Execute Live&quot; to begin an Olive optimization run.
+                </p>
+              ) : (
+                executionLogs.map((line, i) => {
+                  const isSelected = selectedLogIndices.has(i);
+                  const lineClass = line.includes("[ERROR]")
+                    ? "text-red-400"
+                    : line.includes("[WARN]")
+                      ? "text-amber-300"
+                      : line.includes("[SETUP]")
+                        ? "text-amber-400"
+                        : line.includes("[DONE]") || line.includes("[info] Job cancelled")
+                          ? "text-emerald-300 font-bold"
+                          : "text-emerald-400";
+                  return (
+                    <p
+                      key={i}
+                      onClick={(e) => handleLogLineClick(i, e)}
+                      className={`${lineClass} cursor-pointer rounded px-1 -mx-1 transition-colors ${
+                        isSelected
+                          ? "bg-electric-blue/15 ring-1 ring-electric-blue/30"
+                          : "hover:bg-slate-800/50"
+                      }`}
+                    >
+                      {line}
+                    </p>
+                  );
+                })
+              )}
+            </div>
           </div>
 
           {/* MCP Diagnostic & Auto-Fix Card */}
@@ -1331,6 +1429,50 @@ ${
                   <div>
                     <span className="font-semibold text-emerald-400">Recommended Fix: </span>
                     <span className="text-slate-300">{mcpDiagnostic.workaround}</span>
+                  </div>
+                  {mcpDiagnostic.updated_config && (
+                    <div className="pt-1">
+                      <span className="font-semibold text-electric-blue">Config Changes: </span>
+                      <span className="text-slate-400 font-mono text-[10px]">
+                        {Object.entries(mcpDiagnostic.updated_config)
+                          .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+                          .join(", ")}
+                      </span>
+                    </div>
+                  )}
+                  {mcpDiagnostic.relevant_quirks && mcpDiagnostic.relevant_quirks.length > 0 && (
+                    <div className="pt-1">
+                      <span className="font-semibold text-amber-400">Known Quirks: </span>
+                      <ul className="mt-0.5 space-y-0.5">
+                        {mcpDiagnostic.relevant_quirks.map((quirk, i) => (
+                          <li key={i} className="text-[10px] text-slate-400">
+                            • {quirk}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="pt-1.5">
+                    <button
+                      type="button"
+                      onClick={handleApplyMcpFix}
+                      disabled={mcpFixApplied}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold rounded border transition-all cursor-pointer ${
+                        mcpFixApplied
+                          ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400"
+                          : "border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50"
+                      }`}
+                    >
+                      {mcpFixApplied ? (
+                        <>
+                          <Check className="h-3 w-3" /> Fix Applied
+                        </>
+                      ) : (
+                        <>
+                          <Wrench className="h-3 w-3" /> Apply Fix
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               ) : (

@@ -36,7 +36,9 @@
     "prepare": "husky",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
-    "deepcheck": "tsc --noEmit && prettier --check \"src/**/*.{ts,tsx}\" && eslint"
+    "deepcheck": "tsc --noEmit && prettier --check \"src/**/*.{ts,tsx}\" && eslint",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build -o storybook-static"
   },
   "lint-staged": {
     "src/**/*.{ts,tsx}": [
@@ -87,9 +89,15 @@
     "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^21.2.0",
     "@playwright/test": "^1.61.1",
+    "@storybook/addon-essentials": "^8.6.15",
+    "@storybook/react": "^8.6.15",
+    "@storybook/react-vite": "^8.6.15",
+    "@storybook/test": "^8.6.15",
     "@types/express": "^5.0.6",
     "@types/jszip": "^3.4.1",
     "@types/node": "^22.19.19",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "@types/uuid": "^9.0.8",
     "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.65.0",
@@ -106,6 +114,7 @@
     "oxlint": "^1.75.0",
     "prettier": "^3.9.6",
     "rollup-plugin-visualizer": "^7.0.1",
+    "storybook": "^8.6.15",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.22.4",
     "typegpu": "^0.11.9",

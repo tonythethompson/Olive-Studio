@@ -220,6 +220,109 @@ describe("CPU parameter validation", () => {
   });
 });
 
+// ── TensorRT rules ────────────────────────────────────────────────
+
+describe("TensorRT parameter validation", () => {
+  it("warns when PTQ INT8 on TensorRT (requires QDQ format)", () => {
+    const state = baseState({
+      ...withProvider("TensorrtExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int8",
+        quantMethod: "ptq",
+      },
+    });
+    const warnings = validatePassParameters(state, ["OnnxQuantization"]);
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings.some((w) => w.description.includes("QDQ"))).toBe(true);
+  });
+
+  it("warns when AWQ INT8 on TensorRT (prefers INT4)", () => {
+    const state = baseState({
+      ...withProvider("TensorrtExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int8",
+        quantMethod: "awq",
+      },
+    });
+    const warnings = validatePassParameters(state, ["OnnxQuantization"]);
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings.some((w) => w.description.includes("INT4"))).toBe(true);
+  });
+
+  it("warns about slow engine build when not using AWQ on TensorRT", () => {
+    const state = baseState({
+      ...withProvider("TensorrtExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int8",
+        quantMethod: "ptq",
+      },
+    });
+    const warnings = validatePassParameters(state, ["OnnxQuantization"]);
+    expect(warnings.some((w) => w.description.includes("time-intensive"))).toBe(true);
+  });
+
+  it("no warning for AWQ INT4 on TensorRT (optimal)", () => {
+    const state = baseState({
+      ...withProvider("TensorrtExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int4",
+        quantMethod: "awq",
+      },
+    });
+    const warnings = validatePassParameters(state, ["OnnxQuantization"]);
+    expect(warnings.length).toBe(0);
+  });
+});
+
+// ── TensorRT RTX rules ──────────────────────────────────────────
+
+describe("TensorRT RTX parameter validation", () => {
+  it("warns when INT8 on TensorRT RTX (prefers INT4)", () => {
+    const state = baseState({
+      ...withProvider("NvTensorRTRTXExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int8",
+        quantMethod: "awq",
+      },
+    });
+    const warnings = validatePassParameters(state, ["OnnxQuantization"]);
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings.some((w) => w.description.includes("INT4"))).toBe(true);
+  });
+
+  it("warns when PTQ INT8 on TensorRT RTX (requires QDQ)", () => {
+    const state = baseState({
+      ...withProvider("NvTensorRTRTXExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int8",
+        quantMethod: "ptq",
+      },
+    });
+    const warnings = validatePassParameters(state, ["OnnxQuantization"]);
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings.some((w) => w.description.includes("QDQ"))).toBe(true);
+  });
+
+  it("no warning for AWQ INT4 on TensorRT RTX (optimal)", () => {
+    const state = baseState({
+      ...withProvider("NvTensorRTRTXExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int4",
+        quantMethod: "awq",
+      },
+    });
+    const warnings = validatePassParameters(state, ["OnnxQuantization"]);
+    expect(warnings.length).toBe(0);
+  });
+});
+
 // ── Edge cases ────────────────────────────────────────────────────
 
 describe("edge cases", () => {

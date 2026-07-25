@@ -6,6 +6,8 @@ export interface PassGuidance {
   whatItDoes: string;
   whenToUse: string[];
   whenNotToUse: string[];
+  /** Olive pass type name used in recipe JSON — drives MCP get_pass_parameters lookup */
+  passName?: string;
 }
 
 const GUIDANCE: Record<string, PassGuidance> = {
@@ -269,20 +271,61 @@ const GUIDANCE: Record<string, PassGuidance> = {
   },
 };
 
+/** Map a UI state to the concrete Olive pass type name used in recipe JSON. */
+function resolvePassName(nodeId: string, state: UIState): string | undefined {
+  if (nodeId === "conversion") {
+    if (state.passes.conversionFormat === "openvino") return "OpenVINOConversion";
+    return "OnnxConversion";
+  }
+  if (nodeId === "quantization") {
+    const m = state.passes.quantMethod;
+    if (m === "awq") return "AutoAWQQuantizer";
+    if (m === "gptq") return "GptqQuantizer";
+    if (m === "qat") return "QATQuantizer";
+    if (m === "hqq") return "OnnxHqqQuantization";
+    if (m === "rtn") return "OnnxBlockWiseRtnQuantization";
+    if (m === "spinquant") return "SpinQuant";
+    if (m === "quarot") return "QuaRot";
+    if (state.passes.conversionFormat === "openvino") return "OpenVINOQuantization";
+    if (state.passes.conversionFormat === "qnn") return "QNNQuantization";
+    return "OnnxQuantization";
+  }
+  if (nodeId === "pruning") {
+    const m = state.passes.pruningMethod;
+    if (m === "sparsegpt") return "SparseGPT";
+    if (m === "wanda") return "Wanda";
+    return "Prune";
+  }
+  if (nodeId === "peft") {
+    return state.passes.peftMethod === "qlora" ? "QLoRA" : "LoRA";
+  }
+  if (nodeId === "splitting") return "SplitModel";
+  if (nodeId === "transformer_opt") {
+    if (state.passes.conversionFormat === "openvino") return "OpenVINOIoUpdate";
+    if (state.passes.conversionFormat === "qnn") return "QNNPreprocess";
+    return "OrtTransformersOptimization";
+  }
+  return undefined;
+}
+
 export function getPassGuidanceForNode(nodeId: string, state: UIState): PassGuidance | null {
+  const passName = resolvePassName(nodeId, state);
+
   if (nodeId === "quantization" && state.passes.quantization) {
     const method = state.passes.quantMethod;
-    if (method === "awq" && GUIDANCE.quantization_awq) return GUIDANCE.quantization_awq;
-    if (method === "qat" && GUIDANCE.quantization_qat) return GUIDANCE.quantization_qat;
-    if (method === "ptq" && GUIDANCE.quantization_ptq) return GUIDANCE.quantization_ptq;
-    if (method === "hqq" && GUIDANCE.quantization_hqq) return GUIDANCE.quantization_hqq;
-    if (method === "rtn" && GUIDANCE.quantization_rtn) return GUIDANCE.quantization_rtn;
-    if (method === "spinquant" && GUIDANCE.quantization_spinquant) return GUIDANCE.quantization_spinquant;
-    if (method === "quarot" && GUIDANCE.quantization_quarot) return GUIDANCE.quantization_quarot;
+    if (method === "awq" && GUIDANCE.quantization_awq) return { ...GUIDANCE.quantization_awq, passName };
+    if (method === "qat" && GUIDANCE.quantization_qat) return { ...GUIDANCE.quantization_qat, passName };
+    if (method === "ptq" && GUIDANCE.quantization_ptq) return { ...GUIDANCE.quantization_ptq, passName };
+    if (method === "hqq" && GUIDANCE.quantization_hqq) return { ...GUIDANCE.quantization_hqq, passName };
+    if (method === "rtn" && GUIDANCE.quantization_rtn) return { ...GUIDANCE.quantization_rtn, passName };
+    if (method === "spinquant" && GUIDANCE.quantization_spinquant)
+      return { ...GUIDANCE.quantization_spinquant, passName };
+    if (method === "quarot" && GUIDANCE.quantization_quarot)
+      return { ...GUIDANCE.quantization_quarot, passName };
   }
 
   if (nodeId === "conversion" && state.passes.conversion) {
-    const base = { ...GUIDANCE.conversion };
+    const base = { ...GUIDANCE.conversion, passName };
     if (state.passes.conversionFormat === "openvino") {
       base.summary = "Exports to Intel OpenVINO IR for Core/Xeon/NPU targets.";
       base.whenToUse = [
@@ -298,11 +341,14 @@ export function getPassGuidanceForNode(nodeId: string, state: UIState): PassGuid
     const method = state.passes.pruningMethod;
     if (method === "magnitude") {
       const criteria = state.passes.pruningCriteria;
-      if (criteria === "l2_norm" && GUIDANCE.pruning_l2_norm) return GUIDANCE.pruning_l2_norm;
-      if (criteria === "l1_norm" && GUIDANCE.pruning_l1_norm) return GUIDANCE.pruning_l1_norm;
+      if (criteria === "l2_norm" && GUIDANCE.pruning_l2_norm)
+        return { ...GUIDANCE.pruning_l2_norm, passName };
+      if (criteria === "l1_norm" && GUIDANCE.pruning_l1_norm)
+        return { ...GUIDANCE.pruning_l1_norm, passName };
     }
-    return GUIDANCE.pruning;
+    return { ...GUIDANCE.pruning, passName };
   }
 
-  return GUIDANCE[nodeId] ?? null;
+  const entry = GUIDANCE[nodeId];
+  return entry ? { ...entry, passName } : null;
 }

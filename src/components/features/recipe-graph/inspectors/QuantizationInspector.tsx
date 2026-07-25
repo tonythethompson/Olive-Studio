@@ -3,7 +3,8 @@ import { getAllowedQuantMethods } from "@/lib/pipelineValidation";
 import { UIState } from "@/types";
 import { ImportConfirmDialog } from "./ImportConfirmDialog";
 import type { InspectorProps } from "./types";
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useAutoClearError } from "@/lib/hooks";
 import { RecipeDiffOverlay } from "./RecipeDiffOverlay";
 import { RefreshCw, AlertTriangle, Save, Download, Upload } from "lucide-react";
 import {
@@ -261,8 +262,8 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
   const [customPresets, setCustomPresets] = useState<CustomQuantPreset[]>(() => loadCustomPresets());
-  const [importError, setImportError] = useState("");
-  const importErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [importError, setImportError] = useAutoClearError(4000);
+
   const [importConfirm, setImportConfirm] = useState<{
     importedPresets: CustomQuantPreset[];
     collisions: string[];
@@ -371,9 +372,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
         const text = ev.target?.result as string;
         const result = importPresetsJSON(text, customPresets);
         if (result.ok === false) {
-          if (importErrorTimerRef.current !== null) clearTimeout(importErrorTimerRef.current);
           setImportError(result.error);
-          importErrorTimerRef.current = setTimeout(() => setImportError(""), 4000);
         } else {
           setImportConfirm({
             importedPresets: result.importedPresets,

@@ -26,9 +26,10 @@ TabsList.displayName = TabsPrimitive.List.displayName;
 export const TabsTrigger = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
->(({ className, ...props }, ref) => (
+>(({ className, value, ...props }, ref) => (
   <TabsPrimitive.Trigger
     ref={ref}
+    value={value}
     className={cn(
       "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-slate-950 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-slate-800 data-[state=active]:text-slate-50 data-[state=active]:shadow-sm",
       className,
@@ -41,9 +42,10 @@ TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
 export const TabsContent = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
->(({ className, ...props }, ref) => (
+>(({ className, value, ...props }, ref) => (
   <TabsPrimitive.Content
     ref={ref}
+    value={value}
     className={cn(
       "mt-4 ring-offset-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue focus-visible:ring-offset-2",
       className,
@@ -118,7 +120,11 @@ export function CardHeader({
         <div className="min-w-0">
           <div className="text-base font-semibold text-slate-100 flex items-center gap-2">
             {title}
-            {tooltip && <Info className="h-3.5 w-3.5 text-slate-500 cursor-help shrink-0" title={tooltip} />}
+            {tooltip && (
+              <span title={tooltip} className="cursor-help">
+                <Info className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+              </span>
+            )}
           </div>
           {description && <p className="text-sm text-slate-500 mt-1">{description}</p>}
         </div>
@@ -181,13 +187,16 @@ Label.displayName = "Label";
 
 export const Button = React.forwardRef<
   HTMLButtonElement,
-  React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "default" | "outline" | "ghost" | "success" }
+  React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: "default" | "outline" | "ghost" | "success" | "danger";
+  }
 >(({ className, variant = "default", ...props }, ref) => {
   const variants = {
     default: "bg-electric-blue text-white hover:bg-electric-blue-dark shadow",
     outline: "border border-slate-700 bg-transparent hover:bg-slate-800 text-slate-300",
     ghost: "hover:bg-slate-800 hover:text-slate-50 text-slate-400",
     success: "bg-emerald-accent text-white hover:bg-emerald-dark shadow",
+    danger: "bg-rose-600 text-white hover:bg-rose-700 shadow",
   };
   return (
     <button

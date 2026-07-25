@@ -34,9 +34,11 @@ function hardwareLabel(provider: IHVProvider): string {
     case "OpenVINOExecutionProvider":
       return "Intel OpenVINO";
     case "CUDAExecutionProvider":
+      return "NVIDIA CUDA";
     case "TensorrtExecutionProvider":
+      return "NVIDIA TensorRT";
     case "NvTensorRTRTXExecutionProvider":
-      return "NVIDIA GPU";
+      return "NVIDIA TensorRT RTX";
     case "CPUExecutionProvider":
       return "CPU";
     default:
@@ -111,17 +113,68 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
     ];
   }
 
-  if (
-    provider === "CUDAExecutionProvider" ||
-    provider === "TensorrtExecutionProvider" ||
-    provider === "NvTensorRTRTXExecutionProvider"
-  ) {
+  if (provider === "CUDAExecutionProvider") {
     rules["OnnxQuantization"] = [
       {
         name: "NVIDIA prefers AWQ INT4 over PTQ INT8 for LLMs",
         check: (passes) => {
           if (passes.quantPrecision === "int8" && passes.quantMethod === "ptq") {
             return "NVIDIA GPU works best with AWQ INT4 quantization for LLMs (typically <2% perplexity drop). PTQ INT8 can drop 10-15% perplexity on large models.";
+          }
+          return null;
+        },
+      },
+    ];
+  }
+
+  if (provider === "TensorrtExecutionProvider") {
+    rules["OnnxQuantization"] = [
+      {
+        name: "TensorRT INT8 requires QDQ format",
+        check: (passes) => {
+          if (passes.quantPrecision === "int8" && passes.quantMethod === "ptq") {
+            return "TensorRT INT8 quantization requires QDQ (QuantizeDequantize) nodes in the ONNX graph. PTQ INT8 does not generate QDQ — use AWQ instead, which produces the correct format for TensorRT.";
+          }
+          return null;
+        },
+      },
+      {
+        name: "TensorRT prefers AWQ INT4 for LLMs",
+        check: (passes) => {
+          if (passes.quantPrecision === "int8" && passes.quantMethod === "awq") {
+            return "TensorRT works best with AWQ INT4 for LLMs. INT4 provides better memory efficiency and faster inference with minimal accuracy impact.";
+          }
+          return null;
+        },
+      },
+      {
+        name: "TensorRT engine builds are slow",
+        check: (passes) => {
+          if (passes.quantization && passes.quantMethod !== "awq") {
+            return "TensorRT engine optimization is time-intensive (minutes to hours). AWQ pre-quantized models skip the TensorRT calibration step, significantly reducing build time.";
+          }
+          return null;
+        },
+      },
+    ];
+  }
+
+  if (provider === "NvTensorRTRTXExecutionProvider") {
+    rules["OnnxQuantization"] = [
+      {
+        name: "TensorRT RTX prefers INT4 AWQ",
+        check: (passes) => {
+          if (passes.quantPrecision === "int8") {
+            return "TensorRT RTX (consumer GeForce) works best with AWQ INT4 quantization. INT4 reduces VRAM usage on consumer GPUs and provides faster inference with minimal accuracy impact.";
+          }
+          return null;
+        },
+      },
+      {
+        name: "TensorRT RTX INT8 requires QDQ format",
+        check: (passes) => {
+          if (passes.quantPrecision === "int8" && passes.quantMethod === "ptq") {
+            return "TensorRT RTX INT8 requires QDQ format. PTQ INT8 does not generate QDQ nodes — use AWQ instead for correct INT8 quantization on TensorRT RTX.";
           }
           return null;
         },

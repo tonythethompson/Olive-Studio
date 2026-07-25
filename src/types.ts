@@ -127,3 +127,13 @@ export interface UIState {
     diffusionLora: boolean;
   };
 }
+
+/** MCP diagnostic response from troubleshoot_olive_error tool. */
+export interface McpDiagnostic {
+  matched_entry: string | null;
+  title: string;
+  root_cause: string;
+  workaround: string;
+  updated_config?: Record<string, unknown>;
+  relevant_quirks?: string[];
+}

@@ -62,12 +62,13 @@ interface WebGpuStatus {
   initError: string | null;
 }
 
-type BenchmarkPreset = "quick" | "standard" | "thorough";
+type BenchmarkPreset = "quick" | "standard" | "thorough" | "custom";
 
 const PRESETS: Record<BenchmarkPreset, { iterations: number; warmup: number; batchSize: number }> = {
   quick: { iterations: 10, warmup: 2, batchSize: 1 },
   standard: { iterations: 50, warmup: 5, batchSize: 1 },
   thorough: { iterations: 200, warmup: 10, batchSize: 1 },
+  custom: { iterations: 0, warmup: 0, batchSize: 1 },
 };
 
 /* ------------------------------------------------------------------ */

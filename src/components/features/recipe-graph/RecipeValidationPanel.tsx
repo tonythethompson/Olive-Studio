@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { getPipelineValidation, applyIssueAutofix, type PipelineIssue } from "@/lib/pipelineValidation";
 import { validatePassParameters } from "@/lib/passParameterValidation";
 import { buildPipelineSteps } from "./graphLayout";
 import { UIState } from "@/types";
-import { AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Info, Zap } from "lucide-react";
+import { AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Info, RefreshCw, Zap } from "lucide-react";
 
 interface CompatibilityWarning {
   pass_name: string;
@@ -41,6 +41,8 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const [compatValidated, setCompatValidated] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const [showCompatDetails, setShowCompatDetails] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const forceRefreshRef = useRef(false);
 
   const validation = getPipelineValidation(state);
   const pipelineSteps = buildPipelineSteps(state.passes);
@@ -53,77 +55,88 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     const controller = new AbortController();
     let cancelled = false;
 
-    const timer = setTimeout(async () => {
-      // Determine model name and framework from UIState
-      const modelName = state.hfModelId || (state.localFiles.length > 0 ? state.localFiles[0].name : "");
-      const framework = state.passes.conversionSourceFormat === "pytorch" ? "PyTorch" : "ONNX";
-      const hardwareTarget =
-        state.ihvProvider === "CUDAExecutionProvider"
-          ? "NVIDIA RTX 4090"
-          : state.ihvProvider === "TensorrtExecutionProvider"
+    const forceRun = forceRefreshRef.current;
+    forceRefreshRef.current = false;
+
+    const timer = setTimeout(
+      async () => {
+        // Determine model name and framework from UIState
+        const modelName = state.hfModelId || (state.localFiles.length > 0 ? state.localFiles[0].name : "");
+        const framework = state.passes.conversionSourceFormat === "pytorch" ? "PyTorch" : "ONNX";
+        const hardwareTarget =
+          state.ihvProvider === "CUDAExecutionProvider"
             ? "NVIDIA RTX 4090"
-            : state.ihvProvider === "NvTensorRTRTXExecutionProvider"
+            : state.ihvProvider === "TensorrtExecutionProvider"
               ? "NVIDIA RTX 4090"
-              : state.ihvProvider === "OpenVINOExecutionProvider"
-                ? "Intel Core i9 CPU"
-                : state.ihvProvider === "QNNExecutionProvider"
-                  ? "Qualcomm Snapdragon NPU"
-                  : "";
+              : state.ihvProvider === "NvTensorRTRTXExecutionProvider"
+                ? "NVIDIA RTX 4090"
+                : state.ihvProvider === "OpenVINOExecutionProvider"
+                  ? "Intel Core i9 CPU"
+                  : state.ihvProvider === "QNNExecutionProvider"
+                    ? "Qualcomm Snapdragon NPU"
+                    : "";
 
-      if (!modelName) {
-        if (!cancelled) {
-          setCompatResult(null);
-          setCompatError(null);
-          setCompatLoading(false);
-          setCompatValidated(true);
-        }
-        return;
-      }
-
-      setCompatLoading(true);
-      setCompatError(null);
-
-      try {
-        const res = await fetch("/api/validate-compatibility", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ modelName, framework, hardwareTarget }),
-          signal: controller.signal,
-        });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `HTTP ${res.status}`);
+        if (!modelName) {
+          if (!cancelled) {
+            setCompatResult(null);
+            setCompatError(null);
+            setCompatLoading(false);
+            setCompatValidated(true);
+          }
+          return;
         }
 
-        const result = await res.json();
-        if (!cancelled) {
-          setCompatResult(result);
-          setCompatValidated(true);
+        setCompatLoading(true);
+        setCompatError(null);
+
+        try {
+          const res = await fetch("/api/validate-compatibility", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ modelName, framework, hardwareTarget }),
+            signal: controller.signal,
+          });
+
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || `HTTP ${res.status}`);
+          }
+
+          const result = await res.json();
+          if (!cancelled) {
+            setCompatResult(result);
+            setCompatValidated(true);
+          }
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") return;
+          if (!cancelled) {
+            setCompatError(err instanceof Error ? err.message : "Compatibility check failed");
+            setCompatResult(null);
+            setCompatValidated(true);
+          }
+        } finally {
+          if (!cancelled) setCompatLoading(false);
         }
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        if (!cancelled) {
-          setCompatError(err instanceof Error ? err.message : "Compatibility check failed");
-          setCompatResult(null);
-          setCompatValidated(true);
-        }
-      } finally {
-        if (!cancelled) setCompatLoading(false);
-      }
-    }, 600);
+      },
+      forceRun ? 0 : 600,
+    );
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
       controller.abort();
     };
-  }, [state.hfModelId, state.localFiles, state.passes.conversionSourceFormat, state.ihvProvider]);
+  }, [state.hfModelId, state.localFiles, state.passes.conversionSourceFormat, state.ihvProvider, refreshKey]);
 
   const handleApplyAutofix = (issue: PipelineIssue) => {
     const patch = applyIssueAutofix(state, issue);
     setState(patch);
   };
+
+  const handleRefreshValidation = useCallback(() => {
+    forceRefreshRef.current = true;
+    setRefreshKey((k) => k + 1);
+  }, []);
 
   // Hardware-specific parameter validation (synchronous, cheap — runs every render with state)
   const paramWarnings = validatePassParameters(state, activePassNames);
@@ -213,6 +226,22 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
           </span>
           {compatLoading && (
             <span className="text-[10px] text-slate-500 animate-pulse">Checking compatibility...</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleRefreshValidation}
+            disabled={compatLoading}
+            className="h-6 w-6 flex items-center justify-center rounded text-slate-500 hover:text-electric-blue hover:bg-slate-800/50 transition-colors disabled:opacity-40"
+            title="Refresh validation"
+          >
+            <RefreshCw className={`h-3 w-3 ${compatLoading ? "animate-spin" : ""}`} />
+          </button>
+          {expanded ? (
+            <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
           )}
         </div>
         {expanded ? (

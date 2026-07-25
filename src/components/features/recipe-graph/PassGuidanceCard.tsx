@@ -1,11 +1,71 @@
+import { useEffect, useState } from "react";
 import type { PassGuidance } from "@/lib/passGuidance";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, XCircle, Database, ChevronDown, ChevronRight } from "lucide-react";
+
+interface McpParamDoc {
+  description?: string;
+  type?: string;
+  default?: unknown;
+  valid_range?: string;
+  interactions?: string;
+}
+
+interface McpPassParamsResponse {
+  pass_name?: string;
+  description?: string;
+  required_params?: string[];
+  parameters?: Record<string, McpParamDoc>;
+  gotchas?: string[];
+  error?: string;
+}
 
 interface PassGuidanceCardProps {
   guidance: PassGuidance;
 }
 
 export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
+  const [params, setParams] = useState<McpPassParamsResponse | null>(null);
+  const [hasFetched, setHasFetched] = useState(false);
+  const [paramsExpanded, setParamsExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!guidance.passName) return;
+    let cancelled = false;
+    fetch("/api/mcp/tool", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        toolName: "get_pass_parameters",
+        args: { pass_name: guidance.passName },
+      }),
+    })
+      .then((r) => r.json())
+      .then((data: McpPassParamsResponse) => {
+        if (!cancelled) {
+          setParams(data);
+          setHasFetched(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setParams(null);
+          setHasFetched(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [guidance.passName]);
+
+  const isLoading = guidance.passName != null && !hasFetched;
+  const hasParams = params && !params.error && params.parameters && Object.keys(params.parameters).length > 0;
+  const requiredParams = params?.required_params ?? [];
+  const optionalParams: Array<[string, McpParamDoc]> = hasParams
+    ? (Object.entries(params!.parameters!).filter(([k]) => !requiredParams.includes(k)) as Array<
+        [string, McpParamDoc]
+      >)
+    : [];
+
   return (
     <div className="rounded-lg border border-slate-800/80 bg-slate-950/50 p-4 space-y-4">
       <div>
@@ -51,6 +111,116 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
           </div>
         )}
       </div>
+
+      {/* MCP Parameter Documentation */}
+      {guidance.passName && (
+        <div className="border-t border-slate-800/60 pt-3">
+          <button
+            type="button"
+            onClick={() => setParamsExpanded((v) => !v)}
+            className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-electric-blue/70 hover:text-electric-blue transition-colors cursor-pointer w-full"
+          >
+            <Database className="h-3 w-3" />
+            <span>Olive Parameters: {guidance.passName}</span>
+            {isLoading && <span className="text-slate-500 ml-1 animate-pulse">loading...</span>}
+            {!isLoading &&
+              (paramsExpanded ? (
+                <ChevronDown className="h-3 w-3 ml-auto" />
+              ) : (
+                <ChevronRight className="h-3 w-3 ml-auto" />
+              ))}
+          </button>
+
+          {paramsExpanded && hasParams && (
+            <div className="mt-2 space-y-2.5">
+              {params!.description && (
+                <p className="text-[11px] text-slate-400 leading-relaxed">{params!.description}</p>
+              )}
+
+              {requiredParams.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-mono text-rose-400/80 mb-1">Required</p>
+                  <div className="space-y-1">
+                    {requiredParams.map((name) => {
+                      const doc = params!.parameters![name];
+                      return (
+                        <div key={name} className="flex gap-2 text-[11px]">
+                          <span className="font-mono text-slate-300 shrink-0">{name}</span>
+                          {doc?.type && (
+                            <span className="text-slate-500 font-mono text-[10px]">:{doc.type}</span>
+                          )}
+                          {doc?.description && <span className="text-slate-400">— {doc.description}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {optionalParams.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-mono text-slate-500 mb-1">Optional</p>
+                  <div className="space-y-1.5">
+                    {optionalParams.map(([name, doc]) => (
+                      <div
+                        key={name}
+                        className="rounded bg-slate-900/50 px-2 py-1.5 border border-slate-800/40"
+                      >
+                        <div className="flex gap-2 text-[11px] items-baseline">
+                          <span className="font-mono text-slate-300 shrink-0">{name}</span>
+                          {doc.type && (
+                            <span className="text-slate-500 font-mono text-[10px]">:{doc.type}</span>
+                          )}
+                          {doc.default !== undefined && (
+                            <span className="text-slate-600 font-mono text-[10px]">
+                              default: {JSON.stringify(doc.default)}
+                            </span>
+                          )}
+                        </div>
+                        {doc.description && (
+                          <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
+                            {doc.description}
+                          </p>
+                        )}
+                        {doc.valid_range && (
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                            range: {doc.valid_range}
+                          </p>
+                        )}
+                        {doc.interactions && (
+                          <p className="text-[10px] text-amber-500/70 mt-0.5">⚠ {doc.interactions}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {params!.gotchas && params!.gotchas!.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-mono text-amber-400/80 mb-1">Gotchas</p>
+                  <ul className="space-y-0.5">
+                    {params!.gotchas!.map((g, i) => (
+                      <li
+                        key={i}
+                        className="text-[10px] text-amber-500/70 leading-relaxed pl-2 border-l border-amber-500/20"
+                      >
+                        {g}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {paramsExpanded && !hasParams && !isLoading && (
+            <p className="text-[10px] text-slate-500 mt-2 italic">
+              No parameter documentation available for this pass.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

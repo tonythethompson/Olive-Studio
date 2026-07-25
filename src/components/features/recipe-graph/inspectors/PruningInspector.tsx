@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
+import { useAutoClearError } from "@/lib/hooks";
 import {
   Label,
   Select,
@@ -85,8 +86,8 @@ export function PruningInspector({ state, setState }: InspectorProps) {
   const [customPresets, setCustomPresets] = useState<CustomPruningPreset[]>(loadCustomPresets);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [newPresetName, setNewPresetName] = useState("");
-  const [importError, setImportError] = useState("");
-  const importErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [importError, setImportError] = useAutoClearError(4000);
+
   const [importConfirm, setImportConfirm] = useState<{
     importedPresets: CustomPruningPreset[];
     collisions: string[];
@@ -150,9 +151,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
         const text = ev.target?.result as string;
         const result = importPresetsJSON(text, customPresets);
         if (result.ok === false) {
-          if (importErrorTimerRef.current !== null) clearTimeout(importErrorTimerRef.current);
           setImportError(result.error);
-          importErrorTimerRef.current = setTimeout(() => setImportError(""), 4000);
         } else {
           setImportConfirm({
             importedPresets: result.importedPresets,
@@ -164,7 +163,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
       reader.readAsText(file);
     };
     input.click();
-  }, [customPresets]);
+  }, [customPresets, setImportError]);
 
   if (!state.passes.pruning) {
     return (
@@ -310,7 +309,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
                       <p>
                         {isCustom
                           ? `${preset.method} · ${preset.criteria} · ${(preset.sparsity * 100).toFixed(0)}%`
-                          : preset.description}
+                          : ((preset as { description?: string }).description ?? "")}
                       </p>
                     </TooltipContent>
                   </Tooltip>
