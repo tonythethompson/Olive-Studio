@@ -10,6 +10,8 @@ export interface MCPDiagnosticCardProps {
   fixApplied: string;
   /** Called when the user clicks "Apply Fix". */
   onApplyFix: () => void;
+  /** Called when the user clicks "Run MCP Diagnosis". If omitted, no button is shown. */
+  onRunDiagnosis?: () => void;
 }
 
 /**
@@ -26,6 +28,7 @@ export function MCPDiagnosticCard({
   isDiagnosing,
   fixApplied,
   onApplyFix,
+  onRunDiagnosis,
 }: MCPDiagnosticCardProps) {
   return (
     <div className="mt-2 p-3.5 rounded-lg border border-rose-500/30 bg-rose-950/20 text-slate-200 animate-in fade-in space-y-2">
@@ -101,6 +104,14 @@ export function MCPDiagnosticCard({
             </button>
           </div>
         </div>
+      ) : onRunDiagnosis ? (
+        <button
+          type="button"
+          onClick={onRunDiagnosis}
+          className="text-[11px] text-slate-400 hover:text-rose-300 transition-colors cursor-pointer flex items-center gap-1.5"
+        >
+          <Wrench className="h-3 w-3" /> Run MCP Diagnosis
+        </button>
       ) : (
         <p className="text-[11px] text-slate-400 italic">
           Querying Olive MCP Knowledge Base for matching error patterns...

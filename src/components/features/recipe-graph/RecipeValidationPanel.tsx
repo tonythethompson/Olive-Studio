@@ -4,7 +4,7 @@ import { validatePassParameters } from "@/lib/passParameterValidation";
 import { validateMcpParams, clearParamCache, type McpParamWarning } from "@/lib/mcpParamValidation";
 import { useMcpDiagnostic } from "@/lib/hooks";
 import { buildPipelineSteps } from "./graphLayout";
-import { UIState } from "@/types";
+import { UIState, type IHVProvider } from "@/types";
 import { AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Info, RefreshCw, Zap } from "lucide-react";
 
 interface CompatibilityWarning {
@@ -34,6 +34,25 @@ interface CompatibilityResult {
 interface RecipeValidationPanelProps {
   state: UIState;
   setState: (s: Partial<UIState>) => void;
+}
+
+function getHardwareTargetFromProvider(provider: IHVProvider): string {
+  switch (provider) {
+    case "CUDAExecutionProvider":
+    case "TensorrtExecutionProvider":
+    case "NvTensorRTRTXExecutionProvider":
+      return "NVIDIA RTX 4090";
+    case "OpenVINOExecutionProvider":
+    case "CPUExecutionProvider":
+      return "Intel Core i9 CPU";
+    case "QNNExecutionProvider":
+      return "Qualcomm Snapdragon NPU";
+    case "ROCMExecutionProvider":
+      return "AMD MI300X / ROCm";
+    case "WebGpuExecutionProvider":
+    default:
+      return "";
+  }
 }
 
 export function RecipeValidationPanel({ state, setState }: RecipeValidationPanelProps) {
@@ -68,18 +87,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
         // Determine model name and framework from UIState
         const modelName = state.hfModelId || (state.localFiles.length > 0 ? state.localFiles[0].name : "");
         const framework = state.passes.conversionSourceFormat === "pytorch" ? "PyTorch" : "ONNX";
-        const hardwareTarget =
-          state.ihvProvider === "CUDAExecutionProvider"
-            ? "NVIDIA RTX 4090"
-            : state.ihvProvider === "TensorrtExecutionProvider"
-              ? "NVIDIA RTX 4090"
-              : state.ihvProvider === "NvTensorRTRTXExecutionProvider"
-                ? "NVIDIA RTX 4090"
-                : state.ihvProvider === "OpenVINOExecutionProvider"
-                  ? "Intel Core i9 CPU"
-                  : state.ihvProvider === "QNNExecutionProvider"
-                    ? "Qualcomm Snapdragon NPU"
-                    : "";
+        const hardwareTarget = getHardwareTargetFromProvider(state.ihvProvider);
 
         if (!modelName) {
           if (!cancelled) {

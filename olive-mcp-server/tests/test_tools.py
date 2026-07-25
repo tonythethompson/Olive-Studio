@@ -224,3 +224,41 @@ def test_get_integration_recipe_detail():
 def test_get_integration_recipe_not_found():
     result = get_integration_recipe(recipe_id="not-a-real-recipe")
     assert "error" in result
+
+
+def test_get_model_compatibility_new_model():
+    result = get_model_compatibility(model_name="google/vit-base-patch16-224", framework="PyTorch")
+    assert result["model"] == "ViT-base"
+    assert result["framework_supported"] is True
+    assert "Intel Core i9 CPU" in result["hardware_profiles"]
+
+
+def test_get_model_compatibility_azure_hardware():
+    result = get_model_compatibility(
+        model_name="Azure OpenAI Whisper",
+        framework="ONNX",
+        hardware_target="Azure ML N-series",
+    )
+    assert result["selected_hardware"] == "Azure ML N-series"
+    assert "AzureMLQuantization" in result["hardware_compatibility"]
+
+
+def test_get_integration_recipe_qnn():
+    result = get_integration_recipe(recipe_id="qualcomm_qnn_mobile")
+    assert "error" not in result
+    pass_types = {p["type"] for p in result["recipe"]["passes"].values()}
+    assert "QNNConversion" in pass_types
+
+
+def test_get_integration_recipe_azure():
+    result = get_integration_recipe(recipe_id="azure_ml_quant")
+    assert "error" not in result
+    pass_types = {p["type"] for p in result["recipe"]["passes"].values()}
+    assert "AzureMLQuantization" in pass_types
+
+
+def test_get_integration_recipe_openvino_vision():
+    result = get_integration_recipe(recipe_id="openvino_vision")
+    assert "error" not in result
+    pass_types = {p["type"] for p in result["recipe"]["passes"].values()}
+    assert "OpenVINOQuantization" in pass_types

@@ -49,6 +49,12 @@ def test_normalize_framework(input: str, expected: str) -> None:
         ("stable-diffusion", "Stable Diffusion v1.4"),
         ("google-bert/bert-base-uncased", "BERT-base"),
         ("bert-base", "BERT-base"),
+        ("google/vit-base-patch16-224", "ViT-base"),
+        ("t5-small", "T5-small"),
+        ("gpt2", "GPT-2"),
+        ("tiiuae/falcon-7b", "Falcon 7B"),
+        ("ultralytics/yolov8", "YOLOv8"),
+        ("mistralai/Mixtral-8x7B-Instruct-v0.1", "Mixtral 8x7B"),
         ("unrelated-model", "unrelated-model"),
     ],
 )
@@ -69,6 +75,8 @@ def test_normalize_model_no_false_substring_match() -> None:
         ("RTX 4090", "NVIDIA RTX 4090"),
         ("NVIDIA RTX 4090 Super", "NVIDIA RTX 4090"),
         ("T4", "NVIDIA T4"),
+        ("Azure ML N-series", "Azure ML N-series"),
+        ("azure ml", "Azure ML N-series"),
     ],
 )
 def test_normalize_hardware(input: str, expected: str) -> None:

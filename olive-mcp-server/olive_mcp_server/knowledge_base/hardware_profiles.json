@@ -351,6 +351,33 @@
         "Very limited memory; small models and small calibration sets only."
       ],
       "notes": "Quantize to INT8 and keep the model under 2GB."
+    },
+    {
+      "target": "Azure ML N-series",
+      "accelerator": "gpu",
+      "execution_providers": [
+        "CUDAExecutionProvider",
+        "TensorrtExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OnnxQuantization",
+        "AzureMLQuantization"
+      ],
+      "typical_speedup": "4-8x",
+      "calibration_size": 256,
+      "optimal_batch_size": 16,
+      "memory_gb": 48,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention",
+        "LayerNormalization"
+      ],
+      "known_issues": [
+        "AzureML pipeline requires AML workspace and compute target."
+      ],
+      "notes": "Cloud inference with ONNX Runtime on Azure NC/ND-series VMs."
     }
   ]
 }

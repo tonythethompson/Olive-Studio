@@ -171,6 +171,148 @@
           "OnnxQuantization": {"support": "supported", "note": "INT8 QDQ on TensorRT gives good speedup.", "typical_accuracy_drop": "<0.5%"}
         }
       }
+    },
+    {
+      "model": "MobileNetV2",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "Intel Core i9 CPU": {
+          "OnnxConversion": {"support": "supported", "note": "Lightweight CNN; exports cleanly.", "typical_accuracy_drop": "n/a"},
+          "OnnxStaticQuantization": {"support": "supported", "note": "INT8 static quantization is very stable for MobileNet.", "typical_accuracy_drop": "<0.5%"}
+        },
+        "Qualcomm Snapdragon NPU": {
+          "QNNConversion": {"support": "supported", "note": "Convert to QNN for NPU execution.", "typical_accuracy_drop": "<1%"},
+          "QNNQuantization": {"support": "supported", "note": "int8 weights with per-channel symmetric quant.", "typical_accuracy_drop": "<1%"}
+        },
+        "Raspberry Pi 5 (CPU)": {
+          "OnnxStaticQuantization": {"support": "supported", "note": "INT8 reduces latency on ARM Cortex-A76.", "typical_accuracy_drop": "<1%"}
+        }
+      }
+    },
+    {
+      "model": "EfficientNet-B0",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "Intel Core i9 CPU": {
+          "OnnxConversion": {"support": "supported", "note": "Compound scaling is ONNX-friendly.", "typical_accuracy_drop": "n/a"},
+          "OnnxStaticQuantization": {"support": "supported", "note": "INT8 quantization stable for EfficientNet.", "typical_accuracy_drop": "<0.5%"}
+        },
+        "NVIDIA T4": {
+          "OnnxConversion": {"support": "supported", "note": "FP16 TensorRT gives good throughput.", "typical_accuracy_drop": "n/a"},
+          "OnnxQuantization": {"support": "warning", "note": "INT8 may need careful calibration due to SiLU activations.", "typical_accuracy_drop": "1-2%"}
+        },
+        "Intel Arc A770": {
+          "OpenVINOConversion": {"support": "supported", "note": "OpenVINO is a strong CPU/iGPU target.", "typical_accuracy_drop": "n/a"},
+          "OpenVINOQuantization": {"support": "supported", "note": "INT8 on Arc A770 is efficient.", "typical_accuracy_drop": "<1%"}
+        }
+      }
+    },
+    {
+      "model": "ViT-base",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "Intel Core i9 CPU": {
+          "OnnxConversion": {"support": "supported", "note": "Vision Transformer exports with dynamic batch/sequence axes.", "typical_accuracy_drop": "n/a"},
+          "OnnxStaticQuantization": {"support": "supported", "note": "INT8 static quantization works for patch embeddings and MLP.", "typical_accuracy_drop": "<1%"}
+        },
+        "NVIDIA RTX 4090": {
+          "OnnxConversion": {"support": "supported", "note": "FP16 TensorRT is the fastest path.", "typical_accuracy_drop": "n/a"},
+          "OnnxQuantization": {"support": "warning", "note": "INT8 attention may need per-channel weights.", "typical_accuracy_drop": "1-2%"}
+        }
+      }
+    },
+    {
+      "model": "T5-small",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "Intel Core i9 CPU": {
+          "OnnxConversion": {"support": "supported", "note": "Encoder-decoder export requires separate attention caches.", "typical_accuracy_drop": "n/a"},
+          "OnnxStaticQuantization": {"support": "warning", "note": "Decoder dynamic shapes can limit INT8 accuracy; calibrate carefully.", "typical_accuracy_drop": "1-3%"}
+        },
+        "NVIDIA RTX 4090": {
+          "OnnxConversion": {"support": "supported", "note": "Use dynamic_axes for encoder and decoder.", "typical_accuracy_drop": "n/a"},
+          "OnnxQuantization": {"support": "supported", "note": "INT8 QDQ works well for T5 encoder.", "typical_accuracy_drop": "<1%"}
+        }
+      }
+    },
+    {
+      "model": "GPT-2",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "Intel Core i9 CPU": {
+          "OnnxConversion": {"support": "supported", "note": "Small GPT-2 exports cleanly; use dynamic_axes.", "typical_accuracy_drop": "n/a"},
+          "OnnxStaticQuantization": {"support": "supported", "note": "INT8 static quantization is stable for GPT-2.", "typical_accuracy_drop": "<1%"}
+        },
+        "NVIDIA RTX 4090": {
+          "OnnxConversion": {"support": "supported", "note": "FP16 TensorRT gives good speedup for small decoder.", "typical_accuracy_drop": "n/a"},
+          "NVModelOptQuantization": {"support": "supported", "note": "AWQ int4 is overkill for GPT-2 but works.", "typical_accuracy_drop": "<1%"}
+        }
+      }
+    },
+    {
+      "model": "Falcon 7B",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "NVIDIA A100": {
+          "OnnxConversion": {"support": "supported", "note": "Use external data format and dynamic_axes.", "typical_accuracy_drop": "n/a"},
+          "NVModelOptQuantization": {"support": "supported", "note": "AWQ int4 is recommended on A100.", "typical_accuracy_drop": "<2%"}
+        },
+        "Intel Core i9 CPU": {
+          "OnnxConversion": {"support": "supported", "note": "CPU export works; int4 reduces memory.", "typical_accuracy_drop": "n/a"},
+          "OnnxBlockWiseRtnQuantization": {"support": "warning", "note": "RTN int4 is fast but may drop perplexity; validate.", "typical_accuracy_drop": "2-4%"}
+        },
+        "Intel Arc A770": {
+          "OpenVINOOptimumConversion": {"support": "supported", "note": "OpenVINO optimum conversion works for Falcon.", "typical_accuracy_drop": "n/a"},
+          "OpenVINOWeightCompression": {"support": "supported", "note": "INT4/INT8 weight compression for low-memory iGPU.", "typical_accuracy_drop": "2-4%"}
+        }
+      }
+    },
+    {
+      "model": "YOLOv8",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "Intel Core i9 CPU": {
+          "OnnxConversion": {"support": "supported", "note": "YOLOv8 exports via Ultralytics export path.", "typical_accuracy_drop": "n/a"},
+          "OnnxStaticQuantization": {"support": "supported", "note": "INT8 works well for detection heads.", "typical_accuracy_drop": "<1%"}
+        },
+        "NVIDIA Jetson Orin": {
+          "OnnxConversion": {"support": "supported", "note": "Export with batch=1 and dynamic input shape.", "typical_accuracy_drop": "n/a"},
+          "OnnxQuantization": {"support": "warning", "note": "INT8 may reduce mAP; verify on representative dataset.", "typical_accuracy_drop": "1-3%"}
+        },
+        "Qualcomm Snapdragon NPU": {
+          "QNNConversion": {"support": "supported", "note": "Convert to QNN with fixed input resolution.", "typical_accuracy_drop": "1-2%"},
+          "QNNQuantization": {"support": "supported", "note": "int8 weights for NPU execution.", "typical_accuracy_drop": "<2%"}
+        }
+      }
+    },
+    {
+      "model": "Mixtral 8x7B",
+      "frameworks": ["PyTorch", "ONNX"],
+      "notes": "Sparse mixture-of-experts; routing and expert sharding require careful export.",
+      "hardware": {
+        "NVIDIA A100": {
+          "OnnxConversion": {"support": "warning", "note": "MoE routing ops may need custom handling; test with representative inputs.", "typical_accuracy_drop": "n/a"},
+          "NVModelOptQuantization": {"support": "supported", "note": "AWQ int4 recommended; expert weights are large.", "typical_accuracy_drop": "<2%"}
+        },
+        "NVIDIA RTX 4090": {
+          "OnnxConversion": {"support": "warning", "note": "VRAM constrained for 8x7B; use external data format.", "typical_accuracy_drop": "n/a"},
+          "NVModelOptQuantization": {"support": "supported", "note": "int4 AWQ reduces memory to fit on consumer GPUs.", "typical_accuracy_drop": "<3%"}
+        },
+        "AMD MI300X / ROCm": {
+          "OnnxConversion": {"support": "supported", "note": "ROCm supports large MoE; use external data format.", "typical_accuracy_drop": "n/a"},
+          "GptqQuantizer": {"support": "supported", "note": "GPTQ int4 is well supported on ROCm.", "typical_accuracy_drop": "<3%"}
+        }
+      }
+    },
+    {
+      "model": "Azure OpenAI Whisper",
+      "frameworks": ["ONNX"],
+      "notes": "Cloud endpoint reference; local ONNX export for Whisper follows the Whisper entry.",
+      "hardware": {
+        "Azure ML N-series": {
+          "AzureMLQuantization": {"support": "supported", "note": "AzureML quantization pipeline for cloud ONNX Runtime.", "typical_accuracy_drop": "<1%"}
+        }
+      }
     }
   ]
 }
