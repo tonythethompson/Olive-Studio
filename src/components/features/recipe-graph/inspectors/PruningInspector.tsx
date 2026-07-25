@@ -139,9 +139,14 @@ export function PruningInspector({ state, setState }: InspectorProps) {
               }
               className="h-9 text-xs bg-slate-950 max-w-xs"
             >
-              <option value="l1_norm">L1 norm</option>
-              <option value="l2_norm">L2 norm</option>
+              <option value="l1_norm">L1 norm — aggressive</option>
+              <option value="l2_norm">L2 norm — gentle</option>
             </Select>
+            <p className="text-[10px] text-slate-500 leading-relaxed">
+              {state.passes.pruningCriteria === "l1_norm"
+                ? "Sparser, blockier weight distributions — aggressively zeros weights with smaller absolute magnitudes."
+                : "Smoother magnitude preservation — penalizes larger weights more heavily, gentler accuracy degradation."}
+            </p>
           </div>
         )}
       </div>
