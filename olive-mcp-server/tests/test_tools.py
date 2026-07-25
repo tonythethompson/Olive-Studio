@@ -100,7 +100,7 @@ def test_get_pass_chain_valid():
 
 
 def test_get_pass_chain_invalid_order():
-    result = get_pass_chain(["OnnxQuantization", "OnnxConversion"])
+    result = get_pass_chain(["OnnxQuantization", "OnnxConversion"], source_format="PyTorch")
     assert result["valid"] is False
     assert len(result["errors"]) > 0
 
@@ -157,3 +157,9 @@ def test_evaluate_optimization_tradeoff():
     )
     assert result["predicted_outcomes"]["size"] < 100
     assert result["predicted_outcomes"]["latency"] < 1.0
+
+
+def test_get_pass_chain_onnx_source_no_conversion_required():
+    result = get_pass_chain(["OnnxQuantization"], source_format="onnx")
+    assert result["valid"] is True
+    assert len(result["errors"]) == 0

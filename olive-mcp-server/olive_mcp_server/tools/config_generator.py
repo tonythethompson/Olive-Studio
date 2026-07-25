@@ -24,10 +24,15 @@ _TARGET_DEFAULTS = {
 }
 
 
-def _apply_target_defaults(pass_name: str, params: dict[str, Any], target: str) -> dict[str, Any]:
+def _apply_target_defaults(pass_name: str, params: dict[str, Any], target: str, meta: dict[str, Any]) -> dict[str, Any]:
     """Apply optimization-target defaults to a parameter set."""
     defaults = _TARGET_DEFAULTS.get(target, _TARGET_DEFAULTS["balanced"]).copy()
-    merged = defaults.copy()
+
+    # Filter defaults to only include params supported by this pass
+    supported_params = set(meta.get("optional_params", {}).keys()) | set(meta.get("required_params", []))
+    filtered_defaults = {k: v for k, v in defaults.items() if k in supported_params}
+
+    merged = filtered_defaults.copy()
     merged.update(params)
     return merged
 
@@ -69,7 +74,7 @@ def get_pass_config_template(
     }
     # Keep only non-null defaults.
     defaults = {k: v for k, v in defaults.items() if v is not None}
-    params = _apply_target_defaults(pass_name, defaults, target)
+    params = _apply_target_defaults(pass_name, defaults, target, meta)
 
     # Framework-specific input model type.
     framework_map = {

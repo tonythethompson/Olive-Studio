@@ -23,8 +23,7 @@
       "hardware": {
         "NVIDIA RTX 4090": {
           "OnnxQuantization": {"support": "supported", "note": "INT8 QDQ works well; TensorRT recommended.", "typical_accuracy_drop": "<1%"},
-          "NVModelOptQuantization": {"support": "supported", "note": "AWQ int4 is stable for Phi-3.", "typical_accuracy_drop": "<1.5%"},
-          "CoreML": {"support": "warning", "note": "Fix dynamic sequence length; CoreML has GQA limits.", "typical_accuracy_drop": "2-4%"}
+          "NVModelOptQuantization": {"support": "supported", "note": "AWQ int4 is stable for Phi-3.", "typical_accuracy_drop": "<1.5%"}
         }
       }
     },

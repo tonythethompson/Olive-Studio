@@ -7,11 +7,12 @@ from . import load_compatibility_matrix, load_passes
 
 def _normalize_model(name: str) -> str:
     n = name.lower()
-    if "mistral" in n:
+    # Only normalize exact known aliases; return original name for unsupported variants
+    if "mistral" in n and "7b" in n:
         return "Mistral 7B"
-    if "phi" in n:
+    if "phi-3-mini" in n or "phi3-mini" in n or (n == "phi-3" or n == "phi3"):
         return "Phi-3-mini"
-    if "resnet" in n:
+    if "resnet" in n and "50" in n:
         return "ResNet-50"
     if "whisper" in n:
         return "Whisper"

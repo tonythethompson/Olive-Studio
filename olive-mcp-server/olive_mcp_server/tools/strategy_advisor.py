@@ -1,5 +1,6 @@
 """Tool: get_quantization_strategy."""
 
+import re
 from typing import Any
 
 from . import load_hardware_profiles, load_quirks
@@ -182,8 +183,6 @@ def get_quantization_strategy(
     elif latency_rank_val == 0 and (mt == "cnn" or mt == "vision"):
         algorithm += " + consider pruning 20-30% before quantization"
         risks.append("Pruning + quantization compound accuracy loss; fine-tune if possible.")
-
-import re
 
     # Accuracy constraint override.
     match = re.search(r"([\d.]+)\s*%", accuracy_threshold)

@@ -271,17 +271,11 @@
       ],
       "title": "CoreML conversion fails with dynamic shapes",
       "root_cause": "CoreML prefers fixed input shapes; dynamic batch or sequence length can fail.",
-      "solution": "Fix input shapes in OnnxConversion or set min/max sequence lengths; use symbolic shape inference carefully.",
+      "solution": "Fix input shapes by removing dynamic_axes in OnnxConversion; use symbolic shape inference carefully.",
       "updated_config": {
         "passes": {
           "OnnxConversion": {
             "params": {
-              "input_shapes": [
-                [
-                  1,
-                  128
-                ]
-              ],
               "dynamic_axes": {}
             }
           }
@@ -493,12 +487,11 @@
       ],
       "title": "TorchScript export fails for a HuggingFace model",
       "root_cause": "Many HF models use control flow or data-dependent shapes that TorchScript cannot trace.",
-      "solution": "Use OnnxConversion instead of TorchScript export; provide example inputs and dynamic_axes.",
+      "solution": "Use OnnxConversion instead of TorchScript export; configure dynamic_axes for variable dimensions.",
       "updated_config": {
         "passes": {
           "OnnxConversion": {
             "params": {
-              "example_input": "<tensor or dict>",
               "dynamic_axes": {
                 "input": {
                   "0": "batch_size"
