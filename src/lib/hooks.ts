@@ -133,6 +133,66 @@ export function useMcpDiagnostic(): UseMcpDiagnosticReturn {
   return { diagnostic, isDiagnosing, fetchDiagnostic };
 }
 
+// ─── MCP Diagnostic (Keyed by ID) ─────────────────────────────
+
+/**
+ * Per-key MCP diagnostic tracking.
+ *
+ * Wraps useMcpDiagnostic to provide keyed-by-ID loading and result storage.
+ * Eliminates the duplicated pattern in ExecutionWorkspace (single key) and
+ * BatchProcessingPanel (per-job keys).
+ *
+ * Usage:
+ * ```ts
+ * const { fetchKeyedDiagnostic, diagnostics, diagnosingKeys } = useMcpDiagnosticKeyed();
+ * // Fetch for a specific key:
+ * await fetchKeyedDiagnostic("job-123", logs);
+ * // diagnostics["job-123"] now has the McpDiagnostic
+ * // diagnosingKeys["job-123"] is false
+ * ```
+ */
+export function useMcpDiagnosticKeyed(): {
+  fetchKeyedDiagnostic: (key: string, logs: string[]) => Promise<McpDiagnostic | null>;
+  diagnostics: Record<string, McpDiagnostic>;
+  diagnosingKeys: Record<string, boolean>;
+  clearDiagnostic: (key: string) => void;
+} {
+  const [diagnostics, setDiagnostics] = useState<Record<string, McpDiagnostic>>({});
+  const [diagnosingKeys, setDiagnosingKeys] = useState<Record<string, boolean>>({});
+  const { fetchDiagnostic } = useMcpDiagnostic();
+
+  const fetchKeyedDiagnostic = useCallback(
+    async (key: string, logs: string[]): Promise<McpDiagnostic | null> => {
+      setDiagnosingKeys((prev) => ({ ...prev, [key]: true }));
+      try {
+        const result = await fetchDiagnostic(logs);
+        if (result) {
+          setDiagnostics((prev) => ({ ...prev, [key]: result }));
+        }
+        return result;
+      } finally {
+        setDiagnosingKeys((prev) => ({ ...prev, [key]: false }));
+      }
+    },
+    [fetchDiagnostic],
+  );
+
+  const clearDiagnostic = useCallback((key: string) => {
+    setDiagnostics((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setDiagnosingKeys((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
+
+  return { fetchKeyedDiagnostic, diagnostics, diagnosingKeys, clearDiagnostic };
+}
+
 // ─── Import Presets ─────────────────────────────────────────────
 
 interface ImportConfirmState<T> {

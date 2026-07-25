@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, Button, Label, Input, Select } from "@/components/ui";
-import { UIState, BatchJob, IHVProvider, ModelSource, type McpDiagnostic } from "@/types";
-import { useAutoClearError, useMcpDiagnostic } from "@/lib/hooks";
+import { UIState, BatchJob, IHVProvider, ModelSource } from "@/types";
+import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";
 import { mapMcpConfigToUiState } from "@/lib/mcpConfigMapping";
 import { buildRecipeJsonFromState, buildOliveRecipeFromBatchJob } from "@/lib/recipePipeline";
 import { parseOliveMetricsFromLogs } from "@/lib/oliveLogMetrics";
@@ -46,21 +46,18 @@ export function BatchProcessingPanel({
   const handleToggleAddForm = useCallback(() => setShowAddForm((v) => !v), []);
 
   // MCP Diagnostic State — keyed by job ID
-  const [batchDiagnostics, setBatchDiagnostics] = useState<Record<string, McpDiagnostic>>({});
-  const [diagnosingJobs, setDiagnosingJobs] = useState<Record<string, boolean>>({});
+  const {
+    fetchKeyedDiagnostic,
+    diagnostics: batchDiagnostics,
+    diagnosingKeys: diagnosingJobs,
+  } = useMcpDiagnosticKeyed();
   const [appliedFixJobId, setAppliedFixJobId] = useAutoClearError(3000);
-  const { fetchDiagnostic } = useMcpDiagnostic();
 
   const fetchBatchMcpDiagnostic = useCallback(
     async (jobId: string, logs: string[]) => {
-      setDiagnosingJobs((prev) => ({ ...prev, [jobId]: true }));
-      const result = await fetchDiagnostic(logs);
-      if (result) {
-        setBatchDiagnostics((prev) => ({ ...prev, [jobId]: result }));
-      }
-      setDiagnosingJobs((prev) => ({ ...prev, [jobId]: false }));
+      await fetchKeyedDiagnostic(jobId, logs);
     },
-    [fetchDiagnostic],
+    [fetchKeyedDiagnostic],
   );
 
   // Custom job creation states
@@ -349,7 +346,10 @@ export function BatchProcessingPanel({
   const selectedJob = jobs.find((j) => j.id === selectedJobId);
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div
+      data-testid="batch-processing-panel"
+      className="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300"
+    >
       {/* Sidebar Queue List */}
       <div className="xl:col-span-2 space-y-6">
         <Card>

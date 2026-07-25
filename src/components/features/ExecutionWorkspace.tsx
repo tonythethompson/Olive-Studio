@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, Suspense, lazy, type MouseEvent as ReactMouseEvent } from "react";
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
-import { useAutoClearError, useMcpDiagnostic } from "@/lib/hooks";
+import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";
 import { mapMcpConfigToUiState } from "@/lib/mcpConfigMapping";
 import { DiagnosisHistory, type DiagnosisEntry } from "./DiagnosisHistory";
 import {
@@ -96,7 +96,9 @@ export function ExecutionWorkspace({
   const [isExportCopied, setIsExportCopied] = useState(false);
   const [justQueued, setJustQueued] = useState(false);
 
-  const { diagnostic: mcpDiagnostic, isDiagnosing, fetchDiagnostic: fetchMcpDiagnostic } = useMcpDiagnostic();
+  const { fetchKeyedDiagnostic, diagnostics: keyedDiagnostics, diagnosingKeys } = useMcpDiagnosticKeyed();
+  const mcpDiagnostic = keyedDiagnostics["current"] ?? null;
+  const isDiagnosing = diagnosingKeys["current"] ?? false;
   const [mcpFixApplied, setMcpFixApplied] = useAutoClearError(3000);
   // Diagnosis history for comparing across runs
   const [diagnosisHistory, setDiagnosisHistory] = useState<DiagnosisEntry[]>([]);
@@ -189,13 +191,13 @@ export function ExecutionWorkspace({
     const selectedLogs = Array.from(selectedLogIndices)
       .sort((a: number, b: number) => a - b)
       .map((i: number) => executionLogs[i]);
-    fetchMcpDiagnostic(selectedLogs);
+    fetchKeyedDiagnostic("current", selectedLogs);
   };
 
   const handleDiagnoseAll = () => {
     if (executionLogs.length === 0) return;
     setMcpFixApplied("");
-    fetchMcpDiagnostic(executionLogs);
+    fetchKeyedDiagnostic("current", executionLogs);
   };
 
   // Auto-save completed diagnoses to history
@@ -686,7 +688,7 @@ ${
           if (finalStatus === "failed") {
             setMcpFixApplied("");
             setExecutionLogs((currentLogs) => {
-              fetchMcpDiagnostic(currentLogs);
+              fetchKeyedDiagnostic("current", currentLogs);
               return currentLogs;
             });
           }
@@ -720,7 +722,7 @@ ${
                 if (finalStatus === "failed") {
                   setMcpFixApplied("");
                   setExecutionLogs((currentLogs) => {
-                    fetchMcpDiagnostic(currentLogs);
+                    fetchKeyedDiagnostic("current", currentLogs);
                     return currentLogs;
                   });
                 }
@@ -796,7 +798,10 @@ ${
   };
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
+    <div
+      data-testid="execution-workspace"
+      className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 relative"
+    >
       {/* Export Recipe Overlay */}
       {isExportOpen && (
         <div className="absolute inset-0 z-55 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in overflow-y-auto">
@@ -1411,7 +1416,10 @@ ${
                   </div>
                 </div>
               )}
-              <div className="bg-slate-950 border border-slate-800 rounded-md p-4 font-mono text-xs text-emerald-400 space-y-0.5 h-[220px] overflow-y-auto">
+              <div
+                data-testid="execution-log-panel"
+                className="bg-slate-950 border border-slate-800 rounded-md p-4 font-mono text-xs text-emerald-400 space-y-0.5 h-[220px] overflow-y-auto"
+              >
                 {executionLogs.length === 0 ? (
                   <p className="text-slate-500 italic">
                     Ready — click &quot;Execute Live&quot; to begin an Olive optimization run.
