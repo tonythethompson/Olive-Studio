@@ -1,6 +1,6 @@
 {
   "version": "0.2.0",
-  "last_updated": "2026-07-24",
+  "last_updated": "2026-07-25",
   "models": [
     {
       "model": "Mistral 7B",
@@ -47,6 +47,128 @@
         "NVIDIA T4": {
           "OnnxConversion": {"support": "warning", "note": "Dynamic sequence length for audio; use dynamic_axes.", "typical_accuracy_drop": "n/a"},
           "OnnxStaticQuantization": {"support": "supported", "note": "Encoder can be static INT8; decoder often needs dynamic quantization.", "typical_accuracy_drop": "1-3%"}
+        }
+      }
+    },
+    {
+      "model": "Llama 2 7B",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "NVIDIA RTX 4090": {
+          "OnnxConversion": {"support": "supported", "note": "Use dynamic_axes for variable batch/sequence.", "typical_accuracy_drop": "n/a"},
+          "NVModelOptQuantization": {"support": "supported", "note": "AWQ int4 is well supported on NVIDIA GPUs.", "typical_accuracy_drop": "<2%"},
+          "OnnxQuantization": {"support": "warning", "note": "INT8 QDQ is usable but AWQ/TensorRT is preferred.", "typical_accuracy_drop": "1-3%"}
+        },
+        "Intel Core i9 CPU": {
+          "OnnxConversion": {"support": "supported", "note": "CPU inference works; static quantization possible.", "typical_accuracy_drop": "n/a"},
+          "OnnxStaticQuantization": {"support": "supported", "note": "INT8 static quantization reduces memory but may slow generation.", "typical_accuracy_drop": "1-2%"},
+          "OpenVINOConversion": {"support": "supported", "note": "OpenVINO can improve CPU throughput.", "typical_accuracy_drop": "n/a"}
+        },
+        "Qualcomm Snapdragon NPU": {
+          "QNNQuantization": {"support": "supported", "note": "Use int4 weights and QNNPreprocess for unsupported ops.", "typical_accuracy_drop": "3-5%"}
+        }
+      }
+    },
+    {
+      "model": "Llama 3 8B",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "NVIDIA RTX 4090": {
+          "OnnxConversion": {"support": "supported", "note": "Use dynamic_axes and external data for large weights.", "typical_accuracy_drop": "n/a"},
+          "NVModelOptQuantization": {"support": "supported", "note": "AWQ int4 is the recommended path for Llama 3.", "typical_accuracy_drop": "<2%"},
+          "OnnxFloatToFloat16": {"support": "supported", "note": "FP16 halves memory; keep I/O types float32 for stability.", "typical_accuracy_drop": "<1%"}
+        },
+        "Intel Core i9 CPU": {
+          "OnnxConversion": {"support": "supported", "note": "CPU-friendly with dynamic_axes.", "typical_accuracy_drop": "n/a"},
+          "OnnxStaticQuantization": {"support": "supported", "note": "INT8 static quant reduces footprint for edge deployment.", "typical_accuracy_drop": "1-2%"},
+          "OpenVINOConversion": {"support": "supported", "note": "OpenVINO is a good CPU target for Llama 3.", "typical_accuracy_drop": "n/a"}
+        },
+        "Qualcomm Snapdragon NPU": {
+          "QNNQuantization": {"support": "supported", "note": "int4 weights with QNNPreprocess give best NPU throughput.", "typical_accuracy_drop": "3-5%"}
+        }
+      }
+    },
+    {
+      "model": "Phi-4",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "NVIDIA RTX 4090": {
+          "OnnxConversion": {"support": "supported", "note": "Export with dynamic_axes for batch and sequence.", "typical_accuracy_drop": "n/a"},
+          "NVModelOptQuantization": {"support": "supported", "note": "NVModelOpt AWQ int4 works well for small Phi models.", "typical_accuracy_drop": "<2%"},
+          "OnnxQuantization": {"support": "supported", "note": "INT8 QDQ is stable on Phi-4.", "typical_accuracy_drop": "<1%"}
+        },
+        "Intel Core i9 CPU": {
+          "OnnxConversion": {"support": "supported", "note": "CPU export is straightforward.", "typical_accuracy_drop": "n/a"},
+          "OnnxStaticQuantization": {"support": "supported", "note": "INT8 static quantization gives good CPU latency.", "typical_accuracy_drop": "<1%"},
+          "OnnxDynamicQuantization": {"support": "supported", "note": "No calibration required; good for quick CPU tests.", "typical_accuracy_drop": "1-2%"}
+        },
+        "Qualcomm Snapdragon NPU": {
+          "QNNQuantization": {"support": "supported", "note": "Small enough for NPU int4 deployment.", "typical_accuracy_drop": "2-4%"}
+        }
+      }
+    },
+    {
+      "model": "CodeLlama 7B",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "NVIDIA RTX 4090": {
+          "OnnxConversion": {"support": "supported", "note": "Long context requires careful dynamic_axes.", "typical_accuracy_drop": "n/a"},
+          "NVModelOptQuantization": {"support": "supported", "note": "AWQ int4 is recommended for code generation.", "typical_accuracy_drop": "<2%"}
+        },
+        "Intel Core i9 CPU": {
+          "OnnxConversion": {"support": "supported", "note": "Long sequence lengths can be slow on CPU.", "typical_accuracy_drop": "n/a"},
+          "OnnxStaticQuantization": {"support": "warning", "note": "Quantization may affect code-token accuracy; evaluate carefully.", "typical_accuracy_drop": "2-4%"}
+        },
+        "Qualcomm Snapdragon NPU": {
+          "QNNQuantization": {"support": "supported", "note": "int4 weights recommended for 7B code model.", "typical_accuracy_drop": "3-5%"}
+        }
+      }
+    },
+    {
+      "model": "DeepSeek-R1-Distill-Llama 8B",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "NVIDIA RTX 4090": {
+          "OnnxConversion": {"support": "supported", "note": "Use dynamic_axes for reasoning-length outputs.", "typical_accuracy_drop": "n/a"},
+          "NVModelOptQuantization": {"support": "supported", "note": "AWQ int4 is the best GPU path.", "typical_accuracy_drop": "<2%"}
+        },
+        "Intel Core i9 CPU": {
+          "OnnxConversion": {"support": "supported", "note": "CPU export works; int4 reduces memory.", "typical_accuracy_drop": "n/a"},
+          "OpenVINOConversion": {"support": "supported", "note": "OpenVINO Weight Compression is effective for 8B.", "typical_accuracy_drop": "<2%"},
+          "OpenVINOWeightCompression": {"support": "supported", "note": "INT4/INT8 weight compression for low-memory CPU.", "typical_accuracy_drop": "2-4%"}
+        },
+        "Qualcomm Snapdragon NPU": {
+          "QNNQuantization": {"support": "supported", "note": "int4 weights with QNNPreprocess.", "typical_accuracy_drop": "3-5%"}
+        }
+      }
+    },
+    {
+      "model": "Stable Diffusion v1.4",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "NVIDIA RTX 4090": {
+          "OnnxConversion": {"support": "supported", "note": "UNet, VAE and text encoder are converted separately.", "typical_accuracy_drop": "n/a"},
+          "OnnxFloatToFloat16": {"support": "supported", "note": "FP16 is the standard for SD UNet.", "typical_accuracy_drop": "<1%"},
+          "OnnxQuantization": {"support": "warning", "note": "INT8 UNet can cause visible artifacts; use per-channel carefully.", "typical_accuracy_drop": "3-5%"}
+        },
+        "Intel Core i9 CPU": {
+          "OnnxConversion": {"support": "supported", "note": "CPU runs SD components; FP32 is safest.", "typical_accuracy_drop": "n/a"},
+          "OnnxStaticQuantization": {"support": "warning", "note": "VAE quantization can produce artifacts; validate visually.", "typical_accuracy_drop": "3-5%"}
+        }
+      }
+    },
+    {
+      "model": "BERT-base",
+      "frameworks": ["PyTorch", "ONNX"],
+      "hardware": {
+        "Intel Core i9 CPU": {
+          "OnnxConversion": {"support": "supported", "note": "BERT exports cleanly to ONNX.", "typical_accuracy_drop": "n/a"},
+          "OnnxStaticQuantization": {"support": "supported", "note": "INT8 static quantization is highly stable for BERT.", "typical_accuracy_drop": "<0.5%"},
+          "OnnxDynamicQuantization": {"support": "supported", "note": "No calibration required; good for quick tests.", "typical_accuracy_drop": "<1%"}
+        },
+        "NVIDIA RTX 4090": {
+          "OnnxConversion": {"support": "supported", "note": "BERT inference on GPU is fast in FP16.", "typical_accuracy_drop": "n/a"},
+          "OnnxQuantization": {"support": "supported", "note": "INT8 QDQ on TensorRT gives good speedup.", "typical_accuracy_drop": "<0.5%"}
         }
       }
     }
