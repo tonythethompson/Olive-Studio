@@ -239,6 +239,12 @@ function mapQuantPrecision(config: any): UIState["passes"]["quantPrecision"] {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapPruningCriteria(config: any): "l1_norm" | "l2_norm" | undefined {
+  if (!config?.pruning_criteria) return undefined;
+  return String(config.pruning_criteria).toLowerCase().includes("l2") ? "l2_norm" : "l1_norm";
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes"] {
   const next = createInactivePasses();
 
@@ -296,10 +302,8 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
       next.pruningMethod = "sparsegpt";
       if (config.sparsity != null) next.pruningSparsity = Number(config.sparsity);
       if (config.semi_sparse_acc) next.pruningType = "structured";
-      if (config.pruning_criteria) {
-        const criteria = String(config.pruning_criteria).toLowerCase();
-        next.pruningCriteria = criteria.includes("l2") ? "l2_norm" : "l1_norm";
-      }
+      const sparsegptCriteria = mapPruningCriteria(config);
+      if (sparsegptCriteria) next.pruningCriteria = sparsegptCriteria;
       continue;
     }
 
@@ -307,10 +311,8 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
       next.pruning = true;
       next.pruningMethod = "wanda";
       if (config.sparsity != null) next.pruningSparsity = Number(config.sparsity);
-      if (config.pruning_criteria) {
-        const criteria = String(config.pruning_criteria).toLowerCase();
-        next.pruningCriteria = criteria.includes("l2") ? "l2_norm" : "l1_norm";
-      }
+      const wandaCriteria = mapPruningCriteria(config);
+      if (wandaCriteria) next.pruningCriteria = wandaCriteria;
       continue;
     }
 
@@ -319,10 +321,8 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
       next.pruningMethod = "magnitude";
       if (config.sparsity != null) next.pruningSparsity = Number(config.sparsity);
       if (config.semi_sparse_acc) next.pruningType = "structured";
-      if (config.pruning_criteria) {
-        const criteria = String(config.pruning_criteria).toLowerCase();
-        next.pruningCriteria = criteria.includes("l2") ? "l2_norm" : "l1_norm";
-      }
+      const pruneCriteria = mapPruningCriteria(config);
+      if (pruneCriteria) next.pruningCriteria = pruneCriteria;
       continue;
     }
 

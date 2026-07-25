@@ -658,6 +658,17 @@ describe("buildOliveRecipe", () => {
     expect(imported.passes?.pruningCriteria).toBe("l2_norm");
   });
 
+  it("preserves pruning_criteria through recipe import round-trip (wanda)", () => {
+    const state = baseState({
+      passes: { ...DEFAULT_PASSES, pruning: true, pruningMethod: "wanda", pruningCriteria: "l1_norm" },
+    });
+    const recipe = buildOliveRecipe(state);
+    const imported = deriveUiStateFromOliveRecipe(recipe, { replacePasses: true });
+    expect(imported.passes?.pruning).toBe(true);
+    expect(imported.passes?.pruningMethod).toBe("wanda");
+    expect(imported.passes?.pruningCriteria).toBe("l1_norm");
+  });
+
   it("includes evaluators block when userScript and hfDataset are both set", () => {
     const state = baseState({
       userScript: "/path/to/eval.py",
