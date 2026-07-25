@@ -53,13 +53,6 @@ export function BatchProcessingPanel({
   } = useMcpDiagnosticKeyed();
   const [appliedFixJobId, setAppliedFixJobId] = useAutoClearError(3000);
 
-  const fetchBatchMcpDiagnostic = useCallback(
-    async (jobId: string, logs: string[]) => {
-      await fetchKeyedDiagnostic(jobId, logs);
-    },
-    [fetchKeyedDiagnostic],
-  );
-
   // Custom job creation states
   const [newModelName, setNewModelName] = useState("");
   const [newModelId, setNewModelId] = useState("meta-llama/Llama-3-8B");
@@ -146,7 +139,7 @@ export function BatchProcessingPanel({
               j.id === job.id ? { ...j, status: "failed", logs: errorLogs } : j,
             ),
           });
-          fetchBatchMcpDiagnostic(job.id, errorLogs);
+          fetchKeyedDiagnostic(job.id, errorLogs);
           continue;
         }
         const data = await resp.json();
@@ -162,7 +155,7 @@ export function BatchProcessingPanel({
             j.id === job.id ? { ...j, status: "failed", logs: errorLogs } : j,
           ),
         });
-        fetchBatchMcpDiagnostic(job.id, errorLogs);
+        fetchKeyedDiagnostic(job.id, errorLogs);
         continue;
       }
 
@@ -238,7 +231,7 @@ export function BatchProcessingPanel({
           });
           // Auto-diagnose failed jobs via MCP knowledge base
           if (finalStatus === "failed" && completedJob) {
-            fetchBatchMcpDiagnostic(job.id, completedJob.logs);
+            fetchKeyedDiagnostic(job.id, completedJob.logs);
           }
           evtSource.close();
           const idx = activeSourcesRef.current.indexOf(evtSource);
@@ -256,7 +249,7 @@ export function BatchProcessingPanel({
             ),
           });
           // Auto-diagnose SSE failures via MCP knowledge base
-          fetchBatchMcpDiagnostic(job.id, errorLogs);
+          fetchKeyedDiagnostic(job.id, errorLogs);
           evtSource.close();
           resolve();
         };
@@ -856,7 +849,7 @@ export function BatchProcessingPanel({
                     ) : !diagnosingJobs[selectedJob.id] ? (
                       <button
                         type="button"
-                        onClick={() => fetchBatchMcpDiagnostic(selectedJob.id, selectedJob.logs)}
+                        onClick={() => fetchKeyedDiagnostic(selectedJob.id, selectedJob.logs)}
                         className="text-[11px] text-slate-400 hover:text-rose-300 transition-colors cursor-pointer flex items-center gap-1.5"
                       >
                         <Wrench className="h-3 w-3" /> Run MCP Diagnosis

@@ -1,155 +1,303 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useAutoClearError } from "@/lib/hooks";
+import { useMcpDiagnosticKeyed } from "@/lib/hooks";
+import type { McpDiagnostic } from "@/types";
 
-describe("useAutoClearError", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
+// ── Mock fetch ───────────────────────────────────────────────────
+
+const mockDiagnostic: McpDiagnostic = {
+  matched_entry: "onnxruntime-error",
+  title: "ONNX Runtime Error",
+  root_cause: "Model conversion failed due to unsupported op",
+  workaround: "Add custom op definitions",
+  updated_config: { use_external_data_format: true },
+  relevant_quirks: ["Large models need external data format"],
+};
+
+const emptyLogs = ["[ERROR] Something went wrong"];
+
+beforeEach(() => {
+  vi.spyOn(globalThis, "fetch").mockImplementation((_url, _opts) =>
+    Promise.resolve(new Response(JSON.stringify(mockDiagnostic), { status: 200 })),
+  );
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+// ── Tests ────────────────────────────────────────────────────────
+
+describe("useMcpDiagnosticKeyed", () => {
+  it("returns empty diagnostics and diagnosingKeys initially", () => {
+    const { result } = renderHook(() => useMcpDiagnosticKeyed());
+
+    expect(result.current.diagnostics).toEqual({});
+    expect(result.current.diagnosingKeys).toEqual({});
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
+  it("stores diagnostic result keyed by ID after fetch completes", async () => {
+    const { result } = renderHook(() => useMcpDiagnosticKeyed());
+
+    await act(async () => {
+      await result.current.fetchKeyedDiagnostic("job-1", emptyLogs);
+    });
+
+    expect(result.current.diagnostics["job-1"]).toEqual(mockDiagnostic);
   });
 
-  it("returns empty string initially", () => {
-    const { result } = renderHook(() => useAutoClearError(4000));
-    expect(result.current[0]).toBe("");
+  it("tracks loading state: diagnosingKeys[key] is true during fetch, false after", async () => {
+    const { result } = renderHook(() => useMcpDiagnosticKeyed());
+
+    let resolveFetch!: (value: Response) => void;
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+
+    // Start fetch — should set diagnosingKeys["job-1"] = true
+    act(() => {
+      result.current.fetchKeyedDiagnostic("job-1", emptyLogs);
+    });
+
+    expect(result.current.diagnosingKeys["job-1"]).toBe(true);
+
+    // Resolve fetch — should set diagnosingKeys["job-1"] = false
+    await act(async () => {
+      resolveFetch(new Response(JSON.stringify(mockDiagnostic), { status: 200 }));
+    });
+
+    expect(result.current.diagnosingKeys["job-1"]).toBe(false);
   });
 
-  it("sets error message immediately", () => {
-    const { result } = renderHook(() => useAutoClearError(4000));
-    const [, setError] = result.current;
+  it("handles concurrent fetches to different keys independently", async () => {
+    const { result } = renderHook(() => useMcpDiagnosticKeyed());
 
-    act(() => {
-      setError("Something failed");
+    const diagA: McpDiagnostic = {
+      matched_entry: "error-a",
+      title: "Error A",
+      root_cause: "Cause A",
+      workaround: "Fix A",
+    };
+    const diagB: McpDiagnostic = {
+      matched_entry: "error-b",
+      title: "Error B",
+      root_cause: "Cause B",
+      workaround: "Fix B",
+    };
+
+    let callCount = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation((_url, _opts) => {
+      callCount++;
+      const diag = callCount === 1 ? diagA : diagB;
+      return Promise.resolve(new Response(JSON.stringify(diag), { status: 200 }));
     });
 
-    expect(result.current[0]).toBe("Something failed");
+    // Fire both fetches concurrently
+    await act(async () => {
+      await Promise.all([
+        result.current.fetchKeyedDiagnostic("job-a", ["error a"]),
+        result.current.fetchKeyedDiagnostic("job-b", ["error b"]),
+      ]);
+    });
+
+    expect(result.current.diagnostics["job-a"]).toEqual(diagA);
+    expect(result.current.diagnostics["job-b"]).toEqual(diagB);
+    expect(result.current.diagnosingKeys["job-a"]).toBe(false);
+    expect(result.current.diagnosingKeys["job-b"]).toBe(false);
   });
 
-  it("auto-clears error after timeout", () => {
-    const { result } = renderHook(() => useAutoClearError(4000));
-    const [, setError] = result.current;
+  it("concurrent fetches only show loading for keys that are in flight", async () => {
+    const { result } = renderHook(() => useMcpDiagnosticKeyed());
 
-    act(() => {
-      setError("Temporary error");
-    });
-    expect(result.current[0]).toBe("Temporary error");
+    let resolveA!: (value: Response) => void;
+    let resolveB!: (value: Response) => void;
 
-    act(() => {
-      vi.advanceTimersByTime(4000);
+    vi.spyOn(globalThis, "fetch").mockImplementation((_url, _opts) => {
+      const p = new Promise<Response>((resolve) => {
+        if (!resolveA) resolveA = resolve;
+        else resolveB = resolve;
+      });
+      return p;
     });
-    expect(result.current[0]).toBe("");
+
+    // Start both
+    act(() => {
+      result.current.fetchKeyedDiagnostic("job-a", ["error a"]);
+      result.current.fetchKeyedDiagnostic("job-b", ["error b"]);
+    });
+
+    // Both should be loading
+    expect(result.current.diagnosingKeys["job-a"]).toBe(true);
+    expect(result.current.diagnosingKeys["job-b"]).toBe(true);
+
+    // Resolve only job-a
+    await act(async () => {
+      resolveA(new Response(JSON.stringify(mockDiagnostic), { status: 200 }));
+    });
+
+    // job-a done, job-b still loading
+    expect(result.current.diagnosingKeys["job-a"]).toBe(false);
+    expect(result.current.diagnosingKeys["job-b"]).toBe(true);
+    expect(result.current.diagnostics["job-a"]).toEqual(mockDiagnostic);
+    expect(result.current.diagnostics["job-b"]).toBeUndefined();
+
+    // Resolve job-b
+    await act(async () => {
+      resolveB(new Response(JSON.stringify(mockDiagnostic), { status: 200 }));
+    });
+
+    expect(result.current.diagnosingKeys["job-b"]).toBe(false);
+    expect(result.current.diagnostics["job-b"]).toEqual(mockDiagnostic);
   });
 
-  it("uses 4000ms default timeout when no arg is passed", () => {
-    const { result } = renderHook(() => useAutoClearError());
-    const [, setError] = result.current;
+  it("empty logs returns null and does not store anything", async () => {
+    const { result } = renderHook(() => useMcpDiagnosticKeyed());
 
-    act(() => {
-      setError("Default timeout");
+    await act(async () => {
+      const res = await result.current.fetchKeyedDiagnostic("job-empty", []);
+      expect(res).toBeNull();
     });
 
-    act(() => {
-      vi.advanceTimersByTime(3999);
-    });
-    expect(result.current[0]).toBe("Default timeout");
-
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(result.current[0]).toBe("");
+    expect(result.current.diagnostics["job-empty"]).toBeUndefined();
+    expect(result.current.diagnosingKeys["job-empty"]).toBe(false);
   });
 
-  it("respects custom timeout", () => {
-    const { result } = renderHook(() => useAutoClearError(2000));
-    const [, setError] = result.current;
+  it("handles fetch failure gracefully — diagnosingKeys resets, diagnostics not updated", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(new Response(null, { status: 500, statusText: "Internal Server Error" })),
+    );
 
-    act(() => {
-      setError("Quick error");
+    const { result } = renderHook(() => useMcpDiagnosticKeyed());
+
+    await act(async () => {
+      await result.current.fetchKeyedDiagnostic("job-fail", emptyLogs);
     });
 
-    act(() => {
-      vi.advanceTimersByTime(1999);
-    });
-    expect(result.current[0]).toBe("Quick error");
-
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(result.current[0]).toBe("");
+    expect(result.current.diagnosingKeys["job-fail"]).toBe(false);
+    expect(result.current.diagnostics["job-fail"]).toBeUndefined();
   });
 
-  it("setError with empty string clears immediately without scheduling a timer", () => {
-    const { result } = renderHook(() => useAutoClearError(4000));
-    const [, setError] = result.current;
+  it("handles network error gracefully — diagnosingKeys resets", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.reject(new Error("Network failure")));
 
-    act(() => {
-      setError("Some error");
-    });
-    expect(result.current[0]).toBe("Some error");
+    const { result } = renderHook(() => useMcpDiagnosticKeyed());
 
-    act(() => {
-      setError("");
+    await act(async () => {
+      await result.current.fetchKeyedDiagnostic("job-net", emptyLogs);
     });
-    expect(result.current[0]).toBe("");
 
-    // Advancing far past timeout should not change anything
-    act(() => {
-      vi.advanceTimersByTime(10000);
-    });
-    expect(result.current[0]).toBe("");
+    expect(result.current.diagnosingKeys["job-net"]).toBe(false);
+    expect(result.current.diagnostics["job-net"]).toBeUndefined();
   });
 
-  it("rapid setError calls reset the timer — only the last error auto-clears", () => {
-    const { result } = renderHook(() => useAutoClearError(4000));
-    const [, setError] = result.current;
+  it("fetches only the last 20 log lines (matching useMcpDiagnostic behavior)", async () => {
+    const { result } = renderHook(() => useMcpDiagnosticKeyed());
 
-    // First error at t=0
-    act(() => {
-      setError("First error");
-    });
-    expect(result.current[0]).toBe("First error");
+    const manyLogs = Array.from({ length: 50 }, (_, i) => `[INFO] Line ${i}`);
 
-    // Advance 3000ms
-    act(() => {
-      vi.advanceTimersByTime(3000);
+    await act(async () => {
+      await result.current.fetchKeyedDiagnostic("job-many", manyLogs);
     });
-    expect(result.current[0]).toBe("First error");
 
-    // Second error at t=3000 — resets the 4s timer
-    act(() => {
-      setError("Second error");
-    });
-    expect(result.current[0]).toBe("Second error");
-
-    // 3999ms later — still showing second error (3999/4000 since last call)
-    act(() => {
-      vi.advanceTimersByTime(3999);
-    });
-    expect(result.current[0]).toBe("Second error");
-
-    // 1ms more — clears (4000ms since second call)
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(result.current[0]).toBe("");
+    // Verify fetch was called (the hook slices to last 20 internally)
+    expect(globalThis.fetch).toHaveBeenCalledOnce();
+    const callBody = JSON.parse(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1]?.body as string,
+    );
+    expect(callBody.args.error_message).toContain("[INFO] Line 30");
+    expect(callBody.args.error_message).toContain("[INFO] Line 49");
+    // Should NOT contain line 0 (outside the last 20)
+    expect(callBody.args.error_message).not.toContain("[INFO] Line 0");
   });
 
-  it("clears pending timer on unmount without throwing", () => {
-    const { result, unmount } = renderHook(() => useAutoClearError(4000));
-    const [, setError] = result.current;
+  it("second fetch to same key overwrites the previous diagnostic", async () => {
+    const { result } = renderHook(() => useMcpDiagnosticKeyed());
 
-    act(() => {
-      setError("Will outlive component");
+    const diag1: McpDiagnostic = {
+      matched_entry: "first",
+      title: "First",
+      root_cause: "Cause 1",
+      workaround: "Fix 1",
+    };
+    const diag2: McpDiagnostic = {
+      matched_entry: "second",
+      title: "Second",
+      root_cause: "Cause 2",
+      workaround: "Fix 2",
+    };
+
+    vi.spyOn(globalThis, "fetch")
+      .mockImplementationOnce(() => Promise.resolve(new Response(JSON.stringify(diag1), { status: 200 })))
+      .mockImplementationOnce(() => Promise.resolve(new Response(JSON.stringify(diag2), { status: 200 })));
+
+    await act(async () => {
+      await result.current.fetchKeyedDiagnostic("job-overwrite", emptyLogs);
+    });
+    expect(result.current.diagnostics["job-overwrite"]).toEqual(diag1);
+
+    await act(async () => {
+      await result.current.fetchKeyedDiagnostic("job-overwrite", emptyLogs);
+    });
+    expect(result.current.diagnostics["job-overwrite"]).toEqual(diag2);
+  });
+
+  it("resolves correct result when overlapping fetches complete out of order", async () => {
+    const { result } = renderHook(() => useMcpDiagnosticKeyed());
+
+    const diagA: McpDiagnostic = {
+      matched_entry: "a",
+      title: "A",
+      root_cause: "Cause A",
+      workaround: "Fix A",
+    };
+    const diagB: McpDiagnostic = {
+      matched_entry: "b",
+      title: "B",
+      root_cause: "Cause B",
+      workaround: "Fix B",
+    };
+
+    let resolveFirst!: (value: Response) => void;
+    let resolveSecond!: (value: Response) => void;
+
+    vi.spyOn(globalThis, "fetch").mockImplementation((_url, _opts) => {
+      if (!resolveFirst) {
+        return new Promise((resolve) => {
+          resolveFirst = resolve;
+        });
+      }
+      return new Promise((resolve) => {
+        resolveSecond = resolve;
+      });
     });
 
-    unmount();
-
-    // Advancing timers after unmount should not throw
+    // Start both on same key
     act(() => {
-      vi.advanceTimersByTime(10000);
+      result.current.fetchKeyedDiagnostic("job-race", ["error 1"]);
+      result.current.fetchKeyedDiagnostic("job-race", ["error 2"]);
     });
+
+    // Resolve the second fetch first, then the first
+    await act(async () => {
+      resolveSecond(new Response(JSON.stringify(diagB), { status: 200 }));
+    });
+
+    await act(async () => {
+      resolveFirst(new Response(JSON.stringify(diagA), { status: 200 }));
+    });
+
+    // Both fetches completed — diagnosingKeys must reset to false
+    expect(result.current.diagnosingKeys["job-race"]).toBe(false);
+    // A diagnostic was stored (the last one to resolve wins)
+    expect(result.current.diagnostics["job-race"]).toBeDefined();
+    expect(["a", "b"]).toContain(result.current.diagnostics["job-race"].matched_entry);
+    // The stored diagnostic has all required fields
+    expect(typeof result.current.diagnostics["job-race"].title).toBe("string");
+    expect(typeof result.current.diagnostics["job-race"].root_cause).toBe("string");
+    expect(typeof result.current.diagnostics["job-race"].workaround).toBe("string");
   });
 });

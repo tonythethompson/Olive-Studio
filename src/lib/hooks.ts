@@ -155,7 +155,6 @@ export function useMcpDiagnosticKeyed(): {
   fetchKeyedDiagnostic: (key: string, logs: string[]) => Promise<McpDiagnostic | null>;
   diagnostics: Record<string, McpDiagnostic>;
   diagnosingKeys: Record<string, boolean>;
-  clearDiagnostic: (key: string) => void;
 } {
   const [diagnostics, setDiagnostics] = useState<Record<string, McpDiagnostic>>({});
   const [diagnosingKeys, setDiagnosingKeys] = useState<Record<string, boolean>>({});
@@ -177,20 +176,7 @@ export function useMcpDiagnosticKeyed(): {
     [fetchDiagnostic],
   );
 
-  const clearDiagnostic = useCallback((key: string) => {
-    setDiagnostics((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-    setDiagnosingKeys((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  }, []);
-
-  return { fetchKeyedDiagnostic, diagnostics, diagnosingKeys, clearDiagnostic };
+  return { fetchKeyedDiagnostic, diagnostics, diagnosingKeys };
 }
 
 // ─── Import Presets ─────────────────────────────────────────────
