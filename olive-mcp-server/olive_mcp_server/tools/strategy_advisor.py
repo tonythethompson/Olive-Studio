@@ -183,8 +183,11 @@ def get_quantization_strategy(
         algorithm += " + consider pruning 20-30% before quantization"
         risks.append("Pruning + quantization compound accuracy loss; fine-tune if possible.")
 
+import re
+
     # Accuracy constraint override.
-    if "1%" in accuracy_threshold.lower() or "0.5%" in accuracy_threshold.lower():
+    match = re.search(r"([\d.]+)\s*%", accuracy_threshold)
+    if match and float(match.group(1)) <= 1.0:
         algorithm = algorithm.replace("int4", "int8") + " (tight accuracy target)"
         risks.append("Tight accuracy target requires larger calibration set and per-channel weights.")
 
