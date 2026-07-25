@@ -1,0 +1,19 @@
+e2e/quantization-presets.spec.ts
+  s_aa107db594a355::t_bdcb2b87daae01 23,25-26,32-34,37,39,169,203,216,222,233
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "90e01bbeebc558be6f41a43f5609e61a329d08aa",
+  "prompts": {},
+  "sessions": {
+    "s_aa107db594a355": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e4ad752-dcb9-4df4-b035-83d26e74cdc4",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
