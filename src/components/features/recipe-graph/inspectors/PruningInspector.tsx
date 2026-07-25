@@ -115,6 +115,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
   const handleSaveCustomPreset = useCallback(() => {
     const name = newPresetName.trim();
     if (!name || customPresets.length >= MAX_CUSTOM_PRESETS) return;
+    if (customPresets.some((p) => p.label.toLowerCase() === name.toLowerCase())) return;
 
     const preset: CustomPreset = {
       id: `custom-${Date.now()}`,
@@ -177,7 +178,13 @@ export function PruningInspector({ state, setState }: InspectorProps) {
               type="text"
               value={newPresetName}
               onChange={(e) => setNewPresetName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSaveCustomPreset()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSaveCustomPreset();
+                if (e.key === "Escape") {
+                  setShowSaveDialog(false);
+                  setNewPresetName("");
+                }
+              }}
               placeholder="Preset name…"
               maxLength={24}
               className="flex-1 h-7 px-2 text-[10px] bg-slate-950 border border-slate-700 rounded text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50"
