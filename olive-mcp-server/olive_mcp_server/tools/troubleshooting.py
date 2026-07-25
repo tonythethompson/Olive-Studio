@@ -31,8 +31,10 @@ def troubleshoot_olive_error(
     scored = [(entry, _score(entry, error_message, pass_name, config_context)) for entry in entries]
     scored.sort(key=lambda x: x[1], reverse=True)
 
+    matched_entry = None
     if scored and scored[0][1] > 0:
         best = scored[0][0]
+        matched_entry = best.get("id")
     else:
         best = {
             "title": "No exact match found",
@@ -42,7 +44,7 @@ def troubleshoot_olive_error(
         }
 
     return {
-        "matched_entry": best.get("id") if best != scored[0][0] else None,
+        "matched_entry": matched_entry,
         "title": best.get("title", ""),
         "root_cause": best.get("root_cause", ""),
         "workaround": best.get("solution", ""),
