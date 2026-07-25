@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { getPipelineValidation, applyIssueAutofix, type PipelineIssue } from "@/lib/pipelineValidation";
 import { validatePassParameters } from "@/lib/passParameterValidation";
+import { validateMcpParams, type McpParamWarning } from "@/lib/mcpParamValidation";
 import { buildPipelineSteps } from "./graphLayout";
 import { UIState } from "@/types";
 import { AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Info, RefreshCw, Zap } from "lucide-react";
@@ -39,6 +40,8 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const [compatLoading, setCompatLoading] = useState(false);
   const [compatError, setCompatError] = useState<string | null>(null);
   const [compatValidated, setCompatValidated] = useState(false);
+  const [mcpParamWarnings, setMcpParamWarnings] = useState<McpParamWarning[]>([]);
+  const [mcpParamLoading, setMcpParamLoading] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const [showCompatDetails, setShowCompatDetails] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -138,6 +141,28 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     setRefreshKey((k) => k + 1);
   }, []);
 
+  // MCP parameter validation (async — validates required_params, valid_range, interactions)
+  useEffect(() => {
+    if (activePassNames.length === 0) return;
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading flag for async fetch, safe
+    setMcpParamLoading(true);
+    validateMcpParams(state, activePassNames)
+      .then((warnings) => {
+        if (!cancelled) setMcpParamWarnings(warnings);
+      })
+      .catch(() => {
+        if (!cancelled) setMcpParamWarnings([]);
+      })
+      .finally(() => {
+        if (!cancelled) setMcpParamLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- activePassNames is derived from state.passes via buildPipelineSteps; join() stabilizes the reference
+  }, [state.passes, activePassNames.join(","), refreshKey]);
+
   // Hardware-specific parameter validation (synchronous, cheap — runs every render with state)
   const paramWarnings = validatePassParameters(state, activePassNames);
 
@@ -181,6 +206,14 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
       title: w.title,
       description: w.description,
       source: "parameter" as const,
+    })),
+    // MCP parameter constraint warnings (required_params, valid_range, interactions)
+    ...mcpParamWarnings.map((w) => ({
+      id: w.id,
+      severity: w.severity as "warning" | "critical",
+      title: w.title,
+      description: w.description,
+      source: "mcp-param" as const,
     })),
   ];
 
@@ -226,6 +259,9 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
           </span>
           {compatLoading && (
             <span className="text-[10px] text-slate-500 animate-pulse">Checking compatibility...</span>
+          )}
+          {mcpParamLoading && (
+            <span className="text-[10px] text-slate-500 animate-pulse">Validating parameters...</span>
           )}
         </div>
         <div className="flex items-center gap-1">

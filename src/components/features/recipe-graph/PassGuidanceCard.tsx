@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { PassGuidance } from "@/lib/passGuidance";
 import { CheckCircle2, XCircle, Database, ChevronDown, ChevronRight } from "lucide-react";
 
@@ -26,11 +26,18 @@ interface PassGuidanceCardProps {
 export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
   const [params, setParams] = useState<McpPassParamsResponse | null>(null);
   const [hasFetched, setHasFetched] = useState(false);
+  const [networkError, setNetworkError] = useState(false);
   const [paramsExpanded, setParamsExpanded] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
+  const fetchParams = useCallback(() => {
     if (!guidance.passName) return;
-    let cancelled = false;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setHasFetched(false);
+    setNetworkError(false);
+    setParams(null);
     fetch("/api/mcp/tool", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -38,24 +45,31 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
         toolName: "get_pass_parameters",
         args: { pass_name: guidance.passName },
       }),
+      signal: controller.signal,
     })
       .then((r) => r.json())
       .then((data: McpPassParamsResponse) => {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setParams(data);
           setHasFetched(true);
+          setNetworkError(false);
         }
       })
-      .catch(() => {
-        if (!cancelled) {
-          setParams(null);
-          setHasFetched(true);
-        }
+      .catch((err) => {
+        if (err.name === "AbortError") return;
+        setParams(null);
+        setHasFetched(true);
+        setNetworkError(true);
       });
-    return () => {
-      cancelled = true;
-    };
   }, [guidance.passName]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetchParams is async; setState only in .then/.catch
+    fetchParams();
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, [fetchParams]);
 
   const isLoading = guidance.passName != null && !hasFetched;
   const hasParams = params && !params.error && params.parameters && Object.keys(params.parameters).length > 0;
@@ -214,7 +228,20 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
             </div>
           )}
 
-          {paramsExpanded && !hasParams && !isLoading && (
+          {paramsExpanded && networkError && !isLoading && (
+            <div className="mt-2 space-y-1.5">
+              <p className="text-[10px] text-amber-400/80 font-mono">Failed to load parameters</p>
+              <button
+                type="button"
+                onClick={fetchParams}
+                className="text-[10px] text-electric-blue/80 hover:text-electric-blue transition-colors font-mono cursor-pointer"
+              >
+                ↻ Retry
+              </button>
+            </div>
+          )}
+
+          {paramsExpanded && !hasParams && !networkError && !isLoading && (
             <p className="text-[10px] text-slate-500 mt-2 italic">
               No parameter documentation available for this pass.
             </p>

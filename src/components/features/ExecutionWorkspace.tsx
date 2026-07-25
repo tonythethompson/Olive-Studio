@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
 import { useMcpDiagnostic } from "@/lib/hooks";
 import { mapMcpConfigToUiState } from "@/lib/mcpConfigMapping";
+import { DiagnosisHistory, type DiagnosisEntry } from "./DiagnosisHistory";
 import {
   Code,
   Play,
@@ -97,6 +98,9 @@ export function ExecutionWorkspace({
 
   const { diagnostic: mcpDiagnostic, isDiagnosing, fetchDiagnostic: fetchMcpDiagnostic } = useMcpDiagnostic();
   const [mcpFixApplied, setMcpFixApplied] = useState(false);
+  // Diagnosis history for comparing across runs
+  const [diagnosisHistory, setDiagnosisHistory] = useState<DiagnosisEntry[]>([]);
+  const [activeHistoryIndex, setActiveHistoryIndex] = useState(-1);
 
   // Log line selection state for manual diagnosis
   const [selectedLogIndices, setSelectedLogIndices] = useState<Set<number>>(new Set());
@@ -127,6 +131,35 @@ export function ExecutionWorkspace({
     setSelectedLogIndices(new Set());
     lastClickedIndexRef.current = null;
   }, [executionLogs.length]);
+
+  // Auto-select error lines when a job fails so users can immediately
+  // click "Diagnose Selected" without manual selection.
+  const prevStatusRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    // Only auto-select on the FIRST render where status transitions to "failed"
+    if (executionStatus === "failed" && prevStatusRef.current !== "failed") {
+      if (executionLogs.length > 0) {
+        const errorIndices = new Set<number>();
+        for (let i = 0; i < executionLogs.length; i++) {
+          const line = executionLogs[i];
+          if (
+            line.includes("[ERROR]") ||
+            line.includes("Traceback") ||
+            line.includes("Exception") ||
+            line.includes("Error:") ||
+            line.includes("error:")
+          ) {
+            errorIndices.add(i);
+          }
+        }
+        if (errorIndices.size > 0) {
+          setSelectedLogIndices(errorIndices);
+        }
+      }
+    }
+    prevStatusRef.current = executionStatus;
+  }, [executionStatus, executionLogs]);
 
   // Log line selection for manual diagnosis
   const handleLogLineClick = (index: number, e: ReactMouseEvent<HTMLParagraphElement>) => {
@@ -164,6 +197,32 @@ export function ExecutionWorkspace({
     if (executionLogs.length === 0) return;
     setMcpFixApplied(false);
     fetchMcpDiagnostic(executionLogs);
+  };
+
+  // Auto-save completed diagnoses to history
+  const prevDiagnosticRef = useRef(mcpDiagnostic);
+  useEffect(() => {
+    if (mcpDiagnostic && mcpDiagnostic !== prevDiagnosticRef.current) {
+      const entry: DiagnosisEntry = {
+        id: `diag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: Date.now(),
+        diagnostic: mcpDiagnostic,
+        logSnippet: executionLogs.slice(-20).join("\n"),
+        fixApplied: false,
+      };
+      setDiagnosisHistory((prev) => [entry, ...prev].slice(0, 50));
+      setActiveHistoryIndex(0);
+    }
+    prevDiagnosticRef.current = mcpDiagnostic;
+  }, [mcpDiagnostic, executionLogs]);
+
+  const handleSelectHistory = (index: number) => {
+    setActiveHistoryIndex(index);
+  };
+
+  const handleClearHistory = () => {
+    setDiagnosisHistory([]);
+    setActiveHistoryIndex(-1);
   };
 
   const isUnmountedRef = useRef(false);
@@ -1316,75 +1375,85 @@ ${
               </Button>
             </div>
           </div>
-          {/* Log panel with selection and manual diagnosis */}
-          <div className="space-y-1.5">
-            {executionLogs.length > 0 && (
-              <div className="flex items-center justify-between gap-2 px-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-slate-500 font-mono">
-                    {selectedLogIndices.size > 0
-                      ? `${selectedLogIndices.size} line${selectedLogIndices.size > 1 ? "s" : ""} selected`
-                      : `${executionLogs.length} lines`}
-                  </span>
-                  <span className="text-[10px] text-slate-600 hidden sm:inline">
-                    Click to select · Shift+click for range · Ctrl/Cmd+click for multi
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {selectedLogIndices.size > 0 && (
+          {/* Log panel with selection, manual diagnosis, and history sidebar */}
+          <div className="flex gap-0 rounded-md border border-slate-800 overflow-hidden">
+            <div className="flex-1 space-y-1.5 min-w-0">
+              {executionLogs.length > 0 && (
+                <div className="flex items-center justify-between gap-2 px-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {selectedLogIndices.size > 0
+                        ? `${selectedLogIndices.size} line${selectedLogIndices.size > 1 ? "s" : ""} selected`
+                        : `${executionLogs.length} lines`}
+                    </span>
+                    <span className="text-[10px] text-slate-600 hidden sm:inline">
+                      Click to select · Shift+click for range · Ctrl/Cmd+click for multi
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {selectedLogIndices.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleDiagnoseSelected}
+                        disabled={isDiagnosing}
+                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded border border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        <Wrench className="h-3 w-3" /> Diagnose Selected
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={handleDiagnoseSelected}
-                      disabled={isDiagnosing}
-                      className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded border border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50 transition-all cursor-pointer disabled:opacity-50"
+                      onClick={handleDiagnoseAll}
+                      disabled={isDiagnosing || executionLogs.length === 0}
+                      className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600 transition-all cursor-pointer disabled:opacity-50"
                     >
-                      <Wrench className="h-3 w-3" /> Diagnose Selected
+                      <Wrench className="h-3 w-3" /> Diagnose All
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleDiagnoseAll}
-                    disabled={isDiagnosing || executionLogs.length === 0}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600 transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    <Wrench className="h-3 w-3" /> Diagnose All
-                  </button>
+                  </div>
                 </div>
-              </div>
-            )}
-            <div className="bg-slate-950 border border-slate-800 rounded-md p-4 font-mono text-xs text-emerald-400 space-y-0.5 h-[220px] overflow-y-auto">
-              {executionLogs.length === 0 ? (
-                <p className="text-slate-500 italic">
-                  Ready — click &quot;Execute Live&quot; to begin an Olive optimization run.
-                </p>
-              ) : (
-                executionLogs.map((line, i) => {
-                  const isSelected = selectedLogIndices.has(i);
-                  const lineClass = line.includes("[ERROR]")
-                    ? "text-red-400"
-                    : line.includes("[WARN]")
-                      ? "text-amber-300"
-                      : line.includes("[SETUP]")
-                        ? "text-amber-400"
-                        : line.includes("[DONE]") || line.includes("[info] Job cancelled")
-                          ? "text-emerald-300 font-bold"
-                          : "text-emerald-400";
-                  return (
-                    <p
-                      key={i}
-                      onClick={(e) => handleLogLineClick(i, e)}
-                      className={`${lineClass} cursor-pointer rounded px-1 -mx-1 transition-colors ${
-                        isSelected
-                          ? "bg-electric-blue/15 ring-1 ring-electric-blue/30"
-                          : "hover:bg-slate-800/50"
-                      }`}
-                    >
-                      {line}
-                    </p>
-                  );
-                })
               )}
+              <div className="bg-slate-950 border border-slate-800 rounded-md p-4 font-mono text-xs text-emerald-400 space-y-0.5 h-[220px] overflow-y-auto">
+                {executionLogs.length === 0 ? (
+                  <p className="text-slate-500 italic">
+                    Ready — click &quot;Execute Live&quot; to begin an Olive optimization run.
+                  </p>
+                ) : (
+                  executionLogs.map((line, i) => {
+                    const isSelected = selectedLogIndices.has(i);
+                    const lineClass = line.includes("[ERROR]")
+                      ? "text-red-400"
+                      : line.includes("[WARN]")
+                        ? "text-amber-300"
+                        : line.includes("[SETUP]")
+                          ? "text-amber-400"
+                          : line.includes("[DONE]") || line.includes("[info] Job cancelled")
+                            ? "text-emerald-300 font-bold"
+                            : "text-emerald-400";
+                    return (
+                      <p
+                        key={i}
+                        onClick={(e) => handleLogLineClick(i, e)}
+                        className={`${lineClass} cursor-pointer rounded px-1 -mx-1 transition-colors ${
+                          isSelected
+                            ? "bg-electric-blue/15 ring-1 ring-electric-blue/30"
+                            : "hover:bg-slate-800/50"
+                        }`}
+                      >
+                        {line}
+                      </p>
+                    );
+                  })
+                )}
+              </div>
             </div>
+
+            {/* Diagnosis history sidebar */}
+            <DiagnosisHistory
+              entries={diagnosisHistory}
+              activeIndex={activeHistoryIndex}
+              onSelect={handleSelectHistory}
+              onClear={handleClearHistory}
+            />
           </div>
 
           {/* MCP Diagnostic & Auto-Fix Card */}
