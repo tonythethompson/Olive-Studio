@@ -5,6 +5,7 @@ import {
   providerToAccelerator,
   buildOliveRecipe,
 } from "@/lib/oliveRecipeBuilder";
+import { deriveUiStateFromOliveRecipe } from "@/lib/oliveRecipeHub";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import type { UIState, IHVProvider } from "@/types";
 
@@ -608,6 +609,53 @@ describe("buildOliveRecipe", () => {
       (buildOliveRecipe(state).passes as Record<string, unknown>).pruning as Record<string, unknown>
     ).config as Record<string, unknown>;
     expect(cfg.pruning_criteria).toBe("l1_norm");
+  });
+
+  it("preserves pruning_criteria through recipe import round-trip (l2_norm)", () => {
+    const state = baseState({
+      passes: {
+        ...DEFAULT_PASSES,
+        pruning: true,
+        pruningMethod: "magnitude",
+        pruningSparsity: 0.4,
+        pruningCriteria: "l2_norm",
+      },
+    });
+    const recipe = buildOliveRecipe(state);
+    const imported = deriveUiStateFromOliveRecipe(recipe, { replacePasses: true });
+    expect(imported.passes?.pruning).toBe(true);
+    expect(imported.passes?.pruningMethod).toBe("magnitude");
+    expect(imported.passes?.pruningCriteria).toBe("l2_norm");
+  });
+
+  it("preserves pruning_criteria through recipe import round-trip (l1_norm)", () => {
+    const state = baseState({
+      passes: {
+        ...DEFAULT_PASSES,
+        pruning: true,
+        pruningMethod: "magnitude",
+        pruningSparsity: 0.4,
+        pruningCriteria: "l1_norm",
+      },
+    });
+    const recipe = buildOliveRecipe(state);
+    const imported = deriveUiStateFromOliveRecipe(recipe, { replacePasses: true });
+    expect(imported.passes?.pruning).toBe(true);
+    expect(imported.passes?.pruningMethod).toBe("magnitude");
+    expect(imported.passes?.pruningCriteria).toBe("l1_norm");
+  });
+
+  it("preserves pruning_criteria through recipe import round-trip (sparsegpt)", () => {
+    const state = baseState({
+      passes: { ...DEFAULT_PASSES, pruning: true, pruningMethod: "sparsegpt", pruningCriteria: "l2_norm" },
+    });
+    const recipe = buildOliveRecipe(state);
+    const imported = deriveUiStateFromOliveRecipe(recipe, { replacePasses: true });
+    expect(imported.passes?.pruning).toBe(true);
+    expect(imported.passes?.pruningMethod).toBe("sparsegpt");
+    // SparseGPT doesn't consume pruning_criteria at runtime, but the builder
+    // includes it in the config for round-trip fidelity.
+    expect(imported.passes?.pruningCriteria).toBe("l2_norm");
   });
 
   it("includes evaluators block when userScript and hfDataset are both set", () => {

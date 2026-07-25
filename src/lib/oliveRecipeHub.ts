@@ -296,6 +296,10 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
       next.pruningMethod = "sparsegpt";
       if (config.sparsity != null) next.pruningSparsity = Number(config.sparsity);
       if (config.semi_sparse_acc) next.pruningType = "structured";
+      if (config.pruning_criteria) {
+        const criteria = String(config.pruning_criteria).toLowerCase();
+        next.pruningCriteria = criteria.includes("l2") ? "l2_norm" : "l1_norm";
+      }
       continue;
     }
 
@@ -303,6 +307,10 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
       next.pruning = true;
       next.pruningMethod = "wanda";
       if (config.sparsity != null) next.pruningSparsity = Number(config.sparsity);
+      if (config.pruning_criteria) {
+        const criteria = String(config.pruning_criteria).toLowerCase();
+        next.pruningCriteria = criteria.includes("l2") ? "l2_norm" : "l1_norm";
+      }
       continue;
     }
 
