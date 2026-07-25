@@ -84,6 +84,11 @@ function isValueInRange(value: unknown, range: string): boolean {
  */
 const paramCache = new Map<string, McpPassParamsResponse | null>();
 
+/** Clear the param cache so the next fetch re-reads from MCP. */
+export function clearParamCache(): void {
+  paramCache.clear();
+}
+
 export async function fetchMcpPassParams(passTypeName: string): Promise<McpPassParamsResponse | null> {
   if (paramCache.has(passTypeName)) {
     return paramCache.get(passTypeName) ?? null;
@@ -133,7 +138,7 @@ function validateSinglePass(
 
   // Check required params
   for (const req of required) {
-    if (!(req in config) && config[req] === undefined) {
+    if (!(req in config)) {
       const paramDoc = params[req];
       warnings.push({
         id: `mcp-required-${passName}-${req}`,

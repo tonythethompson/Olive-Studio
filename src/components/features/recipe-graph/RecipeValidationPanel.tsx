@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { getPipelineValidation, applyIssueAutofix, type PipelineIssue } from "@/lib/pipelineValidation";
 import { validatePassParameters } from "@/lib/passParameterValidation";
-import { validateMcpParams, type McpParamWarning } from "@/lib/mcpParamValidation";
+import { validateMcpParams, clearParamCache, type McpParamWarning } from "@/lib/mcpParamValidation";
 import { buildPipelineSteps } from "./graphLayout";
 import { UIState } from "@/types";
 import { AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Info, RefreshCw, Zap } from "lucide-react";
@@ -137,6 +137,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   };
 
   const handleRefreshValidation = useCallback(() => {
+    clearParamCache();
     forceRefreshRef.current = true;
     setRefreshKey((k) => k + 1);
   }, []);
