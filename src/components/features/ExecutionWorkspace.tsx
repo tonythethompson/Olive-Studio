@@ -1,9 +1,18 @@
-import { useState, useRef, useEffect, Suspense, lazy, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  Suspense,
+  lazy,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
 import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";
 import { mapMcpConfigToUiState } from "@/lib/mcpConfigMapping";
 import { DiagnosisHistory, type DiagnosisEntry } from "./DiagnosisHistory";
+import { MCPDiagnosticCard } from "./MCPDiagnosticCard";
 import {
   Code,
   Play,
@@ -128,8 +137,8 @@ export function ExecutionWorkspace({
   };
 
   // Clear log selection when logs change (new run starts)
-  useEffect(() => {
-    setSelectedLogIndices(new Set());
+  useLayoutEffect(() => {
+    setSelectedLogIndices(new Set()); // eslint-disable-line react-hooks/set-state-in-effect
     lastClickedIndexRef.current = null;
   }, [executionLogs.length]);
 
@@ -137,7 +146,7 @@ export function ExecutionWorkspace({
   // click "Diagnose Selected" without manual selection.
   const prevStatusRef = useRef<string | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Only auto-select on the FIRST render where status transitions to "failed"
     if (executionStatus === "failed" && prevStatusRef.current !== "failed") {
       if (executionLogs.length > 0) {
@@ -155,7 +164,7 @@ export function ExecutionWorkspace({
           }
         }
         if (errorIndices.size > 0) {
-          setSelectedLogIndices(errorIndices);
+          setSelectedLogIndices(errorIndices); // eslint-disable-line react-hooks/set-state-in-effect
         }
       }
     }
@@ -228,14 +237,18 @@ export function ExecutionWorkspace({
 
   const isUnmountedRef = useRef(false);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const justQueuedTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const copiedTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const exportCopiedTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     isUnmountedRef.current = false;
     return () => {
       isUnmountedRef.current = true;
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (justQueuedTimerRef.current) clearTimeout(justQueuedTimerRef.current);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      if (exportCopiedTimerRef.current) clearTimeout(exportCopiedTimerRef.current);
     };
   }, []);
 
@@ -515,7 +528,7 @@ ${
     const recipeJsonForJob = buildRecipeJsonFromState(state);
 
     const newJob = {
-      id: "job-" + Date.now(),
+      id: "job-" + Date.now(), // eslint-disable-line react-hooks/purity -- stable in event handler
       name: jobName,
       modelSource: state.modelSource,
       modelIdentifier: mid,
@@ -531,7 +544,8 @@ ${
     const currentJobs = state.batchJobs || [];
     setState({ batchJobs: [...currentJobs, newJob] });
     setJustQueued(true);
-    setTimeout(() => setJustQueued(false), 3000);
+    if (justQueuedTimerRef.current) clearTimeout(justQueuedTimerRef.current);
+    justQueuedTimerRef.current = setTimeout(() => setJustQueued(false), 3000);
   };
 
   const recordJobCompletion = (
@@ -539,7 +553,7 @@ ${
     status: "completed" | "failed" | "cancelled",
     exitCode: number | null,
   ) => {
-    const duration = runStartTimeRef.current ? Date.now() - runStartTimeRef.current : 0;
+    const duration = runStartTimeRef.current ? Date.now() - runStartTimeRef.current : 0; // eslint-disable-line react-hooks/purity -- event handler
     const activePassesNames: string[] = [];
     if (state.passes.conversion)
       activePassesNames.push(
@@ -616,7 +630,7 @@ ${
     setExecutionLogs(["[INFO] Initiating Olive run...\n"]);
     setExecutionStatus("running");
     setExecutionExitCode(null);
-    runStartTimeRef.current = Date.now();
+    runStartTimeRef.current = Date.now(); // eslint-disable-line react-hooks/purity -- event handler
 
     try {
       const resp = await fetch("/api/olive/run", {
@@ -772,13 +786,15 @@ ${
   const _handleCopy = () => {
     navigator.clipboard.writeText(JSON.stringify(recipe, null, 2));
     setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setIsCopied(false), 2000);
   };
 
   const handleExportCopy = () => {
     navigator.clipboard.writeText(JSON.stringify(recipe, null, 2));
     setIsExportCopied(true);
-    setTimeout(() => setIsExportCopied(false), 2000);
+    if (exportCopiedTimerRef.current) clearTimeout(exportCopiedTimerRef.current);
+    exportCopiedTimerRef.current = setTimeout(() => setIsExportCopied(false), 2000);
   };
 
   const handleExportDownload = () => {
@@ -1465,81 +1481,12 @@ ${
 
           {/* MCP Diagnostic & Auto-Fix Card */}
           {executionStatus === "failed" && (
-            <div className="mt-2 p-3.5 rounded-lg border border-rose-500/30 bg-rose-950/20 text-slate-200 animate-in fade-in space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 font-semibold text-rose-300 text-xs">
-                  <Wrench className="h-4 w-4 text-rose-400 shrink-0" />
-                  <span>Olive MCP Error Diagnostic & Fix</span>
-                </div>
-                {isDiagnosing && (
-                  <span className="text-[10px] text-slate-400 animate-pulse">Diagnosing with MCP KB...</span>
-                )}
-              </div>
-              {mcpDiagnostic ? (
-                <div className="space-y-1.5 text-xs font-sans">
-                  <div>
-                    <span className="font-semibold text-rose-300">Issue: </span>
-                    <span className="text-slate-200">{mcpDiagnostic.title}</span>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-400">Root Cause: </span>
-                    <span className="text-slate-300">{mcpDiagnostic.root_cause}</span>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-emerald-400">Recommended Fix: </span>
-                    <span className="text-slate-300">{mcpDiagnostic.workaround}</span>
-                  </div>
-                  {mcpDiagnostic.updated_config && (
-                    <div className="pt-1">
-                      <span className="font-semibold text-electric-blue">Config Changes: </span>
-                      <span className="text-slate-400 font-mono text-[10px]">
-                        {Object.entries(mcpDiagnostic.updated_config)
-                          .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
-                          .join(", ")}
-                      </span>
-                    </div>
-                  )}
-                  {mcpDiagnostic.relevant_quirks && mcpDiagnostic.relevant_quirks.length > 0 && (
-                    <div className="pt-1">
-                      <span className="font-semibold text-amber-400">Known Quirks: </span>
-                      <ul className="mt-0.5 space-y-0.5">
-                        {mcpDiagnostic.relevant_quirks.map((quirk, i) => (
-                          <li key={i} className="text-[10px] text-slate-400">
-                            • {quirk}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  <div className="pt-1.5">
-                    <button
-                      type="button"
-                      onClick={handleApplyMcpFix}
-                      disabled={mcpFixApplied !== ""}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold rounded border transition-all cursor-pointer ${
-                        mcpFixApplied !== ""
-                          ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400"
-                          : "border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50"
-                      }`}
-                    >
-                      {mcpFixApplied !== "" ? (
-                        <>
-                          <Check className="h-3 w-3" /> Fix Applied
-                        </>
-                      ) : (
-                        <>
-                          <Wrench className="h-3 w-3" /> Apply Fix
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-[11px] text-slate-400 italic">
-                  Querying Olive MCP Knowledge Base for matching error patterns...
-                </p>
-              )}
-            </div>
+            <MCPDiagnosticCard
+              diagnostic={mcpDiagnostic}
+              isDiagnosing={isDiagnosing}
+              fixApplied={mcpFixApplied}
+              onApplyFix={handleApplyMcpFix}
+            />
           )}
         </CardContent>
       </Card>
