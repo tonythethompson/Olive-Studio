@@ -1,0 +1,509 @@
+{
+  "version": "0.2.0",
+  "last_updated": "2026-07-24",
+  "entries": [
+    {
+      "id": "onnx-export-shape",
+      "patterns": [
+        "dynamic shape",
+        "RuntimeError: Expected all tensors to be on the same device",
+        "The size of tensor a",
+        "shape mismatch",
+        " dimension"
+      ],
+      "title": "ONNX export shape mismatch",
+      "root_cause": "Input shapes or dynamic_axes are not correctly specified; or the model contains control flow that depends on runtime shape.",
+      "solution": "Add dynamic_axes to OnnxConversion for batch/sequence dims; trace with representative input shapes; replace data-dependent control flow with fixed-shape equivalents.",
+      "updated_config": {
+        "passes": {
+          "OnnxConversion": {
+            "params": {
+              "dynamic_axes": {
+                "input": {
+                  "0": "batch_size",
+                  "1": "sequence"
+                },
+                "output": {
+                  "0": "batch_size"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "onnx-export-external-data",
+      "patterns": [
+        "external data",
+        "Protobuf size",
+        "2GB",
+        "Protocol message",
+        "too large"
+      ],
+      "title": "ONNX model exceeds 2GB",
+      "root_cause": "ONNX protobuf cannot store tensors larger than 2GB.",
+      "solution": "Enable use_external_data_format=True; Olive will write weights to a separate .onnx_data file.",
+      "updated_config": {
+        "passes": {
+          "OnnxConversion": {
+            "params": {
+              "use_external_data_format": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "quant-accuracy-collapse",
+      "patterns": [
+        "accuracy drop",
+        "perplexity",
+        "accuracy collapsed",
+        "INT8 accuracy",
+        "quantized model is wrong"
+      ],
+      "title": "Quantized model accuracy collapse",
+      "root_cause": "Calibration data is not representative, per-channel quantization is disabled for CNNs, or asymmetric scheme is used on an accelerator that requires symmetric.",
+      "solution": "Use 100-300 representative samples; enable per_channel=True for CNN/Linear layers; switch to symmetric quantization for QNN/CoreML; evaluate with a held-out set.",
+      "updated_config": {
+        "passes": {
+          "OnnxStaticQuantization": {
+            "params": {
+              "per_channel": true,
+              "calibration_sampling_size": 300,
+              "calibrate_method": "Entropy"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "ep-fallback-cpu",
+      "patterns": [
+        "fallback",
+        "CPUExecutionProvider",
+        "not supported",
+        "op not implemented"
+      ],
+      "title": "Execution provider silent fallback to CPU",
+      "root_cause": "The requested execution provider does not implement one or more operators; ONNX Runtime falls back to CPU.",
+      "solution": "Check EP operator support; add OnnxModelOptimizer to fuse unsupported patterns; consider OnnxOpVersionConversion to a supported opset; enable verbose ORT logging.",
+      "updated_config": {
+        "passes": {
+          "OnnxModelOptimizer": {
+            "params": {
+              "graph_optimization_level": "all"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "oom-quantization",
+      "patterns": [
+        "CUDA out of memory",
+        "OOM",
+        "out of memory",
+        "runtime error: out of memory"
+      ],
+      "title": "Out of memory during quantization or tuning",
+      "root_cause": "Calibration batch or intermediate tensors exceed GPU memory.",
+      "solution": "Reduce calibration_sampling_size and batch_size; move to CPU for calibration; use weight-only quantization; enable external data format for large models.",
+      "updated_config": {
+        "passes": {
+          "OnnxQuantization": {
+            "params": {
+              "calibration_sampling_size": 32
+            }
+          },
+          "OnnxConversion": {
+            "params": {
+              "use_external_data_format": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "calibration-data-mismatch",
+      "patterns": [
+        "calibration",
+        "dataloader",
+        "dataset",
+        "no data",
+        "data_config"
+      ],
+      "title": "Calibration data mismatch or missing",
+      "root_cause": "Static quantization requires a DataConfig with calibration samples that match the model input format and preprocessing.",
+      "solution": "Define a data_config with correct input_names, batching, and preprocessing; use representative samples from the inference distribution.",
+      "updated_config": {
+        "data_configs": {
+          "calibration_data": {
+            "type": "HuggingFaceContainer",
+            "load_dataset_config": {
+              "path": "<dataset>",
+              "split": "train",
+              "subset": "<subset>"
+            },
+            "pre_process_data_config": {
+              "input_cols": [
+                "text"
+              ],
+              "padding": "max_length",
+              "max_length": 512
+            },
+            "dataloader_config": {
+              "batch_size": 1,
+              "drop_last": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "lora-target-modules",
+      "patterns": [
+        "LoRA",
+        "target_modules",
+        "lora_rank",
+        "adapter",
+        "peft"
+      ],
+      "title": "LoRA target modules not found",
+      "root_cause": "target_modules do not match the model architecture (e.g. using q_proj/v_proj for a BERT model).",
+      "solution": "Inspect model keys and set target_modules correctly: Llama/Mistral use q_proj/k_proj/v_proj/o_proj; BERT uses query/key/value/dense.",
+      "updated_config": {
+        "passes": {
+          "LoRA": {
+            "params": {
+              "target_modules": [
+                "q_proj",
+                "v_proj"
+              ],
+              "lora_rank": 16,
+              "lora_alpha": 32
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "tensorrt-build-slow",
+      "patterns": [
+        "TensorRT",
+        "tensorrt",
+        "engine build",
+        "trt",
+        "build time"
+      ],
+      "title": "TensorRT engine build is very slow or fails",
+      "root_cause": "INT8 TensorRT requires per-engine calibration and explicit QDQ placement; dynamic shapes enlarge the search space.",
+      "solution": "Use static shapes where possible; pre-generate calibration cache; enable OnnxStaticQuantization with QDQ format before TensorRT; reuse engine files.",
+      "updated_config": {
+        "passes": {
+          "OnnxStaticQuantization": {
+            "params": {
+              "quant_format": "QDQ",
+              "per_channel": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "awq-slow-calibration",
+      "patterns": [
+        "AWQ",
+        "nvidia-modelopt",
+        "awq calibration",
+        "activation-aware"
+      ],
+      "title": "AWQ calibration is slow or hangs",
+      "root_cause": "AWQ scans weights and activations; large models or large calibration sets take time.",
+      "solution": "Reduce calibration iters to 32; use a small subset (128 samples); ensure GPU memory is available.",
+      "updated_config": {
+        "passes": {
+          "NVModelOptQuantization": {
+            "params": {
+              "algorithm": "awq",
+              "calibration_iters": 32,
+              "weight_bits": 4
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "qnn-layer-not-supported",
+      "patterns": [
+        "QNN",
+        "not supported",
+        "unsupported op",
+        "LayerNormalization",
+        "GELU"
+      ],
+      "title": "QNN reports unsupported operator",
+      "root_cause": "Qualcomm QNN has a limited op whitelist; LayerNorm and GELU are often unsupported.",
+      "solution": "Run QNNPreprocess before QNNQuantization; use OnnxModelOptimizer to fuse LayerNorm; consider replacing GELU with approximate ops if the model allows.",
+      "updated_config": {
+        "passes": {
+          "OnnxModelOptimizer": {
+            "params": {
+              "graph_optimization_level": "all"
+            }
+          },
+          "QNNPreprocess": {
+            "params": {}
+          },
+          "QNNQuantization": {
+            "params": {
+              "per_channel": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "coreml-dynamic-shape",
+      "patterns": [
+        "CoreML",
+        "dynamic shape",
+        "flexible shape",
+        "input shape"
+      ],
+      "title": "CoreML conversion fails with dynamic shapes",
+      "root_cause": "CoreML prefers fixed input shapes; dynamic batch or sequence length can fail.",
+      "solution": "Fix input shapes by removing dynamic_axes in OnnxConversion; use symbolic shape inference carefully.",
+      "updated_config": {
+        "passes": {
+          "OnnxConversion": {
+            "params": {
+              "dynamic_axes": {}
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "lora-merge-fail",
+      "patterns": [
+        "LoRA",
+        "merge",
+        "adapter",
+        "base model",
+        "merge_weights"
+      ],
+      "title": "LoRA adapter cannot be merged into quantized base",
+      "root_cause": "Merging adapters into a 4-bit or quantized base model is not supported by Olive.",
+      "solution": "Merge LoRA weights into the full-precision base model before ONNX conversion; then quantize the merged ONNX model.",
+      "updated_config": {
+        "passes": {
+          "LoRA": {
+            "params": {
+              "target_modules": [
+                "q_proj",
+                "v_proj"
+              ]
+            }
+          },
+          "ExtractLoRA": {
+            "params": {}
+          },
+          "OnnxConversion": {
+            "params": {}
+          }
+        }
+      }
+    },
+    {
+      "id": "openvino-fallback",
+      "patterns": [
+        "OpenVINO",
+        "fallback",
+        "CPUExecutionProvider",
+        "not supported"
+      ],
+      "title": "OpenVINO silently falls back to CPU EP",
+      "root_cause": "OpenVINO Execution Provider does not support some ops or data types.",
+      "solution": "Check OpenVINO operator support; use OnnxModelOptimizer to fuse unsupported patterns; convert to OpenVINO IR for broader op support.",
+      "updated_config": {
+        "passes": {
+          "OnnxModelOptimizer": {
+            "params": {
+              "graph_optimization_level": "all"
+            }
+          },
+          "OpenVINOConversion": {
+            "params": {
+              "fp16": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "transformer-fusion-missing-dims",
+      "patterns": [
+        "OrtTransformersOptimization",
+        "num_heads",
+        "hidden_size",
+        "fusion"
+      ],
+      "title": "Transformer optimization fails due to missing dims",
+      "root_cause": "OrtTransformersOptimization needs num_heads and hidden_size for attention fusion.",
+      "solution": "Set num_heads and hidden_size in pass params; verify against model config.",
+      "updated_config": {
+        "passes": {
+          "OrtTransformersOptimization": {
+            "params": {
+              "num_heads": 32,
+              "hidden_size": 4096,
+              "opt_level": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "int4-perplexity",
+      "patterns": [
+        "int4",
+        "perplexity",
+        "quality",
+        "degradation"
+      ],
+      "title": "INT4 quantization causes large perplexity increase",
+      "root_cause": "INT4 weight quantization is aggressive; small models or sensitive layers suffer.",
+      "solution": "Use group size 128 or 64; exclude lm_head and embedding layers from quantization; try AWQ or GPTQ with larger group size.",
+      "updated_config": {
+        "passes": {
+          "NVModelOptQuantization": {
+            "params": {
+              "algorithm": "awq",
+              "weight_bits": 4,
+              "calibration_iters": 64
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "onnx-fp16-nan",
+      "patterns": [
+        "FP16",
+        "NaN",
+        "inf",
+        "OnnxFloatToFloat16",
+        "overflow"
+      ],
+      "title": "FP16 conversion produces NaN/Inf",
+      "root_cause": "Model activations exceed FP16 range or are not trained for FP16.",
+      "solution": "Keep I/O types float32; cast int inputs to int32; exclude sensitive ops from FP16; consider mixed precision.",
+      "updated_config": {
+        "passes": {
+          "OnnxFloatToFloat16": {
+            "params": {
+              "keep_io_types": true,
+              "cast_int_inputs_to_int32": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "calibration-distribution-mismatch",
+      "patterns": [
+        "calibration",
+        "distribution",
+        "domain shift",
+        "accuracy"
+      ],
+      "title": "Calibration data distribution mismatch",
+      "root_cause": "Calibration samples do not match inference inputs; quantization scale/zp are wrong.",
+      "solution": "Use production-like data; cover min/max sequence lengths and vocabulary; avoid synthetic or unrelated samples.",
+      "updated_config": {
+        "data_configs": {
+          "calibration_data": {
+            "type": "HuggingFaceContainer",
+            "load_dataset_config": {
+              "path": "<production-like-dataset>",
+              "split": "validation"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "multi-pass-cache-overwrite",
+      "patterns": [
+        "cache",
+        "output",
+        "overwrite",
+        "same name"
+      ],
+      "title": "Multi-pass run overwrites intermediate outputs",
+      "root_cause": "Pass output names collide or cache_dir is shared across runs.",
+      "solution": "Set unique output_name per pass; use separate cache_dir per experiment; clean cache between unrelated runs.",
+      "updated_config": {
+        "engine": {
+          "cache_dir": "~/.cache/olive/experiment_1"
+        },
+        "passes": {
+          "OnnxConversion": {
+            "output_name": "onnx_model"
+          },
+          "OnnxQuantization": {
+            "output_name": "quant_model"
+          }
+        }
+      }
+    },
+    {
+      "id": "search-local-optima",
+      "patterns": [
+        "search",
+        "objective",
+        "local optima",
+        "latency vs accuracy"
+      ],
+      "title": "Search finds poor local optimum",
+      "root_cause": "Objective weights or search space are not tuned; evaluator is noisy with small sample size.",
+      "solution": "Fix seed for reproducibility; use larger calibration/evaluation sets; adjust objective weights; try bayesian or evolutionary search.",
+      "updated_config": {
+        "engine": {
+          "search_algorithm": "bayesian",
+          "search_strategy": {
+            "max_iterations": 20,
+            "seed": 42
+          }
+        }
+      }
+    },
+    {
+      "id": "torchscript-export-fail",
+      "patterns": [
+        "torchscript",
+        "jit",
+        "tracer",
+        " scripting"
+      ],
+      "title": "TorchScript export fails for a HuggingFace model",
+      "root_cause": "Many HF models use control flow or data-dependent shapes that TorchScript cannot trace.",
+      "solution": "Use OnnxConversion instead of TorchScript export; configure dynamic_axes for variable dimensions.",
+      "updated_config": {
+        "passes": {
+          "OnnxConversion": {
+            "params": {
+              "dynamic_axes": {
+                "input": {
+                  "0": "batch_size"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

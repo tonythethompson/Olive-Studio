@@ -3703,3 +3703,78 @@ function SearchInput({ onSearch }: { onSearch: (q: string) => void }) {
 5. [https://github.com/isaacs/node-lru-cache](https://github.com/isaacs/node-lru-cache)
 6. [https://vercel.com/blog/how-we-optimized-package-imports-in-next-js](https://vercel.com/blog/how-we-optimized-package-imports-in-next-js)
 7. [https://vercel.com/blog/how-we-made-the-vercel-dashboard-twice-as-fast](https://vercel.com/blog/how-we-made-the-vercel-dashboard-twice-as-fast)
+
+---
+
+## Olive MCP Server
+
+This repo also contains `olive-mcp-server/`, a Python MCP server for Microsoft Olive model optimization workflows. It is not a React/Next.js project, so do not apply the React rules above to that directory.
+
+### Setup
+
+Windows:
+```bash
+cd olive-mcp-server
+python -m venv .venv
+.venv\Scripts\pip install -e ".[dev]"
+```
+
+Linux/macOS:
+```bash
+cd olive-mcp-server
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+```
+
+### Test
+
+Windows:
+```bash
+.venv\Scripts\python -m pytest tests -q
+```
+
+Linux/macOS:
+```bash
+.venv/bin/python -m pytest tests -q
+```
+
+### Run the server
+
+Windows:
+```bash
+.venv\Scripts\python -m olive_mcp_server
+# or
+.venv\Scripts\olive-mcp-server
+```
+
+Linux/macOS:
+```bash
+.venv/bin/python -m olive_mcp_server
+# or
+.venv/bin/olive-mcp-server
+```
+
+### Project layout
+
+- `olive_mcp_server/` - installable Python package
+- `olive_mcp_server/tools/` - 12 MCP tool implementations
+- `olive_mcp_server/knowledge_base/` - JSON catalogs for passes, hardware profiles, troubleshooting, quirks, and compatibility
+- `olive_mcp_server/fetchers/` - stubs for live knowledge-base updates
+- `scripts/` - helper scripts for expanding or updating the knowledge base
+- `tests/` - unit and integration tests
+
+### Updating the knowledge base
+
+Edit the JSON files directly or run `python -m scripts.expand_kb` from `olive-mcp-server/` to re-run the expansion script.
+
+### Claude Code integration
+
+The repo root has `.mcp.json`, which registers the server in Claude Code. By default it uses `run.sh` (works on Linux/macOS and Windows with Git Bash/WSL). Windows users without bash should edit `.mcp.json` to use `run.bat`:
+
+```json
+"command": "cmd.exe",
+"args": ["/c", "${CLAUDE_PROJECT_DIR}/olive-mcp-server/run.bat"]
+```
+
+Reinstall the package if the venv is recreated.
+
