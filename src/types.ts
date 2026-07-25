@@ -89,7 +89,7 @@ export interface UIState {
   passes: {
     conversion: boolean;
     conversionSourceFormat: "pytorch" | "tensorflow" | "jax";
-    conversionFormat: "onnx" | "openvino";
+    conversionFormat: "onnx" | "openvino" | "qnn" | "tensorrt";
     conversionOpset: number;
     conversionInputTargetTypes: string;
     quantization: boolean;
