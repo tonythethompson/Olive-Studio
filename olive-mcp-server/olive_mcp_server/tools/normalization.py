@@ -24,6 +24,16 @@ _MODEL_ALIASES = {
     "whisper": "Whisper",
 }
 
+_EXECUTION_PROVIDER_TO_TARGET = {
+    "CPUExecutionProvider": "Intel Core i9 CPU",
+    "CUDAExecutionProvider": "NVIDIA RTX 4090",
+    "TensorrtExecutionProvider": "NVIDIA RTX 4090",
+    "NvTensorRTRTXExecutionProvider": "NVIDIA RTX 4090",
+    "OpenVINOExecutionProvider": "Intel Core i9 CPU",
+    "QNNExecutionProvider": "Qualcomm Snapdragon NPU",
+    "ROCMExecutionProvider": "AMD MI300X / ROCm",
+}
+
 _hardware_profiles_cache: list[dict] | None = None
 
 
@@ -79,6 +89,12 @@ def normalize_hardware(target_hardware: str) -> str:
     """
     name = target_hardware.strip()
     lower = name.lower()
+
+    # Map ONNX Runtime execution-provider strings to canonical hardware targets
+    if name in _EXECUTION_PROVIDER_TO_TARGET:
+        name = _EXECUTION_PROVIDER_TO_TARGET[name]
+        lower = name.lower()
+
     profiles = _get_hardware_profiles()
 
     # Exact match

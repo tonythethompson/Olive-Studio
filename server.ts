@@ -1752,12 +1752,18 @@ app.post("/api/ai/local-pull", async (req, res) => {
 /** Invokes a tool function in olive_mcp_server and returns its result */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP JSON responses vary
 async function callOliveMcpTool(toolName: string, args: Record<string, unknown> = {}): Promise<any> {
-  const python = getVenvPython() || (await findSystemPython());
+  let python = getVenvPython();
+  if (!fs.existsSync(python)) {
+    python = (await findSystemPython()) ?? "";
+  }
   if (!python) {
     return { error: "Python environment not found." };
   }
 
+  const oliveMcpDir = path.join(process.cwd(), "olive-mcp-server");
+
   const script = `import json, sys
+sys.path.insert(0, sys.argv[3])
 from olive_mcp_server import tools
 
 tool_name = sys.argv[1]
@@ -1775,12 +1781,38 @@ except Exception as e:
 `;
 
   try {
-    const { stdout } = await execFileAsync(python, ["-c", script, toolName, JSON.stringify(args)]);
+    const { stdout } = await execFileAsync(python, [
+      "-c",
+      script,
+      toolName,
+      JSON.stringify(args),
+      oliveMcpDir,
+    ]);
     return JSON.parse(stdout.trim());
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
   } catch (err: any) {
     console.warn(`[MCP Tool Warning] ${toolName} call failed:`, err.message);
     return { error: err.message };
+  }
+}
+
+/** Maps an ONNX Runtime execution-provider name to a canonical hardware target
+ *  profile in the Olive MCP knowledge base. */
+function mapProviderToHardwareTarget(provider: string): string {
+  switch (provider) {
+    case "CUDAExecutionProvider":
+    case "TensorrtExecutionProvider":
+    case "NvTensorRTRTXExecutionProvider":
+      return "NVIDIA RTX 4090";
+    case "OpenVINOExecutionProvider":
+      return "Intel Core i9 CPU";
+    case "QNNExecutionProvider":
+      return "Qualcomm Snapdragon NPU";
+    case "ROCMExecutionProvider":
+      return "AMD MI300X / ROCm";
+    case "CPUExecutionProvider":
+    default:
+      return "Intel Core i9 CPU";
   }
 }
 
@@ -1858,7 +1890,7 @@ app.post("/api/ai/analyze-state", async (req, res) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP strategy responses
   let quantStrat: any = null;
   try {
-    const targetHw = state.ihvProvider || "CPUExecutionProvider";
+    const targetHw = mapProviderToHardwareTarget(state.ihvProvider || "CPUExecutionProvider");
     const modelType = state.hfModelId || "LLM";
     [hwGuide, quantStrat] = await Promise.all([
       callOliveMcpTool("get_hardware_optimization_guide", { target_hardware: targetHw }),
@@ -2054,82 +2086,6 @@ app.post("/api/validate-compatibility", async (req, res) => {
     console.error("MCP compatibility error:", err);
     return res.status(500).json({
       error: err?.message || "MCP compatibility check failed.",
-    });
-  }
-});
-
-// ─── POST /api/mcp/tool (generic MCP tool invocation) ─────────────────────────
-app.post("/api/mcp/tool", async (req, res) => {
-  const { toolName, args = {} } = req.body as {
-    toolName?: string;
-    args?: Record<string, unknown>;
-  };
-
-  // Map tool names to CLI scripts
-  const toolScripts: Record<string, string> = {
-    troubleshoot_olive_error: "troubleshoot_olive_error.py",
-    get_pass_chain: "validate_pass_chain.py",
-    get_model_compatibility: "validate_model_compatibility.py",
-  };
-
-  if (!toolName || !toolScripts[toolName]) {
-    return res.status(400).json({
-      error: `Unknown or unsupported MCP tool: '${toolName ?? ""}'. Supported: ${Object.keys(toolScripts).join(", ")}`,
-    });
-  }
-
-  try {
-    const scriptPath = path.join(process.cwd(), "scripts", toolScripts[toolName]);
-    const python = getVenvPython();
-    const exists = fs.existsSync(python);
-    const systemPython = exists ? python : "python";
-
-    // Build CLI args based on tool
-    const cliArgs: string[] = [scriptPath];
-    if (toolName === "troubleshoot_olive_error") {
-      const errorMsg = String(args.error_message || "");
-      if (!errorMsg.trim()) {
-        return res
-          .status(400)
-          .json({ error: "Missing or empty error_message for troubleshoot_olive_error." });
-      }
-      // Truncate to ~4000 chars to stay within CLI arg limits (Windows ~8KB, Linux ~128KB)
-      cliArgs.push(errorMsg.slice(0, 4000));
-      if (args.pass_name) cliArgs.push(String(args.pass_name));
-      if (args.config_context) cliArgs.push(String(args.config_context));
-    } else if (toolName === "get_pass_chain") {
-      cliArgs.push(JSON.stringify(args.pass_names || []));
-      if (args.source_format) cliArgs.push(String(args.source_format));
-    } else if (toolName === "get_model_compatibility") {
-      cliArgs.push(String(args.model_name || ""));
-      cliArgs.push(String(args.framework || ""));
-      if (args.hardware_target) cliArgs.push(String(args.hardware_target));
-    }
-
-    const { stdout, stderr } = await execFileAsync(systemPython, cliArgs);
-
-    const output = stdout.trim();
-    if (!output) {
-      return res.status(500).json({
-        error: `MCP tool '${toolName}' returned empty output.`,
-        stderr: stderr.trim() || undefined,
-      });
-    }
-
-    try {
-      const result = JSON.parse(output);
-      return res.json(result);
-    } catch {
-      return res.status(500).json({
-        error: `MCP tool '${toolName}' returned invalid JSON.`,
-        raw: output.slice(0, 500),
-      });
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
-  } catch (err: any) {
-    console.error(`MCP tool '${toolName}' error:`, err);
-    return res.status(500).json({
-      error: err?.message || `MCP tool '${toolName}' failed.`,
     });
   }
 });

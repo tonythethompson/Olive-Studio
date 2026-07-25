@@ -6,7 +6,8 @@
  * are suboptimal or incorrect for the target hardware.
  */
 
-import type { UIState, IHVProvider } from "@/types";
+import { buildOliveRecipe } from "@/lib/oliveRecipeBuilder";
+import type { UIState, IHVProvider, OliveRecipe } from "@/types";
 
 export interface ParameterWarning {
   id: string;
@@ -146,6 +147,38 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
 }
 
 /**
+ * Map the actual Olive pass type produced by the recipe builder to the canonical
+ * rule key used by getRulesForProvider. This keeps the UI validation in sync
+ * with the generated Olive recipe rather than generic step IDs.
+ */
+function getRuleKey(passType: string): string | null {
+  // Qualcomm QNN uses its own pass type and rules
+  if (passType === "QNNQuantization") return "QNNQuantization";
+
+  // OpenVINO's built-in quantization passes are already static/optimized; no generic rules
+  if (passType === "OpenVINOQuantization" || passType === "OpenVINOWeightCompression")
+    return "OpenVINOQuantization";
+
+  // All other PyTorch and ONNX quantizers map to the generic OnnxQuantization rules
+  // (the rule checks use quantMethod/quantPrecision to avoid false positives).
+  if (
+    passType === "OnnxQuantization" ||
+    passType === "AutoAWQQuantizer" ||
+    passType === "GptqQuantizer" ||
+    passType === "QATQuantizer" ||
+    passType === "OnnxHqqQuantization" ||
+    passType === "OnnxBlockWiseRtnQuantization" ||
+    passType === "SpinQuant" ||
+    passType === "QuaRot" ||
+    passType === "Nvfp4Quantizer"
+  ) {
+    return "OnnxQuantization";
+  }
+
+  return null;
+}
+
+/**
  * Validate active pass parameters against the selected hardware.
  * Returns warnings for parameter incompatibilities.
  */
@@ -154,9 +187,18 @@ export function validatePassParameters(state: UIState, activePassNames: string[]
   const provider = state.ihvProvider;
   const rules = getRulesForProvider(provider);
 
+  // Build the generated recipe to find the actual Olive pass types for active steps
+  const recipe = buildOliveRecipe(state) as unknown as OliveRecipe;
+  const recipePasses = recipe.passes ?? {};
+
   // Check each active pass against the rules
   for (const passName of activePassNames) {
-    const passRules = rules[passName];
+    const passConfig = recipePasses[passName];
+    const passType = passConfig ? passConfig.type : passName;
+    const ruleKey = getRuleKey(passType);
+    if (!ruleKey) continue;
+
+    const passRules = rules[ruleKey];
     if (!passRules) continue;
 
     for (const rule of passRules) {

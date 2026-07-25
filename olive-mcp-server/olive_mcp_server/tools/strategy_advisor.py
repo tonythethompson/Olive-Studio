@@ -14,7 +14,7 @@ def _normalize_hardware(target: str) -> str:
 
     # Map to strategy categories
     n = normalized.lower()
-    if "nvidia" in n or "rtx" in n or "tesla" in n or "t4" in n:
+    if "nvidia" in n or "rtx" in n or "tesla" in n or "t4" in n or "cuda" in n or "tensorrt" in n:
         return "nvidia"
     if "intel" in n or "openvino" in n or "core" in n:
         return "intel"
