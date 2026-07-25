@@ -105,8 +105,26 @@ export function PruningInspector({ state, setState }: InspectorProps) {
         </div>
         {state.passes.pruningMethod === "magnitude" && (
           <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="pruning-criteria" className="text-xs text-slate-400">
+            <Label htmlFor="pruning-criteria" className="text-xs text-slate-400 flex items-center gap-1.5">
               Pruning criteria
+              <TooltipProvider delayDuration={100}>
+                <Tooltip>
+                  <TooltipTrigger type="button" className="cursor-help text-slate-500 hover:text-slate-300">
+                    <Info className="h-3.5 w-3.5" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p className="font-semibold mb-1">How weights are ranked for removal</p>
+                    <p className="text-slate-300">
+                      <b>L1 norm</b> — sums absolute values. Produces sparser, blockier weight distributions.
+                      Best when you want aggressively zeroed weights and can tolerate accuracy loss.
+                    </p>
+                    <p className="text-slate-300 mt-1">
+                      <b>L2 norm</b> — sums squared values. Preserves relative weight magnitudes more evenly.
+                      Gentler pruning with smoother accuracy degradation.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </Label>
             <Select
               id="pruning-criteria"
