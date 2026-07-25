@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, Button, Label, Input, Select } from "@/components/ui";
 import { UIState, BatchJob, IHVProvider, ModelSource } from "@/types";
 import { buildRecipeJsonFromState, buildOliveRecipeFromBatchJob } from "@/lib/recipePipeline";
@@ -39,6 +39,7 @@ export function BatchProcessingPanel({
   // Always keep a ref to the latest jobs array so SSE callbacks can read current state
   const jobsRef = useRef<typeof state.batchJobs>(state.batchJobs || []);
   const [showAddForm, setShowAddForm] = useState(false);
+  const handleToggleAddForm = useCallback(() => setShowAddForm((v) => !v), []);
 
   // Custom job creation states
   const [newModelName, setNewModelName] = useState("");
@@ -283,6 +284,8 @@ export function BatchProcessingPanel({
     setShowAddForm(false);
   };
 
+  const handleCancelAddJob = useCallback(() => setShowAddForm(false), []);
+
   const handleDeleteJob = (id: string) => {
     const filtered = jobs.filter((j) => j.id !== id);
     setState({ batchJobs: filtered });
@@ -323,7 +326,7 @@ export function BatchProcessingPanel({
               <Button
                 variant="default"
                 className="h-8 text-xs bg-electric-blue text-white shrink-0"
-                onClick={() => setShowAddForm(!showAddForm)}
+                onClick={handleToggleAddForm}
               >
                 <Plus className="h-4 w-4 mr-1" /> Custom Job
               </Button>
@@ -384,7 +387,7 @@ export function BatchProcessingPanel({
                   <button
                     type="button"
                     className="text-slate-500 hover:text-slate-300 text-xs cursor-pointer"
-                    onClick={() => setShowAddForm(false)}
+                    onClick={handleCancelAddJob}
                   >
                     Cancel
                   </button>

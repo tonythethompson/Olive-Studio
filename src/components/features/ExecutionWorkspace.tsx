@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect, Suspense, lazy } from "react";
+import { useState, useRef, useEffect, Suspense, lazy } from "react";
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
 import {
@@ -22,6 +22,8 @@ import {
   AlertTriangle,
   CircleDot,
   Gauge,
+  History,
+  Square,
 } from "lucide-react";
 import JSZip from "jszip";
 import { cn } from "@/lib/utils";
@@ -29,6 +31,8 @@ import { cn } from "@/lib/utils";
 import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
+import { saveJobHistory } from "@/lib/jobHistoryStore";
+import { JobHistoryModal } from "@/components/features/JobHistoryModal";
 
 const RecipeGraphView = lazy(() => import("./RecipeGraphView").then((m) => ({ default: m.RecipeGraphView })));
 
@@ -71,18 +75,35 @@ export function ExecutionWorkspace({
   setIsRunning?: (v: boolean) => void;
 }) {
   // Live execution state
-  const [_liveJobId, setLiveJobId] = useState<string | null>(null);
+  const [liveJobId, setLiveJobId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
-  const [executionStatus, setExecutionStatus] = useState<"idle" | "running" | "completed" | "failed">("idle");
+  const [executionStatus, setExecutionStatus] = useState<
+    "idle" | "running" | "completed" | "failed" | "cancelled"
+  >("idle");
   const [executionExitCode, setExecutionExitCode] = useState<number | null>(null);
   const liveSourceRef = useRef<EventSource | null>(null);
+  const runStartTimeRef = useRef<number | null>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [recipeView, setRecipeView] = useState<"graph" | "json" | "browser-test" | "benchmark">("graph");
   const [_isCopied, setIsCopied] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [showGraphDot, setShowGraphDot] = useState(true);
   const [isExportCopied, setIsExportCopied] = useState(false);
   const [justQueued, setJustQueued] = useState(false);
+
+  const isUnmountedRef = useRef(false);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    isUnmountedRef.current = false;
+    return () => {
+      isUnmountedRef.current = true;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // States for Exporting to ONNX Runtime Web/Mobile (OWR)
   const [isOwrExportOpen, setIsOwrExportOpen] = useState(false);
@@ -379,6 +400,65 @@ ${
     setTimeout(() => setJustQueued(false), 3000);
   };
 
+  const recordJobCompletion = (
+    jobId: string,
+    status: "completed" | "failed" | "cancelled",
+    exitCode: number | null,
+  ) => {
+    const duration = runStartTimeRef.current ? Date.now() - runStartTimeRef.current : 0;
+    const activePassesNames: string[] = [];
+    if (state.passes.conversion)
+      activePassesNames.push(
+        `Conversion (${state.passes.conversionFormat === "onnx" ? "ONNX" : "OpenVINO"})`,
+      );
+    if (state.passes.quantization) activePassesNames.push(`Quantization (${state.passes.quantPrecision})`);
+    if (state.passes.pruning) activePassesNames.push(`Pruning (${state.passes.pruningMethod})`);
+    if (state.passes.onnxTransforms) activePassesNames.push("ORT Transforms");
+    if (activePassesNames.length === 0) activePassesNames.push("Default Baseline Export");
+
+    saveJobHistory({
+      id: jobId,
+      jobId,
+      timestamp: new Date().toISOString(),
+      modelId: state.hfModelId || (state.localFiles && state.localFiles[0]?.name) || "Custom Model",
+      ihvProvider: state.ihvProvider,
+      memoryOffload: state.memoryOffload,
+      status,
+      exitCode,
+      durationMs: duration,
+      passCount: activePassesNames.length,
+      passNames: activePassesNames,
+      recipeJson,
+    });
+  };
+
+  const handleCancelJob = async () => {
+    if (!liveJobId) return;
+    try {
+      setExecutionLogs((prev) => [...prev, "[INFO] Requesting process cancellation..."]);
+      const resp = await fetch("/api/olive/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: liveJobId }),
+      });
+      if (resp.ok) {
+        setExecutionLogs((prev) => [...prev, "[INFO] Cancellation signal confirmed by server."]);
+        setExecutionStatus("cancelled");
+        setIsRunning(false);
+        onRunStateChange?.(false);
+        liveSourceRef.current?.close();
+        liveSourceRef.current = null;
+        recordJobCompletion(liveJobId, "cancelled", -1);
+      } else {
+        const errData = await resp.json().catch(() => ({ error: "Failed to cancel" }));
+        setExecutionLogs((prev) => [...prev, `[ERROR] Cancel failed: ${errData.error}`]);
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      setExecutionLogs((prev) => [...prev, `[ERROR] Failed to send cancel signal: ${err.message}`]);
+    }
+  };
+
   const handleExecuteLive = async () => {
     if (isRunning) return;
 
@@ -402,6 +482,7 @@ ${
     setExecutionLogs(["[INFO] Initiating Olive run...\n"]);
     setExecutionStatus("running");
     setExecutionExitCode(null);
+    runStartTimeRef.current = Date.now();
 
     try {
       const resp = await fetch("/api/olive/run", {
@@ -426,47 +507,111 @@ ${
       // Close any existing SSE connection
       liveSourceRef.current?.close();
 
-      // Open SSE connection
-      const evtSource = new EventSource(`/api/olive/stream/${jobId}`);
-      liveSourceRef.current = evtSource;
+      let reconnectAttempts = 0;
+      const MAX_RECONNECT_ATTEMPTS = 10;
+      const MAX_BACKOFF_MS = 30000;
 
-      // Standard message event (log lines)
-      evtSource.onmessage = (e) => {
-        try {
-          const payload = JSON.parse(e.data);
-          if (payload.line) {
-            setExecutionLogs((prev) => [...prev, payload.line]);
+      const connectSSE = (targetJobId: string) => {
+        if (isUnmountedRef.current) return;
+        liveSourceRef.current?.close();
+
+        const evtSource = new EventSource(`/api/olive/stream/${targetJobId}`);
+        liveSourceRef.current = evtSource;
+
+        evtSource.onopen = () => {
+          if (reconnectAttempts > 0) {
+            setExecutionLogs((prev) => [...prev, "[INFO] Stream reconnected successfully."]);
           }
-        } catch {
-          /* ignore malformed */
-        }
+          reconnectAttempts = 0;
+        };
+
+        evtSource.onmessage = (e) => {
+          try {
+            const payload = JSON.parse(e.data);
+            if (payload.line) {
+              setExecutionLogs((prev) => [...prev, payload.line]);
+            }
+          } catch {
+            /* ignore malformed */
+          }
+        };
+
+        evtSource.addEventListener("done", (e: MessageEvent) => {
+          let exitCode = 0;
+          try {
+            exitCode = JSON.parse(e.data)?.exitCode ?? 0;
+          } catch {
+            exitCode = 0;
+          }
+          const finalStatus = exitCode === 0 ? "completed" : "failed";
+          setExecutionStatus(finalStatus);
+          setExecutionExitCode(exitCode);
+          setIsRunning(false);
+          onRunStateChange?.(false);
+          evtSource.close();
+          liveSourceRef.current = null;
+          recordJobCompletion(targetJobId, finalStatus, exitCode);
+        });
+
+        evtSource.onerror = async () => {
+          evtSource.close();
+          if (isUnmountedRef.current) return;
+
+          let serverSaysRunning = false;
+          try {
+            const statusResp = await fetch(`/api/olive/status/${targetJobId}`);
+            if (statusResp.ok) {
+              const statusData = await statusResp.json();
+              if (
+                statusData.status === "completed" ||
+                statusData.status === "failed" ||
+                statusData.status === "cancelled"
+              ) {
+                const finalStatus =
+                  statusData.status === "completed"
+                    ? "completed"
+                    : statusData.status === "cancelled"
+                      ? "cancelled"
+                      : "failed";
+                setExecutionStatus(finalStatus);
+                setExecutionExitCode(statusData.exitCode ?? (finalStatus === "completed" ? 0 : 1));
+                setIsRunning(false);
+                onRunStateChange?.(false);
+                recordJobCompletion(targetJobId, finalStatus, statusData.exitCode);
+                return;
+              } else if (statusData.status === "running" || statusData.status === "setting_up") {
+                serverSaysRunning = true;
+              }
+            }
+          } catch {
+            /* ignore status check failure */
+          }
+
+          if (serverSaysRunning || reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            reconnectAttempts++;
+            const backoffMs = Math.min(1000 * Math.pow(1.5, reconnectAttempts), MAX_BACKOFF_MS);
+            setExecutionLogs((prev) => [
+              ...prev,
+              `[WARN] Stream connection lost. Reconnecting (attempt ${reconnectAttempts}${serverSaysRunning ? "" : `/${MAX_RECONNECT_ATTEMPTS}`} in ${(backoffMs / 1000).toFixed(1)}s)...`,
+            ]);
+
+            reconnectTimeoutRef.current = setTimeout(() => {
+              if (!isUnmountedRef.current) connectSSE(targetJobId);
+            }, backoffMs);
+          } else {
+            setExecutionLogs((prev) => [
+              ...prev,
+              "[ERROR] SSE connection lost permanently after maximum retry attempts.",
+            ]);
+            setExecutionStatus("failed");
+            setIsRunning(false);
+            onRunStateChange?.(false);
+            recordJobCompletion(targetJobId, "failed", 1);
+          }
+        };
       };
 
-      // Named 'done' event — fired when the Olive process exits
-      evtSource.addEventListener("done", (e: MessageEvent) => {
-        let exitCode = 0;
-        try {
-          exitCode = JSON.parse(e.data)?.exitCode ?? 0;
-        } catch {
-          exitCode = 0;
-        }
-        setExecutionStatus(exitCode === 0 ? "completed" : "failed");
-        setExecutionExitCode(exitCode);
-        setIsRunning(false);
-        onRunStateChange?.(false);
-        evtSource.close();
-        liveSourceRef.current = null;
-      });
-
-      evtSource.onerror = () => {
-        setExecutionLogs((prev) => [...prev, "[ERROR] SSE connection lost."]);
-        setExecutionStatus("failed");
-        setIsRunning(false);
-        onRunStateChange?.(false);
-        evtSource.close();
-        liveSourceRef.current = null;
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      connectSSE(jobId);
     } catch (err: any) {
       setExecutionLogs((prev) => [...prev, `[ERROR] ${err.message}`]);
       setExecutionStatus("failed");
@@ -911,6 +1056,13 @@ ${
               <Button
                 variant="outline"
                 className="h-8 px-3 text-xs border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
+                onClick={() => setIsHistoryOpen(true)}
+              >
+                <History className="h-3.5 w-3.5 mr-1.5" /> Run History
+              </Button>
+              <Button
+                variant="outline"
+                className="h-8 px-3 text-xs border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
                 onClick={() => setIsExportOpen(true)}
               >
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Export Recipe
@@ -1037,6 +1189,15 @@ ${
               </span>
             </div>
             <div className="flex items-center gap-2 ml-auto">
+              {isRunning && (
+                <Button
+                  variant="outline"
+                  onClick={handleCancelJob}
+                  className="h-9 px-3 text-xs border-rose-500/40 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500 cursor-pointer"
+                >
+                  <Square className="h-3.5 w-3.5 mr-1.5 fill-rose-400 text-rose-400" /> Cancel Run
+                </Button>
+              )}
               {justQueued ? (
                 <span className="text-xs text-electric-blue font-semibold font-mono mr-2">Queued</span>
               ) : (
@@ -1079,11 +1240,13 @@ ${
                   className={
                     line.includes("[ERROR]")
                       ? "text-red-400"
-                      : line.includes("[SETUP]")
-                        ? "text-amber-400"
-                        : line.includes("[DONE]")
-                          ? "text-emerald-300 font-bold"
-                          : "text-emerald-400"
+                      : line.includes("[WARN]")
+                        ? "text-amber-300"
+                        : line.includes("[SETUP]")
+                          ? "text-amber-400"
+                          : line.includes("[DONE]") || line.includes("[info] Job cancelled")
+                            ? "text-emerald-300 font-bold"
+                            : "text-emerald-400"
                   }
                 >
                   {line}
@@ -1093,6 +1256,23 @@ ${
           </div>
         </CardContent>
       </Card>
+
+      {/* History & Side-by-Side Comparison Modal */}
+      <JobHistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        onSelectRecipe={(recipeJsonStr) => {
+          try {
+            const parsed = JSON.parse(recipeJsonStr);
+            // Optionally update UI state if needed
+            setExecutionLogs([
+              `[INFO] Loaded recipe from history (${parsed.input_model?.type || "Olive recipe"})`,
+            ]);
+          } catch {
+            /* ignore */
+          }
+        }}
+      />
     </div>
   );
 }

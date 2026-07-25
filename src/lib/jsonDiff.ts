@@ -46,7 +46,9 @@ function diffLines(a: string[], b: string[]): DiffLine[] {
 }
 
 function buildLcsTable(a: string[], b: string[]): number[][] {
-  const table: number[][] = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  const table: number[][] = Array.from({ length: a.length + 1 }, () =>
+    Array.from({ length: b.length + 1 }, () => 0),
+  );
 
   for (let i = 1; i <= a.length; i++) {
     for (let j = 1; j <= b.length; j++) {

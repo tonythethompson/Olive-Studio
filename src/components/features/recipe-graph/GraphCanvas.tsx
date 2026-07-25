@@ -369,6 +369,7 @@ export function GraphCanvas({
         backgroundSize: "24px 24px",
       }}
     >
+      {/* eslint-disable-next-line react-hooks/refs -- intentional: SVG connections read DOM layout during render (client-side SPA, no SSR) */}
       {renderSVGConnections()}
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-y-6 md:gap-3 relative z-10 items-center justify-between h-full w-full min-w-0 md:min-w-[720px]">

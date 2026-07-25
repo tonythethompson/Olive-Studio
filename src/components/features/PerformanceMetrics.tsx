@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui";
 import { Activity } from "lucide-react";
 import { parseOliveMetricsFromLogs } from "@/lib/oliveLogMetrics";
@@ -6,7 +7,7 @@ import { parseOliveMetricsFromLogs } from "@/lib/oliveLogMetrics";
  * PerformanceMetrics — intentionally empty until a real Olive run completes.
  * Parses latency/throughput/memory/compression from Olive stdout when present.
  */
-export function PerformanceMetrics({ logs }: { logs?: string[] }) {
+export const PerformanceMetrics = memo(function PerformanceMetrics({ logs }: { logs?: string[] }) {
   const parsed = logs && logs.length > 0 ? parseOliveMetricsFromLogs(logs) : undefined;
   const parsedMetrics = parsed
     ? ([
@@ -65,4 +66,4 @@ export function PerformanceMetrics({ logs }: { logs?: string[] }) {
       </CardContent>
     </Card>
   );
-}
+});

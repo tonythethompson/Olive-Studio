@@ -2,7 +2,7 @@ import { Label, Select, Switch } from "@/components/ui";
 import { getAllowedQuantMethods } from "@/lib/pipelineValidation";
 import { UIState } from "@/types";
 import type { InspectorProps } from "./types";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { RecipeDiffOverlay } from "./RecipeDiffOverlay";
 import { RefreshCw, AlertTriangle, Save } from "lucide-react";
 import {
@@ -84,6 +84,57 @@ interface QuantPreset {
   label: string;
   description: string;
   fields: Partial<UIState["passes"]>;
+}
+
+/** Build a QuantPreset from the current UI state for tooltip display. */
+function getCurrentQuantPreset(state: UIState): QuantPreset {
+  const f = state.passes;
+  const fields: Partial<UIState["passes"]> = {
+    quantMethod: f.quantMethod,
+    quantPrecision: f.quantPrecision,
+  };
+  if (f.quantMethod === "gptq") {
+    fields.gptqBlockSize = f.gptqBlockSize;
+    fields.gptqGroupSize = f.gptqGroupSize;
+    fields.gptqDescAct = f.gptqDescAct;
+  } else if (f.quantMethod === "awq") {
+    fields.awqGroupSize = f.awqGroupSize;
+    fields.awqDampPercent = f.awqDampPercent;
+    fields.awqSym = f.awqSym;
+  } else if (f.quantMethod === "qat") {
+    fields.qatQuantPrecision = f.qatQuantPrecision;
+    fields.qatCalibrateMethod = f.qatCalibrateMethod;
+    fields.qatCalibrateSteps = f.qatCalibrateSteps;
+  }
+  return {
+    label: "Current",
+    description: `Current ${f.quantMethod.toUpperCase()} ${f.quantPrecision} config`,
+    fields,
+  };
+}
+
+/** Format a preset's full config as a structured tooltip string. */
+function formatPresetTooltip(preset: QuantPreset): string {
+  const f = preset.fields;
+  const lines: string[] = [
+    preset.description,
+    `Method: ${f.quantMethod?.toUpperCase() ?? "PTQ"}`,
+    `Precision: ${f.quantPrecision?.toUpperCase() ?? "INT8"}`,
+  ];
+  if (f.quantMethod === "awq") {
+    lines.push(`AWQ group size: ${f.awqGroupSize ?? 128}`);
+    lines.push(`AWQ damp %: ${f.awqDampPercent ?? 0.01}`);
+    lines.push(`AWQ symmetric: ${f.awqSym ? "on" : "off"}`);
+  } else if (f.quantMethod === "gptq") {
+    lines.push(`GPTQ block size: ${f.gptqBlockSize ?? 128}`);
+    lines.push(`GPTQ group size: ${f.gptqGroupSize ?? 128}`);
+    lines.push(`GPTQ desc_act: ${f.gptqDescAct ? "on" : "off"}`);
+  } else if (f.quantMethod === "qat") {
+    lines.push(`QAT precision: ${f.qatQuantPrecision?.toUpperCase() ?? "INT8"}`);
+    lines.push(`QAT calibrate: ${f.qatCalibrateMethod ?? "percentile"}`);
+    lines.push(`QAT steps: ${f.qatCalibrateSteps ?? 10}`);
+  }
+  return lines.join("\n");
 }
 
 const AI_PRESET_LABEL = "✨ Ask AI...";
@@ -205,13 +256,9 @@ const DELETE_PREFIX = "__delete__:";
 export function QuantizationInspector({ state, setState }: InspectorProps) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
-  const [customPresets, setCustomPresets] = useState<CustomQuantPreset[]>([]);
+  const [customPresets, setCustomPresets] = useState<CustomQuantPreset[]>(() => loadCustomPresets());
 
-  // Load custom presets from localStorage on mount
-  useEffect(() => {
-    setCustomPresets(loadCustomPresets());
-  }, []);
-
+  const currentPreset = useMemo(() => getCurrentQuantPreset(state), [state]);
   const allowedQuantMethods = getAllowedQuantMethods(state.ihvProvider);
   const isGptq = state.passes.quantMethod === "gptq";
   const isAwq = state.passes.quantMethod === "awq";
@@ -351,7 +398,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
               ─── presets ───
             </option>
             {QUANT_PRESETS.map((preset) => (
-              <option key={preset.label} value={preset.label} title={preset.description}>
+              <option key={preset.label} value={preset.label} title={formatPresetTooltip(preset)}>
                 {preset.label} — {preset.description}
               </option>
             ))}
@@ -361,7 +408,16 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
                   ─── custom ───
                 </option>
                 {customPresets.map((p) => (
-                  <option key={p.label} value={`${DELETE_PREFIX}${p.label}`} className="text-rose-400/70">
+                  <option
+                    key={p.label}
+                    value={`${DELETE_PREFIX}${p.label}`}
+                    className="text-rose-400/70"
+                    title={formatPresetTooltip({
+                      label: p.label,
+                      description: p.description,
+                      fields: p.fields,
+                    })}
+                  >
                     ✕ {p.label}
                   </option>
                 ))}
@@ -376,7 +432,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
             type="button"
             onClick={handleSaveCustom}
             className="h-9 w-9 rounded-lg border border-slate-700 bg-slate-950 hover:bg-slate-900 flex items-center justify-center text-slate-400 hover:text-electric-blue transition-colors shrink-0 cursor-pointer"
-            title="Save current config as preset"
+            title={formatPresetTooltip(currentPreset)}
             aria-label="Save current config as preset"
           >
             <Save className="h-4 w-4" />

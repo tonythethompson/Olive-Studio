@@ -17,6 +17,7 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
   const [probeLoading, setProbeLoading] = useState(true);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: on-mount hardware probe
     setProbeLoading(true);
     fetchHardwareProbe()
       .then(setHardwareProbe)
