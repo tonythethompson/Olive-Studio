@@ -6,14 +6,16 @@ from . import load_passes
 
 
 def get_pass_parameters(pass_name: str, parameter_name: str = "") -> dict[str, Any]:
-    """Deep-dive into a pass's parameter schema.
-
-    Args:
-        pass_name: Olive pass name, e.g. "OnnxQuantization".
-        parameter_name: Optional specific parameter to document.
-
+    """
+    Retrieve documentation for an Olive pass or one of its parameters.
+    
+    Parameters:
+        pass_name (str): Name of the Olive pass to document.
+        parameter_name (str): Optional name of a specific parameter to document.
+    
     Returns:
-        Full parameter documentation: type, default, valid range, interactions.
+        dict[str, Any]: Pass-level or parameter-level documentation, or an error
+        with available pass or parameter names when the requested item is not found.
     """
     passes = {p["name"]: p for p in load_passes()}
     meta = passes.get(pass_name)

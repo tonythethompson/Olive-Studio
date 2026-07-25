@@ -8,7 +8,12 @@ _KB_DIR = Path(__file__).parent.parent / "knowledge_base"
 
 
 def _flatten(obj: Any, prefix: str = "") -> list[tuple[str, str]]:
-    """Flatten a JSON object into (key-path, text) pairs for search."""
+    """
+    Flatten nested JSON data into key-path and text pairs.
+    
+    Returns:
+        A list of `(key_path, text)` pairs for each string value in the data.
+    """
     results: list[tuple[str, str]] = []
     if isinstance(obj, dict):
         for k, v in obj.items():
@@ -22,6 +27,12 @@ def _flatten(obj: Any, prefix: str = "") -> list[tuple[str, str]]:
 
 
 def _load_kb_text() -> list[tuple[str, str]]:
+    """
+    Load searchable text entries from all JSON files in the knowledge base.
+    
+    Returns:
+        list[tuple[str, str]]: Flattened key paths and their corresponding text values.
+    """
     all_text: list[tuple[str, str]] = []
     for file in _KB_DIR.glob("*.json"):
         try:
@@ -35,14 +46,17 @@ def _load_kb_text() -> list[tuple[str, str]]:
 
 
 def search_olive_documentation(query: str, top_k: int = 5) -> dict[str, Any]:
-    """Full-text search across the local Olive knowledge base.
-
-    Args:
-        query: Search query, e.g. "calibrate static quantization".
-        top_k: Maximum number of results.
-
+    """
+    Search the local Olive knowledge base for entries matching the query terms.
+    
+    Parameters:
+        query (str): Terms to search for.
+        top_k (int): Maximum number of ranked results to include.
+    
     Returns:
-        Ranked results with snippet, source path, and relevance score.
+        dict[str, Any]: A mapping containing the original query, total matching
+            entry count, ranked results with source paths, snippets, and relevance
+            scores, and a link to the official Olive documentation.
     """
     terms = [t.lower() for t in query.split() if t]
     kb = _load_kb_text()

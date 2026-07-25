@@ -6,15 +6,16 @@ from . import load_passes
 
 
 def get_olive_passes(filter: str | None = None) -> dict[str, Any]:
-    """List available Olive optimization passes, optionally filtered by category.
-
+    """
+    List available Olive optimization passes, optionally filtered by category.
+    
     Args:
-        filter: Optional category filter, e.g. "quantization", "conversion",
-            "graph_optimization", "pruning", "finetuning", "distillation",
-            or "performance_tuning".
-
+        filter: Optional category name to match case-insensitively after
+            surrounding whitespace is removed.
+    
     Returns:
-        A dict with a list of passes and optional filter info.
+        A dictionary containing the normalized filter, the number of matching
+        passes, and the available pass descriptions.
     """
     passes = load_passes()
     requested = (filter or "").strip().lower()

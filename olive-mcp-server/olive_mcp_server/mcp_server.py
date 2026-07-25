@@ -40,6 +40,7 @@ mcp.tool()(evaluate_optimization_tradeoff)
 
 
 def main() -> None:
+    """Start the Olive MCP server."""
     mcp.run()
 
 

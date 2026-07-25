@@ -13,19 +13,23 @@ def get_cli_command(
     output_dir: str = "./models/optimized",
     batch_size: int | None = None,
 ) -> dict[str, Any]:
-    """Generate a ready-to-run Olive CLI command.
-
-    Args:
-        optimization_goal: "quantize", "finetune", "optimize", "auto-opt",
-            "onnx-graph-capture", or "generate-adapter".
-        model: Model name, path, or HuggingFace ID.
-        target: Target accelerator, e.g. "cpu", "gpu", "npu", or "tensorrt".
-        config_path: Path to workflow JSON config.
-        output_dir: Output directory.
-        batch_size: Optional batch size to append.
-
+    """
+    Build a ready-to-run Olive CLI command and its usage metadata.
+    
+    Parameters:
+        optimization_goal (str): Olive workflow or action name. Unknown goals use
+            the ``optimize`` command.
+        model (str): Model name, path, or HuggingFace model ID.
+        target (str): Target accelerator, such as ``cpu``, ``gpu``, ``npu``, or
+            ``tensorrt``.
+        config_path (str): Path to the Olive workflow configuration JSON.
+        output_dir (str): Directory for optimized model artifacts.
+        batch_size (int | None): Optional inference batch size to include in the
+            command.
+    
     Returns:
-        CLI command string and flag explanation.
+        dict[str, Any]: Metadata containing the assembled command, normalized
+            optimization goal, flag explanations, and usage notes.
     """
     goal = optimization_goal.lower().strip()
     accepted = {

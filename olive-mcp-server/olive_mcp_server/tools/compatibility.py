@@ -6,6 +6,15 @@ from . import load_compatibility_matrix, load_passes
 
 
 def _normalize_model(name: str) -> str:
+    """
+    Normalize a model name to a canonical identifier when it matches a known model family.
+    
+    Parameters:
+        name (str): Model name to normalize.
+    
+    Returns:
+        str: Canonical model identifier for recognized model families; otherwise, the original name.
+    """
     n = name.lower()
     if "mistral" in n:
         return "Mistral 7B"
@@ -19,6 +28,15 @@ def _normalize_model(name: str) -> str:
 
 
 def _normalize_framework(framework: str) -> str:
+    """
+    Normalize a framework identifier to its canonical name.
+    
+    Parameters:
+        framework (str): Framework name or alias to normalize.
+    
+    Returns:
+        str: Canonical framework name for recognized aliases; otherwise, the original identifier.
+    """
     f = framework.lower()
     if f in ("pytorch", "torch", "hf", "huggingface"):
         return "PyTorch"
@@ -34,15 +52,19 @@ def get_model_compatibility(
     framework: str,
     olive_version: str = "",
 ) -> dict[str, Any]:
-    """Check Olive support for a model/framework combo.
-
+    """
+    Check compatibility for a model and framework using the local compatibility matrix.
+    
     Args:
-        model_name: Model name or path, e.g. "mistralai/Mistral-7B-v0.1".
-        framework: Source framework, e.g. "PyTorch", "ONNX", "HuggingFace".
-        olive_version: Optional Olive version string.
-
+        model_name: Model name or path to normalize and look up.
+        framework: Source framework identifier, including supported aliases.
+        olive_version: Optional Olive version to include in the compatibility result.
+    
     Returns:
-        Compatibility matrix for supported passes, known issues, and expected performance.
+        A compatibility summary containing normalized identifiers, framework support,
+        hardware profiles, notes, and Olive version for known models. For unknown
+        models, contains the normalized framework, available pass names, and
+        suggested workflow steps.
     """
     models = load_compatibility_matrix()
     key = _normalize_model(model_name)

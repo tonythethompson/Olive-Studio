@@ -7,10 +7,12 @@ from olive_mcp_server.mcp_server import mcp
 
 
 def _run(coro):
+    """Execute a coroutine and return its result."""
     return asyncio.run(coro)
 
 
 def test_server_lists_all_tools():
+    """Verify that the MCP server exposes all expected tool names."""
     tools = _run(mcp.list_tools())
     names = {t.name for t in tools}
     expected = {
@@ -38,6 +40,7 @@ def test_get_olive_passes_via_server():
 
 
 def test_quantization_strategy_via_server():
+    """Validate that the quantization strategy tool normalizes target hardware and includes a pass chain."""
     result, _ = _run(
         mcp.call_tool(
             "get_quantization_strategy",

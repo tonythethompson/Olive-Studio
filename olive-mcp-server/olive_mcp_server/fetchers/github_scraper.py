@@ -8,14 +8,16 @@ ISSUES_URL = f"https://api.github.com/repos/{REPO}/issues"
 
 
 def fetch_github_issues(labels: list[str] | None = None, max_results: int = 50) -> dict[str, Any]:
-    """Stub: fetch recent Olive GitHub issues and release notes.
-
-    Args:
-        labels: Issue labels to filter on, e.g. ["bug", "quantization"].
-        max_results: Maximum number of issues to retrieve.
-
+    """
+    Provide a placeholder response for retrieving Olive GitHub issues and release notes.
+    
+    Parameters:
+        labels (list[str] | None): Optional issue labels to include in the response.
+        max_results (int): Maximum number of issues requested.
+    
     Returns:
-        Dict with releases and issue summaries.
+        dict[str, Any]: A stub response containing the repository source, requested
+            filters, maximum result count, and implementation note.
     """
     return {
         "status": "stub",

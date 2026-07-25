@@ -25,7 +25,16 @@ _TARGET_DEFAULTS = {
 
 
 def _apply_target_defaults(pass_name: str, params: dict[str, Any], target: str) -> dict[str, Any]:
-    """Apply optimization-target defaults to a parameter set."""
+    """
+    Merge optimization-target defaults with the provided pass parameters.
+    
+    Parameters:
+        params (dict[str, Any]): Parameter values that override the target defaults.
+        target (str): Optimization target used to select defaults. Unknown targets use the balanced defaults.
+    
+    Returns:
+        dict[str, Any]: A merged parameter dictionary.
+    """
     defaults = _TARGET_DEFAULTS.get(target, _TARGET_DEFAULTS["balanced"]).copy()
     merged = defaults.copy()
     merged.update(params)
@@ -37,15 +46,16 @@ def get_pass_config_template(
     framework: str = "onnx",
     optimization_target: str = "balanced",
 ) -> dict[str, Any]:
-    """Generate a scaffold Olive workflow configuration for a single pass.
-
-    Args:
-        pass_name: Name of the Olive pass, e.g. "OnnxQuantization".
-        framework: Source framework: "torch", "onnx", or "tf".
-        optimization_target: One of "quality", "latency", or "balanced".
-
+    """
+    Generate an Olive workflow configuration scaffold for a single pass.
+    
+    Parameters:
+        pass_name (str): Name of the Olive pass.
+        framework (str): Source framework used to select the input model type.
+        optimization_target (str): Optimization target: ``"quality"``, ``"latency"``, or ``"balanced"``.
+    
     Returns:
-        A JSON-ready Olive configuration snippet with commentary.
+        dict[str, Any]: A JSON-ready configuration scaffold with pass metadata, parameters, and engine settings. Returns an error dictionary if the pass or optimization target is invalid.
     """
     passes = {p["name"]: p for p in load_passes()}
     meta = passes.get(pass_name)

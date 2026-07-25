@@ -7,13 +7,16 @@ OFFICIAL_DOCS_URL = "https://microsoft.github.io/Olive/"
 
 
 def fetch_official_docs(pages: list[str] | None = None) -> dict[str, Any]:
-    """Stub: fetch official Olive docs pages.
-
+    """
+    Describe the official Olive documentation pages selected for fetching.
+    
     Args:
-        pages: List of doc paths to fetch. If None, fetches core pages.
-
+        pages: Documentation page paths to select. Defaults to the core pages
+            ``index``, ``passes``, and ``tutorials``.
+    
     Returns:
-        Dict mapping page path to markdown content.
+        A status dictionary containing the documentation source URL, selected page
+        paths, and a note about the unimplemented fetch operation.
     """
     return {
         "status": "stub",

@@ -6,6 +6,14 @@ from . import load_hardware_profiles
 
 
 def _normalize_target(target: str) -> str:
+    """Normalize a hardware target description to its canonical profile name.
+    
+    Parameters:
+        target (str): User-provided hardware target description.
+    
+    Returns:
+        str: Canonical hardware profile name, or the original target when no profile matches.
+    """
     t = target.lower()
     if "rtx 4090" in t:
         return "NVIDIA RTX 4090"
@@ -32,16 +40,17 @@ def get_hardware_optimization_guide(
     latency_goal: str = "<100ms",
     throughput_goal: str = "",
 ) -> dict[str, Any]:
-    """Return a hardware-specific optimization path for Olive.
-
-    Args:
-        target_hardware: Hardware target, e.g. "NVIDIA RTX 4090" or "Qualcomm NPU".
-        model_size: "small", "medium", or "large" (affects batch/calibration).
-        latency_goal: Human-readable latency target.
-        throughput_goal: Optional inferences/sec or batch target.
-
+    """
+    Return a hardware-specific Olive optimization plan for the requested model size and performance goals.
+    
+    Parameters:
+        target_hardware (str): Hardware identifier used to select an available profile.
+        model_size (str): Model size used to scale calibration and batch sizing.
+        latency_goal (str): Human-readable latency target included in the result.
+        throughput_goal (str): Optional throughput target included in the result.
+    
     Returns:
-        Recommended pass chain, execution provider, speedup, and calibration.
+        dict[str, Any]: The selected profile, optimization settings, scaled calibration and batch sizes, performance goals, and optional metadata. If no matching profile exists, contains an error message and available profile names.
     """
     profiles = {p["target"]: p for p in load_hardware_profiles()}
     key = _normalize_target(target_hardware)

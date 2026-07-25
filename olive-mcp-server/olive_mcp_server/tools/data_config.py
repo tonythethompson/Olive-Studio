@@ -7,14 +7,17 @@ def get_data_config_template(
     data_source: str,
     task: str = "calibration",
 ) -> dict[str, Any]:
-    """Generate a data pipeline configuration for Olive.
-
+    """
+    Generate a normalized Olive data pipeline configuration template.
+    
     Args:
-        data_source: e.g. "huggingface", "local_files", "image_folder".
-        task: "calibration" or "evaluation".
-
+        data_source: Dataset source type, such as ``"huggingface"`` or
+            ``"image_folder"``.
+        task: Pipeline task, typically ``"calibration"`` or ``"evaluation"``.
+    
     Returns:
-        Complete DataConfig JSON with preprocessing, sampling, and batching.
+        A dictionary containing the normalized task and data source, the generated
+        data configuration, and usage notes.
     """
     source = data_source.lower().strip()
     task = task.lower().strip()

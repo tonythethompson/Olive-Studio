@@ -7,16 +7,34 @@ KB_DIR = Path(__file__).parent.parent / "olive_mcp_server" / "knowledge_base"
 
 
 def load(name: str) -> dict:
+    """Load and parse a knowledge-base JSON file.
+    
+    Parameters:
+    	name (str): The name of the JSON file in the knowledge-base directory.
+    
+    Returns:
+    	dict: The parsed JSON content.
+    """
     with open(KB_DIR / name, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def save(name: str, data: dict) -> None:
+    """
+    Save knowledge base data as a formatted JSON file.
+    
+    Parameters:
+    	name (str): Name of the JSON file within the knowledge base directory.
+    	data (dict): Data to serialize.
+    """
     with open(KB_DIR / name, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
 def expand_passes():
+    """
+    Append predefined pass definitions to the knowledge base when they are missing.
+    """
     data = load("passes.json")
     existing = {p["name"]: p for p in data["passes"]}
 
@@ -400,6 +418,14 @@ def expand_passes():
 
 
 def expand_hardware_profiles():
+    """
+    Add predefined hardware profiles to the hardware profiles knowledge base.
+    
+    Existing profiles are preserved, and profiles with new target identifiers are appended.
+    
+    Returns:
+        None
+    """
     data = load("hardware_profiles.json")
     existing = {p["target"]: p for p in data["profiles"]}
 
@@ -480,6 +506,7 @@ def expand_hardware_profiles():
 
 
 def expand_troubleshooting():
+    """Add predefined troubleshooting entries to the troubleshooting knowledge base when they are missing."""
     data = load("troubleshooting.json")
     entries = {e["id"]: e for e in data.get("entries", [])}
 
@@ -671,6 +698,7 @@ def expand_troubleshooting():
 
 
 def main():
+    """Expand the knowledge base with predefined passes, hardware profiles, and troubleshooting entries."""
     expand_passes()
     expand_hardware_profiles()
     expand_troubleshooting()

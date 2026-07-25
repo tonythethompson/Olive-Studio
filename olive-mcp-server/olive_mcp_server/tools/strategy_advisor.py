@@ -6,6 +6,16 @@ from . import load_hardware_profiles, load_quirks
 
 
 def _normalize_hardware(target: str) -> str:
+    """
+    Classify a hardware description into a canonical hardware family.
+    
+    Parameters:
+        target (str): Hardware name or description to classify.
+    
+    Returns:
+        str: One of "nvidia", "intel", "qualcomm", "apple", "android",
+            "xilinx", or "generic".
+    """
     t = target.lower()
     if "nvidia" in t or "rtx" in t or "tesla" in t:
         return "nvidia"
@@ -23,6 +33,15 @@ def _normalize_hardware(target: str) -> str:
 
 
 def _normalize_model_type(model_type: str) -> str:
+    """
+    Classify a model description into a canonical model category.
+    
+    Parameters:
+        model_type (str): Model category or name to classify.
+    
+    Returns:
+        str: One of `"llm"`, `"cnn"`, `"vision"`, `"speech"`, or `"generic"`.
+    """
     m = model_type.lower()
     if "llm" in m or any(x in m for x in ["llama", "mistral", "phi", "gpt", "qwen", "falcon"]):
         return "llm"
@@ -36,6 +55,15 @@ def _normalize_model_type(model_type: str) -> str:
 
 
 def _latency_rank(latency: str) -> int:
+    """
+    Classify a latency budget by its relative urgency.
+    
+    Parameters:
+    	latency (str): Latency budget description to classify.
+    
+    Returns:
+    	int: A rank from 0 to 3, where 0 represents the most urgent latency target and 3 represents an unclassified target.
+    """
     l = latency.lower()
     if "<100" in l or "100ms" in l or "realtime" in l or "real-time" in l:
         return 0
@@ -52,16 +80,19 @@ def get_quantization_strategy(
     latency_budget: str = "<500ms",
     accuracy_threshold: str = "<2% drop",
 ) -> dict[str, Any]:
-    """Recommend a quantization approach for a model + hardware combo.
-
-    Args:
-        model_type: e.g. "LLM", "CNN", "Vision", or a model name like "llama-7b".
-        target_hardware: e.g. "NVIDIA RTX 4090", "Qualcomm Snapdragon NPU".
-        latency_budget: Human-readable latency target, e.g. "<100ms".
-        accuracy_threshold: Human-readable accuracy constraint, e.g. "<2% drop".
-
+    """
+    Recommend a quantization strategy for a model and target hardware combination.
+    
+    Parameters:
+        model_type (str): Model category or name, such as "LLM", "CNN", "Vision", or "llama-7b".
+        target_hardware (str): Hardware description, such as "NVIDIA RTX 4090" or "Qualcomm Snapdragon NPU".
+        latency_budget (str): Human-readable latency target, such as "<100ms".
+        accuracy_threshold (str): Human-readable accuracy constraint, such as "<2% drop".
+    
     Returns:
-        Recommended algorithm, calibration strategy, expected outcomes, and risks.
+        dict[str, Any]: A recommendation containing normalized inputs, the quantization
+        algorithm, calibration strategy, expected outcomes, risks, processing pass
+        chain, and relevant hardware quirks.
     """
     hw = _normalize_hardware(target_hardware)
     mt = _normalize_model_type(model_type)

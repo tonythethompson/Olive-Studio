@@ -19,6 +19,14 @@ _TYPE_ORDER = [
 
 
 def _type_index(pass_type: str) -> int:
+    """Return the canonical ordering index for a pass type.
+    
+    Parameters:
+    	pass_type (str): Pass type to locate in the canonical ordering.
+    
+    Returns:
+    	int: The pass type's index, or the length of the canonical ordering when it is unknown.
+    """
     try:
         return _TYPE_ORDER.index(pass_type)
     except ValueError:
@@ -26,13 +34,16 @@ def _type_index(pass_type: str) -> int:
 
 
 def get_pass_chain(pass_names: list[str]) -> dict[str, Any]:
-    """Validate and explain an ordered pass chain.
-
-    Args:
-        pass_names: List of pass names in intended execution order.
-
+    """
+    Validate an ordered list of pass names and identify dependency or ordering issues.
+    
+    Parameters:
+        pass_names (list[str]): Pass names in intended execution order.
+    
     Returns:
-        Validation result, explanation, and reordering suggestions.
+        dict[str, Any]: A validation result containing `valid`, `errors`, `warnings`,
+            resolved per-pass metadata in `chain`, and the canonical pass type
+            ordering in `canonical_order`.
     """
     passes = {p["name"]: p for p in load_passes()}
     errors = []

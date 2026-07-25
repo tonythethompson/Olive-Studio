@@ -8,11 +8,7 @@ from olive_mcp_server.fetchers import fetch_github_issues, fetch_official_docs, 
 
 
 def main() -> None:
-    """Fetch external sources and write a freshness report.
-
-    This is a stub. In production it should parse the fetched content,
-    update JSON files, and flag deprecations.
-    """
+    """Fetch external sources and write a timestamped update report to the knowledge base."""
     kb_dir = Path(__file__).parent.parent / "olive_mcp_server" / "knowledge_base"
     report = {
         "updated_at": datetime.now(timezone.utc).isoformat(),

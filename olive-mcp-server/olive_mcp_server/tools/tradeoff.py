@@ -10,15 +10,18 @@ def evaluate_optimization_tradeoff(
     model: str = "",
     evaluation_metrics: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Analyze quality vs. performance tradeoff for a pass sequence.
-
+    """
+    Analyze predicted quality, latency, and model-size tradeoffs for an ordered pass sequence.
+    
     Args:
-        passes: Ordered list of pass names.
-        model: Optional model name for context.
-        evaluation_metrics: Metrics to predict, e.g. ["accuracy", "latency", "size"].
-
+        passes: Ordered pass names to evaluate.
+        model: Optional model name included in the result.
+        evaluation_metrics: Metric names to include in predicted outcomes. Defaults to
+            ``["accuracy", "latency", "size"]``.
+    
     Returns:
-        Predicted outcomes for each metric, risk factors, and Pareto recommendations.
+        A dictionary containing predicted outcomes, baseline-relative metrics, risk
+        factors, unknown pass names, and a heuristic Pareto recommendation.
     """
     metrics = evaluation_metrics or ["accuracy", "latency", "size"]
     catalog = {p["name"]: p for p in load_passes()}
