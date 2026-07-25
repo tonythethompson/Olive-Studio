@@ -313,6 +313,10 @@ export function IHVIntegrationPanel({
   const selectedConflicts = getProviderConflicts(state.ihvProvider, state.passes);
   const selectableProviders = useMemo(() => providers, []);
   const detectedProviders = useMemo(() => getSelectableProviders(hardwareProbe), [hardwareProbe]);
+  const locallyDetectedCount = useMemo(
+    () => selectableProviders.filter((p) => isProviderDetectedLocally(p.id, hardwareProbe)).length,
+    [selectableProviders, hardwareProbe],
+  );
   const hasSelectedCritical = selectedConflicts.some((c) => c.severity === "critical");
 
   return (
@@ -501,7 +505,7 @@ export function IHVIntegrationPanel({
           <p className="text-[11px] text-slate-500 mb-3">
             {probeLoading
               ? "Detecting local execution providers…"
-              : `Showing all ${selectableProviders.length} providers. ${detectedProviders.length} detected locally — undetected targets are still selectable for cross-compile / remote builds.`}
+              : `Showing all ${selectableProviders.length} providers. ${locallyDetectedCount} detected locally — undetected targets are still selectable for cross-compile / remote builds.`}
           </p>
 
           <div className="grid gap-4 mt-2">
@@ -518,7 +522,9 @@ export function IHVIntegrationPanel({
                 // Compute conflicts for this particular card to implement visual disabled indicators & warnings
                 const pConflicts = getProviderConflicts(p.id, state.passes);
                 const cardHasCritical = pConflicts.some((c) => c.severity === "critical");
-                const cardHardwareBlocked = Boolean(getProviderHardwareBlock(p.id, hardwareProbe));
+                const cardHardwareBlocked =
+                  Boolean(getProviderHardwareBlock(p.id, hardwareProbe)) ||
+                  (p.id === "CPUExecutionProvider" && !hardwareProbe);
                 const cardBlocked = cardHasCritical || cardHardwareBlocked;
                 const cardHasWarning = pConflicts.some((c) => c.severity === "warning");
                 const showSwitchAssist = pConflicts.length > 0 && (isSelected || !cardBlocked);
@@ -634,10 +640,11 @@ export function IHVIntegrationPanel({
                         {detectedLocally && hardwareDetail && (
                           <p className="text-[11px] text-emerald-400/90 font-mono">{hardwareDetail}</p>
                         )}
-                        {!detectedLocally && !probeLoading && p.id !== "CPUExecutionProvider" && (
+                        {!detectedLocally && !probeLoading && (
                           <p className="text-[11px] text-slate-600">
-                            No matching hardware found locally — you can still select for remote/cross-compile
-                            targets.
+                            {p.id === "CPUExecutionProvider"
+                              ? "Hardware detection unavailable — CPU status is unknown."
+                              : "No matching hardware found locally — you can still select for remote/cross-compile targets."}
                           </p>
                         )}
                       </div>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   JobHistoryRecord,
   getJobHistory,
+  getJobHistoryRaw,
   deleteJobHistoryRecord,
   clearAllJobHistory,
   exportJobHistoryToFile,
@@ -37,6 +38,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
   const [importNotice, setImportNotice] = useState<string | null>(null);
   const [noticeType, setNoticeType] = useState<"success" | "warning" | "error" | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const noticeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -52,25 +54,53 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    return () => {
+      if (noticeTimerRef.current) {
+        clearTimeout(noticeTimerRef.current);
+      }
+    };
+  }, []);
+
   if (!isOpen) return null;
 
   const refreshHistory = async () => {
-    const records = await getJobHistory();
+    const records = await getJobHistoryRaw();
     setHistory(records);
+  };
+
+  const showNotice = (message: string, type: "success" | "warning" | "error") => {
+    if (noticeTimerRef.current) {
+      clearTimeout(noticeTimerRef.current);
+    }
+    setImportNotice(message);
+    setNoticeType(type);
+    noticeTimerRef.current = setTimeout(() => {
+      setImportNotice(null);
+      setNoticeType(null);
+    }, 4000);
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     await deleteJobHistoryRecord(id);
     setSelectedIds((prev) => prev.filter((item) => item !== id));
-    await refreshHistory();
+    try {
+      await refreshHistory();
+    } catch (err) {
+      showNotice(err instanceof Error ? err.message : "Refresh failed", "error");
+    }
   };
 
   const handleClearAll = async () => {
     if (confirm("Are you sure you want to clear all execution history?")) {
       await clearAllJobHistory();
       setSelectedIds([]);
-      await refreshHistory();
+      try {
+        await refreshHistory();
+      } catch (err) {
+        showNotice(err instanceof Error ? err.message : "Refresh failed", "error");
+      }
     }
   };
 
@@ -78,12 +108,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
     try {
       await exportJobHistoryToFile();
     } catch (err) {
-      setImportNotice(err instanceof Error ? err.message : "Export failed");
-      setNoticeType("error");
-      setTimeout(() => {
-        setImportNotice(null);
-        setNoticeType(null);
-      }, 4000);
+      showNotice(err instanceof Error ? err.message : "Export failed", "error");
     }
   };
 
@@ -97,17 +122,20 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
     e.target.value = ""; // allow re-importing the same file
     try {
       const result = await importJobHistoryFromFile(file);
-      setImportNotice(`Imported ${result.imported} record(s); skipped ${result.skipped} invalid entries.`);
-      setNoticeType(result.skipped > 0 && result.imported === 0 ? "warning" : "success");
-      await refreshHistory();
+      const isPartial = result.skipped > 0;
+      showNotice(
+        `Imported ${result.imported} record(s); skipped ${result.skipped} invalid entries.`,
+        isPartial ? "warning" : "success",
+      );
+      try {
+        await refreshHistory();
+      } catch (refreshErr) {
+        const msg = refreshErr instanceof Error ? refreshErr.message : "Refresh failed";
+        showNotice(`Imported ${result.imported} record(s), but refresh failed: ${msg}`, "error");
+      }
     } catch (err) {
-      setImportNotice(err instanceof Error ? err.message : "Import failed");
-      setNoticeType("error");
+      showNotice(err instanceof Error ? err.message : "Import failed", "error");
     }
-    setTimeout(() => {
-      setImportNotice(null);
-      setNoticeType(null);
-    }, 4000);
   };
 
   const toggleSelect = (id: string) => {

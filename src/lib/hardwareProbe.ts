@@ -180,9 +180,6 @@ export function isProviderDetectedLocally(
   provider: IHVProvider,
   probe: HardwareProbeResult | null | undefined,
 ): boolean {
-  if (provider === "CPUExecutionProvider") {
-    return true;
-  }
   if (!probe) {
     return false;
   }
