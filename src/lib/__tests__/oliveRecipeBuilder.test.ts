@@ -742,6 +742,99 @@ describe("buildOliveRecipe", () => {
     expect(imported.passes?.pruningCriteria).toBe("l2_norm");
   });
 
+  // ── Full pipeline integration: UI state → recipe JSON → UI state ──
+
+  describe("full pruning pipeline integration", () => {
+    const pruningMethods = [
+      { method: "magnitude" as const, expectedType: "Prune" },
+      { method: "sparsegpt" as const, expectedType: "SparseGPT" },
+      { method: "wanda" as const, expectedType: "Wanda" },
+    ];
+    const pruningCriteria = ["l1_norm", "l2_norm"] as const;
+
+    for (const { method, expectedType } of pruningMethods) {
+      for (const criteria of pruningCriteria) {
+        it(`round-trips ${method} + ${criteria} through full pipeline`, () => {
+          const state = baseState({
+            passes: {
+              ...DEFAULT_PASSES,
+              pruning: true,
+              pruningMethod: method,
+              pruningSparsity: 0.5,
+              pruningCriteria: criteria,
+            },
+          });
+
+          // Step 1: Build recipe from UI state
+          const recipe = buildOliveRecipe(state);
+          expect(recipe).toHaveProperty("passes");
+          expect(recipe).toHaveProperty("input_model");
+          expect(recipe).toHaveProperty("systems");
+
+          // Step 2: Verify recipe structure
+          const passes = recipe.passes as Record<string, unknown>;
+          expect(passes.pruning).toBeDefined();
+          const pruning = passes.pruning as Record<string, unknown>;
+          expect(pruning.type).toBe(expectedType);
+          const cfg = pruning.config as Record<string, unknown>;
+          expect(cfg.sparsity).toBe(0.5);
+          expect(cfg.pruning_criteria).toBe(criteria);
+
+          // Step 3: Import recipe back into UI state
+          const imported = deriveUiStateFromOliveRecipe(recipe, { replacePasses: true });
+
+          // Step 4: Verify complete round-trip fidelity
+          expect(imported.passes?.pruning).toBe(true);
+          expect(imported.passes?.pruningMethod).toBe(method);
+          expect(imported.passes?.pruningSparsity).toBe(0.5);
+          expect(imported.passes?.pruningCriteria).toBe(criteria);
+
+          // Step 5: Re-build recipe from imported state and verify JSON equivalence
+          const reExported = buildOliveRecipe(imported as UIState);
+          const rePasses = reExported.passes as Record<string, unknown>;
+          expect((rePasses.pruning as Record<string, unknown>).type).toBe(expectedType);
+          expect(
+            ((rePasses.pruning as Record<string, unknown>).config as Record<string, unknown>).sparsity,
+          ).toBe(0.5);
+          expect(
+            ((rePasses.pruning as Record<string, unknown>).config as Record<string, unknown>)
+              .pruning_criteria,
+          ).toBe(criteria);
+        });
+      }
+    }
+
+    it("preserves all pruning fields alongside other passes", () => {
+      const state = baseState({
+        passes: {
+          ...DEFAULT_PASSES,
+          conversion: true,
+          conversionFormat: "onnx",
+          conversionOpset: 20,
+          onnxTransforms: true,
+          pruning: true,
+          pruningMethod: "magnitude",
+          pruningSparsity: 0.6,
+          pruningCriteria: "l2_norm",
+        },
+      });
+
+      const recipe = buildOliveRecipe(state);
+      const imported = deriveUiStateFromOliveRecipe(recipe, { replacePasses: true });
+
+      // Verify pruning fields survived alongside other passes
+      expect(imported.passes?.pruning).toBe(true);
+      expect(imported.passes?.pruningMethod).toBe("magnitude");
+      expect(imported.passes?.pruningSparsity).toBe(0.6);
+      expect(imported.passes?.pruningCriteria).toBe("l2_norm");
+
+      // Verify other passes also survived
+      expect(imported.passes?.conversion).toBe(true);
+      expect(imported.passes?.conversionFormat).toBe("onnx");
+      expect(imported.passes?.onnxTransforms).toBe(true);
+    });
+  });
+
   it("includes evaluators block when userScript and hfDataset are both set", () => {
     const state = baseState({
       userScript: "/path/to/eval.py",
