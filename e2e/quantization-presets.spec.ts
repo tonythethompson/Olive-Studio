@@ -20,30 +20,23 @@ async function openQuantizationInspector(page: Page) {
   await quantNode.waitFor({ state: 'visible', timeout: 30000 });
   await quantNode.click();
 
-  // Quantization is disabled by default — check if the Activate Pass button appears.
-  // Use waitFor with a short timeout instead of isVisible() to avoid race conditions.
+  // Quantization is disabled by default — activate it if the button appears
   const activateBtn = page.getByRole('button', { name: /activate pass/i });
-  const activateVisible = await activateBtn
-    .waitFor({ state: 'visible', timeout: 3000 })
-    .then(() => true)
-    .catch(() => false);
-  if (activateVisible) {
-    await activateBtn.click();
-  }
+  await activateBtn.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
+  if (await activateBtn.isVisible()) await activateBtn.click();
 
   // Wait for the quantization method dropdown to appear
   await page.locator('#quant-method').waitFor({ state: 'visible', timeout: 15000 });
 }
 
-/** Select a preset by its full option label from the Quick Presets dropdown. */
-async function applyPreset(page: Page, presetLabel: string) {
-  const select = page.locator('#quant-presets');
-  await select.selectOption({ label: presetLabel });
+/** Select a preset by its option value (the preset label) from the Quick Presets dropdown. */
+async function applyPreset(page: Page, presetValue: string) {
+  await page.locator('#quant-presets').selectOption({ value: presetValue });
 }
 
-/** Assert that a select has the expected value. */
+/** Assert that a select has the expected value (auto-retries up to 10s). */
 async function expectSelectValue(page: Page, id: string, expected: string) {
-  await expect(page.locator(`#${id}`)).toHaveValue(expected);
+  await expect(page.locator(`#${id}`)).toHaveValue(expected, { timeout: 10_000 });
 }
 
 /** Assert that a section heading is visible. */
@@ -173,7 +166,7 @@ test.describe('Quantization Presets', () => {
   for (const preset of PRESETS) {
     test(`applies preset: ${preset.labelPrefix}`, async ({ page }) => {
       // Apply the preset
-      await applyPreset(page, preset.fullLabel);
+      await applyPreset(page, preset.labelPrefix);
 
       // Verify method dropdown
       await expectSelectValue(page, 'quant-method', preset.method);
@@ -207,7 +200,7 @@ test.describe('Quantization Presets', () => {
   }
 
   test('PTQ presets do not show any advanced settings', async ({ page }) => {
-    await applyPreset(page, PRESETS[0].fullLabel); // Default INT4
+    await applyPreset(page, PRESETS[0].labelPrefix); // Default INT4
 
     await expectAdvancedHidden(page, 'GPTQ advanced settings');
     await expectAdvancedHidden(page, 'AWQ advanced settings');
@@ -220,13 +213,13 @@ test.describe('Quantization Presets', () => {
 
   test('switching between presets updates all fields correctly', async ({ page }) => {
     // Start with AWQ Balanced
-    await applyPreset(page, PRESETS[2].fullLabel);
+    await applyPreset(page, PRESETS[2].labelPrefix);
     await expectSelectValue(page, 'quant-method', 'awq');
     await expectAdvancedVisible(page, 'AWQ advanced settings');
     await expectAdvancedHidden(page, 'GPTQ advanced settings');
 
     // Switch to GPTQ Fast
-    await applyPreset(page, PRESETS[5].fullLabel);
+    await applyPreset(page, PRESETS[5].labelPrefix);
     await expectSelectValue(page, 'quant-method', 'gptq');
     await expectSelectValue(page, 'quant-target-precision', 'int4');
     await expectAdvancedVisible(page, 'GPTQ advanced settings');
@@ -237,7 +230,7 @@ test.describe('Quantization Presets', () => {
     await expectSelectValue(page, 'gptq-group-size', '128');
 
     // Switch to QAT INT8
-    await applyPreset(page, PRESETS[7].fullLabel);
+    await applyPreset(page, PRESETS[7].labelPrefix);
     await expectSelectValue(page, 'quant-method', 'qat');
     await expectSelectValue(page, 'quant-target-precision', 'int8');
     await expectAdvancedVisible(page, 'QAT advanced settings');
