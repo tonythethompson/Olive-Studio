@@ -647,6 +647,7 @@ ${
           liveSourceRef.current = null;
           recordJobCompletion(targetJobId, finalStatus, exitCode);
           if (finalStatus === "failed") {
+            setMcpFixApplied(false);
             setExecutionLogs((currentLogs) => {
               fetchMcpDiagnostic(currentLogs);
               return currentLogs;
@@ -680,6 +681,7 @@ ${
                 onRunStateChange?.(false);
                 recordJobCompletion(targetJobId, finalStatus, statusData.exitCode);
                 if (finalStatus === "failed") {
+                  setMcpFixApplied(false);
                   setExecutionLogs((currentLogs) => {
                     fetchMcpDiagnostic(currentLogs);
                     return currentLogs;
