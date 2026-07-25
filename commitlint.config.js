@@ -2,7 +2,7 @@ export default {
   extends: ["@commitlint/config-conventional"],
   rules: {
     "scope-enum": [
-      2,
+      1,
       "always",
       [
         "recipe-builder",
@@ -21,6 +21,15 @@ export default {
         "deps",
         "ci",
         "docs",
+        "mcp",
+        "types",
+        "test",
+        "chore",
+        "fix",
+        "perf",
+        "refactor",
+        "style",
+        "build",
       ],
     ],
   },
