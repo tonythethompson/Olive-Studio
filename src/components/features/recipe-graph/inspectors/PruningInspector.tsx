@@ -1,3 +1,4 @@
+import { useState, useCallback } from "react";
 import {
   Label,
   Select,
@@ -9,8 +10,40 @@ import {
 } from "@/components/ui";
 import { getAllowedPruningTypes } from "@/lib/pipelineValidation";
 import { UIState } from "@/types";
-import { Info } from "lucide-react";
+import { Info, Plus, X } from "lucide-react";
 import type { InspectorProps } from "./types";
+
+// ── Custom preset storage ──────────────────────────────────────
+
+interface CustomPreset {
+  id: string;
+  label: string;
+  method: UIState["passes"]["pruningMethod"];
+  criteria: UIState["passes"]["pruningCriteria"];
+  sparsity: number;
+}
+
+const STORAGE_KEY = "olive-pruning-custom-presets";
+const MAX_CUSTOM_PRESETS = 5;
+
+function loadCustomPresets(): CustomPreset[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomPresets(presets: CustomPreset[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
+  } catch {
+    // localStorage unavailable or quota exceeded — fail silently
+  }
+}
+
+// ── Built-in presets ───────────────────────────────────────────
 
 const PRUNING_PRESETS = [
   {
@@ -47,10 +80,13 @@ const PRUNING_PRESETS = [
   },
 ] as const;
 
-type PruningPresetId = (typeof PRUNING_PRESETS)[number]["id"];
+type PruningPreset = (typeof PRUNING_PRESETS)[number];
 
-function getActivePresetId(state: UIState): PruningPresetId | null {
-  for (const preset of PRUNING_PRESETS) {
+function getActivePresetId(
+  state: UIState,
+  allPresets: readonly (PruningPreset | CustomPreset)[],
+): string | null {
+  for (const preset of allPresets) {
     if (
       state.passes.pruningMethod === preset.method &&
       state.passes.pruningCriteria === preset.criteria &&
@@ -66,6 +102,39 @@ export function PruningInspector({ state, setState }: InspectorProps) {
   const allowedPruningTypes = getAllowedPruningTypes(state.ihvProvider);
   const awqBlocksPruning = state.passes.quantMethod === "awq";
 
+  // ── Custom preset state ──
+  const [customPresets, setCustomPresets] = useState<CustomPreset[]>(loadCustomPresets);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [newPresetName, setNewPresetName] = useState("");
+
+  const persistCustomPresets = useCallback((presets: CustomPreset[]) => {
+    setCustomPresets(presets);
+    saveCustomPresets(presets);
+  }, []);
+
+  const handleSaveCustomPreset = useCallback(() => {
+    const name = newPresetName.trim();
+    if (!name || customPresets.length >= MAX_CUSTOM_PRESETS) return;
+
+    const preset: CustomPreset = {
+      id: `custom-${Date.now()}`,
+      label: name,
+      method: state.passes.pruningMethod,
+      criteria: state.passes.pruningCriteria,
+      sparsity: state.passes.pruningSparsity,
+    };
+    persistCustomPresets([...customPresets, preset]);
+    setNewPresetName("");
+    setShowSaveDialog(false);
+  }, [newPresetName, customPresets, state.passes, persistCustomPresets]);
+
+  const handleDeleteCustomPreset = useCallback(
+    (id: string) => {
+      persistCustomPresets(customPresets.filter((p) => p.id !== id));
+    },
+    [customPresets, persistCustomPresets],
+  );
+
   if (!state.passes.pruning) {
     return (
       <p className="text-sm text-slate-500 font-mono italic text-center py-4">
@@ -73,6 +142,9 @@ export function PruningInspector({ state, setState }: InspectorProps) {
       </p>
     );
   }
+
+  const allPresets = [...PRUNING_PRESETS, ...customPresets];
+  const activePresetId = getActivePresetId(state, allPresets);
 
   return (
     <div className="space-y-5">
@@ -82,40 +154,96 @@ export function PruningInspector({ state, setState }: InspectorProps) {
         </p>
       )}
       <div className="space-y-2">
-        <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">Quick presets</p>
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">Quick presets</p>
+          <button
+            type="button"
+            onClick={() => setShowSaveDialog(!showSaveDialog)}
+            className="text-[10px] text-slate-500 hover:text-amber-400 transition-colors flex items-center gap-1"
+            title="Save current settings as a custom preset"
+          >
+            <Plus className="h-3 w-3" />
+            Save
+            {customPresets.length > 0 && (
+              <span className="text-slate-600">
+                ({customPresets.length}/{MAX_CUSTOM_PRESETS})
+              </span>
+            )}
+          </button>
+        </div>
+        {showSaveDialog && (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={newPresetName}
+              onChange={(e) => setNewPresetName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSaveCustomPreset()}
+              placeholder="Preset name…"
+              maxLength={24}
+              className="flex-1 h-7 px-2 text-[10px] bg-slate-950 border border-slate-700 rounded text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50"
+            />
+            <button
+              type="button"
+              onClick={handleSaveCustomPreset}
+              disabled={!newPresetName.trim() || customPresets.length >= MAX_CUSTOM_PRESETS}
+              className="h-7 px-2 text-[10px] font-medium rounded border border-amber-500/50 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Save
+            </button>
+          </div>
+        )}
         <div className="flex flex-wrap gap-1.5">
-          {PRUNING_PRESETS.map((preset) => {
-            const isActive = getActivePresetId(state) === preset.id;
+          {allPresets.map((preset) => {
+            const isActive = activePresetId === preset.id;
+            const isCustom = !PRUNING_PRESETS.some((p) => p.id === preset.id);
             return (
-              <TooltipProvider key={preset.id} delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setState({
-                          passes: {
-                            ...state.passes,
-                            pruningMethod: preset.method,
-                            pruningCriteria: preset.criteria,
-                            pruningSparsity: preset.sparsity,
-                          },
-                        })
-                      }
-                      className={`px-2.5 py-1 text-[10px] font-medium rounded border transition-colors ${
-                        isActive
-                          ? "border-amber-500/50 bg-amber-500/10 text-amber-300"
-                          : "border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500 hover:text-slate-300"
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    <p>{preset.description}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <div key={preset.id} className="group relative">
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setState({
+                            passes: {
+                              ...state.passes,
+                              pruningMethod: preset.method,
+                              pruningCriteria: preset.criteria,
+                              pruningSparsity: preset.sparsity,
+                            },
+                          })
+                        }
+                        className={`px-2.5 py-1 text-[10px] font-medium rounded border transition-colors ${
+                          isActive
+                            ? "border-amber-500/50 bg-amber-500/10 text-amber-300"
+                            : isCustom
+                              ? "border-slate-600 bg-slate-900 text-slate-300 hover:border-slate-500 hover:text-slate-200"
+                              : "border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500 hover:text-slate-300"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p>
+                        {isCustom
+                          ? `${preset.method} · ${preset.criteria} · ${(preset.sparsity * 100).toFixed(0)}%`
+                          : preset.description}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                {isCustom && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteCustomPreset(preset.id)}
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-slate-800 border border-slate-600 text-slate-400 hover:bg-red-900/60 hover:text-red-300 hover:border-red-500/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    title={`Delete preset '${preset.label}'`}
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>
