@@ -51,7 +51,7 @@ from .pass_chain import get_pass_chain
 from .pass_parameters import get_pass_parameters
 from .strategy_advisor import get_quantization_strategy
 from .tradeoff import evaluate_optimization_tradeoff
-from .troubleshooting import troubleshoot_olive_error
+from .troubleshooting import troubleshoot_olive_error, get_error_frequency_summary
 
 __all__ = [
     "get_cli_command",
@@ -67,6 +67,7 @@ __all__ = [
     "get_quantization_strategy",
     "evaluate_optimization_tradeoff",
     "troubleshoot_olive_error",
+    "get_error_frequency_summary",
     "KB_DIR",
     "load_json",
     "load_passes",

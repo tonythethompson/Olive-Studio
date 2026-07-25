@@ -9,6 +9,7 @@ persistent errors.
 from olive_mcp_server.tools.troubleshooting import (
     reset_frequency_store,
     troubleshoot_olive_error,
+    get_error_frequency_summary,
 )
 
 
@@ -193,3 +194,32 @@ def test_unmatched_errors_with_different_messages_are_independent():
     r2 = troubleshoot_olive_error("Error type Beta 888")
     assert r1["frequency"]["occurrence_count"] == 1
     assert r2["frequency"]["occurrence_count"] == 1
+
+
+def test_error_frequency_summary_basic():
+    _setup()
+    troubleshoot_olive_error("CUDA out of memory")
+    troubleshoot_olive_error("CUDA out of memory")
+    troubleshoot_olive_error("ONNX export failed")
+
+    summary = get_error_frequency_summary()
+    assert summary["total_tracked"] == 2
+    assert summary["limit"] == 10
+    assert len(summary["entries"]) == 2
+
+    # Most frequent first (matches oom-quantization)
+    top = summary["entries"][0]
+    assert top["occurrence_count"] == 2
+    assert top["label"] == "recurring"
+    assert top["matched_entry"] == "oom-quantization"
+    assert top["message_prefix"] == ""
+
+
+def test_error_frequency_summary_respects_limit():
+    _setup()
+    for i in range(5):
+        troubleshoot_olive_error(f"unique error {i}")
+
+    summary = get_error_frequency_summary(limit=3)
+    assert summary["total_tracked"] == 5
+    assert len(summary["entries"]) == 3

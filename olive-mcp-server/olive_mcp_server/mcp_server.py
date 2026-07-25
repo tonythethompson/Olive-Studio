@@ -22,7 +22,7 @@ from olive_mcp_server.tools.pass_chain import get_pass_chain
 from olive_mcp_server.tools.pass_parameters import get_pass_parameters
 from olive_mcp_server.tools.strategy_advisor import get_quantization_strategy
 from olive_mcp_server.tools.tradeoff import evaluate_optimization_tradeoff
-from olive_mcp_server.tools.troubleshooting import troubleshoot_olive_error
+from olive_mcp_server.tools.troubleshooting import troubleshoot_olive_error, get_error_frequency_summary
 
 mcp = FastMCP("olive-mcp-server")
 
@@ -33,6 +33,7 @@ TOOLS = [
     get_hardware_optimization_guide,
     get_pass_chain,
     troubleshoot_olive_error,
+    get_error_frequency_summary,
     get_model_compatibility,
     get_cli_command,
     get_data_config_template,

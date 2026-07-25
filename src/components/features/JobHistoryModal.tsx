@@ -4,6 +4,8 @@ import {
   getJobHistory,
   deleteJobHistoryRecord,
   clearAllJobHistory,
+  exportJobHistoryToFile,
+  importJobHistoryFromFile,
 } from "@/lib/jobHistoryStore";
 import {
   History,
@@ -17,6 +19,8 @@ import {
   Clock,
   HardDrive,
   RefreshCw,
+  Download,
+  Upload,
 } from "lucide-react";
 
 interface JobHistoryModalProps {
@@ -30,6 +34,9 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
+  const [importNotice, setImportNotice] = useState<string | null>(null);
+  const [noticeType, setNoticeType] = useState<"success" | "warning" | "error" | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -65,6 +72,42 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
       setSelectedIds([]);
       await refreshHistory();
     }
+  };
+
+  const handleExport = async () => {
+    try {
+      await exportJobHistoryToFile();
+    } catch (err) {
+      setImportNotice(err instanceof Error ? err.message : "Export failed");
+      setNoticeType("error");
+      setTimeout(() => {
+        setImportNotice(null);
+        setNoticeType(null);
+      }, 4000);
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = ""; // allow re-importing the same file
+    try {
+      const result = await importJobHistoryFromFile(file);
+      setImportNotice(`Imported ${result.imported} record(s); skipped ${result.skipped} invalid entries.`);
+      setNoticeType(result.skipped > 0 && result.imported === 0 ? "warning" : "success");
+      await refreshHistory();
+    } catch (err) {
+      setImportNotice(err instanceof Error ? err.message : "Import failed");
+      setNoticeType("error");
+    }
+    setTimeout(() => {
+      setImportNotice(null);
+      setNoticeType(null);
+    }, 4000);
   };
 
   const toggleSelect = (id: string) => {
@@ -245,16 +288,56 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
               ))}
             </div>
 
-            {history.length > 0 && (
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={handleClearAll}
-                className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors"
+                onClick={handleExport}
+                className="text-xs text-slate-300 hover:text-slate-200 hover:bg-slate-800 px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors"
+                title="Export job history as JSON"
               >
-                <Trash2 className="h-3.5 w-3.5" /> Clear History
+                <Download className="h-3.5 w-3.5" /> Export
               </button>
-            )}
+              <button
+                type="button"
+                onClick={handleImportClick}
+                className="text-xs text-slate-300 hover:text-slate-200 hover:bg-slate-800 px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors"
+                title="Import job history from JSON"
+              >
+                <Upload className="h-3.5 w-3.5" /> Import
+              </button>
+              {history.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Clear History
+                </button>
+              )}
+            </div>
           </div>
+
+          {importNotice && (
+            <div
+              className={`text-xs px-3 py-2 rounded-md flex items-center gap-2 border ${
+                noticeType === "error"
+                  ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                  : noticeType === "warning"
+                    ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                    : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+              }`}
+            >
+              {importNotice}
+            </div>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json"
+            onChange={handleFileChange}
+            className="hidden"
+          />
 
           {/* History Records Table/List */}
           {isLoading ? (

@@ -202,3 +202,45 @@ def reset_frequency_store() -> None:
     """Clear the in-memory frequency store (useful for tests)."""
     with _lock:
         _frequency_store.clear()
+
+
+def get_error_frequency_summary(limit: int = 10) -> dict[str, Any]:
+    """Return a summary of the most frequently occurring Olive errors.
+
+    Args:
+        limit: Maximum number of entries to return (default 10).
+
+    Returns:
+        Object containing the total number of tracked errors and the top entries.
+    """
+    with _lock:
+        items = list(_frequency_store.items())
+
+    # Sort by occurrence count descending, then by last seen descending
+    items.sort(key=lambda kv: (kv[1]["occurrence_count"], kv[1]["last_seen"]), reverse=True)
+
+    entries = []
+    for key, data in items[:limit]:
+        if key.startswith("entry:"):
+            matched_entry = key.split(":", 1)[1]
+            message_prefix = ""
+        else:
+            matched_entry = None
+            message_prefix = key.split(":", 1)[1]
+
+        entries.append(
+            {
+                "matched_entry": matched_entry,
+                "message_prefix": message_prefix,
+                "occurrence_count": data["occurrence_count"],
+                "first_seen": _format_ts(data["first_seen"]),
+                "last_seen": _format_ts(data["last_seen"]),
+                "label": _frequency_label(data["occurrence_count"]),
+            }
+        )
+
+    return {
+        "total_tracked": len(items),
+        "limit": limit,
+        "entries": entries,
+    }

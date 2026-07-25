@@ -24,6 +24,58 @@ export interface JobHistoryRecord {
   };
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === "number";
+}
+
+function isOptionalNumber(value: unknown): value is number | undefined {
+  return value === undefined || isNumber(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((v) => isString(v));
+}
+
+function isValidStatus(value: unknown): value is JobHistoryRecord["status"] {
+  return value === "completed" || value === "failed" || value === "cancelled";
+}
+
+function isValidLogSummary(value: unknown): value is JobHistoryRecord["logSummary"] {
+  if (value === undefined) return true;
+  if (typeof value !== "object" || value === null) return false;
+  const obj = value as Record<string, unknown>;
+  return (
+    isNumber(obj.totalLogs) &&
+    isNumber(obj.errorCount) &&
+    (obj.lastLog === undefined || isString(obj.lastLog))
+  );
+}
+
+export function isJobHistoryRecord(value: unknown): value is JobHistoryRecord {
+  if (typeof value !== "object" || value === null) return false;
+  const obj = value as Record<string, unknown>;
+  return (
+    isString(obj.id) &&
+    isString(obj.jobId) &&
+    isString(obj.timestamp) &&
+    isString(obj.modelId) &&
+    isString(obj.ihvProvider) &&
+    isString(obj.memoryOffload) &&
+    isValidStatus(obj.status) &&
+    (obj.exitCode === null || isNumber(obj.exitCode)) &&
+    isNumber(obj.durationMs) &&
+    isNumber(obj.passCount) &&
+    isStringArray(obj.passNames) &&
+    isString(obj.recipeJson) &&
+    isOptionalNumber(obj.vramEstimateGb) &&
+    isValidLogSummary(obj.logSummary)
+  );
+}
+
 const DB_NAME = "OliveStudioHistoryDB";
 const DB_VERSION = 1;
 const STORE_NAME = "job_history";
@@ -137,4 +189,62 @@ export async function clearAllJobHistory(): Promise<void> {
   } catch (err) {
     console.error("Failed to clear job history in IndexedDB:", err);
   }
+}
+
+/** Export the full job history as a JSON string. */
+export async function exportJobHistory(): Promise<string> {
+  const records = await getJobHistory();
+  return JSON.stringify(records, null, 2);
+}
+
+/** Trigger a browser download of the job history as JSON. */
+export async function exportJobHistoryToFile(filename = "olive-job-history.json"): Promise<void> {
+  const json = await exportJobHistory();
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Import an array of JobHistoryRecord objects into IndexedDB.
+ * Invalid entries are skipped; valid entries are written via put (overwrites
+ * existing records with the same id).
+ */
+export async function importJobHistory(data: unknown): Promise<{ imported: number; skipped: number }> {
+  if (!Array.isArray(data)) {
+    throw new Error("Expected an array of job history records.");
+  }
+
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    let imported = 0;
+    let skipped = 0;
+
+    for (const item of data) {
+      if (isJobHistoryRecord(item)) {
+        store.put(item);
+        imported += 1;
+      } else {
+        skipped += 1;
+      }
+    }
+
+    tx.oncomplete = () => resolve({ imported, skipped });
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/** Read a JSON file and import its contents as job history. */
+export async function importJobHistoryFromFile(file: File): Promise<{ imported: number; skipped: number }> {
+  const text = await file.text();
+  const parsed = JSON.parse(text);
+  return importJobHistory(parsed);
 }

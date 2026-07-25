@@ -85,7 +85,7 @@ The server uses stdio transport by default and exposes the registered tools.
 
 ## Fetchers / Update Mechanism
 
-- `fetchers/official_docs_fetcher.py` - stub for https://microsoft.github.io/Olive/
+- `fetchers/official_docs_fetcher.py` - stub for <https://microsoft.github.io/Olive/>
 - `fetchers/github_scraper.py` - stub for microsoft/Olive releases and issues
 - `fetchers/onnx_runtime_fetcher.py` - stub for ONNX Runtime EP docs
 - `scripts/update_kb.py` - generates `knowledge_base/update_report.json` from stubs
