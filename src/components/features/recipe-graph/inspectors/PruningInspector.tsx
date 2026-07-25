@@ -12,6 +12,56 @@ import { UIState } from "@/types";
 import { Info } from "lucide-react";
 import type { InspectorProps } from "./types";
 
+const PRUNING_PRESETS = [
+  {
+    id: "aggressive",
+    label: "Aggressive",
+    description: "Magnitude · L1 · 70% — maximizes sparsity, tolerates accuracy loss",
+    method: "magnitude" as const,
+    criteria: "l1_norm" as const,
+    sparsity: 0.7,
+  },
+  {
+    id: "balanced",
+    label: "Balanced",
+    description: "Magnitude · L2 · 50% — smooth pruning with moderate compression",
+    method: "magnitude" as const,
+    criteria: "l2_norm" as const,
+    sparsity: 0.5,
+  },
+  {
+    id: "sparsegpt",
+    label: "SparseGPT",
+    description: "SparseGPT · 50% — one-shot LLM pruning with minimal accuracy loss",
+    method: "sparsegpt" as const,
+    criteria: "l1_norm" as const,
+    sparsity: 0.5,
+  },
+  {
+    id: "wanda",
+    label: "Wanda",
+    description: "Wanda · 50% — weight × activation pruning, fast calibration",
+    method: "wanda" as const,
+    criteria: "l1_norm" as const,
+    sparsity: 0.5,
+  },
+] as const;
+
+type PruningPresetId = (typeof PRUNING_PRESETS)[number]["id"];
+
+function getActivePresetId(state: UIState): PruningPresetId | null {
+  for (const preset of PRUNING_PRESETS) {
+    if (
+      state.passes.pruningMethod === preset.method &&
+      state.passes.pruningCriteria === preset.criteria &&
+      Math.abs(state.passes.pruningSparsity - preset.sparsity) < 0.01
+    ) {
+      return preset.id;
+    }
+  }
+  return null;
+}
+
 export function PruningInspector({ state, setState }: InspectorProps) {
   const allowedPruningTypes = getAllowedPruningTypes(state.ihvProvider);
   const awqBlocksPruning = state.passes.quantMethod === "awq";
@@ -31,6 +81,45 @@ export function PruningInspector({ state, setState }: InspectorProps) {
           AWQ is active — pruning cannot run until you switch to PTQ or disable quantization.
         </p>
       )}
+      <div className="space-y-2">
+        <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">Quick presets</p>
+        <div className="flex flex-wrap gap-1.5">
+          {PRUNING_PRESETS.map((preset) => {
+            const isActive = getActivePresetId(state) === preset.id;
+            return (
+              <TooltipProvider key={preset.id} delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setState({
+                          passes: {
+                            ...state.passes,
+                            pruningMethod: preset.method,
+                            pruningCriteria: preset.criteria,
+                            pruningSparsity: preset.sparsity,
+                          },
+                        })
+                      }
+                      className={`px-2.5 py-1 text-[10px] font-medium rounded border transition-colors ${
+                        isActive
+                          ? "border-amber-500/50 bg-amber-500/10 text-amber-300"
+                          : "border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500 hover:text-slate-300"
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p>{preset.description}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            );
+          })}
+        </div>
+      </div>
       <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">Pass settings</p>
       <div className="space-y-2">
         <div className="flex justify-between items-center">
