@@ -1,0 +1,21 @@
+e2e/quantization-presets.spec.ts
+  s_aa107db594a355::t_ef76dfcbc2f51b 1-32,34-35,38-41,44-47,49-52,54-57,59-72,74-171,173-206,209-210,212-219,221-249,251-254
+playwright.config.ts
+  s_aa107db594a355::t_599cfe47a796c0 29,34-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "c5a03d5e2a54c7c2b1529c42f00e8f7bb40e3410",
+  "prompts": {},
+  "sessions": {
+    "s_aa107db594a355": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e4ad752-dcb9-4df4-b035-83d26e74cdc4",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
