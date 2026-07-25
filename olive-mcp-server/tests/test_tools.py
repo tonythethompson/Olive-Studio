@@ -141,9 +141,24 @@ def test_get_data_config_template():
 
 
 def test_search_olive_documentation():
-    result = search_olive_documentation(query="calibration data", top_k=3)
+    # Keep the test local-only so CI does not depend on live network.
+    result = search_olive_documentation(query="calibration data", top_k=3, live=False)
     assert result["count"] > 0
     assert len(result["results"]) <= 3
+
+
+def test_search_olive_documentation_with_live_source(monkeypatch: pytest.MonkeyPatch):
+    """Live search should merge cached fetched docs with local results."""
+    from olive_mcp_server.tools import docs_search
+
+    monkeypatch.setattr(
+        docs_search,
+        "_fetch_live_docs",
+        lambda: {"index": "Live docs mention calibration data and quantization."},
+    )
+    result = search_olive_documentation(query="calibration data", top_k=3, live=True)
+    assert result["count"] > 0
+    assert any("live:" in r["source"] for r in result["results"])
 
 
 def test_get_pass_parameters():
