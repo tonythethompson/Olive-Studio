@@ -62,8 +62,6 @@ interface UseMcpDiagnosticReturn {
    * they need (single state, keyed Record, etc.).
    */
   fetchDiagnostic: (logs: string[]) => Promise<McpDiagnostic | null>;
-  /** Clear the stored diagnostic (single-diagnostic use). */
-  clearDiagnostic: () => void;
 }
 
 /**
@@ -126,12 +124,11 @@ export function useMcpDiagnostic(): UseMcpDiagnosticReturn {
     } catch {
       // Ignore abort and network errors
     } finally {
-      setIsDiagnosing(false);
+      // Only clear loading if this request wasn't superseded by a newer one
+      if (!controller.signal.aborted) setIsDiagnosing(false);
     }
     return null;
   }, []);
 
-  const clearDiagnostic = useCallback(() => setDiagnostic(null), []);
-
-  return { diagnostic, isDiagnosing, fetchDiagnostic, clearDiagnostic };
+  return { diagnostic, isDiagnosing, fetchDiagnostic };
 }
