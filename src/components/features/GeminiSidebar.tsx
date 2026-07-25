@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useTransition } from "react";
 import { UIState } from "@/types";
 import { cn } from "@/lib/utils";
 import {
@@ -147,6 +147,13 @@ export function GeminiSidebar({
   onAuditOpened,
 }: GeminiSidebarProps) {
   const [activeTab, setActiveTab] = useState<"audit" | "chat" | "settings">("audit");
+  const [, startTabTransition] = useTransition();
+
+  const handleTabChange = (tab: "audit" | "chat" | "settings") => {
+    startTabTransition(() => {
+      setActiveTab(tab);
+    });
+  };
 
   // Audit
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
@@ -496,7 +503,7 @@ export function GeminiSidebar({
 
         {/* Tabs */}
         <div className="p-4 border-b border-slate-800/60 bg-slate-950/20 shrink-0">
-          <div className="grid grid-cols-3 bg-slate-950/90 p-1 border border-slate-850 rounded-lg">
+          <div className="grid grid-cols-3 bg-slate-950/90 p-1 border border-slate-850 rounded-lg transform-gpu">
             {[
               { id: "audit" as const, label: "Audit", Icon: Lightbulb },
               { id: "chat" as const, label: "Chat", Icon: MessageSquareCode },
@@ -505,8 +512,8 @@ export function GeminiSidebar({
               <button
                 type="button"
                 key={id}
-                onClick={() => setActiveTab(id)}
-                className={`py-1.5 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeTab === id ? "bg-slate-900 text-electric-blue shadow-sm border border-slate-800/40" : "text-slate-400 hover:text-slate-200"}`}
+                onClick={() => handleTabChange(id)}
+                className={`py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer border ${activeTab === id ? "bg-slate-900 text-electric-blue shadow-sm border-slate-800/40" : "text-slate-400 hover:text-slate-200 border-transparent"}`}
               >
                 <Icon
                   className={`h-3.5 w-3.5 ${activeTab === id ? "text-electric-blue" : "text-slate-500"}`}
@@ -518,9 +525,11 @@ export function GeminiSidebar({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-hidden relative transform-gpu">
           {/* ── Audit ── */}
-          {activeTab === "audit" && (
+          <div
+            className={cn("absolute inset-0 p-4 overflow-y-auto", activeTab === "audit" ? "block" : "hidden")}
+          >
             <div className="space-y-4">
               {analysis && !isAnalyzing && (
                 <div className="bg-slate-950/70 rounded border border-slate-800 flex items-center gap-4 p-4">
@@ -643,10 +652,12 @@ export function GeminiSidebar({
                 Analyze Optimization Pipeline
               </button>
             </div>
-          )}
+          </div>
 
           {/* ── Chat ── */}
-          {activeTab === "chat" && (
+          <div
+            className={cn("absolute inset-0 p-4 overflow-y-auto", activeTab === "chat" ? "block" : "hidden")}
+          >
             <div className="flex flex-col h-full space-y-3">
               <div className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
                 <p className="text-xs text-slate-500 mb-1">Live workspace</p>
@@ -719,10 +730,15 @@ export function GeminiSidebar({
                 </button>
               </form>
             </div>
-          )}
+          </div>
 
           {/* ── Settings ── */}
-          {activeTab === "settings" && (
+          <div
+            className={cn(
+              "absolute inset-0 p-4 overflow-y-auto",
+              activeTab === "settings" ? "block" : "hidden",
+            )}
+          >
             <div className="space-y-5">
               {/* Active provider status */}
               <div className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl">
@@ -896,7 +912,7 @@ export function GeminiSidebar({
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
                     />
                     <p className="text-[10px] text-slate-600 mt-1">
-                      Works with Ollama, LM Studio, vLLM, etc.
+                      Works with LM Studio, vLLM, Ollama, etc. (default: http://localhost:1234/v1)
                     </p>
                   </div>
                 )}
@@ -945,7 +961,7 @@ export function GeminiSidebar({
                 )}
               </div>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Footer */}
