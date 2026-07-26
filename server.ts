@@ -2935,8 +2935,21 @@ app.use("/api", (_req, res) => {
 });
 
 // ─── Vite / Static ────────────────────────────────────────────────────────────
+/**
+ * `pnpm start` runs the bundled `dist/server.cjs` and must serve static files.
+ * Only `pnpm dev` (tsx server.ts) should use Vite middleware.
+ * Do not rely solely on NODE_ENV — Windows/`pnpm start` often leave it unset.
+ */
+function shouldServeProductionStatic(): boolean {
+  if (process.env.NODE_ENV === "production") return true;
+  if (process.env.NODE_ENV === "development") return false;
+  if (process.env.OLIVE_DIST_DIR) return true;
+  const entry = (process.argv[1] ?? "").replace(/\\/g, "/");
+  return entry.endsWith("/dist/server.cjs") || entry.endsWith("server.cjs");
+}
+
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+  if (!shouldServeProductionStatic()) {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
@@ -2953,16 +2966,30 @@ async function startServer() {
       vite.middlewares(req, res, next);
     });
   } else {
-    const distPath = process.env.OLIVE_DIST_DIR ?? path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (_req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+    // Ensure downstream code and logs treat this as production.
+    process.env.NODE_ENV = "production";
+    const distPath = path.resolve(process.env.OLIVE_DIST_DIR ?? path.join(process.cwd(), "dist"));
+    const indexHtml = path.join(distPath, "index.html");
+    if (!fs.existsSync(indexHtml)) {
+       
+      console.error(`Production build not found at ${indexHtml}\nRun: pnpm build\nThen:  pnpm start`);
+      process.exit(1);
+    }
+    app.use(express.static(distPath, { index: "index.html" }));
+    // SPA fallback for client routes (Express 5-safe; avoid bare "*")
+    app.use((req, res, next) => {
+      if (req.method !== "GET" && req.method !== "HEAD") return next();
+      if (req.path.startsWith("/api")) return next();
+      res.sendFile(indexHtml);
     });
+    // eslint-disable-next-line no-console -- intentional server startup message
+    console.log(`Serving UI from ${distPath}`);
   }
 
   app.listen(PORT, "0.0.0.0", () => {
     // eslint-disable-next-line no-console -- intentional server startup message
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Open http://localhost:${PORT} in your browser`);
   });
 }
 
