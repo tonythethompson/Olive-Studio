@@ -15,6 +15,7 @@ Thank you for your interest in Olive Studio. This project is a community front e
 - **Node.js** 22+ (pnpm 11 requirement)
 - **Python** 3.9+ on `PATH` (for live Olive runs and GPU testing)
 - **Git**
+- **Desktop (optional):** [Rust](https://rustup.rs/) + Windows WebView2 for `pnpm tauri:dev` / `pnpm tauri:build`
 
 ### Install and run
 

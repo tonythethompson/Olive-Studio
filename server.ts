@@ -43,7 +43,7 @@ dotenv.config({ path: ".env.local", override: true });
 const app = express();
 app.use(express.json({ limit: "10mb" }));
 
-const PORT = 3000;
+const PORT = Number.parseInt(process.env.PORT || "3000", 10) || 3000;
 const VENV_DIR = path.join(process.cwd(), ".venv");
 const OLIVE_GPU_LAUNCHER = path.join(process.cwd(), "scripts", "olive_gpu_launcher.py");
 const execFileAsync = promisify(execFile);
@@ -2930,6 +2930,14 @@ app.post("/api/validate-compatibility", async (req, res) => {
   }
 });
 
+app.get("/api/health", (_req, res) => {
+  res.json({
+    ok: true,
+    version: process.env.npm_package_version || "0.2.0",
+    port: PORT,
+  });
+});
+
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "API route not found." });
 });
@@ -2971,7 +2979,6 @@ async function startServer() {
     const distPath = path.resolve(process.env.OLIVE_DIST_DIR ?? path.join(process.cwd(), "dist"));
     const indexHtml = path.join(distPath, "index.html");
     if (!fs.existsSync(indexHtml)) {
-       
       console.error(`Production build not found at ${indexHtml}\nRun: pnpm build\nThen:  pnpm start`);
       process.exit(1);
     }

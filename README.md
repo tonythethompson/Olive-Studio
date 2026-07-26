@@ -105,6 +105,21 @@ pnpm start
 
 Open **<http://localhost:3000>**.
 
+### Desktop app (Tauri, experimental)
+
+Runs the same Node server inside a native window (WebView) instead of your browser.
+
+**Extra prerequisites:** [Rust](https://rustup.rs/) toolchain, Windows WebView2 (usually preinstalled), Node 22+, Python 3.9+.
+
+```bash
+pnpm install
+pnpm tauri:dev      # starts `pnpm dev` + native window → http://127.0.0.1:3000
+# production-style package (Windows NSIS/MSI):
+pnpm tauri:build
+```
+
+The desktop shell still requires **Node** and **Python** on `PATH` (Olive runs are not reimplemented in Rust). Browser/`pnpm start` remains fully supported.
+
 > **Not published to npm.** Olive Studio is distributed via this GitHub repository and [GitHub Releases](https://github.com/tonythethompson/Olive-Studio/releases). It creates local Python virtualenvs and may install CUDA / TensorRT packages for GPU recipes — clone and run from source rather than expecting a public `npx` package.
 
 ---
