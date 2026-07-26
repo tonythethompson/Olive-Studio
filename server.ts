@@ -2619,24 +2619,25 @@ app.get("/api/mcp/kb-status", kbStatusRateLimit, (req, res) => {
 // ─── POST /api/mcp/sync-kb ────────────────────────────────────────────────────
 app.post("/api/mcp/sync-kb", kbSyncRateLimit, async (req, res) => {
   try {
-    // ── Authentication: token required on every request ──────────────────────────
+    // Auth model (local-first):
+    // - If SYNC_KB_TOKEN is set, require matching x-sync-token (shared-host / locked-down installs).
+    // - If unset, allow same-origin only (desktop + local browser). Fail closed for cross-origin.
     const expectedToken = process.env.SYNC_KB_TOKEN;
-
-    // Fail closed: SYNC_KB_TOKEN must be configured on the server
-    if (!expectedToken) {
-      return res.status(503).json({ ok: false, error: "Service unavailable: SYNC_KB_TOKEN not configured." });
-    }
-
-    const authToken = req.get("x-sync-token");
-
-    // Require valid token on every request
-    if (authToken !== expectedToken) {
-      return res.status(401).json({ ok: false, error: "Unauthorized: valid token required." });
-    }
-
-    // Additional browser origin check (defense-in-depth, not for authorization)
-    if (!isAllowedSyncOrigin(req)) {
-      return res.status(403).json({ ok: false, error: "Forbidden: origin not allowed." });
+    if (expectedToken) {
+      const authToken = req.get("x-sync-token");
+      if (authToken !== expectedToken) {
+        return res.status(401).json({
+          ok: false,
+          error:
+            "Unauthorized: set x-sync-token to match SYNC_KB_TOKEN, or clear SYNC_KB_TOKEN for local same-origin sync.",
+        });
+      }
+    } else if (!isAllowedSyncOrigin(req)) {
+      return res.status(403).json({
+        ok: false,
+        error:
+          "Forbidden: cross-origin KB sync blocked. For local use, open the app at the same host:port as the server, or set SYNC_KB_TOKEN.",
+      });
     }
 
     // ── Mutex: prevent overlapping executions ───────────────────────────────────
