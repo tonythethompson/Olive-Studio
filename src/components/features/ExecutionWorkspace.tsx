@@ -47,7 +47,7 @@ import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipe
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { GpuMetricsBar } from "@/components/features/GpuMetricsBar";
-import { type GpuMetrics } from "@/lib/gpuMetrics";
+import { parseGpuMetrics, type GpuMetrics } from "@/lib/gpuMetrics";
 import { saveJobHistory } from "@/lib/jobHistoryStore";
 import { JobHistoryModal } from "@/components/features/JobHistoryModal";
 
@@ -106,8 +106,13 @@ export function ExecutionWorkspace({
   setIsRunning?: (v: boolean) => void;
 } = {}) {
   const storeState = usePipelineState();
-  const state = propState ?? storeState.state;
-  const setState = propSetState ?? storeState.setState;
+  // All-or-nothing controlled pair: both props or neither. Mixed mode is rejected.
+  const isControlled = propState !== undefined && propSetState !== undefined;
+  if (process.env.NODE_ENV !== "production" && (propState !== undefined) !== (propSetState !== undefined)) {
+    throw new Error("ExecutionWorkspace: state and setState must both be provided or both omitted.");
+  }
+  const state = isControlled ? propState : storeState.state;
+  const setState = isControlled ? propSetState : storeState.setState;
   // Live execution state
   const [liveJobId, setLiveJobId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -720,8 +725,9 @@ ${
 
         evtSource.addEventListener("metrics", (e: MessageEvent) => {
           try {
-            const metrics = JSON.parse(e.data) as GpuMetrics;
-            setGpuMetrics(metrics);
+            const parsed: unknown = JSON.parse(e.data);
+            const metrics = parseGpuMetrics(parsed);
+            if (metrics) setGpuMetrics(metrics);
           } catch {
             /* ignore malformed */
           }

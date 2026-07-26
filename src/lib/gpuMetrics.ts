@@ -13,6 +13,42 @@ export interface GpuMetrics {
   gpus: GpuMetricSample[];
 }
 
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || typeof value === "number";
+}
+
+function isGpuMetricSample(value: unknown): value is GpuMetricSample {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const sample = value as Record<string, unknown>;
+  return (
+    typeof sample.index === "number" &&
+    typeof sample.name === "string" &&
+    isNullableNumber(sample.utilizationPct) &&
+    isNullableNumber(sample.memUsedMb) &&
+    isNullableNumber(sample.memTotalMb) &&
+    isNullableNumber(sample.tempC) &&
+    isNullableNumber(sample.powerW)
+  );
+}
+
+/**
+ * Validates an unknown payload as {@link GpuMetrics}.
+ *
+ * @param data - Parsed event payload (typically from `JSON.parse`)
+ * @returns A typed metrics object, or `null` when the payload is malformed
+ */
+export function parseGpuMetrics(data: unknown): GpuMetrics | null {
+  if (data === null || typeof data !== "object" || Array.isArray(data)) return null;
+  const record = data as Record<string, unknown>;
+  if (typeof record.timestamp !== "string") return null;
+  if (!Array.isArray(record.gpus)) return null;
+  if (!record.gpus.every(isGpuMetricSample)) return null;
+  return {
+    timestamp: record.timestamp,
+    gpus: record.gpus,
+  };
+}
+
 /**
  * Formats a memory size as MiB or GiB.
  *

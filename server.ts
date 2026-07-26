@@ -2534,7 +2534,7 @@ function isSuccessfulKbReport(report: Record<string, unknown> | null): boolean {
 
 function isAllowedSyncOrigin(req: express.Request): boolean {
   const origin = req.get("origin");
-  if (!origin) return true; // same-origin / non-browser clients omit Origin
+  if (!origin) return false; // Origin-less clients must authenticate via token
   try {
     const originHost = new URL(origin).host;
     const requestHost = req.get("host");
@@ -2542,6 +2542,38 @@ function isAllowedSyncOrigin(req: express.Request): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Authorize KB sync: matching browser Origin, or a valid SYNC_KB_TOKEN.
+ * Origin-less clients cannot rely on Origin and must present the token.
+ */
+function authorizeKbSync(req: express.Request): { ok: true } | { ok: false; status: number; error: string } {
+  const expectedToken = process.env.SYNC_KB_TOKEN;
+  const authToken = req.get("x-sync-token");
+  const hasValidToken = Boolean(expectedToken) && authToken === expectedToken;
+
+  if (hasValidToken) return { ok: true };
+
+  if (isAllowedSyncOrigin(req)) return { ok: true };
+
+  if (!req.get("origin")) {
+    return {
+      ok: false,
+      status: 401,
+      error: "Unauthorized: Origin-less clients must provide a valid x-sync-token.",
+    };
+  }
+
+  if (!expectedToken) {
+    return {
+      ok: false,
+      status: 403,
+      error: "Forbidden: origin not allowed.",
+    };
+  }
+
+  return { ok: false, status: 401, error: "Unauthorized: valid token or allowed origin required." };
 }
 
 /** Load KB status from the filesystem and cache it. */
@@ -2619,24 +2651,9 @@ app.get("/api/mcp/kb-status", kbStatusRateLimit, (req, res) => {
 // ─── POST /api/mcp/sync-kb ────────────────────────────────────────────────────
 app.post("/api/mcp/sync-kb", kbSyncRateLimit, async (req, res) => {
   try {
-    // ── Authentication: token required on every request ──────────────────────────
-    const expectedToken = process.env.SYNC_KB_TOKEN;
-
-    // Fail closed: SYNC_KB_TOKEN must be configured on the server
-    if (!expectedToken) {
-      return res.status(503).json({ ok: false, error: "Service unavailable: SYNC_KB_TOKEN not configured." });
-    }
-
-    const authToken = req.get("x-sync-token");
-
-    // Require valid token on every request
-    if (authToken !== expectedToken) {
-      return res.status(401).json({ ok: false, error: "Unauthorized: valid token required." });
-    }
-
-    // Additional browser origin check (defense-in-depth, not for authorization)
-    if (!isAllowedSyncOrigin(req)) {
-      return res.status(403).json({ ok: false, error: "Forbidden: origin not allowed." });
+    const auth = authorizeKbSync(req);
+    if (auth.ok === false) {
+      return res.status(auth.status).json({ ok: false, error: auth.error });
     }
 
     // ── Mutex: prevent overlapping executions ───────────────────────────────────
