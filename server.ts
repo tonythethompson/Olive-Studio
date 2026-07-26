@@ -1801,6 +1801,7 @@ app.get("/api/olive/stream/:jobId", (req, res) => {
 
   // Subscribe to GPU metrics
   const sendMetrics = (metrics: GpuMetrics) => {
+    if (res.writableEnded) return;
     res.write(`event: metrics\ndata: ${JSON.stringify(metrics)}\n\n`);
   };
   job.metricSubscribers.push(sendMetrics);
