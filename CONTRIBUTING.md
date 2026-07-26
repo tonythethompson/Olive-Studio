@@ -6,7 +6,7 @@ Thank you for your interest in Olive Studio. This project is a community front e
 
 - Read [README.md](README.md) for setup and architecture overview.
 - Read [ABOUT.md](ABOUT.md) for project scope — Olive Studio is a local runner and UI, not a fork of Olive itself.
-- Olive Studio is licensed under [AGPL-3.0-or-later](LICENSE). By contributing, you agree that your contributions are licensed under the same terms.
+- Olive Studio is licensed under the [MIT License](LICENSE). By contributing, you agree that your contributions are licensed under the same terms.
 
 ## Development setup
 
