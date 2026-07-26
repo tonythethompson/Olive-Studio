@@ -2619,13 +2619,24 @@ app.get("/api/mcp/kb-status", kbStatusRateLimit, (req, res) => {
 // ─── POST /api/mcp/sync-kb ────────────────────────────────────────────────────
 app.post("/api/mcp/sync-kb", kbSyncRateLimit, async (req, res) => {
   try {
-    // ── Authentication: same-origin or token-based ───────────────────────────────
-    const authToken = req.get("x-sync-token");
+    // ── Authentication: token required on every request ──────────────────────────
     const expectedToken = process.env.SYNC_KB_TOKEN;
-    const hasValidToken = Boolean(expectedToken && authToken === expectedToken);
 
-    if (!hasValidToken && !isAllowedSyncOrigin(req)) {
-      return res.status(401).json({ ok: false, error: "Unauthorized: same-origin or valid token required." });
+    // Fail closed: SYNC_KB_TOKEN must be configured on the server
+    if (!expectedToken) {
+      return res.status(503).json({ ok: false, error: "Service unavailable: SYNC_KB_TOKEN not configured." });
+    }
+
+    const authToken = req.get("x-sync-token");
+
+    // Require valid token on every request
+    if (authToken !== expectedToken) {
+      return res.status(401).json({ ok: false, error: "Unauthorized: valid token required." });
+    }
+
+    // Additional browser origin check (defense-in-depth, not for authorization)
+    if (!isAllowedSyncOrigin(req)) {
+      return res.status(403).json({ ok: false, error: "Forbidden: origin not allowed." });
     }
 
     // ── Mutex: prevent overlapping executions ───────────────────────────────────

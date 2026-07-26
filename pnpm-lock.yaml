@@ -122,9 +122,6 @@ importers:
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
-      '@types/express-rate-limit':
-        specifier: ^6.0.2
-        version: 6.0.2(express@5.2.1(supports-color@7.2.0))(supports-color@7.2.0)
       '@types/jszip':
         specifier: ^3.4.1
         version: 3.4.1
@@ -2176,10 +2173,6 @@ packages:
 
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
-
-  '@types/express-rate-limit@6.0.2':
-    resolution: {integrity: sha512-e1xZLOOlxCDvplAGq7rDcXtbdBu2CWRsMjaIu1LVqGxWtKvwr884YE5mPs3IvHeG/OMDhf24oTaqG5T1bV3rBQ==}
-    deprecated: This is a stub types definition. express-rate-limit provides its own type definitions, so you do not need this installed.
 
   '@types/express-serve-static-core@5.1.2':
     resolution: {integrity: sha512-d3KvEXBSo/lOAMc2u6fkyDHBvetBHeqD7wm/AcXfLpSOQwlmG9D/aQ0SFswVjv05p7ullQS7Mjohj6/VdbZuTg==}
@@ -6715,13 +6708,6 @@ snapshots:
   '@types/doctrine@0.0.9': {}
 
   '@types/estree@1.0.9': {}
-
-  '@types/express-rate-limit@6.0.2(express@5.2.1(supports-color@7.2.0))(supports-color@7.2.0)':
-    dependencies:
-      express-rate-limit: 8.6.0(express@5.2.1(supports-color@7.2.0))(supports-color@7.2.0)
-    transitivePeerDependencies:
-      - express
-      - supports-color
 
   '@types/express-serve-static-core@5.1.2':
     dependencies:
