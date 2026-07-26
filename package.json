@@ -74,6 +74,7 @@
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.6.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.40.0",
@@ -83,7 +84,8 @@
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.6.0",
     "uuid": "^14.0.1",
-    "vite": "^8.1.5"
+    "vite": "^8.1.5",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",

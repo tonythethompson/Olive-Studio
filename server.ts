@@ -7,6 +7,7 @@ import { promisify } from "util";
 import fs from "fs";
 import os from "os";
 import { v4 as uuidv4 } from "uuid";
+import rateLimit from "express-rate-limit";
 
 import { validateOliveRecipeStructure } from "./src/lib/oliveRecipeSchema.ts";
 import { parseJsonFromAiResponse, readEnvApiKey } from "./src/lib/aiResponse.ts";
@@ -33,6 +34,8 @@ import {
 } from "./src/lib/tensorrtDeps.ts";
 import { tensorrtRtxInstallArgs, tensorrtRtxLabel } from "./src/lib/tensorrtRtxDeps.ts";
 import type { IHVProvider } from "./src/types.ts";
+import type { GpuMetrics } from "./src/lib/gpuMetrics.ts";
+import { reloadPassSchemas, type PassesJson } from "./src/lib/schemaEngine.ts";
 
 dotenv.config();
 dotenv.config({ path: ".env.local", override: true });
@@ -44,6 +47,35 @@ const PORT = 3000;
 const VENV_DIR = path.join(process.cwd(), ".venv");
 const OLIVE_GPU_LAUNCHER = path.join(process.cwd(), "scripts", "olive_gpu_launcher.py");
 const execFileAsync = promisify(execFile);
+
+// ─── KB Status Cache & Sync Protection ───────────────────────────────────────
+interface KbStatusCache {
+  available: boolean;
+  version?: string;
+  lastUpdated?: string | null;
+  lastSync?: string | null;
+  passCount?: number;
+  error?: string;
+}
+
+let kbStatusCache: KbStatusCache | null = null;
+let kbSyncInProgress = false;
+
+const kbStatusRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { available: false, error: "Too many KB status requests. Please wait." },
+});
+
+const kbSyncRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: 2,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "Rate limited: please wait before syncing again." },
+});
 
 // ─── AI Provider Config ───────────────────────────────────────────────────────
 
@@ -301,6 +333,14 @@ async function callAnthropic(
   return data.content?.[0]?.text ?? "";
 }
 
+/**
+ * Sends a conversation to the configured AI provider.
+ *
+ * @param system - System instructions for the conversation
+ * @param messages - Conversation messages to send
+ * @param wantJson - Whether to request a JSON-formatted response
+ * @returns The provider's response text
+ */
 async function callAI(system: string, messages: AIChatMessage[], wantJson = false): Promise<string> {
   const cfg = getAiProvider();
   if (!cfg)
@@ -330,6 +370,7 @@ async function callAI(system: string, messages: AIChatMessage[], wantJson = fals
 }
 
 // ─── Olive Job Registry ───────────────────────────────────────────────────────
+
 interface OliveJob {
   id: string;
   status: "setting_up" | "running" | "completed" | "failed" | "cancelled";
@@ -337,7 +378,15 @@ interface OliveJob {
   logs: string[];
   // SSE subscriber queues: each subscriber is a function that receives new log lines
   subscribers: Array<(line: string) => void>;
+  // SSE metric subscribers: receive GPU metric snapshots
+  metricSubscribers: Array<(metrics: GpuMetrics) => void>;
   process: ReturnType<typeof spawn> | null;
+  // Latest GPU metrics snapshot (for replay to late SSE subscribers)
+  latestMetrics: GpuMetrics | null;
+  // Interval handle for periodic GPU sampling
+  metricsTimer: ReturnType<typeof setInterval> | null;
+  // True while a nvidia-smi sample is in-flight (prevents overlap)
+  sampling: boolean;
 }
 
 const jobRegistry = new Map<string, OliveJob>();
@@ -345,6 +394,12 @@ const jobRegistry = new Map<string, OliveJob>();
 // In-memory only — never written to disk or logged
 let runtimeHfToken: string | null = null;
 
+/**
+ * Records a job log line and notifies its active subscribers.
+ *
+ * @param job - The job whose log and subscribers should be updated
+ * @param line - The log line to record and broadcast
+ */
 function pushLog(job: OliveJob, line: string) {
   job.logs.push(line);
   for (const sub of job.subscribers) {
@@ -353,6 +408,93 @@ function pushLog(job: OliveJob, line: string) {
     } catch {
       /* subscriber gone */
     }
+  }
+}
+
+/**
+ * Stores the latest GPU metrics and broadcasts them to subscribed listeners.
+ *
+ * @param job - The Olive job associated with the metrics
+ * @param metrics - The GPU metrics snapshot to store and broadcast
+ */
+function pushGpuMetrics(job: OliveJob, metrics: GpuMetrics) {
+  job.latestMetrics = metrics;
+  for (const sub of job.metricSubscribers) {
+    try {
+      sub(metrics);
+    } catch {
+      /* subscriber gone */
+    }
+  }
+}
+
+/**
+ * Collects current metrics for available NVIDIA GPUs.
+ *
+ * @returns A timestamped GPU metrics snapshot, or `null` when metrics cannot be collected.
+ */
+async function sampleGpuMetrics(): Promise<GpuMetrics | null> {
+  try {
+    const { stdout } = await execFileAsync(
+      "nvidia-smi",
+      [
+        "--query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
+        "--format=csv,noheader,nounits",
+      ],
+      { timeout: 10_000 },
+    );
+    const lines = stdout.trim().split("\n").filter(Boolean);
+    if (lines.length === 0) return null;
+    const gpus = lines.map((line) => {
+      const parts = line.split(",").map((s) => s.trim());
+      const parseNum = (v: string | undefined): number | null => {
+        if (!v || v === "[N/A]") return null;
+        const n = parseFloat(v);
+        return isNaN(n) ? null : n;
+      };
+      return {
+        index: parseInt(parts[0] ?? "0", 10),
+        name: parts[1] ?? "Unknown GPU",
+        utilizationPct: parseNum(parts[2]),
+        memUsedMb: parseNum(parts[3]),
+        memTotalMb: parseNum(parts[4]),
+        tempC: parseNum(parts[5]),
+        powerW: parseNum(parts[6]),
+      };
+    });
+    return { timestamp: new Date().toISOString(), gpus };
+  } catch {
+    return null;
+  }
+}
+
+/** Start periodic GPU metrics sampling for a job. */
+function startGpuMetricsTimer(job: OliveJob): void {
+  if (job.metricsTimer) return;
+  const sample = async () => {
+    if (job.status !== "running") {
+      stopGpuMetricsTimer(job);
+      return;
+    }
+    if (job.sampling) return;
+    job.sampling = true;
+    try {
+      const metrics = await sampleGpuMetrics();
+      if (metrics) pushGpuMetrics(job, metrics);
+    } finally {
+      job.sampling = false;
+    }
+  };
+  // Sample immediately, then every 3 seconds
+  void sample();
+  job.metricsTimer = setInterval(() => void sample(), 3000);
+}
+
+/** Stop GPU metrics sampling for a job. */
+function stopGpuMetricsTimer(job: OliveJob): void {
+  if (job.metricsTimer) {
+    clearInterval(job.metricsTimer);
+    job.metricsTimer = null;
   }
 }
 
@@ -1414,7 +1556,11 @@ app.post("/api/olive/run", async (req, res) => {
     exitCode: null,
     logs: [],
     subscribers: [],
+    metricSubscribers: [],
     process: null,
+    latestMetrics: null,
+    metricsTimer: null,
+    sampling: false,
   };
   jobRegistry.set(jobId, job);
 
@@ -1578,6 +1724,7 @@ app.post("/api/olive/run", async (req, res) => {
     pushLog(job, `[info] Starting Olive optimization run...`);
 
     job.status = "running";
+    startGpuMetricsTimer(job);
     const { executable, args } = resolveOliveCommand(targetProvider, tmpFile, false);
     const proc = spawn(executable, args, {
       stdio: "pipe",
@@ -1597,6 +1744,7 @@ app.post("/api/olive/run", async (req, res) => {
     proc.on("close", (code) => {
       job.exitCode = code;
       job.status = code === 0 ? "completed" : "failed";
+      stopGpuMetricsTimer(job);
       pushLog(job, `[done] Olive process exited with code ${code}.`);
       // Cleanup temp file
       try {
@@ -1618,6 +1766,7 @@ app.post("/api/olive/run", async (req, res) => {
       pushLog(job, `[error] Failed to start Olive process: ${err.message}`);
       job.status = "failed";
       job.exitCode = 1;
+      stopGpuMetricsTimer(job);
       for (const sub of job.subscribers) {
         try {
           sub("__DONE__");
@@ -1655,6 +1804,11 @@ app.get("/api/olive/stream/:jobId", (req, res) => {
     res.write(`data: ${JSON.stringify({ line })}\n\n`);
   }
 
+  // Replay latest GPU metrics if available
+  if (job.latestMetrics) {
+    res.write(`event: metrics\ndata: ${JSON.stringify(job.latestMetrics)}\n\n`);
+  }
+
   // If already finished, send done immediately
   if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
     res.write(`event: done\ndata: ${JSON.stringify({ exitCode: job.exitCode })}\n\n`);
@@ -1665,9 +1819,18 @@ app.get("/api/olive/stream/:jobId", (req, res) => {
   // Subscribe to new lines
   job.subscribers.push(send);
 
+  // Subscribe to GPU metrics
+  const sendMetrics = (metrics: GpuMetrics) => {
+    if (res.writableEnded) return;
+    res.write(`event: metrics\ndata: ${JSON.stringify(metrics)}\n\n`);
+  };
+  job.metricSubscribers.push(sendMetrics);
+
   req.on("close", () => {
     const idx = job.subscribers.indexOf(send);
     if (idx !== -1) job.subscribers.splice(idx, 1);
+    const midx = job.metricSubscribers.indexOf(sendMetrics);
+    if (midx !== -1) job.metricSubscribers.splice(midx, 1);
     if (job.subscribers.length === 0 && (job.status === "running" || job.status === "setting_up")) {
       cancelJobById(job.id);
     }
@@ -1686,7 +1849,12 @@ app.get("/api/olive/status/:jobId", (req, res) => {
   });
 });
 
-// ─── POST & DELETE /api/olive/cancel ──────────────────────────────────────────
+/**
+ * Cancels an active Olive job and terminates its process when applicable.
+ *
+ * @param jobId - The identifier of the job to cancel
+ * @returns An object indicating whether the job was found and cancellation was requested
+ */
 function cancelJobById(jobId: string): { ok: boolean; message?: string } {
   const job = jobRegistry.get(jobId);
   if (!job) return { ok: false, message: "Job not found." };
@@ -1694,6 +1862,7 @@ function cancelJobById(jobId: string): { ok: boolean; message?: string } {
   if (job.status === "running" || job.status === "setting_up") {
     job.status = "cancelled";
     job.exitCode = -1;
+    stopGpuMetricsTimer(job);
     pushLog(job, "[info] Job cancelled by user.");
 
     if (job.process && job.process.pid) {
@@ -2338,6 +2507,216 @@ app.post("/api/mcp/tool", async (req, res) => {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return res.status(500).json({ error: msg });
+  }
+});
+
+// ─── KB Status Helpers ────────────────────────────────────────────────────────
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** True when update_report.json reflects a successful upstream refresh. */
+function isSuccessfulKbReport(report: Record<string, unknown> | null): boolean {
+  if (!report) return false;
+  if (report.success === false) return false;
+  if (report.success === true) return true;
+
+  const sources = report.sources;
+  if (!isObjectRecord(sources) || Object.keys(sources).length === 0) return false;
+
+  for (const source of Object.values(sources)) {
+    if (!isObjectRecord(source)) continue;
+    if (source.status === "error") return false;
+  }
+  return true;
+}
+
+function isAllowedSyncOrigin(req: express.Request): boolean {
+  const origin = req.get("origin");
+  if (!origin) return true; // same-origin / non-browser clients omit Origin
+  try {
+    const originHost = new URL(origin).host;
+    const requestHost = req.get("host");
+    return Boolean(requestHost) && originHost === requestHost;
+  } catch {
+    return false;
+  }
+}
+
+/** Load KB status from the filesystem and cache it. */
+function loadKbStatus(): KbStatusCache {
+  try {
+    const kbDir = path.join(process.cwd(), "olive-mcp-server", "olive_mcp_server", "knowledge_base");
+    const passesPath = path.join(kbDir, "passes.json");
+
+    if (!fs.existsSync(passesPath)) {
+      return {
+        available: false,
+        error: "passes.json not found",
+      };
+    }
+
+    const raw = fs.readFileSync(passesPath, "utf-8");
+    const data = JSON.parse(raw) as { version?: string; last_updated?: string; passes?: unknown[] };
+
+    // Check for update_report.json (written by update_kb.py)
+    const reportPath = path.join(kbDir, "update_report.json");
+    let lastSync: string | null = null;
+    if (fs.existsSync(reportPath)) {
+      try {
+        const report = JSON.parse(fs.readFileSync(reportPath, "utf-8")) as Record<string, unknown>;
+        if (isSuccessfulKbReport(report) && typeof report.updated_at === "string") {
+          lastSync = report.updated_at;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    return {
+      available: true,
+      version: data.version ?? "unknown",
+      lastUpdated: data.last_updated ?? null,
+      lastSync,
+      passCount: Array.isArray(data.passes) ? data.passes.length : 0,
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      available: false,
+      error: msg,
+    };
+  }
+}
+
+/** Invalidate the KB status cache. */
+function invalidateKbStatusCache(): void {
+  kbStatusCache = null;
+}
+
+// ─── GET /api/mcp/kb-status ───────────────────────────────────────────────────
+app.get("/api/mcp/kb-status", kbStatusRateLimit, (req, res) => {
+  // Return cached status if available
+  if (kbStatusCache) {
+    return res.json(kbStatusCache);
+  }
+
+  // Load from filesystem and cache
+  kbStatusCache = loadKbStatus();
+
+  if (kbStatusCache.error && !kbStatusCache.available) {
+    // Designed unavailable response (missing KB) stays HTTP 200 for the UI hook.
+    if (kbStatusCache.error === "passes.json not found") {
+      return res.json(kbStatusCache);
+    }
+    return res.status(500).json(kbStatusCache);
+  }
+
+  return res.json(kbStatusCache);
+});
+
+// ─── POST /api/mcp/sync-kb ────────────────────────────────────────────────────
+app.post("/api/mcp/sync-kb", kbSyncRateLimit, async (req, res) => {
+  try {
+    // ── Authentication: token required on every request ──────────────────────────
+    const expectedToken = process.env.SYNC_KB_TOKEN;
+
+    // Fail closed: SYNC_KB_TOKEN must be configured on the server
+    if (!expectedToken) {
+      return res.status(503).json({ ok: false, error: "Service unavailable: SYNC_KB_TOKEN not configured." });
+    }
+
+    const authToken = req.get("x-sync-token");
+
+    // Require valid token on every request
+    if (authToken !== expectedToken) {
+      return res.status(401).json({ ok: false, error: "Unauthorized: valid token required." });
+    }
+
+    // Additional browser origin check (defense-in-depth, not for authorization)
+    if (!isAllowedSyncOrigin(req)) {
+      return res.status(403).json({ ok: false, error: "Forbidden: origin not allowed." });
+    }
+
+    // ── Mutex: prevent overlapping executions ───────────────────────────────────
+    if (kbSyncInProgress) {
+      return res.status(409).json({ ok: false, error: "Sync already in progress. Please wait." });
+    }
+
+    kbSyncInProgress = true;
+
+    const scriptPath = path.join(process.cwd(), "olive-mcp-server", "scripts", "update_kb.py");
+    if (!fs.existsSync(scriptPath)) {
+      kbSyncInProgress = false;
+      return res.status(404).json({ ok: false, error: "update_kb.py script not found." });
+    }
+
+    let python = getVenvPython();
+    if (!fs.existsSync(python)) {
+      python = (await findSystemPython()) ?? "";
+    }
+    if (!python) {
+      kbSyncInProgress = false;
+      return res.status(500).json({ ok: false, error: "Python environment not found." });
+    }
+
+    const { stdout, stderr } = await execFileAsync(python, [scriptPath], {
+      timeout: 120_000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+
+    // Read the generated report
+    const kbDir = path.join(process.cwd(), "olive-mcp-server", "olive_mcp_server", "knowledge_base");
+    const reportPath = path.join(kbDir, "update_report.json");
+    let report: Record<string, unknown> | null = null;
+    if (fs.existsSync(reportPath)) {
+      try {
+        report = JSON.parse(fs.readFileSync(reportPath, "utf-8"));
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const syncSucceeded = isSuccessfulKbReport(report);
+
+    // Hot-reload only after a successful refresh with a readable passes.json
+    const passesPath = path.join(kbDir, "passes.json");
+    if (syncSucceeded && fs.existsSync(passesPath)) {
+      try {
+        const passesRaw = fs.readFileSync(passesPath, "utf-8");
+        const passesData = JSON.parse(passesRaw) as PassesJson;
+        reloadPassSchemas(passesData);
+      } catch (err: unknown) {
+        console.warn("[sync-kb] Failed to reload pass schemas:", err);
+      }
+    }
+
+    // Invalidate cache so next kb-status call reloads from disk
+    invalidateKbStatusCache();
+
+    kbSyncInProgress = false;
+
+    if (!syncSucceeded) {
+      return res.status(502).json({
+        ok: false,
+        error: "Knowledge-base sync completed without a successful source refresh.",
+        stdout: stdout.slice(0, 2000),
+        stderr: stderr.slice(0, 500) || null,
+        report,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      stdout: stdout.slice(0, 2000),
+      stderr: stderr.slice(0, 500) || null,
+      report,
+    });
+  } catch (err: unknown) {
+    kbSyncInProgress = false;
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg });
   }
 });
 

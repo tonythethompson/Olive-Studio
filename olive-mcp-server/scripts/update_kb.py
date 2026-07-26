@@ -124,8 +124,19 @@ def main() -> None:
     }
 
     parsed = {name: _parse_source(data) for name, data in raw_sources.items()}
+
+    source_statuses: list[str] = []
+    for data in raw_sources.values():
+        if isinstance(data, dict) and isinstance(data.get("status"), str):
+            source_statuses.append(data["status"])
+        else:
+            source_statuses.append("ok" if data else "error")
+
+    success = bool(source_statuses) and all(status != "error" for status in source_statuses)
+
     report: dict[str, Any] = {
         "updated_at": datetime.now(timezone.utc).isoformat(),
+        "success": success,
         "sources": {name: _sanitize_source(data) for name, data in raw_sources.items()},
         "parsed": parsed,
         "deprecations": [
@@ -145,6 +156,9 @@ def main() -> None:
     with open(candidate_path, "w", encoding="utf-8") as f:
         json.dump(candidate_quirks, f, indent=2)
     print(f"Candidate quirks written to {candidate_path}")
+
+    if not success:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

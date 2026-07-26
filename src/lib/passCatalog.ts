@@ -8,8 +8,11 @@
  * Keep this list in sync with the 0.12.1 docs.
  */
 
+/** Centralized Olive version — update this when upgrading the supported Olive release. */
+export const OLIVE_VERSION = "0.12.1";
+
 export type PassCategory =
-  "onnx" | "pytorch" | "intel" | "nvidia" | "openvino" | "qnn" | "pruning" | "peft" | "splitting";
+  "onnx" | "pytorch" | "intel" | "nvidia" | "openvino" | "qnn" | "pruning" | "peft" | "splitting" | "other";
 
 export interface PassCatalogEntry {
   /** Exact pass type name used in recipe JSON (`type` field) */

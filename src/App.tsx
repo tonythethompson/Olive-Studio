@@ -1,8 +1,5 @@
 import { lazy, Suspense, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { UIState } from "@/types";
-import { DEFAULT_PASSES } from "@/lib/defaultPasses";
-import { commitUiStateUpdate } from "@/lib/pipelineValidation";
 import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw } from "lucide-react";
 import { InputEnvironmentPanel } from "@/components/features/InputEnvironmentPanel";
 import { IHVIntegrationPanel } from "@/components/features/IHVIntegrationPanel";
@@ -10,6 +7,7 @@ import { ExecutionWorkspace } from "@/components/features/ExecutionWorkspace";
 import { LicenseNotice } from "@/components/LicenseNotice";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
+import { KbSyncIndicator } from "@/components/features/KbSyncIndicator";
 import { cn } from "@/lib/utils";
 
 const BatchProcessingPanel = lazy(() =>
@@ -38,22 +36,6 @@ function BatchPanelFallback() {
 
 const queryClient = new QueryClient();
 
-const defaultState: UIState = {
-  modelSource: "huggingface",
-  localFiles: [],
-  azureModelPath: "",
-  hfModelId: "meta-llama/Meta-Llama-3-8B",
-  hfDataset: "",
-  ihvProvider: "CPUExecutionProvider",
-  memoryOffload: "gpu_only",
-  cudaVersion: "auto",
-  cacheDir: "",
-  azureStr: "",
-  distributedCaching: false,
-  activeJobId: null,
-  passes: { ...DEFAULT_PASSES },
-};
-
 type ActiveView = "input" | "ihv" | "execute";
 
 const SECTIONS: { id: ActiveView; step: string; label: string; desc: string; icon: typeof BrainCircuit }[] = [
@@ -74,8 +56,10 @@ const SECTIONS: { id: ActiveView; step: string; label: string; desc: string; ico
   },
 ];
 
+/**
+ * Renders the Olive Studio recipe builder dashboard.
+ */
 function Dashboard() {
-  const [state, setStateRaw] = useState<UIState>(defaultState);
   const [activeView, setActiveView] = useState<ActiveView>("input");
   const [isOliveRunning, setIsOliveRunning] = useState(false);
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
@@ -86,8 +70,6 @@ function Dashboard() {
     setIsAiSidebarOpen(true);
     setTriggerAiAudit(true);
   };
-
-  const setState = (partial: Partial<UIState>) => setStateRaw((prev) => commitUiStateUpdate(prev, partial));
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-300 overflow-hidden font-sans">
@@ -151,7 +133,7 @@ function Dashboard() {
         </nav>
 
         <div className="shrink-0 border-t border-slate-800">
-          <VramEstimateBanner state={state} sidebar />
+          <VramEstimateBanner sidebar />
         </div>
 
         <footer className="shrink-0 border-t border-slate-800 px-4 py-2.5">
@@ -168,7 +150,10 @@ function Dashboard() {
       <div className="flex-1 flex min-w-0 overflow-hidden">
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
           <header className="h-12 flex items-center justify-between px-6 md:px-8 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 shrink-0">
-            <span className="text-sm text-slate-500">Optimization pipeline</span>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-slate-500">Optimization pipeline</span>
+              <KbSyncIndicator />
+            </div>
             <button
               type="button"
               onClick={() => setIsAiSidebarOpen((open) => !open)}
@@ -210,20 +195,18 @@ function Dashboard() {
                   </header>
                   {id === "input" && (
                     <ErrorBoundary label="Model source">
-                      <InputEnvironmentPanel state={state} setState={setState} />
+                      <InputEnvironmentPanel />
                     </ErrorBoundary>
                   )}
                   {id === "ihv" && (
                     <ErrorBoundary label="Hardware">
-                      <IHVIntegrationPanel state={state} setState={setState} />
+                      <IHVIntegrationPanel />
                     </ErrorBoundary>
                   )}
                   {id === "execute" && (
                     <div className="space-y-8">
                       <ErrorBoundary label="Recipe &amp; run">
                         <ExecutionWorkspace
-                          state={state}
-                          setState={setState}
                           onOpenAiAudit={handleOpenAiAudit}
                           onRunStateChange={(running) => {
                             setIsOliveRunning(running);
@@ -238,7 +221,7 @@ function Dashboard() {
                       </ErrorBoundary>
                       <ErrorBoundary label="Batch queue">
                         <Suspense fallback={<BatchPanelFallback />}>
-                          <BatchProcessingPanel state={state} setState={setState} />
+                          <BatchProcessingPanel />
                         </Suspense>
                       </ErrorBoundary>
                     </div>
@@ -252,8 +235,6 @@ function Dashboard() {
         <ErrorBoundary label="Assistant">
           <Suspense fallback={<SidebarFallback />}>
             <GeminiSidebar
-              state={state}
-              setState={setState}
               isOpen={isAiSidebarOpen}
               onClose={() => setIsAiSidebarOpen(false)}
               openToAudit={triggerAiAudit}

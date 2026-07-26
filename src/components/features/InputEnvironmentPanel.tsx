@@ -13,6 +13,7 @@ import {
   Button,
 } from "@/components/ui";
 import { UIState } from "@/types";
+import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { SUGGESTED_RECIPES } from "@/data/recipes";
 import {
   compareCatalogMetadataToRecipe,
@@ -78,6 +79,12 @@ interface ReconstructedItem {
   reconstructedAt: string;
 }
 
+/**
+ * Splits a preset name into its primary title and supplemental metadata.
+ *
+ * @param name - The preset name to parse
+ * @returns The parsed title and metadata
+ */
 function presetDisplayName(name: string): { title: string; meta: string } {
   const parts = name
     .split(" · ")
@@ -89,13 +96,22 @@ function presetDisplayName(name: string): { title: string; meta: string } {
   return { title: name, meta: "" };
 }
 
+/**
+ * Renders the model source configuration and Olive recipe management panel.
+ *
+ * @param state - Optional pipeline state; defaults to the pipeline store state.
+ * @param setState - Optional state updater; defaults to the pipeline store updater.
+ */
 export function InputEnvironmentPanel({
-  state,
-  setState,
+  state: propState,
+  setState: propSetState,
 }: {
-  state: UIState;
-  setState: (s: Partial<UIState>) => void;
-}) {
+  state?: UIState;
+  setState?: (s: Partial<UIState>) => void;
+} = {}) {
+  const storeState = usePipelineState();
+  const state = propState ?? storeState.state;
+  const setState = propSetState ?? storeState.setState;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chunkFilesRef = useRef<Map<string, File>>(new Map());
   const [isReconstructing, setIsReconstructing] = useState(false);
