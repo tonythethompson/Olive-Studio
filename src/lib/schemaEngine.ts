@@ -110,8 +110,10 @@ function buildParamSchemas(data: PassesJson): Map<string, PassParamSchema> {
 
 /** Hot-reload the parameter schemas from a freshly-fetched passes.json object. */
 export function reloadPassSchemas(data: PassesJson): void {
+  const nextParamSchemas = buildParamSchemas(data);
   kbData = data;
-  PARAM_SCHEMAS = buildParamSchemas(data);
+  PARAM_SCHEMAS = nextParamSchemas;
+}
 }
 
 /** Get KB metadata (version, last_updated, pass count) from the currently loaded KB data. */
