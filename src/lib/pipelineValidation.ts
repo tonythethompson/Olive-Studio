@@ -52,7 +52,13 @@ const TENSOR_CORE_PROVIDERS: IHVProvider[] = [
   "TensorrtExecutionProvider",
 ];
 
-/** Set of known Olive pass names from the unified schema engine (TS catalog + MCP knowledge base). */
+/**
+ * Determines whether a quantization method is supported by an execution provider.
+ *
+ * @param method - The quantization method to check
+ * @param provider - The execution provider to check
+ * @returns `true` if the method is supported by the provider, `false` otherwise
+ */
 
 export function isQuantMethodAllowed(
   method: UIState["passes"]["quantMethod"],
@@ -483,6 +489,12 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
   return issues;
 }
 
+/**
+ * Identifies generated Olive pipeline steps with unknown pass types.
+ *
+ * @param state - The UI state used to build the Olive recipe
+ * @returns Critical issues for generated steps whose pass types are missing or unknown
+ */
 function getPassCatalogIssues(state: UIState): PipelineIssue[] {
   const issues: PipelineIssue[] = [];
   const recipe = buildOliveRecipe(state) as unknown as OliveRecipe;

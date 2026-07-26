@@ -20,6 +20,11 @@ export interface KbSyncResult {
 const SYNC_TIMEOUT_MS = 130_000;
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
+/**
+ * Provides knowledge base status, synchronization controls, and refresh state.
+ *
+ * @returns The current status, synchronization state, error message, synchronization action, and status refresh action.
+ */
 export function useKbSync() {
   const [status, setStatus] = useState<KbStatus | null>(null);
   const [syncing, setSyncing] = useState(false);

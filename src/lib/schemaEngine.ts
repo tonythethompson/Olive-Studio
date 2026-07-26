@@ -81,6 +81,12 @@ let kbData: PassesJson = passKnowledgeBase as PassesJson;
 /** Map of pass name → parameter schema from passes.json */
 let PARAM_SCHEMAS: Map<string, PassParamSchema> = buildParamSchemas(kbData);
 
+/**
+ * Builds a parameter schema index from pass definitions.
+ *
+ * @param data - Knowledge-base data containing pass definitions.
+ * @returns A map keyed by pass name with normalized parameter schemas.
+ */
 function buildParamSchemas(data: PassesJson): Map<string, PassParamSchema> {
   return new Map(
     (data.passes ?? []).map((p) => [
@@ -150,6 +156,13 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Checks whether a value matches a supported parameter type.
+ *
+ * @param value - The value to check
+ * @param type - The expected parameter type
+ * @returns `true` if the value matches the type, `false` otherwise.
+ */
 function checkParamType(value: unknown, type: ParamType): boolean {
   switch (type) {
     case "str":
@@ -174,8 +187,11 @@ function checkParamType(value: unknown, type: ParamType): boolean {
 }
 
 /**
- * Validate a pass config object against its parameter schema.
- * Returns a list of error strings (empty if valid).
+ * Validates a pass configuration against its parameter schema.
+ *
+ * @param passType - The pass type whose schema defines the configuration requirements
+ * @param config - The configuration to validate
+ * @returns An array of validation error messages; an empty array indicates valid or unvalidated configuration
  */
 export function validatePassConfig(passType: string, config: unknown): string[] {
   const errors: string[] = [];
@@ -334,6 +350,14 @@ export function validateRecipeSchema(recipe: unknown): SchemaValidationResult {
   return { valid: errors.length === 0, errors };
 }
 
+/**
+ * Validates a referenced system and its accelerator configuration.
+ *
+ * @param systems - Map of system names to system definitions
+ * @param ref - Name of the system to validate
+ * @param label - Engine field associated with the reference
+ * @param errors - Array to which validation errors are appended
+ */
 function validateSystemRef(
   systems: Record<string, unknown>,
   ref: string,

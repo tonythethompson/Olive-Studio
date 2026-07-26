@@ -301,6 +301,14 @@ async function callAnthropic(
   return data.content?.[0]?.text ?? "";
 }
 
+/**
+ * Sends a conversation to the configured AI provider.
+ *
+ * @param system - System instructions for the conversation
+ * @param messages - Conversation messages to send
+ * @param wantJson - Whether to request a JSON-formatted response
+ * @returns The provider's response text
+ */
 async function callAI(system: string, messages: AIChatMessage[], wantJson = false): Promise<string> {
   const cfg = getAiProvider();
   if (!cfg)
@@ -366,6 +374,12 @@ const jobRegistry = new Map<string, OliveJob>();
 // In-memory only — never written to disk or logged
 let runtimeHfToken: string | null = null;
 
+/**
+ * Records a job log line and notifies its active subscribers.
+ *
+ * @param job - The job whose log and subscribers should be updated
+ * @param line - The log line to record and broadcast
+ */
 function pushLog(job: OliveJob, line: string) {
   job.logs.push(line);
   for (const sub of job.subscribers) {
@@ -377,6 +391,12 @@ function pushLog(job: OliveJob, line: string) {
   }
 }
 
+/**
+ * Stores the latest GPU metrics and broadcasts them to subscribed listeners.
+ *
+ * @param job - The Olive job associated with the metrics
+ * @param metrics - The GPU metrics snapshot to store and broadcast
+ */
 function pushGpuMetrics(job: OliveJob, metrics: GpuMetrics) {
   job.latestMetrics = metrics;
   for (const sub of job.metricSubscribers) {
@@ -388,7 +408,11 @@ function pushGpuMetrics(job: OliveJob, metrics: GpuMetrics) {
   }
 }
 
-/** Sample GPU metrics via nvidia-smi. Returns null if nvidia-smi is unavailable. */
+/**
+ * Collects current metrics for available NVIDIA GPUs.
+ *
+ * @returns A timestamped GPU metrics snapshot, or `null` when metrics cannot be collected.
+ */
 async function sampleGpuMetrics(): Promise<GpuMetrics | null> {
   try {
     const { stdout } = await execFileAsync(
@@ -1804,7 +1828,12 @@ app.get("/api/olive/status/:jobId", (req, res) => {
   });
 });
 
-// ─── POST & DELETE /api/olive/cancel ──────────────────────────────────────────
+/**
+ * Cancels an active Olive job and terminates its process when applicable.
+ *
+ * @param jobId - The identifier of the job to cancel
+ * @returns An object indicating whether the job was found and cancellation was requested
+ */
 function cancelJobById(jobId: string): { ok: boolean; message?: string } {
   const job = jobRegistry.get(jobId);
   if (!job) return { ok: false, message: "Job not found." };

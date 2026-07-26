@@ -14,6 +14,13 @@ export interface RecipeGraphViewProps {
   showDot?: boolean;
 }
 
+/**
+ * Renders the recipe pipeline graph, validation panel, and selected-step inspector.
+ *
+ * @param state - Optional UI state override; when omitted, state is read from the pipeline store.
+ * @param setState - Optional state update handler; when omitted, the pipeline store handler is used.
+ * @param showDot - Whether to display the graph's dot visualization.
+ */
 export function RecipeGraphView({
   state: propState,
   setState: propSetState,

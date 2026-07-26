@@ -160,6 +160,14 @@ const validations: OptimizationPassValidation[] = [
   },
 ];
 
+/**
+ * Determines the compatibility and estimated optimization characteristics of a pass for a provider.
+ *
+ * @param pass - The optimization pass to evaluate
+ * @param provider - The execution provider to evaluate
+ * @param passes - The configured optimization passes used to identify configuration conflicts
+ * @returns Compatibility status, explanation, and estimated performance characteristics
+ */
 export function getCellCompatibility(
   pass: OptimizationPassValidation,
   provider: IHVProvider,
@@ -266,6 +274,14 @@ export function getCellCompatibility(
   };
 }
 
+/**
+ * Configures hardware acceleration providers and optimization passes for the pipeline.
+ *
+ * Uses the provided pipeline state and updater when available, or the pipeline store otherwise.
+ *
+ * @param state - Optional pipeline state to display and modify.
+ * @param setState - Optional updater for applying pipeline state changes.
+ */
 export function IHVIntegrationPanel({
   state: propState,
   setState: propSetState,

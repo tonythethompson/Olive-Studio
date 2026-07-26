@@ -30,6 +30,12 @@ import {
   AlertCircle,
 } from "lucide-react";
 
+/**
+ * Renders a panel for managing, running, and inspecting sequential batch-processing jobs.
+ *
+ * @param state - Optional pipeline state; uses the pipeline store state when omitted.
+ * @param setState - Optional state updater; uses the pipeline store updater when omitted.
+ */
 export function BatchProcessingPanel({
   state: propState,
   setState: propSetState,

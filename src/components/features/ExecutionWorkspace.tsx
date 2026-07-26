@@ -61,6 +61,12 @@ const WebGpuBenchmarkPanel = lazy(() =>
   import("@/components/features/WebGpuBenchmarkPanel").then((m) => ({ default: m.WebGpuBenchmarkPanel })),
 );
 
+/**
+ * Renders a centered loading spinner with a descriptive label.
+ *
+ * @param label - The text displayed below the spinner
+ * @param minH - The optional minimum height of the loading container
+ */
 function LoadingFallback({ label, minH }: { label: string; minH?: string }) {
   return (
     <div className="flex items-center justify-center w-full" style={minH ? { minHeight: minH } : undefined}>
@@ -72,6 +78,14 @@ function LoadingFallback({ label, minH }: { label: string; minH?: string }) {
   );
 }
 
+/**
+ * Renders the Olive recipe workspace for reviewing, exporting, queuing, and executing a pipeline.
+ *
+ * @param state - Optional pipeline state override; the store state is used when omitted.
+ * @param setState - Optional state update function; the store updater is used when omitted.
+ * @param onOpenAiAudit - Callback invoked when the AI audit review is opened.
+ * @param onRunStateChange - Callback invoked when live execution starts or stops.
+ */
 export function ExecutionWorkspace({
   state: propState,
   setState: propSetState,

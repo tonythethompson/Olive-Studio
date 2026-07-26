@@ -272,6 +272,12 @@ const ProviderErrorBlock = ({ msg, onGoSettings }: { msg: string; onGoSettings: 
   );
 };
 
+/**
+ * Displays installed local models and provides controls to search, load, and unload them.
+ *
+ * @param activeModel - The currently active model to highlight.
+ * @param isOpen - Whether the sidebar is open and keyboard shortcuts should be enabled.
+ */
 function LocalModelManager({ activeModel, isOpen }: { activeModel?: string; isOpen: boolean }) {
   const [models, setModels] = useState<Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }>>([]);
   const [loading, setLoading] = useState(false);
@@ -546,6 +552,16 @@ function LocalModelManager({ activeModel, isOpen }: { activeModel?: string; isOp
   );
 }
 
+/**
+ * Renders a sidebar for auditing, chatting about, and configuring the optimization pipeline.
+ *
+ * @param state - Optional pipeline state; when omitted, the sidebar uses the pipeline store.
+ * @param setState - Optional pipeline state updater; when omitted, the sidebar uses the pipeline store.
+ * @param isOpen - Whether the sidebar is visible.
+ * @param onClose - Called when the sidebar is closed.
+ * @param openToAudit - Whether to open the audit tab and run an analysis.
+ * @param onAuditOpened - Called after an audit is opened in response to `openToAudit`.
+ */
 export function GeminiSidebar({
   state: propState,
   setState: propSetState,

@@ -79,6 +79,12 @@ interface ReconstructedItem {
   reconstructedAt: string;
 }
 
+/**
+ * Splits a preset name into its primary title and supplemental metadata.
+ *
+ * @param name - The preset name to parse
+ * @returns The parsed title and metadata
+ */
 function presetDisplayName(name: string): { title: string; meta: string } {
   const parts = name
     .split(" · ")
@@ -90,6 +96,12 @@ function presetDisplayName(name: string): { title: string; meta: string } {
   return { title: name, meta: "" };
 }
 
+/**
+ * Renders the model source configuration and Olive recipe management panel.
+ *
+ * @param state - Optional pipeline state; defaults to the pipeline store state.
+ * @param setState - Optional state updater; defaults to the pipeline store updater.
+ */
 export function InputEnvironmentPanel({
   state: propState,
   setState: propSetState,

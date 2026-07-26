@@ -56,6 +56,9 @@ const SECTIONS: { id: ActiveView; step: string; label: string; desc: string; ico
   },
 ];
 
+/**
+ * Renders the Olive Studio recipe builder dashboard.
+ */
 function Dashboard() {
   const [activeView, setActiveView] = useState<ActiveView>("input");
   const [isOliveRunning, setIsOliveRunning] = useState(false);
