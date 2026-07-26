@@ -139,6 +139,8 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
           }
           return null;
         },
+        autofix: { passes: { quantPrecision: "int4", quantMethod: "awq" } },
+        actionLabel: "Switch to AWQ INT4",
       },
     ];
   }
@@ -153,6 +155,8 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
           }
           return null;
         },
+        autofix: { passes: { quantMethod: "awq" } },
+        actionLabel: "Switch to AWQ",
       },
       {
         name: "TensorRT prefers AWQ INT4 for LLMs",
@@ -162,6 +166,8 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
           }
           return null;
         },
+        autofix: { passes: { quantPrecision: "int4" } },
+        actionLabel: "Switch to INT4",
       },
       {
         name: "TensorRT engine builds are slow",
@@ -171,6 +177,8 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
           }
           return null;
         },
+        autofix: { passes: { quantMethod: "awq" } },
+        actionLabel: "Switch to AWQ",
       },
     ];
   }
@@ -239,6 +247,8 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
           }
           return null;
         },
+        autofix: { passes: { quantPrecision: "int8" } },
+        actionLabel: "Switch to INT8",
       },
     ];
   }

@@ -2,10 +2,11 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](package.json)
+[![pnpm](https://img.shields.io/badge/package%20manager-pnpm%2010.8.0-f69203)](https://pnpm.io)
 [![CI](https://github.com/tonythethompson/Olive-Studio/actions/workflows/ci.yml/badge.svg)](https://github.com/tonythethompson/Olive-Studio/actions/workflows/ci.yml)
 
 **A visual recipe builder and local runner for [Microsoft Olive](https://github.com/microsoft/Olive).**  
-Author ONNX optimization pipelines — conversion, quantization, pruning, LoRA, and graph transforms — then execute them on your hardware with live logs, dependency auto-install, and validation before the run starts.
+Author ONNX optimization pipelines, then execute them on your hardware with live logs, dependency auto-install, and validation before the run starts.
 
 > **Local-first.** No cloud account required for optimization runs. Optional AI Copilot uses your own API keys.
 
@@ -17,50 +18,56 @@ Author ONNX optimization pipelines — conversion, quantization, pruning, LoRA, 
 
 ### Guided pipeline (3 steps)
 
-1. **Model source** — Hugging Face model ID, local files, Azure ML path, or a starter recipe from the curated catalog.
-2. **Hardware** — Pick an execution provider; the app probes ONNX Runtime and surfaces only what your machine can run.
-3. **Recipe & run** — Edit passes in a graph or JSON view, validate, execute live, export, or queue batch jobs.
+1. **Model source**: Hugging Face model ID, local files, Azure ML path, or a starter recipe from the curated GitHub catalog.
+2. **Hardware**: Pick an execution provider; the app probes ONNX Runtime and local drivers, then surfaces only what your machine can run.
+3. **Recipe & run**: Edit passes in a graph or JSON view, validate, execute live, queue batch jobs, or export.
 
 ### Optimization passes
 
-| Pass | What it does |
-|------|----------------|
-| **Graph conversion** | PyTorch → ONNX (or OpenVINO IR on Intel EP) |
-| **Quantization** | PTQ (static ONNX), AWQ (`AutoAWQQuantizer`), precision INT8/INT4/FP16 |
-| **Pruning** | Magnitude, SparseGPT, Wanda — structured or unstructured |
-| **ORT transforms** | Transformer-specific ONNX Runtime optimizations |
-| **PEFT** | LoRA / QLoRA, including diffusion LoRA |
-| **Model splitting** | Shard large models across devices |
+| Pass                 | What it does                                                               |
+| -------------------- | -------------------------------------------------------------------------- |
+| **Graph conversion** | PyTorch / TensorFlow / JAX → ONNX, OpenVINO IR, QNN context, or TensorRT   |
+| **Quantization**     | PTQ, AWQ, QAT, GPTQ, HQQ, RTN, SpinQuant, and QuaRot across INT8/INT4/FP16 |
+| **Pruning**          | Magnitude, SparseGPT, Wanda: structured or unstructured                    |
+| **ORT transforms**   | Transformer-specific ONNX Runtime graph optimizations                      |
+| **PEFT**             | LoRA / QLoRA, including diffusion LoRA                                     |
+| **Model splitting**  | Shard large models across devices                                          |
 
-Pass combinations are checked against your execution provider (e.g. AWQ requires GPU, OpenVINO IR requires OpenVINO EP, QAT conflicts with splitting).
+Pass combinations are checked against your execution provider (for example, AWQ needs a GPU, OpenVINO IR needs OpenVINO, QAT conflicts with splitting).
 
 ### Execution providers
 
-| Provider | Target hardware |
-|----------|-----------------|
-| `CPUExecutionProvider` | Broad compatibility |
-| `CUDAExecutionProvider` | NVIDIA GPUs |
-| `TensorrtExecutionProvider` | NVIDIA datacenter / full TensorRT SDK |
-| `NvTensorRTRTXExecutionProvider` | Consumer GeForce RTX (TensorRT-RTX) |
-| `OpenVINOExecutionProvider` | Intel CPU / GPU / NPU |
-| `QNNExecutionProvider` | Qualcomm Snapdragon NPU |
-| `ROCMExecutionProvider` | AMD GPUs |
+| Provider                         | Target hardware                       |
+| -------------------------------- | ------------------------------------- |
+| `CPUExecutionProvider`           | Broad compatibility                   |
+| `CUDAExecutionProvider`          | NVIDIA GPUs                           |
+| `TensorrtExecutionProvider`      | NVIDIA datacenter / full TensorRT SDK |
+| `NvTensorRTRTXExecutionProvider` | Consumer GeForce RTX (TensorRT-RTX)   |
+| `OpenVINOExecutionProvider`      | Intel CPU / GPU / NPU                 |
+| `QNNExecutionProvider`           | Qualcomm Snapdragon NPU               |
+| `ROCMExecutionProvider`          | AMD GPUs                              |
+| `WebGpuExecutionProvider`        | In-browser GPU via ONNX Runtime Web   |
 
 ### Runtime intelligence
 
-- **Hardware probe** — Detects available ORT providers and recommends a default.
-- **VRAM estimates** — Rough memory guidance per pass and provider.
-- **Recipe validation** — Structural schema, pipeline compatibility, and Olive preflight (`--list_required_packages`) before spawn.
-- **Auto dependency install** — On first run, creates `.venv/`, installs `olive-ai`, pins `onnxruntime-gpu`, and pulls CUDA/cuDNN/TensorRT packages when a GPU recipe needs them.
-- **GPU launcher** — Preloads CUDA DLLs and works around Windows EP-registration issues with Olive 0.13+.
+- **Hardware probe**: Detects available ORT providers and local NVIDIA / AMD / Intel / Qualcomm drivers, then recommends a default.
+- **VRAM estimates**: Per-pass and provider memory guidance.
+- **Recipe validation**: Structural schema, pipeline compatibility, pass-parameter checks, and Olive preflight (`--list_required_packages`) before spawn.
+- **Auto dependency install**: On first run, creates `.venv/`, installs `olive-ai`, pins `onnxruntime-gpu`, and pulls CUDA 12 runtime / TensorRT / TensorRT-RTX packages when a GPU recipe needs them.
+- **GPU launcher**: Preloads CUDA DLLs and works around Windows EP-registration issues with Olive 0.13+.
+- **In-browser validation**: Smoke-test exported ONNX models in the browser with WebGPU or CPU.
+- **WebGPU benchmark**: Measure browser GPU inference performance.
+- **Batch queue**: Run and track multiple jobs with shared validation rules.
+- **Diagnosis history**: Track MCP-assisted troubleshooting suggestions across sessions.
+- **MCP diagnostics**: Query the bundled Olive MCP server for pass guidance, troubleshooting, and error workarounds.
 
 ### Developer experience
 
-- **Recipe graph** — Visual pass pipeline with per-pass inspectors.
-- **JSON editor** — Full Olive recipe export/import.
-- **Batch queue** — Run multiple jobs with shared validation rules.
-- **ONNX Runtime Web/Mobile export helpers** — Starter configs for OWR deployment.
-- **AI Copilot** (optional) — Recipe Q&A and advisory review via Gemini, OpenAI, Anthropic, or Mistral.
+- **Recipe graph**: Visual pass pipeline with per-pass inspectors and conflict banners.
+- **JSON editor**: Full Olive recipe export/import.
+- **Export helpers**: Starter configs for ONNX Runtime Web / Mobile deployment.
+- **AI Copilot** (optional): Recipe Q&A, advisory review, and state analysis via Gemini, OpenAI, Anthropic, Mistral, xAI, OpenRouter, Groq, Together, or local / Ollama endpoints.
+- **Storybook**: Component development and visual testing.
 
 ---
 
@@ -69,8 +76,9 @@ Pass combinations are checked against your execution provider (e.g. AWQ requires
 ### Prerequisites
 
 - **Node.js** 18+ (20+ recommended)
+- **pnpm** 10.8.0+ (the project uses `packageManager: pnpm@10.8.0`; `npm install` is blocked)
 - **Python** 3.9+ on `PATH` (used for `olive run`)
-- **Optional:** NVIDIA / Intel / Qualcomm tooling for GPU or NPU recipes
+- **Optional:** NVIDIA / Intel / Qualcomm / AMD tooling for GPU or NPU recipes
 - **Optional:** [Hugging Face token](https://huggingface.co/settings/tokens) for gated models
 
 ### Install and run
@@ -78,19 +86,19 @@ Pass combinations are checked against your execution provider (e.g. AWQ requires
 ```bash
 git clone https://github.com/tonythethompson/Olive-Studio.git
 cd Olive-Studio
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
-Open **http://localhost:3000**
+Open **http://localhost:3000**.
 
 On the first **Execute Live** or batch run, the server creates `.venv/` in the project root and installs Olive automatically.
 
 ### Production build
 
 ```bash
-npm run build
-npm run start
+pnpm build
+pnpm start
 ```
 
 Or use the CLI entrypoint after build:
@@ -121,11 +129,17 @@ npx olive-studio
 
 Create `.env` or `.env.local` in the project root:
 
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `GEMINI_API_KEY` or `GOOGLE_API_KEY` | No | Gemini for AI Copilot / AI Review |
-| `HF_TOKEN` | No | Hugging Face token passed to Olive runs |
-| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY` | No | Alternative AI providers |
+| Variable                                                      | Required | Purpose                                 |
+| ------------------------------------------------------------- | -------- | --------------------------------------- |
+| `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `GOOGLE_GENAI_API_KEY` | No       | Gemini for AI Copilot / AI Review       |
+| `HF_TOKEN`                                                    | No       | Hugging Face token passed to Olive runs |
+| `OPENAI_API_KEY`                                              | No       | OpenAI / OpenAI-compatible providers    |
+| `ANTHROPIC_API_KEY`                                           | No       | Anthropic Claude                        |
+| `MISTRAL_API_KEY`                                             | No       | Mistral                                 |
+| `XAI_API_KEY`                                                 | No       | xAI Grok                                |
+| `OPENROUTER_API_KEY`                                          | No       | OpenRouter                              |
+| `GROQ_API_KEY`                                                | No       | Groq                                    |
+| `TOGETHER_API_KEY`                                            | No       | Together AI                             |
 
 You can also set AI credentials in-app under **AI Copilot → Settings**.
 
@@ -135,23 +149,33 @@ You can also set AI credentials in-app under **AI Copilot → Settings**.
 
 For CUDA / TensorRT recipes on Windows or Linux:
 
-- The server pins a stable **onnxruntime-gpu** build and installs **nvidia-cudnn-cu12** and related CUDA 12 runtime wheels into `.venv`.
+- The server pins `onnxruntime-gpu==1.26.0` and installs the matching CUDA 12 runtime wheels (`nvidia-cudnn-cu12`, `nvidia-cublas-cu12`, `nvidia-cuda-runtime-cu12`, and related packages) into `.venv`.
 - **Classic TensorRT** (`tensorrt==10.9.0.34`) is installed when a recipe targets `TensorrtExecutionProvider`.
-- **TensorRT RTX** (`tensorrt-rtx` pip) is installed for `NvTensorRTRTXExecutionProvider` recipes.
-- Restart `npm run dev` after server-side dependency changes so PATH and the GPU launcher pick up new packages.
+- **TensorRT RTX** (`tensorrt-rtx`) is installed for `NvTensorRTRTXExecutionProvider` recipes.
+- Restart `pnpm dev` after server-side dependency changes so PATH and the GPU launcher pick up new packages.
 
 ---
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Vite + Express development server |
-| `npm run build` | Production frontend + server bundle |
-| `npm run start` | Run `dist/server.cjs` |
-| `npm run lint` | Typecheck (`tsc --noEmit`) |
-| `npm run validate:recipe` | Recipe builder + schema smoke tests |
-| `npm run generate:recipes` | Regenerate catalog from microsoft/olive-recipes |
+| Command                 | Description                                     |
+| ----------------------- | ----------------------------------------------- |
+| `pnpm dev`              | Vite + Express development server               |
+| `pnpm build`            | Production frontend + server bundle             |
+| `pnpm start`            | Run `dist/server.cjs`                           |
+| `pnpm test`             | Run Vitest unit tests                           |
+| `pnpm test:coverage`    | Run Vitest with coverage                        |
+| `pnpm test:watch`       | Run Vitest in watch mode                        |
+| `pnpm lint`             | TypeScript typecheck and ESLint                 |
+| `pnpm lint:quick`       | Fast lint with Oxlint                           |
+| `pnpm validate:recipe`  | Recipe builder + schema smoke tests             |
+| `pnpm generate:recipes` | Regenerate catalog from microsoft/olive-recipes |
+| `pnpm deepcheck`        | Typecheck + Prettier + ESLint                   |
+| `pnpm format`           | Format TS/TSX with Prettier                     |
+| `pnpm format:check`     | Check Prettier formatting                       |
+| `pnpm a11y:scan`        | Accessibility scan with Python tool             |
+| `pnpm storybook`        | Start Storybook dev server                      |
+| `pnpm build-storybook`  | Build static Storybook                          |
 
 ---
 
@@ -159,11 +183,25 @@ For CUDA / TensorRT recipes on Windows or Linux:
 
 Olive Studio validates at several layers so bad recipes fail fast:
 
-1. **Pipeline compatibility** — `src/lib/pipelineValidation.ts` (pass ↔ EP rules, auto-sanitize)
-2. **Recipe structure** — `src/lib/oliveRecipeSchema.ts`
-3. **Single builder** — `src/lib/recipePipeline.ts` (`buildRecipeFromState`)
-4. **Server preflight** — JSON schema + `olive run --list_required_packages`
-5. **AI Review** (optional) — `POST /api/ai/validate`; advisory only
+1. **Pipeline compatibility**: `src/lib/pipelineValidation.ts` (pass ↔ EP rules, auto-sanitize)
+2. **Recipe structure**: `src/lib/oliveRecipeSchema.ts`
+3. **Single builder**: `src/lib/recipePipeline.ts` (`buildRecipeFromState`)
+4. **Server preflight**: JSON schema + `olive run --list_required_packages`
+5. **In-browser validation**: Quick smoke test of exported ONNX models in the browser
+6. **AI Review** (optional): `POST /api/ai/validate`; advisory only
+7. **MCP diagnostics**: `POST /api/mcp/tool` for Olive MCP server-assisted troubleshooting
+
+---
+
+## MCP integration
+
+The repository includes `olive-mcp-server/`, a Python MCP server that exposes Olive pass, hardware, troubleshooting, and compatibility tools.
+
+- `.mcp.json` wires the server to Claude via `olive-mcp-server/run.py`.
+- `server.ts` exposes `POST /api/mcp/tool` so the web UI can proxy tool calls.
+- `MCPDiagnosticCard` renders MCP troubleshooting results inside the recipe workspace.
+
+See [olive-mcp-server/README.md](olive-mcp-server/README.md) for setup and tool details.
 
 ---
 
@@ -173,10 +211,12 @@ Olive Studio validates at several layers so bad recipes fail fast:
 Olive-Studio/
 ├── src/                    # React UI + shared recipe logic
 │   ├── components/         # Panels, recipe graph, inspectors
-│   ├── lib/                # Recipe builder, validation, hardware probe
+│   ├── lib/                # Recipe builder, validation, hardware probe, MCP mapping
 │   └── data/               # Generated olive-recipes catalog
-├── server.ts               # Express API, Olive spawn, SSE logs
+├── server.ts               # Express API, Olive spawn, SSE logs, AI endpoints, MCP proxy
+├── olive-mcp-server/       # Python MCP server for Olive guidance
 ├── scripts/                # Catalog generator, GPU launcher, smoke tests
+├── bin/                    # Production CLI entrypoint
 └── .venv/                  # Created on first Olive run (gitignored)
 ```
 
@@ -187,7 +227,7 @@ Olive-Studio/
 The **Starter Curated** tab lazy-loads recipes from GitHub. Device tags on cards are folder-inferred. After upstream catalog changes:
 
 ```bash
-npm run generate:recipes
+pnpm run generate:recipes
 ```
 
 ---
@@ -196,8 +236,12 @@ npm run generate:recipes
 
 GitHub Actions runs on push/PR to `main` / `master`:
 
-- `npm run lint` (TypeScript)
-- `npm run validate:recipe` (recipe builder smoke test)
+- `pnpm install --frozen-lockfile`
+- `pnpm audit --audit-level high`
+- `pnpm lint`
+- `pnpm test`
+- `pnpm validate:recipe`
+- CodeQL analysis
 
 See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
@@ -211,9 +255,9 @@ Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 
 ## Related projects
 
-- [Microsoft Olive](https://github.com/microsoft/Olive) — optimization engine
-- [microsoft/olive-recipes](https://github.com/microsoft/olive-recipes) — official recipe catalog
-- [ONNX Runtime](https://onnxruntime.ai/) — inference runtime
+- [Microsoft Olive](https://github.com/microsoft/Olive): optimization engine
+- [microsoft/olive-recipes](https://github.com/microsoft/olive-recipes): official recipe catalog
+- [ONNX Runtime](https://onnxruntime.ai/): inference runtime
 
 ---
 

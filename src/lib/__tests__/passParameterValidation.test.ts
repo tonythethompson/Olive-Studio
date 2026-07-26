@@ -141,6 +141,55 @@ describe("QNN parameter validation", () => {
     const warnings = validatePassParameters(state, ["QNNQuantization"]);
     expect(warnings.length).toBe(0);
   });
+
+  it("symmetric warning includes AWQ symmetric autofix with correct actionLabel", () => {
+    const state = baseState({
+      ...withProvider("QNNExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int8",
+        quantMethod: "awq",
+        awqSym: false,
+      },
+    });
+    const warnings = validatePassParameters(state, ["QNNQuantization"]);
+    const symWarning = warnings.find((w) => w.title.includes("symmetric"));
+    expect(symWarning).toBeDefined();
+    expect(symWarning!.actionLabel).toBe("Enable AWQ symmetric");
+    expect(symWarning!.autofix).toEqual({ passes: { quantMethod: "awq", awqSym: true } });
+  });
+
+  it("INT4 preference warning includes INT4 autofix with correct actionLabel", () => {
+    const state = baseState({
+      ...withProvider("QNNExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int8",
+        quantMethod: "awq",
+      },
+    });
+    const warnings = validatePassParameters(state, ["QNNQuantization"]);
+    const int4Warning = warnings.find((w) => w.title.includes("prefers INT4"));
+    expect(int4Warning).toBeDefined();
+    expect(int4Warning!.actionLabel).toBe("Switch to INT4");
+    expect(int4Warning!.autofix).toEqual({ passes: { quantPrecision: "int4" } });
+  });
+
+  it("OnnxQuantization symmetric warning includes AWQ symmetric autofix with correct actionLabel", () => {
+    const state = baseState({
+      ...withProvider("QNNExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int8",
+        quantMethod: "ptq",
+      },
+    });
+    const warnings = validatePassParameters(state, ["OnnxQuantization"]);
+    const symWarning = warnings.find((w) => w.title.includes("per-channel"));
+    expect(symWarning).toBeDefined();
+    expect(symWarning!.actionLabel).toBe("Enable AWQ symmetric");
+    expect(symWarning!.autofix).toEqual({ passes: { quantMethod: "awq", awqSym: true } });
+  });
 });
 
 // ── NVIDIA rules ──────────────────────────────────────────────────
@@ -171,6 +220,22 @@ describe("NVIDIA parameter validation", () => {
     });
     const warnings = validatePassParameters(state, ["OnnxQuantization"]);
     expect(warnings.length).toBe(0);
+  });
+
+  it("PTQ INT8 warning includes AWQ INT4 autofix with correct actionLabel", () => {
+    const state = baseState({
+      ...withProvider("CUDAExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int8",
+        quantMethod: "ptq",
+      },
+    });
+    const warnings = validatePassParameters(state, ["OnnxQuantization"]);
+    const ptqWarning = warnings.find((w) => w.title.includes("prefers AWQ INT4"));
+    expect(ptqWarning).toBeDefined();
+    expect(ptqWarning!.actionLabel).toBe("Switch to AWQ INT4");
+    expect(ptqWarning!.autofix).toEqual({ passes: { quantPrecision: "int4", quantMethod: "awq" } });
   });
 });
 
@@ -245,6 +310,21 @@ describe("CPU parameter validation", () => {
     const warnings = validatePassParameters(state, ["OnnxQuantization"]);
     expect(warnings.length).toBe(0);
   });
+
+  it("INT4 warning includes INT8 autofix with correct actionLabel", () => {
+    const state = baseState({
+      ...withProvider("CPUExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int4",
+      },
+    });
+    const warnings = validatePassParameters(state, ["OnnxQuantization"]);
+    const int4Warning = warnings.find((w) => w.title.includes("slower than GPU"));
+    expect(int4Warning).toBeDefined();
+    expect(int4Warning!.actionLabel).toBe("Switch to INT8");
+    expect(int4Warning!.autofix).toEqual({ passes: { quantPrecision: "int8" } });
+  });
 });
 
 // ── TensorRT rules ────────────────────────────────────────────────
@@ -303,6 +383,54 @@ describe("TensorRT parameter validation", () => {
     const warnings = validatePassParameters(state, ["OnnxQuantization"]);
     expect(warnings.length).toBe(0);
   });
+
+  it("PTQ INT8 warning includes AWQ autofix with correct actionLabel", () => {
+    const state = baseState({
+      ...withProvider("TensorrtExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int8",
+        quantMethod: "ptq",
+      },
+    });
+    const warnings = validatePassParameters(state, ["OnnxQuantization"]);
+    const qdqWarning = warnings.find((w) => w.title.includes("QDQ format"));
+    expect(qdqWarning).toBeDefined();
+    expect(qdqWarning!.actionLabel).toBe("Switch to AWQ");
+    expect(qdqWarning!.autofix).toEqual({ passes: { quantMethod: "awq" } });
+  });
+
+  it("AWQ INT8 warning includes INT4 autofix with correct actionLabel", () => {
+    const state = baseState({
+      ...withProvider("TensorrtExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int8",
+        quantMethod: "awq",
+      },
+    });
+    const warnings = validatePassParameters(state, ["OnnxQuantization"]);
+    const int4Warning = warnings.find((w) => w.title.includes("prefers AWQ INT4"));
+    expect(int4Warning).toBeDefined();
+    expect(int4Warning!.actionLabel).toBe("Switch to INT4");
+    expect(int4Warning!.autofix).toEqual({ passes: { quantPrecision: "int4" } });
+  });
+
+  it("slow build warning includes AWQ autofix with correct actionLabel", () => {
+    const state = baseState({
+      ...withProvider("TensorrtExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int8",
+        quantMethod: "ptq",
+      },
+    });
+    const warnings = validatePassParameters(state, ["OnnxQuantization"]);
+    const buildWarning = warnings.find((w) => w.title.includes("engine builds are slow"));
+    expect(buildWarning).toBeDefined();
+    expect(buildWarning!.actionLabel).toBe("Switch to AWQ");
+    expect(buildWarning!.autofix).toEqual({ passes: { quantMethod: "awq" } });
+  });
 });
 
 // ── TensorRT RTX rules ──────────────────────────────────────────
@@ -347,6 +475,38 @@ describe("TensorRT RTX parameter validation", () => {
     });
     const warnings = validatePassParameters(state, ["OnnxQuantization"]);
     expect(warnings.length).toBe(0);
+  });
+
+  it("INT8 warning includes AWQ INT4 autofix with correct actionLabel", () => {
+    const state = baseState({
+      ...withProvider("NvTensorRTRTXExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int8",
+        quantMethod: "awq",
+      },
+    });
+    const warnings = validatePassParameters(state, ["OnnxQuantization"]);
+    const int4Warning = warnings.find((w) => w.title.includes("prefers INT4 AWQ"));
+    expect(int4Warning).toBeDefined();
+    expect(int4Warning!.actionLabel).toBe("Switch to AWQ INT4");
+    expect(int4Warning!.autofix).toEqual({ passes: { quantPrecision: "int4", quantMethod: "awq" } });
+  });
+
+  it("PTQ INT8 warning includes AWQ autofix with correct actionLabel", () => {
+    const state = baseState({
+      ...withProvider("NvTensorRTRTXExecutionProvider"),
+      passes: {
+        ...baseState().passes,
+        quantPrecision: "int8",
+        quantMethod: "ptq",
+      },
+    });
+    const warnings = validatePassParameters(state, ["OnnxQuantization"]);
+    const qdqWarning = warnings.find((w) => w.title.includes("QDQ format"));
+    expect(qdqWarning).toBeDefined();
+    expect(qdqWarning!.actionLabel).toBe("Switch to AWQ");
+    expect(qdqWarning!.autofix).toEqual({ passes: { quantMethod: "awq" } });
   });
 });
 
