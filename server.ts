@@ -232,6 +232,25 @@ function detectEnvProvider(): ProviderConfig | null {
       baseUrl: "https://api.together.xyz/v1",
     };
   }
+  // Copilot-capable token (IDE OAuth / GITHUB_COPILOT_TOKEN preferred over classic PAT)
+  const copilotKey = readEnvApiKey("GITHUB_COPILOT_TOKEN", "COPILOT_GITHUB_TOKEN", "GITHUB_TOKEN");
+  if (copilotKey) {
+    return {
+      provider: "copilot",
+      apiKey: copilotKey,
+      model: "gpt-4o",
+      baseUrl: "https://api.githubcopilot.com",
+    };
+  }
+  const kiloKey = readEnvApiKey("KILO_API_KEY", "KILOCODE_API_KEY");
+  if (kiloKey) {
+    return {
+      provider: "kilocode",
+      apiKey: kiloKey,
+      model: "anthropic/claude-sonnet-4",
+      baseUrl: "https://api.kilo.ai/api/gateway",
+    };
+  }
   return null;
 }
 
@@ -273,25 +292,81 @@ async function callGemini(
   return text;
 }
 
+/** Default base URLs for providers that use an OpenAI-style chat completions API. */
+function resolveOpenAiCompatBase(cfg: ProviderConfig): string {
+  if (cfg.baseUrl?.trim()) return cfg.baseUrl.replace(/\/+$/, "");
+  switch (cfg.provider) {
+    case "mistral":
+      return "https://api.mistral.ai/v1";
+    case "xai":
+      return "https://api.x.ai/v1";
+    case "openrouter":
+      return "https://openrouter.ai/api/v1";
+    case "groq":
+      return "https://api.groq.com/openai/v1";
+    case "together":
+      return "https://api.together.xyz/v1";
+    case "kilocode":
+      // Official Kilo AI Gateway (OpenAI-compatible chat completions)
+      return "https://api.kilo.ai/api/gateway";
+    case "chatgpt-sub":
+    case "openai":
+    default:
+      return "https://api.openai.com/v1";
+  }
+}
+
+/**
+ * Whether this provider reliably supports OpenAI response_format=json_object.
+ * Local / gateway models often reject it — for those we force JSON via the system prompt only.
+ */
+function supportsJsonResponseFormat(cfg: ProviderConfig): boolean {
+  return (
+    cfg.provider === "openai" ||
+    cfg.provider === "chatgpt-sub" ||
+    cfg.provider === "mistral" ||
+    cfg.provider === "xai" ||
+    cfg.provider === "openrouter" ||
+    cfg.provider === "groq" ||
+    cfg.provider === "together"
+  );
+}
+
 async function callOpenAICompat(
   cfg: ProviderConfig,
   system: string,
   messages: AIChatMessage[],
   wantJson: boolean,
 ): Promise<string> {
-  const base =
-    cfg.baseUrl ?? (cfg.provider === "mistral" ? "https://api.mistral.ai/v1" : "https://api.openai.com/v1");
+  const base = resolveOpenAiCompatBase(cfg);
+  const sysText =
+    wantJson && !supportsJsonResponseFormat(cfg)
+      ? `${system}\n\nIMPORTANT: Respond with valid JSON only. No markdown fences, no text outside the JSON object.`
+      : system;
   const body: OpenAIChatRequestBody = {
     model: cfg.model,
     messages: [
-      { role: "system", content: system },
+      { role: "system", content: sysText },
       ...messages.map((m) => ({ role: m.role, content: m.content })),
     ],
   };
-  if (wantJson) body.response_format = { type: "json_object" };
+  if (wantJson && supportsJsonResponseFormat(cfg)) {
+    body.response_format = { type: "json_object" };
+  }
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${cfg.apiKey}`,
+    "Content-Type": "application/json",
+  };
+  // OpenRouter recommends these for ranking / debugging
+  if (cfg.provider === "openrouter") {
+    headers["HTTP-Referer"] = "https://github.com/tonythethompson/Olive-Studio";
+    headers["X-Title"] = "Olive Studio";
+  }
+
   const resp = await fetch(`${base}/chat/completions`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
   if (!resp.ok) {
@@ -300,6 +375,80 @@ async function callOpenAICompat(
   }
   const data = (await resp.json()) as OpenAIChatResponse;
   return data.choices?.[0]?.message?.content ?? "";
+}
+
+/**
+ * GitHub Copilot Chat-style completions (OpenAI-shaped body, Copilot-specific endpoint + headers).
+ *
+ * Endpoint used by IDE chat clients: POST https://api.githubcopilot.com/chat/completions
+ * (not /v1/...). Requires a Copilot-capable bearer token (IDE/device OAuth token — a plain
+ * classic GITHUB_TOKEN PAT is often insufficient). Third-party use of this surface may be
+ * restricted by GitHub ToS; intended for personal local tooling with the user's own sub.
+ */
+async function callGitHubCopilot(
+  cfg: ProviderConfig,
+  system: string,
+  messages: AIChatMessage[],
+  wantJson: boolean,
+): Promise<string> {
+  const base = (cfg.baseUrl?.trim() || "https://api.githubcopilot.com").replace(/\/+$/, "");
+  // Accept either https://api.githubcopilot.com or .../v1 and normalize to chat/completions root
+  const endpoint = base.endsWith("/v1")
+    ? `${base.slice(0, -3)}/chat/completions`
+    : `${base}/chat/completions`;
+
+  const sysText = wantJson
+    ? `${system}\n\nIMPORTANT: Respond with valid JSON only. No markdown fences, no text outside the JSON object.`
+    : system;
+
+  const body: OpenAIChatRequestBody = {
+    model: cfg.model || "gpt-4o",
+    messages: [
+      { role: "system", content: sysText },
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+    ],
+  };
+
+  const resp = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${cfg.apiKey}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      // Required routing header used by official Copilot Chat clients
+      "Copilot-Integration-Id": "vscode-chat",
+      "Editor-Version": "vscode/1.98.2",
+      "Editor-Plugin-Version": "copilot-chat/0.26.7",
+      "User-Agent": "GitHubCopilotChat/0.26.7",
+      "Openai-Intent": "conversation-panel",
+      "X-Request-Id": crypto.randomUUID(),
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "");
+    let detail = resp.statusText;
+    try {
+      const err = JSON.parse(errText) as ApiErrorResponse;
+      detail = err.error?.message ?? (errText.slice(0, 400) || detail);
+    } catch {
+      if (errText) detail = errText.slice(0, 400);
+    }
+    if (resp.status === 401 || resp.status === 403) {
+      throw new Error(
+        `GitHub Copilot ${resp.status}: ${detail}. Use a Copilot session/OAuth token (not a plain classic PAT). Export from a logged-in IDE flow or set GITHUB_COPILOT_TOKEN / GITHUB_TOKEN with Copilot access.`,
+      );
+    }
+    throw new Error(`GitHub Copilot ${resp.status}: ${detail}`);
+  }
+
+  const data = (await resp.json()) as OpenAIChatResponse;
+  const text = data.choices?.[0]?.message?.content ?? "";
+  if (!text.trim()) {
+    throw new Error("GitHub Copilot returned an empty response.");
+  }
+  return text;
 }
 
 async function callAnthropic(
@@ -345,23 +494,27 @@ async function callAI(system: string, messages: AIChatMessage[], wantJson = fals
   const cfg = getAiProvider();
   if (!cfg)
     throw new Error(
-      "No AI provider configured. Add an API key in the AI Copilot settings or set GEMINI_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY / MISTRAL_API_KEY in your environment.",
+      "No AI provider configured. Add an API key in Assistant → Settings, or set GEMINI_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY / MISTRAL_API_KEY / XAI_API_KEY / OPENROUTER_API_KEY / GROQ_API_KEY / TOGETHER_API_KEY / GITHUB_COPILOT_TOKEN / KILO_API_KEY in the environment.",
     );
   switch (cfg.provider) {
     case "gemini":
       return callGemini(cfg, system, messages, wantJson);
     case "anthropic":
       return callAnthropic(cfg, system, messages, wantJson);
+    case "copilot":
+      return callGitHubCopilot(cfg, system, messages, wantJson);
+    case "devin":
+      throw new Error(
+        "Devin does not expose a public OpenAI-compatible chat API for third-party apps. Use OpenAI, Anthropic, OpenRouter, or OpenAI-Compatible with a real endpoint instead.",
+      );
     case "openai":
+    case "chatgpt-sub": // OpenAI API key (platform credits) — not ChatGPT web session login
     case "mistral":
     case "openai-compat":
     case "xai":
     case "openrouter":
     case "groq":
     case "together":
-    case "chatgpt-sub":
-    case "copilot":
-    case "devin":
     case "kilocode":
       return callOpenAICompat(cfg, system, messages, wantJson);
     default:
@@ -2249,14 +2402,36 @@ app.post("/api/ai/provider", (req, res) => {
   if (!ALLOWED_AI_PROVIDERS.has(provider as ProviderConfig["provider"])) {
     return res.status(400).json({ error: `Invalid provider: ${provider}` });
   }
+  if (provider === "devin") {
+    return res.status(400).json({
+      error:
+        "Devin has no public chat completions API for third-party apps. Use OpenAI, OpenRouter, Kilo Gateway, or OpenAI-Compatible.",
+    });
+  }
   if (provider === "openai-compat" && !baseUrl?.trim()) {
     return res.status(400).json({ error: "baseUrl is required for OpenAI-compatible providers." });
   }
+  // Apply known default bases so session config works even if the UI omits baseUrl
+  const resolvedBase =
+    baseUrl?.trim() ||
+    (provider === "copilot"
+      ? "https://api.githubcopilot.com"
+      : provider === "kilocode"
+        ? "https://api.kilo.ai/api/gateway"
+        : provider === "xai"
+          ? "https://api.x.ai/v1"
+          : provider === "openrouter"
+            ? "https://openrouter.ai/api/v1"
+            : provider === "groq"
+              ? "https://api.groq.com/openai/v1"
+              : provider === "together"
+                ? "https://api.together.xyz/v1"
+                : undefined);
   runtimeAiProvider = {
     provider: provider as ProviderConfig["provider"],
     apiKey: key.trim(),
     model: model.trim(),
-    baseUrl: baseUrl?.trim() || undefined,
+    baseUrl: resolvedBase,
   };
   return res.json({
     ok: true,

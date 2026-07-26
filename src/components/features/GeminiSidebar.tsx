@@ -125,44 +125,44 @@ const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     category: "router",
     description: "Open-source model hosting & inference",
   },
-  // ── Subscription Services ────────────────────────────────────────────
+  // ── Subscription / gateway services ─────────────────────────────────
   {
     id: "chatgpt-sub",
-    name: "ChatGPT Subscription",
-    models: ["gpt-4o", "gpt-4o-mini"],
+    name: "OpenAI API (ChatGPT account)",
+    models: ["gpt-4o", "gpt-4o-mini", "o4-mini"],
     keyEnvVar: "OPENAI_API_KEY",
     docsUrl: "platform.openai.com/api-keys",
     category: "subscription",
-    description: "Use your ChatGPT Plus/Pro API credits",
+    description: "Platform API key (not ChatGPT web login). Same path as OpenAI.",
   },
   {
     id: "copilot",
     name: "GitHub Copilot",
-    models: ["gpt-4o", "gpt-4o-mini", "claude-3.5-sonnet"],
-    keyEnvVar: "GITHUB_TOKEN",
-    docsUrl: "github.com/settings/tokens",
-    baseUrl: "https://api.githubcopilot.com/v1",
+    models: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "claude-sonnet-4"],
+    keyEnvVar: "GITHUB_COPILOT_TOKEN or GITHUB_TOKEN",
+    docsUrl: "github.com/settings/copilot",
+    baseUrl: "https://api.githubcopilot.com",
     category: "subscription",
-    description: "Copilot Pro subscription API access",
-  },
-  {
-    id: "devin",
-    name: "Devin",
-    models: ["devin-latest"],
-    keyEnvVar: "DEVIN_API_KEY",
-    docsUrl: "devin.ai/settings",
-    baseUrl: "https://api.devin.ai/v1",
-    category: "subscription",
-    description: "Cognition AI's autonomous coding agent",
+    description: "Copilot chat endpoint (session/OAuth token; classic PAT often fails)",
   },
   {
     id: "kilocode",
-    name: "Kilo Code",
-    models: [],
-    keyEnvVar: "",
-    docsUrl: "kilocode.ai",
+    name: "Kilo Gateway",
+    models: ["anthropic/claude-sonnet-4", "openai/gpt-4o", "google/gemini-2.5-flash", "deepseek/deepseek-r1"],
+    keyEnvVar: "KILO_API_KEY or KILOCODE_API_KEY",
+    docsUrl: "kilo.ai/docs/gateway",
+    baseUrl: "https://api.kilo.ai/api/gateway",
     category: "subscription",
-    description: "AI coding assistant — uses your own API key",
+    description: "Official Kilo AI Gateway (OpenAI-compatible)",
+  },
+  {
+    id: "devin",
+    name: "Devin (unsupported)",
+    models: ["n/a"],
+    keyEnvVar: "",
+    docsUrl: "devin.ai",
+    category: "subscription",
+    description: "No public chat API for third-party apps — use OpenRouter or OpenAI-Compatible",
   },
   // ── Custom / Self-Hosted ─────────────────────────────────────────────
   {
@@ -849,13 +849,19 @@ export function GeminiSidebar({
   };
 
   const handleSaveProvider = async () => {
+    if (settingsProvider === "devin") {
+      setProviderSaveError(
+        "Devin has no public chat completions API for third-party apps. Choose OpenAI, OpenRouter, Kilo Gateway, or OpenAI-Compatible instead.",
+      );
+      return;
+    }
     const key = settingsApiKey.trim();
     const model = isCompatMode ? customModel.trim() : settingsModel;
     if (!key) {
       setProviderSaveError("Enter an API key.");
       return;
     }
-    if (!model) {
+    if (!model || model === "n/a") {
       setProviderSaveError(isCompatMode ? "Enter a model name." : "Select a model.");
       return;
     }
