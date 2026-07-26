@@ -1362,7 +1362,7 @@ ${
           }
         />
         <CardContent className="flex flex-col gap-4 p-4">
-          <VramEstimateBanner compact />
+          <VramEstimateBanner state={state} compact />
           {schema.errors.length > 0 && (
             <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3 space-y-2">
               {schema.errors.map((error) => (

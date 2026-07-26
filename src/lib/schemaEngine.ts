@@ -94,10 +94,14 @@ function ensureKbLoaded(): void {
   PARAM_SCHEMAS = buildParamSchemas(kbData);
 }
 
+function isEmptyValue(v: unknown): boolean {
+  return v === null || v === undefined || v === "";
+}
+
 function hasRequiredParam(config: Record<string, unknown>, reqParam: string): boolean {
-  if (reqParam in config) return true;
+  if (reqParam in config && !isEmptyValue(config[reqParam])) return true;
   const alternatives = REQUIRED_PARAM_ALTERNATIVES[reqParam];
-  return alternatives?.some((alt) => alt in config) ?? false;
+  return alternatives?.some((alt) => alt in config && !isEmptyValue(config[alt])) ?? false;
 }
 
 /**
