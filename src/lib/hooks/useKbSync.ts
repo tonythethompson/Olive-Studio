@@ -55,7 +55,8 @@ export function useKbSync() {
     try {
       const headers: Record<string, string> = {};
       // Optional: set VITE_SYNC_KB_TOKEN when the server requires SYNC_KB_TOKEN.
-      const syncToken = import.meta.env.VITE_SYNC_KB_TOKEN as string | undefined;
+      const metaEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+      const syncToken = metaEnv?.VITE_SYNC_KB_TOKEN;
       if (syncToken) {
         headers["x-sync-token"] = syncToken;
       }

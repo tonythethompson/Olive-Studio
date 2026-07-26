@@ -77,9 +77,11 @@ Pass combinations are checked against your execution provider (for example, AWQ 
 
 - **Node.js** 22+ (pnpm 11 requirement)
 - **pnpm** 11.17.0+ (the project uses `packageManager: pnpm@11.17.0`; `npm install` is blocked)
-- **Python** 3.9+ on `PATH` (used for `olive run`)
+- **Python** 3.9+ (on `PATH`, or set from the app header **Runtime** control if missing)
 - **Optional:** NVIDIA / Intel / Qualcomm / AMD tooling for GPU or NPU recipes
 - **Optional:** [Hugging Face token](https://huggingface.co/settings/tokens) for gated models
+
+If Python or Olive is not on the system PATH, open **Runtime** in the app header: save a path to `python.exe`, and optionally **Add project .venv to user PATH** so terminals outside the app can find Olive too.
 
 ### Install and run
 

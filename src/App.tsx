@@ -8,6 +8,7 @@ import { LicenseNotice } from "@/components/LicenseNotice";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { KbSyncIndicator } from "@/components/features/KbSyncIndicator";
+import { RuntimeEnvControls } from "@/components/features/RuntimeEnvControls";
 import { cn } from "@/lib/utils";
 
 const BatchProcessingPanel = lazy(() =>
@@ -150,9 +151,10 @@ function Dashboard() {
       <div className="flex-1 flex min-w-0 overflow-hidden">
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
           <header className="h-12 flex items-center justify-between px-6 md:px-8 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 shrink-0">
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-slate-500">Optimization pipeline</span>
+            <div className="flex items-center gap-4 min-w-0">
+              <span className="text-sm text-slate-500 shrink-0">Optimization pipeline</span>
               <KbSyncIndicator />
+              <RuntimeEnvControls />
             </div>
             <button
               type="button"

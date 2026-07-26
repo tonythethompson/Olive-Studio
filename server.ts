@@ -500,11 +500,39 @@ function stopGpuMetricsTimer(job: OliveJob): void {
 
 // ─── Python / venv Helpers ────────────────────────────────────────────────────
 
+const STUDIO_CONFIG_DIR = path.join(process.cwd(), ".olive-studio");
+const STUDIO_CONFIG_PATH = path.join(STUDIO_CONFIG_DIR, "config.json");
+
+interface StudioConfig {
+  /** Absolute path to a system Python interpreter (optional override). */
+  systemPython?: string;
+}
+
+function readStudioConfig(): StudioConfig {
+  try {
+    if (!fs.existsSync(STUDIO_CONFIG_PATH)) return {};
+    return JSON.parse(fs.readFileSync(STUDIO_CONFIG_PATH, "utf-8")) as StudioConfig;
+  } catch {
+    return {};
+  }
+}
+
+function writeStudioConfig(patch: StudioConfig): StudioConfig {
+  fs.mkdirSync(STUDIO_CONFIG_DIR, { recursive: true });
+  const next = { ...readStudioConfig(), ...patch };
+  fs.writeFileSync(STUDIO_CONFIG_PATH, JSON.stringify(next, null, 2), "utf-8");
+  return next;
+}
+
 /** Returns the path to python inside the venv, or null if not resolvable */
 function getVenvPython(): string {
   return process.platform === "win32"
     ? path.join(VENV_DIR, "Scripts", "python.exe")
     : path.join(VENV_DIR, "bin", "python");
+}
+
+function getVenvScriptsDir(): string {
+  return process.platform === "win32" ? path.join(VENV_DIR, "Scripts") : path.join(VENV_DIR, "bin");
 }
 
 function getVenvPip(): string {
@@ -513,17 +541,63 @@ function getVenvPip(): string {
     : path.join(VENV_DIR, "bin", "pip");
 }
 
-/** Check whether python/python3 is available on PATH */
+async function isRunnablePython(candidate: string): Promise<boolean> {
+  try {
+    await execFileAsync(candidate, ["--version"], { timeout: 8_000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve a system Python for creating the project venv.
+ * Order: env OLIVE_STUDIO_PYTHON → saved config → PATH → common Windows installs.
+ */
 async function findSystemPython(): Promise<string | null> {
-  for (const cmd of ["python", "python3"]) {
-    try {
-      await execFileAsync(cmd, ["--version"]);
-      return cmd;
-    } catch {
-      /* not found */
+  const candidates: string[] = [];
+
+  const envPy = process.env.OLIVE_STUDIO_PYTHON?.trim();
+  if (envPy) candidates.push(envPy);
+
+  const cfgPy = readStudioConfig().systemPython?.trim();
+  if (cfgPy) candidates.push(cfgPy);
+
+  candidates.push("python", "python3");
+
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA ?? "";
+    const programFiles = process.env.ProgramFiles ?? "C:\\Program Files";
+    for (const ver of ["314", "313", "312", "311", "310", "39"]) {
+      if (localAppData) {
+        candidates.push(path.join(localAppData, "Programs", "Python", `Python${ver}`, "python.exe"));
+      }
+      candidates.push(path.join(programFiles, "Python" + ver, "python.exe"));
     }
   }
+
+  const seen = new Set<string>();
+  for (const c of candidates) {
+    if (!c || seen.has(c)) continue;
+    seen.add(c);
+    // Absolute paths must exist; bare commands rely on PATH
+    if ((c.includes("/") || c.includes("\\")) && !fs.existsSync(c)) continue;
+    if (await isRunnablePython(c)) return c;
+  }
   return null;
+}
+
+/** Prepend project .venv Scripts/bin (and optional python dir) so Olive works without system PATH. */
+function envWithVenvOnPath(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const dirs: string[] = [];
+  const scripts = getVenvScriptsDir();
+  if (fs.existsSync(scripts)) dirs.push(scripts);
+  const cfgPy = readStudioConfig().systemPython;
+  if (cfgPy) {
+    const dir = path.dirname(cfgPy);
+    if (fs.existsSync(dir)) dirs.push(dir);
+  }
+  return envWithPrependedPaths(base, dirs);
 }
 
 /**
@@ -535,7 +609,8 @@ async function ensureVenv(onLine: (line: string) => void): Promise<{ ok: boolean
   if (!systemPython) {
     return {
       ok: false,
-      error: "Python not found on PATH. Install Python 3.9+ to use Olive execution.",
+      error:
+        "Python not found. Install Python 3.9+, or set a path in the app (Runtime → Set Python), or set OLIVE_STUDIO_PYTHON.",
     };
   }
 
@@ -794,11 +869,136 @@ async function buildOliveRunEnvironment(
   provider: IHVProvider,
   base: NodeJS.ProcessEnv,
 ): Promise<NodeJS.ProcessEnv> {
+  // Always put project .venv on PATH so `olive` / scripts resolve without a system install.
+  let env = envWithVenvOnPath(base);
   if (!isGpuExecutionProvider(provider)) {
-    return base;
+    return env;
   }
   const libPaths = await getNativeGpuLibPaths(python);
-  return envWithPrependedPaths(base, libPaths);
+  env = envWithPrependedPaths(env, libPaths);
+  return env;
+}
+
+async function getRuntimeEnvStatus() {
+  const venvPython = getVenvPython();
+  const venvScripts = getVenvScriptsDir();
+  const venvExists = fs.existsSync(venvPython);
+  let oliveInstalled = false;
+  let oliveVersion: string | null = null;
+  if (venvExists) {
+    try {
+      const { stdout } = await execFileAsync(
+        venvPython,
+        ["-c", "import olive; print(getattr(olive, '__version__', 'unknown'))"],
+        { timeout: 15_000 },
+      );
+      oliveInstalled = true;
+      oliveVersion = stdout.trim() || "unknown";
+    } catch {
+      oliveInstalled = false;
+    }
+  }
+  const systemPython = await findSystemPython();
+  const cfg = readStudioConfig();
+  const pathKey = process.platform === "win32" ? "Path" : "PATH";
+  const userPath =
+    process.platform === "win32"
+      ? await (async () => {
+          try {
+            const { stdout } = await execFileAsync(
+              "powershell.exe",
+              ["-NoProfile", "-Command", "[Environment]::GetEnvironmentVariable('Path','User')"],
+              { timeout: 10_000 },
+            );
+            return stdout.trim();
+          } catch {
+            return "";
+          }
+        })()
+      : (process.env[pathKey] ?? "");
+  const venvOnUserPath =
+    Boolean(userPath) &&
+    userPath
+      .split(process.platform === "win32" ? ";" : ":")
+      .some((p) => path.resolve(p) === path.resolve(venvScripts));
+
+  return {
+    venvExists,
+    venvPython: venvExists ? venvPython : null,
+    venvScripts,
+    oliveInstalled,
+    oliveVersion,
+    systemPython,
+    configuredPython: cfg.systemPython ?? null,
+    venvOnUserPath,
+    platform: process.platform,
+    hint: !systemPython
+      ? "No system Python found. Set a python.exe path below (used to create .venv)."
+      : !venvExists
+        ? "Project .venv missing — first Execute Live will create it."
+        : !oliveInstalled
+          ? "olive-ai not in .venv — first Execute Live will install it."
+          : venvOnUserPath
+            ? "Runtime ready. Project .venv is on your user PATH."
+            : "Runtime ready inside the app. Optionally add .venv to user PATH for terminals.",
+  };
+}
+
+/** Permanently prepend project .venv Scripts/bin to the current user's PATH. */
+async function addVenvToUserPath(): Promise<{ ok: boolean; error?: string; already?: boolean }> {
+  const scripts = getVenvScriptsDir();
+  if (!fs.existsSync(scripts)) {
+    return {
+      ok: false,
+      error: "Project .venv not found yet. Run Execute Live once (or create the venv) first.",
+    };
+  }
+  const resolved = path.resolve(scripts);
+
+  if (process.platform === "win32") {
+    const ps = `
+$scripts = ${JSON.stringify(resolved)}
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+if ($null -eq $userPath) { $userPath = '' }
+$parts = $userPath -split ';' | Where-Object { $_ -ne '' }
+if ($parts | Where-Object { $_.TrimEnd('\\') -ieq $scripts.TrimEnd('\\') }) {
+  Write-Output 'ALREADY'
+  exit 0
+}
+$newPath = if ($userPath) { "$scripts;$userPath" } else { $scripts }
+[Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+Write-Output 'ADDED'
+`;
+    try {
+      const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-Command", ps], {
+        timeout: 15_000,
+      });
+      const line = stdout.trim();
+      if (line.includes("ALREADY")) return { ok: true, already: true };
+      // Also update this process so child spawns see it immediately
+      process.env.Path = envWithVenvOnPath(process.env).Path ?? process.env.Path;
+      return { ok: true, already: false };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: msg };
+    }
+  }
+
+  // POSIX: append export line to ~/.profile if missing
+  const profile = path.join(os.homedir(), ".profile");
+  const exportLine = `export PATH="${resolved}:$PATH"  # olive-studio .venv`;
+  try {
+    const existing = fs.existsSync(profile) ? fs.readFileSync(profile, "utf-8") : "";
+    if (existing.includes(resolved)) {
+      return { ok: true, already: true };
+    }
+    fs.appendFileSync(profile, `\n${exportLine}\n`, "utf-8");
+    process.env.PATH = envWithVenvOnPath(process.env).PATH ?? process.env.PATH;
+    return { ok: true, already: false };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
 }
 
 /** Olive RunConfig parse + package scan without starting optimization. */
@@ -1937,6 +2137,59 @@ app.post("/api/env/hf-token", (req, res) => {
 app.delete("/api/env/hf-token", (_req, res) => {
   runtimeHfToken = null;
   return res.json({ ok: true });
+});
+
+// ─── Runtime Python / PATH helpers (in-app fix when olive/python not on PATH) ─
+app.get("/api/env/runtime", async (_req, res) => {
+  try {
+    return res.json(await getRuntimeEnvStatus());
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: msg });
+  }
+});
+
+app.post("/api/env/python-path", async (req, res) => {
+  const raw = (req.body as { path?: string })?.path?.trim();
+  if (!raw) {
+    return res.status(400).json({ ok: false, error: "Provide an absolute path to python.exe / python." });
+  }
+  const resolved = path.resolve(raw);
+  if (!fs.existsSync(resolved)) {
+    return res.status(400).json({ ok: false, error: `File not found: ${resolved}` });
+  }
+  if (!(await isRunnablePython(resolved))) {
+    return res.status(400).json({
+      ok: false,
+      error: "That file did not run as Python (`python --version` failed).",
+    });
+  }
+  writeStudioConfig({ systemPython: resolved });
+  process.env.OLIVE_STUDIO_PYTHON = resolved;
+  return res.json({ ok: true, systemPython: resolved, ...(await getRuntimeEnvStatus()) });
+});
+
+app.delete("/api/env/python-path", async (_req, res) => {
+  const cfg = readStudioConfig();
+  delete cfg.systemPython;
+  fs.mkdirSync(STUDIO_CONFIG_DIR, { recursive: true });
+  fs.writeFileSync(STUDIO_CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf-8");
+  delete process.env.OLIVE_STUDIO_PYTHON;
+  return res.json({ ok: true, ...(await getRuntimeEnvStatus()) });
+});
+
+app.post("/api/env/add-venv-to-path", async (_req, res) => {
+  const result = await addVenvToUserPath();
+  if (!result.ok) {
+    return res.status(400).json(result);
+  }
+  return res.json({
+    ...result,
+    message: result.already
+      ? "Project .venv was already on your user PATH."
+      : "Added project .venv to your user PATH. Open a new terminal for it to apply outside this app.",
+    ...(await getRuntimeEnvStatus()),
+  });
 });
 
 // ─── GET/POST/DELETE /api/ai/provider ────────────────────────────────────────
