@@ -1641,8 +1641,8 @@ async function probeSystemHardware(): Promise<HardwareProbeResult> {
   } else if (nvidia?.gpus.length) {
     notes.push(
       tensorRtRtx?.detail
-        ? `TensorRT RTX not loadable: ${tensorRtRtx.detail}`
-        : "TensorRT RTX not installed — Olive will auto-install tensorrt-rtx on run when TRT RTX is the target.",
+        ? `TensorRT RTX plugin not ready (${tensorRtRtx.detail}). GPU is compatible — install tensorrt-rtx from Hardware or on first TRT RTX run.`
+        : "TensorRT RTX plugin (tensorrt-rtx) not in .venv yet. GPU is compatible — use Install in Hardware, or Olive installs it on first TRT RTX run.",
     );
   }
 
@@ -1691,7 +1691,9 @@ async function probeSystemHardware(): Promise<HardwareProbeResult> {
     tensorRtRtx,
     onnxRuntimeProviders,
     detectedProviders,
-    recommendedProvider: pickRecommendedProvider(detectedProviders),
+    recommendedProvider: pickRecommendedProvider(detectedProviders, {
+      tensorRtRtxLoadable: tensorRtRtx?.loadable === true,
+    }),
     notes,
   };
 }
@@ -2139,6 +2141,35 @@ app.delete("/api/env/hf-token", (_req, res) => {
   return res.json({ ok: true });
 });
 
+// ─── Install TensorRT RTX runtime into project .venv (consumer GeForce EP) ────
+app.post("/api/env/install-tensorrt-rtx", async (_req, res) => {
+  const lines: string[] = [];
+  try {
+    // Ensure venv + olive exist first so pip target is the project environment.
+    const setup = await ensureVenv((line) => lines.push(line));
+    if (!setup.ok) {
+      return res.status(500).json({ ok: false, error: setup.error, log: lines });
+    }
+    const result = await ensureTensorRtRtx((line) => lines.push(line));
+    hardwareProbeCache = null;
+    if (!result.ok) {
+      return res.status(500).json({ ok: false, error: result.error, log: lines });
+    }
+    const probe = await probeSystemHardware();
+    hardwareProbeCache = { at: Date.now(), result: probe };
+    return res.json({
+      ok: true,
+      version: probe.tensorRtRtx?.version ?? null,
+      loadable: probe.tensorRtRtx?.loadable === true,
+      log: lines,
+      probe: enrichProbeWithSystemRam(probe),
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg, log: lines });
+  }
+});
+
 // ─── Runtime Python / PATH helpers (in-app fix when olive/python not on PATH) ─
 app.get("/api/env/runtime", async (_req, res) => {
   try {
@@ -2293,8 +2324,12 @@ function findLmsCli(): string | null {
 }
 
 app.get("/api/ai/local-models", async (_req, res) => {
+  let lmStudioRunning = false;
+  let ollamaRunning = false;
+  const models = new Set<string>();
+
+  // LM Studio HTTP API (loaded models)
   try {
-    // 1) Try LM Studio HTTP API (loaded models)
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2000);
     const response = await fetch(
@@ -2303,36 +2338,62 @@ app.get("/api/ai/local-models", async (_req, res) => {
     );
     clearTimeout(timeout);
     if (response.ok) {
+      lmStudioRunning = true;
       const data = (await response.json()) as { data?: Array<{ id: string }> };
-      const loadedModels = (data.data || []).map((m) => m.id);
+      for (const m of data.data || []) {
+        if (m.id) models.add(m.id);
+      }
+    }
+  } catch {
+    /* LMS API down */
+  }
 
-      // 2) Also try `lms ls` for all downloaded models
-      const lms = findLmsCli();
-      let downloadedModels: string[] = [];
-      if (lms) {
-        try {
-          const { stdout } = await execFileAsync(lms, ["ls", "--json"], { timeout: 5000 });
-          const parsed = JSON.parse(stdout) as Array<{
-            modelKey?: string;
-            sizeBytes?: number;
-            indexedModelIdentifier?: string;
-          }>;
-          downloadedModels = (Array.isArray(parsed) ? parsed : [])
-            .map((m) => m.modelKey || m.indexedModelIdentifier || "")
-            .filter(Boolean);
-        } catch {
-          // Fall back to loaded models only
-          downloadedModels = loadedModels;
+  // LM Studio disk inventory via CLI (works even if the local server is off)
+  const lms = findLmsCli();
+  if (lms) {
+    try {
+      const { stdout } = await execFileAsync(lms, ["ls", "--json"], { timeout: 8000 });
+      const parsed = JSON.parse(stdout) as Array<{
+        modelKey?: string;
+        sizeBytes?: number;
+        indexedModelIdentifier?: string;
+      }>;
+      for (const m of Array.isArray(parsed) ? parsed : []) {
+        const key = m.modelKey || m.indexedModelIdentifier || "";
+        if (key) models.add(key);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Ollama tags (independent of LM Studio)
+  try {
+    ollamaRunning = await isOllamaRunning();
+    if (ollamaRunning) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      const resp = await fetch(`http://localhost:${OLLAMA_PORT}/api/tags`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (resp.ok) {
+        const data = (await resp.json()) as { models?: Array<{ name: string }> };
+        for (const m of data.models || []) {
+          if (m.name) models.add(m.name);
         }
       }
-
-      const allModels = [...new Set([...downloadedModels, ...loadedModels])];
-      return res.json({ lmStudioRunning: true, ollamaRunning: true, installedModels: allModels });
     }
-    return res.json({ lmStudioRunning: false, ollamaRunning: false, installedModels: [] });
   } catch {
-    return res.json({ lmStudioRunning: false, ollamaRunning: false, installedModels: [] });
+    ollamaRunning = false;
   }
+
+  return res.json({
+    lmStudioRunning,
+    ollamaRunning,
+    lmsCliInstalled: Boolean(lms),
+    installedModels: [...models],
+  });
 });
 
 // ─── GET /api/ai/local-model-sizes ─────────────────────────────────────────────
@@ -2451,18 +2512,22 @@ app.post("/api/ai/local-pull", async (req, res) => {
   const { modelTag } = req.body as { modelTag?: string };
   if (!modelTag) return res.status(400).json({ error: "modelTag is required." });
 
-  const LM_STUDIO_PORT = 1234;
+  // Force re-resolve CLI (install path may have changed since process start)
+  cachedLmsCli = undefined;
   const lms = findLmsCli();
 
   if (!lms) {
-    return res.status(500).json({
-      error: "LM Studio (Llmster) not found. Install it from https://lmstudio.ai/install.sh",
+    return res.status(503).json({
+      error:
+        "LM Studio CLI (`lms`) not found. Install LM Studio from https://lmstudio.ai, open it once so the CLI is installed, then retry.",
+      hint: "Windows: %USERPROFILE%\\.lmstudio\\bin\\lms.exe",
     });
   }
 
   try {
-    // Use `lms get` to download the model via LM Studio CLI
-    const getProc = spawn(lms, ["get", modelTag], { stdio: "pipe" });
+    // Non-interactive download: -y approves prompts; --gguf matches our listed GGUF models
+    const getArgs = ["get", "-y", "--gguf", modelTag];
+    const getProc = spawn(lms, getArgs, { stdio: "pipe", windowsHide: true });
     let stdout = "";
     let stderr = "";
     getProc.stdout?.on("data", (d: Buffer) => {
@@ -2473,19 +2538,43 @@ app.post("/api/ai/local-pull", async (req, res) => {
     });
 
     const exitCode = await new Promise<number>((resolve) => {
-      getProc.on("close", (code) => resolve(code ?? 1));
-      getProc.on("error", () => resolve(1));
+      const timer = setTimeout(() => {
+        getProc.kill();
+        resolve(124);
+      }, 600_000); // 10 min for large GGUFs
+      getProc.on("close", (code) => {
+        clearTimeout(timer);
+        resolve(code ?? 1);
+      });
+      getProc.on("error", () => {
+        clearTimeout(timer);
+        resolve(1);
+      });
     });
 
+    if (exitCode === 124) {
+      return res.status(504).json({
+        error:
+          "LM Studio download timed out after 10 minutes. Try a smaller model or pull it inside the LM Studio app.",
+      });
+    }
     if (exitCode !== 0) {
       return res.status(500).json({
-        error: `LM Studio model download failed (exit ${exitCode}): ${stderr || stdout}`,
+        error: `LM Studio download failed (exit ${exitCode}): ${(stderr || stdout || "no output").slice(0, 1500)}`,
+        hint: "Open LM Studio, ensure the Developer/local server can run, then retry. Model id format: publisher/name or name@quant.",
       });
+    }
+
+    // Best-effort: start local OpenAI-compatible server if offline
+    try {
+      await execFileAsync(lms, ["server", "start"], { timeout: 20_000, windowsHide: true });
+    } catch {
+      /* server may already be running or CLI may not support start */
     }
 
     // Auto-load the model into LM Studio memory so it's ready for immediate use
     try {
-      await execFileAsync(lms, ["load", modelTag], { timeout: 30000 });
+      await execFileAsync(lms, ["load", modelTag], { timeout: 120_000, windowsHide: true });
     } catch {
       // Load failure is non-fatal — model is downloaded, user can load manually
     }
@@ -2588,24 +2677,74 @@ app.post("/api/ai/ollama-pull", async (req, res) => {
 
   // Quick check if Ollama is reachable before attempting pull
   if (!(await isOllamaRunning())) {
+    // Try launching `ollama serve` in the background when the CLI is on PATH
+    try {
+      const serve = spawn("ollama", ["serve"], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      serve.unref();
+      // Wait briefly for the HTTP server to come up
+      for (let i = 0; i < 10; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        if (await isOllamaRunning()) break;
+      }
+    } catch {
+      /* ollama not installed or cannot spawn */
+    }
+  }
+
+  if (!(await isOllamaRunning())) {
     return res.status(503).json({
-      error: "Ollama is not running. Install it from https://ollama.com and start the server (ollama serve).",
+      error:
+        "Ollama is not running on localhost:11434. Install from https://ollama.com, start the Ollama app (or `ollama serve`), then retry.",
     });
   }
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 300_000); // 5 min timeout for large models
+    const timeout = setTimeout(() => controller.abort(), 600_000); // 10 min
+    // stream:true with consume until success — more reliable than stream:false on some Ollama versions
     const resp = await fetch(`http://localhost:${OLLAMA_PORT}/api/pull`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: modelTag, stream: false }),
+      body: JSON.stringify({ name: modelTag, stream: true }),
       signal: controller.signal,
     });
-    clearTimeout(timeout);
     if (!resp.ok) {
+      clearTimeout(timeout);
       const err = await resp.text();
-      return res.status(500).json({ error: `Ollama pull failed: ${err}` });
+      return res.status(500).json({ error: `Ollama pull failed: ${err.slice(0, 800)}` });
+    }
+
+    // Drain NDJSON stream until done or error
+    const reader = resp.body?.getReader();
+    const decoder = new TextDecoder();
+    let lastError = "";
+    if (reader) {
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const evt = JSON.parse(line) as { error?: string; status?: string };
+            if (evt.error) lastError = evt.error;
+          } catch {
+            /* ignore partial JSON */
+          }
+        }
+      }
+    }
+    clearTimeout(timeout);
+
+    if (lastError) {
+      return res.status(500).json({ error: `Ollama pull failed: ${lastError}` });
     }
 
     // Configure the AI provider to use Ollama's OpenAI-compatible endpoint
@@ -2621,7 +2760,7 @@ app.post("/api/ai/ollama-pull", async (req, res) => {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("abort")) {
       return res.status(504).json({
-        error: "Ollama pull timed out after 5 minutes. The model may be too large or the network is slow.",
+        error: "Ollama pull timed out after 10 minutes. The model may be too large or the network is slow.",
       });
     }
     return res.status(500).json({ error: `Failed to pull model via Ollama: ${msg}` });

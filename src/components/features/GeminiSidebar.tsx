@@ -644,6 +644,21 @@ export function GeminiSidebar({
     setPullingModel(modelTag);
     setLocalPullError("");
     try {
+      if (source === "ollama" && ollamaHealthy === false) {
+        throw new Error(
+          "Ollama is not running. Start the Ollama app (or run `ollama serve`), then retry the download.",
+        );
+      }
+      if (source === "lms") {
+        const health = await fetch("/api/ai/local-health")
+          .then((r) => r.json())
+          .catch(() => null);
+        if (health && health.lmsInstalled === false) {
+          throw new Error(
+            "LM Studio CLI (`lms`) not found. Install LM Studio from https://lmstudio.ai and open it once so the CLI is installed.",
+          );
+        }
+      }
       const endpoint = source === "ollama" ? "/api/ai/ollama-pull" : "/api/ai/local-pull";
       const r = await fetch(endpoint, {
         method: "POST",
@@ -651,14 +666,18 @@ export function GeminiSidebar({
         body: JSON.stringify({ modelTag }),
       });
       const contentType = r.headers.get("content-type") ?? "";
-      const data = contentType.includes("application/json") ? await r.json().catch(() => ({})) : {};
-      if (!r.ok) throw new Error((data as { error?: string }).error || `HTTP ${r.status}`);
+      const data = contentType.includes("application/json")
+        ? ((await r.json().catch(() => ({}))) as { error?: string; hint?: string })
+        : {};
+      if (!r.ok) {
+        const parts = [data.error || `HTTP ${r.status}`, data.hint].filter(Boolean);
+        throw new Error(parts.join(" — "));
+      }
       await fetchProviderStatus();
       setAnalysis(null);
       setActiveTab("audit");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      setLocalPullError(err.message || "Failed to pull local model.");
+    } catch (err: unknown) {
+      setLocalPullError(err instanceof Error ? err.message : "Failed to pull local model.");
     } finally {
       setPullingModel(null);
     }
@@ -1296,19 +1315,20 @@ export function GeminiSidebar({
                       {(
                         [
                           {
-                            tag: "lmstudio-community/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+                            // Shorter ids resolve more reliably with `lms get -y --gguf`
+                            tag: "qwen2.5-coder-1.5b-instruct",
                             name: "Qwen2.5-Coder (1.5B)",
                             desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
                             fallbackSize: "1.1 GB",
                           },
                           {
-                            tag: "lmstudio-community/Meta-Llama-3.2-1B-Instruct-GGUF",
+                            tag: "llama-3.2-1b-instruct",
                             name: "Llama-3.2 (1B)",
                             desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
                             fallbackSize: "800 MB",
                           },
                           {
-                            tag: "lmstudio-community/Phi-3.5-Mini-Instruct-GGUF",
+                            tag: "phi-3.5-mini-instruct",
                             name: "Phi-3.5-Mini (3.8B)",
                             desc: "🧠 Advanced Reasoning: Complex compiler co-design",
                             fallbackSize: "2.2 GB",
@@ -1407,6 +1427,20 @@ export function GeminiSidebar({
                         Ollama API on{" "}
                         <code className="text-[10px] font-mono text-slate-400">localhost:11434</code>.
                       </p>
+                      {ollamaHealthy === false && (
+                        <p className="text-[11px] text-rose-400 mb-2 leading-relaxed">
+                          Ollama is not reachable. Install from{" "}
+                          <a
+                            href="https://ollama.com"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline text-electric-blue"
+                          >
+                            ollama.com
+                          </a>
+                          , start the Ollama app, then retry download.
+                        </p>
+                      )}
                       <div className="space-y-2">
                         {(
                           [
@@ -1423,10 +1457,10 @@ export function GeminiSidebar({
                               fallbackSize: "800 MB",
                             },
                             {
-                              tag: "phi3.5:3.8b",
-                              name: "Phi-3.5-Mini (3.8B)",
+                              tag: "phi3.5",
+                              name: "Phi-3.5-Mini",
                               desc: "🧠 Advanced Reasoning: Complex compiler co-design",
-                              fallbackSize: "2.2 GB",
+                              fallbackSize: "~2 GB",
                             },
                           ] as const
                         ).map((m) => {

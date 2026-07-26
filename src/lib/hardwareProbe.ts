@@ -91,9 +91,9 @@ export function mergeDetectedProviders(input: {
   // nvidia-smi / rocm-smi / openvino fill gaps when the installed ORT wheel lacks GPU EPs.
   if (input.hasNvidiaGpu) {
     detected.add("CUDAExecutionProvider");
-    if (tensorRtRtxOk) {
-      detected.add("NvTensorRTRTXExecutionProvider");
-    }
+    // TensorRT RTX is GPU-compatible on consumer NVIDIA cards even before the
+    // tensorrt-rtx pip package is installed — the app can install it on demand.
+    detected.add("NvTensorRTRTXExecutionProvider");
     if (tensorRtOk) {
       detected.add("TensorrtExecutionProvider");
     }
@@ -108,11 +108,17 @@ export function mergeDetectedProviders(input: {
   return Array.from(detected);
 }
 
-export function pickRecommendedProvider(detected: IHVProvider[]): IHVProvider {
+export function pickRecommendedProvider(
+  detected: IHVProvider[],
+  opts?: { tensorRtRtxLoadable?: boolean },
+): IHVProvider {
+  // Prefer TensorRT RTX only when the runtime package is already loadable;
+  // otherwise CUDA is the better default (TRT RTX can be installed on demand).
   const priority: IHVProvider[] = [
-    "NvTensorRTRTXExecutionProvider",
+    ...(opts?.tensorRtRtxLoadable ? (["NvTensorRTRTXExecutionProvider"] as const) : []),
     "TensorrtExecutionProvider",
     "CUDAExecutionProvider",
+    "NvTensorRTRTXExecutionProvider",
     "ROCMExecutionProvider",
     "OpenVINOExecutionProvider",
     "WebGpuExecutionProvider",
@@ -137,7 +143,7 @@ function undetectedProviderReason(provider: IHVProvider): string {
     case "TensorrtExecutionProvider":
       return "NVIDIA TensorRT is not loadable yet (nvinfer_10 / TensorRT 10.x). Olive auto-installs the pinned SDK when you run with TensorRT, or use TensorRT RTX / CUDA instead.";
     case "NvTensorRTRTXExecutionProvider":
-      return "NVIDIA TensorRT RTX is not loadable (tensorrt-rtx missing). Olive auto-installs it on run, or use CUDA instead.";
+      return "NVIDIA GPU not detected for TensorRT RTX. On a GeForce RTX GPU, use Install tensorrt-rtx in Hardware, or run with CUDA.";
     case "WebGpuExecutionProvider":
       return "WebGPU requires a browser environment with the WebGPU API (Chrome 113+ / Edge 113+ / Firefox Nightly). Not available in node-based probing contexts.";
     case "CPUExecutionProvider":
