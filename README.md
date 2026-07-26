@@ -75,8 +75,8 @@ Pass combinations are checked against your execution provider (for example, AWQ 
 
 ### Prerequisites
 
-- **Node.js** 18+ (20+ recommended)
-- **pnpm** 10.8.0+ (the project uses `packageManager: pnpm@10.8.0`; `npm install` is blocked)
+- **Node.js** 22+ (pnpm 11 requirement)
+- **pnpm** 11.17.0+ (the project uses `packageManager: pnpm@11.17.0`; `npm install` is blocked)
 - **Python** 3.9+ on `PATH` (used for `olive run`)
 - **Optional:** NVIDIA / Intel / Qualcomm / AMD tooling for GPU or NPU recipes
 - **Optional:** [Hugging Face token](https://huggingface.co/settings/tokens) for gated models
@@ -90,7 +90,7 @@ pnpm install
 pnpm dev
 ```
 
-Open **http://localhost:3000**.
+Open **<http://localhost:3000>**.
 
 On the first **Execute Live** or batch run, the server creates `.venv/` in the project root and installs Olive automatically.
 

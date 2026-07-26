@@ -20,3 +20,9 @@ storybook-static/
 /.freebuff
 /~/.cache/
 /.agents/skills/studio
+
+# Lockfiles for non-pnpm package managers (this repo uses pnpm exclusively)
+package-lock.json
+yarn.lock
+bun.lockb
+bun.lock

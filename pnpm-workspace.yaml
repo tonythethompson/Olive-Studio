@@ -1,3 +1,9 @@
+allowBuilds:
+  '@google/genai': true
+  '@mendable/firecrawl-js': true
+  '@swc/core': true
+  esbuild: true
+  protobufjs: true
 overrides:
   protobufjs@<=7.6.2: '>=7.6.3'
   protobufjs@>=7.5.0 <=7.6.4: '>=7.6.5'
