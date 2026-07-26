@@ -33,6 +33,8 @@ import {
 } from "./src/lib/tensorrtDeps.ts";
 import { tensorrtRtxInstallArgs, tensorrtRtxLabel } from "./src/lib/tensorrtRtxDeps.ts";
 import type { IHVProvider } from "./src/types.ts";
+import type { GpuMetrics } from "./src/lib/gpuMetrics.ts";
+import { reloadPassSchemas, type PassesJson } from "./src/lib/schemaEngine.ts";
 
 dotenv.config();
 dotenv.config({ path: ".env.local", override: true });
@@ -44,6 +46,21 @@ const PORT = 3000;
 const VENV_DIR = path.join(process.cwd(), ".venv");
 const OLIVE_GPU_LAUNCHER = path.join(process.cwd(), "scripts", "olive_gpu_launcher.py");
 const execFileAsync = promisify(execFile);
+
+// ─── KB Status Cache & Sync Protection ───────────────────────────────────────
+interface KbStatusCache {
+  available: boolean;
+  version?: string;
+  lastUpdated?: string | null;
+  lastSync?: string | null;
+  passCount?: number;
+  error?: string;
+}
+
+let kbStatusCache: KbStatusCache | null = null;
+let kbSyncInProgress = false;
+const kbSyncRateLimit = new Map<string, number>(); // clientId -> lastSyncTimestamp
+const KB_SYNC_COOLDOWN_MS = 30_000; // 30 seconds between syncs per client
 
 // ─── AI Provider Config ───────────────────────────────────────────────────────
 
@@ -338,18 +355,6 @@ async function callAI(system: string, messages: AIChatMessage[], wantJson = fals
 }
 
 // ─── Olive Job Registry ───────────────────────────────────────────────────────
-interface GpuMetrics {
-  timestamp: string;
-  gpus: Array<{
-    index: number;
-    name: string;
-    utilizationPct: number | null;
-    memUsedMb: number | null;
-    memTotalMb: number | null;
-    tempC: number | null;
-    powerW: number | null;
-  }>;
-}
 
 interface OliveJob {
   id: string;
@@ -2490,17 +2495,19 @@ app.post("/api/mcp/tool", async (req, res) => {
   }
 });
 
-// ─── GET /api/mcp/kb-status ───────────────────────────────────────────────────
-app.get("/api/mcp/kb-status", (req, res) => {
+// ─── KB Status Helpers ────────────────────────────────────────────────────────
+
+/** Load KB status from the filesystem and cache it. */
+function loadKbStatus(): KbStatusCache {
   try {
     const kbDir = path.join(process.cwd(), "olive-mcp-server", "olive_mcp_server", "knowledge_base");
     const passesPath = path.join(kbDir, "passes.json");
 
     if (!fs.existsSync(passesPath)) {
-      return res.json({
+      return {
         available: false,
         error: "passes.json not found",
-      });
+      };
     }
 
     const raw = fs.readFileSync(passesPath, "utf-8");
@@ -2518,24 +2525,83 @@ app.get("/api/mcp/kb-status", (req, res) => {
       }
     }
 
-    return res.json({
+    return {
       available: true,
       version: data.version ?? "unknown",
       lastUpdated: data.last_updated ?? null,
       lastSync,
       passCount: Array.isArray(data.passes) ? data.passes.length : 0,
-    });
+    };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    return res.status(500).json({ error: msg });
+    return {
+      available: false,
+      error: msg,
+    };
   }
+}
+
+/** Invalidate the KB status cache. */
+function invalidateKbStatusCache(): void {
+  kbStatusCache = null;
+}
+
+// ─── GET /api/mcp/kb-status ───────────────────────────────────────────────────
+app.get("/api/mcp/kb-status", (req, res) => {
+  // Return cached status if available
+  if (kbStatusCache) {
+    return res.json(kbStatusCache);
+  }
+
+  // Load from filesystem and cache
+  kbStatusCache = loadKbStatus();
+
+  if (kbStatusCache.error) {
+    return res.status(500).json(kbStatusCache);
+  }
+
+  return res.json(kbStatusCache);
 });
 
 // ─── POST /api/mcp/sync-kb ────────────────────────────────────────────────────
 app.post("/api/mcp/sync-kb", async (req, res) => {
   try {
+    // ── Authentication: same-origin or token-based ───────────────────────────────
+    const origin = req.get("origin");
+    const authToken = req.get("x-sync-token");
+    const expectedToken = process.env.SYNC_KB_TOKEN;
+
+    // Allow same-origin requests or valid token
+    const isSameOrigin = !origin || origin.includes("localhost") || origin.includes("127.0.0.1");
+    const hasValidToken = expectedToken && authToken === expectedToken;
+
+    if (!isSameOrigin && !hasValidToken) {
+      return res.status(401).json({ error: "Unauthorized: same-origin or valid token required." });
+    }
+
+    // ── Rate limiting ────────────────────────────────────────────────────────────
+    const clientId = req.ip || "unknown";
+    const now = Date.now();
+    const lastSync = kbSyncRateLimit.get(clientId);
+
+    if (lastSync && now - lastSync < KB_SYNC_COOLDOWN_MS) {
+      const waitSeconds = Math.ceil((KB_SYNC_COOLDOWN_MS - (now - lastSync)) / 1000);
+      return res.status(429).json({
+        error: `Rate limited: please wait ${waitSeconds}s before syncing again.`,
+      });
+    }
+
+    // ── Mutex: prevent overlapping executions ───────────────────────────────────
+    if (kbSyncInProgress) {
+      return res.status(409).json({ error: "Sync already in progress. Please wait." });
+    }
+
+    kbSyncInProgress = true;
+    kbSyncRateLimit.set(clientId, now);
+
     const scriptPath = path.join(process.cwd(), "olive-mcp-server", "scripts", "update_kb.py");
     if (!fs.existsSync(scriptPath)) {
+      kbSyncInProgress = false;
       return res.status(404).json({ error: "update_kb.py script not found." });
     }
 
@@ -2544,6 +2610,7 @@ app.post("/api/mcp/sync-kb", async (req, res) => {
       python = (await findSystemPython()) ?? "";
     }
     if (!python) {
+      kbSyncInProgress = false;
       return res.status(500).json({ error: "Python environment not found." });
     }
 
@@ -2564,6 +2631,23 @@ app.post("/api/mcp/sync-kb", async (req, res) => {
       }
     }
 
+    // Hot-reload the schema engine with the updated passes.json
+    const passesPath = path.join(kbDir, "passes.json");
+    if (fs.existsSync(passesPath)) {
+      try {
+        const passesRaw = fs.readFileSync(passesPath, "utf-8");
+        const passesData = JSON.parse(passesRaw) as PassesJson;
+        reloadPassSchemas(passesData);
+      } catch (err: unknown) {
+        console.warn("[sync-kb] Failed to reload pass schemas:", err);
+      }
+    }
+
+    // Invalidate cache so next kb-status call reloads from disk
+    invalidateKbStatusCache();
+
+    kbSyncInProgress = false;
+
     return res.json({
       ok: true,
       stdout: stdout.slice(0, 2000),
@@ -2571,6 +2655,7 @@ app.post("/api/mcp/sync-kb", async (req, res) => {
       report,
     });
   } catch (err: unknown) {
+    kbSyncInProgress = false;
     const msg = err instanceof Error ? err.message : String(err);
     return res.status(500).json({ error: msg });
   }

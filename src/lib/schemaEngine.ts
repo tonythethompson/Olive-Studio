@@ -18,7 +18,6 @@ import {
   type PassCatalogEntry,
   OLIVE_VERSION,
 } from "@/lib/passCatalog";
-import passKnowledgeBase from "../../olive-mcp-server/olive_mcp_server/knowledge_base/passes.json";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -61,6 +60,8 @@ export interface SchemaValidationResult {
 // ─── Knowledge-base index ──────────────────────────────────────────────────────
 
 export interface PassesJson {
+  version?: string;
+  last_updated?: string;
   passes?: Array<{
     name: string;
     type?: string;
@@ -76,10 +77,21 @@ export interface PassesJson {
   }>;
 }
 
-let kbData: PassesJson = passKnowledgeBase as PassesJson;
+let kbData: PassesJson | null = null;
+let PARAM_SCHEMAS: Map<string, PassParamSchema> = new Map();
 
-/** Map of pass name → parameter schema from passes.json */
-let PARAM_SCHEMAS: Map<string, PassParamSchema> = buildParamSchemas(kbData);
+/** Lazy-load the knowledge base data on first use (synchronous). */
+function ensureKbLoaded(): void {
+  if (kbData !== null) return;
+
+  // Synchronous dynamic require for CommonJS compatibility
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const passKnowledgeBase = require(
+    "../../olive-mcp-server/olive_mcp_server/knowledge_base/passes.json"
+  );
+  kbData = passKnowledgeBase as PassesJson;
+  PARAM_SCHEMAS = buildParamSchemas(kbData);
+}
 
 /**
  * Builds a parameter schema index from pass definitions.
@@ -114,29 +126,53 @@ export function reloadPassSchemas(data: PassesJson): void {
   kbData = data;
   PARAM_SCHEMAS = nextParamSchemas;
 }
-}
 
 /** Get KB metadata (version, last_updated, pass count) from the currently loaded KB data. */
 export function getKbMetadata(): { version: string; lastUpdated: string; passCount: number } {
+  ensureKbLoaded();
+
   return {
-    version: (kbData as { version?: string }).version ?? "unknown",
-    lastUpdated: (kbData as { last_updated?: string }).last_updated ?? "unknown",
+    version: kbData?.version ?? "unknown",
+    lastUpdated: kbData?.last_updated ?? "unknown",
     passCount: PARAM_SCHEMAS.size,
   };
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────────
 
+/**
+ * Maps a parameter schema type to a PassCategory.
+ * Used for KB-only passes that don't have a catalog entry.
+ */
+function deriveCategory(type: string): PassCatalogEntry["category"] {
+  const lower = type.toLowerCase();
+  if (lower.includes("onnx")) return "onnx";
+  if (lower.includes("pytorch") || lower.includes("torch")) return "pytorch";
+  if (lower.includes("openvino")) return "openvino";
+  if (lower.includes("qnn") || lower.includes("qualcomm")) return "qnn";
+  if (lower.includes("intel")) return "intel";
+  if (lower.includes("nvidia") || lower.includes("tensorrt") || lower.includes("cuda")) return "nvidia";
+  if (lower.includes("prun")) return "pruning";
+  if (lower.includes("peft") || lower.includes("lora") || lower.includes("qlora")) return "peft";
+  if (lower.includes("split")) return "splitting";
+  return "other";
+}
+
 /** Get the unified schema for a pass type, merging catalog + knowledge-base data. */
 export function getPassSchema(name: string): UnifiedPassSchema | undefined {
+  ensureKbLoaded();
+
   const catalogEntry = getPassCatalogEntry(name);
   const paramSchema = PARAM_SCHEMAS.get(name);
 
   if (!catalogEntry && !paramSchema) return undefined;
 
+  // Derive category: use catalog if available, otherwise derive from paramSchema.type
+  const category = catalogEntry?.category ?? (paramSchema ? deriveCategory(paramSchema.type) : "other");
+
   return {
     name,
-    category: catalogEntry?.category ?? "other",
+    category,
     description: paramSchema?.description ?? catalogEntry?.description ?? "",
     inputs: catalogEntry?.inputs ?? paramSchema?.input_formats ?? [],
     outputs: catalogEntry?.outputs ?? paramSchema?.output_formats ?? [],
@@ -149,6 +185,7 @@ export function getPassSchema(name: string): UnifiedPassSchema | undefined {
 
 /** Check if a pass type name is known to either the catalog or the knowledge base. */
 export function isKnownPass(name: string): boolean {
+  ensureKbLoaded();
   return isKnownPassName(name) || PARAM_SCHEMAS.has(name);
 }
 
@@ -196,6 +233,8 @@ function checkParamType(value: unknown, type: ParamType): boolean {
  * @returns An array of validation error messages; an empty array indicates valid or unvalidated configuration
  */
 export function validatePassConfig(passType: string, config: unknown): string[] {
+  ensureKbLoaded();
+
   const errors: string[] = [];
 
   if (config === undefined || config === null) {

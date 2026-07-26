@@ -325,6 +325,33 @@ describe("reloadPassSchemas", () => {
     expect(validErrors).toEqual([]);
   });
 
+  it("updates version and lastUpdated metadata after reload", () => {
+    // Reload with custom metadata
+    const customKb: PassesJson = {
+      version: "1.2.3-custom",
+      last_updated: "2026-07-26T12:00:00Z",
+      passes: [
+        {
+          name: "TestPass",
+          type: "test",
+          description: "Test pass.",
+          input_formats: [],
+          output_formats: [],
+          required_params: [],
+          optional_params: {},
+          hardware_requirements: [],
+          gotchas: [],
+        },
+      ],
+    };
+    reloadPassSchemas(customKb);
+
+    const meta = getKbMetadata();
+    expect(meta.version).toBe("1.2.3-custom");
+    expect(meta.lastUpdated).toBe("2026-07-26T12:00:00Z");
+    expect(meta.passCount).toBe(1);
+  });
+
   it("removes KB-only passes after reload with empty data", () => {
     // Add a custom KB-only pass
     reloadPassSchemas({
