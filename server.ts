@@ -38,6 +38,14 @@ import type { GpuMetrics } from "./src/lib/gpuMetrics.ts";
 import { reloadPassSchemas, type PassesJson } from "./src/lib/schemaEngine.ts";
 import { getCodexAppServer } from "./src/lib/codex/CodexAppServerClient.ts";
 import { buildCodexPrompt, codexAsk } from "./src/lib/codex/codexAgent.ts";
+import {
+  devinChat,
+  finishDevinLogin,
+  getDevinAccountStatus,
+  getDevinSignInUrl,
+  listDevinModels,
+  logoutDevin,
+} from "./src/lib/devin/client.ts";
 
 dotenv.config();
 dotenv.config({ path: ".env.local", override: true });
@@ -508,10 +516,19 @@ async function callAI(system: string, messages: AIChatMessage[], wantJson = fals
       return callAnthropic(cfg, system, messages, wantJson);
     case "copilot":
       return callGitHubCopilot(cfg, system, messages, wantJson);
-    case "devin":
-      throw new Error(
-        "Devin does not expose a public OpenAI-compatible chat API for third-party apps. Use OpenAI, Anthropic, OpenRouter, or OpenAI-Compatible with a real endpoint instead.",
-      );
+    case "devin": {
+      // Devin subscription: not a model — multi-model access after browser sign-in
+      return devinChat({
+        model: cfg.model || "swe-1-6",
+        system: wantJson
+          ? `${system}\n\nIMPORTANT: Respond with valid JSON only. No markdown fences.`
+          : system,
+        messages: messages.map((m) => ({
+          role: m.role === "assistant" ? "assistant" : m.role === "user" ? "user" : "system",
+          content: m.content,
+        })),
+      });
+    }
     case "codex": {
       // ChatGPT subscription path: local Codex CLI/SDK (auth from app-server login or `codex login`)
       const prompt = buildCodexPrompt(
@@ -2423,9 +2440,23 @@ app.post("/api/ai/provider", (req, res) => {
     return res.status(400).json({ error: `Invalid provider: ${provider}` });
   }
   if (provider === "devin") {
-    return res.status(400).json({
-      error:
-        "Devin has no public chat completions API for third-party apps. Use OpenAI, OpenRouter, Kilo Gateway, or OpenAI-Compatible.",
+    const st = getDevinAccountStatus();
+    if (!st.signedIn) {
+      return res.status(401).json({
+        error: "Not signed in to Devin. Use Assistant → Devin → Sign in, then paste the browser token.",
+      });
+    }
+    runtimeAiProvider = {
+      provider: "devin",
+      apiKey: "devin-local-auth",
+      model: model.trim() || "swe-1-6",
+    };
+    return res.json({
+      ok: true,
+      source: "user",
+      provider: "devin",
+      model: runtimeAiProvider.model,
+      accountName: st.name,
     });
   }
   if (provider === "openai-compat" && !baseUrl?.trim()) {
@@ -2579,6 +2610,83 @@ app.post("/api/codex/ask", async (req, res) => {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+// ─── Devin subscription (multi-model via Devin account — not a model itself) ──
+// Auth + Connect-RPC adapted from pi-devin-auth / opencode-windsurf-auth (MIT).
+
+app.get("/api/devin/account", (_req, res) => {
+  try {
+    const st = getDevinAccountStatus();
+    return res.json({ ok: true, ...st });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, signedIn: false, error: msg });
+  }
+});
+
+app.get("/api/devin/login", (_req, res) => {
+  try {
+    return res.json({
+      ok: true,
+      authUrl: getDevinSignInUrl(),
+      message:
+        "Open authUrl, sign in with your Devin account, then copy the token shown on the page and POST it to /api/devin/login/complete.",
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+app.post("/api/devin/login/complete", async (req, res) => {
+  const token = (req.body as { token?: string })?.token?.trim();
+  if (!token) {
+    return res.status(400).json({
+      error: "token is required — paste the auth token shown after Devin browser sign-in.",
+    });
+  }
+  try {
+    const result = await finishDevinLogin(token);
+    runtimeAiProvider = {
+      provider: "devin",
+      apiKey: "devin-local-auth",
+      model: "swe-1-6",
+    };
+    return res.json({
+      ok: true,
+      name: result.name,
+      apiServerUrl: result.apiServerUrl,
+      provider: "devin",
+      message: "Signed in to Devin. Choose a model from your subscription and use Audit/Chat.",
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+app.post("/api/devin/logout", (_req, res) => {
+  try {
+    logoutDevin();
+    if (runtimeAiProvider?.provider === "devin") {
+      runtimeAiProvider = null;
+    }
+    return res.json({ ok: true });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+app.get("/api/devin/models", async (_req, res) => {
+  try {
+    const models = await listDevinModels();
+    return res.json({ ok: true, models, signedIn: getDevinAccountStatus().signedIn });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg, models: [] });
   }
 });
 

@@ -166,12 +166,12 @@ const PROVIDER_OPTIONS: readonly ProviderOption[] = [
   },
   {
     id: "devin",
-    name: "Devin (unsupported)",
-    models: ["n/a"],
+    name: "Devin",
+    models: ["swe-1-6", "swe-1-7", "claude-sonnet-4", "claude-opus-4", "gpt-4o", "kimi-k2"],
     keyEnvVar: "",
     docsUrl: "devin.ai",
     category: "subscription",
-    description: "No public chat API for third-party apps — use OpenRouter or OpenAI-Compatible",
+    description: "Devin subscription (not a model) — unlocks multiple models via Sign in with Devin",
   },
   // ── Custom / Self-Hosted ─────────────────────────────────────────────
   {
@@ -624,6 +624,15 @@ export function GeminiSidebar({
   } | null>(null);
   const [codexBusy, setCodexBusy] = useState(false);
   const [codexMessage, setCodexMessage] = useState<string | null>(null);
+  const [devinStatus, setDevinStatus] = useState<{
+    signedIn?: boolean;
+    name?: string;
+    error?: string;
+  } | null>(null);
+  const [devinToken, setDevinToken] = useState("");
+  const [devinModels, setDevinModels] = useState<Array<{ id: string; name: string }>>([]);
+  const [devinBusy, setDevinBusy] = useState(false);
+  const [devinMessage, setDevinMessage] = useState<string | null>(null);
   const [pullingModel, setPullingModel] = useState<string | null>(null);
   const [localPullError, setLocalPullError] = useState<string>("");
   const [modelSizes, setModelSizes] = useState<Record<string, number>>({});
@@ -656,10 +665,12 @@ export function GeminiSidebar({
       .catch(() => setOllamaHealthy(false));
   }, [isOpen]);
 
-  // Refresh Codex account when Settings is open on the Codex provider
+  // Refresh Codex / Devin account when Settings is open on those providers
   useEffect(() => {
-    if (!isOpen || activeTab !== "settings" || settingsProvider !== "codex") return;
-    void refreshCodexAccount();
+    if (!isOpen || activeTab !== "settings") return;
+    if (settingsProvider === "codex") void refreshCodexAccount();
+    if (settingsProvider === "devin") void refreshDevinAccount();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, activeTab, settingsProvider]);
 
   const handlePullLocalModel = async (modelTag: string, source: "lms" | "ollama" = "lms") => {
@@ -944,16 +955,117 @@ export function GeminiSidebar({
     }
   };
 
-  const handleSaveProvider = async () => {
-    if (settingsProvider === "devin") {
-      setProviderSaveError(
-        "Devin has no public chat completions API for third-party apps. Choose OpenAI, OpenRouter, Kilo Gateway, or OpenAI-Compatible instead.",
-      );
-      return;
+  const refreshDevinAccount = async () => {
+    try {
+      const r = await fetch("/api/devin/account");
+      const data = (await r.json()) as { signedIn?: boolean; name?: string; error?: string };
+      setDevinStatus(data);
+      if (data.signedIn) {
+        const mr = await fetch("/api/devin/models");
+        const md = (await mr.json()) as { models?: Array<{ id: string; name: string }> };
+        if (Array.isArray(md.models) && md.models.length > 0) {
+          setDevinModels(md.models);
+          if (!md.models.some((m) => m.id === settingsModel)) {
+            setSettingsModel(md.models[0]!.id);
+          }
+        }
+      }
+      return data;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setDevinStatus({ signedIn: false, error: msg });
+      return null;
     }
+  };
+
+  const handleDevinOpenSignIn = async () => {
+    setDevinBusy(true);
+    setDevinMessage(null);
+    setProviderSaveError("");
+    try {
+      const r = await fetch("/api/devin/login");
+      const data = (await r.json()) as { ok?: boolean; authUrl?: string; error?: string };
+      if (!r.ok || !data.ok || !data.authUrl) throw new Error(data.error || `HTTP ${r.status}`);
+      window.open(data.authUrl, "_blank", "noopener,noreferrer");
+      setDevinMessage("Sign in in the browser, then paste the token shown on the page below.");
+    } catch (err: unknown) {
+      setProviderSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDevinBusy(false);
+    }
+  };
+
+  const handleDevinCompleteLogin = async () => {
+    setDevinBusy(true);
+    setDevinMessage(null);
+    setProviderSaveError("");
+    try {
+      const r = await fetch("/api/devin/login/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: devinToken }),
+      });
+      const data = (await r.json()) as { ok?: boolean; error?: string; name?: string; message?: string };
+      if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      setDevinToken("");
+      setDevinMessage(data.message || `Signed in as ${data.name ?? "Devin"}.`);
+      await refreshDevinAccount();
+      await fetch("/api/ai/provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: "devin", model: settingsModel || "swe-1-6" }),
+      });
+      await fetchProviderStatus();
+    } catch (err: unknown) {
+      setProviderSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDevinBusy(false);
+    }
+  };
+
+  const handleDevinLogout = async () => {
+    setDevinBusy(true);
+    try {
+      await fetch("/api/devin/logout", { method: "POST" });
+      setDevinStatus({ signedIn: false });
+      setDevinMessage("Signed out of Devin.");
+      await fetchProviderStatus();
+    } catch (err: unknown) {
+      setProviderSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDevinBusy(false);
+    }
+  };
+
+  const handleSaveProvider = async () => {
     if (settingsProvider === "codex") {
       // Codex uses browser ChatGPT login, not an API key field
       await handleCodexLogin();
+      return;
+    }
+    if (settingsProvider === "devin") {
+      if (!devinStatus?.signedIn) {
+        setProviderSaveError("Sign in to Devin and paste the browser token first.");
+        return;
+      }
+      setIsSavingProvider(true);
+      setProviderSaveError("");
+      try {
+        const r = await fetch("/api/ai/provider", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: "devin", model: settingsModel || "swe-1-6" }),
+        });
+        const data = (await r.json()) as { error?: string };
+        if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+        await fetchProviderStatus();
+        setAnalysis(null);
+        setActiveTab("audit");
+      } catch (err: unknown) {
+        setProviderSaveError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setIsSavingProvider(false);
+      }
       return;
     }
     const key = settingsApiKey.trim();
@@ -1685,9 +1797,12 @@ export function GeminiSidebar({
                       onChange={(e) => setSettingsModel(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue cursor-pointer"
                     >
-                      {providerOption.models.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
+                      {(settingsProvider === "devin" && devinModels.length > 0
+                        ? devinModels.map((m) => ({ id: m.id, label: m.name }))
+                        : providerOption.models.map((m) => ({ id: m, label: m }))
+                      ).map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label}
                         </option>
                       ))}
                     </select>
@@ -1743,6 +1858,94 @@ export function GeminiSidebar({
                         Logout
                       </button>
                     </div>
+                  </div>
+                ) : settingsProvider === "devin" ? (
+                  <div className="space-y-3 p-3 rounded-xl border border-slate-800 bg-slate-950/50">
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      <strong className="text-slate-200">Devin is not a model</strong> — it is a subscription
+                      that unlocks multiple models for Assistant audit/chat. Sign in with your Devin account,
+                      paste the browser token, then pick a model from your plan.
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Status:{" "}
+                      {devinStatus?.signedIn ? (
+                        <span className="text-emerald-400">
+                          signed in{devinStatus.name ? ` · ${devinStatus.name}` : ""}
+                        </span>
+                      ) : devinStatus?.error ? (
+                        <span className="text-rose-400">{devinStatus.error}</span>
+                      ) : (
+                        <span className="text-slate-500">not signed in</span>
+                      )}
+                    </p>
+                    {devinMessage && <p className="text-[11px] text-emerald-400/90">{devinMessage}</p>}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={devinBusy}
+                        onClick={() => void handleDevinOpenSignIn()}
+                        className="flex-1 min-w-[8rem] h-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-2"
+                      >
+                        {devinBusy ? (
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                        Open Devin sign-in
+                      </button>
+                      <button
+                        type="button"
+                        disabled={devinBusy}
+                        onClick={() => void refreshDevinAccount()}
+                        className="h-9 px-3 border border-slate-700 rounded-lg text-xs text-slate-300"
+                      >
+                        Refresh
+                      </button>
+                      <button
+                        type="button"
+                        disabled={devinBusy}
+                        onClick={() => void handleDevinLogout()}
+                        className="h-9 px-3 border border-rose-500/30 rounded-lg text-xs text-rose-400"
+                      >
+                        Logout
+                      </button>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">
+                        Paste token from sign-in page
+                      </label>
+                      <input
+                        type="password"
+                        autoComplete="off"
+                        value={devinToken}
+                        onChange={(e) => setDevinToken(e.target.value)}
+                        placeholder="Token shown after browser sign-in"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+                      />
+                      <button
+                        type="button"
+                        disabled={devinBusy || !devinToken.trim()}
+                        onClick={() => void handleDevinCompleteLogin()}
+                        className="mt-2 w-full h-9 border border-electric-blue/40 text-electric-blue hover:bg-electric-blue/10 disabled:opacity-40 rounded-lg text-xs font-bold"
+                      >
+                        Complete sign-in
+                      </button>
+                    </div>
+                    {devinStatus?.signedIn && (
+                      <button
+                        type="button"
+                        disabled={isSavingProvider}
+                        onClick={() => void handleSaveProvider()}
+                        className="w-full h-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-2"
+                      >
+                        {isSavingProvider ? (
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                        Activate Devin for audit/chat
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <>
