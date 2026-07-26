@@ -6,6 +6,7 @@ import {
   validateRecipeSchema,
   reloadPassSchemas,
   getKbMetadata,
+  type PassesJson,
 } from "@/lib/schemaEngine";
 import originalPassesJson from "../../../olive-mcp-server/olive_mcp_server/knowledge_base/passes.json";
 
@@ -279,7 +280,7 @@ describe("getKbMetadata", () => {
 describe("reloadPassSchemas", () => {
   afterEach(() => {
     // Restore original KB after each reload test
-    reloadPassSchemas(originalPassesJson as never);
+    reloadPassSchemas(originalPassesJson as PassesJson);
   });
 
   it("hot-reloads parameter schemas from a new passes.json object", () => {

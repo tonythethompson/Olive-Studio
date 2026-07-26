@@ -16,33 +16,46 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
       <Database className="h-3 w-3 text-slate-500" />
       {status && !error ? (
         <>
-          <span className="text-slate-500">
-            KB v{status.version} · {status.passCount} passes
-          </span>
-          {isStale ? (
-            <span className="text-amber-500 flex items-center gap-0.5" title="Knowledge base may be outdated">
-              <AlertCircle className="h-3 w-3" />
-              stale
-            </span>
+          {status.available ? (
+            <>
+              <span className="text-slate-500">
+                KB v{status.version} · {status.passCount} passes
+              </span>
+              {isStale ? (
+                <span
+                  className="text-amber-500 flex items-center gap-0.5"
+                  title="Knowledge base may be outdated"
+                >
+                  <AlertCircle className="h-3 w-3" />
+                  stale
+                </span>
+              ) : (
+                <span
+                  className="text-emerald-500 flex items-center gap-0.5"
+                  title="Knowledge base is up to date"
+                >
+                  <CheckCircle className="h-3 w-3" />
+                  fresh
+                </span>
+              )}
+            </>
           ) : (
-            <span className="text-emerald-500 flex items-center gap-0.5" title="Knowledge base is up to date">
-              <CheckCircle className="h-3 w-3" />
-              fresh
-            </span>
+            <span className="text-amber-500">KB unavailable</span>
           )}
+          <button
+            type="button"
+            onClick={() => void syncKb()}
+            disabled={syncing}
+            className="ml-1 text-electric-blue hover:text-electric-blue/80 disabled:opacity-40 flex items-center gap-1 transition-colors"
+            title="Sync knowledge base from official Olive docs"
+          >
+            <RefreshCw className={`h-3 w-3 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "syncing…" : "sync"}
+          </button>
         </>
       ) : (
         <span className="text-amber-500">KB unavailable</span>
       )}
-      <button
-        onClick={() => void syncKb()}
-        disabled={syncing}
-        className="ml-1 text-electric-blue hover:text-electric-blue/80 disabled:opacity-40 flex items-center gap-1 transition-colors"
-        title="Sync knowledge base from official Olive docs"
-      >
-        <RefreshCw className={`h-3 w-3 ${syncing ? "animate-spin" : ""}`} />
-        {syncing ? "syncing…" : "sync"}
-      </button>
       {error && <span className="text-red-400 truncate max-w-[200px]">{error}</span>}
     </div>
   );

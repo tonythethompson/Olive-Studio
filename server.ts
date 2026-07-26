@@ -357,6 +357,8 @@ interface OliveJob {
   latestMetrics: GpuMetrics | null;
   // Interval handle for periodic GPU sampling
   metricsTimer: ReturnType<typeof setInterval> | null;
+  // True while a nvidia-smi sample is in-flight (prevents overlap)
+  sampling: boolean;
 }
 
 const jobRegistry = new Map<string, OliveJob>();
@@ -389,10 +391,14 @@ function pushGpuMetrics(job: OliveJob, metrics: GpuMetrics) {
 /** Sample GPU metrics via nvidia-smi. Returns null if nvidia-smi is unavailable. */
 async function sampleGpuMetrics(): Promise<GpuMetrics | null> {
   try {
-    const { stdout } = await execFileAsync("nvidia-smi", [
-      "--query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
-      "--format=csv,noheader,nounits",
-    ]);
+    const { stdout } = await execFileAsync(
+      "nvidia-smi",
+      [
+        "--query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
+        "--format=csv,noheader,nounits",
+      ],
+      { timeout: 10_000 },
+    );
     const lines = stdout.trim().split("\n").filter(Boolean);
     if (lines.length === 0) return null;
     const gpus = lines.map((line) => {
@@ -426,8 +432,14 @@ function startGpuMetricsTimer(job: OliveJob): void {
       stopGpuMetricsTimer(job);
       return;
     }
-    const metrics = await sampleGpuMetrics();
-    if (metrics) pushGpuMetrics(job, metrics);
+    if (job.sampling) return;
+    job.sampling = true;
+    try {
+      const metrics = await sampleGpuMetrics();
+      if (metrics) pushGpuMetrics(job, metrics);
+    } finally {
+      job.sampling = false;
+    }
   };
   // Sample immediately, then every 3 seconds
   void sample();
@@ -1504,6 +1516,7 @@ app.post("/api/olive/run", async (req, res) => {
     process: null,
     latestMetrics: null,
     metricsTimer: null,
+    sampling: false,
   };
   jobRegistry.set(jobId, job);
 

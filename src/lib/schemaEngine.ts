@@ -12,7 +12,12 @@
  *   validation, superseding the basic checks in `oliveRecipeSchema.ts`.
  */
 
-import { isKnownPassName, getPassCatalogEntry, type PassCatalogEntry } from "@/lib/passCatalog";
+import {
+  isKnownPassName,
+  getPassCatalogEntry,
+  type PassCatalogEntry,
+  OLIVE_VERSION,
+} from "@/lib/passCatalog";
 import passKnowledgeBase from "../../olive-mcp-server/olive_mcp_server/knowledge_base/passes.json";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -55,7 +60,7 @@ export interface SchemaValidationResult {
 
 // ─── Knowledge-base index ──────────────────────────────────────────────────────
 
-interface PassesJson {
+export interface PassesJson {
   passes?: Array<{
     name: string;
     type?: string;
@@ -123,7 +128,7 @@ export function getPassSchema(name: string): UnifiedPassSchema | undefined {
 
   return {
     name,
-    category: catalogEntry?.category ?? "onnx",
+    category: catalogEntry?.category ?? "other",
     description: paramSchema?.description ?? catalogEntry?.description ?? "",
     inputs: catalogEntry?.inputs ?? paramSchema?.input_formats ?? [],
     outputs: catalogEntry?.outputs ?? paramSchema?.output_formats ?? [],
@@ -213,6 +218,21 @@ export function validatePassConfig(passType: string, config: unknown): string[] 
     if (paramSchema.enum && typeof value === "string" && !paramSchema.enum.includes(value)) {
       errors.push(`parameter "${key}" must be one of [${paramSchema.enum.join(", ")}], got "${value}"`);
     }
+
+    // Range check for numeric params
+    if (paramSchema.range && (paramSchema.type === "int" || paramSchema.type === "float")) {
+      const rangeParts = paramSchema.range.split("-");
+      if (rangeParts.length === 2) {
+        const min = parseFloat(rangeParts[0]);
+        const max = parseFloat(rangeParts[1]);
+        if (Number.isFinite(min) && Number.isFinite(max)) {
+          const numVal = typeof value === "number" ? value : NaN;
+          if (!Number.isFinite(numVal) || numVal < min || numVal > max) {
+            errors.push(`parameter "${key}" must be in range [${paramSchema.range}], got ${String(value)}`);
+          }
+        }
+      }
+    }
   }
 
   return errors;
@@ -275,7 +295,7 @@ export function validateRecipeSchema(recipe: unknown): SchemaValidationResult {
     // Validate pass type against unified catalog
     if (!isKnownPass(passValue.type)) {
       errors.push(
-        `passes.${passName}.type "${passValue.type}" is not a known Olive 0.12.1 pass. ` +
+        `passes.${passName}.type "${passValue.type}" is not a known Olive ${OLIVE_VERSION} pass. ` +
           `Run \`olive run-pass --list-passes\` to see the full list.`,
       );
     }

@@ -31,6 +31,7 @@ export function useKbSync() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as KbStatus;
       setStatus(data);
+      setError(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);

@@ -457,7 +457,7 @@ export function IHVIntegrationPanel({
             </div>
           </div>
 
-          <VramEstimateBanner hardwareProbe={hardwareProbe} className="mb-6" />
+          <VramEstimateBanner state={state} hardwareProbe={hardwareProbe} className="mb-6" />
 
           {/* Hardware Validation Guard Alert Summary Banner */}
           {selectedConflicts.length > 0 && (

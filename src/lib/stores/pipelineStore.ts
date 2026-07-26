@@ -51,6 +51,11 @@ export const usePipelineStore = create<PipelineStore>((set) => ({
  * Compatibility shim hook — returns `{ state, setState }` matching the
  * existing prop interface. Components being migrated can call this instead
  * of receiving props, until all prop-drilling is removed in Phase D.
+ *
+ * TODO(Phase D): This hook subscribes to the entire `state` object, causing
+ * all consumers to re-render on any state change. Replace with field-level
+ * selectors or `useShallow` to minimize unnecessary re-renders once prop
+ * drilling is fully removed.
  */
 export function usePipelineState() {
   const state = usePipelineStore((s) => s.state);
