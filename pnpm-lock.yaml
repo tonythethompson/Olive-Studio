@@ -8,6 +8,7 @@ overrides:
   protobufjs@<=7.6.2: '>=7.6.3'
   protobufjs@>=7.5.0 <=7.6.4: '>=7.6.5'
   body-parser@<1.20.6: '>=1.20.6'
+  uuid@<11.1.1: '>=11.1.1'
   minimatch: ^10.2.5
   brace-expansion: 5.0.8
 
@@ -4676,11 +4677,6 @@ packages:
     resolution: {integrity: sha512-6ZxzVpzDXDa3bJWaHilVayA+BH/1zmxCJoVgvmqJnid/gPoKHxUrS/aC/T6LGQtNHT+XHG9fXPJB4d+IrU30Ew==}
     hasBin: true
 
-  uuid@9.0.1:
-    resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
-    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
-    hasBin: true
-
   vary@1.1.2:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
     engines: {node: '>= 0.8'}
@@ -6204,7 +6200,7 @@ snapshots:
       dequal: 2.0.3
       polished: 4.3.1
       storybook: 8.6.17(prettier@3.9.6)
-      uuid: 9.0.1
+      uuid: 14.0.1
 
   '@storybook/addon-backgrounds@8.6.15(storybook@8.6.17(prettier@3.9.6))':
     dependencies:
@@ -9460,8 +9456,6 @@ snapshots:
       which-typed-array: 1.1.22
 
   uuid@14.0.1: {}
-
-  uuid@9.0.1: {}
 
   vary@1.1.2: {}
 

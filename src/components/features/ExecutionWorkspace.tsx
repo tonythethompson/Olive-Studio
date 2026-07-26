@@ -3,6 +3,7 @@ import {
   useRef,
   useEffect,
   useLayoutEffect,
+  useTransition,
   Suspense,
   lazy,
   type MouseEvent as ReactMouseEvent,
@@ -98,7 +99,18 @@ export function ExecutionWorkspace({
   const liveSourceRef = useRef<EventSource | null>(null);
   const runStartTimeRef = useRef<number | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [recipeView, setRecipeView] = useState<"graph" | "json" | "browser-test" | "benchmark">("graph");
+  const [recipeView, setRecipeViewRaw] = useState<"graph" | "json" | "browser-test" | "benchmark">("graph");
+  const [visitedRecipeViews, setVisitedRecipeViews] = useState<Set<string>>(new Set(["graph"]));
+  const [, startRecipeTransition] = useTransition();
+  const setRecipeView = (view: "graph" | "json" | "browser-test" | "benchmark") => {
+    startRecipeTransition(() => {
+      setRecipeViewRaw(view);
+      setVisitedRecipeViews((prev) => {
+        if (prev.has(view)) return prev;
+        return new Set(prev).add(view);
+      });
+    });
+  };
   const [_isCopied, setIsCopied] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [showGraphDot, setShowGraphDot] = useState(true);
@@ -1244,29 +1256,37 @@ ${
             </div>
           }
         />
-        {recipeView === "graph" ? (
-          <CardContent className="flex-1 overflow-hidden p-0 min-h-[420px]">
-            <Suspense fallback={<LoadingFallback label="Loading graph editor..." minH="520px" />}>
-              <RecipeGraphView state={state} setState={setState} showDot={showGraphDot} />
-            </Suspense>
-          </CardContent>
-        ) : recipeView === "browser-test" ? (
-          <CardContent className="flex-1 overflow-auto p-6">
-            <Suspense fallback={<LoadingFallback label="Loading inference panel..." />}>
-              <InBrowserValidation recipeJson={JSON.stringify(recipe, null, 2)} />
-            </Suspense>
-          </CardContent>
-        ) : recipeView === "benchmark" ? (
-          <CardContent className="flex-1 overflow-auto p-6">
-            <Suspense fallback={<LoadingFallback label="Loading benchmark panel..." />}>
-              <WebGpuBenchmarkPanel />
-            </Suspense>
-          </CardContent>
-        ) : (
-          <CardContent className="flex-1 overflow-auto bg-slate-950 p-4 m-6 mt-0 rounded-lg border border-slate-800 min-h-[360px]">
-            <pre className="text-xs font-mono text-emerald-400">{JSON.stringify(recipe, null, 2)}</pre>
-          </CardContent>
-        )}
+        {(["graph", "browser-test", "benchmark", "json"] as const).map((view) => {
+          if (!visitedRecipeViews.has(view)) return null;
+          const isActive = recipeView === view;
+          return (
+            <CardContent
+              key={view}
+              className={cn("flex-1 overflow-hidden p-0 min-h-[420px]", isActive ? "block" : "hidden")}
+            >
+              {view === "graph" && (
+                <Suspense fallback={<LoadingFallback label="Loading graph editor..." minH="520px" />}>
+                  <RecipeGraphView state={state} setState={setState} showDot={showGraphDot} />
+                </Suspense>
+              )}
+              {view === "browser-test" && (
+                <Suspense fallback={<LoadingFallback label="Loading inference panel..." />}>
+                  <InBrowserValidation recipeJson={JSON.stringify(recipe, null, 2)} />
+                </Suspense>
+              )}
+              {view === "benchmark" && (
+                <Suspense fallback={<LoadingFallback label="Loading benchmark panel..." />}>
+                  <WebGpuBenchmarkPanel />
+                </Suspense>
+              )}
+              {view === "json" && (
+                <div className="overflow-auto bg-slate-950 p-4 m-6 mt-0 rounded-lg border border-slate-800 min-h-[360px]">
+                  <pre className="text-xs font-mono text-emerald-400">{JSON.stringify(recipe, null, 2)}</pre>
+                </div>
+              )}
+            </CardContent>
+          );
+        })}
       </Card>
 
       {/* Active Draft — execution controls + live log in one card */}

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, ChangeEvent, useMemo } from "react";
+import { useState, useRef, useEffect, ChangeEvent, useMemo, useTransition } from "react";
 import {
   Card,
   CardContent,
@@ -155,7 +155,18 @@ export function InputEnvironmentPanel({
   );
   const [importJson, setImportJson] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
-  const [activeRecipeTab, setActiveRecipeTab] = useState<"starter" | "github" | "editor">("starter");
+  const [activeRecipeTab, setActiveRecipeTabRaw] = useState<"starter" | "github" | "editor">("starter");
+  const [visitedRecipeTabs, setVisitedRecipeTabs] = useState<Set<string>>(new Set(["starter"]));
+  const [, startRecipeTabTransition] = useTransition();
+  const setActiveRecipeTab = (tab: "starter" | "github" | "editor") => {
+    startRecipeTabTransition(() => {
+      setActiveRecipeTabRaw(tab);
+      setVisitedRecipeTabs((prev) => {
+        if (prev.has(tab)) return prev;
+        return new Set(prev).add(tab);
+      });
+    });
+  };
   const [recipeSuccessMsg, setRecipeSuccessMsg] = useState<string | null>(null);
   const [applyingRecipePath, setApplyingRecipePath] = useState<string | null>(null);
   const [appliedRecipeLabel, setAppliedRecipeLabel] = useState<string | null>(null);
@@ -787,7 +798,14 @@ export function InputEnvironmentPanel({
                     )}
 
                     {/* PRESETS TAB (microsoft/olive-recipes catalog) */}
-                    <TabsContent value="starter" className="space-y-3 animate-in fade-in mt-0">
+                    <TabsContent
+                      value="starter"
+                      {...(visitedRecipeTabs.has("starter") ? { forceMount: true as const } : {})}
+                      className={cn(
+                        "space-y-3 animate-in fade-in mt-0",
+                        activeRecipeTab !== "starter" && "hidden",
+                      )}
+                    >
                       <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5 space-y-2">
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="min-w-0">
@@ -1081,7 +1099,14 @@ export function InputEnvironmentPanel({
                     </TabsContent>
 
                     {/* GITHUB RECIPE SYNC TAB */}
-                    <TabsContent value="github" className="space-y-3 animate-in fade-in mt-0">
+                    <TabsContent
+                      value="github"
+                      {...(visitedRecipeTabs.has("github") ? { forceMount: true as const } : {})}
+                      className={cn(
+                        "space-y-3 animate-in fade-in mt-0",
+                        activeRecipeTab !== "github" && "hidden",
+                      )}
+                    >
                       <div className="space-y-3 bg-slate-950/30 p-3 rounded-xl border border-slate-900 max-h-[420px] overflow-y-auto">
                         <div className="space-y-2">
                           <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
@@ -1213,7 +1238,14 @@ export function InputEnvironmentPanel({
                     </TabsContent>
 
                     {/* RECIPE schema EDITOR TAB */}
-                    <TabsContent value="editor" className="space-y-3 animate-in fade-in mt-0">
+                    <TabsContent
+                      value="editor"
+                      {...(visitedRecipeTabs.has("editor") ? { forceMount: true as const } : {})}
+                      className={cn(
+                        "space-y-3 animate-in fade-in mt-0",
+                        activeRecipeTab !== "editor" && "hidden",
+                      )}
+                    >
                       <div className="flex flex-col gap-3">
                         {importError && (
                           <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs font-mono leading-relaxed flex items-start gap-1.5 animate-bounce">

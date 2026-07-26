@@ -72,6 +72,70 @@ interface AIChatMessage {
   content: string;
 }
 
+// ─── AI Provider Response Types ───────────────────────────────────────────────
+
+interface GeminiRequestBody {
+  system_instruction: { parts: [{ text: string }] };
+  contents: Array<{ role: string; parts: [{ text: string }] }>;
+  generationConfig?: { responseMimeType: string };
+}
+
+interface GeminiResponse {
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string }> };
+  }>;
+}
+
+interface OpenAIChatRequestBody {
+  model: string;
+  messages: Array<{ role: string; content: string }>;
+  response_format?: { type: string };
+}
+
+interface OpenAIChatResponse {
+  choices?: Array<{ message?: { content?: string } }>;
+}
+
+interface AnthropicResponse {
+  content?: Array<{ text?: string }>;
+}
+
+interface ApiErrorResponse {
+  error?: { message?: string };
+}
+
+// ─── Olive Recipe Types ───────────────────────────────────────────────────────
+
+interface OliveRecipe {
+  passes?: Record<string, unknown>;
+  input_model?: {
+    type?: string;
+    config?: Record<string, unknown>;
+  };
+  systems?: {
+    local_system?: {
+      config?: {
+        accelerators?: Array<{ execution_providers?: string[] }>;
+      };
+      accelerators?: Array<{ execution_providers?: string[] }>;
+    };
+  };
+  [key: string]: unknown;
+}
+
+// ─── MCP Tool Response Type ───────────────────────────────────────────────────
+
+interface McpToolResponse {
+  result?: unknown;
+  error?: string;
+  [key: string]: unknown;
+}
+
+interface IncomingChatMessage {
+  role?: string;
+  content?: string;
+}
+
 const ALLOWED_AI_PROVIDERS = new Set<ProviderConfig["provider"]>([
   "gemini",
   "openai",
@@ -145,7 +209,6 @@ function getAiProvider(): ProviderConfig | null {
   return runtimeAiProvider ?? detectEnvProvider();
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any -- external API response shape unknown */
 async function callGemini(
   cfg: ProviderConfig,
   system: string,
@@ -153,7 +216,7 @@ async function callGemini(
   wantJson: boolean,
 ): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${cfg.apiKey}`;
-  const body: any = {
+  const body: GeminiRequestBody = {
     system_instruction: { parts: [{ text: system }] },
     contents: messages.map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
@@ -167,19 +230,17 @@ async function callGemini(
     body: JSON.stringify(body),
   });
   if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(`Gemini ${resp.status}: ${(err as any)?.error?.message ?? resp.statusText}`);
+    const err = (await resp.json().catch(() => ({}))) as ApiErrorResponse;
+    throw new Error(`Gemini ${resp.status}: ${err.error?.message ?? resp.statusText}`);
   }
-  const data = (await resp.json()) as any;
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  const data = (await resp.json()) as GeminiResponse;
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   if (!text.trim()) {
     throw new Error("Gemini returned an empty response.");
   }
   return text;
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
-/* eslint-disable @typescript-eslint/no-explicit-any -- external API response shape unknown */
 async function callOpenAICompat(
   cfg: ProviderConfig,
   system: string,
@@ -188,7 +249,7 @@ async function callOpenAICompat(
 ): Promise<string> {
   const base =
     cfg.baseUrl ?? (cfg.provider === "mistral" ? "https://api.mistral.ai/v1" : "https://api.openai.com/v1");
-  const body: any = {
+  const body: OpenAIChatRequestBody = {
     model: cfg.model,
     messages: [
       { role: "system", content: system },
@@ -202,15 +263,13 @@ async function callOpenAICompat(
     body: JSON.stringify(body),
   });
   if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(`${cfg.provider} ${resp.status}: ${(err as any)?.error?.message ?? resp.statusText}`);
+    const err = (await resp.json().catch(() => ({}))) as ApiErrorResponse;
+    throw new Error(`${cfg.provider} ${resp.status}: ${err.error?.message ?? resp.statusText}`);
   }
-  const data = (await resp.json()) as any;
-  return data?.choices?.[0]?.message?.content ?? "";
+  const data = (await resp.json()) as OpenAIChatResponse;
+  return data.choices?.[0]?.message?.content ?? "";
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
-/* eslint-disable @typescript-eslint/no-explicit-any -- external API response shape unknown */
 async function callAnthropic(
   cfg: ProviderConfig,
   system: string,
@@ -235,13 +294,12 @@ async function callAnthropic(
     }),
   });
   if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(`Anthropic ${resp.status}: ${(err as any)?.error?.message ?? resp.statusText}`);
+    const err = (await resp.json().catch(() => ({}))) as ApiErrorResponse;
+    throw new Error(`Anthropic ${resp.status}: ${err.error?.message ?? resp.statusText}`);
   }
-  const data = (await resp.json()) as any;
-  return data?.content?.[0]?.text ?? "";
+  const data = (await resp.json()) as AnthropicResponse;
+  return data.content?.[0]?.text ?? "";
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 async function callAI(system: string, messages: AIChatMessage[], wantJson = false): Promise<string> {
   const cfg = getAiProvider();
@@ -453,11 +511,11 @@ app.get("/api/github/raw", async (req, res) => {
         error: "Remote file is not valid JSON.",
       });
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error shape
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error("GitHub raw proxy error:", error);
     return res.status(502).json({
-      error: error?.message || "Failed to fetch recipe from GitHub.",
+      error: msg || "Failed to fetch recipe from GitHub.",
     });
   }
 });
@@ -470,14 +528,13 @@ interface PkgDef {
   label: string;
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any -- recipe object has dynamic shape from user JSON */
-function inferRequiredPackages(recipe: any, cudaTag: string): PkgDef[] {
+function inferRequiredPackages(recipe: OliveRecipe, cudaTag: string): PkgDef[] {
   const pkgs: PkgDef[] = [];
-  const passes = Object.values(recipe.passes ?? {}) as any[];
-  const passTypes = passes.map((p: any) => p?.type ?? "");
+  const passes = Object.values(recipe.passes ?? {}) as Array<Record<string, unknown>>;
+  const passTypes = passes.map((p) => String(p?.type ?? ""));
   const isGpu = cudaTag !== "cpu";
   const inputType = String(recipe.input_model?.type ?? "");
-  const inputConfig = recipe.input_model?.config ?? {};
+  const inputConfig = (recipe.input_model?.config ?? {}) as Record<string, unknown>;
 
   // HuggingFace model source
   if (inputConfig.hf_config || inputType === "HfModel" || inputType.toLowerCase().includes("hf")) {
@@ -557,11 +614,9 @@ function inferRequiredPackages(recipe: any, cudaTag: string): PkgDef[] {
   const seen = new Set<string>();
   return pkgs.filter((p) => (seen.has(p.importName) ? false : (seen.add(p.importName), true)));
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
-/* eslint-disable @typescript-eslint/no-explicit-any -- recipe object has dynamic shape */
-function getRecipeIhvProvider(recipe: any): IHVProvider {
-  const system = recipe?.systems?.local_system;
+function getRecipeIhvProvider(recipe: OliveRecipe): IHVProvider {
+  const system = recipe.systems?.local_system;
   const accelerators = system?.config?.accelerators ?? system?.accelerators;
   const ep = accelerators?.[0]?.execution_providers?.[0];
   if (typeof ep === "string" && ep.length > 0) {
@@ -569,7 +624,6 @@ function getRecipeIhvProvider(recipe: any): IHVProvider {
   }
   return "CUDAExecutionProvider";
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 function oliveSpawnArgs(configPath: string, listPackages: boolean): string[] {
   return listPackages
@@ -1389,10 +1443,9 @@ app.post("/api/olive/run", async (req, res) => {
     }
 
     // Detect CUDA version, then infer and install recipe-specific dependencies
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- parsed JSON shape is dynamic
-    let recipeObj: any = {};
+    let recipeObj: OliveRecipe = {};
     try {
-      recipeObj = JSON.parse(recipeJson);
+      recipeObj = JSON.parse(recipeJson) as OliveRecipe;
     } catch {
       /* malformed — olive will catch it */
     }
@@ -1615,6 +1668,9 @@ app.get("/api/olive/stream/:jobId", (req, res) => {
   req.on("close", () => {
     const idx = job.subscribers.indexOf(send);
     if (idx !== -1) job.subscribers.splice(idx, 1);
+    if (job.subscribers.length === 0 && (job.status === "running" || job.status === "setting_up")) {
+      cancelJobById(job.id);
+    }
   });
 });
 
@@ -1663,6 +1719,14 @@ function cancelJobById(jobId: string): { ok: boolean; message?: string } {
   }
 
   return { ok: true };
+}
+
+function cleanupAllJobs(): void {
+  for (const [jobId, job] of jobRegistry) {
+    if (job.status === "running" || job.status === "setting_up") {
+      cancelJobById(jobId);
+    }
+  }
 }
 
 app.post("/api/olive/cancel", (req, res) => {
@@ -2018,9 +2082,9 @@ app.post("/api/ai/local-pull", async (req, res) => {
       provider: "openai-compat",
       model: modelTag,
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
-  } catch (err: any) {
-    return res.status(500).json({ error: `Failed to download model via LM Studio: ${err.message}` });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: `Failed to download model via LM Studio: ${msg}` });
   }
 });
 
@@ -2134,11 +2198,9 @@ app.post("/api/ai/ollama-pull", async (req, res) => {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("abort")) {
-      return res
-        .status(504)
-        .json({
-          error: "Ollama pull timed out after 5 minutes. The model may be too large or the network is slow.",
-        });
+      return res.status(504).json({
+        error: "Ollama pull timed out after 5 minutes. The model may be too large or the network is slow.",
+      });
     }
     return res.status(500).json({ error: `Failed to pull model via Ollama: ${msg}` });
   }
@@ -2198,8 +2260,10 @@ app.post("/api/ai/ollama-unload", async (req, res) => {
 
 // ─── Olive MCP Integration Helper ──────────────────────────────────────────────
 /** Invokes a tool function in olive_mcp_server and returns its result */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP JSON responses vary
-async function callOliveMcpTool(toolName: string, args: Record<string, unknown> = {}): Promise<any> {
+async function callOliveMcpTool(
+  toolName: string,
+  args: Record<string, unknown> = {},
+): Promise<McpToolResponse> {
   let python = getVenvPython();
   if (!fs.existsSync(python)) {
     python = (await findSystemPython()) ?? "";
@@ -2236,11 +2300,11 @@ except Exception as e:
       JSON.stringify(args),
       oliveMcpDir,
     ]);
-    return JSON.parse(stdout.trim());
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
-  } catch (err: any) {
-    console.warn(`[MCP Tool Warning] ${toolName} call failed:`, err.message);
-    return { error: err.message };
+    return JSON.parse(stdout.trim()) as McpToolResponse;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[MCP Tool Warning] ${toolName} call failed:`, msg);
+    return { error: msg };
   }
 }
 
@@ -2271,9 +2335,9 @@ app.post("/api/mcp/tool", async (req, res) => {
   try {
     const result = await callOliveMcpTool(toolName, args || {});
     return res.json(result);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: msg });
   }
 });
 
@@ -2282,8 +2346,7 @@ app.post("/api/ai/validate", async (req, res) => {
   const { recipeJson, ihvProvider } = req.body;
   if (!recipeJson) return res.status(400).json({ error: "No recipe JSON provided." });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP pass chain response
-  let mcpChainResult: any = null;
+  let mcpChainResult: McpToolResponse | null = null;
   try {
     const parsed = JSON.parse(recipeJson);
     const passes = parsed.passes || {};
@@ -2319,10 +2382,10 @@ Respond with ONLY valid JSON:
       true,
     );
     return res.json(parseJsonFromAiResponse(text));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.error("AI Validate Error:", err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: msg });
   }
 });
 
@@ -2333,10 +2396,8 @@ app.post("/api/ai/analyze-state", async (req, res) => {
 
   const workspace = buildAiWorkspaceContext(state);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP guide responses
-  let hwGuide: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP strategy responses
-  let quantStrat: any = null;
+  let hwGuide: McpToolResponse | null = null;
+  let quantStrat: McpToolResponse | null = null;
   try {
     const targetHw = mapProviderToHardwareTarget(state.ihvProvider || "CPUExecutionProvider");
     const modelType = state.hfModelId || "LLM";
@@ -2385,10 +2446,10 @@ Respond with ONLY valid JSON:
       true,
     );
     return res.json(parseJsonFromAiResponse(text));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.error("AI Analyze Error:", err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: msg });
   }
 });
 
@@ -2401,8 +2462,7 @@ app.post("/api/ai/chat", async (req, res) => {
 
   const contextBlock = workspace ? `\n\n${formatAiWorkspaceContextForPrompt(workspace)}` : "";
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP knowledge match
-  let mcpKnowledge: any = null;
+  let mcpKnowledge: McpToolResponse | null = null;
   if (typeof message === "string" && message.length > 5) {
     try {
       const isErrorMsg = /error|fail|exception|invalid|oom|traceback/i.test(message);
@@ -2423,19 +2483,18 @@ app.post("/api/ai/chat", async (req, res) => {
 
   const system = `You are "Olive AI Assistant", an expert Microsoft Olive compiler specialist. Deep expertise in quantization (AWQ, GPTQ, PTQ, QAT, SmoothQuant), pruning (magnitude, SparseGPT, Wanda), PEFT (LoRA, QLoRA), ONNX Runtime, and hardware execution providers (CUDA, TensorRT, DirectML, OpenVINO, QNN/Snapdragon). Give professional, accurate, concise answers. When relevant, provide Olive config snippets or CLI commands. Treat the workspace block below as the user's live pipeline — do not invent a different model, provider, or pass list.${contextBlock}${mcpBlock}`;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- chat messages from request body
-  const history: AIChatMessage[] = (chatHistory || []).map((m: any) => ({
+  const history: AIChatMessage[] = (chatHistory || []).map((m: IncomingChatMessage) => ({
     role: m.role === "assistant" ? "assistant" : "user",
-    content: m.content,
+    content: m.content ?? "",
   }));
 
   try {
     const text = await callAI(system, [...history, { role: "user", content: message }], false);
     return res.json({ text: text || "No response generated." });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.error("AI Chat Error:", err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: msg });
   }
 });
 
@@ -2483,11 +2542,11 @@ app.post("/api/validate-compatibility", async (req, res) => {
         raw: output.slice(0, 500),
       });
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Express catch, unknown error
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.error("MCP compatibility error:", err);
     return res.status(500).json({
-      error: err?.message || "MCP compatibility check failed.",
+      error: msg || "MCP compatibility check failed.",
     });
   }
 });
@@ -2527,5 +2586,23 @@ async function startServer() {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }
+
+process.on("SIGINT", () => {
+  // eslint-disable-next-line no-console -- intentional shutdown logging
+  console.log("\n[SIGINT] Cleaning up active jobs...");
+  cleanupAllJobs();
+  process.exit(0);
+});
+
+process.on("SIGTERM", () => {
+  // eslint-disable-next-line no-console -- intentional shutdown logging
+  console.log("\n[SIGTERM] Cleaning up active jobs...");
+  cleanupAllJobs();
+  process.exit(0);
+});
+
+process.on("exit", () => {
+  cleanupAllJobs();
+});
 
 startServer();

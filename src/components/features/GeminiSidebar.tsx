@@ -373,6 +373,7 @@ function LocalModelManager({ activeModel, isOpen }: { activeModel?: string; isOp
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: fetch models on mount
     void refresh();
   }, []);
 

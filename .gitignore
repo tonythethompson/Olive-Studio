@@ -8,6 +8,9 @@ coverage/
 .env*
 !.env.example
 
+# Storybook build output
+storybook-static/
+
 # Playwright
 /test-results/
 /playwright-report/
@@ -16,3 +19,4 @@ coverage/
 /playwright/.auth/
 /.freebuff
 /~/.cache/
+/.agents/skills/studio
