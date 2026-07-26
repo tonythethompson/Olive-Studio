@@ -1,8 +1,8 @@
 {
   "name": "olive-studio",
   "private": true,
-  "version": "0.1.0",
-  "license": "AGPL-3.0-or-later",
+  "version": "0.2.0",
+  "license": "MIT",
   "description": "GUI for Microsoft Olive model optimization — runs locally, no cloud required",
   "type": "module",
   "bin": {

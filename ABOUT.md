@@ -36,7 +36,7 @@ Olive recipes are JSON documents with strict pass ordering, execution-provider c
 
 ## License & attribution
 
-Olive Studio is **AGPL-3.0-or-later** — see [LICENSE](LICENSE).  
+Olive Studio is **MIT** — see [LICENSE](LICENSE).  
 Microsoft Olive and related trademarks belong to Microsoft Corporation. This project is independent community tooling, not an official Microsoft product.
 
 ## Maintainer

@@ -33,6 +33,28 @@ jobs:
       - name: Recipe builder smoke test
         run: pnpm validate:recipe
 
+      - name: Build
+        run: pnpm build
+
+      - name: Assert production artifacts
+        run: |
+          test -f dist/server.cjs
+          test -f bin/cli.js
+
+      - name: Production start smoke
+        run: |
+          pnpm start &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS http://localhost:3000 >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server did not respond on port 3000"
+          exit 1
+
   security:
     runs-on: ubuntu-latest
     permissions:
