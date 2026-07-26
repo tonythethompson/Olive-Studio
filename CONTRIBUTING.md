@@ -21,8 +21,8 @@ Thank you for your interest in Olive Studio. This project is a community front e
 ```bash
 git clone https://github.com/tonythethompson/Olive-Studio.git
 cd Olive-Studio
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 Open http://localhost:3000. On first **Execute Live**, the server creates `.venv/` and installs `olive-ai` automatically.
@@ -57,7 +57,7 @@ If you change how UI state maps to Olive JSON:
 1. Update `src/lib/oliveRecipeBuilder.ts` and any import/export logic in `src/lib/oliveRecipeHub.ts`.
 2. Extend rules in `src/lib/pipelineValidation.ts` when pass ↔ provider compatibility changes.
 3. Add or update assertions in `scripts/validate-recipe-builder.ts`.
-4. Regenerate the catalog only when upstream olive-recipes paths change: `npm run generate:recipes`.
+4. Regenerate the catalog only when upstream olive-recipes paths change: `pnpm generate:recipes`.
 
 ### Server and GPU runtime
 
@@ -69,21 +69,21 @@ If you change how UI state maps to Olive JSON:
 Run these locally (CI runs the same on Ubuntu):
 
 ```bash
-npm run lint
-npm run validate:recipe
+pnpm lint
+pnpm validate:recipe
 ```
 
 For UI or server changes, manually smoke-test:
 
-1. `npm run dev`
+1. `pnpm dev`
 2. Build or load a recipe, confirm validation banners behave as expected
 3. If touching execution: run **Execute Live** with a small CPU recipe when possible
 
 Production build (optional):
 
 ```bash
-npm run build
-npm run start
+pnpm build
+pnpm start
 ```
 
 ## Pull request guidelines
