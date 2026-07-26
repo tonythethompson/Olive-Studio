@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useTransition } from "react";
 import { UIState } from "@/types";
+import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { cn } from "@/lib/utils";
 import {
   buildAiWorkspaceContext,
@@ -186,8 +187,8 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 interface GeminiSidebarProps {
-  state: UIState;
-  setState: (partial: Partial<UIState>) => void;
+  state?: UIState;
+  setState?: (partial: Partial<UIState>) => void;
   isOpen: boolean;
   onClose: () => void;
   openToAudit?: boolean;
@@ -546,13 +547,16 @@ function LocalModelManager({ activeModel, isOpen }: { activeModel?: string; isOp
 }
 
 export function GeminiSidebar({
-  state,
-  setState,
+  state: propState,
+  setState: propSetState,
   isOpen,
   onClose,
   openToAudit,
   onAuditOpened,
 }: GeminiSidebarProps) {
+  const storeState = usePipelineState();
+  const state = propState ?? storeState.state;
+  const setState = propSetState ?? storeState.setState;
   const [activeTab, setActiveTab] = useState<"audit" | "chat" | "settings">("audit");
   const [, startTabTransition] = useTransition();
 

@@ -13,6 +13,7 @@ import {
   Button,
 } from "@/components/ui";
 import { UIState } from "@/types";
+import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { SUGGESTED_RECIPES } from "@/data/recipes";
 import {
   compareCatalogMetadataToRecipe,
@@ -90,12 +91,15 @@ function presetDisplayName(name: string): { title: string; meta: string } {
 }
 
 export function InputEnvironmentPanel({
-  state,
-  setState,
+  state: propState,
+  setState: propSetState,
 }: {
-  state: UIState;
-  setState: (s: Partial<UIState>) => void;
-}) {
+  state?: UIState;
+  setState?: (s: Partial<UIState>) => void;
+} = {}) {
+  const storeState = usePipelineState();
+  const state = propState ?? storeState.state;
+  const setState = propSetState ?? storeState.setState;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chunkFilesRef = useRef<Map<string, File>>(new Map());
   const [isReconstructing, setIsReconstructing] = useState(false);

@@ -1,4 +1,4 @@
-import { isKnownPassName } from "@/lib/passCatalog";
+import { validatePassConfig, isKnownPass } from "@/lib/schemaEngine";
 
 export interface OliveRecipeSchemaResult {
   valid: boolean;
@@ -62,12 +62,19 @@ export function validateOliveRecipeStructure(recipe: unknown): OliveRecipeSchema
     if (passValue.config !== undefined && !isObject(passValue.config)) {
       errors.push(`passes.${passName}.config must be an object when present`);
     }
-    // Validate pass type name against the 0.12.1 pass catalog
-    if (!isKnownPassName(passValue.type)) {
+    // Validate pass type name against the unified catalog (TS + MCP knowledge base)
+    if (!isKnownPass(passValue.type)) {
       errors.push(
         `passes.${passName}.type "${passValue.type}" is not a known Olive 0.12.1 pass. ` +
           `Run \`olive run-pass --list-passes\` to see the full list.`,
       );
+    }
+    // Validate pass config against parameter schemas from the unified schema engine
+    if (isObject(passValue.config)) {
+      const configErrors = validatePassConfig(passValue.type, passValue.config);
+      for (const err of configErrors) {
+        errors.push(`passes.${passName}: ${err}`);
+      }
     }
   }
 

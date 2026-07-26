@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { UIState } from "@/types";
+import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import {
   compareVramFit,
@@ -17,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { HardDrive } from "lucide-react";
 
 interface VramEstimateBannerProps {
-  state: UIState;
+  state?: UIState;
   hardwareProbe?: HardwareProbeResult | null;
   compact?: boolean;
   sidebar?: boolean;
@@ -25,12 +26,14 @@ interface VramEstimateBannerProps {
 }
 
 export const VramEstimateBanner = memo(function VramEstimateBanner({
-  state,
+  state: propState,
   hardwareProbe: hardwareProbeProp,
   compact = false,
   sidebar = false,
   className,
 }: VramEstimateBannerProps) {
+  const storeState = usePipelineState();
+  const state = propState ?? storeState.state;
   const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(hardwareProbeProp ?? null);
 
   useEffect(() => {

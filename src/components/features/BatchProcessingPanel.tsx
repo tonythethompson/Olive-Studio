@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, Button, Label, Input, Select } from "@/components/ui";
 import { UIState, BatchJob, IHVProvider, ModelSource } from "@/types";
+import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";
 import { mapMcpConfigToUiState } from "@/lib/mcpConfigMapping";
 import { buildRecipeJsonFromState, buildOliveRecipeFromBatchJob } from "@/lib/recipePipeline";
@@ -30,12 +31,15 @@ import {
 } from "lucide-react";
 
 export function BatchProcessingPanel({
-  state,
-  setState,
+  state: propState,
+  setState: propSetState,
 }: {
-  state: UIState;
-  setState: (s: Partial<UIState>) => void;
-}) {
+  state?: UIState;
+  setState?: (s: Partial<UIState>) => void;
+} = {}) {
+  const storeState = usePipelineState();
+  const state = propState ?? storeState.state;
+  const setState = propSetState ?? storeState.setState;
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const activeSourcesRef = useRef<EventSource[]>([]);

@@ -330,6 +330,19 @@ async function callAI(system: string, messages: AIChatMessage[], wantJson = fals
 }
 
 // ─── Olive Job Registry ───────────────────────────────────────────────────────
+interface GpuMetrics {
+  timestamp: string;
+  gpus: Array<{
+    index: number;
+    name: string;
+    utilizationPct: number | null;
+    memUsedMb: number | null;
+    memTotalMb: number | null;
+    tempC: number | null;
+    powerW: number | null;
+  }>;
+}
+
 interface OliveJob {
   id: string;
   status: "setting_up" | "running" | "completed" | "failed" | "cancelled";
@@ -337,7 +350,13 @@ interface OliveJob {
   logs: string[];
   // SSE subscriber queues: each subscriber is a function that receives new log lines
   subscribers: Array<(line: string) => void>;
+  // SSE metric subscribers: receive GPU metric snapshots
+  metricSubscribers: Array<(metrics: GpuMetrics) => void>;
   process: ReturnType<typeof spawn> | null;
+  // Latest GPU metrics snapshot (for replay to late SSE subscribers)
+  latestMetrics: GpuMetrics | null;
+  // Interval handle for periodic GPU sampling
+  metricsTimer: ReturnType<typeof setInterval> | null;
 }
 
 const jobRegistry = new Map<string, OliveJob>();
@@ -353,6 +372,73 @@ function pushLog(job: OliveJob, line: string) {
     } catch {
       /* subscriber gone */
     }
+  }
+}
+
+function pushGpuMetrics(job: OliveJob, metrics: GpuMetrics) {
+  job.latestMetrics = metrics;
+  for (const sub of job.metricSubscribers) {
+    try {
+      sub(metrics);
+    } catch {
+      /* subscriber gone */
+    }
+  }
+}
+
+/** Sample GPU metrics via nvidia-smi. Returns null if nvidia-smi is unavailable. */
+async function sampleGpuMetrics(): Promise<GpuMetrics | null> {
+  try {
+    const { stdout } = await execFileAsync("nvidia-smi", [
+      "--query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
+      "--format=csv,noheader,nounits",
+    ]);
+    const lines = stdout.trim().split("\n").filter(Boolean);
+    if (lines.length === 0) return null;
+    const gpus = lines.map((line) => {
+      const parts = line.split(",").map((s) => s.trim());
+      const parseNum = (v: string | undefined): number | null => {
+        if (!v || v === "[N/A]") return null;
+        const n = parseFloat(v);
+        return isNaN(n) ? null : n;
+      };
+      return {
+        index: parseInt(parts[0] ?? "0", 10),
+        name: parts[1] ?? "Unknown GPU",
+        utilizationPct: parseNum(parts[2]),
+        memUsedMb: parseNum(parts[3]),
+        memTotalMb: parseNum(parts[4]),
+        tempC: parseNum(parts[5]),
+        powerW: parseNum(parts[6]),
+      };
+    });
+    return { timestamp: new Date().toISOString(), gpus };
+  } catch {
+    return null;
+  }
+}
+
+/** Start periodic GPU metrics sampling for a job. */
+function startGpuMetricsTimer(job: OliveJob): void {
+  if (job.metricsTimer) return;
+  const sample = async () => {
+    if (job.status !== "running") {
+      stopGpuMetricsTimer(job);
+      return;
+    }
+    const metrics = await sampleGpuMetrics();
+    if (metrics) pushGpuMetrics(job, metrics);
+  };
+  // Sample immediately, then every 3 seconds
+  void sample();
+  job.metricsTimer = setInterval(() => void sample(), 3000);
+}
+
+/** Stop GPU metrics sampling for a job. */
+function stopGpuMetricsTimer(job: OliveJob): void {
+  if (job.metricsTimer) {
+    clearInterval(job.metricsTimer);
+    job.metricsTimer = null;
   }
 }
 
@@ -1414,7 +1500,10 @@ app.post("/api/olive/run", async (req, res) => {
     exitCode: null,
     logs: [],
     subscribers: [],
+    metricSubscribers: [],
     process: null,
+    latestMetrics: null,
+    metricsTimer: null,
   };
   jobRegistry.set(jobId, job);
 
@@ -1578,6 +1667,7 @@ app.post("/api/olive/run", async (req, res) => {
     pushLog(job, `[info] Starting Olive optimization run...`);
 
     job.status = "running";
+    startGpuMetricsTimer(job);
     const { executable, args } = resolveOliveCommand(targetProvider, tmpFile, false);
     const proc = spawn(executable, args, {
       stdio: "pipe",
@@ -1597,6 +1687,7 @@ app.post("/api/olive/run", async (req, res) => {
     proc.on("close", (code) => {
       job.exitCode = code;
       job.status = code === 0 ? "completed" : "failed";
+      stopGpuMetricsTimer(job);
       pushLog(job, `[done] Olive process exited with code ${code}.`);
       // Cleanup temp file
       try {
@@ -1618,6 +1709,7 @@ app.post("/api/olive/run", async (req, res) => {
       pushLog(job, `[error] Failed to start Olive process: ${err.message}`);
       job.status = "failed";
       job.exitCode = 1;
+      stopGpuMetricsTimer(job);
       for (const sub of job.subscribers) {
         try {
           sub("__DONE__");
@@ -1655,6 +1747,11 @@ app.get("/api/olive/stream/:jobId", (req, res) => {
     res.write(`data: ${JSON.stringify({ line })}\n\n`);
   }
 
+  // Replay latest GPU metrics if available
+  if (job.latestMetrics) {
+    res.write(`event: metrics\ndata: ${JSON.stringify(job.latestMetrics)}\n\n`);
+  }
+
   // If already finished, send done immediately
   if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
     res.write(`event: done\ndata: ${JSON.stringify({ exitCode: job.exitCode })}\n\n`);
@@ -1665,9 +1762,17 @@ app.get("/api/olive/stream/:jobId", (req, res) => {
   // Subscribe to new lines
   job.subscribers.push(send);
 
+  // Subscribe to GPU metrics
+  const sendMetrics = (metrics: GpuMetrics) => {
+    res.write(`event: metrics\ndata: ${JSON.stringify(metrics)}\n\n`);
+  };
+  job.metricSubscribers.push(sendMetrics);
+
   req.on("close", () => {
     const idx = job.subscribers.indexOf(send);
     if (idx !== -1) job.subscribers.splice(idx, 1);
+    const midx = job.metricSubscribers.indexOf(sendMetrics);
+    if (midx !== -1) job.metricSubscribers.splice(midx, 1);
     if (job.subscribers.length === 0 && (job.status === "running" || job.status === "setting_up")) {
       cancelJobById(job.id);
     }
@@ -1694,6 +1799,7 @@ function cancelJobById(jobId: string): { ok: boolean; message?: string } {
   if (job.status === "running" || job.status === "setting_up") {
     job.status = "cancelled";
     job.exitCode = -1;
+    stopGpuMetricsTimer(job);
     pushLog(job, "[info] Job cancelled by user.");
 
     if (job.process && job.process.pid) {
@@ -2335,6 +2441,92 @@ app.post("/api/mcp/tool", async (req, res) => {
   try {
     const result = await callOliveMcpTool(toolName, args || {});
     return res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: msg });
+  }
+});
+
+// ─── GET /api/mcp/kb-status ───────────────────────────────────────────────────
+app.get("/api/mcp/kb-status", (req, res) => {
+  try {
+    const kbDir = path.join(process.cwd(), "olive-mcp-server", "olive_mcp_server", "knowledge_base");
+    const passesPath = path.join(kbDir, "passes.json");
+
+    if (!fs.existsSync(passesPath)) {
+      return res.json({
+        available: false,
+        error: "passes.json not found",
+      });
+    }
+
+    const raw = fs.readFileSync(passesPath, "utf-8");
+    const data = JSON.parse(raw) as { version?: string; last_updated?: string; passes?: unknown[] };
+
+    // Check for update_report.json (written by update_kb.py)
+    const reportPath = path.join(kbDir, "update_report.json");
+    let lastSync: string | null = null;
+    if (fs.existsSync(reportPath)) {
+      try {
+        const report = JSON.parse(fs.readFileSync(reportPath, "utf-8")) as { updated_at?: string };
+        lastSync = report.updated_at ?? null;
+      } catch {
+        /* ignore */
+      }
+    }
+
+    return res.json({
+      available: true,
+      version: data.version ?? "unknown",
+      lastUpdated: data.last_updated ?? null,
+      lastSync,
+      passCount: Array.isArray(data.passes) ? data.passes.length : 0,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: msg });
+  }
+});
+
+// ─── POST /api/mcp/sync-kb ────────────────────────────────────────────────────
+app.post("/api/mcp/sync-kb", async (req, res) => {
+  try {
+    const scriptPath = path.join(process.cwd(), "olive-mcp-server", "scripts", "update_kb.py");
+    if (!fs.existsSync(scriptPath)) {
+      return res.status(404).json({ error: "update_kb.py script not found." });
+    }
+
+    let python = getVenvPython();
+    if (!fs.existsSync(python)) {
+      python = (await findSystemPython()) ?? "";
+    }
+    if (!python) {
+      return res.status(500).json({ error: "Python environment not found." });
+    }
+
+    const { stdout, stderr } = await execFileAsync(python, [scriptPath], {
+      timeout: 120_000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+
+    // Read the generated report
+    const kbDir = path.join(process.cwd(), "olive-mcp-server", "olive_mcp_server", "knowledge_base");
+    const reportPath = path.join(kbDir, "update_report.json");
+    let report: Record<string, unknown> | null = null;
+    if (fs.existsSync(reportPath)) {
+      try {
+        report = JSON.parse(fs.readFileSync(reportPath, "utf-8"));
+      } catch {
+        /* ignore */
+      }
+    }
+
+    return res.json({
+      ok: true,
+      stdout: stdout.slice(0, 2000),
+      stderr: stderr.slice(0, 500) || null,
+      report,
+    });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return res.status(500).json({ error: msg });

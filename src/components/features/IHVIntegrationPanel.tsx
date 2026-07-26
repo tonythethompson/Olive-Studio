@@ -12,6 +12,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui";
 import { IHVProvider, UIState } from "@/types";
+import { usePipelineState } from "@/lib/stores/pipelineStore";
 import {
   applyProviderConflictAutofixes,
   getProviderConflicts,
@@ -266,12 +267,15 @@ export function getCellCompatibility(
 }
 
 export function IHVIntegrationPanel({
-  state,
-  setState,
+  state: propState,
+  setState: propSetState,
 }: {
-  state: UIState;
-  setState: (s: Partial<UIState>) => void;
-}) {
+  state?: UIState;
+  setState?: (s: Partial<UIState>) => void;
+} = {}) {
+  const storeState = usePipelineState();
+  const state = propState ?? storeState.state;
+  const setState = propSetState ?? storeState.setState;
   const [passSearch, setPassSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"matrix" | "cards">("matrix");
   const [selectedCategory, setSelectedCategory] = useState<
@@ -453,7 +457,7 @@ export function IHVIntegrationPanel({
             </div>
           </div>
 
-          <VramEstimateBanner state={state} hardwareProbe={hardwareProbe} className="mb-6" />
+          <VramEstimateBanner hardwareProbe={hardwareProbe} className="mb-6" />
 
           {/* Hardware Validation Guard Alert Summary Banner */}
           {selectedConflicts.length > 0 && (

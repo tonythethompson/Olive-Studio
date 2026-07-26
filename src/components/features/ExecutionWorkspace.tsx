@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
+import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";
 import { mapMcpConfigToUiState } from "@/lib/mcpConfigMapping";
 import { DiagnosisHistory, type DiagnosisEntry } from "./DiagnosisHistory";
@@ -45,6 +46,8 @@ import { cn } from "@/lib/utils";
 import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
+import { GpuMetricsBar } from "@/components/features/GpuMetricsBar";
+import { type GpuMetrics } from "@/lib/gpuMetrics";
 import { saveJobHistory } from "@/lib/jobHistoryStore";
 import { JobHistoryModal } from "@/components/features/JobHistoryModal";
 
@@ -70,8 +73,8 @@ function LoadingFallback({ label, minH }: { label: string; minH?: string }) {
 }
 
 export function ExecutionWorkspace({
-  state,
-  setState,
+  state: propState,
+  setState: propSetState,
   onOpenAiAudit,
   onRunStateChange,
   onExecute: _onExecute,
@@ -79,15 +82,18 @@ export function ExecutionWorkspace({
   isRunning: _isRunning,
   setIsRunning: _setIsRunning,
 }: {
-  state: UIState;
-  setState: (s: Partial<UIState>) => void;
+  state?: UIState;
+  setState?: (s: Partial<UIState>) => void;
   onOpenAiAudit?: () => void;
   onRunStateChange?: (running: boolean) => void;
   onExecute?: () => void;
   jobId?: string | null;
   isRunning?: boolean;
   setIsRunning?: (v: boolean) => void;
-}) {
+} = {}) {
+  const storeState = usePipelineState();
+  const state = propState ?? storeState.state;
+  const setState = propSetState ?? storeState.setState;
   // Live execution state
   const [liveJobId, setLiveJobId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -96,6 +102,7 @@ export function ExecutionWorkspace({
     "idle" | "running" | "completed" | "failed" | "cancelled"
   >("idle");
   const [executionExitCode, setExecutionExitCode] = useState<number | null>(null);
+  const [gpuMetrics, setGpuMetrics] = useState<GpuMetrics | null>(null);
   const liveSourceRef = useRef<EventSource | null>(null);
   const runStartTimeRef = useRef<number | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -642,6 +649,7 @@ ${
     setExecutionLogs(["[INFO] Initiating Olive run...\n"]);
     setExecutionStatus("running");
     setExecutionExitCode(null);
+    setGpuMetrics(null);
     runStartTimeRef.current = Date.now(); // eslint-disable-line react-hooks/purity -- event handler
 
     try {
@@ -696,6 +704,15 @@ ${
           }
         };
 
+        evtSource.addEventListener("metrics", (e: MessageEvent) => {
+          try {
+            const metrics = JSON.parse(e.data) as GpuMetrics;
+            setGpuMetrics(metrics);
+          } catch {
+            /* ignore malformed */
+          }
+        });
+
         evtSource.addEventListener("done", (e: MessageEvent) => {
           let exitCode = 0;
           try {
@@ -707,6 +724,7 @@ ${
           setExecutionStatus(finalStatus);
           setExecutionExitCode(exitCode);
           setIsRunning(false);
+          setGpuMetrics(null);
           onRunStateChange?.(false);
           evtSource.close();
           liveSourceRef.current = null;
@@ -1266,7 +1284,7 @@ ${
             >
               {view === "graph" && (
                 <Suspense fallback={<LoadingFallback label="Loading graph editor..." minH="520px" />}>
-                  <RecipeGraphView state={state} setState={setState} showDot={showGraphDot} />
+                  <RecipeGraphView showDot={showGraphDot} />
                 </Suspense>
               )}
               {view === "browser-test" && (
@@ -1330,7 +1348,7 @@ ${
           }
         />
         <CardContent className="flex flex-col gap-4 p-4">
-          <VramEstimateBanner state={state} compact />
+          <VramEstimateBanner compact />
           {schema.errors.length > 0 && (
             <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3 space-y-2">
               {schema.errors.map((error) => (
@@ -1415,6 +1433,8 @@ ${
               </Button>
             </div>
           </div>
+          {/* GPU metrics live bar */}
+          {isRunning && gpuMetrics && <GpuMetricsBar metrics={gpuMetrics} />}
           {/* Log panel with selection, manual diagnosis, and history sidebar */}
           <div className="flex gap-0 rounded-md border border-slate-800 overflow-hidden">
             <div className="flex-1 space-y-1.5 min-w-0">
