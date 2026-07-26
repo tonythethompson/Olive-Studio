@@ -36,7 +36,11 @@ export function useKbSync() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as KbStatus;
       setStatus(data);
-      setError(null);
+      if (data.available === false) {
+        setError(data.error ?? "Knowledge base unavailable");
+      } else {
+        setError(null);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
@@ -77,6 +81,7 @@ export function useKbSync() {
   }, [fetchStatus]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetchStatus is async; setState runs after await, not synchronously
     void fetchStatus();
     const interval = setInterval(() => void fetchStatus(), REFRESH_INTERVAL_MS);
     const onVisibility = () => {

@@ -69,14 +69,42 @@ describe("validatePassConfig", () => {
     expect(errors).toEqual([]);
   });
 
-  it("returns no errors for undefined config", () => {
+  it("returns no errors for undefined config when pass has no required params", () => {
     const errors = validatePassConfig("OnnxConversion", undefined);
     expect(errors).toEqual([]);
   });
 
-  it("returns no errors for null config", () => {
+  it("returns no errors for null config when pass has no required params", () => {
     const errors = validatePassConfig("OnnxConversion", null);
     expect(errors).toEqual([]);
+  });
+
+  it("reports missing required params when config is absent", () => {
+    const errors = validatePassConfig("OnnxStaticQuantization", undefined);
+    expect(errors.some((e) => e.includes("calibration_data_dir"))).toBe(true);
+  });
+
+  it("accepts data_config as an alternate to calibration_data_dir", () => {
+    const errors = validatePassConfig("OnnxStaticQuantization", { data_config: "imagenet_calib" });
+    expect(errors.filter((e) => e.includes("calibration_data_dir"))).toEqual([]);
+  });
+
+  it("rejects unsupported numeric enum members", () => {
+    const errors = validatePassConfig("QLoRA", { bits: 3 });
+    expect(errors.some((e) => e.includes("bits"))).toBe(true);
+  });
+
+  it("accepts valid numeric enum members", () => {
+    const errors = validatePassConfig("QLoRA", { bits: 4 });
+    expect(errors.filter((e) => e.includes("bits"))).toEqual([]);
+  });
+
+  it("validates nested list[list[int]] parameter types", () => {
+    const ok = validatePassConfig("OpenVINOConversion", { input_shapes: [[1, 3, 224, 224]] });
+    expect(ok.filter((e) => e.includes("input_shapes"))).toEqual([]);
+
+    const bad = validatePassConfig("OpenVINOConversion", { input_shapes: ["invalid"] });
+    expect(bad.some((e) => e.includes("input_shapes"))).toBe(true);
   });
 
   it("returns error for non-object config", () => {

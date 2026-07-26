@@ -1298,7 +1298,7 @@ ${
             >
               {view === "graph" && (
                 <Suspense fallback={<LoadingFallback label="Loading graph editor..." minH="520px" />}>
-                  <RecipeGraphView showDot={showGraphDot} />
+                  <RecipeGraphView state={state} setState={setState} showDot={showGraphDot} />
                 </Suspense>
               )}
               {view === "browser-test" && (

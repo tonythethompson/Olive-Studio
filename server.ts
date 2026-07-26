@@ -7,6 +7,7 @@ import { promisify } from "util";
 import fs from "fs";
 import os from "os";
 import { v4 as uuidv4 } from "uuid";
+import rateLimit from "express-rate-limit";
 
 import { validateOliveRecipeStructure } from "./src/lib/oliveRecipeSchema.ts";
 import { parseJsonFromAiResponse, readEnvApiKey } from "./src/lib/aiResponse.ts";
@@ -59,8 +60,22 @@ interface KbStatusCache {
 
 let kbStatusCache: KbStatusCache | null = null;
 let kbSyncInProgress = false;
-const kbSyncRateLimit = new Map<string, number>(); // clientId -> lastSyncTimestamp
-const KB_SYNC_COOLDOWN_MS = 30_000; // 30 seconds between syncs per client
+
+const kbStatusRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { available: false, error: "Too many KB status requests. Please wait." },
+});
+
+const kbSyncRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: 2,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "Rate limited: please wait before syncing again." },
+});
 
 // ─── AI Provider Config ───────────────────────────────────────────────────────
 
@@ -2497,6 +2512,38 @@ app.post("/api/mcp/tool", async (req, res) => {
 
 // ─── KB Status Helpers ────────────────────────────────────────────────────────
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** True when update_report.json reflects a successful upstream refresh. */
+function isSuccessfulKbReport(report: Record<string, unknown> | null): boolean {
+  if (!report) return false;
+  if (report.success === false) return false;
+  if (report.success === true) return true;
+
+  const sources = report.sources;
+  if (!isObjectRecord(sources) || Object.keys(sources).length === 0) return false;
+
+  for (const source of Object.values(sources)) {
+    if (!isObjectRecord(source)) continue;
+    if (source.status === "error") return false;
+  }
+  return true;
+}
+
+function isAllowedSyncOrigin(req: express.Request): boolean {
+  const origin = req.get("origin");
+  if (!origin) return true; // same-origin / non-browser clients omit Origin
+  try {
+    const originHost = new URL(origin).host;
+    const requestHost = req.get("host");
+    return Boolean(requestHost) && originHost === requestHost;
+  } catch {
+    return false;
+  }
+}
+
 /** Load KB status from the filesystem and cache it. */
 function loadKbStatus(): KbStatusCache {
   try {
@@ -2518,8 +2565,10 @@ function loadKbStatus(): KbStatusCache {
     let lastSync: string | null = null;
     if (fs.existsSync(reportPath)) {
       try {
-        const report = JSON.parse(fs.readFileSync(reportPath, "utf-8")) as { updated_at?: string };
-        lastSync = report.updated_at ?? null;
+        const report = JSON.parse(fs.readFileSync(reportPath, "utf-8")) as Record<string, unknown>;
+        if (isSuccessfulKbReport(report) && typeof report.updated_at === "string") {
+          lastSync = report.updated_at;
+        }
       } catch {
         /* ignore */
       }
@@ -2547,7 +2596,7 @@ function invalidateKbStatusCache(): void {
 }
 
 // ─── GET /api/mcp/kb-status ───────────────────────────────────────────────────
-app.get("/api/mcp/kb-status", (req, res) => {
+app.get("/api/mcp/kb-status", kbStatusRateLimit, (req, res) => {
   // Return cached status if available
   if (kbStatusCache) {
     return res.json(kbStatusCache);
@@ -2556,7 +2605,11 @@ app.get("/api/mcp/kb-status", (req, res) => {
   // Load from filesystem and cache
   kbStatusCache = loadKbStatus();
 
-  if (kbStatusCache.error) {
+  if (kbStatusCache.error && !kbStatusCache.available) {
+    // Designed unavailable response (missing KB) stays HTTP 200 for the UI hook.
+    if (kbStatusCache.error === "passes.json not found") {
+      return res.json(kbStatusCache);
+    }
     return res.status(500).json(kbStatusCache);
   }
 
@@ -2564,45 +2617,28 @@ app.get("/api/mcp/kb-status", (req, res) => {
 });
 
 // ─── POST /api/mcp/sync-kb ────────────────────────────────────────────────────
-app.post("/api/mcp/sync-kb", async (req, res) => {
+app.post("/api/mcp/sync-kb", kbSyncRateLimit, async (req, res) => {
   try {
     // ── Authentication: same-origin or token-based ───────────────────────────────
-    const origin = req.get("origin");
     const authToken = req.get("x-sync-token");
     const expectedToken = process.env.SYNC_KB_TOKEN;
+    const hasValidToken = Boolean(expectedToken && authToken === expectedToken);
 
-    // Allow same-origin requests or valid token
-    const isSameOrigin = !origin || origin.includes("localhost") || origin.includes("127.0.0.1");
-    const hasValidToken = expectedToken && authToken === expectedToken;
-
-    if (!isSameOrigin && !hasValidToken) {
-      return res.status(401).json({ error: "Unauthorized: same-origin or valid token required." });
-    }
-
-    // ── Rate limiting ────────────────────────────────────────────────────────────
-    const clientId = req.ip || "unknown";
-    const now = Date.now();
-    const lastSync = kbSyncRateLimit.get(clientId);
-
-    if (lastSync && now - lastSync < KB_SYNC_COOLDOWN_MS) {
-      const waitSeconds = Math.ceil((KB_SYNC_COOLDOWN_MS - (now - lastSync)) / 1000);
-      return res.status(429).json({
-        error: `Rate limited: please wait ${waitSeconds}s before syncing again.`,
-      });
+    if (!hasValidToken && !isAllowedSyncOrigin(req)) {
+      return res.status(401).json({ ok: false, error: "Unauthorized: same-origin or valid token required." });
     }
 
     // ── Mutex: prevent overlapping executions ───────────────────────────────────
     if (kbSyncInProgress) {
-      return res.status(409).json({ error: "Sync already in progress. Please wait." });
+      return res.status(409).json({ ok: false, error: "Sync already in progress. Please wait." });
     }
 
     kbSyncInProgress = true;
-    kbSyncRateLimit.set(clientId, now);
 
     const scriptPath = path.join(process.cwd(), "olive-mcp-server", "scripts", "update_kb.py");
     if (!fs.existsSync(scriptPath)) {
       kbSyncInProgress = false;
-      return res.status(404).json({ error: "update_kb.py script not found." });
+      return res.status(404).json({ ok: false, error: "update_kb.py script not found." });
     }
 
     let python = getVenvPython();
@@ -2611,7 +2647,7 @@ app.post("/api/mcp/sync-kb", async (req, res) => {
     }
     if (!python) {
       kbSyncInProgress = false;
-      return res.status(500).json({ error: "Python environment not found." });
+      return res.status(500).json({ ok: false, error: "Python environment not found." });
     }
 
     const { stdout, stderr } = await execFileAsync(python, [scriptPath], {
@@ -2631,9 +2667,11 @@ app.post("/api/mcp/sync-kb", async (req, res) => {
       }
     }
 
-    // Hot-reload the schema engine with the updated passes.json
+    const syncSucceeded = isSuccessfulKbReport(report);
+
+    // Hot-reload only after a successful refresh with a readable passes.json
     const passesPath = path.join(kbDir, "passes.json");
-    if (fs.existsSync(passesPath)) {
+    if (syncSucceeded && fs.existsSync(passesPath)) {
       try {
         const passesRaw = fs.readFileSync(passesPath, "utf-8");
         const passesData = JSON.parse(passesRaw) as PassesJson;
@@ -2648,6 +2686,16 @@ app.post("/api/mcp/sync-kb", async (req, res) => {
 
     kbSyncInProgress = false;
 
+    if (!syncSucceeded) {
+      return res.status(502).json({
+        ok: false,
+        error: "Knowledge-base sync completed without a successful source refresh.",
+        stdout: stdout.slice(0, 2000),
+        stderr: stderr.slice(0, 500) || null,
+        report,
+      });
+    }
+
     return res.json({
       ok: true,
       stdout: stdout.slice(0, 2000),
@@ -2657,7 +2705,7 @@ app.post("/api/mcp/sync-kb", async (req, res) => {
   } catch (err: unknown) {
     kbSyncInProgress = false;
     const msg = err instanceof Error ? err.message : String(err);
-    return res.status(500).json({ error: msg });
+    return res.status(500).json({ ok: false, error: msg });
   }
 });
 

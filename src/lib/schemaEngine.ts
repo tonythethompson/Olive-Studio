@@ -18,18 +18,25 @@ import {
   type PassCatalogEntry,
   OLIVE_VERSION,
 } from "@/lib/passCatalog";
+import passKnowledgeBase from "../../olive-mcp-server/olive_mcp_server/knowledge_base/passes.json";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-export type ParamType = "str" | "int" | "float" | "bool" | "dict" | "list[str]" | "list[int]" | "list[float]";
+export type ParamType =
+  "str" | "int" | "float" | "bool" | "dict" | "list[str]" | "list[int]" | "list[float]" | "list[list[int]]";
 
 export interface ParamSchema {
   type: ParamType;
   default: unknown;
-  enum?: string[];
+  enum?: Array<string | number | boolean>;
   range?: string;
   description?: string;
 }
+
+/** Required params that Olive also accepts via an alternate config key. */
+const REQUIRED_PARAM_ALTERNATIVES: Record<string, readonly string[]> = {
+  calibration_data_dir: ["data_config", "data_config_name"],
+};
 
 export interface PassParamSchema {
   name: string;
@@ -83,14 +90,14 @@ let PARAM_SCHEMAS: Map<string, PassParamSchema> = new Map();
 /** Lazy-load the knowledge base data on first use (synchronous). */
 function ensureKbLoaded(): void {
   if (kbData !== null) return;
-
-  // Synchronous dynamic require for CommonJS compatibility
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const passKnowledgeBase = require(
-    "../../olive-mcp-server/olive_mcp_server/knowledge_base/passes.json"
-  );
   kbData = passKnowledgeBase as PassesJson;
   PARAM_SCHEMAS = buildParamSchemas(kbData);
+}
+
+function hasRequiredParam(config: Record<string, unknown>, reqParam: string): boolean {
+  if (reqParam in config) return true;
+  const alternatives = REQUIRED_PARAM_ALTERNATIVES[reqParam];
+  return alternatives?.some((alt) => alt in config) ?? false;
 }
 
 /**
@@ -220,8 +227,16 @@ function checkParamType(value: unknown, type: ParamType): boolean {
       return Array.isArray(value) && value.every((v) => typeof v === "number" && Number.isInteger(v));
     case "list[float]":
       return Array.isArray(value) && value.every((v) => typeof v === "number");
+    case "list[list[int]]":
+      return (
+        Array.isArray(value) &&
+        value.every(
+          (row) => Array.isArray(row) && row.every((v) => typeof v === "number" && Number.isInteger(v)),
+        )
+      );
     default:
-      return true;
+      // Unknown / future schema types are rejected rather than silently accepted.
+      return false;
   }
 }
 
@@ -236,8 +251,13 @@ export function validatePassConfig(passType: string, config: unknown): string[] 
   ensureKbLoaded();
 
   const errors: string[] = [];
+  const schema = getPassSchema(passType);
 
   if (config === undefined || config === null) {
+    if (!schema) return errors;
+    for (const reqParam of schema.requiredParams) {
+      errors.push(`missing required parameter "${reqParam}"`);
+    }
     return errors;
   }
 
@@ -246,15 +266,19 @@ export function validatePassConfig(passType: string, config: unknown): string[] 
     return errors;
   }
 
-  const schema = getPassSchema(passType);
   if (!schema) {
     return errors;
   }
 
-  // Check required params
+  // Check required params (allow documented alternate calibration inputs)
   for (const reqParam of schema.requiredParams) {
-    if (!(reqParam in config)) {
-      errors.push(`missing required parameter "${reqParam}"`);
+    if (!hasRequiredParam(config, reqParam)) {
+      const alternatives = REQUIRED_PARAM_ALTERNATIVES[reqParam];
+      if (alternatives?.length) {
+        errors.push(`missing required parameter "${reqParam}" (or one of: ${alternatives.join(", ")})`);
+      } else {
+        errors.push(`missing required parameter "${reqParam}"`);
+      }
     }
   }
 
@@ -271,8 +295,12 @@ export function validatePassConfig(passType: string, config: unknown): string[] 
       continue;
     }
 
-    // Enum check
-    if (paramSchema.enum && typeof value === "string" && !paramSchema.enum.includes(value)) {
+    // Enum check (strings, numbers, and booleans)
+    if (
+      paramSchema.enum &&
+      (typeof value === "string" || typeof value === "number" || typeof value === "boolean") &&
+      !paramSchema.enum.includes(value)
+    ) {
       errors.push(`parameter "${key}" must be one of [${paramSchema.enum.join(", ")}], got "${value}"`);
     }
 
@@ -357,10 +385,10 @@ export function validateRecipeSchema(recipe: unknown): SchemaValidationResult {
       );
     }
 
-    // Validate pass config against parameter schema
+    // Validate pass config against parameter schema (including absent config)
     if (passValue.config !== undefined && !isObject(passValue.config)) {
       errors.push(`passes.${passName}.config must be an object when present`);
-    } else if (isObject(passValue.config)) {
+    } else {
       const configErrors = validatePassConfig(passValue.type, passValue.config);
       for (const err of configErrors) {
         errors.push(`passes.${passName}: ${err}`);

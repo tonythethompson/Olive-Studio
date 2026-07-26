@@ -14,33 +14,21 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
   return (
     <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400">
       <Database className="h-3 w-3 text-slate-500" />
-      {status && !error ? (
+      {status?.available ? (
         <>
-          {status.available ? (
-            <>
-              <span className="text-slate-500">
-                KB v{status.version} · {status.passCount} passes
-              </span>
-              {isStale ? (
-                <span
-                  className="text-amber-500 flex items-center gap-0.5"
-                  title="Knowledge base may be outdated"
-                >
-                  <AlertCircle className="h-3 w-3" />
-                  stale
-                </span>
-              ) : (
-                <span
-                  className="text-emerald-500 flex items-center gap-0.5"
-                  title="Knowledge base is up to date"
-                >
-                  <CheckCircle className="h-3 w-3" />
-                  fresh
-                </span>
-              )}
-            </>
+          <span className="text-slate-500">
+            KB v{status.version} · {status.passCount} passes
+          </span>
+          {isStale ? (
+            <span className="text-amber-500 flex items-center gap-0.5" title="Knowledge base may be outdated">
+              <AlertCircle className="h-3 w-3" />
+              stale
+            </span>
           ) : (
-            <span className="text-amber-500">KB unavailable</span>
+            <span className="text-emerald-500 flex items-center gap-0.5" title="Knowledge base is up to date">
+              <CheckCircle className="h-3 w-3" />
+              fresh
+            </span>
           )}
           <button
             type="button"
