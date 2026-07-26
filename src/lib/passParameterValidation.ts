@@ -123,6 +123,8 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
           }
           return null;
         },
+        autofix: { passes: { onnxTransforms: true, quantPrecision: "int8" } },
+        actionLabel: "Enable static INT8",
       },
     ];
   }

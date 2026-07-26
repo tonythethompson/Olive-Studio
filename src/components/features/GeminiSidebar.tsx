@@ -272,7 +272,7 @@ const ProviderErrorBlock = ({ msg, onGoSettings }: { msg: string; onGoSettings: 
 };
 
 function LocalModelManager({ activeModel, isOpen }: { activeModel?: string; isOpen: boolean }) {
-  const [models, setModels] = useState<Array<{ id: string; loaded: boolean }>>([]);
+  const [models, setModels] = useState<Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }>>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -310,7 +310,7 @@ function LocalModelManager({ activeModel, isOpen }: { activeModel?: string; isOp
 
   // Group filtered models by publisher (first segment of model ID)
   const groupedModels = useMemo(() => {
-    const groups = new Map<string, Array<{ id: string; loaded: boolean }>>();
+    const groups = new Map<string, Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }>>();
     for (const m of filteredModels) {
       const parts = m.id.split("/");
       const publisher = parts.length > 1 ? parts[0] : "Other";
@@ -328,12 +328,43 @@ function LocalModelManager({ activeModel, isOpen }: { activeModel?: string; isOp
   const refresh = async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/ai/local-models");
-      const d = await r.json();
-      const loaded = d.loadedModels || [];
-      const installed = d.installedModels || [];
-      const all = [...new Set([...installed, ...loaded])];
-      setModels(all.map((id: string) => ({ id, loaded: loaded.includes(id) })));
+      // Fetch from both LM Studio and Ollama in parallel
+      const [lmsRes, ollamaRes] = await Promise.allSettled([
+        fetch("/api/ai/local-models"),
+        fetch("/api/ai/ollama-models"),
+      ]);
+
+      const lmsModels: string[] = [];
+      const ollamaModels: string[] = [];
+      const lmsLoaded: string[] = [];
+      const ollamaLoaded: string[] = [];
+
+      if (lmsRes.status === "fulfilled" && lmsRes.value.ok) {
+        const d = await lmsRes.value.json();
+        lmsModels.push(...(d.installedModels || []));
+        lmsLoaded.push(...(d.loadedModels || []));
+      }
+      if (ollamaRes.status === "fulfilled" && ollamaRes.value.ok) {
+        const d = await ollamaRes.value.json();
+        ollamaModels.push(...(d.installedModels || []));
+        ollamaLoaded.push(...(d.runningModels || []));
+      }
+
+      const allModels: Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }> = [];
+      const seen = new Set<string>();
+      for (const id of lmsModels) {
+        if (!seen.has(id)) {
+          seen.add(id);
+          allModels.push({ id, loaded: lmsLoaded.includes(id), source: "lms" });
+        }
+      }
+      for (const id of ollamaModels) {
+        if (!seen.has(id)) {
+          seen.add(id);
+          allModels.push({ id, loaded: ollamaLoaded.includes(id), source: "ollama" });
+        }
+      }
+      setModels(allModels);
     } catch {
       /* ignore */
     } finally {
@@ -345,11 +376,12 @@ function LocalModelManager({ activeModel, isOpen }: { activeModel?: string; isOp
     void refresh();
   }, []);
 
-  const handleLoad = async (modelTag: string) => {
+  const handleLoad = async (modelTag: string, source: "lms" | "ollama" = "lms") => {
     setBusy(modelTag);
     setError("");
     try {
-      const r = await fetch("/api/ai/local-load", {
+      const endpoint = source === "ollama" ? "/api/ai/ollama-load" : "/api/ai/local-load";
+      const r = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ modelTag }),
@@ -366,11 +398,12 @@ function LocalModelManager({ activeModel, isOpen }: { activeModel?: string; isOp
     }
   };
 
-  const handleUnload = async (modelTag: string) => {
+  const handleUnload = async (modelTag: string, source: "lms" | "ollama" = "lms") => {
     setBusy(modelTag);
     setError("");
     try {
-      const r = await fetch("/api/ai/local-unload", {
+      const endpoint = source === "ollama" ? "/api/ai/ollama-unload" : "/api/ai/local-unload";
+      const r = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ modelTag }),
@@ -476,7 +509,7 @@ function LocalModelManager({ activeModel, isOpen }: { activeModel?: string; isOp
                         {m.loaded ? (
                           <button
                             type="button"
-                            onClick={() => void handleUnload(m.id)}
+                            onClick={() => void handleUnload(m.id, m.source)}
                             disabled={busy === m.id}
                             className="text-[10px] px-2 py-0.5 rounded border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
                           >
@@ -485,7 +518,7 @@ function LocalModelManager({ activeModel, isOpen }: { activeModel?: string; isOp
                         ) : (
                           <button
                             type="button"
-                            onClick={() => void handleLoad(m.id)}
+                            onClick={() => void handleLoad(m.id, m.source)}
                             disabled={busy === m.id}
                             className="text-[10px] px-2 py-0.5 rounded border border-electric-blue/30 text-electric-blue hover:bg-electric-blue/10 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
                           >
@@ -557,12 +590,41 @@ export function GeminiSidebar({
   const [pullingModel, setPullingModel] = useState<string | null>(null);
   const [localPullError, setLocalPullError] = useState<string>("");
   const [modelSizes, setModelSizes] = useState<Record<string, number>>({});
+  const [ollamaHealthy, setOllamaHealthy] = useState<boolean | null>(null);
+  const [preferredEngine, setPreferredEngine] = useState<"lms" | "ollama">(() => {
+    try {
+      return (localStorage.getItem("localEngine") as "lms" | "ollama") || "lms";
+    } catch {
+      return "lms";
+    }
+  });
+  const [showOtherEngine, setShowOtherEngine] = useState(false);
 
-  const handlePullLocalModel = async (modelTag: string) => {
+  const handleSetPreferredEngine = (engine: "lms" | "ollama") => {
+    setPreferredEngine(engine);
+    setShowOtherEngine(false);
+    try {
+      localStorage.setItem("localEngine", engine);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  // Check Ollama health on mount and when sidebar opens
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch("/api/ai/ollama-health")
+      .then((r) => r.json())
+      .then((d) => setOllamaHealthy(d.healthy ?? false))
+      .catch(() => setOllamaHealthy(false));
+  }, [isOpen]);
+
+  const handlePullLocalModel = async (modelTag: string, source: "lms" | "ollama" = "lms") => {
     setPullingModel(modelTag);
     setLocalPullError("");
     try {
-      const r = await fetch("/api/ai/local-pull", {
+      const endpoint = source === "ollama" ? "/api/ai/ollama-pull" : "/api/ai/local-pull";
+      const r = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ modelTag }),
@@ -638,12 +700,23 @@ export function GeminiSidebar({
 
   // ── Effects ──
 
-  // Fetch model sizes from LM Studio on mount
+  // Fetch model sizes from both LM Studio and Ollama on mount
   useEffect(() => {
-    void fetch("/api/ai/local-model-sizes")
-      .then((r) => r.json())
-      .then((d: { sizes?: Record<string, number> }) => {
-        if (d.sizes) setModelSizes(d.sizes);
+    Promise.allSettled([
+      fetch("/api/ai/local-model-sizes").then((r) => r.json()),
+      fetch("/api/ai/ollama-model-sizes").then((r) => r.json()),
+    ])
+      .then(([lmsRes, ollamaRes]) => {
+        const merged: Record<string, number> = {};
+        if (lmsRes.status === "fulfilled") {
+          const d = lmsRes.value as { sizes?: Record<string, number> };
+          if (d.sizes) Object.assign(merged, d.sizes);
+        }
+        if (ollamaRes.status === "fulfilled") {
+          const d = ollamaRes.value as { sizes?: Record<string, number> };
+          if (d.sizes) Object.assign(merged, d.sizes);
+        }
+        setModelSizes(merged);
       })
       .catch(() => {});
   }, []);
@@ -1160,86 +1233,227 @@ export function GeminiSidebar({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 font-bold text-xs text-electric-blue">
                     <Download className="h-4 w-4" />
-                    <span>1-Click Local AI Setup (LM Studio)</span>
+                    <span>1-Click Local AI Setup</span>
                   </div>
                   <span className="text-[10px] bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-1.5 py-0.5 rounded font-mono">
                     Local & Private
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-300 leading-relaxed">
-                  Download & enable a local model via LM Studio (Llmster) to run Olive Studio AI features
-                  offline with zero cloud keys:
-                </p>
-                <div className="space-y-2">
-                  {(
-                    [
-                      {
-                        tag: "lmstudio-community/Qwen2.5-Coder-1.5B-Instruct-GGUF",
-                        name: "Qwen2.5-Coder (1.5B)",
-                        desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
-                        fallbackSize: "1.1 GB",
-                      },
-                      {
-                        tag: "lmstudio-community/Meta-Llama-3.2-1B-Instruct-GGUF",
-                        name: "Llama-3.2 (1B)",
-                        desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
-                        fallbackSize: "800 MB",
-                      },
-                      {
-                        tag: "lmstudio-community/Phi-3.5-Mini-Instruct-GGUF",
-                        name: "Phi-3.5-Mini (3.8B)",
-                        desc: "🧠 Advanced Reasoning: Complex compiler co-design",
-                        fallbackSize: "2.2 GB",
-                      },
-                    ] as const
-                  ).map((m) => {
-                    // Find actual size by matching tag against LM Studio model keys
-                    const sizeBytes = Object.entries(modelSizes).find(
-                      ([key]) =>
-                        key
-                          .toLowerCase()
-                          .includes(m.tag.split("/").pop()?.toLowerCase().split("-")[0] ?? "") ||
-                        m.tag.toLowerCase().includes(key.toLowerCase().split("/").pop() ?? ""),
-                    )?.[1];
-                    const displaySize = sizeBytes ? formatBytes(sizeBytes) : m.fallbackSize;
-                    return (
-                      <div
-                        key={m.tag}
-                        className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60 flex flex-col gap-1.5"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-xs text-slate-100">{m.name}</span>
-                          <span className="text-[10px] font-mono text-slate-400 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded">
-                            {displaySize}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-400 leading-normal">{m.desc}</p>
-                        <button
-                          type="button"
-                          onClick={() => handlePullLocalModel(m.tag)}
-                          disabled={pullingModel === m.tag}
-                          className="mt-1 w-full h-7 bg-electric-blue/10 hover:bg-electric-blue/20 text-electric-blue border border-electric-blue/30 rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
-                        >
-                          {pullingModel === m.tag ? (
-                            <>
-                              <RefreshCw className="h-3 w-3 animate-spin" />
-                              <span>Pulling & Activating...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Download className="h-3 w-3" />
-                              <span>1-Click Download & Enable</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    );
-                  })}
+                {/* Engine toggle */}
+                <div className="flex items-center gap-1 p-0.5 bg-slate-900 border border-slate-800 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => handleSetPreferredEngine("lms")}
+                    className={`flex-1 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                      preferredEngine === "lms"
+                        ? "bg-electric-blue/20 text-electric-blue border border-electric-blue/30"
+                        : "text-slate-500 hover:text-slate-300 border border-transparent"
+                    }`}
+                  >
+                    LM Studio
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetPreferredEngine("ollama")}
+                    className={`flex-1 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                      preferredEngine === "ollama"
+                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                        : "text-slate-500 hover:text-slate-300 border border-transparent"
+                    }`}
+                  >
+                    Ollama
+                  </button>
                 </div>
-                {localPullError && <p className="text-xs text-rose-400 mt-1">{localPullError}</p>}
+                {(preferredEngine === "lms" || showOtherEngine) && (
+                  <>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      {preferredEngine === "lms"
+                        ? "Download & enable a local model via LM Studio (Llmster) to run Olive Studio AI features offline with zero cloud keys:"
+                        : "LM Studio models (click above to switch to LM Studio as preferred engine):"}
+                    </p>
+                    <div className="space-y-2">
+                      {(
+                        [
+                          {
+                            tag: "lmstudio-community/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+                            name: "Qwen2.5-Coder (1.5B)",
+                            desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
+                            fallbackSize: "1.1 GB",
+                          },
+                          {
+                            tag: "lmstudio-community/Meta-Llama-3.2-1B-Instruct-GGUF",
+                            name: "Llama-3.2 (1B)",
+                            desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
+                            fallbackSize: "800 MB",
+                          },
+                          {
+                            tag: "lmstudio-community/Phi-3.5-Mini-Instruct-GGUF",
+                            name: "Phi-3.5-Mini (3.8B)",
+                            desc: "🧠 Advanced Reasoning: Complex compiler co-design",
+                            fallbackSize: "2.2 GB",
+                          },
+                        ] as const
+                      ).map((m) => {
+                        // Find actual size by matching tag against LM Studio model keys
+                        const sizeBytes = Object.entries(modelSizes).find(
+                          ([key]) =>
+                            key
+                              .toLowerCase()
+                              .includes(m.tag.split("/").pop()?.toLowerCase().split("-")[0] ?? "") ||
+                            m.tag.toLowerCase().includes(key.toLowerCase().split("/").pop() ?? ""),
+                        )?.[1];
+                        const displaySize = sizeBytes ? formatBytes(sizeBytes) : m.fallbackSize;
+                        return (
+                          <div
+                            key={m.tag}
+                            className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60 flex flex-col gap-1.5"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-xs text-slate-100">{m.name}</span>
+                              <span className="text-[10px] font-mono text-slate-400 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded">
+                                {displaySize}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 leading-normal">{m.desc}</p>
+                            <button
+                              type="button"
+                              onClick={() => handlePullLocalModel(m.tag)}
+                              disabled={pullingModel === m.tag}
+                              className="mt-1 w-full h-7 bg-electric-blue/10 hover:bg-electric-blue/20 text-electric-blue border border-electric-blue/30 rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                            >
+                              {pullingModel === m.tag ? (
+                                <>
+                                  <RefreshCw className="h-3 w-3 animate-spin" />
+                                  <span>Pulling & Activating...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="h-3 w-3" />
+                                  <span>1-Click Download & Enable</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {localPullError && <p className="text-xs text-rose-400 mt-1">{localPullError}</p>}
 
-                {/* Load/Unloaded models list */}
-                <LocalModelManager activeModel={providerStatus.model} isOpen={isOpen} />
+                    {/* Load/Unloaded models list */}
+                    <LocalModelManager activeModel={providerStatus.model} isOpen={isOpen} />
+
+                    {/* Other engine toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setShowOtherEngine(!showOtherEngine)}
+                      className="w-full text-[10px] text-slate-500 hover:text-slate-300 border border-dashed border-slate-700 hover:border-slate-500 rounded-lg px-3 py-2 transition-all cursor-pointer"
+                    >
+                      {showOtherEngine ? "Hide" : "Show"} {preferredEngine === "lms" ? "Ollama" : "LM Studio"}{" "}
+                      models
+                    </button>
+                  </>
+                )}
+
+                {/* Ollama 1-Click Setup */}
+                {(preferredEngine === "ollama" || showOtherEngine) && (
+                  <>
+                    <div className="pt-3 border-t border-slate-800/50">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 font-bold text-xs text-emerald-400">
+                          <Download className="h-4 w-4" />
+                          <span>
+                            {preferredEngine === "ollama"
+                              ? "Ollama models"
+                              : "Ollama models (alternative engine)"}
+                          </span>
+                          <span
+                            className={`inline-block w-2 h-2 rounded-full ${ollamaHealthy === true ? "bg-emerald-400" : ollamaHealthy === false ? "bg-rose-400" : "bg-slate-500"}`}
+                            title={
+                              ollamaHealthy === true
+                                ? "Ollama server running"
+                                : ollamaHealthy === false
+                                  ? "Ollama server not reachable"
+                                  : "Checking Ollama..."
+                            }
+                          />
+                        </div>
+                        <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded font-mono">
+                          Alternative Engine
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed mb-2">
+                        Download & enable a local model via Ollama — same models, different engine. Uses the
+                        Ollama API on{" "}
+                        <code className="text-[10px] font-mono text-slate-400">localhost:11434</code>.
+                      </p>
+                      <div className="space-y-2">
+                        {(
+                          [
+                            {
+                              tag: "qwen2.5-coder:1.5b",
+                              name: "Qwen2.5-Coder (1.5B)",
+                              desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
+                              fallbackSize: "1.1 GB",
+                            },
+                            {
+                              tag: "llama3.2:1b",
+                              name: "Llama-3.2 (1B)",
+                              desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
+                              fallbackSize: "800 MB",
+                            },
+                            {
+                              tag: "phi3.5:3.8b",
+                              name: "Phi-3.5-Mini (3.8B)",
+                              desc: "🧠 Advanced Reasoning: Complex compiler co-design",
+                              fallbackSize: "2.2 GB",
+                            },
+                          ] as const
+                        ).map((m) => {
+                          // Find actual size by matching tag against Ollama model names
+                          const sizeBytes = Object.entries(modelSizes).find(
+                            ([key]) =>
+                              key === m.tag ||
+                              key.toLowerCase().includes(m.tag.split(":")[0]?.toLowerCase() ?? "") ||
+                              m.tag.toLowerCase().includes(key.toLowerCase()),
+                          )?.[1];
+                          const displaySize = sizeBytes ? formatBytes(sizeBytes) : m.fallbackSize;
+                          return (
+                            <div
+                              key={m.tag}
+                              className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60 flex flex-col gap-1.5"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-semibold text-xs text-slate-100">{m.name}</span>
+                                <span className="text-[10px] font-mono text-slate-400 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded">
+                                  {displaySize}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 leading-normal">{m.desc}</p>
+                              <button
+                                type="button"
+                                onClick={() => handlePullLocalModel(m.tag, "ollama")}
+                                disabled={pullingModel === m.tag}
+                                className="mt-1 w-full h-7 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                              >
+                                {pullingModel === m.tag ? (
+                                  <>
+                                    <RefreshCw className="h-3 w-3 animate-spin" />
+                                    <span>Pulling & Activating...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Download className="h-3 w-3" />
+                                    <span>1-Click Download & Enable</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Configure new provider */}

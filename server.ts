@@ -2024,6 +2024,178 @@ app.post("/api/ai/local-pull", async (req, res) => {
   }
 });
 
+// ─── Ollama Integration ────────────────────────────────────────────────────────
+const OLLAMA_PORT = 11434;
+
+/** Check if the Ollama server is reachable on localhost */
+async function isOllamaRunning(): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const resp = await fetch(`http://localhost:${OLLAMA_PORT}/api/tags`, { signal: controller.signal });
+    clearTimeout(timeout);
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+// ─── GET /api/ai/ollama-model-sizes ────────────────────────────────────────────
+app.get("/api/ai/ollama-model-sizes", async (_req, res) => {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const resp = await fetch(`http://localhost:${OLLAMA_PORT}/api/tags`, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!resp.ok) return res.json({ sizes: {} });
+    const data = (await resp.json()) as { models?: Array<{ name: string; size?: number }> };
+    const sizes: Record<string, number> = {};
+    if (Array.isArray(data.models)) {
+      for (const m of data.models) {
+        if (m.name && typeof m.size === "number") {
+          sizes[m.name] = m.size;
+        }
+      }
+    }
+    return res.json({ sizes });
+  } catch {
+    return res.json({ sizes: {} });
+  }
+});
+
+app.get("/api/ai/ollama-health", async (_req, res) => {
+  const running = await isOllamaRunning();
+  return res.json({ healthy: running, serverRunning: running, port: OLLAMA_PORT });
+});
+
+app.get("/api/ai/ollama-models", async (_req, res) => {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const resp = await fetch(`http://localhost:${OLLAMA_PORT}/api/tags`, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!resp.ok) return res.json({ installedModels: [], runningModels: [] });
+    const data = (await resp.json()) as { models?: Array<{ name: string; size?: number }> };
+    const installed = (data.models || []).map((m) => m.name);
+
+    // Get running models via /api/ps
+    let runningModels: string[] = [];
+    try {
+      const psResp = await fetch(`http://localhost:${OLLAMA_PORT}/api/ps`);
+      if (psResp.ok) {
+        const psData = (await psResp.json()) as { models?: Array<{ name: string }> };
+        runningModels = (psData.models || []).map((m) => m.name);
+      }
+    } catch {
+      /* ignore */
+    }
+
+    return res.json({ installedModels: installed, runningModels, ollamaRunning: true });
+  } catch {
+    return res.json({ installedModels: [], runningModels: [], ollamaRunning: false });
+  }
+});
+
+app.post("/api/ai/ollama-pull", async (req, res) => {
+  const { modelTag } = req.body as { modelTag?: string };
+  if (!modelTag) return res.status(400).json({ error: "modelTag is required." });
+
+  // Quick check if Ollama is reachable before attempting pull
+  if (!(await isOllamaRunning())) {
+    return res.status(503).json({
+      error: "Ollama is not running. Install it from https://ollama.com and start the server (ollama serve).",
+    });
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 300_000); // 5 min timeout for large models
+    const resp = await fetch(`http://localhost:${OLLAMA_PORT}/api/pull`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: modelTag, stream: false }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!resp.ok) {
+      const err = await resp.text();
+      return res.status(500).json({ error: `Ollama pull failed: ${err}` });
+    }
+
+    // Configure the AI provider to use Ollama's OpenAI-compatible endpoint
+    runtimeAiProvider = {
+      provider: "openai-compat",
+      baseUrl: `http://localhost:${OLLAMA_PORT}/v1`,
+      model: modelTag,
+      apiKey: "ollama",
+    };
+
+    return res.json({ ok: true, source: "ollama", provider: "openai-compat", model: modelTag });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("abort")) {
+      return res
+        .status(504)
+        .json({
+          error: "Ollama pull timed out after 5 minutes. The model may be too large or the network is slow.",
+        });
+    }
+    return res.status(500).json({ error: `Failed to pull model via Ollama: ${msg}` });
+  }
+});
+
+app.post("/api/ai/ollama-load", async (req, res) => {
+  const { modelTag } = req.body as { modelTag?: string };
+  if (!modelTag) return res.status(400).json({ error: "modelTag is required." });
+
+  try {
+    // Use /api/show to verify the model exists, then keep_alive: -1 to keep it loaded
+    const showResp = await fetch(`http://localhost:${OLLAMA_PORT}/api/show`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: modelTag }),
+    });
+    if (!showResp.ok) {
+      return res.status(404).json({ error: `Model '${modelTag}' not found in Ollama. Pull it first.` });
+    }
+    // Warm up the model by generating a minimal token — Ollama auto-loads on first request
+    const resp = await fetch(`http://localhost:${OLLAMA_PORT}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: modelTag, prompt: "hi", keep_alive: -1, options: { num_predict: 1 } }),
+    });
+    if (!resp.ok) {
+      const err = await resp.text();
+      return res.status(500).json({ error: `Failed to load model: ${err}` });
+    }
+    return res.json({ ok: true });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: `Failed to load model: ${msg}` });
+  }
+});
+
+app.post("/api/ai/ollama-unload", async (req, res) => {
+  const { modelTag } = req.body as { modelTag?: string };
+  if (!modelTag) return res.status(400).json({ error: "modelTag is required." });
+
+  try {
+    const resp = await fetch(`http://localhost:${OLLAMA_PORT}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: modelTag, prompt: "", keep_alive: 0 }),
+    });
+    if (!resp.ok) {
+      const err = await resp.text();
+      return res.status(500).json({ error: `Failed to unload model: ${err}` });
+    }
+    return res.json({ ok: true });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: `Failed to unload model: ${msg}` });
+  }
+});
+
 // ─── Olive MCP Integration Helper ──────────────────────────────────────────────
 /** Invokes a tool function in olive_mcp_server and returns its result */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP JSON responses vary
