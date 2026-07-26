@@ -36,6 +36,8 @@ import { tensorrtRtxInstallArgs, tensorrtRtxLabel } from "./src/lib/tensorrtRtxD
 import type { IHVProvider } from "./src/types.ts";
 import type { GpuMetrics } from "./src/lib/gpuMetrics.ts";
 import { reloadPassSchemas, type PassesJson } from "./src/lib/schemaEngine.ts";
+import { getCodexAppServer } from "./src/lib/codex/CodexAppServerClient.ts";
+import { buildCodexPrompt, codexAsk } from "./src/lib/codex/codexAgent.ts";
 
 dotenv.config();
 dotenv.config({ path: ".env.local", override: true });
@@ -93,7 +95,9 @@ interface ProviderConfig {
     | "chatgpt-sub"
     | "copilot"
     | "devin"
-    | "kilocode";
+    | "kilocode"
+    /** OpenAI Codex via local app-server + SDK (ChatGPT Plus/Pro subscription). */
+    | "codex";
   apiKey: string;
   model: string;
   baseUrl?: string;
@@ -182,6 +186,7 @@ const ALLOWED_AI_PROVIDERS = new Set<ProviderConfig["provider"]>([
   "copilot",
   "devin",
   "kilocode",
+  "codex",
 ]);
 
 function detectEnvProvider(): ProviderConfig | null {
@@ -507,6 +512,17 @@ async function callAI(system: string, messages: AIChatMessage[], wantJson = fals
       throw new Error(
         "Devin does not expose a public OpenAI-compatible chat API for third-party apps. Use OpenAI, Anthropic, OpenRouter, or OpenAI-Compatible with a real endpoint instead.",
       );
+    case "codex": {
+      // ChatGPT subscription path: local Codex CLI/SDK (auth from app-server login or `codex login`)
+      const prompt = buildCodexPrompt(
+        wantJson ? `${system}\n\nIMPORTANT: Respond with valid JSON only. No markdown fences.` : system,
+        messages,
+      );
+      return codexAsk(prompt, {
+        workingDirectory: process.cwd(),
+        model: cfg.model && cfg.model !== "default" ? cfg.model : undefined,
+      });
+    }
     case "openai":
     case "chatgpt-sub": // OpenAI API key (platform credits) — not ChatGPT web session login
     case "mistral":
@@ -2396,7 +2412,11 @@ app.post("/api/ai/provider", (req, res) => {
     model?: string;
     baseUrl?: string;
   };
-  if (!provider || !key || !model) {
+  if (!provider || !model) {
+    return res.status(400).json({ error: "provider and model are required" });
+  }
+  // Codex uses ChatGPT browser login via app-server; no API key required.
+  if (provider !== "codex" && !key) {
     return res.status(400).json({ error: "provider, apiKey, and model are required" });
   }
   if (!ALLOWED_AI_PROVIDERS.has(provider as ProviderConfig["provider"])) {
@@ -2410,6 +2430,19 @@ app.post("/api/ai/provider", (req, res) => {
   }
   if (provider === "openai-compat" && !baseUrl?.trim()) {
     return res.status(400).json({ error: "baseUrl is required for OpenAI-compatible providers." });
+  }
+  if (provider === "codex") {
+    runtimeAiProvider = {
+      provider: "codex",
+      apiKey: "codex-local-auth",
+      model: model.trim() || "default",
+    };
+    return res.json({
+      ok: true,
+      source: "user",
+      provider: "codex",
+      model: runtimeAiProvider.model,
+    });
   }
   // Apply known default bases so session config works even if the UI omits baseUrl
   const resolvedBase =
@@ -2444,6 +2477,109 @@ app.post("/api/ai/provider", (req, res) => {
 app.delete("/api/ai/provider", (_req, res) => {
   runtimeAiProvider = null;
   return res.json({ ok: true });
+});
+
+// ─── OpenAI Codex (ChatGPT subscription via local app-server + SDK) ───────────
+// See https://developers.openai.com/codex/app-server and /codex/auth
+
+app.get("/api/codex/account", async (_req, res) => {
+  try {
+    const client = getCodexAppServer();
+    const result = await client.readAccount();
+    return res.json({
+      ok: true,
+      account: result.account,
+      requiresOpenaiAuth: result.requiresOpenaiAuth,
+      ready: Boolean(result.account),
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(503).json({
+      ok: false,
+      ready: false,
+      error: msg,
+      hint: "Install Codex CLI (`npm i -g @openai/codex`) and ensure `codex` is on PATH.",
+    });
+  }
+});
+
+app.post("/api/codex/login", async (_req, res) => {
+  try {
+    const client = getCodexAppServer();
+    const login = await client.startChatGptLogin();
+    // Activate codex as the AI provider once login is initiated; auth completes in browser.
+    runtimeAiProvider = {
+      provider: "codex",
+      apiKey: "codex-local-auth",
+      model: "default",
+    };
+    return res.json({
+      ok: true,
+      loginId: login.loginId,
+      authUrl: login.authUrl,
+      message: "Open authUrl in your browser to sign in with ChatGPT (Plus/Pro Codex allowance).",
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+app.post("/api/codex/login/cancel", async (req, res) => {
+  const loginId = (req.body as { loginId?: string })?.loginId;
+  if (!loginId) return res.status(400).json({ error: "loginId is required" });
+  try {
+    await getCodexAppServer().cancelLogin(loginId);
+    return res.json({ ok: true });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+app.post("/api/codex/logout", async (_req, res) => {
+  try {
+    await getCodexAppServer().logout();
+    if (runtimeAiProvider?.provider === "codex") {
+      runtimeAiProvider = null;
+    }
+    return res.json({ ok: true });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+app.get("/api/codex/rate-limits", async (_req, res) => {
+  try {
+    const limits = await getCodexAppServer().readRateLimits();
+    return res.json({ ok: true, ...limits });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+/** Lightweight ask endpoint (also used by callAI when provider=codex). */
+app.post("/api/codex/ask", async (req, res) => {
+  const { prompt, model } = req.body as { prompt?: string; model?: string };
+  if (!prompt?.trim()) return res.status(400).json({ error: "prompt is required" });
+  try {
+    const account = await getCodexAppServer().readAccount();
+    if (!account.account) {
+      return res.status(401).json({
+        error: "Not signed in to Codex. Use POST /api/codex/login and complete ChatGPT browser sign-in.",
+      });
+    }
+    const text = await codexAsk(prompt.trim(), {
+      workingDirectory: process.cwd(),
+      model: model || undefined,
+    });
+    return res.json({ ok: true, text });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg });
+  }
 });
 
 // ─── LM Studio (Llmster) Integration ─────────────────────────────────────────

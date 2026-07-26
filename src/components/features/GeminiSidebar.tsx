@@ -127,13 +127,22 @@ const PROVIDER_OPTIONS: readonly ProviderOption[] = [
   },
   // ── Subscription / gateway services ─────────────────────────────────
   {
+    id: "codex",
+    name: "OpenAI Codex",
+    models: ["default", "o3", "o4-mini", "gpt-5"],
+    keyEnvVar: "",
+    docsUrl: "developers.openai.com/codex/auth",
+    category: "subscription",
+    description: "ChatGPT Plus/Pro Codex allowance — Sign in with ChatGPT (local app-server)",
+  },
+  {
     id: "chatgpt-sub",
-    name: "OpenAI API (ChatGPT account)",
+    name: "OpenAI API key",
     models: ["gpt-4o", "gpt-4o-mini", "o4-mini"],
     keyEnvVar: "OPENAI_API_KEY",
     docsUrl: "platform.openai.com/api-keys",
     category: "subscription",
-    description: "Platform API key (not ChatGPT web login). Same path as OpenAI.",
+    description: "Platform API key (usage-based). Not ChatGPT web login.",
   },
   {
     id: "copilot",
@@ -608,6 +617,13 @@ export function GeminiSidebar({
   const [customModel, setCustomModel] = useState("");
   const [isSavingProvider, setIsSavingProvider] = useState(false);
   const [providerSaveError, setProviderSaveError] = useState("");
+  const [codexAccount, setCodexAccount] = useState<{
+    ready?: boolean;
+    account?: { type?: string; email?: string | null; planType?: string } | null;
+    error?: string;
+  } | null>(null);
+  const [codexBusy, setCodexBusy] = useState(false);
+  const [codexMessage, setCodexMessage] = useState<string | null>(null);
   const [pullingModel, setPullingModel] = useState<string | null>(null);
   const [localPullError, setLocalPullError] = useState<string>("");
   const [modelSizes, setModelSizes] = useState<Record<string, number>>({});
@@ -639,6 +655,12 @@ export function GeminiSidebar({
       .then((d) => setOllamaHealthy(d.healthy ?? false))
       .catch(() => setOllamaHealthy(false));
   }, [isOpen]);
+
+  // Refresh Codex account when Settings is open on the Codex provider
+  useEffect(() => {
+    if (!isOpen || activeTab !== "settings" || settingsProvider !== "codex") return;
+    void refreshCodexAccount();
+  }, [isOpen, activeTab, settingsProvider]);
 
   const handlePullLocalModel = async (modelTag: string, source: "lms" | "ollama" = "lms") => {
     setPullingModel(modelTag);
@@ -848,11 +870,90 @@ export function GeminiSidebar({
     }
   };
 
+  const refreshCodexAccount = async () => {
+    try {
+      const r = await fetch("/api/codex/account");
+      const data = (await r.json()) as {
+        ok?: boolean;
+        ready?: boolean;
+        account?: { type?: string; email?: string | null; planType?: string } | null;
+        error?: string;
+      };
+      setCodexAccount(data);
+      return data;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setCodexAccount({ ready: false, error: msg });
+      return null;
+    }
+  };
+
+  const handleCodexLogin = async () => {
+    setCodexBusy(true);
+    setCodexMessage(null);
+    setProviderSaveError("");
+    try {
+      const r = await fetch("/api/codex/login", { method: "POST" });
+      const data = (await r.json()) as {
+        ok?: boolean;
+        authUrl?: string;
+        error?: string;
+        message?: string;
+      };
+      if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      if (data.authUrl) {
+        window.open(data.authUrl, "_blank", "noopener,noreferrer");
+      }
+      setCodexMessage(data.message || "Complete sign-in in the browser, then click Refresh status.");
+      // Poll account a few times after login window opens
+      for (let i = 0; i < 12; i++) {
+        await new Promise((res) => setTimeout(res, 2500));
+        const acc = await refreshCodexAccount();
+        if (acc?.ready) {
+          setCodexMessage(
+            `Signed in${acc.account && "planType" in (acc.account as object) ? ` (${(acc.account as { planType?: string }).planType})` : ""}. Codex is active for audit/chat.`,
+          );
+          await fetch("/api/ai/provider", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ provider: "codex", model: settingsModel || "default" }),
+          });
+          await fetchProviderStatus();
+          break;
+        }
+      }
+    } catch (err: unknown) {
+      setProviderSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCodexBusy(false);
+    }
+  };
+
+  const handleCodexLogout = async () => {
+    setCodexBusy(true);
+    setCodexMessage(null);
+    try {
+      await fetch("/api/codex/logout", { method: "POST" });
+      await refreshCodexAccount();
+      setCodexMessage("Signed out of Codex.");
+      await fetchProviderStatus();
+    } catch (err: unknown) {
+      setProviderSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCodexBusy(false);
+    }
+  };
+
   const handleSaveProvider = async () => {
     if (settingsProvider === "devin") {
       setProviderSaveError(
         "Devin has no public chat completions API for third-party apps. Choose OpenAI, OpenRouter, Kilo Gateway, or OpenAI-Compatible instead.",
       );
+      return;
+    }
+    if (settingsProvider === "codex") {
+      // Codex uses browser ChatGPT login, not an API key field
+      await handleCodexLogin();
       return;
     }
     const key = settingsApiKey.trim();
@@ -889,9 +990,8 @@ export function GeminiSidebar({
       setSettingsApiKey("");
       setAnalysis(null);
       setActiveTab("audit");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      setProviderSaveError(err.message || "Failed to save provider.");
+    } catch (err: unknown) {
+      setProviderSaveError(err instanceof Error ? err.message : "Failed to save provider.");
     } finally {
       setIsSavingProvider(false);
     }
@@ -1594,62 +1694,116 @@ export function GeminiSidebar({
                   )}
                 </div>
 
-                {isCompatMode && (
-                  <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Base URL</label>
-                    <input
-                      type="text"
-                      placeholder="http://localhost:11434/v1"
-                      value={settingsBaseUrl}
-                      onChange={(e) => setSettingsBaseUrl(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
-                    />
-                    <p className="text-[10px] text-slate-600 mt-1">
-                      Works with LM Studio, vLLM, Ollama, etc. (default: http://localhost:11434/v1)
+                {settingsProvider === "codex" ? (
+                  <div className="space-y-3 p-3 rounded-xl border border-slate-800 bg-slate-950/50">
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Uses local <code className="text-slate-400 font-mono">codex app-server</code> for
+                      ChatGPT sign-in and <code className="text-slate-400 font-mono">@openai/codex-sdk</code>{" "}
+                      for recipe Q&amp;A (read-only sandbox). Requires the Codex CLI on PATH.
                     </p>
+                    <p className="text-[11px] text-slate-400">
+                      Status:{" "}
+                      {codexAccount?.ready ? (
+                        <span className="text-emerald-400">signed in</span>
+                      ) : codexAccount?.error ? (
+                        <span className="text-rose-400">{codexAccount.error}</span>
+                      ) : (
+                        <span className="text-slate-500">not signed in</span>
+                      )}
+                    </p>
+                    {codexMessage && <p className="text-[11px] text-emerald-400/90">{codexMessage}</p>}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={codexBusy}
+                        onClick={() => void handleCodexLogin()}
+                        className="flex-1 min-w-[8rem] h-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-2"
+                      >
+                        {codexBusy ? (
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                        Sign in with ChatGPT
+                      </button>
+                      <button
+                        type="button"
+                        disabled={codexBusy}
+                        onClick={() => void refreshCodexAccount()}
+                        className="h-9 px-3 border border-slate-700 rounded-lg text-xs text-slate-300"
+                      >
+                        Refresh
+                      </button>
+                      <button
+                        type="button"
+                        disabled={codexBusy}
+                        onClick={() => void handleCodexLogout()}
+                        className="h-9 px-3 border border-rose-500/30 rounded-lg text-xs text-rose-400"
+                      >
+                        Logout
+                      </button>
+                    </div>
                   </div>
-                )}
-
-                <div>
-                  <label className="text-xs text-slate-400 mb-1 flex items-center gap-1.5 block">
-                    <Key className="h-3 w-3" />
-                    API Key
-                    {"keyEnvVar" in providerOption && providerOption.keyEnvVar && (
-                      <span className="text-[9px] text-slate-600">
-                        (or env: <code className="font-mono">{providerOption.keyEnvVar}</code>)
-                      </span>
+                ) : (
+                  <>
+                    {isCompatMode && (
+                      <div>
+                        <label className="text-xs text-slate-400 mb-1 block">Base URL</label>
+                        <input
+                          type="text"
+                          placeholder="http://localhost:11434/v1"
+                          value={settingsBaseUrl}
+                          onChange={(e) => setSettingsBaseUrl(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+                        />
+                        <p className="text-[10px] text-slate-600 mt-1">
+                          Works with LM Studio, vLLM, Ollama, etc.
+                        </p>
+                      </div>
                     )}
-                  </label>
-                  <input
-                    type="password"
-                    autoComplete="off"
-                    placeholder="Stored in memory only, never persisted to disk"
-                    value={settingsApiKey}
-                    onChange={(e) => setSettingsApiKey(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSaveProvider()}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
-                  />
-                </div>
+
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 flex items-center gap-1.5 block">
+                        <Key className="h-3 w-3" />
+                        API Key
+                        {"keyEnvVar" in providerOption && providerOption.keyEnvVar && (
+                          <span className="text-[9px] text-slate-600">
+                            (or env: <code className="font-mono">{providerOption.keyEnvVar}</code>)
+                          </span>
+                        )}
+                      </label>
+                      <input
+                        type="password"
+                        autoComplete="off"
+                        placeholder="Stored in memory only, never persisted to disk"
+                        value={settingsApiKey}
+                        onChange={(e) => setSettingsApiKey(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && void handleSaveProvider()}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveProvider()}
+                      disabled={isSavingProvider}
+                      className="w-full h-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer"
+                    >
+                      {isSavingProvider ? (
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Check className="h-3.5 w-3.5" />
+                      )}
+                      Save & Activate
+                    </button>
+                  </>
+                )}
 
                 {providerSaveError && <p className="text-xs text-rose-400">{providerSaveError}</p>}
 
-                <button
-                  type="button"
-                  onClick={handleSaveProvider}
-                  disabled={isSavingProvider}
-                  className="w-full h-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  {isSavingProvider ? (
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Check className="h-3.5 w-3.5" />
-                  )}
-                  Save & Activate
-                </button>
-
                 {"docsUrl" in providerOption && providerOption.docsUrl && (
                   <p className="text-[10px] text-slate-600 text-center">
-                    Get key at <span className="font-mono text-slate-500">{providerOption.docsUrl}</span>
+                    Docs: <span className="font-mono text-slate-500">{providerOption.docsUrl}</span>
                   </p>
                 )}
               </div>

@@ -66,7 +66,7 @@ Pass combinations are checked against your execution provider (for example, AWQ 
 - **Recipe graph**: Visual pass pipeline with per-pass inspectors and conflict banners.
 - **JSON editor**: Full Olive recipe export/import.
 - **Export helpers**: Starter configs for ONNX Runtime Web / Mobile deployment.
-- **AI Copilot** (optional): Recipe Q&A, advisory review, and state analysis via Gemini, OpenAI, Anthropic, Mistral, xAI, OpenRouter, Groq, Together, or local / Ollama endpoints.
+- **AI Copilot** (optional): Recipe Q&A, advisory review, and state analysis via Gemini, OpenAI API, Anthropic, Mistral, xAI, OpenRouter, Groq, Together, **OpenAI Codex** (ChatGPT Plus/Pro sign-in via local Codex CLI), GitHub Copilot token, Kilo Gateway, or local LM Studio / Ollama.
 - **Storybook**: Component development and visual testing.
 
 ---
