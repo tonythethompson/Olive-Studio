@@ -17,6 +17,9 @@ export interface KbSyncResult {
   error?: string;
 }
 
+const SYNC_TIMEOUT_MS = 130_000;
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+
 export function useKbSync() {
   const [status, setStatus] = useState<KbStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -37,8 +40,13 @@ export function useKbSync() {
   const syncKb = useCallback(async (): Promise<KbSyncResult | null> => {
     setSyncing(true);
     setError(null);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), SYNC_TIMEOUT_MS);
     try {
-      const res = await fetch("/api/mcp/sync-kb", { method: "POST" });
+      const res = await fetch("/api/mcp/sync-kb", {
+        method: "POST",
+        signal: controller.signal,
+      });
       const data = (await res.json()) as KbSyncResult;
       if (!res.ok) {
         setError(data.error ?? `HTTP ${res.status}`);
@@ -48,16 +56,31 @@ export function useKbSync() {
       await fetchStatus();
       return data;
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg =
+        err instanceof DOMException && err.name === "AbortError"
+          ? "KB sync timed out"
+          : err instanceof Error
+            ? err.message
+            : String(err);
       setError(msg);
       return { ok: false, error: msg };
     } finally {
+      clearTimeout(timeout);
       setSyncing(false);
     }
   }, [fetchStatus]);
 
   useEffect(() => {
     void fetchStatus();
+    const interval = setInterval(() => void fetchStatus(), REFRESH_INTERVAL_MS);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void fetchStatus();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [fetchStatus]);
 
   return { status, syncing, error, syncKb, refreshStatus: fetchStatus };

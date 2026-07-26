@@ -71,10 +71,10 @@ interface PassesJson {
   }>;
 }
 
-const kb = passKnowledgeBase as PassesJson;
+let kbData: PassesJson = passKnowledgeBase as PassesJson;
 
 /** Map of pass name → parameter schema from passes.json */
-let PARAM_SCHEMAS: Map<string, PassParamSchema> = buildParamSchemas(kb);
+let PARAM_SCHEMAS: Map<string, PassParamSchema> = buildParamSchemas(kbData);
 
 function buildParamSchemas(data: PassesJson): Map<string, PassParamSchema> {
   return new Map(
@@ -99,14 +99,15 @@ function buildParamSchemas(data: PassesJson): Map<string, PassParamSchema> {
 
 /** Hot-reload the parameter schemas from a freshly-fetched passes.json object. */
 export function reloadPassSchemas(data: PassesJson): void {
+  kbData = data;
   PARAM_SCHEMAS = buildParamSchemas(data);
 }
 
-/** Get KB metadata (version, last_updated, pass count) without reloading. */
+/** Get KB metadata (version, last_updated, pass count) from the currently loaded KB data. */
 export function getKbMetadata(): { version: string; lastUpdated: string; passCount: number } {
   return {
-    version: (kb as { version?: string }).version ?? "unknown",
-    lastUpdated: (kb as { last_updated?: string }).last_updated ?? "unknown",
+    version: (kbData as { version?: string }).version ?? "unknown",
+    lastUpdated: (kbData as { last_updated?: string }).last_updated ?? "unknown",
     passCount: PARAM_SCHEMAS.size,
   };
 }

@@ -7,9 +7,9 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
 
   if (!status && !error) return null;
 
-  const isStale = status?.lastSync
-    ? Date.now() - new Date(status.lastSync).getTime() > 7 * 24 * 60 * 60 * 1000
-    : true;
+  const syncTime = status?.lastSync ? new Date(status.lastSync).getTime() : null;
+  const isStale =
+    syncTime == null || !Number.isFinite(syncTime) || Date.now() - syncTime > 7 * 24 * 60 * 60 * 1000;
 
   return (
     <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400">
