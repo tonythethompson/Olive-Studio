@@ -4,8 +4,6 @@
  * Sandbox is read-only; approval policy never — no shell/file mutation without UI.
  */
 
-import { Codex } from "@openai/codex-sdk";
-
 export type CodexAskOptions = {
   /** Absolute project root for workspace context */
   workingDirectory?: string;
@@ -13,10 +11,47 @@ export type CodexAskOptions = {
   signal?: AbortSignal;
 };
 
-let codexSingleton: Codex | null = null;
+type CodexThread = {
+  run: (
+    prompt: string,
+    options?: { signal?: AbortSignal },
+  ) => Promise<{
+    finalResponse?: string;
+    items: Array<{ type?: string; text?: string }>;
+  }>;
+};
 
-function getCodex(): Codex {
+type CodexClient = {
+  startThread: (options: {
+    model?: string;
+    workingDirectory?: string;
+    sandboxMode?: string;
+    approvalPolicy?: string;
+    skipGitRepoCheck?: boolean;
+    networkAccessEnabled?: boolean;
+    webSearchMode?: string;
+  }) => CodexThread;
+};
+
+type CodexSdkModule = {
+  Codex: new (options: { codexPathOverride?: string }) => CodexClient;
+};
+
+let codexSingleton: CodexClient | null = null;
+let codexModulePromise: Promise<CodexSdkModule> | null = null;
+
+function loadCodexSdk(): Promise<CodexSdkModule> {
+  // Avoid static analysis so the CJS server bundle does not require() this ESM-only package at startup.
+  const dynamicImport = new Function("specifier", "return import(specifier)") as (
+    specifier: string,
+  ) => Promise<CodexSdkModule>;
+  return dynamicImport("@openai/codex-sdk");
+}
+
+async function getCodex(): Promise<CodexClient> {
   if (!codexSingleton) {
+    codexModulePromise ??= loadCodexSdk();
+    const { Codex } = await codexModulePromise;
     codexSingleton = new Codex({
       codexPathOverride: process.env.CODEX_PATH || undefined,
     });
@@ -28,7 +63,7 @@ function getCodex(): Codex {
  * Run a single non-mutating Codex turn and return the final agent text.
  */
 export async function codexAsk(prompt: string, options: CodexAskOptions = {}): Promise<string> {
-  const codex = getCodex();
+  const codex = await getCodex();
   const thread = codex.startThread({
     model: options.model,
     workingDirectory: options.workingDirectory ?? process.cwd(),
@@ -46,7 +81,7 @@ export async function codexAsk(prompt: string, options: CodexAskOptions = {}): P
   // Fallback: last agent_message item
   for (let i = turn.items.length - 1; i >= 0; i--) {
     const item = turn.items[i];
-    if (item && item.type === "agent_message" && "text" in item && typeof item.text === "string") {
+    if (item && item.type === "agent_message" && typeof item.text === "string") {
       return item.text.trim();
     }
   }
