@@ -235,7 +235,9 @@ describe("NVIDIA parameter validation", () => {
     const ptqWarning = warnings.find((w) => w.title.includes("prefers AWQ INT4"));
     expect(ptqWarning).toBeDefined();
     expect(ptqWarning!.actionLabel).toBe("Switch to AWQ INT4");
-    expect(ptqWarning!.autofix).toEqual({ passes: { quantPrecision: "int4", quantMethod: "awq" } });
+    expect(ptqWarning!.autofix).toEqual({
+      passes: { quantization: true, quantPrecision: "int4", quantMethod: "awq", pruning: false },
+    });
   });
 });
 
@@ -490,7 +492,15 @@ describe("TensorRT RTX parameter validation", () => {
     const int4Warning = warnings.find((w) => w.title.includes("prefers INT4 AWQ"));
     expect(int4Warning).toBeDefined();
     expect(int4Warning!.actionLabel).toBe("Switch to AWQ INT4");
-    expect(int4Warning!.autofix).toEqual({ passes: { quantPrecision: "int4", quantMethod: "awq" } });
+    expect(int4Warning!.autofix).toEqual({
+      passes: {
+        quantization: true,
+        quantPrecision: "int4",
+        quantMethod: "awq",
+        pruning: false,
+        awqSym: true,
+      },
+    });
   });
 
   it("PTQ INT8 warning includes AWQ autofix with correct actionLabel", () => {
@@ -506,7 +516,7 @@ describe("TensorRT RTX parameter validation", () => {
     const qdqWarning = warnings.find((w) => w.title.includes("QDQ format"));
     expect(qdqWarning).toBeDefined();
     expect(qdqWarning!.actionLabel).toBe("Switch to AWQ");
-    expect(qdqWarning!.autofix).toEqual({ passes: { quantMethod: "awq" } });
+    expect(qdqWarning!.autofix).toEqual({ passes: { quantMethod: "awq", pruning: false } });
   });
 });
 

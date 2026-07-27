@@ -216,10 +216,16 @@ function mapQuantMethod(config: any, passType = ""): UIState["passes"]["quantMet
   if (typeLower.includes("autoawq")) {
     return "awq";
   }
+  if (typeLower.includes("gptq")) return "gptq";
+  if (typeLower.includes("spinquant")) return "spinquant";
+  if (typeLower.includes("quarot")) return "quarot";
+  if (typeLower.includes("hqq")) return "hqq";
+  if (typeLower.includes("blockwisertn") || typeLower.includes("rtn")) return "rtn";
+
   const algorithm = String(config?.algorithm ?? "").toLowerCase();
   if (algorithm.includes("awq")) return "awq";
-  if (typeLower.includes("gptq")) return "gptq";
   if (algorithm.includes("gptq")) return "gptq";
+
   const mode = String(config?.quant_mode ?? config?.mode ?? "").toLowerCase();
   if (mode.includes("qat") || mode === "qlinearops") {
     return "qat";
@@ -228,9 +234,18 @@ function mapQuantMethod(config: any, passType = ""): UIState["passes"]["quantMet
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapQuantPrecision(config: any): UIState["passes"]["quantPrecision"] {
+function mapQuantPrecision(config: any, passType = ""): UIState["passes"]["quantPrecision"] {
+  const typeLower = passType.toLowerCase();
+  if (typeLower.includes("weightcompression") || typeLower.includes("nvfp4")) {
+    return "int4";
+  }
   if (config?.bits != null) {
     return Number(config.bits) <= 4 ? "int4" : "int8";
+  }
+  if (config?.quant_level != null) {
+    const ql = String(config.quant_level).toLowerCase();
+    if (ql.includes("w4") || ql.includes("4")) return "int4";
+    if (ql.includes("w8") || ql.includes("8")) return "int8";
   }
   const weight = String(config?.weight_type ?? config?.precision ?? "int8").toLowerCase();
   if (weight.includes("int4") || weight === "4") return "int4";
@@ -273,7 +288,7 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
     if (lowerType.includes("autoawq")) {
       next.quantization = true;
       next.quantMethod = "awq";
-      next.quantPrecision = mapQuantPrecision(config);
+      next.quantPrecision = mapQuantPrecision(config, type);
       if (config.group_size != null) next.awqGroupSize = Number(config.group_size);
       if (config.damp_percent != null) next.awqDampPercent = Number(config.damp_percent);
       if (config.sym != null) next.awqSym = Boolean(config.sym);
@@ -283,7 +298,7 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
     if (lowerType.includes("gptq")) {
       next.quantization = true;
       next.quantMethod = "gptq";
-      next.quantPrecision = mapQuantPrecision(config);
+      next.quantPrecision = mapQuantPrecision(config, type);
       if (config.block_size != null) next.gptqBlockSize = Number(config.block_size);
       if (config.group_size != null) next.gptqGroupSize = Number(config.group_size);
       if (config.desc_act != null) next.gptqDescAct = Boolean(config.desc_act);
@@ -293,14 +308,36 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
     if (lowerType.includes("quant")) {
       next.quantization = true;
       next.quantMethod = mapQuantMethod(config, type);
-      next.quantPrecision = mapQuantPrecision(config);
+      next.quantPrecision = mapQuantPrecision(config, type);
+      continue;
+    }
+
+    if (lowerType.includes("spinquant")) {
+      next.quantization = true;
+      next.quantMethod = "spinquant";
+      next.quantPrecision = mapQuantPrecision(config, type);
+      continue;
+    }
+
+    if (lowerType.includes("quarot")) {
+      next.quantization = true;
+      next.quantMethod = "quarot";
+      next.quantPrecision = mapQuantPrecision(config, type);
+      continue;
+    }
+
+    if (lowerType.includes("openvino") && lowerType.includes("weight")) {
+      next.quantization = true;
+      next.quantMethod = "ptq";
+      next.quantPrecision = mapQuantPrecision(config, type);
       continue;
     }
 
     if (lowerType.includes("sparsegpt")) {
       next.pruning = true;
       next.pruningMethod = "sparsegpt";
-      if (config.sparsity != null) next.pruningSparsity = Number(config.sparsity);
+      const sparsity = config.sparsity_ratio ?? config.target_sparsity ?? config.sparsity;
+      if (sparsity != null) next.pruningSparsity = Number(sparsity);
       if (config.semi_sparse_acc) next.pruningType = "structured";
       const sparsegptCriteria = mapPruningCriteria(config);
       if (sparsegptCriteria) next.pruningCriteria = sparsegptCriteria;
@@ -310,7 +347,8 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
     if (lowerType.includes("wanda")) {
       next.pruning = true;
       next.pruningMethod = "wanda";
-      if (config.sparsity != null) next.pruningSparsity = Number(config.sparsity);
+      const sparsity = config.sparsity_ratio ?? config.target_sparsity ?? config.sparsity;
+      if (sparsity != null) next.pruningSparsity = Number(sparsity);
       const wandaCriteria = mapPruningCriteria(config);
       if (wandaCriteria) next.pruningCriteria = wandaCriteria;
       continue;
@@ -319,7 +357,8 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
     if (lowerType.includes("prune")) {
       next.pruning = true;
       next.pruningMethod = "magnitude";
-      if (config.sparsity != null) next.pruningSparsity = Number(config.sparsity);
+      const sparsity = config.sparsity_ratio ?? config.target_sparsity ?? config.sparsity;
+      if (sparsity != null) next.pruningSparsity = Number(sparsity);
       if (config.semi_sparse_acc) next.pruningType = "structured";
       const pruneCriteria = mapPruningCriteria(config);
       if (pruneCriteria) next.pruningCriteria = pruneCriteria;

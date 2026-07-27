@@ -6,11 +6,17 @@ import fs from "fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkgDir = path.join(__dirname, "..");
-const serverPath = path.join(pkgDir, "dist", "server.cjs");
+const serverPath = path.join(pkgDir, "dist", "server.mjs");
+const legacyServerPath = path.join(pkgDir, "dist", "server.cjs");
+const resolvedServer = fs.existsSync(serverPath)
+  ? serverPath
+  : fs.existsSync(legacyServerPath)
+    ? legacyServerPath
+    : null;
 
-if (!fs.existsSync(serverPath)) {
+if (!resolvedServer) {
   console.error(
-    "olive-studio: dist/ not found. Run `pnpm build` first (from a clone of this repo)."
+    "olive-studio: dist/server.mjs not found. Run `pnpm build` first (from a clone of this repo)."
   );
   process.exit(1);
 }
@@ -26,7 +32,7 @@ const openBrowser = () => {
 
 console.log("Starting Olive Studio at http://localhost:3000 ...");
 
-const server = spawn(process.execPath, [serverPath], {
+const server = spawn(process.execPath, [resolvedServer], {
   cwd: process.cwd(),
   env: {
     ...process.env,

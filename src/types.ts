@@ -43,6 +43,18 @@ export type IHVProvider =
   | "ROCMExecutionProvider"
   | "WebGpuExecutionProvider";
 
+/**
+ * Extra fields applied to a generated Olive pass when building a recipe.
+ * Populated by MCP "Apply Fix" from nested `updated_config.passes` entries.
+ * Keyed by Olive pass type name (e.g. `OnnxConversion`, `OnnxQuantization`).
+ */
+export interface PassRecipeOverride {
+  /** Olive pass-level output_name (unique intermediate artifact name). */
+  output_name?: string;
+  /** Merged into the pass `config` object. */
+  config?: Record<string, unknown>;
+}
+
 export interface BatchJob {
   id: string;
   name: string;
@@ -86,6 +98,11 @@ export interface UIState {
   batchJobs?: BatchJob[];
   /** Active olive job ID for the Execute Live button */
   activeJobId?: string | null;
+  /**
+   * MCP / advanced pass-level recipe overrides (output_name, extra config keys).
+   * Applied by `buildOliveRecipe` onto matching pass types.
+   */
+  passRecipeOverrides?: Record<string, PassRecipeOverride>;
   passes: {
     conversion: boolean;
     conversionSourceFormat: "pytorch" | "tensorflow" | "jax";

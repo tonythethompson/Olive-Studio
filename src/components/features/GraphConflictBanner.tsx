@@ -73,7 +73,14 @@ export const GraphConflictBanner = memo(function GraphConflictBanner({
                           ? "border-rose-500/30 text-rose-400"
                           : "border-amber-500/30 text-amber-400"
                       }`}
-                      onClick={() => setState(applyIssueAutofix(state, issue))}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const patch = applyIssueAutofix(state, issue);
+                        if (patch && Object.keys(patch).length > 0) {
+                          setState(patch);
+                        }
+                      }}
                     >
                       Resolve: {issue.actionLabel}
                     </Button>

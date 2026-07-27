@@ -365,3 +365,47 @@ def test_troubleshoot_relevant_quirks_always_populated():
     resp = _call_via_server(error_message="totally unknown error xyz 999")
     assert isinstance(resp["relevant_quirks"], list)
     assert len(resp["relevant_quirks"]) > 0
+
+
+def test_troubleshoot_relevant_quirks_include_full_category_not_truncated():
+    """All quirks from matched categories surface (not first-2 / max-6 truncation)."""
+    from olive_mcp_server.tools import load_quirks
+    from olive_mcp_server.tools.troubleshooting import troubleshoot_olive_error, reset_frequency_store
+
+    reset_frequency_store()
+    resp = troubleshoot_olive_error(
+        error_message="cache output overwrite same name multi-pass",
+        pass_name="OnnxQuantization",
+    )
+    quirks = resp["relevant_quirks"]
+    assert isinstance(quirks, list)
+
+    # multi-pass-cache-overwrite → pass_ordering + quantization + onnx_export (all entries)
+    kb = load_quirks()
+    expected = []
+    for cat in ("pass_ordering", "quantization", "onnx_export"):
+        for q in kb.get(cat, []):
+            expected.append(q["title"])
+    for title in expected:
+        assert title in quirks, f"missing quirk title: {title}"
+
+    # Previously truncated away — must appear
+    assert "Graph Optimize Before Quantization" in quirks
+    assert "External Data Format" in quirks
+    assert "Symmetric vs Asymmetric Quantization" in quirks
+    assert "Float16 After Quantization" in quirks
+
+
+def test_troubleshoot_lora_quirks_include_qlora():
+    """LoRA merge failures should surface every lora category quirk including QLoRA."""
+    from olive_mcp_server.tools.troubleshooting import troubleshoot_olive_error, reset_frequency_store
+
+    reset_frequency_store()
+    resp = troubleshoot_olive_error(
+        error_message="LoRA adapter cannot be merged into quantized base",
+        pass_name="LoRA",
+    )
+    quirks = resp["relevant_quirks"]
+    assert "QLoRA + Quantization" in quirks
+    assert "Base Model Frozen" in quirks
+    assert "Rank Selection" in quirks

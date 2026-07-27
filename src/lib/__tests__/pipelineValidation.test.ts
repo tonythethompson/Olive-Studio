@@ -83,17 +83,17 @@ describe("isQuantMethodAllowed", () => {
     expect(isQuantMethodAllowed("qat", "QNNExecutionProvider")).toBe(false);
   });
 
-  it("allows HQQ on any provider (no GPU required per docs)", () => {
+  it("allows HQQ only on CPU/CUDA", () => {
     expect(isQuantMethodAllowed("hqq", "CUDAExecutionProvider")).toBe(true);
-    expect(isQuantMethodAllowed("hqq", "ROCMExecutionProvider")).toBe(true);
+    expect(isQuantMethodAllowed("hqq", "ROCMExecutionProvider")).toBe(false);
     expect(isQuantMethodAllowed("hqq", "CPUExecutionProvider")).toBe(true);
-    expect(isQuantMethodAllowed("hqq", "QNNExecutionProvider")).toBe(true);
+    expect(isQuantMethodAllowed("hqq", "QNNExecutionProvider")).toBe(false);
   });
 
-  it("allows RTN on any provider", () => {
+  it("allows RTN only on CPU/CUDA", () => {
     expect(isQuantMethodAllowed("rtn", "CPUExecutionProvider")).toBe(true);
     expect(isQuantMethodAllowed("rtn", "CUDAExecutionProvider")).toBe(true);
-    expect(isQuantMethodAllowed("rtn", "QNNExecutionProvider")).toBe(true);
+    expect(isQuantMethodAllowed("rtn", "QNNExecutionProvider")).toBe(false);
   });
 
   it("allows SpinQuant and QuaRot only on GPU providers", () => {
@@ -170,8 +170,8 @@ describe("getAllowedQuantMethods", () => {
   it("excludes AWQ, GPTQ, SpinQuant, QuaRot for CPU (keeps ptq, qat, hqq, rtn)", () => {
     expect(getAllowedQuantMethods("CPUExecutionProvider")).toEqual(["ptq", "qat", "hqq", "rtn"]);
   });
-  it("excludes AWQ, GPTQ, QAT, SpinQuant, QuaRot for QNN (keeps ptq, hqq, rtn)", () => {
-    expect(getAllowedQuantMethods("QNNExecutionProvider")).toEqual(["ptq", "hqq", "rtn"]);
+  it("excludes AWQ, GPTQ, QAT, SpinQuant, QuaRot, HQQ, RTN for QNN (keeps ptq)", () => {
+    expect(getAllowedQuantMethods("QNNExecutionProvider")).toEqual(["ptq"]);
   });
 });
 
@@ -398,13 +398,13 @@ describe("coercePassFields", () => {
       coercePassFields(basePasses({ peft: true, peftMethod: "qlora" }), "CPUExecutionProvider").peftMethod,
     ).toBe("lora");
   });
-  it("disables pruning when AWQ active", () => {
+  it("preserves pruning when AWQ active", () => {
     expect(
       coercePassFields(
         basePasses({ quantization: true, quantMethod: "awq", pruning: true }),
         "CUDAExecutionProvider",
       ).pruning,
-    ).toBe(false);
+    ).toBe(true);
   });
   it("LoRA + INT4 → QLoRA on GPU", () => {
     expect(

@@ -35,7 +35,7 @@ describe("pipelineStore", () => {
   });
 
   it("setState runs sanitization (coerces invalid pass combinations)", () => {
-    // Set up: enable AWQ + pruning on CUDA — sanitization should disable pruning
+    // Set up: enable AWQ + pruning on CUDA — pruning is valid after AWQ in the chain
     usePipelineStore.getState().setState({
       ihvProvider: "CUDAExecutionProvider",
       passes: {
@@ -46,8 +46,7 @@ describe("pipelineStore", () => {
       },
     });
     const { state } = usePipelineStore.getState();
-    // AWQ + pruning is invalid — pruning should be coerced off
-    expect(state.passes.pruning).toBe(false);
+    expect(state.passes.pruning).toBe(true);
     expect(state.passes.quantization).toBe(true);
   });
 

@@ -25,9 +25,16 @@ const WHISPER_PARAMS_B: Record<string, number> = {
 function inferParamBillions(identifier: string): { paramsB: number; confidence: VramConfidence } {
   const id = identifier.toLowerCase();
 
-  const billionMatch = id.match(/(?:^|[/\-_])(\d+(?:\.\d+)?)\s*b(?:illion)?(?:[^a-z]|$)/);
-  if (billionMatch) {
-    return { paramsB: parseFloat(billionMatch[1]), confidence: "medium" };
+  // Prefer the *smallest* explicit size token (e.g. "…-Qwen-1.5B" not a false 7B default).
+  // Matches 1.5B, 7b, 70B, 0.5B, etc. anywhere in the id.
+  const allSizeMatches = [...id.matchAll(/(?:^|[/\-_\s])(\d+(?:\.\d+)?)\s*b(?:illion)?(?=[^a-z]|$)/gi)];
+  if (allSizeMatches.length > 0) {
+    const sizes = allSizeMatches
+      .map((m) => parseFloat(m[1]))
+      .filter((n) => Number.isFinite(n) && n > 0 && n < 1000);
+    if (sizes.length > 0) {
+      return { paramsB: Math.min(...sizes), confidence: "medium" };
+    }
   }
 
   for (const [key, params] of Object.entries(WHISPER_PARAMS_B)) {
@@ -37,9 +44,15 @@ function inferParamBillions(identifier: string): { paramsB: number; confidence: 
   }
   if (id.includes("whisper")) return { paramsB: 0.244, confidence: "low" };
 
+  // Known distill / small models before broad family defaults
+  if (id.includes("deepseek") && id.includes("distill") && id.includes("1.5")) {
+    return { paramsB: 1.5, confidence: "medium" };
+  }
+
   if (id.includes("phi-3.5") || id.includes("phi3.5")) return { paramsB: 3.8, confidence: "low" };
   if (id.includes("phi-3") || id.includes("phi3")) return { paramsB: 3.8, confidence: "low" };
   if (id.includes("phi-2")) return { paramsB: 2.7, confidence: "low" };
+  if (id.includes("llama-3.2") || id.includes("llama3.2")) return { paramsB: 1, confidence: "low" };
   if (id.includes("llama-3") || id.includes("llama3")) return { paramsB: 8, confidence: "low" };
   if (id.includes("llama-2") || id.includes("llama2")) return { paramsB: 7, confidence: "low" };
   if (id.includes("mistral") || id.includes("mixtral")) return { paramsB: 7, confidence: "low" };
@@ -162,18 +175,23 @@ function effectiveParamBillions(state: UIState, paramBillions: number): number {
   return paramBillions;
 }
 
+/**
+ * Peak memory during Olive is higher than deployed inference weights, but not
+ * "full VRAM card size" for small models. Keep multipliers modest for non-training paths.
+ */
 function peakRunMultiplier(state: UIState): number {
-  let multiplier = 1.35;
-
-  if (state.passes.quantization) {
-    multiplier = state.passes.quantMethod === "awq" ? 2.2 : state.passes.quantMethod === "qat" ? 2.5 : 1.9;
-  }
+  // Training / adapter paths dominate peak memory.
   if (state.passes.peft) {
-    multiplier = state.passes.peftMethod === "qlora" ? 2.8 : 3.2;
+    return state.passes.peftMethod === "qlora" ? 2.4 : 2.8;
   }
-  if (state.passes.pruning) multiplier += 0.2;
-
-  return multiplier;
+  if (state.passes.quantization) {
+    // Calibration buffers — not 2× full FP16 weights forever
+    let m = state.passes.quantMethod === "awq" ? 1.55 : state.passes.quantMethod === "qat" ? 2.0 : 1.45;
+    if (state.passes.pruning) m += 0.1;
+    return m;
+  }
+  // Convert / optimize only
+  return state.passes.pruning ? 1.35 : 1.25;
 }
 
 export function isGpuProvider(provider: IHVProvider): boolean {
@@ -211,7 +229,10 @@ export function estimateVramRequirement(state: UIState): VramEstimate {
   const effectiveParams = effectiveParamBillions(state, paramBillions);
   const inferenceGb =
     source.paramBillions > 0 ? paramsToGb(effectiveParams, deployedBytesPerParam(state)) : source.weightGb;
-  const peakRunGb = source.weightGb * peakRunMultiplier(state);
+  // Peak uses the larger of FP source weights vs current deployed size, times a pass-aware multiplier.
+  // Floor: never show peak below optimized inference size.
+  const baseForPeak = Math.max(source.weightGb, inferenceGb);
+  const peakRunGb = Math.max(inferenceGb, baseForPeak * peakRunMultiplier(state));
   const usesGpu = isGpuProvider(state.ihvProvider);
 
   const passNotes: string[] = [];

@@ -1,9 +1,9 @@
-import type { UIState } from "@/types";
+import type { PassRecipeOverride, UIState } from "@/types";
 
 /**
- * All recognized MCP config keys that mapMcpConfigToUiState handles.
- * Adding a new key here forces a compile-time check that the mapping logic
- * covers it — typos like `precisionn` will fail at build time.
+ * Flat MCP config keys that map directly onto UIState.passes fields.
+ * Nested `engine` / `passes` / `data_configs` shapes from the Olive MCP KB
+ * are handled separately below.
  */
 export type McpConfigKey =
   | "use_external_data_format"
@@ -14,119 +14,702 @@ export type McpConfigKey =
   | "group_size"
   | "damp_percent"
   | "desc_act"
-  | "alpha";
-
-type McpConfig = Partial<Record<McpConfigKey, unknown>>;
+  | "alpha"
+  | "cache_dir"
+  | "output_dir";
 
 /**
- * Map MCP diagnostic `updated_config` keys to UIState patches.
- *
- * Both ExecutionWorkspace and BatchProcessingPanel used to duplicate this
- * mapping logic. Extracted here so both consumers share a single source of
- * truth for how MCP config keys translate to Olive Studio UIState fields.
- *
- * @param config  The `updated_config` object from an MCP diagnostic response.
- * @param currentPasses  The current `state.passes` to merge into.
- * @returns  A partial UIState with the mapped patches, plus any log messages
- *           for config keys that have no direct UIState equivalent.
+ * Olive pass type names (from MCP KB `updated_config.passes`) → UI pass toggles
+ * and related defaults.
  */
-export function mapMcpConfigToUiState(
-  config: McpConfig,
+const PASS_TYPE_TO_UI: Record<
+  string,
+  {
+    enable?: Partial<UIState["passes"]>;
+    /** When true, merge params into passRecipeOverrides for this type. */
+    storeOverride?: boolean;
+  }
+> = {
+  OnnxConversion: {
+    enable: { conversion: true, conversionFormat: "onnx" },
+    storeOverride: true,
+  },
+  OpenVINOConversion: {
+    enable: { conversion: true, conversionFormat: "openvino" },
+    storeOverride: true,
+  },
+  QNNConversion: {
+    enable: { conversion: true, conversionFormat: "qnn" },
+    storeOverride: true,
+  },
+  TensorRTConversion: {
+    enable: { conversion: true, conversionFormat: "tensorrt" },
+    storeOverride: true,
+  },
+  OnnxQuantization: {
+    enable: { quantization: true, quantMethod: "ptq" },
+    storeOverride: true,
+  },
+  OnnxStaticQuantization: {
+    enable: { quantization: true, quantMethod: "ptq" },
+    storeOverride: true,
+  },
+  OnnxHqqQuantization: {
+    enable: { quantization: true, quantMethod: "hqq" },
+    storeOverride: true,
+  },
+  OnnxBlockWiseRtnQuantization: {
+    enable: { quantization: true, quantMethod: "rtn" },
+    storeOverride: true,
+  },
+  AutoAWQQuantizer: {
+    enable: { quantization: true, quantMethod: "awq" },
+    storeOverride: true,
+  },
+  GptqQuantizer: {
+    enable: { quantization: true, quantMethod: "gptq" },
+    storeOverride: true,
+  },
+  QATQuantizer: {
+    enable: { quantization: true, quantMethod: "qat" },
+    storeOverride: true,
+  },
+  NVModelOptQuantization: {
+    enable: { quantization: true, quantMethod: "awq" },
+    storeOverride: true,
+  },
+  OpenVINOQuantization: {
+    enable: { quantization: true },
+    storeOverride: true,
+  },
+  OpenVINOWeightCompression: {
+    enable: { quantization: true, quantPrecision: "int4" },
+    storeOverride: true,
+  },
+  QNNQuantization: {
+    enable: { quantization: true },
+    storeOverride: true,
+  },
+  OrtTransformersOptimization: {
+    enable: { onnxTransforms: true },
+    storeOverride: true,
+  },
+  OnnxModelOptimizer: {
+    enable: { onnxTransforms: true },
+    storeOverride: true,
+  },
+  OpenVINOIoUpdate: {
+    enable: { onnxTransforms: true },
+    storeOverride: true,
+  },
+  QNNPreprocess: {
+    enable: { onnxTransforms: true },
+    storeOverride: true,
+  },
+  SplitModel: {
+    enable: { splitting: true },
+    storeOverride: true,
+  },
+  LoRA: {
+    enable: { peft: true, peftMethod: "lora" },
+    storeOverride: true,
+  },
+  QLoRA: {
+    enable: { peft: true, peftMethod: "qlora" },
+    storeOverride: true,
+  },
+  SparseGPT: {
+    enable: { pruning: true, pruningMethod: "sparsegpt" },
+    storeOverride: true,
+  },
+  Wanda: {
+    enable: { pruning: true, pruningMethod: "wanda" },
+    storeOverride: true,
+  },
+  Prune: {
+    enable: { pruning: true, pruningMethod: "magnitude" },
+    storeOverride: true,
+  },
+};
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function mergePassPatch(base: UIState["passes"], patch: Partial<UIState["passes"]>): UIState["passes"] {
+  return { ...base, ...patch };
+}
+
+/**
+ * Map a flat bag of known quant/conversion params onto UIState.passes.
+ * Used for top-level keys and for nested `passes.*.params`.
+ */
+function mapFlatParams(
+  params: Record<string, unknown>,
   currentPasses: UIState["passes"],
-): { patches: Partial<UIState>; logs: string[] } {
-  const patches: Partial<UIState> = {};
-  const logs: string[] = [];
-
-  // use_external_data_format → no direct UIState equivalent, log it
-  if ("use_external_data_format" in config) {
-    logs.push(`[MCP FIX] Applied: use_external_data_format = ${config.use_external_data_format}`);
+  patches: Partial<UIState>,
+  logs: string[],
+): void {
+  if ("use_external_data_format" in params) {
+    logs.push(
+      `[MCP FIX] Applied: use_external_data_format = ${JSON.stringify(params.use_external_data_format)} (stored on conversion pass)`,
+    );
   }
 
-  // precision → quantPrecision
-  if ("precision" in config && typeof config.precision === "string") {
-    const precision = config.precision;
+  if ("precision" in params && typeof params.precision === "string") {
+    const precision = params.precision;
     if (precision === "int4" || precision === "int8" || precision === "fp16") {
-      patches.passes = { ...currentPasses, quantPrecision: precision };
+      patches.passes = mergePassPatch(patches.passes ?? currentPasses, {
+        quantPrecision: precision,
+      });
     }
   }
 
-  // quant_mode → quantMethod (static → ptq)
-  if ("quant_mode" in config && typeof config.quant_mode === "string") {
-    if (config.quant_mode === "static") {
-      patches.passes = {
-        ...(patches.passes ?? currentPasses),
+  if ("quant_mode" in params && typeof params.quant_mode === "string") {
+    if (params.quant_mode === "static") {
+      patches.passes = mergePassPatch(patches.passes ?? currentPasses, {
         quantMethod: "ptq",
-      };
+      });
     }
   }
 
-  // sym → awqSym
-  if ("sym" in config && typeof config.sym === "boolean") {
-    patches.passes = {
-      ...(patches.passes ?? currentPasses),
-      awqSym: config.sym,
-    };
+  if ("sym" in params && typeof params.sym === "boolean") {
+    patches.passes = mergePassPatch(patches.passes ?? currentPasses, {
+      awqSym: params.sym,
+    });
   }
 
-  // block_size → gptqBlockSize or awqGroupSize (AWQ uses group_size for block)
-  if ("block_size" in config && typeof config.block_size === "number") {
-    if (config.block_size > 0 && Number.isInteger(config.block_size)) {
-      patches.passes = {
-        ...(patches.passes ?? currentPasses),
-        gptqBlockSize: config.block_size,
-      };
+  if ("block_size" in params && typeof params.block_size === "number") {
+    if (params.block_size > 0 && Number.isInteger(params.block_size)) {
+      patches.passes = mergePassPatch(patches.passes ?? currentPasses, {
+        gptqBlockSize: params.block_size,
+      });
     }
   }
 
-  // group_size → gptqGroupSize or awqGroupSize (based on active quant method)
-  if ("group_size" in config && typeof config.group_size === "number") {
-    if (config.group_size > 0 && Number.isInteger(config.group_size)) {
+  if ("group_size" in params && typeof params.group_size === "number") {
+    if (params.group_size > 0 && Number.isInteger(params.group_size)) {
       const method = (patches.passes ?? currentPasses).quantMethod;
       if (method === "gptq") {
-        patches.passes = {
-          ...(patches.passes ?? currentPasses),
-          gptqGroupSize: config.group_size,
-        };
+        patches.passes = mergePassPatch(patches.passes ?? currentPasses, {
+          gptqGroupSize: params.group_size,
+        });
       } else if (method === "awq") {
-        patches.passes = {
-          ...(patches.passes ?? currentPasses),
-          awqGroupSize: config.group_size,
-        };
+        patches.passes = mergePassPatch(patches.passes ?? currentPasses, {
+          awqGroupSize: params.group_size,
+        });
       } else {
-        // Default: set both so the active method picks up the value
-        patches.passes = {
-          ...(patches.passes ?? currentPasses),
-          gptqGroupSize: config.group_size,
-          awqGroupSize: config.group_size,
-        };
+        patches.passes = mergePassPatch(patches.passes ?? currentPasses, {
+          gptqGroupSize: params.group_size,
+          awqGroupSize: params.group_size,
+        });
       }
     }
   }
 
-  // damp_percent → awqDampPercent
-  if ("damp_percent" in config && typeof config.damp_percent === "number") {
-    if (config.damp_percent >= 0 && config.damp_percent <= 1) {
-      patches.passes = {
-        ...(patches.passes ?? currentPasses),
-        awqDampPercent: config.damp_percent,
+  if ("damp_percent" in params && typeof params.damp_percent === "number") {
+    if (params.damp_percent >= 0 && params.damp_percent <= 1) {
+      patches.passes = mergePassPatch(patches.passes ?? currentPasses, {
+        awqDampPercent: params.damp_percent,
+      });
+    }
+  }
+
+  if ("desc_act" in params && typeof params.desc_act === "boolean") {
+    patches.passes = mergePassPatch(patches.passes ?? currentPasses, {
+      gptqDescAct: params.desc_act,
+    });
+  }
+
+  if ("alpha" in params) {
+    logs.push(
+      `[MCP FIX] Note: alpha = ${JSON.stringify(params.alpha)} (LoRA scaling — stored on peft pass if present)`,
+    );
+  }
+
+  // QAT / static quant calibration knobs
+  if ("calibrate_method" in params && typeof params.calibrate_method === "string") {
+    const m = params.calibrate_method.toLowerCase();
+    if (m === "minmax" || m === "percentile" || m === "entropy") {
+      patches.passes = mergePassPatch(patches.passes ?? currentPasses, {
+        qatCalibrateMethod: m as "minmax" | "percentile" | "entropy",
+      });
+    }
+  }
+
+  if ("calibrate_steps" in params && typeof params.calibrate_steps === "number") {
+    if (params.calibrate_steps > 0 && Number.isInteger(params.calibrate_steps)) {
+      patches.passes = mergePassPatch(patches.passes ?? currentPasses, {
+        qatCalibrateSteps: params.calibrate_steps,
+      });
+    }
+  }
+}
+
+/**
+ * Map MCP diagnostic `updated_config` keys to UIState patches.
+ *
+ * Supports both:
+ * - **Flat** keys used by older callers (`precision`, `sym`, …)
+ * - **Nested** Olive MCP KB shapes:
+ *   `{ engine: { cache_dir }, passes: { OnnxConversion: { output_name, params } } }`
+ *
+ * Nested pass `params` / `output_name` are stored in `passRecipeOverrides` so
+ * `buildOliveRecipe` can emit them on the next run. Without that storage,
+ * "Apply Fix" appeared to work (button flip) but changed nothing in the recipe.
+ *
+ * @param config  The `updated_config` object from an MCP diagnostic response.
+ * @param currentPasses  The current `state.passes` to merge into.
+ */
+export function mapMcpConfigToUiState(
+  config: Record<string, unknown>,
+  currentPasses: UIState["passes"],
+): { patches: Partial<UIState>; logs: string[] } {
+  const patches: Partial<UIState> = {};
+  const logs: string[] = [];
+  const overrides: Record<string, PassRecipeOverride> = {};
+
+  // ── Nested engine.* ───────────────────────────────────────────────────
+  if (isRecord(config.engine)) {
+    const engine = config.engine;
+    if (typeof engine.cache_dir === "string" && engine.cache_dir.trim()) {
+      patches.cacheDir = engine.cache_dir.trim();
+      logs.push(`[MCP FIX] Applied: engine.cache_dir = ${engine.cache_dir}`);
+    }
+    if (typeof engine.output_dir === "string" && engine.output_dir.trim()) {
+      logs.push(
+        `[MCP FIX] Note: engine.output_dir = ${engine.output_dir} (recipe builder uses ./models/optimized; set cache/output paths in Infra if needed)`,
+      );
+    }
+    for (const [k, v] of Object.entries(engine)) {
+      if (k === "cache_dir" || k === "output_dir") continue;
+      logs.push(`[MCP FIX] Note: engine.${k} = ${JSON.stringify(v)} (no direct UI mapping)`);
+    }
+  }
+
+  // Top-level cache_dir shorthand
+  if (typeof config.cache_dir === "string" && config.cache_dir.trim()) {
+    patches.cacheDir = config.cache_dir.trim();
+    logs.push(`[MCP FIX] Applied: cache_dir = ${config.cache_dir}`);
+  }
+
+  // ── Nested passes.{PassType}.{output_name|params|config} ──────────────
+  if (isRecord(config.passes)) {
+    for (const [passType, raw] of Object.entries(config.passes)) {
+      if (!isRecord(raw)) {
+        logs.push(`[MCP FIX] Note: passes.${passType} = ${JSON.stringify(raw)} (skipped)`);
+        continue;
+      }
+
+      const mapping = PASS_TYPE_TO_UI[passType];
+      if (mapping?.enable) {
+        patches.passes = mergePassPatch(patches.passes ?? currentPasses, mapping.enable);
+        logs.push(
+          `[MCP FIX] Enabled/configured UI pass for ${passType}: ${Object.keys(mapping.enable).join(", ")}`,
+        );
+      }
+
+      const override: PassRecipeOverride = { ...(overrides[passType] ?? {}) };
+
+      if (typeof raw.output_name === "string" && raw.output_name.trim()) {
+        override.output_name = raw.output_name.trim();
+        logs.push(`[MCP FIX] Applied: ${passType}.output_name = ${raw.output_name}`);
+      }
+
+      // MCP KB uses both `params` (older Olive style) and `config`
+      const params = isRecord(raw.params) ? raw.params : isRecord(raw.config) ? raw.config : null;
+      if (params) {
+        mapFlatParams(params, patches.passes ?? currentPasses, patches, logs);
+        override.config = { ...(override.config ?? {}), ...params };
+        logs.push(`[MCP FIX] Stored ${passType} config overrides: ${Object.keys(params).join(", ")}`);
+      }
+
+      // Other top-level fields on the pass entry (e.g. disable_search)
+      for (const [k, v] of Object.entries(raw)) {
+        if (k === "output_name" || k === "params" || k === "config" || k === "type") continue;
+        override.config = { ...(override.config ?? {}), [k]: v };
+        logs.push(`[MCP FIX] Stored ${passType}.${k} = ${JSON.stringify(v)}`);
+      }
+
+      if (override.output_name || (override.config && Object.keys(override.config).length > 0)) {
+        overrides[passType] = override;
+      } else if (!mapping) {
+        logs.push(`[MCP FIX] Note: passes.${passType} has no UI mapping — apply manually if needed`);
+      }
+    }
+  }
+
+  if (Object.keys(overrides).length > 0) {
+    patches.passRecipeOverrides = overrides;
+  }
+
+  // ── data_configs (log only — no full UI form yet) ─────────────────────
+  if (config.data_configs !== undefined) {
+    logs.push(
+      `[MCP FIX] Note: data_configs present — set Dataset / user script in Input panel if calibration still fails. ${JSON.stringify(config.data_configs).slice(0, 200)}…`,
+    );
+  }
+
+  // ── Flat top-level keys (legacy / AI-suggested) ───────────────────────
+  const flat: Record<string, unknown> = {};
+  for (const key of [
+    "use_external_data_format",
+    "precision",
+    "quant_mode",
+    "sym",
+    "block_size",
+    "group_size",
+    "damp_percent",
+    "desc_act",
+    "alpha",
+    "calibrate_method",
+    "calibrate_steps",
+  ] as const) {
+    if (key in config) flat[key] = config[key];
+  }
+  if (Object.keys(flat).length > 0) {
+    mapFlatParams(flat, patches.passes ?? currentPasses, patches, logs);
+    // Persist external data format on conversion if only flat key was given
+    if ("use_external_data_format" in flat) {
+      const existing = patches.passRecipeOverrides ?? {};
+      patches.passRecipeOverrides = {
+        ...existing,
+        OnnxConversion: {
+          ...(existing.OnnxConversion ?? {}),
+          config: {
+            ...(existing.OnnxConversion?.config ?? {}),
+            use_external_data_format: flat.use_external_data_format,
+          },
+        },
       };
     }
   }
 
-  // desc_act → gptqDescAct
-  if ("desc_act" in config && typeof config.desc_act === "boolean") {
-    patches.passes = {
-      ...(patches.passes ?? currentPasses),
-      gptqDescAct: config.desc_act,
+  return { patches, logs };
+}
+
+// ── Known-quirk auto-apply ───────────────────────────────────────────────────
+
+/** Quirk id / title fragments that we can turn into UIState patches. */
+export type ActionableQuirkId =
+  | "order-convert-first"
+  | "order-float16-last"
+  | "order-optimize-first"
+  | "onnx-external-data"
+  | "calib-symmetric"
+  | "calib-per-channel"
+  | "lora-qlora"
+  | "onnx-opset";
+
+const ACTIONABLE_QUIRK_MATCHERS: Array<{
+  id: ActionableQuirkId;
+  /** Match against quirk title, description, or id (case-insensitive). */
+  patterns: string[];
+}> = [
+  {
+    id: "order-convert-first",
+    patterns: [
+      "order-convert-first",
+      "convert before quantize",
+      "convert -> optimize -> quantize",
+      "require an onnx input",
+      "running quantization before onnxconversion",
+    ],
+  },
+  {
+    id: "order-float16-last",
+    patterns: [
+      "order-float16-last",
+      "float16 after quantization",
+      "onnxfloattofloat16 before",
+      "apply fp16 after quantization",
+      "destroys the quantized graph",
+    ],
+  },
+  {
+    id: "order-optimize-first",
+    patterns: [
+      "order-optimize-first",
+      "graph optimize before quantization",
+      "optimize before quantization",
+      "onnxmodeloptimizer or orttransformersoptimization before quantization",
+    ],
+  },
+  {
+    id: "onnx-external-data",
+    patterns: [
+      "onnx-external-data",
+      "external data format",
+      "use_external_data_format",
+      "weights >2gb",
+      "2gb",
+    ],
+  },
+  {
+    id: "calib-symmetric",
+    patterns: [
+      "calib-symmetric",
+      "symmetric vs asymmetric",
+      "symmetric quantization",
+      "zero point = 0",
+      "qnn/coreml prefer symmetric",
+    ],
+  },
+  {
+    id: "calib-per-channel",
+    patterns: ["calib-per-channel", "per-channel vs per-tensor", "per-channel weights", "per_channel"],
+  },
+  {
+    id: "lora-qlora",
+    patterns: ["lora-qlora", "qlora + quantization", "qlora uses a 4-bit base"],
+  },
+  {
+    id: "onnx-opset",
+    patterns: ["onnx-opset", "opset version compatibility", "default to 14"],
+  },
+];
+
+function normalizeQuirkText(q: string): string {
+  return q.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Identify which known-quirk ids appear in MCP `relevant_quirks` strings.
+ * Quirks may be titles only, "title — description", or include ids.
+ */
+export function matchActionableQuirks(quirks: string[] | undefined | null): ActionableQuirkId[] {
+  if (!quirks?.length) return [];
+  const found = new Set<ActionableQuirkId>();
+  for (const raw of quirks) {
+    const text = normalizeQuirkText(raw);
+    for (const m of ACTIONABLE_QUIRK_MATCHERS) {
+      if (m.patterns.some((p) => text.includes(p))) {
+        found.add(m.id);
+      }
+    }
+  }
+  return [...found];
+}
+
+export function hasActionableQuirks(quirks: string[] | undefined | null): boolean {
+  return matchActionableQuirks(quirks).length > 0;
+}
+
+/**
+ * Map MCP Known Quirks into UIState patches (pass toggles, dtype, overrides).
+ * Safe to call with empty quirks — returns empty patches.
+ */
+export function mapMcpQuirksToUiState(
+  quirks: string[] | undefined | null,
+  currentPasses: UIState["passes"],
+): { patches: Partial<UIState>; logs: string[]; applied: ActionableQuirkId[] } {
+  const patches: Partial<UIState> = {};
+  const logs: string[] = [];
+  const applied: ActionableQuirkId[] = [];
+  const matched = matchActionableQuirks(quirks);
+  if (matched.length === 0) return { patches, logs, applied };
+
+  let overrides: Record<string, PassRecipeOverride> = {};
+
+  const mergeOverrides = (type: string, ov: PassRecipeOverride) => {
+    overrides = {
+      ...overrides,
+      [type]: {
+        ...(overrides[type] ?? {}),
+        ...ov,
+        config: { ...(overrides[type]?.config ?? {}), ...(ov.config ?? {}) },
+      },
+    };
+  };
+
+  const passesNow = () => patches.passes ?? currentPasses;
+
+  for (const id of matched) {
+    switch (id) {
+      case "order-convert-first": {
+        // Quant / ONNX graph ops need conversion first
+        patches.passes = mergePassPatch(passesNow(), {
+          conversion: true,
+          conversionFormat: passesNow().conversionFormat || "onnx",
+        });
+        logs.push(
+          "[MCP QUIRK] Convert Before Quantize → enabled Graph Conversion (Convert → Optimize → Quantize order)",
+        );
+        applied.push(id);
+        break;
+      }
+      case "order-optimize-first": {
+        patches.passes = mergePassPatch(passesNow(), {
+          onnxTransforms: true,
+          // Ensure conversion exists so optimize has an ONNX graph
+          conversion: true,
+          conversionFormat: passesNow().conversionFormat || "onnx",
+        });
+        logs.push(
+          "[MCP QUIRK] Graph Optimize Before Quantization → enabled ONNX transforms (recipe order: convert → optimize → quantize)",
+        );
+        applied.push(id);
+        break;
+      }
+      case "order-float16-last": {
+        // Don't cast to FP16 before INT quant — keep conversion dtype float32.
+        // Pure FP16 models use quantPrecision=fp16 separately.
+        const p = passesNow();
+        const isIntQuant = p.quantization && (p.quantPrecision === "int4" || p.quantPrecision === "int8");
+        const dtype = (p.conversionInputTargetTypes || "").toLowerCase();
+        const isFp16DType = dtype.includes("float16") || dtype === "fp16" || dtype.includes("half");
+        if (isIntQuant && isFp16DType) {
+          patches.passes = mergePassPatch(p, {
+            conversionInputTargetTypes: "float32",
+          });
+          logs.push(
+            "[MCP QUIRK] Float16 After Quantization → conversion dtype set to float32 (FP16 before INT quant destroys QDQ)",
+          );
+          applied.push(id);
+        } else if (isIntQuant) {
+          logs.push(
+            "[MCP QUIRK] Float16 After Quantization → already float32/compatible; recipe keeps FP16 after INT quant only if added later",
+          );
+          applied.push(id);
+        } else {
+          logs.push("[MCP QUIRK] Float16 After Quantization → noted (no INT quant active; no dtype change)");
+          applied.push(id);
+        }
+        break;
+      }
+      case "onnx-external-data": {
+        mergeOverrides("OnnxConversion", {
+          config: { use_external_data_format: true },
+        });
+        patches.passes = mergePassPatch(passesNow(), {
+          conversion: true,
+          conversionFormat: passesNow().conversionFormat || "onnx",
+        });
+        logs.push("[MCP QUIRK] External Data Format → use_external_data_format=true on OnnxConversion");
+        applied.push(id);
+        break;
+      }
+      case "calib-symmetric": {
+        patches.passes = mergePassPatch(passesNow(), { awqSym: true });
+        mergeOverrides("OnnxQuantization", { config: { symmetric: true } });
+        mergeOverrides("OnnxStaticQuantization", { config: { symmetric: true } });
+        logs.push("[MCP QUIRK] Symmetric quantization → awqSym=true + symmetric on quant passes");
+        applied.push(id);
+        break;
+      }
+      case "calib-per-channel": {
+        mergeOverrides("OnnxQuantization", { config: { per_channel: true } });
+        mergeOverrides("OnnxStaticQuantization", { config: { per_channel: true } });
+        logs.push("[MCP QUIRK] Per-channel quantization → per_channel=true on quant passes");
+        applied.push(id);
+        break;
+      }
+      case "lora-qlora": {
+        const p = passesNow();
+        if (p.peft && p.quantization && p.peftMethod === "lora") {
+          patches.passes = mergePassPatch(p, { peftMethod: "qlora" });
+          logs.push("[MCP QUIRK] QLoRA + Quantization → switched peftMethod to qlora");
+          applied.push(id);
+        } else {
+          logs.push(
+            "[MCP QUIRK] QLoRA + Quantization → noted (enable PEFT + quant with LoRA to auto-switch)",
+          );
+          applied.push(id);
+        }
+        break;
+      }
+      case "onnx-opset": {
+        const p = passesNow();
+        if (p.conversionOpset > 17 || p.conversionOpset < 13) {
+          patches.passes = mergePassPatch(p, { conversionOpset: 14 });
+          logs.push("[MCP QUIRK] Opset compatibility → conversionOpset set to 14");
+          applied.push(id);
+        } else {
+          logs.push(
+            `[MCP QUIRK] Opset compatibility → current opset ${p.conversionOpset} already in 13–17 range`,
+          );
+          applied.push(id);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  if (Object.keys(overrides).length > 0) {
+    patches.passRecipeOverrides = {
+      ...(patches.passRecipeOverrides ?? {}),
+      ...overrides,
     };
   }
 
-  // alpha → no direct UIState equivalent (LoRA-specific), log it
-  if ("alpha" in config) {
-    logs.push(
-      `[MCP FIX] Note: alpha = ${JSON.stringify(config.alpha)} (LoRA scaling factor, no UIState mapping)`,
-    );
+  return { patches, logs, applied };
+}
+
+function mergePartialUiState(a: Partial<UIState>, b: Partial<UIState>): Partial<UIState> {
+  const out: Partial<UIState> = { ...a, ...b };
+  if (a.passes || b.passes) {
+    out.passes = { ...(a.passes ?? {}), ...(b.passes ?? {}) } as UIState["passes"];
+  }
+  if (a.passRecipeOverrides || b.passRecipeOverrides) {
+    const types = new Set([
+      ...Object.keys(a.passRecipeOverrides ?? {}),
+      ...Object.keys(b.passRecipeOverrides ?? {}),
+    ]);
+    const merged: Record<string, PassRecipeOverride> = {};
+    for (const t of types) {
+      const left = a.passRecipeOverrides?.[t];
+      const right = b.passRecipeOverrides?.[t];
+      merged[t] = {
+        ...left,
+        ...right,
+        config: { ...(left?.config ?? {}), ...(right?.config ?? {}) },
+      };
+    }
+    out.passRecipeOverrides = merged;
+  }
+  return out;
+}
+
+/**
+ * Full Apply Fix: merge nested `updated_config` + actionable Known Quirks.
+ */
+export function applyMcpDiagnosticToUiState(
+  diagnostic: {
+    updated_config?: Record<string, unknown>;
+    relevant_quirks?: string[];
+  },
+  currentPasses: UIState["passes"],
+): { patches: Partial<UIState>; logs: string[]; appliedQuirks: ActionableQuirkId[] } {
+  const logs: string[] = [];
+  let patches: Partial<UIState> = {};
+
+  if (diagnostic.updated_config && Object.keys(diagnostic.updated_config).length > 0) {
+    const mapped = mapMcpConfigToUiState(diagnostic.updated_config, currentPasses);
+    patches = mergePartialUiState(patches, mapped.patches);
+    logs.push(...mapped.logs);
   }
 
-  return { patches, logs };
+  const effectivePasses = patches.passes
+    ? ({ ...currentPasses, ...patches.passes } as UIState["passes"])
+    : currentPasses;
+
+  const quirkResult = mapMcpQuirksToUiState(diagnostic.relevant_quirks, effectivePasses);
+  patches = mergePartialUiState(patches, quirkResult.patches);
+  logs.push(...quirkResult.logs);
+
+  return { patches, logs, appliedQuirks: quirkResult.applied };
+}
+
+/** Whether Apply Fix can change pipeline state for this diagnostic. */
+export function canApplyMcpDiagnostic(
+  diagnostic: {
+    updated_config?: Record<string, unknown>;
+    relevant_quirks?: string[];
+  } | null,
+): boolean {
+  if (!diagnostic) return false;
+  if (diagnostic.updated_config && Object.keys(diagnostic.updated_config).length > 0) return true;
+  return hasActionableQuirks(diagnostic.relevant_quirks);
 }

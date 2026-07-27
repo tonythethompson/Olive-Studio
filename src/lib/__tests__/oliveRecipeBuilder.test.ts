@@ -258,6 +258,53 @@ describe("buildOliveRecipe", () => {
     expect((recipe.engine as Record<string, unknown>).cache_dir).toBe("/custom/cache");
   });
 
+  it("orders ONNX passes Convert → Optimize → Quantize", () => {
+    const state = baseState({
+      passes: {
+        ...DEFAULT_PASSES,
+        conversion: true,
+        conversionFormat: "onnx",
+        onnxTransforms: true,
+        quantization: true,
+        quantMethod: "ptq",
+      },
+    });
+    const recipe = buildOliveRecipe(state);
+    const keys = Object.keys(recipe.passes as object);
+    const conv = keys.indexOf("conversion");
+    const opt = keys.indexOf("transformer_opt");
+    const quant = keys.indexOf("quantization");
+    expect(conv).toBeGreaterThanOrEqual(0);
+    expect(opt).toBeGreaterThan(conv);
+    expect(quant).toBeGreaterThan(opt);
+  });
+
+  it("applies passRecipeOverrides (output_name + config) from MCP Apply Fix", () => {
+    const state = baseState({
+      cacheDir: "~/.cache/olive/experiment_1",
+      passRecipeOverrides: {
+        OnnxConversion: {
+          output_name: "onnx_model",
+          config: { use_external_data_format: true },
+        },
+        OnnxQuantization: { output_name: "quant_model" },
+      },
+      passes: {
+        ...DEFAULT_PASSES,
+        conversion: true,
+        conversionFormat: "onnx",
+        quantization: true,
+        quantMethod: "ptq",
+      },
+    });
+    const recipe = buildOliveRecipe(state);
+    const passes = recipe.passes as Record<string, Record<string, unknown>>;
+    expect(passes.conversion.output_name).toBe("onnx_model");
+    expect((passes.conversion.config as Record<string, unknown>).use_external_data_format).toBe(true);
+    expect(passes.quantization.output_name).toBe("quant_model");
+    expect((recipe.engine as Record<string, unknown>).cache_dir).toBe("~/.cache/olive/experiment_1");
+  });
+
   it("uses azureStr for cache when distributed caching is enabled", () => {
     const state = baseState({
       distributedCaching: true,
