@@ -109,12 +109,16 @@ describe("validatePassConfig", () => {
 
   it("rejects null values for required parameters", () => {
     const errors = validatePassConfig("OnnxStaticQuantization", { calibration_data_dir: null });
-    expect(errors.some((e) => e.includes("calibration_data_dir"))).toBe(true);
+    expect(
+      errors.some((e) => e.startsWith("missing required parameter") && e.includes("calibration_data_dir")),
+    ).toBe(true);
   });
 
   it("rejects empty string for required parameters", () => {
     const errors = validatePassConfig("OnnxStaticQuantization", { calibration_data_dir: "" });
-    expect(errors.some((e) => e.includes("calibration_data_dir"))).toBe(true);
+    expect(
+      errors.some((e) => e.startsWith("missing required parameter") && e.includes("calibration_data_dir")),
+    ).toBe(true);
   });
 
   it("returns error for non-object config", () => {
