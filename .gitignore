@@ -1,7 +1,9 @@
 node_modules/
 .venv/
+.olive-studio/
 build/
 dist/
+src-tauri/target/
 coverage/
 .DS_Store
 *.log
@@ -21,3 +23,10 @@ storybook-static/
 /.freebuff
 /~/.cache/
 /.agents/skills/studio
+
+# Lockfiles for non-pnpm package managers (this repo uses pnpm exclusively)
+package-lock.json
+yarn.lock
+bun.lockb
+bun.lock
+.cursor/hooks/state/continual-learning.json

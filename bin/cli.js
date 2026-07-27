@@ -10,7 +10,7 @@ const serverPath = path.join(pkgDir, "dist", "server.cjs");
 
 if (!fs.existsSync(serverPath)) {
   console.error(
-    "olive-studio: dist/ not found. Run `npm run build` first, or reinstall via npx."
+    "olive-studio: dist/ not found. Run `pnpm build` first (from a clone of this repo)."
   );
   process.exit(1);
 }

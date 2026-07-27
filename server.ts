@@ -7,6 +7,7 @@ import { promisify } from "util";
 import fs from "fs";
 import os from "os";
 import { v4 as uuidv4 } from "uuid";
+import rateLimit from "express-rate-limit";
 
 import { validateOliveRecipeStructure } from "./src/lib/oliveRecipeSchema.ts";
 import { parseJsonFromAiResponse, readEnvApiKey } from "./src/lib/aiResponse.ts";
@@ -33,6 +34,18 @@ import {
 } from "./src/lib/tensorrtDeps.ts";
 import { tensorrtRtxInstallArgs, tensorrtRtxLabel } from "./src/lib/tensorrtRtxDeps.ts";
 import type { IHVProvider } from "./src/types.ts";
+import type { GpuMetrics } from "./src/lib/gpuMetrics.ts";
+import { reloadPassSchemas, type PassesJson } from "./src/lib/schemaEngine.ts";
+import { getCodexAppServer } from "./src/lib/codex/CodexAppServerClient.ts";
+import { buildCodexPrompt, codexAsk } from "./src/lib/codex/codexAgent.ts";
+import {
+  devinChat,
+  finishDevinLogin,
+  getDevinAccountStatus,
+  getDevinSignInUrl,
+  listDevinModels,
+  logoutDevin,
+} from "./src/lib/devin/client.ts";
 
 dotenv.config();
 dotenv.config({ path: ".env.local", override: true });
@@ -40,10 +53,39 @@ dotenv.config({ path: ".env.local", override: true });
 const app = express();
 app.use(express.json({ limit: "10mb" }));
 
-const PORT = 3000;
+const PORT = Number.parseInt(process.env.PORT || "3000", 10) || 3000;
 const VENV_DIR = path.join(process.cwd(), ".venv");
 const OLIVE_GPU_LAUNCHER = path.join(process.cwd(), "scripts", "olive_gpu_launcher.py");
 const execFileAsync = promisify(execFile);
+
+// ─── KB Status Cache & Sync Protection ───────────────────────────────────────
+interface KbStatusCache {
+  available: boolean;
+  version?: string;
+  lastUpdated?: string | null;
+  lastSync?: string | null;
+  passCount?: number;
+  error?: string;
+}
+
+let kbStatusCache: KbStatusCache | null = null;
+let kbSyncInProgress = false;
+
+const kbStatusRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { available: false, error: "Too many KB status requests. Please wait." },
+});
+
+const kbSyncRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: 2,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "Rate limited: please wait before syncing again." },
+});
 
 // ─── AI Provider Config ───────────────────────────────────────────────────────
 
@@ -61,7 +103,9 @@ interface ProviderConfig {
     | "chatgpt-sub"
     | "copilot"
     | "devin"
-    | "kilocode";
+    | "kilocode"
+    /** OpenAI Codex via local app-server + SDK (ChatGPT Plus/Pro subscription). */
+    | "codex";
   apiKey: string;
   model: string;
   baseUrl?: string;
@@ -150,6 +194,7 @@ const ALLOWED_AI_PROVIDERS = new Set<ProviderConfig["provider"]>([
   "copilot",
   "devin",
   "kilocode",
+  "codex",
 ]);
 
 function detectEnvProvider(): ProviderConfig | null {
@@ -200,6 +245,25 @@ function detectEnvProvider(): ProviderConfig | null {
       baseUrl: "https://api.together.xyz/v1",
     };
   }
+  // Copilot-capable token (IDE OAuth / GITHUB_COPILOT_TOKEN preferred over classic PAT)
+  const copilotKey = readEnvApiKey("GITHUB_COPILOT_TOKEN", "COPILOT_GITHUB_TOKEN", "GITHUB_TOKEN");
+  if (copilotKey) {
+    return {
+      provider: "copilot",
+      apiKey: copilotKey,
+      model: "gpt-4o",
+      baseUrl: "https://api.githubcopilot.com",
+    };
+  }
+  const kiloKey = readEnvApiKey("KILO_API_KEY", "KILOCODE_API_KEY");
+  if (kiloKey) {
+    return {
+      provider: "kilocode",
+      apiKey: kiloKey,
+      model: "anthropic/claude-sonnet-4",
+      baseUrl: "https://api.kilo.ai/api/gateway",
+    };
+  }
   return null;
 }
 
@@ -241,25 +305,81 @@ async function callGemini(
   return text;
 }
 
+/** Default base URLs for providers that use an OpenAI-style chat completions API. */
+function resolveOpenAiCompatBase(cfg: ProviderConfig): string {
+  if (cfg.baseUrl?.trim()) return cfg.baseUrl.replace(/\/+$/, "");
+  switch (cfg.provider) {
+    case "mistral":
+      return "https://api.mistral.ai/v1";
+    case "xai":
+      return "https://api.x.ai/v1";
+    case "openrouter":
+      return "https://openrouter.ai/api/v1";
+    case "groq":
+      return "https://api.groq.com/openai/v1";
+    case "together":
+      return "https://api.together.xyz/v1";
+    case "kilocode":
+      // Official Kilo AI Gateway (OpenAI-compatible chat completions)
+      return "https://api.kilo.ai/api/gateway";
+    case "chatgpt-sub":
+    case "openai":
+    default:
+      return "https://api.openai.com/v1";
+  }
+}
+
+/**
+ * Whether this provider reliably supports OpenAI response_format=json_object.
+ * Local / gateway models often reject it — for those we force JSON via the system prompt only.
+ */
+function supportsJsonResponseFormat(cfg: ProviderConfig): boolean {
+  return (
+    cfg.provider === "openai" ||
+    cfg.provider === "chatgpt-sub" ||
+    cfg.provider === "mistral" ||
+    cfg.provider === "xai" ||
+    cfg.provider === "openrouter" ||
+    cfg.provider === "groq" ||
+    cfg.provider === "together"
+  );
+}
+
 async function callOpenAICompat(
   cfg: ProviderConfig,
   system: string,
   messages: AIChatMessage[],
   wantJson: boolean,
 ): Promise<string> {
-  const base =
-    cfg.baseUrl ?? (cfg.provider === "mistral" ? "https://api.mistral.ai/v1" : "https://api.openai.com/v1");
+  const base = resolveOpenAiCompatBase(cfg);
+  const sysText =
+    wantJson && !supportsJsonResponseFormat(cfg)
+      ? `${system}\n\nIMPORTANT: Respond with valid JSON only. No markdown fences, no text outside the JSON object.`
+      : system;
   const body: OpenAIChatRequestBody = {
     model: cfg.model,
     messages: [
-      { role: "system", content: system },
+      { role: "system", content: sysText },
       ...messages.map((m) => ({ role: m.role, content: m.content })),
     ],
   };
-  if (wantJson) body.response_format = { type: "json_object" };
+  if (wantJson && supportsJsonResponseFormat(cfg)) {
+    body.response_format = { type: "json_object" };
+  }
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${cfg.apiKey}`,
+    "Content-Type": "application/json",
+  };
+  // OpenRouter recommends these for ranking / debugging
+  if (cfg.provider === "openrouter") {
+    headers["HTTP-Referer"] = "https://github.com/tonythethompson/Olive-Studio";
+    headers["X-Title"] = "Olive Studio";
+  }
+
   const resp = await fetch(`${base}/chat/completions`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
   if (!resp.ok) {
@@ -268,6 +388,80 @@ async function callOpenAICompat(
   }
   const data = (await resp.json()) as OpenAIChatResponse;
   return data.choices?.[0]?.message?.content ?? "";
+}
+
+/**
+ * GitHub Copilot Chat-style completions (OpenAI-shaped body, Copilot-specific endpoint + headers).
+ *
+ * Endpoint used by IDE chat clients: POST https://api.githubcopilot.com/chat/completions
+ * (not /v1/...). Requires a Copilot-capable bearer token (IDE/device OAuth token — a plain
+ * classic GITHUB_TOKEN PAT is often insufficient). Third-party use of this surface may be
+ * restricted by GitHub ToS; intended for personal local tooling with the user's own sub.
+ */
+async function callGitHubCopilot(
+  cfg: ProviderConfig,
+  system: string,
+  messages: AIChatMessage[],
+  wantJson: boolean,
+): Promise<string> {
+  const base = (cfg.baseUrl?.trim() || "https://api.githubcopilot.com").replace(/\/+$/, "");
+  // Accept either https://api.githubcopilot.com or .../v1 and normalize to chat/completions root
+  const endpoint = base.endsWith("/v1")
+    ? `${base.slice(0, -3)}/chat/completions`
+    : `${base}/chat/completions`;
+
+  const sysText = wantJson
+    ? `${system}\n\nIMPORTANT: Respond with valid JSON only. No markdown fences, no text outside the JSON object.`
+    : system;
+
+  const body: OpenAIChatRequestBody = {
+    model: cfg.model || "gpt-4o",
+    messages: [
+      { role: "system", content: sysText },
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+    ],
+  };
+
+  const resp = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${cfg.apiKey}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      // Required routing header used by official Copilot Chat clients
+      "Copilot-Integration-Id": "vscode-chat",
+      "Editor-Version": "vscode/1.98.2",
+      "Editor-Plugin-Version": "copilot-chat/0.26.7",
+      "User-Agent": "GitHubCopilotChat/0.26.7",
+      "Openai-Intent": "conversation-panel",
+      "X-Request-Id": crypto.randomUUID(),
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "");
+    let detail = resp.statusText;
+    try {
+      const err = JSON.parse(errText) as ApiErrorResponse;
+      detail = err.error?.message ?? (errText.slice(0, 400) || detail);
+    } catch {
+      if (errText) detail = errText.slice(0, 400);
+    }
+    if (resp.status === 401 || resp.status === 403) {
+      throw new Error(
+        `GitHub Copilot ${resp.status}: ${detail}. Use a Copilot session/OAuth token (not a plain classic PAT). Export from a logged-in IDE flow or set GITHUB_COPILOT_TOKEN / GITHUB_TOKEN with Copilot access.`,
+      );
+    }
+    throw new Error(`GitHub Copilot ${resp.status}: ${detail}`);
+  }
+
+  const data = (await resp.json()) as OpenAIChatResponse;
+  const text = data.choices?.[0]?.message?.content ?? "";
+  if (!text.trim()) {
+    throw new Error("GitHub Copilot returned an empty response.");
+  }
+  return text;
 }
 
 async function callAnthropic(
@@ -301,27 +495,59 @@ async function callAnthropic(
   return data.content?.[0]?.text ?? "";
 }
 
+/**
+ * Sends a conversation to the configured AI provider.
+ *
+ * @param system - System instructions for the conversation
+ * @param messages - Conversation messages to send
+ * @param wantJson - Whether to request a JSON-formatted response
+ * @returns The provider's response text
+ */
 async function callAI(system: string, messages: AIChatMessage[], wantJson = false): Promise<string> {
   const cfg = getAiProvider();
   if (!cfg)
     throw new Error(
-      "No AI provider configured. Add an API key in the AI Copilot settings or set GEMINI_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY / MISTRAL_API_KEY in your environment.",
+      "No AI provider configured. Add an API key in Assistant → Settings, or set GEMINI_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY / MISTRAL_API_KEY / XAI_API_KEY / OPENROUTER_API_KEY / GROQ_API_KEY / TOGETHER_API_KEY / GITHUB_COPILOT_TOKEN / KILO_API_KEY in the environment.",
     );
   switch (cfg.provider) {
     case "gemini":
       return callGemini(cfg, system, messages, wantJson);
     case "anthropic":
       return callAnthropic(cfg, system, messages, wantJson);
+    case "copilot":
+      return callGitHubCopilot(cfg, system, messages, wantJson);
+    case "devin": {
+      // Devin subscription: not a model — multi-model access after browser sign-in
+      return devinChat({
+        model: cfg.model || "swe-1-6",
+        system: wantJson
+          ? `${system}\n\nIMPORTANT: Respond with valid JSON only. No markdown fences.`
+          : system,
+        messages: messages.map((m) => ({
+          role: m.role === "assistant" ? "assistant" : m.role === "user" ? "user" : "system",
+          content: m.content,
+        })),
+      });
+    }
+    case "codex": {
+      // ChatGPT subscription path: local Codex CLI/SDK (auth from app-server login or `codex login`)
+      const prompt = buildCodexPrompt(
+        wantJson ? `${system}\n\nIMPORTANT: Respond with valid JSON only. No markdown fences.` : system,
+        messages,
+      );
+      return codexAsk(prompt, {
+        workingDirectory: process.cwd(),
+        model: cfg.model && cfg.model !== "default" ? cfg.model : undefined,
+      });
+    }
     case "openai":
+    case "chatgpt-sub": // OpenAI API key (platform credits) — not ChatGPT web session login
     case "mistral":
     case "openai-compat":
     case "xai":
     case "openrouter":
     case "groq":
     case "together":
-    case "chatgpt-sub":
-    case "copilot":
-    case "devin":
     case "kilocode":
       return callOpenAICompat(cfg, system, messages, wantJson);
     default:
@@ -330,6 +556,7 @@ async function callAI(system: string, messages: AIChatMessage[], wantJson = fals
 }
 
 // ─── Olive Job Registry ───────────────────────────────────────────────────────
+
 interface OliveJob {
   id: string;
   status: "setting_up" | "running" | "completed" | "failed" | "cancelled";
@@ -337,7 +564,15 @@ interface OliveJob {
   logs: string[];
   // SSE subscriber queues: each subscriber is a function that receives new log lines
   subscribers: Array<(line: string) => void>;
+  // SSE metric subscribers: receive GPU metric snapshots
+  metricSubscribers: Array<(metrics: GpuMetrics) => void>;
   process: ReturnType<typeof spawn> | null;
+  // Latest GPU metrics snapshot (for replay to late SSE subscribers)
+  latestMetrics: GpuMetrics | null;
+  // Interval handle for periodic GPU sampling
+  metricsTimer: ReturnType<typeof setInterval> | null;
+  // True while a nvidia-smi sample is in-flight (prevents overlap)
+  sampling: boolean;
 }
 
 const jobRegistry = new Map<string, OliveJob>();
@@ -345,6 +580,12 @@ const jobRegistry = new Map<string, OliveJob>();
 // In-memory only — never written to disk or logged
 let runtimeHfToken: string | null = null;
 
+/**
+ * Records a job log line and notifies its active subscribers.
+ *
+ * @param job - The job whose log and subscribers should be updated
+ * @param line - The log line to record and broadcast
+ */
 function pushLog(job: OliveJob, line: string) {
   job.logs.push(line);
   for (const sub of job.subscribers) {
@@ -356,7 +597,118 @@ function pushLog(job: OliveJob, line: string) {
   }
 }
 
+/**
+ * Stores the latest GPU metrics and broadcasts them to subscribed listeners.
+ *
+ * @param job - The Olive job associated with the metrics
+ * @param metrics - The GPU metrics snapshot to store and broadcast
+ */
+function pushGpuMetrics(job: OliveJob, metrics: GpuMetrics) {
+  job.latestMetrics = metrics;
+  for (const sub of job.metricSubscribers) {
+    try {
+      sub(metrics);
+    } catch {
+      /* subscriber gone */
+    }
+  }
+}
+
+/**
+ * Collects current metrics for available NVIDIA GPUs.
+ *
+ * @returns A timestamped GPU metrics snapshot, or `null` when metrics cannot be collected.
+ */
+async function sampleGpuMetrics(): Promise<GpuMetrics | null> {
+  try {
+    const { stdout } = await execFileAsync(
+      "nvidia-smi",
+      [
+        "--query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
+        "--format=csv,noheader,nounits",
+      ],
+      { timeout: 10_000 },
+    );
+    const lines = stdout.trim().split("\n").filter(Boolean);
+    if (lines.length === 0) return null;
+    const gpus = lines.map((line) => {
+      const parts = line.split(",").map((s) => s.trim());
+      const parseNum = (v: string | undefined): number | null => {
+        if (!v || v === "[N/A]") return null;
+        const n = parseFloat(v);
+        return isNaN(n) ? null : n;
+      };
+      return {
+        index: parseInt(parts[0] ?? "0", 10),
+        name: parts[1] ?? "Unknown GPU",
+        utilizationPct: parseNum(parts[2]),
+        memUsedMb: parseNum(parts[3]),
+        memTotalMb: parseNum(parts[4]),
+        tempC: parseNum(parts[5]),
+        powerW: parseNum(parts[6]),
+      };
+    });
+    return { timestamp: new Date().toISOString(), gpus };
+  } catch {
+    return null;
+  }
+}
+
+/** Start periodic GPU metrics sampling for a job. */
+function startGpuMetricsTimer(job: OliveJob): void {
+  if (job.metricsTimer) return;
+  const sample = async () => {
+    if (job.status !== "running") {
+      stopGpuMetricsTimer(job);
+      return;
+    }
+    if (job.sampling) return;
+    job.sampling = true;
+    try {
+      const metrics = await sampleGpuMetrics();
+      if (metrics) pushGpuMetrics(job, metrics);
+    } finally {
+      job.sampling = false;
+    }
+  };
+  // Sample immediately, then every 3 seconds
+  void sample();
+  job.metricsTimer = setInterval(() => void sample(), 3000);
+}
+
+/** Stop GPU metrics sampling for a job. */
+function stopGpuMetricsTimer(job: OliveJob): void {
+  if (job.metricsTimer) {
+    clearInterval(job.metricsTimer);
+    job.metricsTimer = null;
+  }
+}
+
 // ─── Python / venv Helpers ────────────────────────────────────────────────────
+
+const STUDIO_CONFIG_DIR = path.join(process.cwd(), ".olive-studio");
+const STUDIO_CONFIG_PATH = path.join(STUDIO_CONFIG_DIR, "config.json");
+
+interface StudioConfig {
+  /** Absolute path to a system Python interpreter (optional override). */
+  systemPython?: string;
+}
+
+function readStudioConfig(): StudioConfig {
+  try {
+    if (!fs.existsSync(STUDIO_CONFIG_PATH)) return {};
+    return JSON.parse(fs.readFileSync(STUDIO_CONFIG_PATH, "utf-8")) as StudioConfig;
+  } catch {
+    return {};
+  }
+}
+
+function writeStudioConfig(patch: StudioConfig): StudioConfig {
+  fs.mkdirSync(STUDIO_CONFIG_DIR, { recursive: true });
+  const next = { ...readStudioConfig(), ...patch };
+  fs.writeFileSync(STUDIO_CONFIG_PATH, JSON.stringify(next, null, 2), "utf-8");
+  return next;
+}
 
 /** Returns the path to python inside the venv, or null if not resolvable */
 function getVenvPython(): string {
@@ -365,23 +717,73 @@ function getVenvPython(): string {
     : path.join(VENV_DIR, "bin", "python");
 }
 
+function getVenvScriptsDir(): string {
+  return process.platform === "win32" ? path.join(VENV_DIR, "Scripts") : path.join(VENV_DIR, "bin");
+}
+
 function getVenvPip(): string {
   return process.platform === "win32"
     ? path.join(VENV_DIR, "Scripts", "pip.exe")
     : path.join(VENV_DIR, "bin", "pip");
 }
 
-/** Check whether python/python3 is available on PATH */
+async function isRunnablePython(candidate: string): Promise<boolean> {
+  try {
+    await execFileAsync(candidate, ["--version"], { timeout: 8_000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve a system Python for creating the project venv.
+ * Order: env OLIVE_STUDIO_PYTHON → saved config → PATH → common Windows installs.
+ */
 async function findSystemPython(): Promise<string | null> {
-  for (const cmd of ["python", "python3"]) {
-    try {
-      await execFileAsync(cmd, ["--version"]);
-      return cmd;
-    } catch {
-      /* not found */
+  const candidates: string[] = [];
+
+  const envPy = process.env.OLIVE_STUDIO_PYTHON?.trim();
+  if (envPy) candidates.push(envPy);
+
+  const cfgPy = readStudioConfig().systemPython?.trim();
+  if (cfgPy) candidates.push(cfgPy);
+
+  candidates.push("python", "python3");
+
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA ?? "";
+    const programFiles = process.env.ProgramFiles ?? "C:\\Program Files";
+    for (const ver of ["314", "313", "312", "311", "310", "39"]) {
+      if (localAppData) {
+        candidates.push(path.join(localAppData, "Programs", "Python", `Python${ver}`, "python.exe"));
+      }
+      candidates.push(path.join(programFiles, "Python" + ver, "python.exe"));
     }
   }
+
+  const seen = new Set<string>();
+  for (const c of candidates) {
+    if (!c || seen.has(c)) continue;
+    seen.add(c);
+    // Absolute paths must exist; bare commands rely on PATH
+    if ((c.includes("/") || c.includes("\\")) && !fs.existsSync(c)) continue;
+    if (await isRunnablePython(c)) return c;
+  }
   return null;
+}
+
+/** Prepend project .venv Scripts/bin (and optional python dir) so Olive works without system PATH. */
+function envWithVenvOnPath(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const dirs: string[] = [];
+  const scripts = getVenvScriptsDir();
+  if (fs.existsSync(scripts)) dirs.push(scripts);
+  const cfgPy = readStudioConfig().systemPython;
+  if (cfgPy) {
+    const dir = path.dirname(cfgPy);
+    if (fs.existsSync(dir)) dirs.push(dir);
+  }
+  return envWithPrependedPaths(base, dirs);
 }
 
 /**
@@ -393,7 +795,8 @@ async function ensureVenv(onLine: (line: string) => void): Promise<{ ok: boolean
   if (!systemPython) {
     return {
       ok: false,
-      error: "Python not found on PATH. Install Python 3.9+ to use Olive execution.",
+      error:
+        "Python not found. Install Python 3.9+, or set a path in the app (Runtime → Set Python), or set OLIVE_STUDIO_PYTHON.",
     };
   }
 
@@ -652,11 +1055,136 @@ async function buildOliveRunEnvironment(
   provider: IHVProvider,
   base: NodeJS.ProcessEnv,
 ): Promise<NodeJS.ProcessEnv> {
+  // Always put project .venv on PATH so `olive` / scripts resolve without a system install.
+  let env = envWithVenvOnPath(base);
   if (!isGpuExecutionProvider(provider)) {
-    return base;
+    return env;
   }
   const libPaths = await getNativeGpuLibPaths(python);
-  return envWithPrependedPaths(base, libPaths);
+  env = envWithPrependedPaths(env, libPaths);
+  return env;
+}
+
+async function getRuntimeEnvStatus() {
+  const venvPython = getVenvPython();
+  const venvScripts = getVenvScriptsDir();
+  const venvExists = fs.existsSync(venvPython);
+  let oliveInstalled = false;
+  let oliveVersion: string | null = null;
+  if (venvExists) {
+    try {
+      const { stdout } = await execFileAsync(
+        venvPython,
+        ["-c", "import olive; print(getattr(olive, '__version__', 'unknown'))"],
+        { timeout: 15_000 },
+      );
+      oliveInstalled = true;
+      oliveVersion = stdout.trim() || "unknown";
+    } catch {
+      oliveInstalled = false;
+    }
+  }
+  const systemPython = await findSystemPython();
+  const cfg = readStudioConfig();
+  const pathKey = process.platform === "win32" ? "Path" : "PATH";
+  const userPath =
+    process.platform === "win32"
+      ? await (async () => {
+          try {
+            const { stdout } = await execFileAsync(
+              "powershell.exe",
+              ["-NoProfile", "-Command", "[Environment]::GetEnvironmentVariable('Path','User')"],
+              { timeout: 10_000 },
+            );
+            return stdout.trim();
+          } catch {
+            return "";
+          }
+        })()
+      : (process.env[pathKey] ?? "");
+  const venvOnUserPath =
+    Boolean(userPath) &&
+    userPath
+      .split(process.platform === "win32" ? ";" : ":")
+      .some((p) => path.resolve(p) === path.resolve(venvScripts));
+
+  return {
+    venvExists,
+    venvPython: venvExists ? venvPython : null,
+    venvScripts,
+    oliveInstalled,
+    oliveVersion,
+    systemPython,
+    configuredPython: cfg.systemPython ?? null,
+    venvOnUserPath,
+    platform: process.platform,
+    hint: !systemPython
+      ? "No system Python found. Set a python.exe path below (used to create .venv)."
+      : !venvExists
+        ? "Project .venv missing — first Execute Live will create it."
+        : !oliveInstalled
+          ? "olive-ai not in .venv — first Execute Live will install it."
+          : venvOnUserPath
+            ? "Runtime ready. Project .venv is on your user PATH."
+            : "Runtime ready inside the app. Optionally add .venv to user PATH for terminals.",
+  };
+}
+
+/** Permanently prepend project .venv Scripts/bin to the current user's PATH. */
+async function addVenvToUserPath(): Promise<{ ok: boolean; error?: string; already?: boolean }> {
+  const scripts = getVenvScriptsDir();
+  if (!fs.existsSync(scripts)) {
+    return {
+      ok: false,
+      error: "Project .venv not found yet. Run Execute Live once (or create the venv) first.",
+    };
+  }
+  const resolved = path.resolve(scripts);
+
+  if (process.platform === "win32") {
+    const ps = `
+$scripts = ${JSON.stringify(resolved)}
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+if ($null -eq $userPath) { $userPath = '' }
+$parts = $userPath -split ';' | Where-Object { $_ -ne '' }
+if ($parts | Where-Object { $_.TrimEnd('\\') -ieq $scripts.TrimEnd('\\') }) {
+  Write-Output 'ALREADY'
+  exit 0
+}
+$newPath = if ($userPath) { "$scripts;$userPath" } else { $scripts }
+[Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+Write-Output 'ADDED'
+`;
+    try {
+      const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-Command", ps], {
+        timeout: 15_000,
+      });
+      const line = stdout.trim();
+      if (line.includes("ALREADY")) return { ok: true, already: true };
+      // Also update this process so child spawns see it immediately
+      process.env.Path = envWithVenvOnPath(process.env).Path ?? process.env.Path;
+      return { ok: true, already: false };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: msg };
+    }
+  }
+
+  // POSIX: append export line to ~/.profile if missing
+  const profile = path.join(os.homedir(), ".profile");
+  const exportLine = `export PATH="${resolved}:$PATH"  # olive-studio .venv`;
+  try {
+    const existing = fs.existsSync(profile) ? fs.readFileSync(profile, "utf-8") : "";
+    if (existing.includes(resolved)) {
+      return { ok: true, already: true };
+    }
+    fs.appendFileSync(profile, `\n${exportLine}\n`, "utf-8");
+    process.env.PATH = envWithVenvOnPath(process.env).PATH ?? process.env.PATH;
+    return { ok: true, already: false };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
 }
 
 /** Olive RunConfig parse + package scan without starting optimization. */
@@ -1299,8 +1827,8 @@ async function probeSystemHardware(): Promise<HardwareProbeResult> {
   } else if (nvidia?.gpus.length) {
     notes.push(
       tensorRtRtx?.detail
-        ? `TensorRT RTX not loadable: ${tensorRtRtx.detail}`
-        : "TensorRT RTX not installed — Olive will auto-install tensorrt-rtx on run when TRT RTX is the target.",
+        ? `TensorRT RTX plugin not ready (${tensorRtRtx.detail}). GPU is compatible — install tensorrt-rtx from Hardware or on first TRT RTX run.`
+        : "TensorRT RTX plugin (tensorrt-rtx) not in .venv yet. GPU is compatible — use Install in Hardware, or Olive installs it on first TRT RTX run.",
     );
   }
 
@@ -1349,7 +1877,9 @@ async function probeSystemHardware(): Promise<HardwareProbeResult> {
     tensorRtRtx,
     onnxRuntimeProviders,
     detectedProviders,
-    recommendedProvider: pickRecommendedProvider(detectedProviders),
+    recommendedProvider: pickRecommendedProvider(detectedProviders, {
+      tensorRtRtxLoadable: tensorRtRtx?.loadable === true,
+    }),
     notes,
   };
 }
@@ -1414,7 +1944,11 @@ app.post("/api/olive/run", async (req, res) => {
     exitCode: null,
     logs: [],
     subscribers: [],
+    metricSubscribers: [],
     process: null,
+    latestMetrics: null,
+    metricsTimer: null,
+    sampling: false,
   };
   jobRegistry.set(jobId, job);
 
@@ -1578,6 +2112,7 @@ app.post("/api/olive/run", async (req, res) => {
     pushLog(job, `[info] Starting Olive optimization run...`);
 
     job.status = "running";
+    startGpuMetricsTimer(job);
     const { executable, args } = resolveOliveCommand(targetProvider, tmpFile, false);
     const proc = spawn(executable, args, {
       stdio: "pipe",
@@ -1597,6 +2132,7 @@ app.post("/api/olive/run", async (req, res) => {
     proc.on("close", (code) => {
       job.exitCode = code;
       job.status = code === 0 ? "completed" : "failed";
+      stopGpuMetricsTimer(job);
       pushLog(job, `[done] Olive process exited with code ${code}.`);
       // Cleanup temp file
       try {
@@ -1618,6 +2154,7 @@ app.post("/api/olive/run", async (req, res) => {
       pushLog(job, `[error] Failed to start Olive process: ${err.message}`);
       job.status = "failed";
       job.exitCode = 1;
+      stopGpuMetricsTimer(job);
       for (const sub of job.subscribers) {
         try {
           sub("__DONE__");
@@ -1655,6 +2192,11 @@ app.get("/api/olive/stream/:jobId", (req, res) => {
     res.write(`data: ${JSON.stringify({ line })}\n\n`);
   }
 
+  // Replay latest GPU metrics if available
+  if (job.latestMetrics) {
+    res.write(`event: metrics\ndata: ${JSON.stringify(job.latestMetrics)}\n\n`);
+  }
+
   // If already finished, send done immediately
   if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
     res.write(`event: done\ndata: ${JSON.stringify({ exitCode: job.exitCode })}\n\n`);
@@ -1665,9 +2207,18 @@ app.get("/api/olive/stream/:jobId", (req, res) => {
   // Subscribe to new lines
   job.subscribers.push(send);
 
+  // Subscribe to GPU metrics
+  const sendMetrics = (metrics: GpuMetrics) => {
+    if (res.writableEnded) return;
+    res.write(`event: metrics\ndata: ${JSON.stringify(metrics)}\n\n`);
+  };
+  job.metricSubscribers.push(sendMetrics);
+
   req.on("close", () => {
     const idx = job.subscribers.indexOf(send);
     if (idx !== -1) job.subscribers.splice(idx, 1);
+    const midx = job.metricSubscribers.indexOf(sendMetrics);
+    if (midx !== -1) job.metricSubscribers.splice(midx, 1);
     if (job.subscribers.length === 0 && (job.status === "running" || job.status === "setting_up")) {
       cancelJobById(job.id);
     }
@@ -1686,7 +2237,12 @@ app.get("/api/olive/status/:jobId", (req, res) => {
   });
 });
 
-// ─── POST & DELETE /api/olive/cancel ──────────────────────────────────────────
+/**
+ * Cancels an active Olive job and terminates its process when applicable.
+ *
+ * @param jobId - The identifier of the job to cancel
+ * @returns An object indicating whether the job was found and cancellation was requested
+ */
 function cancelJobById(jobId: string): { ok: boolean; message?: string } {
   const job = jobRegistry.get(jobId);
   if (!job) return { ok: false, message: "Job not found." };
@@ -1694,6 +2250,7 @@ function cancelJobById(jobId: string): { ok: boolean; message?: string } {
   if (job.status === "running" || job.status === "setting_up") {
     job.status = "cancelled";
     job.exitCode = -1;
+    stopGpuMetricsTimer(job);
     pushLog(job, "[info] Job cancelled by user.");
 
     if (job.process && job.process.pid) {
@@ -1770,6 +2327,88 @@ app.delete("/api/env/hf-token", (_req, res) => {
   return res.json({ ok: true });
 });
 
+// ─── Install TensorRT RTX runtime into project .venv (consumer GeForce EP) ────
+app.post("/api/env/install-tensorrt-rtx", async (_req, res) => {
+  const lines: string[] = [];
+  try {
+    // Ensure venv + olive exist first so pip target is the project environment.
+    const setup = await ensureVenv((line) => lines.push(line));
+    if (!setup.ok) {
+      return res.status(500).json({ ok: false, error: setup.error, log: lines });
+    }
+    const result = await ensureTensorRtRtx((line) => lines.push(line));
+    hardwareProbeCache = null;
+    if (!result.ok) {
+      return res.status(500).json({ ok: false, error: result.error, log: lines });
+    }
+    const probe = await probeSystemHardware();
+    hardwareProbeCache = { at: Date.now(), result: probe };
+    return res.json({
+      ok: true,
+      version: probe.tensorRtRtx?.version ?? null,
+      loadable: probe.tensorRtRtx?.loadable === true,
+      log: lines,
+      probe: enrichProbeWithSystemRam(probe),
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg, log: lines });
+  }
+});
+
+// ─── Runtime Python / PATH helpers (in-app fix when olive/python not on PATH) ─
+app.get("/api/env/runtime", async (_req, res) => {
+  try {
+    return res.json(await getRuntimeEnvStatus());
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: msg });
+  }
+});
+
+app.post("/api/env/python-path", async (req, res) => {
+  const raw = (req.body as { path?: string })?.path?.trim();
+  if (!raw) {
+    return res.status(400).json({ ok: false, error: "Provide an absolute path to python.exe / python." });
+  }
+  const resolved = path.resolve(raw);
+  if (!fs.existsSync(resolved)) {
+    return res.status(400).json({ ok: false, error: `File not found: ${resolved}` });
+  }
+  if (!(await isRunnablePython(resolved))) {
+    return res.status(400).json({
+      ok: false,
+      error: "That file did not run as Python (`python --version` failed).",
+    });
+  }
+  writeStudioConfig({ systemPython: resolved });
+  process.env.OLIVE_STUDIO_PYTHON = resolved;
+  return res.json({ ok: true, ...(await getRuntimeEnvStatus()) });
+});
+
+app.delete("/api/env/python-path", async (_req, res) => {
+  const cfg = readStudioConfig();
+  delete cfg.systemPython;
+  fs.mkdirSync(STUDIO_CONFIG_DIR, { recursive: true });
+  fs.writeFileSync(STUDIO_CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf-8");
+  delete process.env.OLIVE_STUDIO_PYTHON;
+  return res.json({ ok: true, ...(await getRuntimeEnvStatus()) });
+});
+
+app.post("/api/env/add-venv-to-path", async (_req, res) => {
+  const result = await addVenvToUserPath();
+  if (!result.ok) {
+    return res.status(400).json(result);
+  }
+  return res.json({
+    ...result,
+    message: result.already
+      ? "Project .venv was already on your user PATH."
+      : "Added project .venv to your user PATH. Open a new terminal for it to apply outside this app.",
+    ...(await getRuntimeEnvStatus()),
+  });
+});
+
 // ─── GET/POST/DELETE /api/ai/provider ────────────────────────────────────────
 app.get("/api/ai/provider", (_req, res) => {
   const cfg = getAiProvider();
@@ -1790,20 +2429,73 @@ app.post("/api/ai/provider", (req, res) => {
     model?: string;
     baseUrl?: string;
   };
-  if (!provider || !key || !model) {
+  if (!provider || !model) {
+    return res.status(400).json({ error: "provider and model are required" });
+  }
+  // Codex uses ChatGPT browser login via app-server; no API key required.
+  if (provider !== "codex" && !key) {
     return res.status(400).json({ error: "provider, apiKey, and model are required" });
   }
   if (!ALLOWED_AI_PROVIDERS.has(provider as ProviderConfig["provider"])) {
     return res.status(400).json({ error: `Invalid provider: ${provider}` });
   }
+  if (provider === "devin") {
+    const st = getDevinAccountStatus();
+    if (!st.signedIn) {
+      return res.status(401).json({
+        error: "Not signed in to Devin. Use Assistant → Devin → Sign in, then paste the browser token.",
+      });
+    }
+    runtimeAiProvider = {
+      provider: "devin",
+      apiKey: "devin-local-auth",
+      model: model.trim() || "swe-1-6",
+    };
+    return res.json({
+      ok: true,
+      source: "user",
+      provider: "devin",
+      model: runtimeAiProvider.model,
+      accountName: st.name,
+    });
+  }
   if (provider === "openai-compat" && !baseUrl?.trim()) {
     return res.status(400).json({ error: "baseUrl is required for OpenAI-compatible providers." });
   }
+  if (provider === "codex") {
+    runtimeAiProvider = {
+      provider: "codex",
+      apiKey: "codex-local-auth",
+      model: model.trim() || "default",
+    };
+    return res.json({
+      ok: true,
+      source: "user",
+      provider: "codex",
+      model: runtimeAiProvider.model,
+    });
+  }
+  // Apply known default bases so session config works even if the UI omits baseUrl
+  const resolvedBase =
+    baseUrl?.trim() ||
+    (provider === "copilot"
+      ? "https://api.githubcopilot.com"
+      : provider === "kilocode"
+        ? "https://api.kilo.ai/api/gateway"
+        : provider === "xai"
+          ? "https://api.x.ai/v1"
+          : provider === "openrouter"
+            ? "https://openrouter.ai/api/v1"
+            : provider === "groq"
+              ? "https://api.groq.com/openai/v1"
+              : provider === "together"
+                ? "https://api.together.xyz/v1"
+                : undefined);
   runtimeAiProvider = {
     provider: provider as ProviderConfig["provider"],
-    apiKey: key.trim(),
+    apiKey: key!.trim(),
     model: model.trim(),
-    baseUrl: baseUrl?.trim() || undefined,
+    baseUrl: resolvedBase,
   };
   return res.json({
     ok: true,
@@ -1816,6 +2508,186 @@ app.post("/api/ai/provider", (req, res) => {
 app.delete("/api/ai/provider", (_req, res) => {
   runtimeAiProvider = null;
   return res.json({ ok: true });
+});
+
+// ─── OpenAI Codex (ChatGPT subscription via local app-server + SDK) ───────────
+// See https://developers.openai.com/codex/app-server and /codex/auth
+
+app.get("/api/codex/account", async (_req, res) => {
+  try {
+    const client = getCodexAppServer();
+    const result = await client.readAccount();
+    return res.json({
+      ok: true,
+      account: result.account,
+      requiresOpenaiAuth: result.requiresOpenaiAuth,
+      ready: Boolean(result.account),
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(503).json({
+      ok: false,
+      ready: false,
+      error: msg,
+      hint: "Install Codex CLI (`npm i -g @openai/codex`) and ensure `codex` is on PATH.",
+    });
+  }
+});
+
+app.post("/api/codex/login", async (_req, res) => {
+  try {
+    const client = getCodexAppServer();
+    const login = await client.startChatGptLogin();
+    // Activate codex as the AI provider once login is initiated; auth completes in browser.
+    runtimeAiProvider = {
+      provider: "codex",
+      apiKey: "codex-local-auth",
+      model: "default",
+    };
+    return res.json({
+      ok: true,
+      loginId: login.loginId,
+      authUrl: login.authUrl,
+      message: "Open authUrl in your browser to sign in with ChatGPT (Plus/Pro Codex allowance).",
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+app.post("/api/codex/login/cancel", async (req, res) => {
+  const loginId = (req.body as { loginId?: string })?.loginId;
+  if (!loginId) return res.status(400).json({ error: "loginId is required" });
+  try {
+    await getCodexAppServer().cancelLogin(loginId);
+    return res.json({ ok: true });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+app.post("/api/codex/logout", async (_req, res) => {
+  try {
+    await getCodexAppServer().logout();
+    if (runtimeAiProvider?.provider === "codex") {
+      runtimeAiProvider = null;
+    }
+    return res.json({ ok: true });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+app.get("/api/codex/rate-limits", async (_req, res) => {
+  try {
+    const limits = await getCodexAppServer().readRateLimits();
+    return res.json({ ok: true, ...limits });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+/** Lightweight ask endpoint (also used by callAI when provider=codex). */
+app.post("/api/codex/ask", async (req, res) => {
+  const { prompt, model } = req.body as { prompt?: string; model?: string };
+  if (!prompt?.trim()) return res.status(400).json({ error: "prompt is required" });
+  try {
+    const account = await getCodexAppServer().readAccount();
+    if (!account.account) {
+      return res.status(401).json({
+        error: "Not signed in to Codex. Use POST /api/codex/login and complete ChatGPT browser sign-in.",
+      });
+    }
+    const text = await codexAsk(prompt.trim(), {
+      workingDirectory: process.cwd(),
+      model: model || undefined,
+    });
+    return res.json({ ok: true, text });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+// ─── Devin subscription (multi-model via Devin account — not a model itself) ──
+// Auth + Connect-RPC adapted from pi-devin-auth / opencode-windsurf-auth (MIT).
+
+app.get("/api/devin/account", (_req, res) => {
+  try {
+    const st = getDevinAccountStatus();
+    return res.json({ ok: true, ...st });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, signedIn: false, error: msg });
+  }
+});
+
+app.get("/api/devin/login", (_req, res) => {
+  try {
+    return res.json({
+      ok: true,
+      authUrl: getDevinSignInUrl(),
+      message:
+        "Open authUrl, sign in with your Devin account, then copy the token shown on the page and POST it to /api/devin/login/complete.",
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+app.post("/api/devin/login/complete", async (req, res) => {
+  const token = (req.body as { token?: string })?.token?.trim();
+  if (!token) {
+    return res.status(400).json({
+      error: "token is required — paste the auth token shown after Devin browser sign-in.",
+    });
+  }
+  try {
+    const result = await finishDevinLogin(token);
+    runtimeAiProvider = {
+      provider: "devin",
+      apiKey: "devin-local-auth",
+      model: "swe-1-6",
+    };
+    return res.json({
+      ok: true,
+      name: result.name,
+      apiServerUrl: result.apiServerUrl,
+      provider: "devin",
+      message: "Signed in to Devin. Choose a model from your subscription and use Audit/Chat.",
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+app.post("/api/devin/logout", (_req, res) => {
+  try {
+    logoutDevin();
+    if (runtimeAiProvider?.provider === "devin") {
+      runtimeAiProvider = null;
+    }
+    return res.json({ ok: true });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+app.get("/api/devin/models", async (_req, res) => {
+  try {
+    const models = await listDevinModels();
+    return res.json({ ok: true, models, signedIn: getDevinAccountStatus().signedIn });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg, models: [] });
+  }
 });
 
 // ─── LM Studio (Llmster) Integration ─────────────────────────────────────────
@@ -1871,8 +2743,12 @@ function findLmsCli(): string | null {
 }
 
 app.get("/api/ai/local-models", async (_req, res) => {
+  let lmStudioRunning = false;
+  let ollamaRunning = false;
+  const models = new Set<string>();
+
+  // LM Studio HTTP API (loaded models)
   try {
-    // 1) Try LM Studio HTTP API (loaded models)
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2000);
     const response = await fetch(
@@ -1881,36 +2757,62 @@ app.get("/api/ai/local-models", async (_req, res) => {
     );
     clearTimeout(timeout);
     if (response.ok) {
+      lmStudioRunning = true;
       const data = (await response.json()) as { data?: Array<{ id: string }> };
-      const loadedModels = (data.data || []).map((m) => m.id);
+      for (const m of data.data || []) {
+        if (m.id) models.add(m.id);
+      }
+    }
+  } catch {
+    /* LMS API down */
+  }
 
-      // 2) Also try `lms ls` for all downloaded models
-      const lms = findLmsCli();
-      let downloadedModels: string[] = [];
-      if (lms) {
-        try {
-          const { stdout } = await execFileAsync(lms, ["ls", "--json"], { timeout: 5000 });
-          const parsed = JSON.parse(stdout) as Array<{
-            modelKey?: string;
-            sizeBytes?: number;
-            indexedModelIdentifier?: string;
-          }>;
-          downloadedModels = (Array.isArray(parsed) ? parsed : [])
-            .map((m) => m.modelKey || m.indexedModelIdentifier || "")
-            .filter(Boolean);
-        } catch {
-          // Fall back to loaded models only
-          downloadedModels = loadedModels;
+  // LM Studio disk inventory via CLI (works even if the local server is off)
+  const lms = findLmsCli();
+  if (lms) {
+    try {
+      const { stdout } = await execFileAsync(lms, ["ls", "--json"], { timeout: 8000 });
+      const parsed = JSON.parse(stdout) as Array<{
+        modelKey?: string;
+        sizeBytes?: number;
+        indexedModelIdentifier?: string;
+      }>;
+      for (const m of Array.isArray(parsed) ? parsed : []) {
+        const key = m.modelKey || m.indexedModelIdentifier || "";
+        if (key) models.add(key);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Ollama tags (independent of LM Studio)
+  try {
+    ollamaRunning = await isOllamaRunning();
+    if (ollamaRunning) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      const resp = await fetch(`http://localhost:${OLLAMA_PORT}/api/tags`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (resp.ok) {
+        const data = (await resp.json()) as { models?: Array<{ name: string }> };
+        for (const m of data.models || []) {
+          if (m.name) models.add(m.name);
         }
       }
-
-      const allModels = [...new Set([...downloadedModels, ...loadedModels])];
-      return res.json({ lmStudioRunning: true, ollamaRunning: true, installedModels: allModels });
     }
-    return res.json({ lmStudioRunning: false, ollamaRunning: false, installedModels: [] });
   } catch {
-    return res.json({ lmStudioRunning: false, ollamaRunning: false, installedModels: [] });
+    ollamaRunning = false;
   }
+
+  return res.json({
+    lmStudioRunning,
+    ollamaRunning,
+    lmsCliInstalled: Boolean(lms),
+    installedModels: [...models],
+  });
 });
 
 // ─── GET /api/ai/local-model-sizes ─────────────────────────────────────────────
@@ -2029,18 +2931,22 @@ app.post("/api/ai/local-pull", async (req, res) => {
   const { modelTag } = req.body as { modelTag?: string };
   if (!modelTag) return res.status(400).json({ error: "modelTag is required." });
 
-  const LM_STUDIO_PORT = 1234;
+  // Force re-resolve CLI (install path may have changed since process start)
+  cachedLmsCli = undefined;
   const lms = findLmsCli();
 
   if (!lms) {
-    return res.status(500).json({
-      error: "LM Studio (Llmster) not found. Install it from https://lmstudio.ai/install.sh",
+    return res.status(503).json({
+      error:
+        "LM Studio CLI (`lms`) not found. Install LM Studio from https://lmstudio.ai, open it once so the CLI is installed, then retry.",
+      hint: "Windows: %USERPROFILE%\\.lmstudio\\bin\\lms.exe",
     });
   }
 
   try {
-    // Use `lms get` to download the model via LM Studio CLI
-    const getProc = spawn(lms, ["get", modelTag], { stdio: "pipe" });
+    // Non-interactive download: -y approves prompts; --gguf matches our listed GGUF models
+    const getArgs = ["get", "-y", "--gguf", modelTag];
+    const getProc = spawn(lms, getArgs, { stdio: "pipe", windowsHide: true });
     let stdout = "";
     let stderr = "";
     getProc.stdout?.on("data", (d: Buffer) => {
@@ -2051,19 +2957,43 @@ app.post("/api/ai/local-pull", async (req, res) => {
     });
 
     const exitCode = await new Promise<number>((resolve) => {
-      getProc.on("close", (code) => resolve(code ?? 1));
-      getProc.on("error", () => resolve(1));
+      const timer = setTimeout(() => {
+        getProc.kill();
+        resolve(124);
+      }, 600_000); // 10 min for large GGUFs
+      getProc.on("close", (code) => {
+        clearTimeout(timer);
+        resolve(code ?? 1);
+      });
+      getProc.on("error", () => {
+        clearTimeout(timer);
+        resolve(1);
+      });
     });
 
+    if (exitCode === 124) {
+      return res.status(504).json({
+        error:
+          "LM Studio download timed out after 10 minutes. Try a smaller model or pull it inside the LM Studio app.",
+      });
+    }
     if (exitCode !== 0) {
       return res.status(500).json({
-        error: `LM Studio model download failed (exit ${exitCode}): ${stderr || stdout}`,
+        error: `LM Studio download failed (exit ${exitCode}): ${(stderr || stdout || "no output").slice(0, 1500)}`,
+        hint: "Open LM Studio, ensure the Developer/local server can run, then retry. Model id format: publisher/name or name@quant.",
       });
+    }
+
+    // Best-effort: start local OpenAI-compatible server if offline
+    try {
+      await execFileAsync(lms, ["server", "start"], { timeout: 20_000, windowsHide: true });
+    } catch {
+      /* server may already be running or CLI may not support start */
     }
 
     // Auto-load the model into LM Studio memory so it's ready for immediate use
     try {
-      await execFileAsync(lms, ["load", modelTag], { timeout: 30000 });
+      await execFileAsync(lms, ["load", modelTag], { timeout: 120_000, windowsHide: true });
     } catch {
       // Load failure is non-fatal — model is downloaded, user can load manually
     }
@@ -2166,24 +3096,74 @@ app.post("/api/ai/ollama-pull", async (req, res) => {
 
   // Quick check if Ollama is reachable before attempting pull
   if (!(await isOllamaRunning())) {
+    // Try launching `ollama serve` in the background when the CLI is on PATH
+    try {
+      const serve = spawn("ollama", ["serve"], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      serve.unref();
+      // Wait briefly for the HTTP server to come up
+      for (let i = 0; i < 10; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        if (await isOllamaRunning()) break;
+      }
+    } catch {
+      /* ollama not installed or cannot spawn */
+    }
+  }
+
+  if (!(await isOllamaRunning())) {
     return res.status(503).json({
-      error: "Ollama is not running. Install it from https://ollama.com and start the server (ollama serve).",
+      error:
+        "Ollama is not running on localhost:11434. Install from https://ollama.com, start the Ollama app (or `ollama serve`), then retry.",
     });
   }
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 300_000); // 5 min timeout for large models
+    const timeout = setTimeout(() => controller.abort(), 600_000); // 10 min
+    // stream:true with consume until success — more reliable than stream:false on some Ollama versions
     const resp = await fetch(`http://localhost:${OLLAMA_PORT}/api/pull`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: modelTag, stream: false }),
+      body: JSON.stringify({ name: modelTag, stream: true }),
       signal: controller.signal,
     });
-    clearTimeout(timeout);
     if (!resp.ok) {
+      clearTimeout(timeout);
       const err = await resp.text();
-      return res.status(500).json({ error: `Ollama pull failed: ${err}` });
+      return res.status(500).json({ error: `Ollama pull failed: ${err.slice(0, 800)}` });
+    }
+
+    // Drain NDJSON stream until done or error
+    const reader = resp.body?.getReader();
+    const decoder = new TextDecoder();
+    let lastError = "";
+    if (reader) {
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const evt = JSON.parse(line) as { error?: string; status?: string };
+            if (evt.error) lastError = evt.error;
+          } catch {
+            /* ignore partial JSON */
+          }
+        }
+      }
+    }
+    clearTimeout(timeout);
+
+    if (lastError) {
+      return res.status(500).json({ error: `Ollama pull failed: ${lastError}` });
     }
 
     // Configure the AI provider to use Ollama's OpenAI-compatible endpoint
@@ -2199,7 +3179,7 @@ app.post("/api/ai/ollama-pull", async (req, res) => {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("abort")) {
       return res.status(504).json({
-        error: "Ollama pull timed out after 5 minutes. The model may be too large or the network is slow.",
+        error: "Ollama pull timed out after 10 minutes. The model may be too large or the network is slow.",
       });
     }
     return res.status(500).json({ error: `Failed to pull model via Ollama: ${msg}` });
@@ -2338,6 +3318,217 @@ app.post("/api/mcp/tool", async (req, res) => {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return res.status(500).json({ error: msg });
+  }
+});
+
+// ─── KB Status Helpers ────────────────────────────────────────────────────────
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** True when update_report.json reflects a successful upstream refresh. */
+function isSuccessfulKbReport(report: Record<string, unknown> | null): boolean {
+  if (!report) return false;
+  if (report.success === false) return false;
+  if (report.success === true) return true;
+
+  const sources = report.sources;
+  if (!isObjectRecord(sources) || Object.keys(sources).length === 0) return false;
+
+  for (const source of Object.values(sources)) {
+    if (!isObjectRecord(source)) continue;
+    if (source.status === "error") return false;
+  }
+  return true;
+}
+
+function isAllowedSyncOrigin(req: express.Request): boolean {
+  const origin = req.get("origin");
+  if (!origin) return true; // same-origin / non-browser clients omit Origin
+  try {
+    const originHost = new URL(origin).host;
+    const requestHost = req.get("host");
+    return Boolean(requestHost) && originHost === requestHost;
+  } catch {
+    return false;
+  }
+}
+
+/** Load KB status from the filesystem and cache it. */
+function loadKbStatus(): KbStatusCache {
+  try {
+    const kbDir = path.join(process.cwd(), "olive-mcp-server", "olive_mcp_server", "knowledge_base");
+    const passesPath = path.join(kbDir, "passes.json");
+
+    if (!fs.existsSync(passesPath)) {
+      return {
+        available: false,
+        error: "passes.json not found",
+      };
+    }
+
+    const raw = fs.readFileSync(passesPath, "utf-8");
+    const data = JSON.parse(raw) as { version?: string; last_updated?: string; passes?: unknown[] };
+
+    // Check for update_report.json (written by update_kb.py)
+    const reportPath = path.join(kbDir, "update_report.json");
+    let lastSync: string | null = null;
+    if (fs.existsSync(reportPath)) {
+      try {
+        const report = JSON.parse(fs.readFileSync(reportPath, "utf-8")) as Record<string, unknown>;
+        if (isSuccessfulKbReport(report) && typeof report.updated_at === "string") {
+          lastSync = report.updated_at;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    return {
+      available: true,
+      version: data.version ?? "unknown",
+      lastUpdated: data.last_updated ?? null,
+      lastSync,
+      passCount: Array.isArray(data.passes) ? data.passes.length : 0,
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      available: false,
+      error: msg,
+    };
+  }
+}
+
+/** Invalidate the KB status cache. */
+function invalidateKbStatusCache(): void {
+  kbStatusCache = null;
+}
+
+// ─── GET /api/mcp/kb-status ───────────────────────────────────────────────────
+app.get("/api/mcp/kb-status", kbStatusRateLimit, (req, res) => {
+  // Return cached status if available
+  if (kbStatusCache) {
+    return res.json(kbStatusCache);
+  }
+
+  // Load from filesystem and cache
+  kbStatusCache = loadKbStatus();
+
+  if (kbStatusCache.error && !kbStatusCache.available) {
+    // Designed unavailable response (missing KB) stays HTTP 200 for the UI hook.
+    if (kbStatusCache.error === "passes.json not found") {
+      return res.json(kbStatusCache);
+    }
+    return res.status(500).json(kbStatusCache);
+  }
+
+  return res.json(kbStatusCache);
+});
+
+// ─── POST /api/mcp/sync-kb ────────────────────────────────────────────────────
+app.post("/api/mcp/sync-kb", kbSyncRateLimit, async (req, res) => {
+  try {
+    // Auth model (local-first):
+    // - If SYNC_KB_TOKEN is set, require matching x-sync-token (shared-host / locked-down installs).
+    // - If unset, allow same-origin only (desktop + local browser). Fail closed for cross-origin.
+    const expectedToken = process.env.SYNC_KB_TOKEN;
+    if (expectedToken) {
+      const authToken = req.get("x-sync-token");
+      if (authToken !== expectedToken) {
+        return res.status(401).json({
+          ok: false,
+          error:
+            "Unauthorized: set x-sync-token to match SYNC_KB_TOKEN, or clear SYNC_KB_TOKEN for local same-origin sync.",
+        });
+      }
+    } else if (!isAllowedSyncOrigin(req)) {
+      return res.status(403).json({
+        ok: false,
+        error:
+          "Forbidden: cross-origin KB sync blocked. For local use, open the app at the same host:port as the server, or set SYNC_KB_TOKEN.",
+      });
+    }
+
+    // ── Mutex: prevent overlapping executions ───────────────────────────────────
+    if (kbSyncInProgress) {
+      return res.status(409).json({ ok: false, error: "Sync already in progress. Please wait." });
+    }
+
+    kbSyncInProgress = true;
+
+    const scriptPath = path.join(process.cwd(), "olive-mcp-server", "scripts", "update_kb.py");
+    if (!fs.existsSync(scriptPath)) {
+      kbSyncInProgress = false;
+      return res.status(404).json({ ok: false, error: "update_kb.py script not found." });
+    }
+
+    let python = getVenvPython();
+    if (!fs.existsSync(python)) {
+      python = (await findSystemPython()) ?? "";
+    }
+    if (!python) {
+      kbSyncInProgress = false;
+      return res.status(500).json({ ok: false, error: "Python environment not found." });
+    }
+
+    const { stdout, stderr } = await execFileAsync(python, [scriptPath], {
+      timeout: 120_000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+
+    // Read the generated report
+    const kbDir = path.join(process.cwd(), "olive-mcp-server", "olive_mcp_server", "knowledge_base");
+    const reportPath = path.join(kbDir, "update_report.json");
+    let report: Record<string, unknown> | null = null;
+    if (fs.existsSync(reportPath)) {
+      try {
+        report = JSON.parse(fs.readFileSync(reportPath, "utf-8"));
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const syncSucceeded = isSuccessfulKbReport(report);
+
+    // Hot-reload only after a successful refresh with a readable passes.json
+    const passesPath = path.join(kbDir, "passes.json");
+    if (syncSucceeded && fs.existsSync(passesPath)) {
+      try {
+        const passesRaw = fs.readFileSync(passesPath, "utf-8");
+        const passesData = JSON.parse(passesRaw) as PassesJson;
+        reloadPassSchemas(passesData);
+      } catch (err: unknown) {
+        console.warn("[sync-kb] Failed to reload pass schemas:", err);
+      }
+    }
+
+    // Invalidate cache so next kb-status call reloads from disk
+    invalidateKbStatusCache();
+
+    kbSyncInProgress = false;
+
+    if (!syncSucceeded) {
+      return res.status(502).json({
+        ok: false,
+        error: "Knowledge-base sync completed without a successful source refresh.",
+        stdout: stdout.slice(0, 2000),
+        stderr: stderr.slice(0, 500) || null,
+        report,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      stdout: stdout.slice(0, 2000),
+      stderr: stderr.slice(0, 500) || null,
+      report,
+    });
+  } catch (err: unknown) {
+    kbSyncInProgress = false;
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg });
   }
 });
 
@@ -2551,13 +3742,34 @@ app.post("/api/validate-compatibility", async (req, res) => {
   }
 });
 
+app.get("/api/health", (_req, res) => {
+  res.json({
+    ok: true,
+    version: process.env.npm_package_version || "0.2.0",
+    port: PORT,
+  });
+});
+
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "API route not found." });
 });
 
 // ─── Vite / Static ────────────────────────────────────────────────────────────
+/**
+ * `pnpm start` runs the bundled `dist/server.cjs` and must serve static files.
+ * Only `pnpm dev` (tsx server.ts) should use Vite middleware.
+ * Do not rely solely on NODE_ENV — Windows/`pnpm start` often leave it unset.
+ */
+function shouldServeProductionStatic(): boolean {
+  if (process.env.NODE_ENV === "production") return true;
+  if (process.env.NODE_ENV === "development") return false;
+  if (process.env.OLIVE_DIST_DIR) return true;
+  const entry = (process.argv[1] ?? "").replace(/\\/g, "/");
+  return entry.endsWith("/dist/server.cjs") || entry.endsWith("server.cjs");
+}
+
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+  if (!shouldServeProductionStatic()) {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
@@ -2574,16 +3786,29 @@ async function startServer() {
       vite.middlewares(req, res, next);
     });
   } else {
-    const distPath = process.env.OLIVE_DIST_DIR ?? path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (_req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+    // Ensure downstream code and logs treat this as production.
+    process.env.NODE_ENV = "production";
+    const distPath = path.resolve(process.env.OLIVE_DIST_DIR ?? path.join(process.cwd(), "dist"));
+    const indexHtml = path.join(distPath, "index.html");
+    if (!fs.existsSync(indexHtml)) {
+      console.error(`Production build not found at ${indexHtml}\nRun: pnpm build\nThen:  pnpm start`);
+      process.exit(1);
+    }
+    app.use(express.static(distPath, { index: "index.html" }));
+    // SPA fallback for client routes (Express 5-safe; avoid bare "*")
+    app.use((req, res, next) => {
+      if (req.method !== "GET" && req.method !== "HEAD") return next();
+      if (req.path.startsWith("/api")) return next();
+      res.sendFile(indexHtml);
     });
+    // eslint-disable-next-line no-console -- intentional server startup message
+    console.log(`Serving UI from ${distPath}`);
   }
 
   app.listen(PORT, "0.0.0.0", () => {
     // eslint-disable-next-line no-console -- intentional server startup message
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Open http://localhost:${PORT} in your browser`);
   });
 }
 

@@ -1,18 +1,35 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSelectedModelInfo } from "@/lib/modelFamily";
 import { UIState } from "@/types";
+import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { buildPipelineSteps } from "./graphLayout";
 import { GraphCanvas } from "./GraphCanvas";
 import { RecipeValidationPanel } from "./RecipeValidationPanel";
 import { StepInspector } from "./StepInspector";
 
 export interface RecipeGraphViewProps {
-  state: UIState;
-  setState: (s: Partial<UIState>) => void;
+  /** Optional override — defaults to Zustand store */
+  state?: UIState;
+  setState?: (s: Partial<UIState>) => void;
   showDot?: boolean;
 }
 
-export function RecipeGraphView({ state, setState, showDot = true }: RecipeGraphViewProps) {
+/**
+ * Renders the recipe pipeline graph, validation panel, and selected-step inspector.
+ *
+ * @param state - Optional UI state override; when omitted, state is read from the pipeline store.
+ * @param setState - Optional state update handler; when omitted, the pipeline store handler is used.
+ * @param showDot - Whether to display the graph's dot visualization.
+ */
+export function RecipeGraphView({
+  state: propState,
+  setState: propSetState,
+  showDot = true,
+}: RecipeGraphViewProps) {
+  const storeState = usePipelineState();
+  const state = propState ?? storeState.state;
+  const setState = propSetState ?? storeState.setState;
+
   const [selectedNodeId, setSelectedNodeId] = useState<string>("input");
   const [layoutTick, setLayoutTick] = useState(0);
   const pipelineSteps = buildPipelineSteps(state.passes);

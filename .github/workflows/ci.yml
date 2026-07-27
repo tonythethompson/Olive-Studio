@@ -9,15 +9,13 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.8.0
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "22"
           cache: pnpm
 
       - name: Install dependencies
@@ -35,6 +33,28 @@ jobs:
       - name: Recipe builder smoke test
         run: pnpm validate:recipe
 
+      - name: Build
+        run: pnpm build
+
+      - name: Assert production artifacts
+        run: |
+          test -f dist/server.cjs
+          test -f bin/cli.js
+
+      - name: Production start smoke
+        run: |
+          pnpm start &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS http://localhost:3000 >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server did not respond on port 3000"
+          exit 1
+
   security:
     runs-on: ubuntu-latest
     permissions:
@@ -42,15 +62,15 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
       - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4

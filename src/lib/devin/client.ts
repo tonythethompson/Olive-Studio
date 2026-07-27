@@ -1,0 +1,131 @@
+/**
+ * Olive Studio Devin subscription client.
+ *
+ * Devin is not a model — it is a subscription that unlocks multiple models
+ * through the Devin chat backend. Auth: browser sign-in + token paste.
+ * Chat: cloud-direct Connect-RPC (adapted from pi-devin-auth / opencode-windsurf-auth, MIT).
+ */
+
+import { buildDevinSignInUrl, completeDevinLogin } from "./oauth/login.ts";
+import { DEFAULT_REGION } from "./oauth/types.ts";
+import {
+  clearDevinCredentials,
+  loadDevinCredentials,
+  saveDevinCredentials,
+  getDevinCredPath,
+} from "./credentials.ts";
+import { streamChat, type ChatHistoryItem } from "./cloud-direct/chat.ts";
+import { getCachedCatalog, type ModelCatalogEntry } from "./cloud-direct/catalog.ts";
+
+/** Curated fallback models when live catalog is unavailable. */
+export const DEVIN_FALLBACK_MODELS: Array<{ id: string; name: string }> = [
+  { id: "swe-1-6", name: "SWE-1.6" },
+  { id: "swe-1-7", name: "SWE-1.7" },
+  { id: "claude-sonnet-4", name: "Claude Sonnet 4" },
+  { id: "claude-opus-4", name: "Claude Opus 4" },
+  { id: "gpt-4o", name: "GPT-4o" },
+  { id: "kimi-k2", name: "Kimi K2" },
+];
+
+export function getDevinSignInUrl(): string {
+  return buildDevinSignInUrl(DEFAULT_REGION);
+}
+
+export function getDevinAccountStatus(): {
+  signedIn: boolean;
+  name?: string;
+  apiServerUrl?: string;
+  issuedAt?: string;
+  credPath: string;
+} {
+  const creds = loadDevinCredentials();
+  if (!creds) {
+    return { signedIn: false, credPath: getDevinCredPath() };
+  }
+  return {
+    signedIn: true,
+    name: creds.name,
+    apiServerUrl: creds.apiServerUrl,
+    issuedAt: creds.issuedAt,
+    credPath: getDevinCredPath(),
+  };
+}
+
+export async function finishDevinLogin(pastedToken: string): Promise<{
+  name: string;
+  apiServerUrl: string;
+}> {
+  const result = await completeDevinLogin(pastedToken, DEFAULT_REGION);
+  saveDevinCredentials(result);
+  return { name: result.name, apiServerUrl: result.apiServerUrl };
+}
+
+export function logoutDevin(): void {
+  clearDevinCredentials();
+}
+
+export async function listDevinModels(): Promise<Array<{ id: string; name: string; disabled?: boolean }>> {
+  const creds = loadDevinCredentials();
+  if (!creds) {
+    return DEVIN_FALLBACK_MODELS.map((m) => ({ ...m }));
+  }
+  try {
+    const catalog = await getCachedCatalog(creds.apiKey, creds.apiServerUrl || "https://server.codeium.com");
+    const entries: ModelCatalogEntry[] = catalog ? [...catalog.byUid.values()] : [];
+    if (entries.length === 0) {
+      return DEVIN_FALLBACK_MODELS.map((m) => ({ ...m }));
+    }
+    // Prefer enabled models; keep a reasonable list for the dropdown
+    const enabled = entries.filter((e) => !e.disabled);
+    const source = enabled.length > 0 ? enabled : entries;
+    return source
+      .slice(0, 80)
+      .map((e) => ({
+        id: e.modelUid,
+        name: e.label || e.modelUid,
+        disabled: e.disabled,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  } catch {
+    return DEVIN_FALLBACK_MODELS.map((m) => ({ ...m }));
+  }
+}
+
+/**
+ * Non-streaming Devin chat: collect all text deltas from the cloud stream.
+ */
+export async function devinChat(options: {
+  model: string;
+  system?: string;
+  messages: Array<{ role: "user" | "assistant" | "system"; content: string }>;
+}): Promise<string> {
+  const creds = loadDevinCredentials();
+  if (!creds) {
+    throw new Error(
+      "Not signed in to Devin. Use Assistant → Settings → Devin → Sign in, paste the token from the browser page.",
+    );
+  }
+
+  const history: ChatHistoryItem[] = [];
+  if (options.system?.trim()) {
+    history.push({ role: "system", content: options.system.trim() });
+  }
+  for (const m of options.messages) {
+    history.push({ role: m.role, content: m.content });
+  }
+
+  const parts: string[] = [];
+  for await (const delta of streamChat({
+    apiKey: creds.apiKey,
+    apiServerUrl: creds.apiServerUrl || "https://server.codeium.com",
+    modelUid: options.model,
+    messages: history,
+  })) {
+    parts.push(delta);
+  }
+  const text = parts.join("");
+  if (!text.trim()) {
+    throw new Error("Devin returned an empty response. Check your subscription model access.");
+  }
+  return text;
+}

@@ -1,8 +1,8 @@
 # Olive Studio
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](package.json)
-[![pnpm](https://img.shields.io/badge/package%20manager-pnpm%2010.8.0-f69203)](https://pnpm.io)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](package.json)
+[![pnpm](https://img.shields.io/badge/package%20manager-pnpm%2011.17.0-f69203)](https://pnpm.io)
 [![CI](https://github.com/tonythethompson/Olive-Studio/actions/workflows/ci.yml/badge.svg)](https://github.com/tonythethompson/Olive-Studio/actions/workflows/ci.yml)
 
 **A visual recipe builder and local runner for [Microsoft Olive](https://github.com/microsoft/Olive).**  
@@ -66,7 +66,7 @@ Pass combinations are checked against your execution provider (for example, AWQ 
 - **Recipe graph**: Visual pass pipeline with per-pass inspectors and conflict banners.
 - **JSON editor**: Full Olive recipe export/import.
 - **Export helpers**: Starter configs for ONNX Runtime Web / Mobile deployment.
-- **AI Copilot** (optional): Recipe Q&A, advisory review, and state analysis via Gemini, OpenAI, Anthropic, Mistral, xAI, OpenRouter, Groq, Together, or local / Ollama endpoints.
+- **AI Copilot** (optional): Recipe Q&A, advisory review, and state analysis via Gemini, OpenAI API, Anthropic, Mistral, xAI, OpenRouter, Groq, Together, **OpenAI Codex** (ChatGPT Plus/Pro sign-in via local Codex CLI), GitHub Copilot token, Kilo Gateway, or local LM Studio / Ollama.
 - **Storybook**: Component development and visual testing.
 
 ---
@@ -75,11 +75,13 @@ Pass combinations are checked against your execution provider (for example, AWQ 
 
 ### Prerequisites
 
-- **Node.js** 18+ (20+ recommended)
-- **pnpm** 10.8.0+ (the project uses `packageManager: pnpm@10.8.0`; `npm install` is blocked)
-- **Python** 3.9+ on `PATH` (used for `olive run`)
+- **Node.js** 22+ (pnpm 11 requirement)
+- **pnpm** 11.17.0+ (the project uses `packageManager: pnpm@11.17.0`; `npm install` is blocked)
+- **Python** 3.9+ (on `PATH`, or set from the app header **Runtime** control if missing)
 - **Optional:** NVIDIA / Intel / Qualcomm / AMD tooling for GPU or NPU recipes
 - **Optional:** [Hugging Face token](https://huggingface.co/settings/tokens) for gated models
+
+If Python or Olive is not on the system PATH, open **Runtime** in the app header: save a path to `python.exe`, and optionally **Add project .venv to user PATH** so terminals outside the app can find Olive too.
 
 ### Install and run
 
@@ -90,7 +92,7 @@ pnpm install
 pnpm dev
 ```
 
-Open **http://localhost:3000**.
+Open **<http://localhost:3000>**.
 
 On the first **Execute Live** or batch run, the server creates `.venv/` in the project root and installs Olive automatically.
 
@@ -99,13 +101,28 @@ On the first **Execute Live** or batch run, the server creates `.venv/` in the p
 ```bash
 pnpm build
 pnpm start
+# equivalent after build:
+# node bin/cli.js
 ```
 
-Or use the CLI entrypoint after build:
+Open **<http://localhost:3000>**.
+
+### Desktop app (Tauri, experimental)
+
+Runs the same Node server inside a native window (WebView) instead of your browser.
+
+**Extra prerequisites:** [Rust](https://rustup.rs/) toolchain, Windows WebView2 (usually preinstalled), Node 22+, Python 3.9+.
 
 ```bash
-npx olive-studio
+pnpm install
+pnpm tauri:dev      # starts `pnpm dev` + native window → http://127.0.0.1:3000
+# production-style package (Windows NSIS/MSI):
+pnpm tauri:build
 ```
+
+The desktop shell still requires **Node** and **Python** on `PATH` (Olive runs are not reimplemented in Rust). Browser/`pnpm start` remains fully supported.
+
+> **Not published to npm.** Olive Studio is distributed via this GitHub repository and [GitHub Releases](https://github.com/tonythethompson/Olive-Studio/releases). It creates local Python virtualenvs and may install CUDA / TensorRT packages for GPU recipes — clone and run from source rather than expecting a public `npx` package.
 
 ---
 
@@ -265,6 +282,6 @@ Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 
 Copyright © 2026 Anthony Thompson.
 
-Olive Studio is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-or-later). Network use of a modified version must make corresponding source available under the same license.
+Olive Studio is licensed under the [MIT License](LICENSE).
 
 Microsoft Olive and related names are trademarks of Microsoft Corporation. This project is community tooling and is not affiliated with or endorsed by Microsoft.

@@ -2,7 +2,7 @@ import { IHVProvider, UIState, OliveRecipe } from "@/types";
 import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
 import { getProviderAvailabilityBlock, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { buildOliveRecipe } from "@/lib/oliveRecipeBuilder";
-import passCatalog from "../../olive-mcp-server/olive_mcp_server/knowledge_base/passes.json";
+import { isKnownPass } from "@/lib/schemaEngine";
 
 export type PipelineValidationOptions = {
   hardwareProbe?: HardwareProbeResult | null;
@@ -52,10 +52,13 @@ const TENSOR_CORE_PROVIDERS: IHVProvider[] = [
   "TensorrtExecutionProvider",
 ];
 
-/** Set of known Olive pass names from the MCP knowledge-base pass catalog. */
-const KNOWN_OLIVE_PASSES = new Set<string>(
-  (passCatalog as { passes?: Array<{ name: string }> }).passes?.map((p) => p.name) ?? [],
-);
+/**
+ * Determines whether a quantization method is supported by an execution provider.
+ *
+ * @param method - The quantization method to check
+ * @param provider - The execution provider to check
+ * @returns `true` if the method is supported by the provider, `false` otherwise
+ */
 
 export function isQuantMethodAllowed(
   method: UIState["passes"]["quantMethod"],
@@ -486,13 +489,19 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
   return issues;
 }
 
+/**
+ * Identifies generated Olive pipeline steps with unknown pass types.
+ *
+ * @param state - The UI state used to build the Olive recipe
+ * @returns Critical issues for generated steps whose pass types are missing or unknown
+ */
 function getPassCatalogIssues(state: UIState): PipelineIssue[] {
   const issues: PipelineIssue[] = [];
   const recipe = buildOliveRecipe(state) as unknown as OliveRecipe;
 
   for (const [stepId, passConfig] of Object.entries(recipe.passes ?? {})) {
     const passType = (passConfig as { type?: string }).type;
-    if (!passType || KNOWN_OLIVE_PASSES.has(passType)) continue;
+    if (!passType || isKnownPass(passType)) continue;
 
     issues.push({
       id: `unknown-pass-type-${stepId}`,

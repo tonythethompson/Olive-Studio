@@ -10,7 +10,10 @@ interface MockPreset extends ImportConfirmPreset {
   sparsity: number;
 }
 
-const presetDetail = (p: MockPreset) => `${p.method} · ${p.criteria} · ${(p.sparsity * 100).toFixed(0)}%`;
+const presetDetail = (preset: ImportConfirmPreset) => {
+  const p = preset as MockPreset;
+  return `${p.method} · ${p.criteria} · ${(p.sparsity * 100).toFixed(0)}%`;
+};
 
 // ── Shared mock data ─────────────────────────────────────────────
 

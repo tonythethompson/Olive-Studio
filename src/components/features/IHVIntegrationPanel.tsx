@@ -12,6 +12,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui";
 import { IHVProvider, UIState } from "@/types";
+import { usePipelineState } from "@/lib/stores/pipelineStore";
 import {
   applyProviderConflictAutofixes,
   getProviderConflicts,
@@ -159,6 +160,14 @@ const validations: OptimizationPassValidation[] = [
   },
 ];
 
+/**
+ * Determines the compatibility and estimated optimization characteristics of a pass for a provider.
+ *
+ * @param pass - The optimization pass to evaluate
+ * @param provider - The execution provider to evaluate
+ * @param passes - The configured optimization passes used to identify configuration conflicts
+ * @returns Compatibility status, explanation, and estimated performance characteristics
+ */
 export function getCellCompatibility(
   pass: OptimizationPassValidation,
   provider: IHVProvider,
@@ -265,13 +274,24 @@ export function getCellCompatibility(
   };
 }
 
+/**
+ * Configures hardware acceleration providers and optimization passes for the pipeline.
+ *
+ * Uses the provided pipeline state and updater when available, or the pipeline store otherwise.
+ *
+ * @param state - Optional pipeline state to display and modify.
+ * @param setState - Optional updater for applying pipeline state changes.
+ */
 export function IHVIntegrationPanel({
-  state,
-  setState,
+  state: propState,
+  setState: propSetState,
 }: {
-  state: UIState;
-  setState: (s: Partial<UIState>) => void;
-}) {
+  state?: UIState;
+  setState?: (s: Partial<UIState>) => void;
+} = {}) {
+  const storeState = usePipelineState();
+  const state = propState ?? storeState.state;
+  const setState = propSetState ?? storeState.setState;
   const [passSearch, setPassSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"matrix" | "cards">("matrix");
   const [selectedCategory, setSelectedCategory] = useState<
@@ -280,8 +300,42 @@ export function IHVIntegrationPanel({
   const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
   const [probeLoading, setProbeLoading] = useState(true);
   const [probeError, setProbeError] = useState<string | null>(null);
+  const [installingTrtRtx, setInstallingTrtRtx] = useState(false);
+  const [installTrtRtxError, setInstallTrtRtxError] = useState<string | null>(null);
+  const [installTrtRtxLog, setInstallTrtRtxLog] = useState<string[]>([]);
 
   const hasAutoAppliedRef = useRef(false);
+
+  const trtRtxNeedsInstall =
+    Boolean(hardwareProbe?.nvidia?.gpus.length) && hardwareProbe?.tensorRtRtx?.loadable !== true;
+
+  const handleInstallTensorRtRtx = async () => {
+    setInstallingTrtRtx(true);
+    setInstallTrtRtxError(null);
+    setInstallTrtRtxLog([]);
+    try {
+      const res = await fetch("/api/env/install-tensorrt-rtx", { method: "POST" });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        log?: string[];
+        probe?: HardwareProbeResult;
+      };
+      if (Array.isArray(data.log)) setInstallTrtRtxLog(data.log);
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error ?? `Install failed (HTTP ${res.status})`);
+      }
+      if (data.probe) {
+        setHardwareProbe(data.probe);
+      } else {
+        await runHardwareProbe(true);
+      }
+    } catch (err) {
+      setInstallTrtRtxError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setInstallingTrtRtx(false);
+    }
+  };
 
   const runHardwareProbe = useCallback(
     async (refresh = false) => {
@@ -307,7 +361,6 @@ export function IHVIntegrationPanel({
   );
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: on-mount hardware probe
     void runHardwareProbe(false);
   }, [runHardwareProbe]);
 
@@ -566,6 +619,14 @@ export function IHVIntegrationPanel({
                       "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-75 hover:border-slate-700";
                     badgeText = "Not on this system";
                     badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
+                  } else if (
+                    p.id === "NvTensorRTRTXExecutionProvider" &&
+                    trtRtxNeedsInstall &&
+                    detectedLocally
+                  ) {
+                    cardClasses += "border-amber-900/40 bg-amber-950/10 opacity-95 hover:border-amber-500/40";
+                    badgeText = "Plugin install needed";
+                    badgeColor = "bg-amber-500/10 text-amber-400 border-amber-500/20";
                   } else if (!detectedLocally && !probeLoading) {
                     cardClasses +=
                       "border-slate-850/60 bg-zinc-950/30 opacity-80 hover:opacity-100 hover:border-slate-700";
@@ -693,6 +754,46 @@ export function IHVIntegrationPanel({
                           </Tooltip>
                           {detectedLocally && hardwareDetail && (
                             <p className="text-[11px] text-emerald-400/90 font-mono">{hardwareDetail}</p>
+                          )}
+                          {p.id === "NvTensorRTRTXExecutionProvider" && trtRtxNeedsInstall && (
+                            <div className="mt-2 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                              <p className="text-[11px] text-amber-400/90 leading-relaxed">
+                                GPU is compatible. The TensorRT RTX runtime is a separate package (not the
+                                full TensorRT SDK). Install into the project{" "}
+                                <code className="text-slate-400">.venv</code> to enable detection and runs.
+                              </p>
+                              {hardwareProbe?.tensorRtRtx?.detail && (
+                                <p
+                                  className="text-[10px] text-slate-500 font-mono truncate"
+                                  title={hardwareProbe.tensorRtRtx.detail}
+                                >
+                                  {hardwareProbe.tensorRtRtx.detail}
+                                </p>
+                              )}
+                              <button
+                                type="button"
+                                disabled={installingTrtRtx}
+                                onClick={() => void handleInstallTensorRtRtx()}
+                                className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
+                              >
+                                {installingTrtRtx ? (
+                                  <>
+                                    <RefreshCw className="h-3 w-3 animate-spin" />
+                                    Installing tensorrt-rtx…
+                                  </>
+                                ) : (
+                                  "Install tensorrt-rtx into .venv"
+                                )}
+                              </button>
+                              {installTrtRtxError && (
+                                <p className="text-[11px] text-rose-400">{installTrtRtxError}</p>
+                              )}
+                              {installTrtRtxLog.length > 0 && (
+                                <pre className="text-[10px] text-slate-500 max-h-24 overflow-auto font-mono whitespace-pre-wrap">
+                                  {installTrtRtxLog.slice(-12).join("\n")}
+                                </pre>
+                              )}
+                            </div>
                           )}
                           {!detectedLocally && !probeLoading && (
                             <p className="text-[11px] text-slate-600">

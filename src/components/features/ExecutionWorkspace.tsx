@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
+import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";
 import { mapMcpConfigToUiState } from "@/lib/mcpConfigMapping";
 import { DiagnosisHistory, type DiagnosisEntry } from "./DiagnosisHistory";
@@ -45,6 +46,8 @@ import { cn } from "@/lib/utils";
 import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
+import { GpuMetricsBar } from "@/components/features/GpuMetricsBar";
+import { parseGpuMetrics, type GpuMetrics } from "@/lib/gpuMetrics";
 import { saveJobHistory } from "@/lib/jobHistoryStore";
 import { JobHistoryModal } from "@/components/features/JobHistoryModal";
 
@@ -58,6 +61,12 @@ const WebGpuBenchmarkPanel = lazy(() =>
   import("@/components/features/WebGpuBenchmarkPanel").then((m) => ({ default: m.WebGpuBenchmarkPanel })),
 );
 
+/**
+ * Renders a centered loading spinner with a descriptive label.
+ *
+ * @param label - The text displayed below the spinner
+ * @param minH - The optional minimum height of the loading container
+ */
 function LoadingFallback({ label, minH }: { label: string; minH?: string }) {
   return (
     <div className="flex items-center justify-center w-full" style={minH ? { minHeight: minH } : undefined}>
@@ -69,9 +78,17 @@ function LoadingFallback({ label, minH }: { label: string; minH?: string }) {
   );
 }
 
+/**
+ * Renders the Olive recipe workspace for reviewing, exporting, queuing, and executing a pipeline.
+ *
+ * @param state - Optional pipeline state override; the store state is used when omitted.
+ * @param setState - Optional state update function; the store updater is used when omitted.
+ * @param onOpenAiAudit - Callback invoked when the AI audit review is opened.
+ * @param onRunStateChange - Callback invoked when live execution starts or stops.
+ */
 export function ExecutionWorkspace({
-  state,
-  setState,
+  state: propState,
+  setState: propSetState,
   onOpenAiAudit,
   onRunStateChange,
   onExecute: _onExecute,
@@ -79,15 +96,25 @@ export function ExecutionWorkspace({
   isRunning: _isRunning,
   setIsRunning: _setIsRunning,
 }: {
-  state: UIState;
-  setState: (s: Partial<UIState>) => void;
+  state?: UIState;
+  setState?: (s: Partial<UIState>) => void;
   onOpenAiAudit?: () => void;
   onRunStateChange?: (running: boolean) => void;
   onExecute?: () => void;
   jobId?: string | null;
   isRunning?: boolean;
   setIsRunning?: (v: boolean) => void;
-}) {
+} = {}) {
+  const storeState = usePipelineState();
+  // All-or-nothing controlled pair: both props or neither. Mixed mode is rejected.
+  const hasState = propState !== undefined;
+  const hasSetState = propSetState !== undefined;
+  if (hasState !== hasSetState) {
+    throw new Error("ExecutionWorkspace: state and setState must both be provided or both omitted.");
+  }
+  const isControlled = hasState && hasSetState;
+  const state = isControlled ? propState : storeState.state;
+  const setState = isControlled ? propSetState : storeState.setState;
   // Live execution state
   const [liveJobId, setLiveJobId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -96,6 +123,7 @@ export function ExecutionWorkspace({
     "idle" | "running" | "completed" | "failed" | "cancelled"
   >("idle");
   const [executionExitCode, setExecutionExitCode] = useState<number | null>(null);
+  const [gpuMetrics, setGpuMetrics] = useState<GpuMetrics | null>(null);
   const liveSourceRef = useRef<EventSource | null>(null);
   const runStartTimeRef = useRef<number | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -642,6 +670,7 @@ ${
     setExecutionLogs(["[INFO] Initiating Olive run...\n"]);
     setExecutionStatus("running");
     setExecutionExitCode(null);
+    setGpuMetrics(null);
     runStartTimeRef.current = Date.now(); // eslint-disable-line react-hooks/purity -- event handler
 
     try {
@@ -696,6 +725,16 @@ ${
           }
         };
 
+        evtSource.addEventListener("metrics", (e: MessageEvent) => {
+          try {
+            const parsed: unknown = JSON.parse(e.data);
+            const metrics = parseGpuMetrics(parsed);
+            if (metrics) setGpuMetrics(metrics);
+          } catch {
+            /* ignore malformed */
+          }
+        });
+
         evtSource.addEventListener("done", (e: MessageEvent) => {
           let exitCode = 0;
           try {
@@ -707,6 +746,7 @@ ${
           setExecutionStatus(finalStatus);
           setExecutionExitCode(exitCode);
           setIsRunning(false);
+          setGpuMetrics(null);
           onRunStateChange?.(false);
           evtSource.close();
           liveSourceRef.current = null;
@@ -1415,6 +1455,8 @@ ${
               </Button>
             </div>
           </div>
+          {/* GPU metrics live bar */}
+          {isRunning && gpuMetrics && <GpuMetricsBar metrics={gpuMetrics} />}
           {/* Log panel with selection, manual diagnosis, and history sidebar */}
           <div className="flex gap-0 rounded-md border border-slate-800 overflow-hidden">
             <div className="flex-1 space-y-1.5 min-w-0">

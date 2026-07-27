@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useTransition } from "react";
 import { UIState } from "@/types";
+import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { cn } from "@/lib/utils";
 import {
   buildAiWorkspaceContext,
@@ -124,44 +125,53 @@ const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     category: "router",
     description: "Open-source model hosting & inference",
   },
-  // ── Subscription Services ────────────────────────────────────────────
+  // ── Subscription / gateway services ─────────────────────────────────
+  {
+    id: "codex",
+    name: "OpenAI Codex",
+    models: ["default", "o3", "o4-mini", "gpt-5"],
+    keyEnvVar: "",
+    docsUrl: "developers.openai.com/codex/auth",
+    category: "subscription",
+    description: "ChatGPT Plus/Pro Codex allowance — Sign in with ChatGPT (local app-server)",
+  },
   {
     id: "chatgpt-sub",
-    name: "ChatGPT Subscription",
-    models: ["gpt-4o", "gpt-4o-mini"],
+    name: "OpenAI API key",
+    models: ["gpt-4o", "gpt-4o-mini", "o4-mini"],
     keyEnvVar: "OPENAI_API_KEY",
     docsUrl: "platform.openai.com/api-keys",
     category: "subscription",
-    description: "Use your ChatGPT Plus/Pro API credits",
+    description: "Platform API key (usage-based). Not ChatGPT web login.",
   },
   {
     id: "copilot",
     name: "GitHub Copilot",
-    models: ["gpt-4o", "gpt-4o-mini", "claude-3.5-sonnet"],
-    keyEnvVar: "GITHUB_TOKEN",
-    docsUrl: "github.com/settings/tokens",
-    baseUrl: "https://api.githubcopilot.com/v1",
+    models: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "claude-sonnet-4"],
+    keyEnvVar: "GITHUB_COPILOT_TOKEN or GITHUB_TOKEN",
+    docsUrl: "github.com/settings/copilot",
+    baseUrl: "https://api.githubcopilot.com",
     category: "subscription",
-    description: "Copilot Pro subscription API access",
+    description: "Copilot chat endpoint (session/OAuth token; classic PAT often fails)",
+  },
+  {
+    id: "kilocode",
+    name: "Kilo Gateway",
+    models: ["anthropic/claude-sonnet-4", "openai/gpt-4o", "google/gemini-2.5-flash", "deepseek/deepseek-r1"],
+    keyEnvVar: "KILO_API_KEY or KILOCODE_API_KEY",
+    docsUrl: "kilo.ai/docs/gateway",
+    baseUrl: "https://api.kilo.ai/api/gateway",
+    category: "subscription",
+    description: "Official Kilo AI Gateway (OpenAI-compatible)",
   },
   {
     id: "devin",
     name: "Devin",
-    models: ["devin-latest"],
-    keyEnvVar: "DEVIN_API_KEY",
-    docsUrl: "devin.ai/settings",
-    baseUrl: "https://api.devin.ai/v1",
-    category: "subscription",
-    description: "Cognition AI's autonomous coding agent",
-  },
-  {
-    id: "kilocode",
-    name: "Kilo Code",
-    models: [],
+    models: ["swe-1-6", "swe-1-7", "claude-sonnet-4", "claude-opus-4", "gpt-4o", "kimi-k2"],
     keyEnvVar: "",
-    docsUrl: "kilocode.ai",
+    docsUrl: "devin.ai",
     category: "subscription",
-    description: "AI coding assistant — uses your own API key",
+    description: "Devin subscription (not a model) — unlocks multiple models via Sign in with Devin",
   },
   // ── Custom / Self-Hosted ─────────────────────────────────────────────
   {
@@ -186,8 +196,8 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 interface GeminiSidebarProps {
-  state: UIState;
-  setState: (partial: Partial<UIState>) => void;
+  state?: UIState;
+  setState?: (partial: Partial<UIState>) => void;
   isOpen: boolean;
   onClose: () => void;
   openToAudit?: boolean;
@@ -271,6 +281,12 @@ const ProviderErrorBlock = ({ msg, onGoSettings }: { msg: string; onGoSettings: 
   );
 };
 
+/**
+ * Displays installed local models and provides controls to search, load, and unload them.
+ *
+ * @param activeModel - The currently active model to highlight.
+ * @param isOpen - Whether the sidebar is open and keyboard shortcuts should be enabled.
+ */
 function LocalModelManager({ activeModel, isOpen }: { activeModel?: string; isOpen: boolean }) {
   const [models, setModels] = useState<Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }>>([]);
   const [loading, setLoading] = useState(false);
@@ -545,14 +561,27 @@ function LocalModelManager({ activeModel, isOpen }: { activeModel?: string; isOp
   );
 }
 
+/**
+ * Renders a sidebar for auditing, chatting about, and configuring the optimization pipeline.
+ *
+ * @param state - Optional pipeline state; when omitted, the sidebar uses the pipeline store.
+ * @param setState - Optional pipeline state updater; when omitted, the sidebar uses the pipeline store.
+ * @param isOpen - Whether the sidebar is visible.
+ * @param onClose - Called when the sidebar is closed.
+ * @param openToAudit - Whether to open the audit tab and run an analysis.
+ * @param onAuditOpened - Called after an audit is opened in response to `openToAudit`.
+ */
 export function GeminiSidebar({
-  state,
-  setState,
+  state: propState,
+  setState: propSetState,
   isOpen,
   onClose,
   openToAudit,
   onAuditOpened,
 }: GeminiSidebarProps) {
+  const storeState = usePipelineState();
+  const state = propState ?? storeState.state;
+  const setState = propSetState ?? storeState.setState;
   const [activeTab, setActiveTab] = useState<"audit" | "chat" | "settings">("audit");
   const [, startTabTransition] = useTransition();
 
@@ -588,6 +617,22 @@ export function GeminiSidebar({
   const [customModel, setCustomModel] = useState("");
   const [isSavingProvider, setIsSavingProvider] = useState(false);
   const [providerSaveError, setProviderSaveError] = useState("");
+  const [codexAccount, setCodexAccount] = useState<{
+    ready?: boolean;
+    account?: { type?: string; email?: string | null; planType?: string } | null;
+    error?: string;
+  } | null>(null);
+  const [codexBusy, setCodexBusy] = useState(false);
+  const [codexMessage, setCodexMessage] = useState<string | null>(null);
+  const [devinStatus, setDevinStatus] = useState<{
+    signedIn?: boolean;
+    name?: string;
+    error?: string;
+  } | null>(null);
+  const [devinToken, setDevinToken] = useState("");
+  const [devinModels, setDevinModels] = useState<Array<{ id: string; name: string }>>([]);
+  const [devinBusy, setDevinBusy] = useState(false);
+  const [devinMessage, setDevinMessage] = useState<string | null>(null);
   const [pullingModel, setPullingModel] = useState<string | null>(null);
   const [localPullError, setLocalPullError] = useState<string>("");
   const [modelSizes, setModelSizes] = useState<Record<string, number>>({});
@@ -620,10 +665,33 @@ export function GeminiSidebar({
       .catch(() => setOllamaHealthy(false));
   }, [isOpen]);
 
+  // Refresh Codex / Devin account when Settings is open on those providers
+  useEffect(() => {
+    if (!isOpen || activeTab !== "settings") return;
+    if (settingsProvider === "codex") void refreshCodexAccount();
+    if (settingsProvider === "devin") void refreshDevinAccount();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, activeTab, settingsProvider]);
+
   const handlePullLocalModel = async (modelTag: string, source: "lms" | "ollama" = "lms") => {
     setPullingModel(modelTag);
     setLocalPullError("");
     try {
+      if (source === "ollama" && ollamaHealthy === false) {
+        throw new Error(
+          "Ollama is not running. Start the Ollama app (or run `ollama serve`), then retry the download.",
+        );
+      }
+      if (source === "lms") {
+        const health = await fetch("/api/ai/local-health")
+          .then((r) => r.json())
+          .catch(() => null);
+        if (health && health.lmsInstalled === false) {
+          throw new Error(
+            "LM Studio CLI (`lms`) not found. Install LM Studio from https://lmstudio.ai and open it once so the CLI is installed.",
+          );
+        }
+      }
       const endpoint = source === "ollama" ? "/api/ai/ollama-pull" : "/api/ai/local-pull";
       const r = await fetch(endpoint, {
         method: "POST",
@@ -631,14 +699,18 @@ export function GeminiSidebar({
         body: JSON.stringify({ modelTag }),
       });
       const contentType = r.headers.get("content-type") ?? "";
-      const data = contentType.includes("application/json") ? await r.json().catch(() => ({})) : {};
-      if (!r.ok) throw new Error((data as { error?: string }).error || `HTTP ${r.status}`);
+      const data = contentType.includes("application/json")
+        ? ((await r.json().catch(() => ({}))) as { error?: string; hint?: string })
+        : {};
+      if (!r.ok) {
+        const parts = [data.error || `HTTP ${r.status}`, data.hint].filter(Boolean);
+        throw new Error(parts.join(" — "));
+      }
       await fetchProviderStatus();
       setAnalysis(null);
       setActiveTab("audit");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      setLocalPullError(err.message || "Failed to pull local model.");
+    } catch (err: unknown) {
+      setLocalPullError(err instanceof Error ? err.message : "Failed to pull local model.");
     } finally {
       setPullingModel(null);
     }
@@ -809,14 +881,200 @@ export function GeminiSidebar({
     }
   };
 
+  const refreshCodexAccount = async () => {
+    try {
+      const r = await fetch("/api/codex/account");
+      const data = (await r.json()) as {
+        ok?: boolean;
+        ready?: boolean;
+        account?: { type?: string; email?: string | null; planType?: string } | null;
+        error?: string;
+      };
+      setCodexAccount(data);
+      return data;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setCodexAccount({ ready: false, error: msg });
+      return null;
+    }
+  };
+
+  const handleCodexLogin = async () => {
+    setCodexBusy(true);
+    setCodexMessage(null);
+    setProviderSaveError("");
+    try {
+      const r = await fetch("/api/codex/login", { method: "POST" });
+      const data = (await r.json()) as {
+        ok?: boolean;
+        authUrl?: string;
+        error?: string;
+        message?: string;
+      };
+      if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      if (data.authUrl) {
+        window.open(data.authUrl, "_blank", "noopener,noreferrer");
+      }
+      setCodexMessage(data.message || "Complete sign-in in the browser, then click Refresh status.");
+      // Poll account a few times after login window opens
+      for (let i = 0; i < 12; i++) {
+        await new Promise((res) => setTimeout(res, 2500));
+        const acc = await refreshCodexAccount();
+        if (acc?.ready) {
+          setCodexMessage(
+            `Signed in${acc.account && "planType" in (acc.account as object) ? ` (${(acc.account as { planType?: string }).planType})` : ""}. Codex is active for audit/chat.`,
+          );
+          await fetch("/api/ai/provider", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ provider: "codex", model: settingsModel || "default" }),
+          });
+          await fetchProviderStatus();
+          break;
+        }
+      }
+    } catch (err: unknown) {
+      setProviderSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCodexBusy(false);
+    }
+  };
+
+  const handleCodexLogout = async () => {
+    setCodexBusy(true);
+    setCodexMessage(null);
+    try {
+      await fetch("/api/codex/logout", { method: "POST" });
+      await refreshCodexAccount();
+      setCodexMessage("Signed out of Codex.");
+      await fetchProviderStatus();
+    } catch (err: unknown) {
+      setProviderSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCodexBusy(false);
+    }
+  };
+
+  const refreshDevinAccount = async () => {
+    try {
+      const r = await fetch("/api/devin/account");
+      const data = (await r.json()) as { signedIn?: boolean; name?: string; error?: string };
+      setDevinStatus(data);
+      if (data.signedIn) {
+        const mr = await fetch("/api/devin/models");
+        const md = (await mr.json()) as { models?: Array<{ id: string; name: string }> };
+        if (Array.isArray(md.models) && md.models.length > 0) {
+          setDevinModels(md.models);
+          if (!md.models.some((m) => m.id === settingsModel)) {
+            setSettingsModel(md.models[0]!.id);
+          }
+        }
+      }
+      return data;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setDevinStatus({ signedIn: false, error: msg });
+      return null;
+    }
+  };
+
+  const handleDevinOpenSignIn = async () => {
+    setDevinBusy(true);
+    setDevinMessage(null);
+    setProviderSaveError("");
+    try {
+      const r = await fetch("/api/devin/login");
+      const data = (await r.json()) as { ok?: boolean; authUrl?: string; error?: string };
+      if (!r.ok || !data.ok || !data.authUrl) throw new Error(data.error || `HTTP ${r.status}`);
+      window.open(data.authUrl, "_blank", "noopener,noreferrer");
+      setDevinMessage("Sign in in the browser, then paste the token shown on the page below.");
+    } catch (err: unknown) {
+      setProviderSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDevinBusy(false);
+    }
+  };
+
+  const handleDevinCompleteLogin = async () => {
+    setDevinBusy(true);
+    setDevinMessage(null);
+    setProviderSaveError("");
+    try {
+      const r = await fetch("/api/devin/login/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: devinToken }),
+      });
+      const data = (await r.json()) as { ok?: boolean; error?: string; name?: string; message?: string };
+      if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      setDevinToken("");
+      setDevinMessage(data.message || `Signed in as ${data.name ?? "Devin"}.`);
+      await refreshDevinAccount();
+      await fetch("/api/ai/provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: "devin", model: settingsModel || "swe-1-6" }),
+      });
+      await fetchProviderStatus();
+    } catch (err: unknown) {
+      setProviderSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDevinBusy(false);
+    }
+  };
+
+  const handleDevinLogout = async () => {
+    setDevinBusy(true);
+    try {
+      await fetch("/api/devin/logout", { method: "POST" });
+      setDevinStatus({ signedIn: false });
+      setDevinMessage("Signed out of Devin.");
+      await fetchProviderStatus();
+    } catch (err: unknown) {
+      setProviderSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDevinBusy(false);
+    }
+  };
+
   const handleSaveProvider = async () => {
+    if (settingsProvider === "codex") {
+      // Codex uses browser ChatGPT login, not an API key field
+      await handleCodexLogin();
+      return;
+    }
+    if (settingsProvider === "devin") {
+      if (!devinStatus?.signedIn) {
+        setProviderSaveError("Sign in to Devin and paste the browser token first.");
+        return;
+      }
+      setIsSavingProvider(true);
+      setProviderSaveError("");
+      try {
+        const r = await fetch("/api/ai/provider", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: "devin", model: settingsModel || "swe-1-6" }),
+        });
+        const data = (await r.json()) as { error?: string };
+        if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+        await fetchProviderStatus();
+        setAnalysis(null);
+        setActiveTab("audit");
+      } catch (err: unknown) {
+        setProviderSaveError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setIsSavingProvider(false);
+      }
+      return;
+    }
     const key = settingsApiKey.trim();
     const model = isCompatMode ? customModel.trim() : settingsModel;
     if (!key) {
       setProviderSaveError("Enter an API key.");
       return;
     }
-    if (!model) {
+    if (!model || model === "n/a") {
       setProviderSaveError(isCompatMode ? "Enter a model name." : "Select a model.");
       return;
     }
@@ -844,9 +1102,8 @@ export function GeminiSidebar({
       setSettingsApiKey("");
       setAnalysis(null);
       setActiveTab("audit");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      setProviderSaveError(err.message || "Failed to save provider.");
+    } catch (err: unknown) {
+      setProviderSaveError(err instanceof Error ? err.message : "Failed to save provider.");
     } finally {
       setIsSavingProvider(false);
     }
@@ -1276,19 +1533,20 @@ export function GeminiSidebar({
                       {(
                         [
                           {
-                            tag: "lmstudio-community/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+                            // Shorter ids resolve more reliably with `lms get -y --gguf`
+                            tag: "qwen2.5-coder-1.5b-instruct",
                             name: "Qwen2.5-Coder (1.5B)",
                             desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
                             fallbackSize: "1.1 GB",
                           },
                           {
-                            tag: "lmstudio-community/Meta-Llama-3.2-1B-Instruct-GGUF",
+                            tag: "llama-3.2-1b-instruct",
                             name: "Llama-3.2 (1B)",
                             desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
                             fallbackSize: "800 MB",
                           },
                           {
-                            tag: "lmstudio-community/Phi-3.5-Mini-Instruct-GGUF",
+                            tag: "phi-3.5-mini-instruct",
                             name: "Phi-3.5-Mini (3.8B)",
                             desc: "🧠 Advanced Reasoning: Complex compiler co-design",
                             fallbackSize: "2.2 GB",
@@ -1387,6 +1645,20 @@ export function GeminiSidebar({
                         Ollama API on{" "}
                         <code className="text-[10px] font-mono text-slate-400">localhost:11434</code>.
                       </p>
+                      {ollamaHealthy === false && (
+                        <p className="text-[11px] text-rose-400 mb-2 leading-relaxed">
+                          Ollama is not reachable. Install from{" "}
+                          <a
+                            href="https://ollama.com"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline text-electric-blue"
+                          >
+                            ollama.com
+                          </a>
+                          , start the Ollama app, then retry download.
+                        </p>
+                      )}
                       <div className="space-y-2">
                         {(
                           [
@@ -1403,10 +1675,10 @@ export function GeminiSidebar({
                               fallbackSize: "800 MB",
                             },
                             {
-                              tag: "phi3.5:3.8b",
-                              name: "Phi-3.5-Mini (3.8B)",
+                              tag: "phi3.5",
+                              name: "Phi-3.5-Mini",
                               desc: "🧠 Advanced Reasoning: Complex compiler co-design",
-                              fallbackSize: "2.2 GB",
+                              fallbackSize: "~2 GB",
                             },
                           ] as const
                         ).map((m) => {
@@ -1525,71 +1797,216 @@ export function GeminiSidebar({
                       onChange={(e) => setSettingsModel(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue cursor-pointer"
                     >
-                      {providerOption.models.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
+                      {(settingsProvider === "devin" && devinModels.length > 0
+                        ? devinModels.map((m) => ({ id: m.id, label: m.name }))
+                        : providerOption.models.map((m) => ({ id: m, label: m }))
+                      ).map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label}
                         </option>
                       ))}
                     </select>
                   )}
                 </div>
 
-                {isCompatMode && (
-                  <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Base URL</label>
-                    <input
-                      type="text"
-                      placeholder="http://localhost:11434/v1"
-                      value={settingsBaseUrl}
-                      onChange={(e) => setSettingsBaseUrl(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
-                    />
-                    <p className="text-[10px] text-slate-600 mt-1">
-                      Works with LM Studio, vLLM, Ollama, etc. (default: http://localhost:11434/v1)
+                {settingsProvider === "codex" ? (
+                  <div className="space-y-3 p-3 rounded-xl border border-slate-800 bg-slate-950/50">
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Uses local <code className="text-slate-400 font-mono">codex app-server</code> for
+                      ChatGPT sign-in and <code className="text-slate-400 font-mono">@openai/codex-sdk</code>{" "}
+                      for recipe Q&amp;A (read-only sandbox). Requires the Codex CLI on PATH.
                     </p>
+                    <p className="text-[11px] text-slate-400">
+                      Status:{" "}
+                      {codexAccount?.ready ? (
+                        <span className="text-emerald-400">signed in</span>
+                      ) : codexAccount?.error ? (
+                        <span className="text-rose-400">{codexAccount.error}</span>
+                      ) : (
+                        <span className="text-slate-500">not signed in</span>
+                      )}
+                    </p>
+                    {codexMessage && <p className="text-[11px] text-emerald-400/90">{codexMessage}</p>}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={codexBusy}
+                        onClick={() => void handleCodexLogin()}
+                        className="flex-1 min-w-[8rem] h-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-2"
+                      >
+                        {codexBusy ? (
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                        Sign in with ChatGPT
+                      </button>
+                      <button
+                        type="button"
+                        disabled={codexBusy}
+                        onClick={() => void refreshCodexAccount()}
+                        className="h-9 px-3 border border-slate-700 rounded-lg text-xs text-slate-300"
+                      >
+                        Refresh
+                      </button>
+                      <button
+                        type="button"
+                        disabled={codexBusy}
+                        onClick={() => void handleCodexLogout()}
+                        className="h-9 px-3 border border-rose-500/30 rounded-lg text-xs text-rose-400"
+                      >
+                        Logout
+                      </button>
+                    </div>
                   </div>
-                )}
-
-                <div>
-                  <label className="text-xs text-slate-400 mb-1 flex items-center gap-1.5 block">
-                    <Key className="h-3 w-3" />
-                    API Key
-                    {"keyEnvVar" in providerOption && providerOption.keyEnvVar && (
-                      <span className="text-[9px] text-slate-600">
-                        (or env: <code className="font-mono">{providerOption.keyEnvVar}</code>)
-                      </span>
+                ) : settingsProvider === "devin" ? (
+                  <div className="space-y-3 p-3 rounded-xl border border-slate-800 bg-slate-950/50">
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      <strong className="text-slate-200">Devin is not a model</strong> — it is a subscription
+                      that unlocks multiple models for Assistant audit/chat. Sign in with your Devin account,
+                      paste the browser token, then pick a model from your plan.
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Status:{" "}
+                      {devinStatus?.signedIn ? (
+                        <span className="text-emerald-400">
+                          signed in{devinStatus.name ? ` · ${devinStatus.name}` : ""}
+                        </span>
+                      ) : devinStatus?.error ? (
+                        <span className="text-rose-400">{devinStatus.error}</span>
+                      ) : (
+                        <span className="text-slate-500">not signed in</span>
+                      )}
+                    </p>
+                    {devinMessage && <p className="text-[11px] text-emerald-400/90">{devinMessage}</p>}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={devinBusy}
+                        onClick={() => void handleDevinOpenSignIn()}
+                        className="flex-1 min-w-[8rem] h-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-2"
+                      >
+                        {devinBusy ? (
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                        Open Devin sign-in
+                      </button>
+                      <button
+                        type="button"
+                        disabled={devinBusy}
+                        onClick={() => void refreshDevinAccount()}
+                        className="h-9 px-3 border border-slate-700 rounded-lg text-xs text-slate-300"
+                      >
+                        Refresh
+                      </button>
+                      <button
+                        type="button"
+                        disabled={devinBusy}
+                        onClick={() => void handleDevinLogout()}
+                        className="h-9 px-3 border border-rose-500/30 rounded-lg text-xs text-rose-400"
+                      >
+                        Logout
+                      </button>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">
+                        Paste token from sign-in page
+                      </label>
+                      <input
+                        type="password"
+                        autoComplete="off"
+                        value={devinToken}
+                        onChange={(e) => setDevinToken(e.target.value)}
+                        placeholder="Token shown after browser sign-in"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+                      />
+                      <button
+                        type="button"
+                        disabled={devinBusy || !devinToken.trim()}
+                        onClick={() => void handleDevinCompleteLogin()}
+                        className="mt-2 w-full h-9 border border-electric-blue/40 text-electric-blue hover:bg-electric-blue/10 disabled:opacity-40 rounded-lg text-xs font-bold"
+                      >
+                        Complete sign-in
+                      </button>
+                    </div>
+                    {devinStatus?.signedIn && (
+                      <button
+                        type="button"
+                        disabled={isSavingProvider}
+                        onClick={() => void handleSaveProvider()}
+                        className="w-full h-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-2"
+                      >
+                        {isSavingProvider ? (
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                        Activate Devin for audit/chat
+                      </button>
                     )}
-                  </label>
-                  <input
-                    type="password"
-                    autoComplete="off"
-                    placeholder="Stored in memory only, never persisted to disk"
-                    value={settingsApiKey}
-                    onChange={(e) => setSettingsApiKey(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSaveProvider()}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
-                  />
-                </div>
+                  </div>
+                ) : (
+                  <>
+                    {isCompatMode && (
+                      <div>
+                        <label className="text-xs text-slate-400 mb-1 block">Base URL</label>
+                        <input
+                          type="text"
+                          placeholder="http://localhost:11434/v1"
+                          value={settingsBaseUrl}
+                          onChange={(e) => setSettingsBaseUrl(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+                        />
+                        <p className="text-[10px] text-slate-600 mt-1">
+                          Works with LM Studio, vLLM, Ollama, etc.
+                        </p>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 flex items-center gap-1.5 block">
+                        <Key className="h-3 w-3" />
+                        API Key
+                        {"keyEnvVar" in providerOption && providerOption.keyEnvVar && (
+                          <span className="text-[9px] text-slate-600">
+                            (or env: <code className="font-mono">{providerOption.keyEnvVar}</code>)
+                          </span>
+                        )}
+                      </label>
+                      <input
+                        type="password"
+                        autoComplete="off"
+                        placeholder="Stored in memory only, never persisted to disk"
+                        value={settingsApiKey}
+                        onChange={(e) => setSettingsApiKey(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && void handleSaveProvider()}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveProvider()}
+                      disabled={isSavingProvider}
+                      className="w-full h-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer"
+                    >
+                      {isSavingProvider ? (
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Check className="h-3.5 w-3.5" />
+                      )}
+                      Save & Activate
+                    </button>
+                  </>
+                )}
 
                 {providerSaveError && <p className="text-xs text-rose-400">{providerSaveError}</p>}
 
-                <button
-                  type="button"
-                  onClick={handleSaveProvider}
-                  disabled={isSavingProvider}
-                  className="w-full h-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  {isSavingProvider ? (
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Check className="h-3.5 w-3.5" />
-                  )}
-                  Save & Activate
-                </button>
-
                 {"docsUrl" in providerOption && providerOption.docsUrl && (
                   <p className="text-[10px] text-slate-600 text-center">
-                    Get key at <span className="font-mono text-slate-500">{providerOption.docsUrl}</span>
+                    Docs: <span className="font-mono text-slate-500">{providerOption.docsUrl}</span>
                   </p>
                 )}
               </div>

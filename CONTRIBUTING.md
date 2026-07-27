@@ -6,15 +6,16 @@ Thank you for your interest in Olive Studio. This project is a community front e
 
 - Read [README.md](README.md) for setup and architecture overview.
 - Read [ABOUT.md](ABOUT.md) for project scope — Olive Studio is a local runner and UI, not a fork of Olive itself.
-- Olive Studio is licensed under [AGPL-3.0-or-later](LICENSE). By contributing, you agree that your contributions are licensed under the same terms.
+- Olive Studio is licensed under the [MIT License](LICENSE). By contributing, you agree that your contributions are licensed under the same terms.
 
 ## Development setup
 
 ### Requirements
 
-- **Node.js** 18+ (20+ recommended)
+- **Node.js** 22+ (pnpm 11 requirement)
 - **Python** 3.9+ on `PATH` (for live Olive runs and GPU testing)
 - **Git**
+- **Desktop (optional):** [Rust](https://rustup.rs/) + Windows WebView2 for `pnpm tauri:dev` / `pnpm tauri:build`
 
 ### Install and run
 
@@ -25,7 +26,7 @@ pnpm install
 pnpm dev
 ```
 
-Open http://localhost:3000. On first **Execute Live**, the server creates `.venv/` and installs `olive-ai` automatically.
+Open <http://localhost:3000>. On first **Execute Live**, the server creates `.venv/` and installs `olive-ai` automatically.
 
 Optional: copy `.env.local` for `HF_TOKEN` or AI provider keys (see README).
 
@@ -100,14 +101,14 @@ Reviewers may ask for smaller scope or additional tests; that keeps the codebase
 
 Use [Conventional Commits](https://www.conventionalcommits.org/) style:
 
-| Prefix | Use for |
-|--------|---------|
-| `feat:` | New user-facing capability |
-| `fix:` | Bug fixes |
-| `docs:` | Documentation only |
+| Prefix      | Use for                             |
+| ----------- | ----------------------------------- |
+| `feat:`     | New user-facing capability          |
+| `fix:`      | Bug fixes                           |
+| `docs:`     | Documentation only                  |
 | `refactor:` | Code change without behavior change |
-| `test:` | Tests or smoke scripts |
-| `chore:` | Tooling, deps, CI |
+| `test:`     | Tests or smoke scripts              |
+| `chore:`    | Tooling, deps, CI                   |
 
 Examples:
 

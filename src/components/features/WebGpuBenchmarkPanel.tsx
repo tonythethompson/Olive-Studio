@@ -187,7 +187,7 @@ export function WebGpuBenchmarkPanel() {
         ]);
         setLogOutput((prev) => [...prev, `[${ts()}] Vendor: ${status.adapterInfo?.vendor ?? "Unknown"}`]);
         if (status.adapterInfo?.features?.length) {
-          setLogOutput((prev) => [...prev, `[${ts()}] Features: ${status.adapterInfo.features.join(", ")}`]);
+          setLogOutput((prev) => [...prev, `[${ts()}] Features: ${status.adapterInfo?.features.join(", ")}`]);
         }
 
         // Step 2: Initialize TypeGPU to validate the full WebGPU pipeline
