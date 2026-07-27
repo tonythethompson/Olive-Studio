@@ -136,14 +136,12 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
         check: (passes) => {
           if (!passes.quantization) return null;
           if (passes.quantPrecision === "int8" && passes.quantMethod === "ptq") {
-            return "NVIDIA GPU works best with AWQ INT4 quantization for LLMs (typically <2% perplexity drop). PTQ INT8 can drop 10-15% perplexity on large models.";
+            return "NVIDIA GPU works best with AWQ INT4 quantization for LLMs (typically <2% perplexity drop). PTQ INT8 can drop 10-15% perplexity on large models. Note: AWQ is incompatible with pruning; switching will disable pruning if enabled.";
           }
           return null;
         },
-        autofix: {
-          passes: { quantization: true, quantPrecision: "int4", quantMethod: "awq", pruning: false },
-        },
-        actionLabel: "Switch to AWQ INT4",
+        autofix: { passes: { quantPrecision: "int4", quantMethod: "awq" } },
+        actionLabel: "Switch to AWQ INT4 (disables pruning)",
       },
     ];
   }
@@ -154,12 +152,12 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
         name: "TensorRT INT8 requires QDQ format",
         check: (passes) => {
           if (passes.quantPrecision === "int8" && passes.quantMethod === "ptq") {
-            return "TensorRT INT8 quantization requires QDQ (QuantizeDequantize) nodes in the ONNX graph. PTQ INT8 does not generate QDQ — use AWQ instead, which produces the correct format for TensorRT.";
+            return "TensorRT INT8 quantization requires QDQ (QuantizeDequantize) nodes in the ONNX graph. PTQ INT8 does not generate QDQ — use AWQ instead, which produces the correct format for TensorRT. Note: AWQ is incompatible with pruning; switching will disable pruning if enabled.";
           }
           return null;
         },
         autofix: { passes: { quantMethod: "awq" } },
-        actionLabel: "Switch to AWQ",
+        actionLabel: "Switch to AWQ (disables pruning)",
       },
       {
         name: "TensorRT prefers AWQ INT4 for LLMs",
@@ -176,12 +174,12 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
         name: "TensorRT engine builds are slow",
         check: (passes) => {
           if (passes.quantization && passes.quantMethod !== "awq") {
-            return "TensorRT engine optimization is time-intensive (minutes to hours). AWQ pre-quantized models skip the TensorRT calibration step, significantly reducing build time.";
+            return "TensorRT engine optimization is time-intensive (minutes to hours). AWQ pre-quantized models skip the TensorRT calibration step, significantly reducing build time. Note: AWQ is incompatible with pruning; switching will disable pruning if enabled.";
           }
           return null;
         },
         autofix: { passes: { quantMethod: "awq" } },
-        actionLabel: "Switch to AWQ",
+        actionLabel: "Switch to AWQ (disables pruning)",
       },
     ];
   }
@@ -191,35 +189,25 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
       {
         name: "TensorRT RTX prefers INT4 AWQ",
         check: (passes) => {
-          // Only when quant is actually enabled — default quantPrecision is int8 even when quant is off.
-          if (!passes.quantization) return null;
-          if (passes.quantMethod === "awq" && passes.quantPrecision === "int4") return null;
-          // Exclude INT8 PTQ case which is handled by the separate QDQ format rule
-          if (passes.quantPrecision === "int8" && passes.quantMethod === "ptq") return null;
-          return "TensorRT RTX (consumer GeForce) works best with AWQ INT4. Structured pruning is not a substitute — use AWQ INT4 first (pruning conflicts with AWQ calibration).";
+          if (passes.quantPrecision === "int8") {
+            return "TensorRT RTX (consumer GeForce) works best with AWQ INT4 quantization. INT4 reduces VRAM usage on consumer GPUs and provides faster inference with minimal accuracy impact. Note: AWQ is incompatible with pruning; switching will disable pruning if enabled.";
+          }
+          return null;
         },
-        autofix: {
-          passes: {
-            quantization: true,
-            quantPrecision: "int4",
-            quantMethod: "awq",
-            pruning: false,
-            awqSym: true,
-          },
-        },
-        actionLabel: "Switch to AWQ INT4",
+        autofix: { passes: { quantPrecision: "int4", quantMethod: "awq" } },
+        actionLabel: "Switch to AWQ INT4 (disables pruning)",
       },
       {
         name: "TensorRT RTX INT8 requires QDQ format",
         check: (passes) => {
           if (!passes.quantization) return null;
           if (passes.quantPrecision === "int8" && passes.quantMethod === "ptq") {
-            return "TensorRT RTX INT8 requires QDQ format. PTQ INT8 does not generate QDQ nodes — use AWQ instead for correct INT8 quantization on TensorRT RTX.";
+            return "TensorRT RTX INT8 requires QDQ format. PTQ INT8 does not generate QDQ nodes — use AWQ instead for correct INT8 quantization on TensorRT RTX. Note: AWQ is incompatible with pruning; switching will disable pruning if enabled.";
           }
           return null;
         },
-        autofix: { passes: { quantMethod: "awq", pruning: false } },
-        actionLabel: "Switch to AWQ",
+        autofix: { passes: { quantMethod: "awq" } },
+        actionLabel: "Switch to AWQ (disables pruning)",
       },
     ];
     rules["SparseGPT"] = [
