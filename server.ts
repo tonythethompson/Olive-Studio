@@ -138,7 +138,7 @@ app.use((req, res, next) => {
     try {
       const url = new URL(origin);
       const hostname = url.hostname;
-      const port = url.port ? parseInt(url.port, 10) : (url.protocol === "https:" ? 443 : 80);
+      const port = url.port ? parseInt(url.port, 10) : url.protocol === "https:" ? 443 : 80;
 
       // Allow localhost and 127.0.0.1 with any port for dev/Tauri
       if (hostname === "localhost" || hostname === "127.0.0.1") {
@@ -2779,8 +2779,31 @@ async function listGeminiModels(apiKey: string): Promise<string[]> {
   }
 }
 
-async function listOpenAiCompatModels(baseUrl: string, apiKey: string, provider: string): Promise<string[]> {
-  const base = baseUrl.replace(/\/+$/, "");
+/**
+ * Resolve a fetch base for OpenAI-compatible model listing.
+ * Always returns a constant from ALLOWED_BASE_URL_PREFIX_BY_PROVIDER (never the raw user string)
+ * so outbound requests cannot be redirected via SSRF.
+ */
+function allowlistedOpenAiCompatBase(provider: string, preferred?: string): string | undefined {
+  const allowed = ALLOWED_BASE_URL_PREFIX_BY_PROVIDER[provider as ProviderConfig["provider"]];
+  if (!allowed?.length) return undefined;
+  const trimmed = preferred?.trim().replace(/\/+$/, "");
+  if (trimmed) {
+    const match = allowed.find((prefix) => trimmed === prefix || trimmed.startsWith(`${prefix}/`));
+    if (match) return match;
+  }
+  return allowed[0];
+}
+
+async function listOpenAiCompatModels(
+  provider: string,
+  apiKey: string,
+  preferredBase?: string,
+): Promise<string[]> {
+  const base = allowlistedOpenAiCompatBase(provider, preferredBase);
+  if (!base) {
+    throw new Error(`Live model listing is not available for provider: ${provider}`);
+  }
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     Accept: "application/json",
@@ -2878,16 +2901,9 @@ async function fetchProviderModelList(opts: {
 
   const resolved = resolveKeyForProvider(provider, opts.apiKey);
   const apiKey = resolved.apiKey;
-  const defaultBaseUrl =
-    provider === "openai" || provider === "chatgpt-sub"
-      ? "https://api.openai.com/v1"
-      : provider === "mistral"
-        ? "https://api.mistral.ai/v1"
-        : undefined;
-  const baseUrl =
-    sanitizeProviderBaseUrl(provider, opts.baseUrl) ??
-    sanitizeProviderBaseUrl(provider, resolved.baseUrl) ??
-    defaultBaseUrl;
+  // Validate optional user baseUrl against the provider allowlist; never pass the raw
+  // string into fetch — listOpenAiCompatModels uses allowlisted constants only.
+  const preferredBase = opts.baseUrl?.trim() ? sanitizeProviderBaseUrl(provider, opts.baseUrl) : undefined;
 
   if (!apiKey) {
     return {
@@ -2904,8 +2920,8 @@ async function fetchProviderModelList(opts: {
       ids = await listGeminiModels(apiKey);
     } else if (provider === "anthropic") {
       ids = await listAnthropicModels(apiKey);
-    } else if (baseUrl) {
-      ids = await listOpenAiCompatModels(baseUrl, apiKey, provider);
+    } else if (allowlistedOpenAiCompatBase(provider, preferredBase)) {
+      ids = await listOpenAiCompatModels(provider, apiKey, preferredBase);
     } else {
       return { models: fallback, source: "fallback", authSource: resolved.source };
     }
