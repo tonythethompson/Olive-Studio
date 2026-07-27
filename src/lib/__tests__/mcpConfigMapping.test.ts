@@ -307,7 +307,7 @@ describe("mapMcpConfigToUiState", () => {
     });
 
     it("applyMcpDiagnosticToUiState merges config + quirks", () => {
-      const { patches, appliedQuirks } = applyMcpDiagnosticToUiState(
+      const { patches, appliedQuirks, notedQuirks } = applyMcpDiagnosticToUiState(
         {
           updated_config: {
             engine: { cache_dir: "~/.cache/olive/experiment_1" },

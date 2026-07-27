@@ -195,6 +195,50 @@ const CATEGORY_LABELS: Record<string, string> = {
   custom: "Custom / Self-Hosted",
 };
 
+/** LM Studio starter models for local AI. */
+const LMS_STARTER_MODELS = [
+  {
+    tag: "qwen2.5-coder-1.5b-instruct",
+    name: "Qwen2.5-Coder (1.5B)",
+    desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
+    fallbackSize: "1.1 GB",
+  },
+  {
+    tag: "llama-3.2-1b-instruct",
+    name: "Llama-3.2 (1B)",
+    desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
+    fallbackSize: "800 MB",
+  },
+  {
+    tag: "phi-3.5-mini-instruct",
+    name: "Phi-3.5-Mini (3.8B)",
+    desc: "🧠 Advanced Reasoning: Complex compiler co-design",
+    fallbackSize: "2.2 GB",
+  },
+] as const;
+
+/** Ollama starter models for local AI. */
+const OLLAMA_STARTER_MODELS = [
+  {
+    tag: "qwen2.5-coder:1.5b",
+    name: "Qwen2.5-Coder (1.5B)",
+    desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
+    fallbackSize: "1.1 GB",
+  },
+  {
+    tag: "llama3.2:1b",
+    name: "Llama-3.2 (1B)",
+    desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
+    fallbackSize: "800 MB",
+  },
+  {
+    tag: "phi3.5",
+    name: "Phi-3.5-Mini",
+    desc: "🧠 Advanced Reasoning: Complex compiler co-design",
+    fallbackSize: "~2 GB",
+  },
+] as const;
+
 interface GeminiSidebarProps {
   state?: UIState;
   setState?: (partial: Partial<UIState>) => void;
@@ -350,7 +394,7 @@ function LocalModelManager({
     });
   }, [filteredModels]);
 
-  const refresh = async () => {
+  const refresh = async (isCancelled?: () => boolean) => {
     setLoading(true);
     setError("");
     try {
@@ -360,6 +404,8 @@ function LocalModelManager({
         fetchLms ? fetch("/api/ai/local-models") : Promise.resolve(null),
         fetchOllama ? fetch("/api/ai/ollama-models") : Promise.resolve(null),
       ]);
+
+      if (isCancelled?.()) return;
 
       const lmsModels: string[] = [];
       const ollamaModels: string[] = [];
@@ -378,7 +424,7 @@ function LocalModelManager({
         !lmsRes.value.ok
       ) {
         const d = (await lmsRes.value.json().catch(() => ({}))) as { error?: string };
-        if (d.error) setError(d.error);
+        if (d.error && !isCancelled?.()) setError(d.error);
       }
       if (fetchOllama && ollamaRes.status === "fulfilled" && ollamaRes.value && ollamaRes.value.ok) {
         const d = await ollamaRes.value.json();
@@ -392,8 +438,10 @@ function LocalModelManager({
         !ollamaRes.value.ok
       ) {
         const d = (await ollamaRes.value.json().catch(() => ({}))) as { error?: string };
-        if (d.error) setError(d.error);
+        if (d.error && !isCancelled?.()) setError(d.error);
       }
+
+      if (isCancelled?.()) return;
 
       const allModels: Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }> = [];
       const seen = new Set<string>();
@@ -413,19 +461,23 @@ function LocalModelManager({
           }
         }
       }
-      setModels(allModels);
+      if (!isCancelled?.()) setModels(allModels);
     } catch (err: unknown) {
-      if (engine !== "all") {
+      if (engine !== "all" && !isCancelled?.()) {
         setError(err instanceof Error ? err.message : "Failed to list local models");
       }
     } finally {
-      setLoading(false);
+      if (!isCancelled?.()) setLoading(false);
     }
   };
 
   useEffect(() => {
+    const cancelGuard = { cancelled: false };
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: fetch models on mount / engine change
-    void refresh();
+    void refresh(() => cancelGuard.cancelled);
+    return () => {
+      cancelGuard.cancelled = true;
+    };
   }, [engine]);
 
   const handleLoad = async (modelTag: string, source: "lms" | "ollama" = "lms") => {
@@ -677,8 +729,14 @@ export function GeminiSidebar({
   const [modelsHint, setModelsHint] = useState<string | null>(null);
   /** Providers already auto-refreshed this session (skip repeat unless force). */
   const modelsFetchedRef = useRef<Set<string>>(new Set());
+  /** Sequence counter to guard against stale responses in refreshProviderModels. */
+  const refreshSequenceRef = useRef(0);
+  /** Last values used for model fetching to avoid redundant refetches. */
+  const lastFetchedApiKeyRef = useRef<string>("");
+  const lastFetchedBaseUrlRef = useRef<string>("");
   const [pullingModel, setPullingModel] = useState<string | null>(null);
   const [localPullError, setLocalPullError] = useState<string>("");
+  const [localInstallInfo, setLocalInstallInfo] = useState<string | null>(null);
   const [modelSizes, setModelSizes] = useState<Record<string, number>>({});
   const [ollamaHealthy, setOllamaHealthy] = useState<boolean | null>(null);
   const [lmsHealthy, setLmsHealthy] = useState<boolean | null>(null);
@@ -686,7 +744,11 @@ export function GeminiSidebar({
   const [installingEngine, setInstallingEngine] = useState<"lms" | "ollama" | null>(null);
   const [preferredEngine, setPreferredEngine] = useState<"lms" | "ollama">(() => {
     try {
-      return (localStorage.getItem("localEngine") as "lms" | "ollama") || "lms";
+      const stored = localStorage.getItem("localEngine");
+      if (stored === "lms" || stored === "ollama") {
+        return stored;
+      }
+      return "lms";
     } catch {
       return "lms";
     }
@@ -695,6 +757,7 @@ export function GeminiSidebar({
   const handleSetPreferredEngine = (engine: "lms" | "ollama") => {
     setPreferredEngine(engine);
     setLocalPullError("");
+    setLocalInstallInfo(null);
     try {
       localStorage.setItem("localEngine", engine);
     } catch {
@@ -724,6 +787,7 @@ export function GeminiSidebar({
   const handleInstallLocalEngine = async (engine: "lms" | "ollama") => {
     setInstallingEngine(engine);
     setLocalPullError("");
+    setLocalInstallInfo(null);
     try {
       const r = await fetch("/api/ai/install-engine", {
         method: "POST",
@@ -741,6 +805,7 @@ export function GeminiSidebar({
         window.open(data.openedUrl, "_blank", "noopener,noreferrer");
       }
       setLocalPullError("");
+      setLocalInstallInfo(null);
       // Re-check health after a short delay
       setTimeout(() => {
         if (engine === "ollama") {
@@ -759,7 +824,7 @@ export function GeminiSidebar({
         }
       }, 2000);
       if (data.message) {
-        setLocalPullError(data.message); // reuse banner as info if needed — shown green path via install
+        setLocalInstallInfo(data.message);
       }
     } catch (err: unknown) {
       setLocalPullError(err instanceof Error ? err.message : "Install failed");
@@ -781,6 +846,8 @@ export function GeminiSidebar({
       return;
     }
     modelsFetchedRef.current.add(providerId);
+    refreshSequenceRef.current += 1;
+    const currentSequence = refreshSequenceRef.current;
     setModelsLoading(true);
     setModelsHint(null);
     try {
@@ -802,6 +869,12 @@ export function GeminiSidebar({
         source?: "live" | "fallback";
         error?: string;
       };
+
+      // Guard against stale responses
+      if (currentSequence !== refreshSequenceRef.current) {
+        return;
+      }
+
       const models = Array.isArray(data.models) ? data.models : [];
       if (models.length > 0) {
         setLiveModelsByProvider((prev) => ({ ...prev, [providerId]: models }));
@@ -825,12 +898,19 @@ export function GeminiSidebar({
         setModelsHint(null);
       }
     } catch (err: unknown) {
+      // Guard against stale responses
+      if (currentSequence !== refreshSequenceRef.current) {
+        return;
+      }
       setModelsSource("fallback");
       setModelsHint(err instanceof Error ? err.message : "Could not refresh models");
       // Allow retry on next selection if network failed entirely
       modelsFetchedRef.current.delete(providerId);
     } finally {
-      setModelsLoading(false);
+      // Guard against stale responses
+      if (currentSequence === refreshSequenceRef.current) {
+        setModelsLoading(false);
+      }
     }
   };
 
@@ -846,6 +926,7 @@ export function GeminiSidebar({
   const handlePullLocalModel = async (modelTag: string, source: "lms" | "ollama" = "lms") => {
     setPullingModel(modelTag);
     setLocalPullError("");
+    setLocalInstallInfo(null);
     try {
       if (source === "ollama" && ollamaHealthy === false) {
         throw new Error(
@@ -1010,7 +1091,7 @@ export function GeminiSidebar({
       try {
         const obj = JSON.parse(value) as Record<string, unknown>;
         if (pass === "ihvProvider" || pass === "cudaVersion") {
-          setState({ [pass]: Object.values(obj)[0] } as Partial<UIState>);
+          setState({ [pass]: obj[pass] } as Partial<UIState>);
         } else {
           const passKey = pass.startsWith("passes.") ? pass.slice(7) : pass;
           // If the object has multiple pass keys, merge all; else set single key
@@ -1049,14 +1130,7 @@ export function GeminiSidebar({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         [passKey]: parsed as any,
       };
-      // Enabling structured pruning on TensorRT RTX: don't leave INT8 PTQ as "the" path
-      if (
-        passKey === "pruning" &&
-        parsed === true &&
-        state.ihvProvider === "NvTensorRTRTXExecutionProvider"
-      ) {
-        // leave quant as-is; validation will suggest AWQ
-      }
+      // Enabling structured pruning on TensorRT RTX: leave quant as-is; validation will suggest AWQ
       if (passKey === "quantMethod" && value === "awq") {
         nextPasses.pruning = false;
         nextPasses.quantization = true;
@@ -1746,54 +1820,13 @@ export function GeminiSidebar({
                 </div>
                 {(() => {
                   const isLms = preferredEngine === "lms";
-                  const accent = isLms ? "electric-blue" : "emerald";
                   const accentText = isLms ? "text-electric-blue" : "text-emerald-400";
                   const accentBg = isLms
                     ? "bg-electric-blue/10 hover:bg-electric-blue/20 border-electric-blue/30 text-electric-blue"
                     : "bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-400";
                   const healthy = isLms ? lmsHealthy : ollamaHealthy;
                   const missing = isLms ? lmsInstalled === false : ollamaHealthy === false;
-                  const models = isLms
-                    ? ([
-                        {
-                          tag: "qwen2.5-coder-1.5b-instruct",
-                          name: "Qwen2.5-Coder (1.5B)",
-                          desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
-                          fallbackSize: "1.1 GB",
-                        },
-                        {
-                          tag: "llama-3.2-1b-instruct",
-                          name: "Llama-3.2 (1B)",
-                          desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
-                          fallbackSize: "800 MB",
-                        },
-                        {
-                          tag: "phi-3.5-mini-instruct",
-                          name: "Phi-3.5-Mini (3.8B)",
-                          desc: "🧠 Advanced Reasoning: Complex compiler co-design",
-                          fallbackSize: "2.2 GB",
-                        },
-                      ] as const)
-                    : ([
-                        {
-                          tag: "qwen2.5-coder:1.5b",
-                          name: "Qwen2.5-Coder (1.5B)",
-                          desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
-                          fallbackSize: "1.1 GB",
-                        },
-                        {
-                          tag: "llama3.2:1b",
-                          name: "Llama-3.2 (1B)",
-                          desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
-                          fallbackSize: "800 MB",
-                        },
-                        {
-                          tag: "phi3.5",
-                          name: "Phi-3.5-Mini",
-                          desc: "🧠 Advanced Reasoning: Complex compiler co-design",
-                          fallbackSize: "~2 GB",
-                        },
-                      ] as const);
+                  const models = isLms ? LMS_STARTER_MODELS : OLLAMA_STARTER_MODELS;
                   return (
                     <>
                       <div className="flex items-center justify-between gap-2">
@@ -1902,13 +1935,14 @@ export function GeminiSidebar({
                       {localPullError && (
                         <p className="text-xs text-rose-400 mt-1 leading-relaxed">{localPullError}</p>
                       )}
+                      {localInstallInfo && (
+                        <p className="text-xs text-emerald-400 mt-1 leading-relaxed">{localInstallInfo}</p>
+                      )}
                       <LocalModelManager
                         activeModel={providerStatus.model}
                         isOpen={isOpen}
                         engine={preferredEngine}
                       />
-                      {/* silence unused accent variable for lint */}
-                      <span className="hidden">{accent}</span>
                     </>
                   );
                 })()}
@@ -2213,11 +2247,13 @@ export function GeminiSidebar({
                           value={settingsBaseUrl}
                           onChange={(e) => setSettingsBaseUrl(e.target.value)}
                           onBlur={() => {
-                            if (settingsBaseUrl.trim()) {
+                            const trimmedUrl = settingsBaseUrl.trim();
+                            if (trimmedUrl && trimmedUrl !== lastFetchedBaseUrlRef.current) {
+                              lastFetchedBaseUrlRef.current = trimmedUrl;
                               void refreshProviderModels(settingsProvider, {
                                 force: true,
                                 apiKey: settingsApiKey || undefined,
-                                baseUrl: settingsBaseUrl.trim(),
+                                baseUrl: trimmedUrl,
                               });
                             }
                           }}
@@ -2247,10 +2283,12 @@ export function GeminiSidebar({
                         onChange={(e) => setSettingsApiKey(e.target.value)}
                         onBlur={() => {
                           // Re-list models with the key the user just typed (env may already work)
-                          if (settingsApiKey.trim()) {
+                          const trimmedKey = settingsApiKey.trim();
+                          if (trimmedKey && trimmedKey !== lastFetchedApiKeyRef.current) {
+                            lastFetchedApiKeyRef.current = trimmedKey;
                             void refreshProviderModels(settingsProvider, {
                               force: true,
-                              apiKey: settingsApiKey.trim(),
+                              apiKey: trimmedKey,
                               baseUrl: settingsBaseUrl || providerOption.baseUrl || undefined,
                             });
                           }

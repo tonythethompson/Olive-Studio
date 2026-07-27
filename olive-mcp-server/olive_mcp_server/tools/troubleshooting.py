@@ -85,6 +85,11 @@ def _score(entry: dict[str, Any], error_message: str, pass_name: str, config_con
 
 
 # ---------------------------------------------------------------------------
+# Maximum number of quirks to return (generous upper bound to prevent unbounded growth).
+# ---------------------------------------------------------------------------
+MAX_RELEVANT_QUIRKS = 20
+
+# ---------------------------------------------------------------------------
 # Map each troubleshooting entry to the quirk categories most relevant to its root cause.
 # Categories list *all* quirks from that bucket (no per-category truncation).
 # ---------------------------------------------------------------------------
@@ -150,11 +155,15 @@ def _infer_quirk_categories(entry_id: str | None, pass_name: str) -> set[str]:
 
 
 def _build_relevant_quirks(entry_id: str | None, pass_name: str) -> list[str]:
-    """Return **all** quirk titles from every inferred relevant category.
+    """Return quirk titles from every inferred relevant category, up to MAX_RELEVANT_QUIRKS.
 
     Historically this returned only the first 2 quirks per category (max 6),
     which hid actionable guidance such as External Data Format, Graph Optimize
     Before Quantization, Symmetric quantization, and QLoRA + Quantization.
+
+    Now returns all quirks from the inferred categories, enforcing a generous
+    upper bound (MAX_RELEVANT_QUIRKS) across the combined result to prevent
+    unbounded growth as the quirks database expands.
     """
     categories = _infer_quirk_categories(entry_id, pass_name)
     quirks_db = load_quirks()
@@ -167,6 +176,8 @@ def _build_relevant_quirks(entry_id: str | None, pass_name: str) -> list[str]:
 
     for category in ordered_cats:
         for quirk in quirks_db.get(category, []):
+            if len(titles) >= MAX_RELEVANT_QUIRKS:
+                return titles
             title = quirk.get("title") if isinstance(quirk, dict) else None
             if not title or title in seen:
                 continue

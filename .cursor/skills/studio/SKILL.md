@@ -5,6 +5,8 @@ description: >
 argument-hint: "[wait for edits from CSS Studio]"
 ---
 
+# Studio
+
 ## Overview
 
 CSS Studio is a visual editor that lets users edit CSS properties, HTML attributes, text content, and CSS variables on a live page. When connected via MCP, edits made in the panel are sent as structured data describing the change.
@@ -13,12 +15,14 @@ CSS Studio is a visual editor that lets users edit CSS properties, HTML attribut
 
 Your **first** `css-studio` call must be `announce`:
 
-```
-css-studio({ action: "announce", capabilities: { subagent: true, backgroundSubagents: true, channelEvents: true, ask: true } })
+```typescript
+css-studio({ action: "announce", capabilities: { subagent: <reflect-your-actual-support>, backgroundSubagents: <true-only-if-genuinely-detached>, channelEvents: <reflect-your-actual-support>, ask: <reflect-your-actual-support> } })
 ```
 
+**Each capability value must reflect your host's ACTUAL supported features, not a literal copy-paste of these placeholder values:**
+
 - `subagent` — `true` if you can spawn subagents via a Task/Agent tool.
-- `backgroundSubagents` — `true` **only** if your host's subagent spawn is _detached_ so your turn continues immediately while the subagent runs (e.g. a `run_in_background: true` flag or equivalent capability). This is what enables parallel tasks. If you have such a capability, announce `true` and use it; if your spawn primitive blocks the parent, announce `false` or omit — tasks then route in **linear mode** and the hub queues them FIFO on this thread. That's correct behaviour — just no parallelism.
+- `backgroundSubagents` — `true` **only** if your host's subagent spawn is _detached_ so your turn continues immediately while the subagent runs (e.g. a `run_in_background: true` flag or equivalent capability). This is what enables parallel tasks. If you have such a capability, announce `true` and use it; if your spawn primitive blocks the parent, **you must announce `false` or omit this field** — tasks then route in **linear mode** and the hub queues them FIFO on this thread. That's correct behaviour — just no parallelism.
 - `channelEvents` — `true` if your environment delivers `notifications/claude/channel` notifications.
 - `ask` — `true` if you can block on a user answer.
 
@@ -35,6 +39,13 @@ Then keep calling `get` in a loop forever:
 - Never exit the loop except on user interrupt.
 - Channel notifications (`notifications/claude/channel`) may arrive while a `get` is in flight — they unblock it early so the task is delivered without waiting out the poll. They do **not** replace the poll loop; the loop is mandatory.
 
+**Backoff and resilience:**
+
+- **After empty/immediate responses:** If `get` returns immediately without data multiple times in a row (e.g., 3+ consecutive empty responses within 1 second each), add a small delay (e.g., 2-5 seconds) before the next `get` call to avoid tight-looping. The underlying `get` timeout remains 60000ms.
+- **After errors:** If `get` returns an error, log it and retry with exponential backoff (e.g., wait 1s, 2s, 4s, 8s, capping at 30s) between retries. Keep the `get` timeout at 60000ms.
+- **Circuit breaker:** After N consecutive errors (e.g., 10), pause polling for a longer period (e.g., 60 seconds) before resuming, to avoid overwhelming a failing service.
+- **Bounded concurrency:** Maintain a bounded queue or explicit maximum number of concurrent in-flight tasks (e.g., a limit of 10 parallel subagents in orchestrator mode, or 1 in-flight linear task). Once capacity is reached, queue new tasks internally or signal back-pressure to the hub. This prevents resource exhaustion during bursts.
+
 ## Tasks
 
 Every task arrives with a `mode`. The task carries a `payload` object — the canonical, deduped data the subagent needs (or you need, in linear mode).
@@ -49,7 +60,7 @@ The task carries **`subagentPromptPath`**: an absolute path to a file the hub ha
 
 **Spawn call shape:**
 
-```
+```typescript
 Task({
   subagent_type: "general-purpose",
   description: "CSS Studio task",
@@ -91,7 +102,7 @@ Handle the task inline. The `payload` has everything:
 
 Diff-style edits carry `from` and `to` as separate fields so the values can contain any characters (including arrows). Non-diff edits use `value`.
 
-```json
+```typescript
 {
   "changes": [
     {
@@ -144,6 +155,6 @@ Loose `changes` (no task wrapper) are keystroke edits. Apply them to source; don
 
 > The CSS Studio MCP server is not installed. Install it with:
 >
-> ```
-> npx cssstudio install
+> ```bash
+> npx cssstudio@1.0.0 install
 > ```

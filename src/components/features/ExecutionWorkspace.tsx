@@ -166,7 +166,10 @@ export function ExecutionWorkspace({
       return;
     }
 
-    const { patches, logs, appliedQuirks } = applyMcpDiagnosticToUiState(mcpDiagnostic, state.passes);
+    const { patches, logs, appliedQuirks, notedQuirks } = applyMcpDiagnosticToUiState(
+      mcpDiagnostic,
+      state.passes,
+    );
 
     const hasPatches = Object.keys(patches).length > 0;
     if (!hasPatches && logs.length === 0) {
@@ -203,6 +206,7 @@ export function ExecutionWorkspace({
         ? `[MCP FIX] Applied config + quirks: ${appliedParts.join(", ") || Object.keys(patches).join(", ")}. Re-run Execute (recipe order: Convert → Optimize → Quantize).`
         : "[MCP FIX] Logged notes only — no UI fields changed.",
     ]);
+    // Gate success UI state on actual applied quirks/patches only, not noted quirks
     setMcpFixApplied(hasPatches || appliedQuirks.length > 0 ? "applied" : "");
   };
 

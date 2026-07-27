@@ -126,13 +126,31 @@ app.use(express.json({ limit: "10mb" }));
 // CORS early — browser + Tauri webviews (same-origin normally; helps desktop edge cases)
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (
-    !origin ||
-    origin.startsWith("http://127.0.0.1") ||
-    origin.startsWith("http://localhost") ||
-    origin.includes("tauri.localhost") ||
-    origin.startsWith("tauri://")
-  ) {
+  let allowed = false;
+
+  if (!origin) {
+    allowed = true;
+  } else if (origin === "tauri://localhost" || origin === "https://tauri.localhost") {
+    // Exact match for Tauri origins
+    allowed = true;
+  } else {
+    // Parse URL to validate hostname and port for http origins
+    try {
+      const url = new URL(origin);
+      const hostname = url.hostname;
+      const port = url.port ? parseInt(url.port, 10) : (url.protocol === "https:" ? 443 : 80);
+
+      // Allow localhost and 127.0.0.1 with any port for dev/Tauri
+      if (hostname === "localhost" || hostname === "127.0.0.1") {
+        allowed = true;
+      }
+    } catch {
+      // Invalid URL, reject
+      allowed = false;
+    }
+  }
+
+  if (allowed) {
     res.setHeader("Access-Control-Allow-Origin", origin || "*");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -2672,49 +2690,49 @@ function resolveKeyForProvider(
   switch (provider) {
     case "gemini":
       return {
-        apiKey: readEnvApiKey("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_API_KEY"),
+        apiKey: readEnvApiKey("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_API_KEY") ?? null,
         source: "env",
       };
     case "openai":
     case "chatgpt-sub":
-      return { apiKey: readEnvApiKey("OPENAI_API_KEY"), source: "env" };
+      return { apiKey: readEnvApiKey("OPENAI_API_KEY") ?? null, source: "env" };
     case "anthropic":
-      return { apiKey: readEnvApiKey("ANTHROPIC_API_KEY"), source: "env" };
+      return { apiKey: readEnvApiKey("ANTHROPIC_API_KEY") ?? null, source: "env" };
     case "mistral":
-      return { apiKey: readEnvApiKey("MISTRAL_API_KEY"), source: "env" };
+      return { apiKey: readEnvApiKey("MISTRAL_API_KEY") ?? null, source: "env" };
     case "xai":
       return {
-        apiKey: readEnvApiKey("XAI_API_KEY"),
+        apiKey: readEnvApiKey("XAI_API_KEY") ?? null,
         baseUrl: "https://api.x.ai/v1",
         source: "env",
       };
     case "openrouter":
       return {
-        apiKey: readEnvApiKey("OPENROUTER_API_KEY"),
+        apiKey: readEnvApiKey("OPENROUTER_API_KEY") ?? null,
         baseUrl: "https://openrouter.ai/api/v1",
         source: "env",
       };
     case "groq":
       return {
-        apiKey: readEnvApiKey("GROQ_API_KEY"),
+        apiKey: readEnvApiKey("GROQ_API_KEY") ?? null,
         baseUrl: "https://api.groq.com/openai/v1",
         source: "env",
       };
     case "together":
       return {
-        apiKey: readEnvApiKey("TOGETHER_API_KEY"),
+        apiKey: readEnvApiKey("TOGETHER_API_KEY") ?? null,
         baseUrl: "https://api.together.xyz/v1",
         source: "env",
       };
     case "copilot":
       return {
-        apiKey: readEnvApiKey("GITHUB_COPILOT_TOKEN", "COPILOT_GITHUB_TOKEN", "GITHUB_TOKEN"),
+        apiKey: readEnvApiKey("GITHUB_COPILOT_TOKEN", "COPILOT_GITHUB_TOKEN", "GITHUB_TOKEN") ?? null,
         baseUrl: "https://api.githubcopilot.com",
         source: "env",
       };
     case "kilocode":
       return {
-        apiKey: readEnvApiKey("KILO_API_KEY", "KILOCODE_API_KEY"),
+        apiKey: readEnvApiKey("KILO_API_KEY", "KILOCODE_API_KEY") ?? null,
         baseUrl: "https://api.kilo.ai/api/gateway",
         source: "env",
       };
@@ -2725,34 +2743,40 @@ function resolveKeyForProvider(
 
 async function listGeminiModels(apiKey: string): Promise<string[]> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=100`;
-  const resp = await fetch(url);
-  if (!resp.ok) {
-    const err = (await resp.json().catch(() => ({}))) as ApiErrorResponse;
-    throw new Error(`Gemini models ${resp.status}: ${err.error?.message ?? resp.statusText}`);
-  }
-  const data = (await resp.json()) as {
-    models?: Array<{ name?: string; supportedGenerationMethods?: string[] }>;
-  };
-  const ids: string[] = [];
-  for (const m of data.models ?? []) {
-    const raw = m.name?.replace(/^models\//, "") ?? "";
-    if (!raw) continue;
-    // Prefer generateContent-capable models for chat/audit
-    const methods = m.supportedGenerationMethods ?? [];
-    if (methods.length === 0 || methods.includes("generateContent")) {
-      ids.push(raw);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    if (!resp.ok) {
+      const err = (await resp.json().catch(() => ({}))) as ApiErrorResponse;
+      throw new Error(`Gemini models ${resp.status}: ${err.error?.message ?? resp.statusText}`);
     }
-  }
-  // Prefer flash/pro chat models first
-  ids.sort((a, b) => {
-    const score = (id: string) => {
-      if (id.includes("flash")) return 0;
-      if (id.includes("pro")) return 1;
-      return 2;
+    const data = (await resp.json()) as {
+      models?: Array<{ name?: string; supportedGenerationMethods?: string[] }>;
     };
-    return score(a) - score(b) || a.localeCompare(b);
-  });
-  return ids;
+    const ids: string[] = [];
+    for (const m of data.models ?? []) {
+      const raw = m.name?.replace(/^models\//, "") ?? "";
+      if (!raw) continue;
+      // Prefer generateContent-capable models for chat/audit
+      const methods = m.supportedGenerationMethods ?? [];
+      if (methods.length === 0 || methods.includes("generateContent")) {
+        ids.push(raw);
+      }
+    }
+    // Prefer flash/pro chat models first
+    ids.sort((a, b) => {
+      const score = (id: string) => {
+        if (id.includes("flash")) return 0;
+        if (id.includes("pro")) return 1;
+        return 2;
+      };
+      return score(a) - score(b) || a.localeCompare(b);
+    });
+    return ids;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function listOpenAiCompatModels(baseUrl: string, apiKey: string, provider: string): Promise<string[]> {
@@ -3533,6 +3557,17 @@ const installEngineRateLimiter = rateLimit({
 });
 
 app.post("/api/ai/install-engine", installEngineRateLimiter, async (req, res) => {
+  // Security: restrict installer execution to loopback-only requests
+  const remoteAddr = req.socket.remoteAddress || "";
+  const isLoopback =
+    remoteAddr === "127.0.0.1" ||
+    remoteAddr === "::1" ||
+    remoteAddr === "::ffff:127.0.0.1" ||
+    remoteAddr.startsWith("::ffff:127.");
+  if (!isLoopback) {
+    return res.status(403).json({ error: "This endpoint is only accessible from localhost" });
+  }
+
   const engine = (req.body as { engine?: string })?.engine;
   if (engine !== "lms" && engine !== "ollama") {
     return res.status(400).json({ error: "engine must be 'lms' or 'ollama'" });

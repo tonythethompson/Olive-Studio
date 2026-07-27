@@ -194,6 +194,8 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
           // Only when quant is actually enabled — default quantPrecision is int8 even when quant is off.
           if (!passes.quantization) return null;
           if (passes.quantMethod === "awq" && passes.quantPrecision === "int4") return null;
+          // Exclude INT8 PTQ case which is handled by the separate QDQ format rule
+          if (passes.quantPrecision === "int8" && passes.quantMethod === "ptq") return null;
           return "TensorRT RTX (consumer GeForce) works best with AWQ INT4. Structured pruning is not a substitute — use AWQ INT4 first (pruning conflicts with AWQ calibration).";
         },
         autofix: {
@@ -327,15 +329,23 @@ function getRuleKey(passType: string): string | null {
 /**
  * Validate active pass parameters against the selected hardware.
  * Returns warnings for parameter incompatibilities.
+ *
+ * @param state - The UI state
+ * @param activePassNames - List of active pass names to validate
+ * @param recipe - Optional pre-built Olive recipe to avoid redundant builds
  */
-export function validatePassParameters(state: UIState, activePassNames: string[]): ParameterWarning[] {
+export function validatePassParameters(
+  state: UIState,
+  activePassNames: string[],
+  recipe?: OliveRecipe,
+): ParameterWarning[] {
   const warnings: ParameterWarning[] = [];
   const provider = state.ihvProvider;
   const rules = getRulesForProvider(provider);
 
   // Build the generated recipe to find the actual Olive pass types for active steps
-  const recipe = buildOliveRecipe(state) as unknown as OliveRecipe;
-  const recipePasses = recipe.passes ?? {};
+  const builtRecipe = recipe ?? (buildOliveRecipe(state) as unknown as OliveRecipe);
+  const recipePasses = builtRecipe.passes ?? {};
 
   // Check each active pass against the rules
   for (const passName of activePassNames) {

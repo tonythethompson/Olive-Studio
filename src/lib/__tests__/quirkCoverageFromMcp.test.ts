@@ -44,9 +44,16 @@ const EXPECTED_ADVISORY = new Set([
 ]);
 
 describe("MCP quirks.json coverage vs Apply Fix matchers", () => {
-  it("loads all 16 quirks from olive-mcp-server", () => {
-    expect(ALL.length).toBe(16);
-    expect(new Set([...EXPECTED_ACTIONABLE, ...EXPECTED_ADVISORY]).size).toBe(16);
+  it("loads all quirks from olive-mcp-server and verifies complete classification coverage", () => {
+    const expectedAll = new Set([...EXPECTED_ACTIONABLE, ...EXPECTED_ADVISORY]);
+    const allIds = new Set(ALL.map((q) => q.id));
+
+    // Every quirk in ALL must be classified (covered by union of EXPECTED_ACTIONABLE and EXPECTED_ADVISORY)
+    const missingFromExpected = ALL.filter((q) => !expectedAll.has(q.id));
+    const extraInExpected = [...expectedAll].filter((id) => !allIds.has(id));
+
+    expect(missingFromExpected).toEqual([]);
+    expect(extraInExpected).toEqual([]);
   });
 
   it("matches every expected actionable quirk by title alone (MCP returns titles)", () => {
@@ -88,7 +95,7 @@ describe("MCP quirks.json coverage vs Apply Fix matchers", () => {
     expect(matched).toContain("calib-per-channel");
     expect(matched).toContain("calib-symmetric");
 
-    const { appliedQuirks, patches } = applyMcpDiagnosticToUiState(
+    const { appliedQuirks, notedQuirks, patches } = applyMcpDiagnosticToUiState(
       {
         updated_config: {
           engine: { cache_dir: "~/.cache/olive/experiment_1" },

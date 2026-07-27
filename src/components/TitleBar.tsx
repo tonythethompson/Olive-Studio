@@ -16,20 +16,27 @@ export function TitleBar() {
     setIsTauri(Boolean(tauri));
     if (!tauri) return;
 
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
     void (async () => {
       try {
         const { getCurrentWindow } = await import("@tauri-apps/api/window");
         const win = getCurrentWindow();
         setMaximized(await win.isMaximized());
-        unlisten = await win.onResized(async () => {
+        const listener = await win.onResized(async () => {
           setMaximized(await win.isMaximized());
         });
+        if (cancelled) {
+          listener();
+        } else {
+          unlisten = listener;
+        }
       } catch {
         /* not running under Tauri runtime */
       }
     })();
     return () => {
+      cancelled = true;
       unlisten?.();
     };
   }, []);

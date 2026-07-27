@@ -29,6 +29,8 @@ export interface PipelineValidationResult {
   isBlocked: boolean;
   statusLabel: string;
   statusTone: "success" | "warning" | "error";
+  /** Pre-built recipe, available for reuse to avoid redundant builds */
+  recipe: OliveRecipe;
 }
 
 export interface HardwareConflict {
@@ -476,9 +478,8 @@ function inputModelFormats(inputModel: { type?: string }): string[] {
 /**
  * Detect input/output handler mismatches in the generated Olive pass chain.
  */
-function getPassChainIssues(state: UIState): PipelineIssue[] {
+function getPassChainIssues(state: UIState, recipe: OliveRecipe): PipelineIssue[] {
   const issues: PipelineIssue[] = [];
-  const recipe = buildOliveRecipe(state) as unknown as OliveRecipe;
 
   const recipePasses = recipe.passes ?? {};
   const passEntries = Object.entries(recipePasses);
@@ -543,11 +544,11 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
  * Identifies generated Olive pipeline steps with unknown pass types.
  *
  * @param state - The UI state used to build the Olive recipe
+ * @param recipe - Pre-built Olive recipe to avoid redundant builds
  * @returns Critical issues for generated steps whose pass types are missing or unknown
  */
-function getPassCatalogIssues(state: UIState): PipelineIssue[] {
+function getPassCatalogIssues(state: UIState, recipe: OliveRecipe): PipelineIssue[] {
   const issues: PipelineIssue[] = [];
-  const recipe = buildOliveRecipe(state) as unknown as OliveRecipe;
 
   for (const [stepId, passConfig] of Object.entries(recipe.passes ?? {})) {
     const passType = (passConfig as { type?: string }).type;
@@ -581,13 +582,16 @@ export function getPipelineValidation(
   state: UIState,
   options?: PipelineValidationOptions,
 ): PipelineValidationResult {
+  // Build the recipe once and pass to functions that need it
+  const recipe = buildOliveRecipe(state) as unknown as OliveRecipe;
+
   const issues = dedupeIssues([
     ...getCrossPassIssues(state),
     ...getProviderIssues(state),
     ...getProviderHardwareIssues(state, options?.hardwareProbe),
     ...getAdvisoryIssues(state),
-    ...getPassCatalogIssues(state),
-    ...getPassChainIssues(state),
+    ...getPassCatalogIssues(state, recipe),
+    ...getPassChainIssues(state, recipe),
   ]);
 
   const criticalCount = issues.filter((i) => i.severity === "critical").length;
@@ -611,6 +615,7 @@ export function getPipelineValidation(
     isBlocked: criticalCount > 0,
     statusLabel,
     statusTone,
+    recipe,
   };
 }
 

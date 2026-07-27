@@ -305,16 +305,16 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
       continue;
     }
 
-    if (lowerType.includes("quant")) {
+    if (lowerType.includes("spinquant")) {
       next.quantization = true;
-      next.quantMethod = mapQuantMethod(config, type);
+      next.quantMethod = "spinquant";
       next.quantPrecision = mapQuantPrecision(config, type);
       continue;
     }
 
-    if (lowerType.includes("spinquant")) {
+    if (lowerType.includes("quant")) {
       next.quantization = true;
-      next.quantMethod = "spinquant";
+      next.quantMethod = mapQuantMethod(config, type);
       next.quantPrecision = mapQuantPrecision(config, type);
       continue;
     }

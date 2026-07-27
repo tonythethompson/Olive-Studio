@@ -74,6 +74,9 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     .filter((s) => s.active && s.id !== "input" && s.id !== "output" && s.id !== "provider")
     .map((s) => s.id);
 
+  // Reuse the pre-built recipe from validation to avoid redundant builds
+  const recipe = validation.recipe;
+
   // Call MCP server for model-hardware compatibility check
   useEffect(() => {
     const controller = new AbortController();
@@ -190,7 +193,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   }, [validation.issues, fetchDiagnostic]);
 
   // Hardware-specific parameter validation (synchronous, cheap — runs every render with state)
-  const paramWarnings = validatePassParameters(state, activePassNames);
+  const paramWarnings = validatePassParameters(state, activePassNames, recipe);
 
   // Build compatibility warnings for active passes
   const compatWarnings = compatResult?.compatibility_warnings ?? [];
@@ -336,6 +339,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
           disabled={compatLoading}
           className="h-6 w-6 flex items-center justify-center rounded text-slate-500 hover:text-electric-blue hover:bg-slate-800/50 transition-colors disabled:opacity-40 ml-1"
           title="Refresh validation"
+          aria-label="Refresh validation"
         >
           <RefreshCw className={`h-3 w-3 ${compatLoading ? "animate-spin" : ""}`} />
         </button>

@@ -26,109 +26,82 @@ const PASS_TYPE_TO_UI: Record<
   string,
   {
     enable?: Partial<UIState["passes"]>;
-    /** When true, merge params into passRecipeOverrides for this type. */
-    storeOverride?: boolean;
   }
 > = {
   OnnxConversion: {
     enable: { conversion: true, conversionFormat: "onnx" },
-    storeOverride: true,
   },
   OpenVINOConversion: {
     enable: { conversion: true, conversionFormat: "openvino" },
-    storeOverride: true,
   },
   QNNConversion: {
     enable: { conversion: true, conversionFormat: "qnn" },
-    storeOverride: true,
   },
   TensorRTConversion: {
     enable: { conversion: true, conversionFormat: "tensorrt" },
-    storeOverride: true,
   },
   OnnxQuantization: {
     enable: { quantization: true, quantMethod: "ptq" },
-    storeOverride: true,
   },
   OnnxStaticQuantization: {
     enable: { quantization: true, quantMethod: "ptq" },
-    storeOverride: true,
   },
   OnnxHqqQuantization: {
     enable: { quantization: true, quantMethod: "hqq" },
-    storeOverride: true,
   },
   OnnxBlockWiseRtnQuantization: {
     enable: { quantization: true, quantMethod: "rtn" },
-    storeOverride: true,
   },
   AutoAWQQuantizer: {
     enable: { quantization: true, quantMethod: "awq" },
-    storeOverride: true,
   },
   GptqQuantizer: {
     enable: { quantization: true, quantMethod: "gptq" },
-    storeOverride: true,
   },
   QATQuantizer: {
     enable: { quantization: true, quantMethod: "qat" },
-    storeOverride: true,
   },
   NVModelOptQuantization: {
     enable: { quantization: true, quantMethod: "awq" },
-    storeOverride: true,
   },
   OpenVINOQuantization: {
     enable: { quantization: true },
-    storeOverride: true,
   },
   OpenVINOWeightCompression: {
     enable: { quantization: true, quantPrecision: "int4" },
-    storeOverride: true,
   },
   QNNQuantization: {
     enable: { quantization: true },
-    storeOverride: true,
   },
   OrtTransformersOptimization: {
     enable: { onnxTransforms: true },
-    storeOverride: true,
   },
   OnnxModelOptimizer: {
     enable: { onnxTransforms: true },
-    storeOverride: true,
   },
   OpenVINOIoUpdate: {
     enable: { onnxTransforms: true },
-    storeOverride: true,
   },
   QNNPreprocess: {
     enable: { onnxTransforms: true },
-    storeOverride: true,
   },
   SplitModel: {
     enable: { splitting: true },
-    storeOverride: true,
   },
   LoRA: {
     enable: { peft: true, peftMethod: "lora" },
-    storeOverride: true,
   },
   QLoRA: {
     enable: { peft: true, peftMethod: "qlora" },
-    storeOverride: true,
   },
   SparseGPT: {
     enable: { pruning: true, pruningMethod: "sparsegpt" },
-    storeOverride: true,
   },
   Wanda: {
     enable: { pruning: true, pruningMethod: "wanda" },
-    storeOverride: true,
   },
   Prune: {
     enable: { pruning: true, pruningMethod: "magnitude" },
-    storeOverride: true,
   },
 };
 
@@ -501,12 +474,13 @@ export function hasActionableQuirks(quirks: string[] | undefined | null): boolea
 export function mapMcpQuirksToUiState(
   quirks: string[] | undefined | null,
   currentPasses: UIState["passes"],
-): { patches: Partial<UIState>; logs: string[]; applied: ActionableQuirkId[] } {
+): { patches: Partial<UIState>; logs: string[]; applied: ActionableQuirkId[]; noted: ActionableQuirkId[] } {
   const patches: Partial<UIState> = {};
   const logs: string[] = [];
   const applied: ActionableQuirkId[] = [];
+  const noted: ActionableQuirkId[] = [];
   const matched = matchActionableQuirks(quirks);
-  if (matched.length === 0) return { patches, logs, applied };
+  if (matched.length === 0) return { patches, logs, applied, noted };
 
   let overrides: Record<string, PassRecipeOverride> = {};
 
@@ -569,10 +543,10 @@ export function mapMcpQuirksToUiState(
           logs.push(
             "[MCP QUIRK] Float16 After Quantization → already float32/compatible; recipe keeps FP16 after INT quant only if added later",
           );
-          applied.push(id);
+          noted.push(id);
         } else {
           logs.push("[MCP QUIRK] Float16 After Quantization → noted (no INT quant active; no dtype change)");
-          applied.push(id);
+          noted.push(id);
         }
         break;
       }
@@ -613,7 +587,7 @@ export function mapMcpQuirksToUiState(
           logs.push(
             "[MCP QUIRK] QLoRA + Quantization → noted (enable PEFT + quant with LoRA to auto-switch)",
           );
-          applied.push(id);
+          noted.push(id);
         }
         break;
       }
@@ -627,7 +601,7 @@ export function mapMcpQuirksToUiState(
           logs.push(
             `[MCP QUIRK] Opset compatibility → current opset ${p.conversionOpset} already in 13–17 range`,
           );
-          applied.push(id);
+          noted.push(id);
         }
         break;
       }
@@ -643,7 +617,7 @@ export function mapMcpQuirksToUiState(
     };
   }
 
-  return { patches, logs, applied };
+  return { patches, logs, applied, noted };
 }
 
 function mergePartialUiState(a: Partial<UIState>, b: Partial<UIState>): Partial<UIState> {
@@ -680,7 +654,12 @@ export function applyMcpDiagnosticToUiState(
     relevant_quirks?: string[];
   },
   currentPasses: UIState["passes"],
-): { patches: Partial<UIState>; logs: string[]; appliedQuirks: ActionableQuirkId[] } {
+): {
+  patches: Partial<UIState>;
+  logs: string[];
+  appliedQuirks: ActionableQuirkId[];
+  notedQuirks: ActionableQuirkId[];
+} {
   const logs: string[] = [];
   let patches: Partial<UIState> = {};
 
@@ -698,7 +677,7 @@ export function applyMcpDiagnosticToUiState(
   patches = mergePartialUiState(patches, quirkResult.patches);
   logs.push(...quirkResult.logs);
 
-  return { patches, logs, appliedQuirks: quirkResult.applied };
+  return { patches, logs, appliedQuirks: quirkResult.applied, notedQuirks: quirkResult.noted };
 }
 
 /** Whether Apply Fix can change pipeline state for this diagnostic. */

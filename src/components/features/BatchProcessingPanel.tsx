@@ -777,12 +777,19 @@ export function BatchProcessingPanel({
                     onApplyFix={() => {
                       const diagnostic = batchDiagnostics[selectedJob.id];
                       if (!diagnostic || !canApplyMcpDiagnostic(diagnostic)) return;
-                      const { patches, logs, appliedQuirks } = applyMcpDiagnosticToUiState(
+                      const { patches, logs, appliedQuirks, notedQuirks } = applyMcpDiagnosticToUiState(
                         diagnostic,
                         state.passes,
                       );
                       if (Object.keys(patches).length > 0 || appliedQuirks.length > 0) {
                         if (Object.keys(patches).length > 0) setState(patches);
+                        // Append mapping logs to job logs, matching ExecutionWorkspace behavior
+                        setState({
+                          batchJobs: (state.batchJobs || []).map((j) =>
+                            j.id === selectedJob.id ? { ...j, logs: [...j.logs, ...logs] } : j,
+                          ),
+                        });
+                        // Gate success UI state on actual applied quirks/patches only
                         setAppliedFixJobId(selectedJob.id);
                       } else {
                         console.warn(
