@@ -1,0 +1,75 @@
+/**
+ * Recipe Q&A / review via @openai/codex-sdk.
+ * Uses local Codex auth (ChatGPT subscription or API key after `codex login`).
+ * Sandbox is read-only; approval policy never — no shell/file mutation without UI.
+ */
+
+import { Codex } from "@openai/codex-sdk";
+
+export type CodexAskOptions = {
+  /** Absolute project root for workspace context */
+  workingDirectory?: string;
+  model?: string;
+  signal?: AbortSignal;
+};
+
+let codexSingleton: Codex | null = null;
+
+function getCodex(): Codex {
+  if (!codexSingleton) {
+    codexSingleton = new Codex({
+      codexPathOverride: process.env.CODEX_PATH || undefined,
+    });
+  }
+  return codexSingleton;
+}
+
+/**
+ * Run a single non-mutating Codex turn and return the final agent text.
+ */
+export async function codexAsk(prompt: string, options: CodexAskOptions = {}): Promise<string> {
+  const codex = getCodex();
+  const thread = codex.startThread({
+    model: options.model,
+    workingDirectory: options.workingDirectory ?? process.cwd(),
+    sandboxMode: "read-only",
+    approvalPolicy: "never",
+    skipGitRepoCheck: true,
+    networkAccessEnabled: true,
+    webSearchMode: "disabled",
+  });
+
+  const turn = await thread.run(prompt, { signal: options.signal });
+  if (turn.finalResponse?.trim()) {
+    return turn.finalResponse.trim();
+  }
+  // Fallback: last agent_message item
+  for (let i = turn.items.length - 1; i >= 0; i--) {
+    const item = turn.items[i];
+    if (item && item.type === "agent_message" && "text" in item && typeof item.text === "string") {
+      return item.text.trim();
+    }
+  }
+  throw new Error("Codex returned no agent message. Sign in with ChatGPT via Assistant → Codex.");
+}
+
+/**
+ * Build an Olive-focused prompt from system + chat messages for Codex turns.
+ */
+export function buildCodexPrompt(system: string, messages: Array<{ role: string; content: string }>): string {
+  const history = messages
+    .map((m) => `${m.role === "assistant" ? "Assistant" : "User"}: ${m.content}`)
+    .join("\n\n");
+  return [
+    "You are assisting with Microsoft Olive model optimization in Olive Studio.",
+    "Do not run shell commands or modify files. Answer from the provided context only.",
+    "",
+    "### System instructions",
+    system,
+    "",
+    "### Conversation",
+    history || "(no prior messages)",
+    "",
+    "Respond helpfully and specifically about Olive recipes, execution providers, quantization, and local runs.",
+  ].join("\n");
+}

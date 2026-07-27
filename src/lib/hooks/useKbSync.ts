@@ -53,14 +53,31 @@ export function useKbSync() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), SYNC_TIMEOUT_MS);
     try {
+      const headers: Record<string, string> = {};
+      // Optional: set VITE_SYNC_KB_TOKEN when the server requires SYNC_KB_TOKEN.
+      const metaEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+      const syncToken = metaEnv?.VITE_SYNC_KB_TOKEN;
+      if (syncToken) {
+        headers["x-sync-token"] = syncToken;
+      }
       const res = await fetch("/api/mcp/sync-kb", {
         method: "POST",
+        headers,
         signal: controller.signal,
       });
-      const data = (await res.json()) as KbSyncResult;
+      let data: KbSyncResult;
+      try {
+        data = (await res.json()) as KbSyncResult;
+      } catch {
+        data = { ok: false, error: `HTTP ${res.status}` };
+      }
       if (!res.ok) {
-        setError(data.error ?? `HTTP ${res.status}`);
-        return data;
+        const detail =
+          res.status === 429
+            ? "Rate limited — wait about a minute and try sync again."
+            : (data.error ?? `HTTP ${res.status}`);
+        setError(detail);
+        return { ...data, error: detail };
       }
       // Refresh status after successful sync
       await fetchStatus();

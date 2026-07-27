@@ -66,7 +66,7 @@ Pass combinations are checked against your execution provider (for example, AWQ 
 - **Recipe graph**: Visual pass pipeline with per-pass inspectors and conflict banners.
 - **JSON editor**: Full Olive recipe export/import.
 - **Export helpers**: Starter configs for ONNX Runtime Web / Mobile deployment.
-- **AI Copilot** (optional): Recipe Q&A, advisory review, and state analysis via Gemini, OpenAI, Anthropic, Mistral, xAI, OpenRouter, Groq, Together, or local / Ollama endpoints.
+- **AI Copilot** (optional): Recipe Q&A, advisory review, and state analysis via Gemini, OpenAI API, Anthropic, Mistral, xAI, OpenRouter, Groq, Together, **OpenAI Codex** (ChatGPT Plus/Pro sign-in via local Codex CLI), GitHub Copilot token, Kilo Gateway, or local LM Studio / Ollama.
 - **Storybook**: Component development and visual testing.
 
 ---
@@ -77,9 +77,11 @@ Pass combinations are checked against your execution provider (for example, AWQ 
 
 - **Node.js** 22+ (pnpm 11 requirement)
 - **pnpm** 11.17.0+ (the project uses `packageManager: pnpm@11.17.0`; `npm install` is blocked)
-- **Python** 3.9+ on `PATH` (used for `olive run`)
+- **Python** 3.9+ (on `PATH`, or set from the app header **Runtime** control if missing)
 - **Optional:** NVIDIA / Intel / Qualcomm / AMD tooling for GPU or NPU recipes
 - **Optional:** [Hugging Face token](https://huggingface.co/settings/tokens) for gated models
+
+If Python or Olive is not on the system PATH, open **Runtime** in the app header: save a path to `python.exe`, and optionally **Add project .venv to user PATH** so terminals outside the app can find Olive too.
 
 ### Install and run
 
@@ -104,6 +106,21 @@ pnpm start
 ```
 
 Open **<http://localhost:3000>**.
+
+### Desktop app (Tauri, experimental)
+
+Runs the same Node server inside a native window (WebView) instead of your browser.
+
+**Extra prerequisites:** [Rust](https://rustup.rs/) toolchain, Windows WebView2 (usually preinstalled), Node 22+, Python 3.9+.
+
+```bash
+pnpm install
+pnpm tauri:dev      # starts `pnpm dev` + native window → http://127.0.0.1:3000
+# production-style package (Windows NSIS/MSI):
+pnpm tauri:build
+```
+
+The desktop shell still requires **Node** and **Python** on `PATH` (Olive runs are not reimplemented in Rust). Browser/`pnpm start` remains fully supported.
 
 > **Not published to npm.** Olive Studio is distributed via this GitHub repository and [GitHub Releases](https://github.com/tonythethompson/Olive-Studio/releases). It creates local Python virtualenvs and may install CUDA / TensorRT packages for GPU recipes — clone and run from source rather than expecting a public `npx` package.
 

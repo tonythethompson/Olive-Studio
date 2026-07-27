@@ -7,7 +7,10 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
 
   if (!status && !error) return null;
 
-  const syncTime = status?.lastSync ? new Date(status.lastSync).getTime() : null;
+  // Prefer last successful network sync; fall back to catalog last_updated so a
+  // bundled KB is not forever "stale" before the first manual sync.
+  const freshnessSource = status?.lastSync ?? status?.lastUpdated ?? null;
+  const syncTime = freshnessSource ? new Date(freshnessSource).getTime() : null;
   const isStale =
     syncTime == null || !Number.isFinite(syncTime) || Date.now() - syncTime > 7 * 24 * 60 * 60 * 1000;
 

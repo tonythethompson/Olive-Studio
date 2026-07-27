@@ -1,7 +1,9 @@
 node_modules/
 .venv/
+.olive-studio/
 build/
 dist/
+src-tauri/target/
 coverage/
 .DS_Store
 *.log
@@ -26,3 +28,4 @@ package-lock.json
 yarn.lock
 bun.lockb
 bun.lock
+.cursor/hooks/state/continual-learning.json
