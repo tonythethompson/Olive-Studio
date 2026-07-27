@@ -80,7 +80,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.1",
     "jszip": "^3.10.1",
-    "lucide-react": "^0.546.0",
+    "lucide-react": "^1.27.0",
     "motion": "^12.40.0",
     "onnxruntime-web": "^1.27.0",
     "react": "^19.2.8",
