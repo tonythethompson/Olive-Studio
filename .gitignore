@@ -9,7 +9,6 @@ coverage/
 *.log
 .env*
 !.env.example
-package-lock.json
 
 # Storybook build output
 storybook-static/
@@ -18,8 +17,7 @@ storybook-static/
 /test-results/
 /playwright-report/
 /blob-report/
-/playwright/.cache/
-/playwright/.auth/
+/playwright/
 /.freebuff
 /~/.cache/
 /.agents/skills/studio
@@ -30,3 +28,4 @@ yarn.lock
 bun.lockb
 bun.lock
 .cursor/hooks/state/continual-learning.json
+/.dirac-cache/
