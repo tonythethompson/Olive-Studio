@@ -780,6 +780,7 @@ export function BatchProcessingPanel({
                       const { patches, logs, appliedQuirks, notedQuirks } = applyMcpDiagnosticToUiState(
                         diagnostic,
                         state.passes,
+                        state.passRecipeOverrides,
                       );
                       if (Object.keys(patches).length > 0 || appliedQuirks.length > 0) {
                         if (Object.keys(patches).length > 0) setState(patches);

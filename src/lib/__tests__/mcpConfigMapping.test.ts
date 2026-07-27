@@ -306,8 +306,8 @@ describe("mapMcpConfigToUiState", () => {
       expect(patches.passes?.conversion).toBe(true);
     });
 
-    it("applyMcpDiagnosticToUiState merges config + quirks", () => {
-      const { patches, appliedQuirks, notedQuirks } = applyMcpDiagnosticToUiState(
+    it("applyMcpDiagnosticToUiState applies updated_config only; quirks are noted", () => {
+      const { patches, appliedQuirks, notedQuirks, logs } = applyMcpDiagnosticToUiState(
         {
           updated_config: {
             engine: { cache_dir: "~/.cache/olive/experiment_1" },
@@ -323,15 +323,43 @@ describe("mapMcpConfigToUiState", () => {
         },
       );
       expect(patches.cacheDir).toBe("~/.cache/olive/experiment_1");
-      expect(patches.passes?.conversion).toBe(true);
-      expect(patches.passes?.conversionInputTargetTypes).toBe("float32");
-      expect(appliedQuirks).toContain("order-convert-first");
-      expect(appliedQuirks).toContain("order-float16-last");
+      // Quirks must not silently rewrite pass toggles / dtypes
+      expect(patches.passes?.conversion).toBeUndefined();
+      expect(patches.passes?.conversionInputTargetTypes).toBeUndefined();
+      expect(appliedQuirks).toEqual([]);
+      expect(notedQuirks).toContain("order-convert-first");
+      expect(notedQuirks).toContain("order-float16-last");
+      expect(logs.some((l) => l.includes("not auto-applied"))).toBe(true);
     });
 
-    it("canApplyMcpDiagnostic is true for quirks-only diagnostics", () => {
+    it("applyMcpDiagnosticToUiState merges new overrides onto currentOverrides", () => {
+      const { patches } = applyMcpDiagnosticToUiState(
+        {
+          updated_config: {
+            passes: {
+              OnnxQuantization: { output_name: "quant_model" },
+            },
+          },
+        },
+        basePasses,
+        {
+          OnnxConversion: { output_name: "onnx_model", config: { use_external_data_format: true } },
+        },
+      );
+      expect(patches.passRecipeOverrides?.OnnxConversion?.output_name).toBe("onnx_model");
+      expect(patches.passRecipeOverrides?.OnnxConversion?.config?.use_external_data_format).toBe(true);
+      expect(patches.passRecipeOverrides?.OnnxQuantization?.output_name).toBe("quant_model");
+    });
+
+    it("canApplyMcpDiagnostic requires updated_config, not quirks alone", () => {
       expect(
         canApplyMcpDiagnostic({
+          relevant_quirks: ["Convert Before Quantize"],
+        }),
+      ).toBe(false);
+      expect(
+        canApplyMcpDiagnostic({
+          updated_config: { engine: { cache_dir: "/tmp" } },
           relevant_quirks: ["Convert Before Quantize"],
         }),
       ).toBe(true);

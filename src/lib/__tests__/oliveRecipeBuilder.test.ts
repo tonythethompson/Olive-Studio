@@ -724,6 +724,7 @@ describe("buildOliveRecipe", () => {
     expect(imported.passes?.pruning).toBe(true);
     expect(imported.passes?.pruningMethod).toBe("magnitude");
     expect(imported.passes?.pruningCriteria).toBe("l2_norm");
+    expect(imported.passRecipeOverrides).toEqual({});
   });
 
   it("preserves pruning_criteria through recipe import round-trip (l1_norm)", () => {

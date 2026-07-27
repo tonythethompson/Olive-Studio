@@ -410,12 +410,7 @@ const ACTIONABLE_QUIRK_MATCHERS: Array<{
   },
   {
     id: "onnx-external-data",
-    patterns: [
-      "onnx-external-data",
-      "external data format",
-      "use_external_data_format",
-      "weights >2gb",
-    ],
+    patterns: ["onnx-external-data", "external data format", "use_external_data_format", "weights >2gb"],
   },
   {
     id: "calib-symmetric",
@@ -646,7 +641,16 @@ function mergePartialUiState(a: Partial<UIState>, b: Partial<UIState>): Partial<
 }
 
 /**
- * Full Apply Fix: merge nested `updated_config` + actionable Known Quirks.
+ * Full Apply Fix: apply nested `updated_config` remedies only.
+ *
+ * `relevant_quirks` are contextual tips from broad quirk categories (including
+ * full category dumps on unmatched errors). They are noted for the user, not
+ * auto-applied, so Apply Fix cannot silently rewrite pass order / calibration
+ * settings unrelated to the diagnosis.
+ *
+ * When `currentOverrides` is provided, new `passRecipeOverrides` are merged
+ * onto it so sequential Apply Fix calls still accumulate under replace-on-key
+ * `mergeUiState` semantics.
  */
 export function applyMcpDiagnosticToUiState(
   diagnostic: {
@@ -654,6 +658,7 @@ export function applyMcpDiagnosticToUiState(
     relevant_quirks?: string[];
   },
   currentPasses: UIState["passes"],
+  currentOverrides?: UIState["passRecipeOverrides"],
 ): {
   patches: Partial<UIState>;
   logs: string[];
@@ -669,15 +674,21 @@ export function applyMcpDiagnosticToUiState(
     logs.push(...mapped.logs);
   }
 
-  const effectivePasses = patches.passes
-    ? ({ ...currentPasses, ...patches.passes } as UIState["passes"])
-    : currentPasses;
+  if (patches.passRecipeOverrides) {
+    patches.passRecipeOverrides = mergePartialUiState(
+      { passRecipeOverrides: currentOverrides ?? {} },
+      { passRecipeOverrides: patches.passRecipeOverrides },
+    ).passRecipeOverrides;
+  }
 
-  const quirkResult = mapMcpQuirksToUiState(diagnostic.relevant_quirks, effectivePasses);
-  patches = mergePartialUiState(patches, quirkResult.patches);
-  logs.push(...quirkResult.logs);
+  const notedQuirks = matchActionableQuirks(diagnostic.relevant_quirks);
+  if (notedQuirks.length > 0) {
+    logs.push(
+      `[MCP QUIRK] Noted related tip(s) (not auto-applied): ${notedQuirks.join(", ")}. Review Known Quirks manually.`,
+    );
+  }
 
-  return { patches, logs, appliedQuirks: quirkResult.applied, notedQuirks: quirkResult.noted };
+  return { patches, logs, appliedQuirks: [], notedQuirks };
 }
 
 /** Whether Apply Fix can change pipeline state for this diagnostic. */
@@ -688,6 +699,5 @@ export function canApplyMcpDiagnostic(
   } | null,
 ): boolean {
   if (!diagnostic) return false;
-  if (diagnostic.updated_config && Object.keys(diagnostic.updated_config).length > 0) return true;
-  return hasActionableQuirks(diagnostic.relevant_quirks);
+  return !!(diagnostic.updated_config && Object.keys(diagnostic.updated_config).length > 0);
 }

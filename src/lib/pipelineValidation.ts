@@ -629,25 +629,12 @@ export function applyIssueAutofix(state: UIState, issue: PipelineIssue): Partial
 }
 
 export function mergeUiState(state: UIState, patch: Partial<UIState>): UIState {
+  // Replace (do not deep-merge) when the key is present so recipe loads can
+  // clear stale MCP overrides with `passRecipeOverrides: {}`. Callers that need
+  // incremental accumulation (MCP Apply Fix) must merge onto current overrides
+  // before setState.
   const passRecipeOverrides =
-    patch.passRecipeOverrides !== undefined
-      ? {
-          ...(state.passRecipeOverrides ?? {}),
-          ...Object.fromEntries(
-            Object.entries(patch.passRecipeOverrides).map(([type, ov]) => [
-              type,
-              {
-                ...(state.passRecipeOverrides?.[type] ?? {}),
-                ...ov,
-                config: {
-                  ...(state.passRecipeOverrides?.[type]?.config ?? {}),
-                  ...(ov.config ?? {}),
-                },
-              },
-            ]),
-          ),
-        }
-      : state.passRecipeOverrides;
+    patch.passRecipeOverrides !== undefined ? patch.passRecipeOverrides : state.passRecipeOverrides;
 
   return {
     ...state,

@@ -118,11 +118,14 @@ describe("MCP quirks.json coverage vs Apply Fix matchers", () => {
     );
 
     expect(patches.cacheDir).toBe("~/.cache/olive/experiment_1");
+    // updated_config enables conversion via OnnxConversion mapping; quirks are not auto-applied
     expect(patches.passes?.conversion).toBe(true);
-    expect(patches.passes?.onnxTransforms).toBe(true);
-    expect(patches.passes?.conversionInputTargetTypes).toBe("float32");
-    expect(patches.passRecipeOverrides?.OnnxConversion?.config?.use_external_data_format).toBe(true);
-    expect(appliedQuirks.length).toBeGreaterThan(0);
+    expect(patches.passes?.onnxTransforms).not.toBe(true);
+    expect(patches.passes?.conversionInputTargetTypes).not.toBe("float32");
+    expect(patches.passRecipeOverrides?.OnnxConversion?.config?.use_external_data_format).toBeUndefined();
+    expect(patches.passRecipeOverrides?.OnnxConversion?.output_name).toBe("onnx_model");
+    expect(appliedQuirks).toEqual([]);
+    expect(notedQuirks.length).toBeGreaterThan(0);
   });
 
   it("inventory table: every quirk is either actionable or advisory (noted)", () => {

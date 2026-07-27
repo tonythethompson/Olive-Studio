@@ -447,6 +447,9 @@ export function deriveUiStateFromOliveRecipe(parsed: any, options?: DeriveUiStat
     const mapped = mapPassesFromRecipe(parsed.passes);
     if (options?.replacePasses) {
       incomingState.passes = mapped;
+      // Clear MCP / prior-run pass overrides so curated/import loads do not
+      // inherit stale output_name, dynamic_axes, or calibration settings.
+      incomingState.passRecipeOverrides = {};
     } else {
       const base = options?.basePasses ?? DEFAULT_PASSES;
       incomingState.passes = { ...base, ...mapped };

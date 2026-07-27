@@ -169,6 +169,7 @@ export function ExecutionWorkspace({
     const { patches, logs, appliedQuirks, notedQuirks } = applyMcpDiagnosticToUiState(
       mcpDiagnostic,
       state.passes,
+      state.passRecipeOverrides,
     );
 
     const hasPatches = Object.keys(patches).length > 0;

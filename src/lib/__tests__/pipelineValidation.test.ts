@@ -569,6 +569,40 @@ describe("mergeUiState", () => {
     expect(m.passes.conversion).toBe(true);
     expect(m.passes.conversionFormat).toBe("onnx");
   });
+  it("retains passRecipeOverrides when patch omits the key", () => {
+    const state = baseState({
+      passRecipeOverrides: {
+        OnnxConversion: { output_name: "onnx_model" },
+      },
+    });
+    const m = mergeUiState(state, { hfModelId: "other/model" });
+    expect(m.passRecipeOverrides?.OnnxConversion?.output_name).toBe("onnx_model");
+  });
+  it("clears passRecipeOverrides when patch provides an empty map", () => {
+    const state = baseState({
+      passRecipeOverrides: {
+        OnnxConversion: { output_name: "onnx_model" },
+      },
+    });
+    const m = mergeUiState(state, { passRecipeOverrides: {} });
+    expect(m.passRecipeOverrides).toEqual({});
+  });
+  it("replaces passRecipeOverrides when patch provides a new map", () => {
+    const state = baseState({
+      passRecipeOverrides: {
+        OnnxConversion: { output_name: "onnx_model" },
+        OnnxQuantization: { output_name: "quant_model" },
+      },
+    });
+    const m = mergeUiState(state, {
+      passRecipeOverrides: {
+        OnnxConversion: { config: { use_external_data_format: true } },
+      },
+    });
+    expect(m.passRecipeOverrides?.OnnxConversion?.config?.use_external_data_format).toBe(true);
+    expect(m.passRecipeOverrides?.OnnxConversion?.output_name).toBeUndefined();
+    expect(m.passRecipeOverrides?.OnnxQuantization).toBeUndefined();
+  });
 });
 
 describe("commitUiStateUpdate", () => {
