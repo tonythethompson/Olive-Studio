@@ -107,10 +107,12 @@ export function ExecutionWorkspace({
 } = {}) {
   const storeState = usePipelineState();
   // All-or-nothing controlled pair: both props or neither. Mixed mode is rejected.
-  const isControlled = propState !== undefined && propSetState !== undefined;
-  if (process.env.NODE_ENV !== "production" && (propState !== undefined) !== (propSetState !== undefined)) {
+  const hasState = propState !== undefined;
+  const hasSetState = propSetState !== undefined;
+  if (hasState !== hasSetState) {
     throw new Error("ExecutionWorkspace: state and setState must both be provided or both omitted.");
   }
+  const isControlled = hasState && hasSetState;
   const state = isControlled ? propState : storeState.state;
   const setState = isControlled ? propSetState : storeState.setState;
   // Live execution state
