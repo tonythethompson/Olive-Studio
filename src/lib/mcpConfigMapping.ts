@@ -442,7 +442,6 @@ const ACTIONABLE_QUIRK_MATCHERS: Array<{
       "external data format",
       "use_external_data_format",
       "weights >2gb",
-      "2gb",
     ],
   },
   {
