@@ -205,9 +205,7 @@ describe("useMcpDiagnosticKeyed", () => {
 
     // Verify fetch was called (the hook slices to last 20 internally)
     expect(globalThis.fetch).toHaveBeenCalledOnce();
-    const callBody = JSON.parse(
-      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1]?.body as string,
-    );
+    const callBody = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1]?.body as string);
     expect(callBody.args.error_message).toContain("[INFO] Line 30");
     expect(callBody.args.error_message).toContain("[INFO] Line 49");
     // Should NOT contain line 0 (outside the last 20)

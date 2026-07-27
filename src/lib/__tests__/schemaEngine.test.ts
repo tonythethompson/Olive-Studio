@@ -322,7 +322,7 @@ describe("getKbMetadata", () => {
 describe("reloadPassSchemas", () => {
   afterEach(() => {
     // Restore original KB after each reload test
-    reloadPassSchemas(originalPassesJson as PassesJson);
+    reloadPassSchemas(originalPassesJson as unknown as PassesJson);
   });
 
   it("hot-reloads parameter schemas from a new passes.json object", () => {

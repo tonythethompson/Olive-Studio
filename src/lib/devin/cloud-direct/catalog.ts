@@ -122,7 +122,7 @@ async function fetchCatalog(apiKey: string, host: string, signal?: AbortSignal):
     resp = await fetch(`${host}/exa.api_server_pb.ApiServerService/GetCascadeModelConfigs`, {
       method: "POST",
       headers: { "Content-Type": "application/proto", "Connect-Protocol-Version": "1" },
-      body: reqBody,
+      body: reqBody as unknown as BodyInit,
       signal: ac.signal,
     });
   } finally {

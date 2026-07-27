@@ -71,7 +71,7 @@ export async function listDevinModels(): Promise<Array<{ id: string; name: strin
   }
   try {
     const catalog = await getCachedCatalog(creds.apiKey, creds.apiServerUrl || "https://server.codeium.com");
-    const entries: ModelCatalogEntry[] = [...catalog.byUid.values()];
+    const entries: ModelCatalogEntry[] = catalog ? [...catalog.byUid.values()] : [];
     if (entries.length === 0) {
       return DEVIN_FALLBACK_MODELS.map((m) => ({ ...m }));
     }
