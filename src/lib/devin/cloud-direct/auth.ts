@@ -114,7 +114,7 @@ export async function mintUserJwt(
       "Content-Type": "application/proto",
       "Connect-Protocol-Version": "1",
     },
-    body: req,
+    body: req as unknown as BodyInit,
     signal: combinedSignal,
   });
   const buf = Buffer.from(await resp.arrayBuffer());

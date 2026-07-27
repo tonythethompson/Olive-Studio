@@ -90,7 +90,7 @@ let PARAM_SCHEMAS: Map<string, PassParamSchema> = new Map();
 /** Lazy-load the knowledge base data on first use (synchronous). */
 function ensureKbLoaded(): void {
   if (kbData !== null) return;
-  kbData = passKnowledgeBase as PassesJson;
+  kbData = passKnowledgeBase as unknown as PassesJson;
   PARAM_SCHEMAS = buildParamSchemas(kbData);
 }
 

@@ -4,6 +4,8 @@ allowBuilds:
   '@swc/core': true
   esbuild: true
   protobufjs: true
+minimumReleaseAgeExclude:
+  - express-rate-limit@8.6.1
 overrides:
   protobufjs@<=7.6.2: '>=7.6.3'
   protobufjs@>=7.5.0 <=7.6.4: '>=7.6.5'

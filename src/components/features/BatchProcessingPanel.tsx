@@ -122,7 +122,7 @@ export function BatchProcessingPanel({
     for (const job of queuedJobs) {
       const recipe = buildOliveRecipeFromBatchJob(job, state);
       setState({
-        batchJobs: jobsRef.current.map((j) =>
+        batchJobs: (jobsRef.current ?? []).map((j) =>
           j.id === job.id
             ? { ...j, status: "running", progress: -1, logs: ["[INFO] Starting Olive run..."] }
             : j,
@@ -140,11 +140,11 @@ export function BatchProcessingPanel({
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
           const errorLogs = [
-            ...(jobsRef.current.find((j) => j.id === job.id)?.logs || []),
+            ...((jobsRef.current ?? []).find((j) => j.id === job.id)?.logs || []),
             `[ERROR] ${err.error}`,
           ];
           setState({
-            batchJobs: jobsRef.current.map((j) =>
+            batchJobs: (jobsRef.current ?? []).map((j) =>
               j.id === job.id ? { ...j, status: "failed", logs: errorLogs } : j,
             ),
           });
@@ -156,11 +156,11 @@ export function BatchProcessingPanel({
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         const errorLogs = [
-          ...(jobsRef.current.find((j) => j.id === job.id)?.logs || []),
+          ...((jobsRef.current ?? []).find((j) => j.id === job.id)?.logs || []),
           `[ERROR] ${message}`,
         ];
         setState({
-          batchJobs: jobsRef.current.map((j) =>
+          batchJobs: (jobsRef.current ?? []).map((j) =>
             j.id === job.id ? { ...j, status: "failed", logs: errorLogs } : j,
           ),
         });
@@ -194,7 +194,7 @@ export function BatchProcessingPanel({
         evtSource.addEventListener("log", (e: MessageEvent) => {
           const line: string = e.data;
           const parsedPct = parseProgress(line);
-          const currentJobs = jobsRef.current;
+          const currentJobs = jobsRef.current ?? [];
           setState({
             batchJobs: currentJobs.map((j) =>
               j.id === job.id
@@ -220,7 +220,7 @@ export function BatchProcessingPanel({
             exitCode = 1;
           }
           const finalStatus = exitCode === 0 ? "completed" : "failed";
-          const currentJobs = jobsRef.current;
+          const currentJobs = jobsRef.current ?? [];
           const completedJob = currentJobs.find((j) => j.id === job.id);
           const metrics =
             finalStatus === "completed" && completedJob
@@ -249,7 +249,7 @@ export function BatchProcessingPanel({
         });
 
         evtSource.onerror = () => {
-          const currentJobs = jobsRef.current;
+          const currentJobs = jobsRef.current ?? [];
           const failedJob = currentJobs.find((j) => j.id === job.id);
           const errorLogs = [...(failedJob?.logs || []), "[ERROR] SSE connection lost."];
           setState({
