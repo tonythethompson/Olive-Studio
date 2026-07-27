@@ -28,4 +28,4 @@ yarn.lock
 bun.lockb
 bun.lock
 .cursor/hooks/state/continual-learning.json
-/.dirac-cache/
+/.dirac-cache

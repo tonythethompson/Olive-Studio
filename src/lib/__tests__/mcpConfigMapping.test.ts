@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { mapMcpConfigToUiState } from "@/lib/mcpConfigMapping";
+import {
+  applyMcpDiagnosticToUiState,
+  canApplyMcpDiagnostic,
+  mapMcpConfigToUiState,
+  mapMcpQuirksToUiState,
+  matchActionableQuirks,
+} from "@/lib/mcpConfigMapping";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import type { UIState } from "@/types";
 
@@ -193,18 +199,55 @@ describe("mapMcpConfigToUiState", () => {
 
   // ── unmapped keys → logs ────────────────────────────────────────────
   describe("unmapped keys", () => {
-    it("logs use_external_data_format", () => {
-      const { logs } = mapSingle("use_external_data_format", true);
-      expect(logs).toHaveLength(1);
-      expect(logs[0]).toContain("use_external_data_format");
-      expect(logs[0]).toContain("true");
+    it("logs use_external_data_format and stores conversion override", () => {
+      const { logs, patches } = mapSingle("use_external_data_format", true);
+      expect(logs.some((l) => l.includes("use_external_data_format"))).toBe(true);
+      expect(patches.passRecipeOverrides?.OnnxConversion?.config?.use_external_data_format).toBe(true);
     });
 
     it("logs alpha as unmapped", () => {
       const { logs } = mapSingle("alpha", 1.5);
-      expect(logs).toHaveLength(1);
-      expect(logs[0]).toContain("alpha");
-      expect(logs[0]).toContain("LoRA");
+      expect(logs.some((l) => l.includes("alpha"))).toBe(true);
+      expect(logs.some((l) => l.includes("LoRA"))).toBe(true);
+    });
+  });
+
+  // ── Nested MCP KB shapes (engine / passes) ──────────────────────────
+  describe("nested engine + passes (multi-pass cache overwrite)", () => {
+    it("maps engine.cache_dir and pass output_name into UI patches", () => {
+      const { patches, logs } = mapMcpConfigToUiState(
+        {
+          engine: { cache_dir: "~/.cache/olive/experiment_1" },
+          passes: {
+            OnnxConversion: { output_name: "onnx_model" },
+            OnnxQuantization: { output_name: "quant_model" },
+          },
+        },
+        basePasses,
+      );
+
+      expect(patches.cacheDir).toBe("~/.cache/olive/experiment_1");
+      expect(patches.passRecipeOverrides?.OnnxConversion?.output_name).toBe("onnx_model");
+      expect(patches.passRecipeOverrides?.OnnxQuantization?.output_name).toBe("quant_model");
+      expect(patches.passes?.conversion).toBe(true);
+      expect(patches.passes?.quantization).toBe(true);
+      expect(logs.some((l) => l.includes("cache_dir"))).toBe(true);
+      expect(logs.some((l) => l.includes("output_name"))).toBe(true);
+    });
+
+    it("maps nested pass params into passRecipeOverrides.config", () => {
+      const { patches } = mapMcpConfigToUiState(
+        {
+          passes: {
+            OnnxConversion: {
+              params: { use_external_data_format: true },
+            },
+          },
+        },
+        basePasses,
+      );
+      expect(patches.passRecipeOverrides?.OnnxConversion?.config?.use_external_data_format).toBe(true);
+      expect(patches.passes?.conversion).toBe(true);
     });
   });
 
@@ -227,6 +270,101 @@ describe("mapMcpConfigToUiState", () => {
       expect(patches.passes?.quantPrecision).toBe("int4");
       expect(patches.passes?.awqSym).toBe(true);
       expect(patches.passes?.gptqBlockSize).toBe(64);
+    });
+  });
+
+  // ── Known quirks auto-apply ─────────────────────────────────────────
+  describe("mapMcpQuirksToUiState", () => {
+    it("matches Convert Before Quantize and enables conversion", () => {
+      const { patches, applied } = mapMcpQuirksToUiState(["Convert Before Quantize"], {
+        ...basePasses,
+        conversion: false,
+        quantization: true,
+      });
+      expect(applied).toContain("order-convert-first");
+      expect(patches.passes?.conversion).toBe(true);
+    });
+
+    it("matches Float16 After Quantization and forces float32 when INT quant + fp16 dtype", () => {
+      const { patches, applied } = mapMcpQuirksToUiState(["Float16 After Quantization"], {
+        ...basePasses,
+        quantization: true,
+        quantPrecision: "int8",
+        conversionInputTargetTypes: "float16",
+      });
+      expect(applied).toContain("order-float16-last");
+      expect(patches.passes?.conversionInputTargetTypes).toBe("float32");
+    });
+
+    it("matches Graph Optimize Before Quantization and enables transforms", () => {
+      const { patches, applied } = mapMcpQuirksToUiState(["Graph Optimize Before Quantization"], {
+        ...basePasses,
+        onnxTransforms: false,
+      });
+      expect(applied).toContain("order-optimize-first");
+      expect(patches.passes?.onnxTransforms).toBe(true);
+      expect(patches.passes?.conversion).toBe(true);
+    });
+
+    it("applyMcpDiagnosticToUiState applies updated_config only; quirks are noted", () => {
+      const { patches, appliedQuirks, notedQuirks, logs } = applyMcpDiagnosticToUiState(
+        {
+          updated_config: {
+            engine: { cache_dir: "~/.cache/olive/experiment_1" },
+          },
+          relevant_quirks: ["Convert Before Quantize", "Float16 After Quantization"],
+        },
+        {
+          ...basePasses,
+          conversion: false,
+          quantization: true,
+          quantPrecision: "int4",
+          conversionInputTargetTypes: "fp16",
+        },
+      );
+      expect(patches.cacheDir).toBe("~/.cache/olive/experiment_1");
+      // Quirks must not silently rewrite pass toggles / dtypes
+      expect(patches.passes?.conversion).toBeUndefined();
+      expect(patches.passes?.conversionInputTargetTypes).toBeUndefined();
+      expect(appliedQuirks).toEqual([]);
+      expect(notedQuirks).toContain("order-convert-first");
+      expect(notedQuirks).toContain("order-float16-last");
+      expect(logs.some((l) => l.includes("not auto-applied"))).toBe(true);
+    });
+
+    it("applyMcpDiagnosticToUiState merges new overrides onto currentOverrides", () => {
+      const { patches } = applyMcpDiagnosticToUiState(
+        {
+          updated_config: {
+            passes: {
+              OnnxQuantization: { output_name: "quant_model" },
+            },
+          },
+        },
+        basePasses,
+        {
+          OnnxConversion: { output_name: "onnx_model", config: { use_external_data_format: true } },
+        },
+      );
+      expect(patches.passRecipeOverrides?.OnnxConversion?.output_name).toBe("onnx_model");
+      expect(patches.passRecipeOverrides?.OnnxConversion?.config?.use_external_data_format).toBe(true);
+      expect(patches.passRecipeOverrides?.OnnxQuantization?.output_name).toBe("quant_model");
+    });
+
+    it("canApplyMcpDiagnostic requires updated_config, not quirks alone", () => {
+      expect(
+        canApplyMcpDiagnostic({
+          relevant_quirks: ["Convert Before Quantize"],
+        }),
+      ).toBe(false);
+      expect(
+        canApplyMcpDiagnostic({
+          updated_config: { engine: { cache_dir: "/tmp" } },
+          relevant_quirks: ["Convert Before Quantize"],
+        }),
+      ).toBe(true);
+      expect(canApplyMcpDiagnostic({ relevant_quirks: ["Some unrelated tip"] })).toBe(false);
+      expect(matchActionableQuirks(["External Data Format"])).toContain("onnx-external-data");
     });
   });
 });

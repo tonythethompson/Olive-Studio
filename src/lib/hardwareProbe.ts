@@ -141,9 +141,9 @@ function undetectedProviderReason(provider: IHVProvider): string {
     case "CUDAExecutionProvider":
       return "NVIDIA CUDA was not detected (no NVIDIA GPU or CUDA execution provider on this machine).";
     case "TensorrtExecutionProvider":
-      return "NVIDIA TensorRT is not loadable yet (nvinfer_10 / TensorRT 10.x). Olive auto-installs the pinned SDK when you run with TensorRT, or use TensorRT RTX / CUDA instead.";
+      return "Full TensorRT (nvinfer_10 / datacenter SDK) is not loadable. Consumer GeForce GPUs should use TensorRT RTX (NvTensorRTRTX) or CUDA instead — that is separate from full TensorRT.";
     case "NvTensorRTRTXExecutionProvider":
-      return "NVIDIA GPU not detected for TensorRT RTX. On a GeForce RTX GPU, use Install tensorrt-rtx in Hardware, or run with CUDA.";
+      return "TensorRT RTX needs an NVIDIA GPU. On GeForce RTX, install tensorrt-rtx from Hardware (or it installs on first run). This is not the same as full TensorRT.";
     case "WebGpuExecutionProvider":
       return "WebGPU requires a browser environment with the WebGPU API (Chrome 113+ / Edge 113+ / Firefox Nightly). Not available in node-based probing contexts.";
     case "CPUExecutionProvider":

@@ -195,6 +195,50 @@ const CATEGORY_LABELS: Record<string, string> = {
   custom: "Custom / Self-Hosted",
 };
 
+/** LM Studio starter models for local AI. */
+const LMS_STARTER_MODELS = [
+  {
+    tag: "qwen2.5-coder-1.5b-instruct",
+    name: "Qwen2.5-Coder (1.5B)",
+    desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
+    fallbackSize: "1.1 GB",
+  },
+  {
+    tag: "llama-3.2-1b-instruct",
+    name: "Llama-3.2 (1B)",
+    desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
+    fallbackSize: "800 MB",
+  },
+  {
+    tag: "phi-3.5-mini-instruct",
+    name: "Phi-3.5-Mini (3.8B)",
+    desc: "🧠 Advanced Reasoning: Complex compiler co-design",
+    fallbackSize: "2.2 GB",
+  },
+] as const;
+
+/** Ollama starter models for local AI. */
+const OLLAMA_STARTER_MODELS = [
+  {
+    tag: "qwen2.5-coder:1.5b",
+    name: "Qwen2.5-Coder (1.5B)",
+    desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
+    fallbackSize: "1.1 GB",
+  },
+  {
+    tag: "llama3.2:1b",
+    name: "Llama-3.2 (1B)",
+    desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
+    fallbackSize: "800 MB",
+  },
+  {
+    tag: "phi3.5",
+    name: "Phi-3.5-Mini",
+    desc: "🧠 Advanced Reasoning: Complex compiler co-design",
+    fallbackSize: "~2 GB",
+  },
+] as const;
+
 interface GeminiSidebarProps {
   state?: UIState;
   setState?: (partial: Partial<UIState>) => void;
@@ -287,7 +331,16 @@ const ProviderErrorBlock = ({ msg, onGoSettings }: { msg: string; onGoSettings: 
  * @param activeModel - The currently active model to highlight.
  * @param isOpen - Whether the sidebar is open and keyboard shortcuts should be enabled.
  */
-function LocalModelManager({ activeModel, isOpen }: { activeModel?: string; isOpen: boolean }) {
+function LocalModelManager({
+  activeModel,
+  isOpen,
+  engine = "all",
+}: {
+  activeModel?: string;
+  isOpen: boolean;
+  /** Restrict list/errors to one local engine so LMS tab never shows Ollama errors. */
+  engine?: "lms" | "ollama" | "all";
+}) {
   const [models, setModels] = useState<Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }>>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -341,57 +394,91 @@ function LocalModelManager({ activeModel, isOpen }: { activeModel?: string; isOp
     });
   }, [filteredModels]);
 
-  const refresh = async () => {
+  const refresh = async (isCancelled?: () => boolean) => {
     setLoading(true);
+    setError("");
     try {
-      // Fetch from both LM Studio and Ollama in parallel
+      const fetchLms = engine === "lms" || engine === "all";
+      const fetchOllama = engine === "ollama" || engine === "all";
       const [lmsRes, ollamaRes] = await Promise.allSettled([
-        fetch("/api/ai/local-models"),
-        fetch("/api/ai/ollama-models"),
+        fetchLms ? fetch("/api/ai/local-models") : Promise.resolve(null),
+        fetchOllama ? fetch("/api/ai/ollama-models") : Promise.resolve(null),
       ]);
+
+      if (isCancelled?.()) return;
 
       const lmsModels: string[] = [];
       const ollamaModels: string[] = [];
       const lmsLoaded: string[] = [];
       const ollamaLoaded: string[] = [];
 
-      if (lmsRes.status === "fulfilled" && lmsRes.value.ok) {
+      if (fetchLms && lmsRes.status === "fulfilled" && lmsRes.value && lmsRes.value.ok) {
         const d = await lmsRes.value.json();
         lmsModels.push(...(d.installedModels || []));
         lmsLoaded.push(...(d.loadedModels || []));
+      } else if (
+        fetchLms &&
+        engine === "lms" &&
+        lmsRes.status === "fulfilled" &&
+        lmsRes.value &&
+        !lmsRes.value.ok
+      ) {
+        const d = (await lmsRes.value.json().catch(() => ({}))) as { error?: string };
+        if (d.error && !isCancelled?.()) setError(d.error);
       }
-      if (ollamaRes.status === "fulfilled" && ollamaRes.value.ok) {
+      if (fetchOllama && ollamaRes.status === "fulfilled" && ollamaRes.value && ollamaRes.value.ok) {
         const d = await ollamaRes.value.json();
         ollamaModels.push(...(d.installedModels || []));
         ollamaLoaded.push(...(d.runningModels || []));
+      } else if (
+        fetchOllama &&
+        engine === "ollama" &&
+        ollamaRes.status === "fulfilled" &&
+        ollamaRes.value &&
+        !ollamaRes.value.ok
+      ) {
+        const d = (await ollamaRes.value.json().catch(() => ({}))) as { error?: string };
+        if (d.error && !isCancelled?.()) setError(d.error);
       }
+
+      if (isCancelled?.()) return;
 
       const allModels: Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }> = [];
       const seen = new Set<string>();
-      for (const id of lmsModels) {
-        if (!seen.has(id)) {
-          seen.add(id);
-          allModels.push({ id, loaded: lmsLoaded.includes(id), source: "lms" });
+      if (fetchLms) {
+        for (const id of lmsModels) {
+          if (!seen.has(id)) {
+            seen.add(id);
+            allModels.push({ id, loaded: lmsLoaded.includes(id), source: "lms" });
+          }
         }
       }
-      for (const id of ollamaModels) {
-        if (!seen.has(id)) {
-          seen.add(id);
-          allModels.push({ id, loaded: ollamaLoaded.includes(id), source: "ollama" });
+      if (fetchOllama) {
+        for (const id of ollamaModels) {
+          if (!seen.has(id)) {
+            seen.add(id);
+            allModels.push({ id, loaded: ollamaLoaded.includes(id), source: "ollama" });
+          }
         }
       }
-      setModels(allModels);
-    } catch {
-      /* ignore */
+      if (!isCancelled?.()) setModels(allModels);
+    } catch (err: unknown) {
+      if (engine !== "all" && !isCancelled?.()) {
+        setError(err instanceof Error ? err.message : "Failed to list local models");
+      }
     } finally {
-      setLoading(false);
+      if (!isCancelled?.()) setLoading(false);
     }
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: fetch models on mount
-    void refresh();
-  }, []);
+    const cancelGuard = { cancelled: false };
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: fetch models on mount / engine change
+    void refresh(() => cancelGuard.cancelled);
+    return () => {
+      cancelGuard.cancelled = true;
+    };
+  }, [engine]);
 
   const handleLoad = async (modelTag: string, source: "lms" | "ollama" = "lms") => {
     setBusy(modelTag);
@@ -633,22 +720,44 @@ export function GeminiSidebar({
   const [devinModels, setDevinModels] = useState<Array<{ id: string; name: string }>>([]);
   const [devinBusy, setDevinBusy] = useState(false);
   const [devinMessage, setDevinMessage] = useState<string | null>(null);
+  /** Live model lists keyed by provider — populated automatically on first selection. */
+  const [liveModelsByProvider, setLiveModelsByProvider] = useState<
+    Record<string, Array<{ id: string; label: string }>>
+  >({});
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsSource, setModelsSource] = useState<"live" | "fallback" | null>(null);
+  const [modelsHint, setModelsHint] = useState<string | null>(null);
+  /** Providers already auto-refreshed this session (skip repeat unless force). */
+  const modelsFetchedRef = useRef<Set<string>>(new Set());
+  /** Sequence counter to guard against stale responses in refreshProviderModels. */
+  const refreshSequenceRef = useRef(0);
+  /** Last values used for model fetching to avoid redundant refetches. */
+  const lastFetchedApiKeyRef = useRef<string>("");
+  const lastFetchedBaseUrlRef = useRef<string>("");
   const [pullingModel, setPullingModel] = useState<string | null>(null);
   const [localPullError, setLocalPullError] = useState<string>("");
+  const [localInstallInfo, setLocalInstallInfo] = useState<string | null>(null);
   const [modelSizes, setModelSizes] = useState<Record<string, number>>({});
   const [ollamaHealthy, setOllamaHealthy] = useState<boolean | null>(null);
+  const [lmsHealthy, setLmsHealthy] = useState<boolean | null>(null);
+  const [lmsInstalled, setLmsInstalled] = useState<boolean | null>(null);
+  const [installingEngine, setInstallingEngine] = useState<"lms" | "ollama" | null>(null);
   const [preferredEngine, setPreferredEngine] = useState<"lms" | "ollama">(() => {
     try {
-      return (localStorage.getItem("localEngine") as "lms" | "ollama") || "lms";
+      const stored = localStorage.getItem("localEngine");
+      if (stored === "lms" || stored === "ollama") {
+        return stored;
+      }
+      return "lms";
     } catch {
       return "lms";
     }
   });
-  const [showOtherEngine, setShowOtherEngine] = useState(false);
 
   const handleSetPreferredEngine = (engine: "lms" | "ollama") => {
     setPreferredEngine(engine);
-    setShowOtherEngine(false);
+    setLocalPullError("");
+    setLocalInstallInfo(null);
     try {
       localStorage.setItem("localEngine", engine);
     } catch {
@@ -656,26 +765,168 @@ export function GeminiSidebar({
     }
   };
 
-  // Check Ollama health on mount and when sidebar opens
+  // Engine health when sidebar opens (only surface the active tab's status)
   useEffect(() => {
     if (!isOpen) return;
     fetch("/api/ai/ollama-health")
       .then((r) => r.json())
       .then((d) => setOllamaHealthy(d.healthy ?? false))
       .catch(() => setOllamaHealthy(false));
-  }, [isOpen]);
+    fetch("/api/ai/local-health")
+      .then((r) => r.json())
+      .then((d: { healthy?: boolean; lmsInstalled?: boolean }) => {
+        setLmsHealthy(d.healthy ?? false);
+        setLmsInstalled(d.lmsInstalled ?? false);
+      })
+      .catch(() => {
+        setLmsHealthy(false);
+        setLmsInstalled(false);
+      });
+  }, [isOpen, preferredEngine]);
 
-  // Refresh Codex / Devin account when Settings is open on those providers
+  const handleInstallLocalEngine = async (engine: "lms" | "ollama") => {
+    setInstallingEngine(engine);
+    setLocalPullError("");
+    setLocalInstallInfo(null);
+    try {
+      const r = await fetch("/api/ai/install-engine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ engine }),
+      });
+      const data = (await r.json()) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+        openedUrl?: string;
+      };
+      if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      if (data.openedUrl) {
+        window.open(data.openedUrl, "_blank", "noopener,noreferrer");
+      }
+      setLocalPullError("");
+      setLocalInstallInfo(null);
+      // Re-check health after a short delay
+      setTimeout(() => {
+        if (engine === "ollama") {
+          fetch("/api/ai/ollama-health")
+            .then((res) => res.json())
+            .then((d) => setOllamaHealthy(d.healthy ?? false))
+            .catch(() => undefined);
+        } else {
+          fetch("/api/ai/local-health")
+            .then((res) => res.json())
+            .then((d: { healthy?: boolean; lmsInstalled?: boolean }) => {
+              setLmsHealthy(d.healthy ?? false);
+              setLmsInstalled(d.lmsInstalled ?? false);
+            })
+            .catch(() => undefined);
+        }
+      }, 2000);
+      if (data.message) {
+        setLocalInstallInfo(data.message);
+      }
+    } catch (err: unknown) {
+      setLocalPullError(err instanceof Error ? err.message : "Install failed");
+    } finally {
+      setInstallingEngine(null);
+    }
+  };
+
+  /**
+   * Fetch live model catalog for a provider on first selection (or force re-fetch).
+   * Uses env/runtime keys on the server; optional client key/baseUrl for typed-but-unsaved creds.
+   * Always falls back to PROVIDER_OPTIONS hardcodes if the live call fails or has no key.
+   */
+  const refreshProviderModels = async (
+    providerId: ProviderId,
+    opts?: { force?: boolean; apiKey?: string; baseUrl?: string },
+  ) => {
+    if (!opts?.force && modelsFetchedRef.current.has(providerId)) {
+      return;
+    }
+    modelsFetchedRef.current.add(providerId);
+    refreshSequenceRef.current += 1;
+    const currentSequence = refreshSequenceRef.current;
+    setModelsLoading(true);
+    setModelsHint(null);
+    try {
+      const body: { provider: string; apiKey?: string; baseUrl?: string } = {
+        provider: providerId,
+      };
+      const key = opts?.apiKey?.trim();
+      const base = opts?.baseUrl?.trim();
+      if (key) body.apiKey = key;
+      if (base) body.baseUrl = base;
+
+      const r = await fetch("/api/ai/models", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await r.json()) as {
+        models?: Array<{ id: string; label: string }>;
+        source?: "live" | "fallback";
+        error?: string;
+      };
+
+      // Guard against stale responses
+      if (currentSequence !== refreshSequenceRef.current) {
+        return;
+      }
+
+      const models = Array.isArray(data.models) ? data.models : [];
+      if (models.length > 0) {
+        setLiveModelsByProvider((prev) => ({ ...prev, [providerId]: models }));
+        if (providerId === "devin") {
+          setDevinModels(models.map((m) => ({ id: m.id, name: m.label })));
+        }
+        // Keep selection valid when the live list differs from static defaults
+        setSettingsModel((current) => {
+          if (models.some((m) => m.id === current)) return current;
+          return models[0]!.id;
+        });
+        setCustomModel((current) => {
+          if (!current || models.some((m) => m.id === current)) return current || models[0]!.id;
+          return models[0]!.id;
+        });
+      }
+      setModelsSource(data.source ?? (models.length > 0 ? "live" : "fallback"));
+      if (data.error && data.source === "fallback") {
+        setModelsHint(data.error);
+      } else if (data.source === "live") {
+        setModelsHint(null);
+      }
+    } catch (err: unknown) {
+      // Guard against stale responses
+      if (currentSequence !== refreshSequenceRef.current) {
+        return;
+      }
+      setModelsSource("fallback");
+      setModelsHint(err instanceof Error ? err.message : "Could not refresh models");
+      // Allow retry on next selection if network failed entirely
+      modelsFetchedRef.current.delete(providerId);
+    } finally {
+      // Guard against stale responses
+      if (currentSequence === refreshSequenceRef.current) {
+        setModelsLoading(false);
+      }
+    }
+  };
+
+  // Refresh Codex / Devin account + auto-load model list when Settings is open
   useEffect(() => {
     if (!isOpen || activeTab !== "settings") return;
     if (settingsProvider === "codex") void refreshCodexAccount();
     if (settingsProvider === "devin") void refreshDevinAccount();
+    void refreshProviderModels(settingsProvider);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, activeTab, settingsProvider]);
 
   const handlePullLocalModel = async (modelTag: string, source: "lms" | "ollama" = "lms") => {
     setPullingModel(modelTag);
     setLocalPullError("");
+    setLocalInstallInfo(null);
     try {
       if (source === "ollama" && ollamaHealthy === false) {
         throw new Error(
@@ -718,6 +969,16 @@ export function GeminiSidebar({
 
   const providerOption = PROVIDER_OPTIONS.find((p) => p.id === settingsProvider)!;
   const isCompatMode = settingsProvider === "openai-compat" || !!providerOption.baseUrl;
+
+  /** Models shown in the dropdown: live catalog if loaded, else static PROVIDER_OPTIONS. */
+  const displayedModels = useMemo(() => {
+    if (settingsProvider === "devin" && devinModels.length > 0) {
+      return devinModels.map((m) => ({ id: m.id, label: m.name }));
+    }
+    const live = liveModelsByProvider[settingsProvider];
+    if (live && live.length > 0) return live;
+    return providerOption.models.map((m) => ({ id: m, label: m }));
+  }, [settingsProvider, devinModels, liveModelsByProvider, providerOption.models]);
 
   const fetchProviderStatus = async (): Promise<ProviderStatus> => {
     try {
@@ -825,6 +1086,35 @@ export function GeminiSidebar({
   const handleApplyAutofix = (autofix: Suggestion["autofix"]) => {
     if (!autofix?.pass) return;
     const { pass, value } = autofix;
+    // Multi-field JSON patches from the assistant: {"quantMethod":"awq","quantPrecision":"int4"}
+    if (value.trim().startsWith("{")) {
+      try {
+        const obj = JSON.parse(value) as Record<string, unknown>;
+        if (pass === "ihvProvider" || pass === "cudaVersion") {
+          setState({ [pass]: obj[pass] } as Partial<UIState>);
+        } else {
+          const passKey = pass.startsWith("passes.") ? pass.slice(7) : pass;
+          // If the object has multiple pass keys, merge all; else set single key
+          const looksLikePasses = Object.keys(obj).some((k) => k in state.passes || k === passKey);
+          if (looksLikePasses && !("ihvProvider" in obj)) {
+            setState({
+              passes: {
+                ...state.passes,
+                ...(obj as Partial<UIState["passes"]>),
+                // TRT RTX / AWQ suggestions should not leave structured pruning on
+                ...(obj.quantMethod === "awq" ? { pruning: false } : {}),
+              },
+            });
+          } else {
+            setState(obj as Partial<UIState>);
+          }
+        }
+        setTimeout(() => handleRunAnalysis(), 400);
+        return;
+      } catch {
+        /* fall through to scalar apply */
+      }
+    }
     if (pass === "ihvProvider") {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setState({ ihvProvider: value as any });
@@ -835,8 +1125,20 @@ export function GeminiSidebar({
       const passKey = pass.startsWith("passes.") ? pass.slice(7) : pass;
       const parsed =
         value === "true" ? true : value === "false" ? false : isNaN(Number(value)) ? value : Number(value);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setState({ passes: { ...state.passes, [passKey]: parsed as any } });
+      const nextPasses: UIState["passes"] = {
+        ...state.passes,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [passKey]: parsed as any,
+      };
+      // Enabling structured pruning on TensorRT RTX: leave quant as-is; validation will suggest AWQ
+      if (passKey === "quantMethod" && value === "awq") {
+        nextPasses.pruning = false;
+        nextPasses.quantization = true;
+      }
+      if (passKey === "quantPrecision" && (value === "int4" || value === "int8")) {
+        nextPasses.quantization = true;
+      }
+      setState({ passes: nextPasses });
     }
     setTimeout(() => handleRunAnalysis(), 400);
   };
@@ -961,14 +1263,8 @@ export function GeminiSidebar({
       const data = (await r.json()) as { signedIn?: boolean; name?: string; error?: string };
       setDevinStatus(data);
       if (data.signedIn) {
-        const mr = await fetch("/api/devin/models");
-        const md = (await mr.json()) as { models?: Array<{ id: string; name: string }> };
-        if (Array.isArray(md.models) && md.models.length > 0) {
-          setDevinModels(md.models);
-          if (!md.models.some((m) => m.id === settingsModel)) {
-            setSettingsModel(md.models[0]!.id);
-          }
-        }
+        // Prefer unified catalog (also fills liveModelsByProvider)
+        await refreshProviderModels("devin", { force: true });
       }
       return data;
     } catch (err: unknown) {
@@ -1522,173 +1818,85 @@ export function GeminiSidebar({
                     Ollama
                   </button>
                 </div>
-                {(preferredEngine === "lms" || showOtherEngine) && (
-                  <>
-                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                      {preferredEngine === "lms"
-                        ? "Download & enable a local model via LM Studio (Llmster) to run Olive Studio AI features offline with zero cloud keys:"
-                        : "LM Studio models (click above to switch to LM Studio as preferred engine):"}
-                    </p>
-                    <div className="space-y-2">
-                      {(
-                        [
-                          {
-                            // Shorter ids resolve more reliably with `lms get -y --gguf`
-                            tag: "qwen2.5-coder-1.5b-instruct",
-                            name: "Qwen2.5-Coder (1.5B)",
-                            desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
-                            fallbackSize: "1.1 GB",
-                          },
-                          {
-                            tag: "llama-3.2-1b-instruct",
-                            name: "Llama-3.2 (1B)",
-                            desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
-                            fallbackSize: "800 MB",
-                          },
-                          {
-                            tag: "phi-3.5-mini-instruct",
-                            name: "Phi-3.5-Mini (3.8B)",
-                            desc: "🧠 Advanced Reasoning: Complex compiler co-design",
-                            fallbackSize: "2.2 GB",
-                          },
-                        ] as const
-                      ).map((m) => {
-                        // Find actual size by matching tag against LM Studio model keys
-                        const sizeBytes = Object.entries(modelSizes).find(
-                          ([key]) =>
-                            key
-                              .toLowerCase()
-                              .includes(m.tag.split("/").pop()?.toLowerCase().split("-")[0] ?? "") ||
-                            m.tag.toLowerCase().includes(key.toLowerCase().split("/").pop() ?? ""),
-                        )?.[1];
-                        const displaySize = sizeBytes ? formatBytes(sizeBytes) : m.fallbackSize;
-                        return (
-                          <div
-                            key={m.tag}
-                            className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60 flex flex-col gap-1.5"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-semibold text-xs text-slate-100">{m.name}</span>
-                              <span className="text-[10px] font-mono text-slate-400 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded">
-                                {displaySize}
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-slate-400 leading-normal">{m.desc}</p>
+                {(() => {
+                  const isLms = preferredEngine === "lms";
+                  const accentText = isLms ? "text-electric-blue" : "text-emerald-400";
+                  const accentBg = isLms
+                    ? "bg-electric-blue/10 hover:bg-electric-blue/20 border-electric-blue/30 text-electric-blue"
+                    : "bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-400";
+                  const healthy = isLms ? lmsHealthy : ollamaHealthy;
+                  const missing = isLms ? lmsInstalled === false : ollamaHealthy === false;
+                  const models = isLms ? LMS_STARTER_MODELS : OLLAMA_STARTER_MODELS;
+                  return (
+                    <>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-slate-300 leading-relaxed">
+                          Download &amp; enable a local model via{" "}
+                          {isLms ? "LM Studio (Llmster CLI)" : "Ollama"} for offline Olive Studio AI — zero
+                          cloud keys.
+                        </p>
+                        <span
+                          className={`inline-block w-2 h-2 shrink-0 rounded-full ${
+                            healthy === true
+                              ? "bg-emerald-400"
+                              : healthy === false
+                                ? "bg-rose-400"
+                                : "bg-slate-500"
+                          }`}
+                          title={
+                            healthy === true
+                              ? `${isLms ? "LM Studio" : "Ollama"} ready`
+                              : healthy === false
+                                ? `${isLms ? "LM Studio" : "Ollama"} not reachable`
+                                : "Checking…"
+                          }
+                        />
+                      </div>
+
+                      {missing && (
+                        <div className="rounded-lg border border-rose-500/25 bg-rose-950/20 p-2.5 space-y-2">
+                          <p className="text-[11px] text-rose-300 leading-relaxed">
+                            {isLms
+                              ? "LM Studio CLI (`lms`) not found or server not running. Install LM Studio, open it once so the CLI installs, then start the local server."
+                              : "Ollama is not reachable on localhost:11434. Install Ollama and start the app (or `ollama serve`)."}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
-                              onClick={() => handlePullLocalModel(m.tag)}
-                              disabled={pullingModel === m.tag}
-                              className="mt-1 w-full h-7 bg-electric-blue/10 hover:bg-electric-blue/20 text-electric-blue border border-electric-blue/30 rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                              disabled={installingEngine !== null}
+                              onClick={() => void handleInstallLocalEngine(isLms ? "lms" : "ollama")}
+                              className={`h-7 px-2.5 rounded text-[11px] font-bold border flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${accentBg}`}
                             >
-                              {pullingModel === m.tag ? (
-                                <>
-                                  <RefreshCw className="h-3 w-3 animate-spin" />
-                                  <span>Pulling & Activating...</span>
-                                </>
+                              {installingEngine === preferredEngine ? (
+                                <RefreshCw className="h-3 w-3 animate-spin" />
                               ) : (
-                                <>
-                                  <Download className="h-3 w-3" />
-                                  <span>1-Click Download & Enable</span>
-                                </>
+                                <Download className="h-3 w-3" />
                               )}
+                              Install {isLms ? "LM Studio" : "Ollama"}
                             </button>
+                            <a
+                              href={isLms ? "https://lmstudio.ai" : "https://ollama.com"}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={`text-[11px] underline ${accentText}`}
+                            >
+                              {isLms ? "lmstudio.ai" : "ollama.com"}
+                            </a>
                           </div>
-                        );
-                      })}
-                    </div>
-                    {localPullError && <p className="text-xs text-rose-400 mt-1">{localPullError}</p>}
-
-                    {/* Load/Unloaded models list */}
-                    <LocalModelManager activeModel={providerStatus.model} isOpen={isOpen} />
-
-                    {/* Other engine toggle */}
-                    <button
-                      type="button"
-                      onClick={() => setShowOtherEngine(!showOtherEngine)}
-                      className="w-full text-[10px] text-slate-500 hover:text-slate-300 border border-dashed border-slate-700 hover:border-slate-500 rounded-lg px-3 py-2 transition-all cursor-pointer"
-                    >
-                      {showOtherEngine ? "Hide" : "Show"} {preferredEngine === "lms" ? "Ollama" : "LM Studio"}{" "}
-                      models
-                    </button>
-                  </>
-                )}
-
-                {/* Ollama 1-Click Setup */}
-                {(preferredEngine === "ollama" || showOtherEngine) && (
-                  <>
-                    <div className="pt-3 border-t border-slate-800/50">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2 font-bold text-xs text-emerald-400">
-                          <Download className="h-4 w-4" />
-                          <span>
-                            {preferredEngine === "ollama"
-                              ? "Ollama models"
-                              : "Ollama models (alternative engine)"}
-                          </span>
-                          <span
-                            className={`inline-block w-2 h-2 rounded-full ${ollamaHealthy === true ? "bg-emerald-400" : ollamaHealthy === false ? "bg-rose-400" : "bg-slate-500"}`}
-                            title={
-                              ollamaHealthy === true
-                                ? "Ollama server running"
-                                : ollamaHealthy === false
-                                  ? "Ollama server not reachable"
-                                  : "Checking Ollama..."
-                            }
-                          />
                         </div>
-                        <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded font-mono">
-                          Alternative Engine
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-300 leading-relaxed mb-2">
-                        Download & enable a local model via Ollama — same models, different engine. Uses the
-                        Ollama API on{" "}
-                        <code className="text-[10px] font-mono text-slate-400">localhost:11434</code>.
-                      </p>
-                      {ollamaHealthy === false && (
-                        <p className="text-[11px] text-rose-400 mb-2 leading-relaxed">
-                          Ollama is not reachable. Install from{" "}
-                          <a
-                            href="https://ollama.com"
-                            target="_blank"
-                            rel="noreferrer"
-                            className="underline text-electric-blue"
-                          >
-                            ollama.com
-                          </a>
-                          , start the Ollama app, then retry download.
-                        </p>
                       )}
+
                       <div className="space-y-2">
-                        {(
-                          [
-                            {
-                              tag: "qwen2.5-coder:1.5b",
-                              name: "Qwen2.5-Coder (1.5B)",
-                              desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
-                              fallbackSize: "1.1 GB",
-                            },
-                            {
-                              tag: "llama3.2:1b",
-                              name: "Llama-3.2 (1B)",
-                              desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
-                              fallbackSize: "800 MB",
-                            },
-                            {
-                              tag: "phi3.5",
-                              name: "Phi-3.5-Mini",
-                              desc: "🧠 Advanced Reasoning: Complex compiler co-design",
-                              fallbackSize: "~2 GB",
-                            },
-                          ] as const
-                        ).map((m) => {
-                          // Find actual size by matching tag against Ollama model names
-                          const sizeBytes = Object.entries(modelSizes).find(
-                            ([key]) =>
-                              key === m.tag ||
-                              key.toLowerCase().includes(m.tag.split(":")[0]?.toLowerCase() ?? "") ||
-                              m.tag.toLowerCase().includes(key.toLowerCase()),
-                          )?.[1];
+                        {models.map((m) => {
+                          const sizeBytes = Object.entries(modelSizes).find(([key]) => {
+                            const k = key.toLowerCase();
+                            const t = m.tag.toLowerCase();
+                            return (
+                              k === t ||
+                              k.includes(t.split(":")[0] ?? "") ||
+                              t.includes(k.split("/").pop() ?? "___")
+                            );
+                          })?.[1];
                           const displaySize = sizeBytes ? formatBytes(sizeBytes) : m.fallbackSize;
                           return (
                             <div
@@ -1704,9 +1912,9 @@ export function GeminiSidebar({
                               <p className="text-[10px] text-slate-400 leading-normal">{m.desc}</p>
                               <button
                                 type="button"
-                                onClick={() => handlePullLocalModel(m.tag, "ollama")}
+                                onClick={() => handlePullLocalModel(m.tag, isLms ? "lms" : "ollama")}
                                 disabled={pullingModel === m.tag}
-                                className="mt-1 w-full h-7 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                                className={`mt-1 w-full h-7 border rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 ${accentBg}`}
                               >
                                 {pullingModel === m.tag ? (
                                   <>
@@ -1724,9 +1932,20 @@ export function GeminiSidebar({
                           );
                         })}
                       </div>
-                    </div>
-                  </>
-                )}
+                      {localPullError && (
+                        <p className="text-xs text-rose-400 mt-1 leading-relaxed">{localPullError}</p>
+                      )}
+                      {localInstallInfo && (
+                        <p className="text-xs text-emerald-400 mt-1 leading-relaxed">{localInstallInfo}</p>
+                      )}
+                      <LocalModelManager
+                        activeModel={providerStatus.model}
+                        isOpen={isOpen}
+                        engine={preferredEngine}
+                      />
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Configure new provider */}
@@ -1747,9 +1966,15 @@ export function GeminiSidebar({
                       const id = e.target.value as ProviderId;
                       setSettingsProvider(id);
                       const opt = PROVIDER_OPTIONS.find((p) => p.id === id)!;
-                      setSettingsModel(opt.models[0] ?? "");
-                      setCustomModel("");
+                      // Prefer cached live list; otherwise static default until fetch returns
+                      const cached = liveModelsByProvider[id];
+                      const first = cached?.[0]?.id ?? opt.models[0] ?? "";
+                      setSettingsModel(first);
+                      setCustomModel(id === "openai-compat" ? "" : first);
                       setSettingsBaseUrl(opt.baseUrl ?? "");
+                      setModelsHint(null);
+                      // Always refresh model catalog on selection (first time auto; force if re-pick)
+                      void refreshProviderModels(id, { force: true });
                     }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue cursor-pointer"
                   >
@@ -1779,16 +2004,82 @@ export function GeminiSidebar({
                 </div>
 
                 <div>
-                  <label htmlFor="gemini-settings-model" className="text-xs text-slate-400 mb-1 block">
-                    Model
-                  </label>
-                  {isCompatMode ? (
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <label htmlFor="gemini-settings-model" className="text-xs text-slate-400 block">
+                      Model
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {modelsLoading ? (
+                        <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                          <RefreshCw className="h-2.5 w-2.5 animate-spin" />
+                          Refreshing…
+                        </span>
+                      ) : modelsSource === "live" ? (
+                        <span className="text-[10px] text-emerald-500/80">Live catalog</span>
+                      ) : modelsSource === "fallback" ? (
+                        <span className="text-[10px] text-slate-500">Defaults</span>
+                      ) : null}
+                      <button
+                        type="button"
+                        title="Refresh model list from provider"
+                        disabled={modelsLoading}
+                        onClick={() =>
+                          void refreshProviderModels(settingsProvider, {
+                            force: true,
+                            apiKey: settingsApiKey || undefined,
+                            baseUrl: settingsBaseUrl || providerOption.baseUrl || undefined,
+                          })
+                        }
+                        className="text-[10px] text-slate-400 hover:text-electric-blue disabled:opacity-40 flex items-center gap-0.5"
+                      >
+                        <RefreshCw className={cn("h-2.5 w-2.5", modelsLoading && "animate-spin")} />
+                        Refresh
+                      </button>
+                    </div>
+                  </div>
+                  {isCompatMode && settingsProvider === "openai-compat" ? (
                     <input
                       placeholder="Model name (e.g. llama3.1:8b, deepseek-r1)"
                       value={customModel}
                       onChange={(e) => setCustomModel(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
                     />
+                  ) : isCompatMode && displayedModels.length > 0 ? (
+                    // OpenAI-compat routers (xAI, OpenRouter, …): show live list + allow free text
+                    <div className="space-y-1.5">
+                      <select
+                        id="gemini-settings-model"
+                        aria-label="AI model"
+                        value={
+                          displayedModels.some((m) => m.id === (customModel || settingsModel))
+                            ? customModel || settingsModel
+                            : ""
+                        }
+                        onChange={(e) => {
+                          setSettingsModel(e.target.value);
+                          setCustomModel(e.target.value);
+                        }}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue cursor-pointer"
+                      >
+                        {!displayedModels.some((m) => m.id === (customModel || settingsModel)) && (
+                          <option value="">Select a model…</option>
+                        )}
+                        {displayedModels.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        placeholder="Or type a model id…"
+                        value={customModel}
+                        onChange={(e) => {
+                          setCustomModel(e.target.value);
+                          setSettingsModel(e.target.value);
+                        }}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+                      />
+                    </div>
                   ) : (
                     <select
                       id="gemini-settings-model"
@@ -1797,16 +2088,14 @@ export function GeminiSidebar({
                       onChange={(e) => setSettingsModel(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue cursor-pointer"
                     >
-                      {(settingsProvider === "devin" && devinModels.length > 0
-                        ? devinModels.map((m) => ({ id: m.id, label: m.name }))
-                        : providerOption.models.map((m) => ({ id: m, label: m }))
-                      ).map((m) => (
+                      {displayedModels.map((m) => (
                         <option key={m.id} value={m.id}>
                           {m.label}
                         </option>
                       ))}
                     </select>
                   )}
+                  {modelsHint && <p className="mt-1 text-[10px] text-slate-500 leading-snug">{modelsHint}</p>}
                 </div>
 
                 {settingsProvider === "codex" ? (
@@ -1957,6 +2246,17 @@ export function GeminiSidebar({
                           placeholder="http://localhost:11434/v1"
                           value={settingsBaseUrl}
                           onChange={(e) => setSettingsBaseUrl(e.target.value)}
+                          onBlur={() => {
+                            const trimmedUrl = settingsBaseUrl.trim();
+                            if (trimmedUrl && trimmedUrl !== lastFetchedBaseUrlRef.current) {
+                              lastFetchedBaseUrlRef.current = trimmedUrl;
+                              void refreshProviderModels(settingsProvider, {
+                                force: true,
+                                apiKey: settingsApiKey || undefined,
+                                baseUrl: trimmedUrl,
+                              });
+                            }
+                          }}
                           className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
                         />
                         <p className="text-[10px] text-slate-600 mt-1">
@@ -1981,6 +2281,18 @@ export function GeminiSidebar({
                         placeholder="Stored in memory only, never persisted to disk"
                         value={settingsApiKey}
                         onChange={(e) => setSettingsApiKey(e.target.value)}
+                        onBlur={() => {
+                          // Re-list models with the key the user just typed (env may already work)
+                          const trimmedKey = settingsApiKey.trim();
+                          if (trimmedKey && trimmedKey !== lastFetchedApiKeyRef.current) {
+                            lastFetchedApiKeyRef.current = trimmedKey;
+                            void refreshProviderModels(settingsProvider, {
+                              force: true,
+                              apiKey: trimmedKey,
+                              baseUrl: settingsBaseUrl || providerOption.baseUrl || undefined,
+                            });
+                          }
+                        }}
                         onKeyDown={(e) => e.key === "Enter" && void handleSaveProvider()}
                         className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
                       />

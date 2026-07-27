@@ -30,3 +30,7 @@ olive_mcp_server = ["knowledge_base/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint.per-file-ignores]
+# S106: Suppress "possible hardcoded password" for pass_name keyword argument in tests
+"tests/**" = ["S106"]

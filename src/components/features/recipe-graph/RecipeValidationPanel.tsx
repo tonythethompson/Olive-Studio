@@ -74,6 +74,9 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     .filter((s) => s.active && s.id !== "input" && s.id !== "output" && s.id !== "provider")
     .map((s) => s.id);
 
+  // Reuse the pre-built recipe from validation to avoid redundant builds
+  const recipe = validation.recipe;
+
   // Call MCP server for model-hardware compatibility check
   useEffect(() => {
     const controller = new AbortController();
@@ -141,8 +144,11 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     };
   }, [state.hfModelId, state.localFiles, state.passes.conversionSourceFormat, state.ihvProvider, refreshKey]);
 
-  const handleApplyAutofix = (issue: PipelineIssue) => {
+  const handleApplyAutofix = (issue: PipelineIssue, e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     const patch = applyIssueAutofix(state, issue);
+    if (!patch || Object.keys(patch).length === 0) return;
     setState(patch);
   };
 
@@ -187,7 +193,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   }, [validation.issues, fetchDiagnostic]);
 
   // Hardware-specific parameter validation (synchronous, cheap — runs every render with state)
-  const paramWarnings = validatePassParameters(state, activePassNames);
+  const paramWarnings = validatePassParameters(state, activePassNames, recipe);
 
   // Build compatibility warnings for active passes
   const compatWarnings = compatResult?.compatibility_warnings ?? [];
@@ -292,18 +298,18 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
       className="rounded-lg border border-slate-700 bg-slate-900/80 overflow-hidden"
     >
       {/* Header */}
-      <button
-        type="button"
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-3 hover:bg-slate-800/50 transition-colors"
-      >
-        <div className="flex items-center gap-2">
+      <div className="w-full flex items-center justify-between p-3 hover:bg-slate-800/50 transition-colors">
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-2 flex-1 min-w-0 text-left cursor-pointer"
+        >
           {criticalCount > 0 ? (
-            <AlertTriangle className="h-4 w-4 text-rose-400" />
+            <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
           ) : warningCount > 0 ? (
-            <Info className="h-4 w-4 text-amber-400" />
+            <Info className="h-4 w-4 text-amber-400 shrink-0" />
           ) : (
-            <CheckCircle className="h-4 w-4 text-emerald-400" />
+            <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />
           )}
           <span className="text-xs font-medium text-slate-300">
             {criticalCount > 0
@@ -318,29 +324,26 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
           {mcpParamLoading && (
             <span className="text-[10px] text-slate-500 animate-pulse">Validating parameters...</span>
           )}
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={handleRefreshValidation}
-            disabled={compatLoading}
-            className="h-6 w-6 flex items-center justify-center rounded text-slate-500 hover:text-electric-blue hover:bg-slate-800/50 transition-colors disabled:opacity-40"
-            title="Refresh validation"
-          >
-            <RefreshCw className={`h-3 w-3 ${compatLoading ? "animate-spin" : ""}`} />
-          </button>
           {expanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
+            <ChevronDown className="h-3.5 w-3.5 text-slate-500 ml-auto shrink-0" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
+            <ChevronRight className="h-3.5 w-3.5 text-slate-500 ml-auto shrink-0" />
           )}
-        </div>
-        {expanded ? (
-          <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
-        ) : (
-          <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
-        )}
-      </button>
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleRefreshValidation();
+          }}
+          disabled={compatLoading}
+          className="h-6 w-6 flex items-center justify-center rounded text-slate-500 hover:text-electric-blue hover:bg-slate-800/50 transition-colors disabled:opacity-40 ml-1"
+          title="Refresh validation"
+          aria-label="Refresh validation"
+        >
+          <RefreshCw className={`h-3 w-3 ${compatLoading ? "animate-spin" : ""}`} />
+        </button>
+      </div>
 
       {/* Issue list */}
       {expanded && (
@@ -371,8 +374,8 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
                 {"autofix" in issue && issue.autofix && (
                   <button
                     type="button"
-                    onClick={() => handleApplyAutofix(issue)}
-                    className="shrink-0 flex items-center gap-1 px-2 py-1 text-[9px] font-medium rounded border border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 transition-colors"
+                    onClick={(e) => handleApplyAutofix(issue, e)}
+                    className="shrink-0 flex items-center gap-1 px-2 py-1 text-[9px] font-medium rounded border border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 transition-colors cursor-pointer"
                     title={issue.actionLabel || "Apply fix"}
                   >
                     <Zap className="h-2.5 w-2.5" />

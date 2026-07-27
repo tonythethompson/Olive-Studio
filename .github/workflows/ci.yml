@@ -38,7 +38,7 @@ jobs:
 
       - name: Assert production artifacts
         run: |
-          test -f dist/server.cjs
+          test -f dist/server.mjs
           test -f bin/cli.js
 
       - name: Production start smoke

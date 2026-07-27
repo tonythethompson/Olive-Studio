@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";
-import { mapMcpConfigToUiState } from "@/lib/mcpConfigMapping";
+import { applyMcpDiagnosticToUiState, canApplyMcpDiagnostic } from "@/lib/mcpConfigMapping";
 import { DiagnosisHistory, type DiagnosisEntry } from "./DiagnosisHistory";
 import { MCPDiagnosticCard } from "./MCPDiagnosticCard";
 import {
@@ -158,22 +158,57 @@ export function ExecutionWorkspace({
   const lastClickedIndexRef = useRef<number | null>(null);
 
   const handleApplyMcpFix = () => {
-    if (!mcpDiagnostic?.updated_config) return;
-    const { patches, logs } = mapMcpConfigToUiState(mcpDiagnostic.updated_config, state.passes);
-
-    if (logs.length > 0) {
-      setExecutionLogs((prev) => [...prev, ...logs]);
+    if (!mcpDiagnostic || !canApplyMcpDiagnostic(mcpDiagnostic)) {
+      setExecutionLogs((prev) => [
+        ...prev,
+        "[MCP FIX] Nothing auto-applyable — follow Recommended Fix / Known Quirks manually.",
+      ]);
+      return;
     }
-    if (Object.keys(patches).length > 0) {
+
+    const { patches, logs, appliedQuirks, notedQuirks } = applyMcpDiagnosticToUiState(
+      mcpDiagnostic,
+      state.passes,
+      state.passRecipeOverrides,
+    );
+
+    const hasPatches = Object.keys(patches).length > 0;
+    if (!hasPatches && logs.length === 0) {
+      setExecutionLogs((prev) => [
+        ...prev,
+        "[MCP FIX] Could not map this diagnostic to UI/recipe fields. See Recommended Fix and Known Quirks.",
+      ]);
+      return;
+    }
+
+    if (hasPatches) {
       setState(patches);
     }
 
-    // Log all applied config for transparency
-    const configSummary = Object.entries(mcpDiagnostic.updated_config)
-      .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
-      .join(", ");
-    setExecutionLogs((prev) => [...prev, `[MCP FIX] Applied diagnostic config: ${configSummary}`]);
-    setMcpFixApplied("applied");
+    const appliedParts: string[] = [];
+    if (patches.cacheDir) appliedParts.push(`cacheDir=${patches.cacheDir}`);
+    if (patches.passRecipeOverrides) {
+      appliedParts.push(`passOverrides=${Object.keys(patches.passRecipeOverrides).join("+")}`);
+    }
+    if (patches.passes) {
+      const changed = Object.entries(patches.passes)
+        .filter(([k, v]) => (state.passes as Record<string, unknown>)[k] !== v)
+        .map(([k, v]) => `${k}=${JSON.stringify(v)}`);
+      if (changed.length) appliedParts.push(...changed.slice(0, 8));
+    }
+    if (appliedQuirks.length) {
+      appliedParts.push(`quirks=${appliedQuirks.join("+")}`);
+    }
+
+    setExecutionLogs((prev) => [
+      ...prev,
+      ...logs,
+      hasPatches
+        ? `[MCP FIX] Applied config + quirks: ${appliedParts.join(", ") || Object.keys(patches).join(", ")}. Re-run Execute (recipe order: Convert → Optimize → Quantize).`
+        : "[MCP FIX] Logged notes only — no UI fields changed.",
+    ]);
+    // Gate success UI state on actual applied quirks/patches only, not noted quirks
+    setMcpFixApplied(hasPatches || appliedQuirks.length > 0 ? "applied" : "");
   };
 
   // Clear log selection when logs change (new run starts)

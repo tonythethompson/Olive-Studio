@@ -103,6 +103,27 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
     }
   };
 
+  const ensureVenvNow = async () => {
+    setBusy(true);
+    setMessage(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/env/ensure-venv", { method: "POST" });
+      const data = (await res.json()) as RuntimeEnvStatus & {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setStatus(data);
+      setMessage(data.message ?? "Olive venv ready.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const needsAttention = status && (!status.systemPython || !status.oliveInstalled || !status.venvExists);
   const pathOk = status?.venvOnUserPath;
 
@@ -208,9 +229,20 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
 
           <button
             type="button"
+            disabled={busy || Boolean(status?.oliveInstalled && status?.venvExists)}
+            onClick={() => void ensureVenvNow()}
+            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-electric-blue/40 text-electric-blue hover:bg-electric-blue/10 disabled:opacity-40 font-sans text-[11px]"
+            title="Create project .venv and install olive-ai now (while you configure the pipeline)"
+          >
+            {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Terminal className="h-3.5 w-3.5" />}
+            {status?.oliveInstalled && status?.venvExists ? "Olive venv ready" : "Install Olive venv now"}
+          </button>
+
+          <button
+            type="button"
             disabled={busy || !status?.venvExists || status.venvOnUserPath}
             onClick={() => void addVenvToPath()}
-            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-electric-blue/40 text-electric-blue hover:bg-electric-blue/10 disabled:opacity-40 font-sans text-[11px]"
+            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-slate-600 text-slate-300 hover:border-electric-blue hover:text-electric-blue disabled:opacity-40 font-sans text-[11px]"
             title={
               status?.venvOnUserPath
                 ? "Already on user PATH"
@@ -222,8 +254,8 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
           </button>
 
           <p className="text-[10px] text-slate-600 leading-relaxed font-sans">
-            The app always uses the project <code className="text-slate-500">.venv</code> for Olive runs.
-            Adding to user PATH is for terminals outside the app. New terminals pick up PATH changes.
+            Install the Olive venv while you build the recipe — no need to wait for Execute Live. The app
+            always uses the project <code className="text-slate-500">.venv</code> for runs.
           </p>
 
           {message && <p className="text-[10px] text-emerald-500 font-sans">{message}</p>}

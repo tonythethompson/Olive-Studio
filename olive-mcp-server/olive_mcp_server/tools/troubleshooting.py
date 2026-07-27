@@ -85,30 +85,45 @@ def _score(entry: dict[str, Any], error_message: str, pass_name: str, config_con
 
 
 # ---------------------------------------------------------------------------
+# Maximum number of quirks to return (generous upper bound to prevent unbounded growth).
+# ---------------------------------------------------------------------------
+MAX_RELEVANT_QUIRKS = 20
+
+# ---------------------------------------------------------------------------
 # Map each troubleshooting entry to the quirk categories most relevant to its root cause.
+# Categories list *all* quirks from that bucket (no per-category truncation).
 # ---------------------------------------------------------------------------
 _ENTRY_QUIRK_CATEGORIES: dict[str, list[str]] = {
-    "onnx-export-shape": ["onnx_export"],
+    "onnx-export-shape": ["onnx_export", "pass_ordering"],
     "onnx-export-external-data": ["onnx_export"],
-    "quant-accuracy-collapse": ["quantization"],
+    "quant-accuracy-collapse": ["quantization", "pass_ordering"],
     "ep-fallback-cpu": ["hardware"],
-    "oom-quantization": ["quantization"],
+    "oom-quantization": ["quantization", "onnx_export"],
     "calibration-data-mismatch": ["quantization"],
     "lora-target-modules": ["lora"],
-    "tensorrt-build-slow": ["quantization", "hardware"],
+    "tensorrt-build-slow": ["quantization", "hardware", "onnx_export"],
     "awq-slow-calibration": ["quantization"],
-    "qnn-layer-not-supported": ["hardware"],
+    "qnn-layer-not-supported": ["hardware", "quantization", "pass_ordering"],
     "coreml-dynamic-shape": ["onnx_export"],
-    "lora-merge-fail": ["lora"],
+    "lora-merge-fail": ["lora", "quantization"],
     "openvino-fallback": ["hardware"],
-    "transformer-fusion-missing-dims": ["pass_ordering"],
-    "int4-perplexity": ["quantization"],
-    "onnx-fp16-nan": ["onnx_export"],
+    "transformer-fusion-missing-dims": ["pass_ordering", "onnx_export"],
+    "int4-perplexity": ["quantization", "pass_ordering"],
+    "onnx-fp16-nan": ["onnx_export", "pass_ordering"],
     "calibration-distribution-mismatch": ["quantization"],
-    "multi-pass-cache-overwrite": ["pass_ordering"],
+    "multi-pass-cache-overwrite": ["pass_ordering", "quantization", "onnx_export"],
     "search-local-optima": ["pass_ordering"],
     "torchscript-export-fail": ["onnx_export"],
 }
+
+# Stable presentation order (actionable pipeline guidance first).
+_QUIRK_CATEGORY_ORDER: tuple[str, ...] = (
+    "pass_ordering",
+    "quantization",
+    "onnx_export",
+    "lora",
+    "hardware",
+)
 
 
 def _infer_quirk_categories(entry_id: str | None, pass_name: str) -> set[str]:
@@ -119,32 +134,56 @@ def _infer_quirk_categories(entry_id: str | None, pass_name: str) -> set[str]:
         categories.update(_ENTRY_QUIRK_CATEGORIES.get(entry_id, []))
 
     p = (pass_name or "").lower()
-    if any(k in p for k in ("quant", "awq", "qat", "int4", "int8", "nvfp4")):
+    if any(k in p for k in ("quant", "awq", "qat", "int4", "int8", "nvfp4", "hqq", "gptq")):
         categories.add("quantization")
-    if any(k in p for k in ("onnx", "conversion", "export", "coreml", "float16")):
+        # Quant pipelines almost always need convert/order guidance too.
+        categories.add("pass_ordering")
+    if any(k in p for k in ("onnx", "conversion", "export", "coreml", "float16", "fp16")):
         categories.add("onnx_export")
-    if any(k in p for k in ("lora", "peft")):
+    if any(k in p for k in ("lora", "peft", "qlora")):
         categories.add("lora")
     if any(k in p for k in ("tensorrt", "qnn", "openvino", "execution", "provider", "cuda", "rocm")):
         categories.add("hardware")
-    if any(k in p for k in ("transform", "optimize", "order", "cache", "search", "fusion")):
+    if any(k in p for k in ("transform", "optimize", "order", "cache", "search", "fusion", "split")):
         categories.add("pass_ordering")
 
     if not categories:
-        categories = {"quantization", "pass_ordering"}
+        # Unknown errors still get full default guidance sets (not a truncated sample).
+        categories = {"pass_ordering", "quantization"}
 
     return categories
 
 
 def _build_relevant_quirks(entry_id: str | None, pass_name: str) -> list[str]:
-    """Return quirk titles from the most relevant categories, limited to a handful."""
+    """Return quirk titles from every inferred relevant category, up to MAX_RELEVANT_QUIRKS.
+
+    Historically this returned only the first 2 quirks per category (max 6),
+    which hid actionable guidance such as External Data Format, Graph Optimize
+    Before Quantization, Symmetric quantization, and QLoRA + Quantization.
+
+    Now returns all quirks from the inferred categories, enforcing a generous
+    upper bound (MAX_RELEVANT_QUIRKS) across the combined result to prevent
+    unbounded growth as the quirks database expands.
+    """
     categories = _infer_quirk_categories(entry_id, pass_name)
     quirks_db = load_quirks()
     titles: list[str] = []
-    for category in categories:
-        for quirk in quirks_db.get(category, [])[:2]:
-            titles.append(quirk["title"])
-    return titles[:6]
+    seen: set[str] = set()
+
+    ordered_cats = [c for c in _QUIRK_CATEGORY_ORDER if c in categories]
+    # Include any unexpected category keys after the known order.
+    ordered_cats.extend(sorted(c for c in categories if c not in _QUIRK_CATEGORY_ORDER))
+
+    for category in ordered_cats:
+        for quirk in quirks_db.get(category, []):
+            if len(titles) >= MAX_RELEVANT_QUIRKS:
+                return titles
+            title = quirk.get("title") if isinstance(quirk, dict) else None
+            if not title or title in seen:
+                continue
+            seen.add(title)
+            titles.append(title)
+    return titles
 
 def troubleshoot_olive_error(
     error_message: str,

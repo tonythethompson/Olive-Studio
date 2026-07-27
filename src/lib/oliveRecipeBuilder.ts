@@ -43,6 +43,81 @@ export function providerToAccelerator(provider: IHVProvider): {
   return { device, execution_providers: [provider] };
 }
 
+const PYTORCH_NATIVE_QUANT_METHODS = new Set(["awq", "gptq", "qat", "spinquant", "quarot"]);
+
+export function isPyTorchNativeQuantMethod(method: UIState["passes"]["quantMethod"]): boolean {
+  return PYTORCH_NATIVE_QUANT_METHODS.has(method);
+}
+
+/**
+ * Merge MCP/UI pass recipe overrides (output_name + extra config) onto a pass object.
+ * Matches by Olive pass `type` string (e.g. OnnxConversion).
+ */
+export function applyPassRecipeOverride(
+  passObj: Record<string, unknown>,
+  overrides: UIState["passRecipeOverrides"] | undefined,
+): Record<string, unknown> {
+  if (!overrides) return passObj;
+  const typeName = typeof passObj.type === "string" ? passObj.type : "";
+  if (!typeName) return passObj;
+  const ov = overrides[typeName];
+  if (!ov) return passObj;
+
+  const next: Record<string, unknown> = { ...passObj };
+  if (ov.output_name?.trim()) {
+    next.output_name = ov.output_name.trim();
+  }
+  if (ov.config && Object.keys(ov.config).length > 0) {
+    const existing =
+      next.config && typeof next.config === "object" && !Array.isArray(next.config)
+        ? (next.config as Record<string, unknown>)
+        : {};
+    next.config = { ...existing, ...ov.config };
+  }
+  return next;
+}
+
+/**
+ * Canonical Olive pass order (dict insertion order = run order for fixed pipelines).
+ * ONNX: Convert → Optimize → Quantize → (optional FP16) → Split
+ * Torch-native quant (AWQ/GPTQ/…): PEFT/Prune → Quant → then ONNX stages if present
+ */
+function preferredPassOrder(torchQuantActive: boolean): string[] {
+  if (torchQuantActive) {
+    return ["peft", "pruning", "quantization", "conversion", "transformer_opt", "float16", "splitting"];
+  }
+  return ["peft", "pruning", "conversion", "transformer_opt", "quantization", "float16", "splitting"];
+}
+
+function orderPasses(passes: Record<string, unknown>, torchQuantActive: boolean): Record<string, unknown> {
+  const ordered: Record<string, unknown> = {};
+  for (const key of preferredPassOrder(torchQuantActive)) {
+    if (passes[key] !== undefined) ordered[key] = passes[key];
+  }
+  for (const [key, value] of Object.entries(passes)) {
+    if (!(key in ordered)) ordered[key] = value;
+  }
+  return ordered;
+}
+
+function finalizePasses(
+  passes: Record<string, unknown>,
+  overrides: UIState["passRecipeOverrides"] | undefined,
+  torchQuantActive: boolean,
+): Record<string, unknown> {
+  const ordered = orderPasses(passes, torchQuantActive);
+  if (!overrides || Object.keys(overrides).length === 0) return ordered;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(ordered)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      out[key] = applyPassRecipeOverride(value as Record<string, unknown>, overrides);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
 export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   const recipe: Record<string, unknown> = {
     input_model: {
@@ -98,6 +173,10 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   }
 
   const passes = recipe.passes as Record<string, unknown>;
+
+  // PyTorch-native quantizers consume a torch/HF model, so ONNX conversion and
+  // ONNX-only passes cannot precede them in the fixed pipeline order.
+  const torchQuantActive = state.passes.quantization && isPyTorchNativeQuantMethod(state.passes.quantMethod);
 
   if (state.passes.conversion) {
     if (state.passes.conversionFormat === "onnx") {
@@ -171,7 +250,10 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
         type: "QATQuantizer",
         config: qatConfig,
       };
-    } else if (state.passes.quantMethod === "hqq") {
+    } else if (
+      state.passes.quantMethod === "hqq" &&
+      (state.ihvProvider === "CPUExecutionProvider" || state.ihvProvider === "CUDAExecutionProvider")
+    ) {
       // Docs: https://microsoft.github.io/Olive/0.12.1/reference/options.html -> OnnxHqqQuantization
       const hqqConfig: Record<string, unknown> = {
         precision: state.passes.quantPrecision === "int4" ? "int4" : "int8",
@@ -186,7 +268,10 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
         type: "OnnxHqqQuantization",
         config: hqqConfig,
       };
-    } else if (state.passes.quantMethod === "rtn") {
+    } else if (
+      state.passes.quantMethod === "rtn" &&
+      (state.ihvProvider === "CPUExecutionProvider" || state.ihvProvider === "CUDAExecutionProvider")
+    ) {
       // Docs: https://microsoft.github.io/Olive/0.12.1/reference/options.html -> OnnxBlockWiseRtnQuantization
       const rtnConfig: Record<string, unknown> = {
         bits: state.passes.quantPrecision === "int4" ? 4 : 8,
@@ -288,7 +373,8 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
     }
   }
 
-  if (state.passes.onnxTransforms) {
+  // ONNX graph passes cannot follow a torch-native quantizer without an ONNX conversion.
+  if (state.passes.onnxTransforms && (!torchQuantActive || state.passes.conversion)) {
     if (state.passes.conversionFormat === "openvino" || state.ihvProvider === "OpenVINOExecutionProvider") {
       passes.transformer_opt = {
         type: "OpenVINOIoUpdate",
@@ -322,7 +408,7 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
     }
   }
 
-  if (state.passes.splitting) {
+  if (state.passes.splitting && (!torchQuantActive || state.passes.conversion)) {
     passes.splitting = { type: "SplitModel", config: {} };
   }
 
@@ -345,7 +431,10 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
         : state.passes.pruningMethod === "wanda"
           ? "Wanda"
           : "Prune";
+    const sparsityKey = pType === "Prune" ? "target_sparsity" : "sparsity_ratio";
     const config: Record<string, unknown> = {
+      [sparsityKey]: state.passes.pruningSparsity,
+      // Preserve legacy key for older recipe-hub round-trip until hub reads the new keys.
       sparsity: state.passes.pruningSparsity,
       pruning_criteria: state.passes.pruningCriteria,
     };
@@ -379,6 +468,9 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
       },
     };
   }
+
+  // Order: Convert → Optimize → Quantize (ONNX path), then MCP pass overrides
+  recipe.passes = finalizePasses(passes, state.passRecipeOverrides, torchQuantActive);
 
   return recipe;
 }

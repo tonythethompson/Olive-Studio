@@ -1,8 +1,8 @@
 import { IHVProvider, UIState, OliveRecipe } from "@/types";
 import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
 import { getProviderAvailabilityBlock, type HardwareProbeResult } from "@/lib/hardwareProbe";
-import { buildOliveRecipe } from "@/lib/oliveRecipeBuilder";
-import { isKnownPass } from "@/lib/schemaEngine";
+import { buildOliveRecipe, isPyTorchNativeQuantMethod } from "@/lib/oliveRecipeBuilder";
+import { isKnownPass, getPassSchema } from "@/lib/schemaEngine";
 
 export type PipelineValidationOptions = {
   hardwareProbe?: HardwareProbeResult | null;
@@ -29,6 +29,8 @@ export interface PipelineValidationResult {
   isBlocked: boolean;
   statusLabel: string;
   statusTone: "success" | "warning" | "error";
+  /** Pre-built recipe, available for reuse to avoid redundant builds */
+  recipe: OliveRecipe;
 }
 
 export interface HardwareConflict {
@@ -73,9 +75,9 @@ export function isQuantMethodAllowed(
   if (method === "qat") {
     return provider !== "QNNExecutionProvider";
   }
-  if (method === "hqq") {
-    // OnnxHqqQuantization — no GPU required for HQQ (docs: olive quantize CLI table shows ❌ GPU).
-    return true;
+  if (method === "hqq" || method === "rtn") {
+    // OnnxHqqQuantization and OnnxBlockWiseRtnQuantization only support CPU/CUDA.
+    return provider === "CPUExecutionProvider" || provider === "CUDAExecutionProvider";
   }
   if (method === "spinquant" || method === "quarot") {
     return GPU_PROVIDERS.includes(provider);
@@ -291,7 +293,13 @@ export function prepareProviderChange(
 }
 
 function passesNeedOnnxGraph(passes: UIState["passes"]): boolean {
-  return Boolean(passes.quantization || passes.onnxTransforms);
+  // PyTorch-native quantizers do not need an ONNX conversion by themselves.
+  // They only need conversion when followed by ONNX graph transforms or splitting.
+  const usesPyTorchQuant = passes.quantization && isPyTorchNativeQuantMethod(passes.quantMethod);
+  if (usesPyTorchQuant) {
+    return Boolean(passes.onnxTransforms || passes.splitting);
+  }
+  return Boolean(passes.quantization || passes.onnxTransforms || passes.splitting);
 }
 
 function getCrossPassIssues(state: UIState): PipelineIssue[] {
@@ -309,20 +317,6 @@ function getCrossPassIssues(state: UIState): PipelineIssue[] {
       affectedPasses: ["conversion", "transformer_opt", "quantization", "provider"],
       actionLabel: "Enable ONNX conversion",
       autofix: { passes: { ...passes, conversion: true, conversionFormat: "onnx" } },
-    });
-  }
-
-  if (passes.pruning && passes.quantization && passes.quantMethod === "awq") {
-    issues.push({
-      id: "pruning-awq",
-      severity: "warning",
-      title: "Pruning disabled for AWQ",
-      description:
-        "Pruning conflicts with AWQ scale calibration. Pruning is turned off automatically when AWQ is selected.",
-      affectedTabs: ["quantization", "compression"],
-      affectedPasses: ["pruning", "quantization"],
-      actionLabel: "Disable pruning",
-      autofix: { passes: { ...passes, pruning: false } },
     });
   }
 
@@ -467,6 +461,63 @@ function getProviderHardwareIssues(state: UIState, probe?: HardwareProbeResult |
   ];
 }
 
+function inputModelFormats(inputModel: { type?: string }): string[] {
+  switch (inputModel.type) {
+    case "HfModel":
+      return ["hf"];
+    case "OnnxModel":
+      return ["onnx"];
+    case "OpenVINOModel":
+      return ["openvino"];
+    case "PyTorchModel":
+    default:
+      return ["torch"];
+  }
+}
+
+/**
+ * Detect input/output handler mismatches in the generated Olive pass chain.
+ */
+function getPassChainIssues(state: UIState, recipe: OliveRecipe): PipelineIssue[] {
+  const issues: PipelineIssue[] = [];
+
+  const recipePasses = recipe.passes ?? {};
+  const passEntries = Object.entries(recipePasses);
+  if (passEntries.length === 0) return issues;
+
+  let prevOutputs = inputModelFormats(recipe.input_model ?? { type: "PyTorchModel" });
+  let prevPassKey = "input_model";
+
+  for (const [stepId, passConfig] of passEntries) {
+    const passType = (passConfig as { type?: string }).type;
+    if (!passType) continue;
+
+    const schema = getPassSchema(passType);
+    if (!schema) continue;
+
+    const inputs = schema.inputs ?? [];
+    const outputs = schema.outputs ?? [];
+
+    const compatible =
+      inputs.length === 0 || prevOutputs.length === 0 || prevOutputs.some((o) => inputs.includes(o));
+    if (!compatible) {
+      issues.push({
+        id: `pass-chain-mismatch-${stepId}`,
+        severity: "critical",
+        title: "Pass chain mismatch",
+        description: `Previous step (${prevPassKey}) produces ${prevOutputs.join("/")} output, but ${passType} (${stepId}) expects inputs in ${inputs.join("/")} format.`,
+        affectedTabs: [stepId],
+        affectedPasses: [prevPassKey, stepId],
+      });
+    }
+
+    prevOutputs = outputs.length > 0 ? outputs : prevOutputs;
+    prevPassKey = stepId;
+  }
+
+  return issues;
+}
+
 function getAdvisoryIssues(state: UIState): PipelineIssue[] {
   const issues: PipelineIssue[] = [];
   const { passes } = state;
@@ -493,11 +544,11 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
  * Identifies generated Olive pipeline steps with unknown pass types.
  *
  * @param state - The UI state used to build the Olive recipe
+ * @param recipe - Pre-built Olive recipe to avoid redundant builds
  * @returns Critical issues for generated steps whose pass types are missing or unknown
  */
-function getPassCatalogIssues(state: UIState): PipelineIssue[] {
+function getPassCatalogIssues(state: UIState, recipe: OliveRecipe): PipelineIssue[] {
   const issues: PipelineIssue[] = [];
-  const recipe = buildOliveRecipe(state) as unknown as OliveRecipe;
 
   for (const [stepId, passConfig] of Object.entries(recipe.passes ?? {})) {
     const passType = (passConfig as { type?: string }).type;
@@ -531,12 +582,16 @@ export function getPipelineValidation(
   state: UIState,
   options?: PipelineValidationOptions,
 ): PipelineValidationResult {
+  // Build the recipe once and pass to functions that need it
+  const recipe = buildOliveRecipe(state) as unknown as OliveRecipe;
+
   const issues = dedupeIssues([
     ...getCrossPassIssues(state),
     ...getProviderIssues(state),
     ...getProviderHardwareIssues(state, options?.hardwareProbe),
     ...getAdvisoryIssues(state),
-    ...getPassCatalogIssues(state),
+    ...getPassCatalogIssues(state, recipe),
+    ...getPassChainIssues(state, recipe),
   ]);
 
   const criticalCount = issues.filter((i) => i.severity === "critical").length;
@@ -560,6 +615,7 @@ export function getPipelineValidation(
     isBlocked: criticalCount > 0,
     statusLabel,
     statusTone,
+    recipe,
   };
 }
 
@@ -573,10 +629,18 @@ export function applyIssueAutofix(state: UIState, issue: PipelineIssue): Partial
 }
 
 export function mergeUiState(state: UIState, patch: Partial<UIState>): UIState {
+  // Replace (do not deep-merge) when the key is present so recipe loads can
+  // clear stale MCP overrides with `passRecipeOverrides: {}`. Callers that need
+  // incremental accumulation (MCP Apply Fix) must merge onto current overrides
+  // before setState.
+  const passRecipeOverrides =
+    patch.passRecipeOverrides !== undefined ? patch.passRecipeOverrides : state.passRecipeOverrides;
+
   return {
     ...state,
     ...patch,
     passes: patch.passes ? { ...state.passes, ...patch.passes } : state.passes,
+    passRecipeOverrides,
   };
 }
 
@@ -602,10 +666,6 @@ export function coercePassFields(passes: UIState["passes"], provider: IHVProvide
 
   if (next.peft && !isPeftMethodAllowed(next.peftMethod, provider)) {
     next.peftMethod = "lora";
-  }
-
-  if (next.quantization && next.quantMethod === "awq" && next.pruning) {
-    next.pruning = false;
   }
 
   if (next.peft && next.quantization && next.quantPrecision !== "fp16" && next.peftMethod === "lora") {
@@ -637,12 +697,13 @@ export function sanitizePipelineState(state: UIState): UIState {
 
   for (let i = 0; i < 16; i++) {
     const validation = getPipelineValidation(current);
-    const fixable = validation.issues.filter((issue) => issue.autofix);
+    // Only auto-apply critical fixes; warnings should be surfaced to the user.
+    const fixable = validation.issues.filter((issue) => issue.autofix && issue.severity === "critical");
     if (fixable.length === 0) {
       break;
     }
 
-    const issue = fixable.find((candidate) => candidate.severity === "critical") ?? fixable[0];
+    const issue = fixable[0];
 
     const patch = applyIssueAutofix(current, issue);
     if (!patch.passes && !patch.ihvProvider && Object.keys(patch).length === 0) {

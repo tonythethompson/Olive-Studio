@@ -134,6 +134,7 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
       {
         name: "NVIDIA prefers AWQ INT4 over PTQ INT8 for LLMs",
         check: (passes) => {
+          if (!passes.quantization) return null;
           if (passes.quantPrecision === "int8" && passes.quantMethod === "ptq") {
             return "NVIDIA GPU works best with AWQ INT4 quantization for LLMs (typically <2% perplexity drop). PTQ INT8 can drop 10-15% perplexity on large models. Note: AWQ is incompatible with pruning; switching will disable pruning if enabled.";
           }
@@ -199,6 +200,7 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
       {
         name: "TensorRT RTX INT8 requires QDQ format",
         check: (passes) => {
+          if (!passes.quantization) return null;
           if (passes.quantPrecision === "int8" && passes.quantMethod === "ptq") {
             return "TensorRT RTX INT8 requires QDQ format. PTQ INT8 does not generate QDQ nodes — use AWQ instead for correct INT8 quantization on TensorRT RTX. Note: AWQ is incompatible with pruning; switching will disable pruning if enabled.";
           }
@@ -206,6 +208,26 @@ function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]>
         },
         autofix: { passes: { quantMethod: "awq" } },
         actionLabel: "Switch to AWQ (disables pruning)",
+      },
+    ];
+    rules["SparseGPT"] = [
+      {
+        name: "Structured pruning vs TensorRT RTX",
+        check: (passes) => {
+          if (passes.pruning && passes.pruningType === "structured") {
+            return "On TensorRT RTX, prefer AWQ INT4 over structured pruning for LLMs. Pruning + AWQ also conflict (AWQ calibration). Switch to AWQ INT4 or use unstructured sparsity only after quant.";
+          }
+          return null;
+        },
+        autofix: {
+          passes: {
+            pruning: false,
+            quantization: true,
+            quantMethod: "awq",
+            quantPrecision: "int4",
+          },
+        },
+        actionLabel: "Switch to AWQ INT4",
       },
     ];
   }
@@ -285,21 +307,33 @@ function getRuleKey(passType: string): string | null {
     return "OnnxQuantization";
   }
 
+  if (passType === "SparseGPT" || passType === "Wanda" || passType === "Prune") {
+    return "SparseGPT";
+  }
+
   return null;
 }
 
 /**
  * Validate active pass parameters against the selected hardware.
  * Returns warnings for parameter incompatibilities.
+ *
+ * @param state - The UI state
+ * @param activePassNames - List of active pass names to validate
+ * @param recipe - Optional pre-built Olive recipe to avoid redundant builds
  */
-export function validatePassParameters(state: UIState, activePassNames: string[]): ParameterWarning[] {
+export function validatePassParameters(
+  state: UIState,
+  activePassNames: string[],
+  recipe?: OliveRecipe,
+): ParameterWarning[] {
   const warnings: ParameterWarning[] = [];
   const provider = state.ihvProvider;
   const rules = getRulesForProvider(provider);
 
   // Build the generated recipe to find the actual Olive pass types for active steps
-  const recipe = buildOliveRecipe(state) as unknown as OliveRecipe;
-  const recipePasses = recipe.passes ?? {};
+  const builtRecipe = recipe ?? (buildOliveRecipe(state) as unknown as OliveRecipe);
+  const recipePasses = builtRecipe.passes ?? {};
 
   // Check each active pass against the rules
   for (const passName of activePassNames) {

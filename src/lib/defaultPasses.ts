@@ -26,7 +26,7 @@ export const DEFAULT_PASSES: UIState["passes"] = {
   peft: false,
   peftMethod: "lora",
   diffusionLora: false,
-  qatQuantPrecision: "int4",
+  qatQuantPrecision: "int8",
   qatCalibrateMethod: "minmax",
   qatCalibrateSteps: 10,
   quantPreset: "",

@@ -179,7 +179,7 @@ For CUDA / TensorRT recipes on Windows or Linux:
 | ----------------------- | ----------------------------------------------- |
 | `pnpm dev`              | Vite + Express development server               |
 | `pnpm build`            | Production frontend + server bundle             |
-| `pnpm start`            | Run `dist/server.cjs`                           |
+| `pnpm start`            | Run `dist/server.mjs` (production static)       |
 | `pnpm test`             | Run Vitest unit tests                           |
 | `pnpm test:coverage`    | Run Vitest with coverage                        |
 | `pnpm test:watch`       | Run Vitest in watch mode                        |

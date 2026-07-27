@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
-import { spawn, execFile } from "child_process";
+import { spawn, spawnSync, execFile, execSync } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import os from "os";
@@ -50,8 +50,116 @@ import {
 dotenv.config();
 dotenv.config({ path: ".env.local", override: true });
 
+const ALLOWED_BASE_URL_PREFIX_BY_PROVIDER: Partial<Record<ProviderConfig["provider"], string[]>> = {
+  openai: ["https://api.openai.com/v1"],
+  "chatgpt-sub": ["https://api.openai.com/v1"],
+  mistral: ["https://api.mistral.ai/v1"],
+  copilot: ["https://api.githubcopilot.com"],
+  kilocode: ["https://api.kilo.ai/api/gateway"],
+  xai: ["https://api.x.ai/v1"],
+  openrouter: ["https://openrouter.ai/api/v1"],
+  groq: ["https://api.groq.com/openai/v1"],
+  together: ["https://api.together.xyz/v1"],
+};
+
+function isIpLiteralHost(hostname: string): boolean {
+  if (!hostname) return false;
+  if (hostname.includes(":")) return true; // IPv6 literal
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname);
+}
+
+function isPrivateOrLocalHostname(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  if (
+    h === "localhost" ||
+    h.endsWith(".localhost") ||
+    h === "127.0.0.1" ||
+    h === "::1" ||
+    h === "0.0.0.0" ||
+    h.endsWith(".local")
+  ) {
+    return true;
+  }
+  if (!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(h)) return false;
+  const octets = h.split(".").map((n) => Number(n));
+  if (octets.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return true;
+  const [a, b] = octets;
+  return (
+    a === 10 ||
+    a === 127 ||
+    a === 0 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
+}
+
+function sanitizeProviderBaseUrl(provider: string, rawBaseUrl?: string): string | undefined {
+  const trimmed = rawBaseUrl?.trim();
+  if (!trimmed) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error("Invalid baseUrl");
+  }
+  if (parsed.protocol !== "https:") {
+    throw new Error("baseUrl must use https");
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("baseUrl must not include credentials");
+  }
+  if (isIpLiteralHost(parsed.hostname) || isPrivateOrLocalHostname(parsed.hostname)) {
+    throw new Error("baseUrl host is not allowed");
+  }
+  const normalized = parsed.toString().replace(/\/+$/, "");
+  const allowed = ALLOWED_BASE_URL_PREFIX_BY_PROVIDER[provider as ProviderConfig["provider"]];
+  if (allowed && !allowed.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`))) {
+    throw new Error(`baseUrl is not allowed for provider: ${provider}`);
+  }
+  return normalized;
+}
+
 const app = express();
 app.use(express.json({ limit: "10mb" }));
+
+// CORS early — browser + Tauri webviews (same-origin normally; helps desktop edge cases)
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  let allowed = false;
+
+  if (!origin) {
+    allowed = true;
+  } else if (origin === "tauri://localhost" || origin === "https://tauri.localhost") {
+    // Exact match for Tauri origins
+    allowed = true;
+  } else {
+    // Parse URL to validate hostname and port for http origins
+    try {
+      const url = new URL(origin);
+      const hostname = url.hostname;
+      const port = url.port ? parseInt(url.port, 10) : url.protocol === "https:" ? 443 : 80;
+
+      // Allow localhost and 127.0.0.1 with any port for dev/Tauri
+      if (hostname === "localhost" || hostname === "127.0.0.1") {
+        allowed = true;
+      }
+    } catch {
+      // Invalid URL, reject
+      allowed = false;
+    }
+  }
+
+  if (allowed) {
+    res.setHeader("Access-Control-Allow-Origin", origin || "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  }
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+  next();
+});
 
 const PORT = Number.parseInt(process.env.PORT || "3000", 10) || 3000;
 const VENV_DIR = path.join(process.cwd(), ".venv");
@@ -517,7 +625,6 @@ async function callAI(system: string, messages: AIChatMessage[], wantJson = fals
     case "copilot":
       return callGitHubCopilot(cfg, system, messages, wantJson);
     case "devin": {
-      // Devin subscription: not a model — multi-model access after browser sign-in
       return devinChat({
         model: cfg.model || "swe-1-6",
         system: wantJson
@@ -530,7 +637,7 @@ async function callAI(system: string, messages: AIChatMessage[], wantJson = fals
       });
     }
     case "codex": {
-      // ChatGPT subscription path: local Codex CLI/SDK (auth from app-server login or `codex login`)
+      // ChatGPT Plus/Pro subscription
       const prompt = buildCodexPrompt(
         wantJson ? `${system}\n\nIMPORTANT: Respond with valid JSON only. No markdown fences.` : system,
         messages,
@@ -541,7 +648,7 @@ async function callAI(system: string, messages: AIChatMessage[], wantJson = fals
       });
     }
     case "openai":
-    case "chatgpt-sub": // OpenAI API key (platform credits) — not ChatGPT web session login
+    case "chatgpt-sub": // OpenAI API key (platform credits)
     case "mistral":
     case "openai-compat":
     case "xai":
@@ -2256,7 +2363,6 @@ function cancelJobById(jobId: string): { ok: boolean; message?: string } {
     if (job.process && job.process.pid) {
       try {
         if (process.platform === "win32") {
-          const { spawnSync } = require("child_process");
           spawnSync("taskkill", ["/F", "/T", "/PID", String(job.process.pid)]);
         } else {
           job.process.kill("SIGKILL");
@@ -2409,6 +2515,31 @@ app.post("/api/env/add-venv-to-path", async (_req, res) => {
   });
 });
 
+/**
+ * Create project .venv + install olive-ai without starting a full Olive run.
+ * Lets users prepare the environment while configuring the pipeline.
+ */
+app.post("/api/env/ensure-venv", async (_req, res) => {
+  const lines: string[] = [];
+  try {
+    const result = await ensureVenv((line) => {
+      lines.push(line);
+    });
+    if (!result.ok) {
+      return res.status(500).json({ ok: false, error: result.error, lines });
+    }
+    return res.json({
+      ok: true,
+      message: "Project .venv is ready with olive-ai.",
+      lines,
+      ...(await getRuntimeEnvStatus()),
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ ok: false, error: msg, lines });
+  }
+});
+
 // ─── GET/POST/DELETE /api/ai/provider ────────────────────────────────────────
 app.get("/api/ai/provider", (_req, res) => {
   const cfg = getAiProvider();
@@ -2476,9 +2607,8 @@ app.post("/api/ai/provider", (req, res) => {
     });
   }
   // Apply known default bases so session config works even if the UI omits baseUrl
-  const resolvedBase =
-    baseUrl?.trim() ||
-    (provider === "copilot"
+  const defaultBase =
+    provider === "copilot"
       ? "https://api.githubcopilot.com"
       : provider === "kilocode"
         ? "https://api.kilo.ai/api/gateway"
@@ -2490,7 +2620,8 @@ app.post("/api/ai/provider", (req, res) => {
               ? "https://api.groq.com/openai/v1"
               : provider === "together"
                 ? "https://api.together.xyz/v1"
-                : undefined);
+                : undefined;
+  const resolvedBase = sanitizeProviderBaseUrl(provider, baseUrl) ?? defaultBase;
   runtimeAiProvider = {
     provider: provider as ProviderConfig["provider"],
     apiKey: key!.trim(),
@@ -2508,6 +2639,374 @@ app.post("/api/ai/provider", (req, res) => {
 app.delete("/api/ai/provider", (_req, res) => {
   runtimeAiProvider = null;
   return res.json({ ok: true });
+});
+
+// ─── GET/POST /api/ai/models — live model catalog for a provider ──────────────
+// Auto-refresh on first selection in the UI. Falls back gracefully when no key.
+
+/** Static fallback lists (same defaults as the settings UI). */
+const FALLBACK_MODELS: Record<string, string[]> = {
+  gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
+  openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+  anthropic: ["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-4-8"],
+  mistral: ["mistral-large-latest", "mistral-medium-latest", "ministral-8b-latest"],
+  xai: ["grok-3", "grok-3-mini", "grok-2"],
+  openrouter: [
+    "openai/gpt-4o",
+    "anthropic/claude-sonnet-4-6",
+    "google/gemini-2.5-flash",
+    "meta-llama/llama-4-scout",
+    "deepseek/deepseek-r1",
+    "qwen/qwen3-235b-a22b",
+  ],
+  groq: ["llama-4-scout-17b-16e-instruct", "gemma2-9b-it", "mixtral-8x7b-32768"],
+  together: [
+    "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+    "deepseek-ai/DeepSeek-R1",
+    "Qwen/Qwen3-235B-A22B-Instruct-2507",
+  ],
+  codex: ["default", "o3", "o4-mini", "gpt-5"],
+  "chatgpt-sub": ["gpt-4o", "gpt-4o-mini", "o4-mini"],
+  copilot: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "claude-sonnet-4"],
+  kilocode: ["anthropic/claude-sonnet-4", "openai/gpt-4o", "google/gemini-2.5-flash", "deepseek/deepseek-r1"],
+  devin: ["swe-1-6", "swe-1-7", "claude-sonnet-4", "claude-opus-4", "gpt-4o", "kimi-k2"],
+  "openai-compat": [],
+};
+
+function resolveKeyForProvider(
+  provider: string,
+  bodyKey?: string,
+): { apiKey: string | null; baseUrl?: string; source: "body" | "runtime" | "env" | "none" } {
+  if (bodyKey?.trim()) {
+    return { apiKey: bodyKey.trim(), source: "body" };
+  }
+  if (runtimeAiProvider?.provider === provider && runtimeAiProvider.apiKey) {
+    return {
+      apiKey: runtimeAiProvider.apiKey,
+      baseUrl: runtimeAiProvider.baseUrl,
+      source: "runtime",
+    };
+  }
+  switch (provider) {
+    case "gemini":
+      return {
+        apiKey: readEnvApiKey("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_API_KEY") ?? null,
+        source: "env",
+      };
+    case "openai":
+    case "chatgpt-sub":
+      return { apiKey: readEnvApiKey("OPENAI_API_KEY") ?? null, source: "env" };
+    case "anthropic":
+      return { apiKey: readEnvApiKey("ANTHROPIC_API_KEY") ?? null, source: "env" };
+    case "mistral":
+      return { apiKey: readEnvApiKey("MISTRAL_API_KEY") ?? null, source: "env" };
+    case "xai":
+      return {
+        apiKey: readEnvApiKey("XAI_API_KEY") ?? null,
+        baseUrl: "https://api.x.ai/v1",
+        source: "env",
+      };
+    case "openrouter":
+      return {
+        apiKey: readEnvApiKey("OPENROUTER_API_KEY") ?? null,
+        baseUrl: "https://openrouter.ai/api/v1",
+        source: "env",
+      };
+    case "groq":
+      return {
+        apiKey: readEnvApiKey("GROQ_API_KEY") ?? null,
+        baseUrl: "https://api.groq.com/openai/v1",
+        source: "env",
+      };
+    case "together":
+      return {
+        apiKey: readEnvApiKey("TOGETHER_API_KEY") ?? null,
+        baseUrl: "https://api.together.xyz/v1",
+        source: "env",
+      };
+    case "copilot":
+      return {
+        apiKey: readEnvApiKey("GITHUB_COPILOT_TOKEN", "COPILOT_GITHUB_TOKEN", "GITHUB_TOKEN") ?? null,
+        baseUrl: "https://api.githubcopilot.com",
+        source: "env",
+      };
+    case "kilocode":
+      return {
+        apiKey: readEnvApiKey("KILO_API_KEY", "KILOCODE_API_KEY") ?? null,
+        baseUrl: "https://api.kilo.ai/api/gateway",
+        source: "env",
+      };
+    default:
+      return { apiKey: null, source: "none" };
+  }
+}
+
+async function listGeminiModels(apiKey: string): Promise<string[]> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=100`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    if (!resp.ok) {
+      const err = (await resp.json().catch(() => ({}))) as ApiErrorResponse;
+      throw new Error(`Gemini models ${resp.status}: ${err.error?.message ?? resp.statusText}`);
+    }
+    const data = (await resp.json()) as {
+      models?: Array<{ name?: string; supportedGenerationMethods?: string[] }>;
+    };
+    const ids: string[] = [];
+    for (const m of data.models ?? []) {
+      const raw = m.name?.replace(/^models\//, "") ?? "";
+      if (!raw) continue;
+      // Prefer generateContent-capable models for chat/audit
+      const methods = m.supportedGenerationMethods ?? [];
+      if (methods.length === 0 || methods.includes("generateContent")) {
+        ids.push(raw);
+      }
+    }
+    // Prefer flash/pro chat models first
+    ids.sort((a, b) => {
+      const score = (id: string) => {
+        if (id.includes("flash")) return 0;
+        if (id.includes("pro")) return 1;
+        return 2;
+      };
+      return score(a) - score(b) || a.localeCompare(b);
+    });
+    return ids;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Resolve a fetch base for OpenAI-compatible model listing.
+ * Always returns a constant from ALLOWED_BASE_URL_PREFIX_BY_PROVIDER (never the raw user string)
+ * so outbound requests cannot be redirected via SSRF.
+ */
+function allowlistedOpenAiCompatBase(provider: string, preferred?: string): string | undefined {
+  const allowed = ALLOWED_BASE_URL_PREFIX_BY_PROVIDER[provider as ProviderConfig["provider"]];
+  if (!allowed?.length) return undefined;
+  const trimmed = preferred?.trim().replace(/\/+$/, "");
+  if (trimmed) {
+    const match = allowed.find((prefix) => trimmed === prefix || trimmed.startsWith(`${prefix}/`));
+    if (match) return match;
+  }
+  return allowed[0];
+}
+
+async function listOpenAiCompatModels(
+  provider: string,
+  apiKey: string,
+  preferredBase?: string,
+): Promise<string[]> {
+  const base = allowlistedOpenAiCompatBase(provider, preferredBase);
+  if (!base) {
+    throw new Error(`Live model listing is not available for provider: ${provider}`);
+  }
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    Accept: "application/json",
+  };
+  if (provider === "openrouter") {
+    headers["HTTP-Referer"] = "https://github.com/tonythethompson/Olive-Studio";
+    headers["X-Title"] = "Olive Studio";
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const resp = await fetch(`${base}/models`, { headers, signal: controller.signal });
+    if (!resp.ok) {
+      const err = (await resp.json().catch(() => ({}))) as ApiErrorResponse;
+      throw new Error(`${provider} models ${resp.status}: ${err.error?.message ?? resp.statusText}`);
+    }
+    const data = (await resp.json()) as { data?: Array<{ id?: string }> };
+    const ids = (data.data ?? [])
+      .map((m) => m.id)
+      .filter((id): id is string => Boolean(id && id.trim()))
+      .sort((a, b) => a.localeCompare(b));
+    return ids;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function listAnthropicModels(apiKey: string): Promise<string[]> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const resp = await fetch("https://api.anthropic.com/v1/models", {
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        Accept: "application/json",
+      },
+      signal: controller.signal,
+    });
+    if (!resp.ok) {
+      const err = (await resp.json().catch(() => ({}))) as ApiErrorResponse;
+      throw new Error(`Anthropic models ${resp.status}: ${err.error?.message ?? resp.statusText}`);
+    }
+    const data = (await resp.json()) as { data?: Array<{ id?: string }> };
+    return (data.data ?? []).map((m) => m.id).filter((id): id is string => Boolean(id && id.trim()));
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchProviderModelList(opts: {
+  provider: string;
+  apiKey?: string;
+  baseUrl?: string;
+}): Promise<{
+  models: Array<{ id: string; label: string }>;
+  source: "live" | "fallback";
+  authSource: string;
+  error?: string;
+}> {
+  const provider = opts.provider;
+  const fallback = (FALLBACK_MODELS[provider] ?? []).map((id) => ({ id, label: id }));
+
+  // Subscription providers with dedicated auth
+  if (provider === "devin") {
+    try {
+      const models = await listDevinModels();
+      if (models.length > 0) {
+        return {
+          models: models.map((m) => ({ id: m.id, label: m.name || m.id })),
+          source: "live",
+          authSource: "devin-session",
+        };
+      }
+    } catch (err: unknown) {
+      return {
+        models: fallback,
+        source: "fallback",
+        authSource: "none",
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+    return { models: fallback, source: "fallback", authSource: "none" };
+  }
+
+  if (provider === "codex") {
+    // Codex model IDs are app-server side; no public list API. Static is correct.
+    return { models: fallback, source: "fallback", authSource: "codex" };
+  }
+
+  if (provider === "copilot") {
+    // Copilot chat models list is not a stable public catalog; keep curated list.
+    return { models: fallback, source: "fallback", authSource: "static" };
+  }
+
+  const resolved = resolveKeyForProvider(provider, opts.apiKey);
+  const apiKey = resolved.apiKey;
+  // Validate optional user baseUrl against the provider allowlist; never pass the raw
+  // string into fetch — listOpenAiCompatModels uses allowlisted constants only.
+  const preferredBase = opts.baseUrl?.trim() ? sanitizeProviderBaseUrl(provider, opts.baseUrl) : undefined;
+
+  if (!apiKey) {
+    return {
+      models: fallback,
+      source: "fallback",
+      authSource: "none",
+      error: "No API key available yet — showing defaults. Enter a key or set env var for live list.",
+    };
+  }
+
+  try {
+    let ids: string[] = [];
+    if (provider === "gemini") {
+      ids = await listGeminiModels(apiKey);
+    } else if (provider === "anthropic") {
+      ids = await listAnthropicModels(apiKey);
+    } else if (allowlistedOpenAiCompatBase(provider, preferredBase)) {
+      ids = await listOpenAiCompatModels(provider, apiKey, preferredBase);
+    } else {
+      return { models: fallback, source: "fallback", authSource: resolved.source };
+    }
+
+    if (ids.length === 0) {
+      return {
+        models: fallback,
+        source: "fallback",
+        authSource: resolved.source,
+        error: "Provider returned an empty model list.",
+      };
+    }
+
+    // Cap huge catalogs (OpenRouter can return hundreds)
+    const capped = ids.length > 200 ? ids.slice(0, 200) : ids;
+    return {
+      models: capped.map((id) => ({ id, label: id })),
+      source: "live",
+      authSource: resolved.source,
+    };
+  } catch (err: unknown) {
+    return {
+      models: fallback,
+      source: "fallback",
+      authSource: resolved.source,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+app.get("/api/ai/models", async (req, res) => {
+  const provider = String(req.query.provider || "").trim();
+  if (!provider) {
+    return res.status(400).json({ error: "provider query param is required" });
+  }
+  if (!ALLOWED_AI_PROVIDERS.has(provider as ProviderConfig["provider"]) && provider !== "openai-compat") {
+    return res.status(400).json({ error: `Invalid provider: ${provider}` });
+  }
+  try {
+    const result = await fetchProviderModelList({
+      provider,
+      baseUrl: typeof req.query.baseUrl === "string" ? req.query.baseUrl : undefined,
+    });
+    return res.json({ ok: true, provider, ...result });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({
+      ok: false,
+      provider,
+      models: (FALLBACK_MODELS[provider] ?? []).map((id) => ({ id, label: id })),
+      source: "fallback",
+      error: msg,
+    });
+  }
+});
+
+app.post("/api/ai/models", async (req, res) => {
+  const { provider, apiKey, baseUrl } = req.body as {
+    provider?: string;
+    apiKey?: string;
+    baseUrl?: string;
+  };
+  if (!provider?.trim()) {
+    return res.status(400).json({ error: "provider is required" });
+  }
+  if (!ALLOWED_AI_PROVIDERS.has(provider as ProviderConfig["provider"]) && provider !== "openai-compat") {
+    return res.status(400).json({ error: `Invalid provider: ${provider}` });
+  }
+  try {
+    const result = await fetchProviderModelList({
+      provider: provider.trim(),
+      apiKey,
+      baseUrl,
+    });
+    return res.json({ ok: true, provider: provider.trim(), ...result });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({
+      ok: false,
+      provider,
+      models: (FALLBACK_MODELS[provider] ?? []).map((id) => ({ id, label: id })),
+      source: "fallback",
+      error: msg,
+    });
+  }
 });
 
 // ─── OpenAI Codex (ChatGPT subscription via local app-server + SDK) ───────────
@@ -2726,7 +3225,6 @@ function findLmsCli(): string | null {
   }
   // Try PATH via synchronous which/where
   try {
-    const { execSync } = require("child_process") as typeof import("child_process");
     const result: string = execSync("which lms 2>/dev/null || where lms 2>nul", {
       encoding: "utf-8",
       timeout: 2000,
@@ -3060,6 +3558,102 @@ app.get("/api/ai/ollama-model-sizes", async (_req, res) => {
 app.get("/api/ai/ollama-health", async (_req, res) => {
   const running = await isOllamaRunning();
   return res.json({ healthy: running, serverRunning: running, port: OLLAMA_PORT });
+});
+
+/**
+ * Install or open installer for local AI engines (LM Studio / Ollama).
+ * Tries winget on Windows; always returns a download URL for the UI to open.
+ */
+const installEngineRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 3, // limit install attempts per IP in each window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many install requests. Please try again later." },
+});
+
+app.post("/api/ai/install-engine", installEngineRateLimiter, async (req, res) => {
+  // Security: restrict installer execution to loopback-only requests
+  const remoteAddr = req.socket.remoteAddress || "";
+  const isLoopback =
+    remoteAddr === "127.0.0.1" ||
+    remoteAddr === "::1" ||
+    remoteAddr === "::ffff:127.0.0.1" ||
+    remoteAddr.startsWith("::ffff:127.");
+  if (!isLoopback) {
+    return res.status(403).json({ error: "This endpoint is only accessible from localhost" });
+  }
+
+  const engine = (req.body as { engine?: string })?.engine;
+  if (engine !== "lms" && engine !== "ollama") {
+    return res.status(400).json({ error: "engine must be 'lms' or 'ollama'" });
+  }
+
+  const openedUrl = engine === "lms" ? "https://lmstudio.ai" : "https://ollama.com";
+  const wingetId = engine === "lms" ? "ElementLabs.LMStudio" : "Ollama.Ollama";
+  // Alternate package ids if primary fails
+  const wingetAlt = engine === "lms" ? "LMStudio.LMStudio" : "Ollama.Ollama";
+
+  if (process.platform === "win32") {
+    try {
+      await execFileAsync("winget", ["--version"], { timeout: 5000 });
+      try {
+        await execFileAsync(
+          "winget",
+          ["install", "-e", "--id", wingetId, "--accept-package-agreements", "--accept-source-agreements"],
+          { timeout: 300_000 },
+        );
+        return res.json({
+          ok: true,
+          method: "winget",
+          packageId: wingetId,
+          openedUrl,
+          message: `${engine === "lms" ? "LM Studio" : "Ollama"} install started via winget. Open the app once, then retry 1-Click Download.`,
+        });
+      } catch {
+        try {
+          await execFileAsync(
+            "winget",
+            ["install", "-e", "--id", wingetAlt, "--accept-package-agreements", "--accept-source-agreements"],
+            { timeout: 300_000 },
+          );
+          return res.json({
+            ok: true,
+            method: "winget",
+            packageId: wingetAlt,
+            openedUrl,
+            message: `${engine === "lms" ? "LM Studio" : "Ollama"} install started via winget. Open the app once, then retry.`,
+          });
+        } catch {
+          /* fall through to browser */
+        }
+      }
+    } catch {
+      /* winget missing */
+    }
+  }
+
+  // macOS: brew if available
+  if (process.platform === "darwin" && engine === "ollama") {
+    try {
+      await execFileAsync("brew", ["install", "ollama"], { timeout: 300_000 });
+      return res.json({
+        ok: true,
+        method: "brew",
+        openedUrl,
+        message: "Ollama installed via Homebrew. Run `ollama serve` or open the app, then retry.",
+      });
+    } catch {
+      /* fall through */
+    }
+  }
+
+  return res.json({
+    ok: true,
+    method: "browser",
+    openedUrl,
+    message: `Open ${openedUrl} to install ${engine === "lms" ? "LM Studio" : "Ollama"}, launch it once, then retry 1-Click Download.`,
+  });
 });
 
 app.get("/api/ai/ollama-models", async (_req, res) => {
@@ -3612,13 +4206,19 @@ app.post("/api/ai/analyze-state", async (req, res) => {
 
 ${formatAiWorkspaceContextForPrompt(workspace)}${mcpAdvice}
 
+Hardware rules you MUST follow before suggesting pruning:
+- NvTensorRTRTXExecutionProvider (TensorRT RTX / consumer GeForce): prefer AWQ INT4 quantization first. Do NOT recommend structured pruning as the primary path; pruning conflicts with AWQ calibration. Suggest passes.quantMethod=awq + passes.quantPrecision=int4 + passes.quantization=true + passes.pruning=false.
+- TensorrtExecutionProvider (full TensorRT SDK / datacenter): also prefer AWQ INT4; full TensorRT is different from TensorRT RTX — never say TensorRT is unavailable when only TensorRT RTX is selected/available.
+- CUDAExecutionProvider: AWQ INT4 is preferred for LLMs over PTQ INT8.
+- Never recommend structured pruning + AWQ together.
+
 autofix.pass MUST be one of these exact strings:
-ihvProvider (value: CPUExecutionProvider|CUDAExecutionProvider|TensorrtExecutionProvider|OpenVINOExecutionProvider|QNNExecutionProvider|ROCMExecutionProvider)
+ihvProvider (value: CPUExecutionProvider|CUDAExecutionProvider|TensorrtExecutionProvider|NvTensorRTRTXExecutionProvider|OpenVINOExecutionProvider|QNNExecutionProvider|ROCMExecutionProvider)
 cudaVersion (value: auto|cpu|cu118|cu121|cu124|cu126)
 passes.conversion (value: "true"|"false")
 passes.conversionFormat (value: "onnx"|"openvino")
 passes.quantization (value: "true"|"false")
-passes.quantMethod (value: "ptq"|"awq"|"qat")
+passes.quantMethod (value: "ptq"|"awq"|"qat"|"gptq")
 passes.quantPrecision (value: "int4"|"int8"|"fp16")
 passes.pruning (value: "true"|"false")
 passes.pruningType (value: "unstructured"|"structured")
@@ -3626,6 +4226,8 @@ passes.pruningMethod (value: "magnitude"|"sparsegpt"|"wanda")
 passes.onnxTransforms (value: "true"|"false")
 passes.peft (value: "true"|"false")
 passes.peftMethod (value: "lora"|"qlora")
+
+For multi-field fixes, set autofix.value to a JSON object string of pass fields, e.g. value: "{\"quantization\":true,\"quantMethod\":\"awq\",\"quantPrecision\":\"int4\",\"pruning\":false}" with pass: "passes.quantMethod".
 
 Respond with ONLY valid JSON:
 {"score":<0-100>,"level":"Optimized"|"Suboptimal"|"Unoptimized"|"Critical Mismatch","summary":"<2 sentences>","suggestions":[{"title":"<short>","description":"<why+what>","impact":"High"|"Medium"|"Low","type":"warning"|"success"|"suggestion"|"info","autofix":{"pass":"<path>","value":"<val>"}}]}`;
@@ -3742,9 +4344,21 @@ app.post("/api/validate-compatibility", async (req, res) => {
   }
 });
 
+/** Set true after listen + optional Vite warmup so Tauri does not open on a half-ready server. */
+let serverReady = false;
+
 app.get("/api/health", (_req, res) => {
-  res.json({
+  if (!serverReady) {
+    return res.status(503).json({
+      ok: false,
+      ready: false,
+      version: process.env.npm_package_version || "0.2.0",
+      port: PORT,
+    });
+  }
+  return res.json({
     ok: true,
+    ready: true,
     version: process.env.npm_package_version || "0.2.0",
     port: PORT,
   });
@@ -3756,16 +4370,23 @@ app.use("/api", (_req, res) => {
 
 // ─── Vite / Static ────────────────────────────────────────────────────────────
 /**
- * `pnpm start` runs the bundled `dist/server.cjs` and must serve static files.
+ * `pnpm start` runs the bundled `dist/server.mjs` and must serve static files.
  * Only `pnpm dev` (tsx server.ts) should use Vite middleware.
  * Do not rely solely on NODE_ENV — Windows/`pnpm start` often leave it unset.
+ * ESM format is required: packages like @openai/codex-sdk are ESM-only (no CJS export).
  */
 function shouldServeProductionStatic(): boolean {
   if (process.env.NODE_ENV === "production") return true;
   if (process.env.NODE_ENV === "development") return false;
   if (process.env.OLIVE_DIST_DIR) return true;
   const entry = (process.argv[1] ?? "").replace(/\\/g, "/");
-  return entry.endsWith("/dist/server.cjs") || entry.endsWith("server.cjs");
+  return (
+    entry.endsWith("/dist/server.mjs") ||
+    entry.endsWith("server.mjs") ||
+    // legacy CJS bundle name (older builds)
+    entry.endsWith("/dist/server.cjs") ||
+    entry.endsWith("server.cjs")
+  );
 }
 
 async function startServer() {
@@ -3779,6 +4400,13 @@ async function startServer() {
       },
       appType: "spa",
     });
+    // Pre-bundle deps BEFORE Tauri WebView opens — otherwise every import is "Failed to fetch"
+    try {
+      await vite.warmupRequest("/src/main.tsx");
+      await vite.warmupRequest("/src/App.tsx");
+    } catch (err) {
+      console.warn("[vite] warmup skipped:", err instanceof Error ? err.message : err);
+    }
     app.use((req, res, next) => {
       if (req.path.startsWith("/api")) {
         return next();
@@ -3805,10 +4433,15 @@ async function startServer() {
     console.log(`Serving UI from ${distPath}`);
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    // eslint-disable-next-line no-console -- intentional server startup message
-    console.log(`Server running on http://localhost:${PORT}`);
-    console.log(`Open http://localhost:${PORT} in your browser`);
+  await new Promise<void>((resolve) => {
+    app.listen(PORT, "0.0.0.0", () => {
+      serverReady = true;
+      // eslint-disable-next-line no-console -- intentional server startup message
+      console.log(`Server running on http://localhost:${PORT}`);
+      // eslint-disable-next-line no-console -- intentional server startup message
+      console.log(`Open http://localhost:${PORT} in your browser`);
+      resolve();
+    });
   });
 }
 
