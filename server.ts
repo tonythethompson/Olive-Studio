@@ -3524,7 +3524,15 @@ app.get("/api/ai/ollama-health", async (_req, res) => {
  * Install or open installer for local AI engines (LM Studio / Ollama).
  * Tries winget on Windows; always returns a download URL for the UI to open.
  */
-app.post("/api/ai/install-engine", async (req, res) => {
+const installEngineRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 3, // limit install attempts per IP in each window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many install requests. Please try again later." },
+});
+
+app.post("/api/ai/install-engine", installEngineRateLimiter, async (req, res) => {
   const engine = (req.body as { engine?: string })?.engine;
   if (engine !== "lms" && engine !== "ollama") {
     return res.status(400).json({ error: "engine must be 'lms' or 'ollama'" });
