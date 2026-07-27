@@ -17,8 +17,7 @@ storybook-static/
 /test-results/
 /playwright-report/
 /blob-report/
-/playwright/.cache/
-/playwright/.auth/
+/playwright/
 /.freebuff
 /~/.cache/
 /.agents/skills/studio

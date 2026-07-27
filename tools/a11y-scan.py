@@ -49,16 +49,41 @@ def keep(finding: dict) -> bool:
 
 
 def main() -> int:
-    target = sys.argv[1] if len(sys.argv) > 1 else str(ROOT / "src")
-    scanner = Path(os.environ.get("A11Y_SCANNER", DEFAULT_SCANNER))
+    target_path = Path(sys.argv[1] if len(sys.argv) > 1 else ROOT / "src").resolve()
+    if not target_path.exists():
+        print(f"Target not found: {target_path}", file=sys.stderr)
+        return 1
+    try:
+        target_path.relative_to(ROOT.resolve())
+    except ValueError:
+        print(f"Target must be inside project root: {target_path}", file=sys.stderr)
+        return 1
+
+    scanner = DEFAULT_SCANNER.resolve()
+    scanner_override = os.environ.get("A11Y_SCANNER")
+    if scanner_override:
+        candidate = Path(scanner_override).resolve()
+        plugin_root = (
+            Path.home() / ".cursor/plugins/cache/claude-code-skills/a11y-audit"
+        ).resolve()
+        try:
+            candidate.relative_to(plugin_root)
+        except ValueError:
+            print(f"Scanner path not allowed: {candidate}", file=sys.stderr)
+            return 1
+        if candidate.name != "a11y_scanner.py":
+            print(f"Scanner name not allowed: {candidate.name}", file=sys.stderr)
+            return 1
+        scanner = candidate
     if not scanner.is_file():
         print(f"Scanner not found: {scanner}", file=sys.stderr)
         return 1
 
     proc = subprocess.run(
-        [sys.executable, str(scanner), target, "--format", "json"],
+        [sys.executable, str(scanner), str(target_path), "--format", "json"],
         capture_output=True,
         text=True,
+        shell=False,
         check=False,
     )
     if proc.returncode not in (0, 1, 2) or not proc.stdout.strip():

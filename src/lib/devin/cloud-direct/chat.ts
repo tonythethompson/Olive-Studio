@@ -852,7 +852,7 @@ export async function* streamChatEvents(req: CloudChatRequest): AsyncGenerator<C
         "Connect-Content-Encoding": "gzip",
         "Connect-Accept-Encoding": "gzip",
       },
-      body,
+      body: body as unknown as BodyInit,
       signal: initialSignal,
     });
   } finally {

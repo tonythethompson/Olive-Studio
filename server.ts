@@ -2471,7 +2471,7 @@ app.post("/api/env/python-path", async (req, res) => {
   }
   writeStudioConfig({ systemPython: resolved });
   process.env.OLIVE_STUDIO_PYTHON = resolved;
-  return res.json({ ok: true, systemPython: resolved, ...(await getRuntimeEnvStatus()) });
+  return res.json({ ok: true, ...(await getRuntimeEnvStatus()) });
 });
 
 app.delete("/api/env/python-path", async (_req, res) => {
@@ -2606,7 +2606,7 @@ app.post("/api/ai/provider", (req, res) => {
   const resolvedBase = sanitizeProviderBaseUrl(provider, baseUrl) ?? defaultBase;
   runtimeAiProvider = {
     provider: provider as ProviderConfig["provider"],
-    apiKey: key.trim(),
+    apiKey: key!.trim(),
     model: model.trim(),
     baseUrl: resolvedBase,
   };

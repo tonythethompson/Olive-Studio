@@ -7,6 +7,8 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  checks: read
+  actions: read
 
 jobs:
   auto-merge:
@@ -25,9 +27,40 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Enable auto-merge (squash) — patch only
+      # Without branch protection, `gh pr merge --auto` merges immediately and
+      # can land lockfile bumps that fail pnpm's minimumReleaseAge check.
+      # Wait for the CI `validate` job, then squash-merge patch updates only.
+      - name: Wait for validate, then squash-merge patch PRs
         if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
-        run: gh pr merge --auto --squash "$PR_URL"
+        run: |
+          set -euo pipefail
+          echo "Waiting for CI validate on $PR_URL"
+          for _ in $(seq 1 80); do
+            conclusion="$(gh pr view "$PR_URL" --json statusCheckRollup --jq '
+              [.statusCheckRollup[]
+                | select(.name == "validate" and (.workflowName == "CI" or .workflowName == null))
+              ]
+              | if length == 0 then "PENDING"
+                else (.[0].conclusion // .[0].state // "PENDING")
+                end
+            ')"
+            echo "validate=$conclusion"
+            case "$conclusion" in
+              SUCCESS|success)
+                gh pr merge --squash "$PR_URL"
+                exit 0
+                ;;
+              FAILURE|failure|CANCELLED|cancelled|ERROR|error|TIMED_OUT|timed_out|startup_failure)
+                echo "Refusing to merge: validate concluded $conclusion"
+                exit 1
+                ;;
+              *)
+                sleep 15
+                ;;
+            esac
+          done
+          echo "Timed out waiting for validate"
+          exit 1
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -44,4 +77,3 @@ jobs:
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
