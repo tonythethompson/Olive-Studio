@@ -234,7 +234,7 @@ describe("NVIDIA parameter validation", () => {
     const warnings = validatePassParameters(state, ["OnnxQuantization"]);
     const ptqWarning = warnings.find((w) => w.title.includes("prefers AWQ INT4"));
     expect(ptqWarning).toBeDefined();
-    expect(ptqWarning!.actionLabel).toBe("Switch to AWQ INT4");
+    expect(ptqWarning!.actionLabel).toBe("Switch to AWQ INT4 (disables pruning)");
     expect(ptqWarning!.autofix).toEqual({ passes: { quantPrecision: "int4", quantMethod: "awq" } });
   });
 });
@@ -396,7 +396,7 @@ describe("TensorRT parameter validation", () => {
     const warnings = validatePassParameters(state, ["OnnxQuantization"]);
     const qdqWarning = warnings.find((w) => w.title.includes("QDQ format"));
     expect(qdqWarning).toBeDefined();
-    expect(qdqWarning!.actionLabel).toBe("Switch to AWQ");
+    expect(qdqWarning!.actionLabel).toBe("Switch to AWQ (disables pruning)");
     expect(qdqWarning!.autofix).toEqual({ passes: { quantMethod: "awq" } });
   });
 
@@ -428,7 +428,7 @@ describe("TensorRT parameter validation", () => {
     const warnings = validatePassParameters(state, ["OnnxQuantization"]);
     const buildWarning = warnings.find((w) => w.title.includes("engine builds are slow"));
     expect(buildWarning).toBeDefined();
-    expect(buildWarning!.actionLabel).toBe("Switch to AWQ");
+    expect(buildWarning!.actionLabel).toBe("Switch to AWQ (disables pruning)");
     expect(buildWarning!.autofix).toEqual({ passes: { quantMethod: "awq" } });
   });
 });
@@ -489,7 +489,7 @@ describe("TensorRT RTX parameter validation", () => {
     const warnings = validatePassParameters(state, ["OnnxQuantization"]);
     const int4Warning = warnings.find((w) => w.title.includes("prefers INT4 AWQ"));
     expect(int4Warning).toBeDefined();
-    expect(int4Warning!.actionLabel).toBe("Switch to AWQ INT4");
+    expect(int4Warning!.actionLabel).toBe("Switch to AWQ INT4 (disables pruning)");
     expect(int4Warning!.autofix).toEqual({ passes: { quantPrecision: "int4", quantMethod: "awq" } });
   });
 
@@ -505,7 +505,7 @@ describe("TensorRT RTX parameter validation", () => {
     const warnings = validatePassParameters(state, ["OnnxQuantization"]);
     const qdqWarning = warnings.find((w) => w.title.includes("QDQ format"));
     expect(qdqWarning).toBeDefined();
-    expect(qdqWarning!.actionLabel).toBe("Switch to AWQ");
+    expect(qdqWarning!.actionLabel).toBe("Switch to AWQ (disables pruning)");
     expect(qdqWarning!.autofix).toEqual({ passes: { quantMethod: "awq" } });
   });
 });

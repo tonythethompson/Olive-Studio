@@ -35,19 +35,20 @@ describe("pipelineStore", () => {
   });
 
   it("setState runs sanitization (coerces invalid pass combinations)", () => {
-    // Set up: enable AWQ + pruning on CUDA — sanitization should disable pruning
+    // pruning + quantization at INT4 is invalid: sanitizer coerces precision to INT8
     usePipelineStore.getState().setState({
       ihvProvider: "CUDAExecutionProvider",
       passes: {
         ...DEFAULT_PASSES,
         quantization: true,
-        quantMethod: "awq",
+        quantMethod: "ptq",
+        quantPrecision: "int4",
         pruning: true,
       },
     });
     const { state } = usePipelineStore.getState();
-    // AWQ + pruning is invalid — pruning should be coerced off
-    expect(state.passes.pruning).toBe(false);
+    expect(state.passes.quantPrecision).toBe("int8");
+    expect(state.passes.pruning).toBe(true);
     expect(state.passes.quantization).toBe(true);
   });
 
