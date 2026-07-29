@@ -318,6 +318,36 @@ describe("Route integration tests", () => {
     });
   });
 
+  // ─── GET /api/health ─────────────────────────────────────────────────────
+
+  describe("GET /api/health", () => {
+    it("returns 200 with status ok", async () => {
+      const res = await fetch(`${baseUrl}/api/health`);
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("application/json");
+
+      const body = await res.json();
+      expect(body).toHaveProperty("status", "ok");
+      expect(body).toHaveProperty("uptime");
+      expect(typeof body.uptime).toBe("number");
+      expect(body.uptime).toBeGreaterThan(0);
+    });
+
+    it("returns increasing uptime on subsequent calls", async () => {
+      const res1 = await fetch(`${baseUrl}/api/health`);
+      const body1 = await res1.json();
+
+      // Wait a tick so uptime advances
+      await new Promise((r) => setTimeout(r, 100));
+
+      const res2 = await fetch(`${baseUrl}/api/health`);
+      const body2 = await res2.json();
+
+      expect(body2.uptime).toBeGreaterThanOrEqual(body1.uptime);
+    });
+  });
+
   // ─── GET /api/system/hardware-probe ────────────────────────────────────────
 
   describe("GET /api/system/hardware-probe", () => {
