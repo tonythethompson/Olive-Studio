@@ -31,15 +31,18 @@ function allowedRoots() {
   return roots;
 }
 
-function isUnderRoot(resolved) {
+/** Rebase onto an allowlisted root via path.relative / path.join. */
+function rebaseOntoRoot(resolved) {
   const normalized = path.normalize(resolved);
-  if (normalized.includes("\0") || normalized.includes("..")) return false;
+  if (normalized.includes("\0")) return null;
   for (const root of allowedRoots()) {
     const rootNorm = path.normalize(root);
-    const prefix = rootNorm.endsWith(path.sep) ? rootNorm : rootNorm + path.sep;
-    if (normalized === rootNorm || normalized.startsWith(prefix)) return true;
+    const relative = path.relative(rootNorm, normalized);
+    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) continue;
+    if (relative.split(path.sep).includes("..")) continue;
+    return path.join(rootNorm, relative);
   }
-  return false;
+  return null;
 }
 
 const target = process.argv[2];
@@ -48,17 +51,18 @@ if (!target || target.includes("\0")) {
   process.exit(2);
 }
 const resolved = path.resolve(target);
-if (!path.isAbsolute(resolved) || !isUnderRoot(resolved) || !PYTHON_BASENAME_RE.test(path.basename(resolved))) {
+const safePath = rebaseOntoRoot(resolved);
+if (!safePath || !PYTHON_BASENAME_RE.test(path.basename(safePath))) {
   process.stderr.write("python path not allowed\n");
   process.exit(2);
 }
-if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+if (!fs.existsSync(safePath) || !fs.statSync(safePath).isFile()) {
   process.stderr.write("python path not a file\n");
   process.exit(2);
 }
 
 try {
-  const out = execFileSync(resolved, ["--version"], {
+  const out = execFileSync(safePath, ["--version"], {
     encoding: "utf8",
     timeout: 8000,
     stdio: ["ignore", "pipe", "pipe"],

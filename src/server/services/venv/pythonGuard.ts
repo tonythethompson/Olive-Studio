@@ -10,8 +10,8 @@ export type PathPythonCommand = (typeof PATH_PYTHON_COMMANDS)[number];
 
 /**
  * Trusted install roots for absolute Python interpreters.
- * Containment checks (`resolved === root || resolved.startsWith(root + sep)`)
- * are recognized by CodeQL as path-injection sanitizers.
+ * Paths are re-joined from (root, relative) after a `..` check so CodeQL
+ * treats the result as a sanitized path expression.
  */
 export function getAllowedPythonRoots(): string[] {
   const roots: string[] = [
@@ -35,16 +35,33 @@ export function getAllowedPythonRoots(): string[] {
   return roots;
 }
 
-export function isUnderAllowedPythonRoot(resolvedAbsPath: string): boolean {
+/**
+ * Map a resolved absolute path onto an allowlisted root via path.relative /
+ * path.join (CodeQL-recognized path-injection sanitizer).
+ */
+export function rebaseOntoAllowedPythonRoot(resolvedAbsPath: string): string | null {
   const normalized = path.normalize(resolvedAbsPath);
-  if (normalized.includes("\0") || normalized.includes("..")) return false;
+  if (normalized.includes("\0")) return null;
+
   for (const root of getAllowedPythonRoots()) {
     const rootNorm = path.normalize(root);
-    if (normalized === rootNorm) return true;
-    const prefix = rootNorm.endsWith(path.sep) ? rootNorm : rootNorm + path.sep;
-    if (normalized.startsWith(prefix)) return true;
+    const relative = path.relative(rootNorm, normalized);
+    // Reject escape / absolute relatives (Windows can yield absolute relatives).
+    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+      if (normalized === rootNorm) {
+        // Exact root itself is not a python file; skip.
+        continue;
+      }
+      continue;
+    }
+    if (relative.split(path.sep).includes("..")) continue;
+    return path.join(rootNorm, relative);
   }
-  return false;
+  return null;
+}
+
+export function isUnderAllowedPythonRoot(resolvedAbsPath: string): boolean {
+  return rebaseOntoAllowedPythonRoot(resolvedAbsPath) != null;
 }
 
 export function isPathPythonCommand(value: string): value is PathPythonCommand {
@@ -53,7 +70,7 @@ export function isPathPythonCommand(value: string): value is PathPythonCommand {
 
 /**
  * Validate an absolute interpreter path: basename + allowed-root containment.
- * Does not touch the filesystem until containment succeeds.
+ * Filesystem access uses the rebased (root + relative) path only.
  */
 export function resolveAllowedPythonFile(
   pythonPath: string,
@@ -68,27 +85,32 @@ export function resolveAllowedPythonFile(
   if (!path.isAbsolute(resolved)) {
     return { ok: false, error: "pythonPath must be an absolute path" };
   }
-  if (!isUnderAllowedPythonRoot(resolved)) {
+
+  const safePath = rebaseOntoAllowedPythonRoot(resolved);
+  if (!safePath) {
     return {
       ok: false,
       error: "pythonPath must be under an allowed install location (e.g. /usr, ~/.local, Program Files).",
     };
   }
-  const base = path.basename(resolved);
+
+  const base = path.basename(safePath);
   if (!PYTHON_BASENAME_RE.test(base)) {
     return {
       ok: false,
       error: "pythonPath basename must look like a Python interpreter (python, python3, python.exe, …)",
     };
   }
+
   let stat: fs.Stats;
   try {
-    stat = fs.statSync(resolved);
+    // Use rebased path (path.join of allowlisted root + checked relative).
+    stat = fs.statSync(safePath);
   } catch {
-    return { ok: false, error: `File not found: ${resolved}` };
+    return { ok: false, error: `File not found: ${safePath}` };
   }
   if (!stat.isFile()) {
-    return { ok: false, error: `Not a file: ${resolved}` };
+    return { ok: false, error: `Not a file: ${safePath}` };
   }
-  return { ok: true, path: resolved };
+  return { ok: true, path: safePath };
 }
