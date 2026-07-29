@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 
 /**
  * Displays installed local models and provides controls to search, load, and unload them.
@@ -319,7 +320,7 @@ export function LocalModelManager({
           </p>
         )}
       </div>
-      {error && <p className="text-[11px] text-rose-400">{error}</p>}
+      {Boolean(error) && <p className="text-[11px] text-rose-400">{error}</p>}
     </div>
   );
 }

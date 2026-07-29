@@ -1,4 +1,8 @@
-import { RefreshCw, AlertTriangle, CheckCircle2, Zap, Check } from "lucide-react";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import AlertTriangle from "lucide-react/dist/esm/icons/alert-triangle";
+import CheckCircle2 from "lucide-react/dist/esm/icons/check-circle-2";
+import Zap from "lucide-react/dist/esm/icons/zap";
+import Check from "lucide-react/dist/esm/icons/check";
 import { ProviderErrorBlock } from "./ProviderErrorBlock";
 import type { AnalysisResult, Suggestion } from "./GeminiSidebar";
 
@@ -80,7 +84,7 @@ export function AuditPanel({
         </div>
       )}
 
-      {analysisError && <ProviderErrorBlock msg={analysisError} onGoSettings={onGoSettings} />}
+      {Boolean(analysisError) && <ProviderErrorBlock msg={analysisError} onGoSettings={onGoSettings} />}
 
       {analysis && !isAnalyzing && (
         <div className="space-y-3">

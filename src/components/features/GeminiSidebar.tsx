@@ -7,19 +7,17 @@ import {
   buildChatPresetQueries,
   buildWorkspaceContextSummary,
 } from "@/lib/aiWorkspaceContext";
-import {
-  Bot,
-  Send,
-  X,
-  RefreshCw,
-  Zap,
-  Check,
-  Lightbulb,
-  MessageSquareCode,
-  Settings2,
-  Key,
-  Download,
-} from "lucide-react";
+import Bot from "lucide-react/dist/esm/icons/bot";
+import Send from "lucide-react/dist/esm/icons/send";
+import X from "lucide-react/dist/esm/icons/x";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import Zap from "lucide-react/dist/esm/icons/zap";
+import Check from "lucide-react/dist/esm/icons/check";
+import Lightbulb from "lucide-react/dist/esm/icons/lightbulb";
+import MessageSquareCode from "lucide-react/dist/esm/icons/message-square-code";
+import Settings2 from "lucide-react/dist/esm/icons/settings-2";
+import Key from "lucide-react/dist/esm/icons/key";
+import Download from "lucide-react/dist/esm/icons/download";
 import { LocalModelManager } from "./LocalModelManager";
 import { ProviderErrorBlock } from "./ProviderErrorBlock";
 import { AuditPanel } from "./AuditPanel";
