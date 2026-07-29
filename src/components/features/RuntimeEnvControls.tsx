@@ -192,7 +192,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
 
           <div className="space-y-1.5">
             <label className="block text-[10px] text-slate-500 font-sans" htmlFor="studio-python-path">
-              Python interpreter (if not on PATH)
+              Python 3.10–3.13 (3.12 recommended)
             </label>
             <div className="flex gap-1">
               <input
@@ -201,7 +201,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
                 value={pythonPath}
                 onChange={(e) => setPythonPath(e.target.value)}
                 placeholder={
-                  status?.platform === "win32" ? "C:\\Users\\…\\Python313\\python.exe" : "/usr/bin/python3"
+                  status?.platform === "win32" ? "C:\\Users\\…\\Python312\\python.exe" : "/usr/bin/python3.12"
                 }
                 className="flex-1 min-w-0 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-200 placeholder:text-slate-600 focus:border-electric-blue outline-none"
               />

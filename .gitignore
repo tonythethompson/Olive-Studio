@@ -18,14 +18,21 @@ storybook-static/
 /playwright-report/
 /blob-report/
 /playwright/
-/.freebuff
+/.freebuff/
 /~/.cache/
 /.agents/skills/studio
+
+# Local agent/tool state
+/.ocx/
+/.opencode/
+/.remember/logs/
+/.cursor/hooks/state/
 
 # Lockfiles for non-pnpm package managers (this repo uses pnpm exclusively)
 package-lock.json
 yarn.lock
 bun.lockb
 bun.lock
-.cursor/hooks/state/continual-learning.json
+/.cursor/hooks/state/continual-learning.json
+/.cursor/hooks/state/continual-learning-index.json
 /.dirac-cache

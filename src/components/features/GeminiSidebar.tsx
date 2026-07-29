@@ -13,17 +13,16 @@ import {
   X,
   RefreshCw,
   Zap,
-  CheckCircle2,
-  AlertTriangle,
-  MessageSquareCode,
-  Lightbulb,
   Check,
+  Lightbulb,
+  MessageSquareCode,
   Settings2,
   Key,
   Download,
-  ChevronDown,
-  ChevronRight,
 } from "lucide-react";
+import { LocalModelManager } from "./LocalModelManager";
+import { ProviderErrorBlock } from "./ProviderErrorBlock";
+import { AuditPanel } from "./AuditPanel";
 
 interface ProviderOption {
   readonly id: string;
@@ -248,7 +247,7 @@ interface GeminiSidebarProps {
   onAuditOpened?: () => void;
 }
 
-interface Suggestion {
+export interface Suggestion {
   title: string;
   description: string;
   impact: "High" | "Medium" | "Low";
@@ -256,7 +255,7 @@ interface Suggestion {
   autofix: { pass: string; value: string };
 }
 
-interface AnalysisResult {
+export interface AnalysisResult {
   score: number;
   level: string;
   summary: string;
@@ -278,386 +277,9 @@ function formatBytes(bytes: number): string {
   return `${size.toFixed(i > 1 ? 1 : 0)} ${units[i]}`;
 }
 
-const ProviderErrorBlock = ({ msg, onGoSettings }: { msg: string; onGoSettings: () => void }) => {
-  const isProviderErr =
-    msg.includes("not configured") ||
-    msg.includes("API key") ||
-    msg.includes("No AI provider") ||
-    msg.includes("401") ||
-    msg.includes("403") ||
-    msg.includes("API route not found") ||
-    msg.includes("not valid JSON") ||
-    msg.includes("Unexpected token");
+// ProviderErrorBlock extracted to ./ProviderErrorBlock.tsx
+// LocalModelManager extracted to ./LocalModelManager.tsx
 
-  return isProviderErr ? (
-    <div className="p-4 bg-slate-900 border border-slate-700 rounded-xl text-xs flex flex-col gap-2.5">
-      <div className="flex items-center gap-2 text-amber-400">
-        <AlertTriangle className="h-4 w-4 shrink-0" />
-        <span className="font-bold text-sm">No AI Provider Configured</span>
-      </div>
-      <p className="text-slate-400 leading-relaxed">
-        Configure a provider in the{" "}
-        <button type="button" onClick={onGoSettings} className="text-electric-blue underline cursor-pointer">
-          Settings tab
-        </button>
-        .
-      </p>
-      <p className="text-slate-500 text-[10px]">
-        Or set an env var (
-        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">GEMINI_API_KEY</code>,{" "}
-        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">OPENAI_API_KEY</code>,{" "}
-        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">ANTHROPIC_API_KEY</code>,{" "}
-        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">XAI_API_KEY</code>,{" "}
-        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">OPENROUTER_API_KEY</code>,{" "}
-        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">GROQ_API_KEY</code>) in{" "}
-        <code className="font-mono">.env</code> or <code className="font-mono">.env.local</code>, then restart{" "}
-        <code className="font-mono">npm run dev</code>.
-      </p>
-    </div>
-  ) : (
-    <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-lg text-xs text-rose-400 flex items-start gap-2">
-      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-500" />
-      <div>
-        <span className="font-bold block text-rose-200">Error</span>
-        {msg}
-      </div>
-    </div>
-  );
-};
-
-/**
- * Displays installed local models and provides controls to search, load, and unload them.
- *
- * @param activeModel - The currently active model to highlight.
- * @param isOpen - Whether the sidebar is open and keyboard shortcuts should be enabled.
- */
-function LocalModelManager({
-  activeModel,
-  isOpen,
-  engine = "all",
-}: {
-  activeModel?: string;
-  isOpen: boolean;
-  /** Restrict list/errors to one local engine so LMS tab never shows Ollama errors. */
-  engine?: "lms" | "ollama" | "all";
-}) {
-  const [models, setModels] = useState<Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }>>([]);
-  const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [collapsedPublishers, setCollapsedPublishers] = useState<Set<string>>(new Set());
-  const searchInputRef = useRef<HTMLInputElement>(null);
-
-  const togglePublisher = (publisher: string) => {
-    setCollapsedPublishers((prev) => {
-      const next = new Set(prev);
-      if (next.has(publisher)) next.delete(publisher);
-      else next.add(publisher);
-      return next;
-    });
-  };
-
-  // Global Cmd+K / Ctrl+K to focus search input (only when sidebar is open)
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [isOpen]);
-
-  const filteredModels = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return models;
-    return models.filter((m) => m.id.toLowerCase().includes(q));
-  }, [models, searchQuery]);
-
-  // Group filtered models by publisher (first segment of model ID)
-  const groupedModels = useMemo(() => {
-    const groups = new Map<string, Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }>>();
-    for (const m of filteredModels) {
-      const parts = m.id.split("/");
-      const publisher = parts.length > 1 ? parts[0] : "Other";
-      if (!groups.has(publisher)) groups.set(publisher, []);
-      groups.get(publisher)!.push(m);
-    }
-    // Sort publishers alphabetically, 'Other' last
-    return Array.from(groups.entries()).sort(([a], [b]) => {
-      if (a === "Other") return 1;
-      if (b === "Other") return -1;
-      return a.localeCompare(b);
-    });
-  }, [filteredModels]);
-
-  const refresh = async (isCancelled?: () => boolean) => {
-    setLoading(true);
-    setError("");
-    try {
-      const fetchLms = engine === "lms" || engine === "all";
-      const fetchOllama = engine === "ollama" || engine === "all";
-      const [lmsRes, ollamaRes] = await Promise.allSettled([
-        fetchLms ? fetch("/api/ai/local-models") : Promise.resolve(null),
-        fetchOllama ? fetch("/api/ai/ollama-models") : Promise.resolve(null),
-      ]);
-
-      if (isCancelled?.()) return;
-
-      const lmsModels: string[] = [];
-      const ollamaModels: string[] = [];
-      const lmsLoaded: string[] = [];
-      const ollamaLoaded: string[] = [];
-
-      if (fetchLms && lmsRes.status === "fulfilled" && lmsRes.value && lmsRes.value.ok) {
-        const d = await lmsRes.value.json();
-        lmsModels.push(...(d.installedModels || []));
-        lmsLoaded.push(...(d.loadedModels || []));
-      } else if (
-        fetchLms &&
-        engine === "lms" &&
-        lmsRes.status === "fulfilled" &&
-        lmsRes.value &&
-        !lmsRes.value.ok
-      ) {
-        const d = (await lmsRes.value.json().catch(() => ({}))) as { error?: string };
-        if (d.error && !isCancelled?.()) setError(d.error);
-      }
-      if (fetchOllama && ollamaRes.status === "fulfilled" && ollamaRes.value && ollamaRes.value.ok) {
-        const d = await ollamaRes.value.json();
-        ollamaModels.push(...(d.installedModels || []));
-        ollamaLoaded.push(...(d.runningModels || []));
-      } else if (
-        fetchOllama &&
-        engine === "ollama" &&
-        ollamaRes.status === "fulfilled" &&
-        ollamaRes.value &&
-        !ollamaRes.value.ok
-      ) {
-        const d = (await ollamaRes.value.json().catch(() => ({}))) as { error?: string };
-        if (d.error && !isCancelled?.()) setError(d.error);
-      }
-
-      if (isCancelled?.()) return;
-
-      const allModels: Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }> = [];
-      const seen = new Set<string>();
-      if (fetchLms) {
-        for (const id of lmsModels) {
-          if (!seen.has(id)) {
-            seen.add(id);
-            allModels.push({ id, loaded: lmsLoaded.includes(id), source: "lms" });
-          }
-        }
-      }
-      if (fetchOllama) {
-        for (const id of ollamaModels) {
-          if (!seen.has(id)) {
-            seen.add(id);
-            allModels.push({ id, loaded: ollamaLoaded.includes(id), source: "ollama" });
-          }
-        }
-      }
-      if (!isCancelled?.()) setModels(allModels);
-    } catch (err: unknown) {
-      if (engine !== "all" && !isCancelled?.()) {
-        setError(err instanceof Error ? err.message : "Failed to list local models");
-      }
-    } finally {
-      if (!isCancelled?.()) setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const cancelGuard = { cancelled: false };
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: fetch models on mount / engine change
-    void refresh(() => cancelGuard.cancelled);
-    return () => {
-      cancelGuard.cancelled = true;
-    };
-  }, [engine]);
-
-  const handleLoad = async (modelTag: string, source: "lms" | "ollama" = "lms") => {
-    setBusy(modelTag);
-    setError("");
-    try {
-      const endpoint = source === "ollama" ? "/api/ai/ollama-load" : "/api/ai/local-load";
-      const r = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelTag }),
-      });
-      if (!r.ok) {
-        const d = await r.json();
-        throw new Error(d.error || `HTTP ${r.status}`);
-      }
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Load failed");
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleUnload = async (modelTag: string, source: "lms" | "ollama" = "lms") => {
-    setBusy(modelTag);
-    setError("");
-    try {
-      const endpoint = source === "ollama" ? "/api/ai/ollama-unload" : "/api/ai/local-unload";
-      const r = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelTag }),
-      });
-      if (!r.ok) {
-        const d = await r.json();
-        throw new Error(d.error || `HTTP ${r.status}`);
-      }
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unload failed");
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  if (models.length === 0 && !loading) return null;
-
-  return (
-    <div className="mt-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">
-          Installed Models
-        </p>
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          disabled={loading}
-          className="text-[10px] text-slate-500 hover:text-electric-blue transition-colors cursor-pointer"
-        >
-          {loading ? "Refreshing…" : "Refresh"}
-        </button>
-      </div>
-      <div className="space-y-1.5">
-        {models.length > 3 && (
-          <div className="relative">
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder="Search models… (⌘K)"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setSearchQuery("");
-                  searchInputRef.current?.blur();
-                }
-              }}
-              className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 pr-5 text-[10px] text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-slate-600"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-slate-500 hover:text-slate-300 cursor-pointer"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        )}
-        <div className="space-y-2 max-h-48 overflow-y-auto">
-          {groupedModels.map(([publisher, pubModels]) => {
-            const isCollapsed = collapsedPublishers.has(publisher);
-            return (
-              <div key={publisher}>
-                <button
-                  type="button"
-                  onClick={() => togglePublisher(publisher)}
-                  aria-expanded={!isCollapsed}
-                  className="w-full flex items-center gap-1.5 text-[10px] text-slate-400 hover:text-slate-200 font-mono font-bold uppercase tracking-wider cursor-pointer py-0.5"
-                >
-                  {isCollapsed ? (
-                    <ChevronRight className="h-3 w-3 shrink-0" />
-                  ) : (
-                    <ChevronDown className="h-3 w-3 shrink-0" />
-                  )}
-                  <span>{publisher}</span>
-                  <span className="text-slate-600 font-normal">({pubModels.length})</span>
-                </button>
-                {!isCollapsed && (
-                  <div className="space-y-1 mt-0.5">
-                    {pubModels.map((m) => (
-                      <div
-                        key={m.id}
-                        className="flex items-center justify-between gap-2 p-2 rounded-lg border border-slate-800 bg-slate-950/60 text-[11px]"
-                      >
-                        <span
-                          className="font-mono text-slate-300 truncate flex-1 flex items-center gap-1.5"
-                          title={m.id}
-                        >
-                          {activeModel &&
-                            (m.id === activeModel ||
-                              activeModel.endsWith(m.id) ||
-                              m.id.endsWith(activeModel)) && (
-                              <span
-                                className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"
-                                title="Active model"
-                              />
-                            )}
-                          {m.id.split("/").pop() || m.id}
-                        </span>
-                        {m.loaded ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleUnload(m.id, m.source)}
-                            disabled={busy === m.id}
-                            className="text-[10px] px-2 py-0.5 rounded border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
-                          >
-                            {busy === m.id ? "…" : "Unload"}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => void handleLoad(m.id, m.source)}
-                            disabled={busy === m.id}
-                            className="text-[10px] px-2 py-0.5 rounded border border-electric-blue/30 text-electric-blue hover:bg-electric-blue/10 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
-                          >
-                            {busy === m.id ? "…" : "Load"}
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        {searchQuery.trim() && filteredModels.length === 0 && (
-          <p className="text-[10px] text-slate-500 italic text-center py-1">
-            No models match "{searchQuery}"
-          </p>
-        )}
-      </div>
-      {error && <p className="text-[11px] text-rose-400">{error}</p>}
-    </div>
-  );
-}
-
-/**
- * Renders a sidebar for auditing, chatting about, and configuring the optimization pipeline.
- *
- * @param state - Optional pipeline state; when omitted, the sidebar uses the pipeline store.
- * @param setState - Optional pipeline state updater; when omitted, the sidebar uses the pipeline store.
- * @param isOpen - Whether the sidebar is visible.
- * @param onClose - Called when the sidebar is closed.
- * @param openToAudit - Whether to open the audit tab and run an analysis.
- * @param onAuditOpened - Called after an audit is opened in response to `openToAudit`.
- */
 export function GeminiSidebar({
   state: propState,
   setState: propSetState,
@@ -737,6 +359,9 @@ export function GeminiSidebar({
   const [pullingModel, setPullingModel] = useState<string | null>(null);
   const [localPullError, setLocalPullError] = useState<string>("");
   const [localInstallInfo, setLocalInstallInfo] = useState<string | null>(null);
+  /** 0–100 while 1-click pull streams progress; null when idle. */
+  const [localPullPercent, setLocalPullPercent] = useState<number | null>(null);
+  const [localPullLog, setLocalPullLog] = useState<string[]>([]);
   const [modelSizes, setModelSizes] = useState<Record<string, number>>({});
   const [ollamaHealthy, setOllamaHealthy] = useState<boolean | null>(null);
   const [lmsHealthy, setLmsHealthy] = useState<boolean | null>(null);
@@ -787,47 +412,101 @@ export function GeminiSidebar({
   const handleInstallLocalEngine = async (engine: "lms" | "ollama") => {
     setInstallingEngine(engine);
     setLocalPullError("");
-    setLocalInstallInfo(null);
+    setLocalPullPercent(0);
+    setLocalPullLog([]);
+    setLocalInstallInfo(
+      engine === "ollama"
+        ? "Installing/starting Ollama automatically…"
+        : "Installing/starting LM Studio automatically…",
+    );
     try {
       const r = await fetch("/api/ai/install-engine", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/x-ndjson, application/json",
+        },
         body: JSON.stringify({ engine }),
       });
-      const data = (await r.json()) as {
-        ok?: boolean;
-        error?: string;
-        message?: string;
-        openedUrl?: string;
-      };
-      if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
-      if (data.openedUrl) {
-        window.open(data.openedUrl, "_blank", "noopener,noreferrer");
-      }
-      setLocalPullError("");
-      setLocalInstallInfo(null);
-      // Re-check health after a short delay
-      setTimeout(() => {
-        if (engine === "ollama") {
-          fetch("/api/ai/ollama-health")
-            .then((res) => res.json())
-            .then((d) => setOllamaHealthy(d.healthy ?? false))
-            .catch(() => undefined);
-        } else {
-          fetch("/api/ai/local-health")
-            .then((res) => res.json())
-            .then((d: { healthy?: boolean; lmsInstalled?: boolean }) => {
-              setLmsHealthy(d.healthy ?? false);
-              setLmsInstalled(d.lmsInstalled ?? false);
-            })
-            .catch(() => undefined);
+      if (!r.body) {
+        const data = (await r.json().catch(() => ({}))) as {
+          ok?: boolean;
+          error?: string;
+          message?: string;
+          openedUrl?: string;
+        };
+        if (!r.ok || !data.ok) {
+          if (data.openedUrl) window.open(data.openedUrl, "_blank", "noopener,noreferrer");
+          throw new Error(data.error || data.message || `HTTP ${r.status}`);
         }
-      }, 2000);
-      if (data.message) {
-        setLocalInstallInfo(data.message);
+        setLocalInstallInfo(data.message || "Engine ready.");
+      } else {
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        let ok = false;
+        let finalMsg = "Engine ready.";
+        let openedUrl: string | undefined;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const evt = JSON.parse(line) as {
+                type?: string;
+                message?: string;
+                percent?: number;
+                error?: string;
+                openedUrl?: string;
+                ok?: boolean;
+              };
+              if (typeof evt.percent === "number") {
+                setLocalPullPercent(Math.max(0, Math.min(100, evt.percent)));
+              }
+              if (evt.message) {
+                setLocalInstallInfo(evt.message);
+                setLocalPullLog((prev) => [...prev.slice(-12), evt.message!]);
+              }
+              if (evt.openedUrl) openedUrl = evt.openedUrl;
+              if (evt.type === "error") {
+                if (openedUrl || evt.openedUrl) {
+                  window.open(openedUrl || evt.openedUrl, "_blank", "noopener,noreferrer");
+                }
+                throw new Error(evt.error || evt.message || "Setup failed");
+              }
+              if (evt.type === "done") {
+                ok = true;
+                finalMsg = evt.message || finalMsg;
+                setLocalPullPercent(100);
+              }
+            } catch (e) {
+              if (e instanceof Error && e.message !== "Setup failed" && !e.message.includes("JSON")) {
+                throw e;
+              }
+            }
+          }
+        }
+        if (!ok && !r.ok) throw new Error(`Setup failed (HTTP ${r.status})`);
+        setLocalInstallInfo(finalMsg);
+      }
+      if (engine === "ollama") setOllamaHealthy(true);
+      else {
+        setLmsHealthy(true);
+        setLmsInstalled(true);
       }
     } catch (err: unknown) {
-      setLocalPullError(err instanceof Error ? err.message : "Install failed");
+      if (err instanceof TypeError && /fetch/i.test(err.message)) {
+        setLocalPullError(
+          "Failed to reach Olive Studio server. Keep pnpm dev / tauri:dev running, then retry.",
+        );
+      } else {
+        setLocalPullError(err instanceof Error ? err.message : "Install failed");
+      }
+      setLocalInstallInfo(null);
     } finally {
       setInstallingEngine(null);
     }
@@ -926,44 +605,123 @@ export function GeminiSidebar({
   const handlePullLocalModel = async (modelTag: string, source: "lms" | "ollama" = "lms") => {
     setPullingModel(modelTag);
     setLocalPullError("");
-    setLocalInstallInfo(null);
+    setLocalPullPercent(0);
+    setLocalPullLog([]);
+    setLocalInstallInfo(
+      source === "ollama"
+        ? "Starting: ensure Ollama → serve → download…"
+        : "Starting: ensure LM Studio → serve → download…",
+    );
     try {
-      if (source === "ollama" && ollamaHealthy === false) {
-        throw new Error(
-          "Ollama is not running. Start the Ollama app (or run `ollama serve`), then retry the download.",
-        );
+      const endpoint = source === "ollama" ? "/api/ai/ollama-pull" : "/api/ai/local-pull";
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12 * 60 * 1000);
+      let r: Response;
+      try {
+        r = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/x-ndjson, application/json",
+          },
+          body: JSON.stringify({ modelTag }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
       }
-      if (source === "lms") {
-        const health = await fetch("/api/ai/local-health")
-          .then((r) => r.json())
-          .catch(() => null);
-        if (health && health.lmsInstalled === false) {
-          throw new Error(
-            "LM Studio CLI (`lms`) not found. Install LM Studio from https://lmstudio.ai and open it once so the CLI is installed.",
-          );
+
+      if (!r.ok && !r.body) {
+        const data = (await r.json().catch(() => ({}))) as { error?: string; hint?: string };
+        throw new Error([data.error || `HTTP ${r.status}`, data.hint].filter(Boolean).join(" — "));
+      }
+      if (!r.body) throw new Error(`Empty response (HTTP ${r.status})`);
+
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let gotDone = false;
+      let finalMessage = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let evt: {
+            type?: string;
+            message?: string;
+            percent?: number;
+            error?: string;
+            hint?: string;
+            ok?: boolean;
+          };
+          try {
+            evt = JSON.parse(line) as typeof evt;
+          } catch {
+            continue;
+          }
+          if (typeof evt.percent === "number" && Number.isFinite(evt.percent)) {
+            setLocalPullPercent(Math.max(0, Math.min(100, evt.percent)));
+          }
+          if (evt.message) {
+            setLocalInstallInfo(evt.message);
+            if (evt.type === "log" || evt.type === "step" || evt.type === "progress") {
+              setLocalPullLog((prev) => [...prev.slice(-12), evt.message!]);
+            }
+          }
+          if (evt.type === "error") {
+            throw new Error([evt.error || "Pull failed", evt.hint].filter(Boolean).join(" — "));
+          }
+          if (evt.type === "done") {
+            gotDone = true;
+            finalMessage = evt.message || "Model ready.";
+            setLocalPullPercent(100);
+          }
         }
       }
-      const endpoint = source === "ollama" ? "/api/ai/ollama-pull" : "/api/ai/local-pull";
-      const r = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelTag }),
-      });
-      const contentType = r.headers.get("content-type") ?? "";
-      const data = contentType.includes("application/json")
-        ? ((await r.json().catch(() => ({}))) as { error?: string; hint?: string })
-        : {};
-      if (!r.ok) {
-        const parts = [data.error || `HTTP ${r.status}`, data.hint].filter(Boolean);
-        throw new Error(parts.join(" — "));
+
+      // Legacy JSON body (non-stream) if server ever falls back
+      if (!gotDone && r.headers.get("content-type")?.includes("application/json") && buf.trim()) {
+        const data = JSON.parse(buf) as { ok?: boolean; error?: string; message?: string };
+        if (data.error) throw new Error(data.error);
+        if (data.ok) {
+          gotDone = true;
+          finalMessage = data.message || "Model ready.";
+        }
+      }
+      if (!gotDone && !r.ok) {
+        throw new Error(`Pull failed (HTTP ${r.status})`);
+      }
+
+      setLocalInstallInfo(finalMessage || "Model ready.");
+      if (source === "ollama") setOllamaHealthy(true);
+      else {
+        setLmsHealthy(true);
+        setLmsInstalled(true);
       }
       await fetchProviderStatus();
       setAnalysis(null);
       setActiveTab("audit");
     } catch (err: unknown) {
-      setLocalPullError(err instanceof Error ? err.message : "Failed to pull local model.");
+      if (err instanceof Error && err.name === "AbortError") {
+        setLocalPullError(
+          "Download timed out (install + pull can take several minutes). Retry once the engine is installed.",
+        );
+      } else if (err instanceof TypeError && /fetch/i.test(err.message)) {
+        setLocalPullError(
+          "Failed to reach Olive Studio server (Failed to fetch). Keep pnpm dev / tauri:dev running, then retry.",
+        );
+      } else {
+        setLocalPullError(err instanceof Error ? err.message : "Failed to pull local model.");
+      }
+      setLocalInstallInfo(null);
     } finally {
       setPullingModel(null);
+      // Keep last percent visible briefly when done; clear on next pull
     }
   };
 
@@ -1541,128 +1299,14 @@ export function GeminiSidebar({
           <div
             className={cn("absolute inset-0 p-4 overflow-y-auto", activeTab === "audit" ? "block" : "hidden")}
           >
-            <div className="space-y-4">
-              {analysis && !isAnalyzing && (
-                <div className="bg-slate-950/70 rounded border border-slate-800 flex items-center gap-4 p-4">
-                  <div className="relative h-16 w-16 shrink-0 flex items-center justify-center">
-                    <svg className="w-full h-full transform -rotate-90">
-                      <circle
-                        cx="32"
-                        cy="32"
-                        r="28"
-                        stroke="currentColor"
-                        className="text-slate-800"
-                        strokeWidth="4"
-                        fill="transparent"
-                      />
-                      <circle
-                        cx="32"
-                        cy="32"
-                        r="28"
-                        stroke="currentColor"
-                        className="text-electric-blue transition-all duration-1000"
-                        strokeWidth="4"
-                        fill="transparent"
-                        strokeDasharray={176}
-                        strokeDashoffset={176 - (176 * analysis.score) / 100}
-                      />
-                    </svg>
-                    <span className="absolute text-sm font-extrabold font-mono text-slate-100">
-                      {analysis.score}%
-                    </span>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-slate-100">Pipeline efficiency</h4>
-                    <div
-                      className={`mt-0.5 text-[10px] inline-block px-1.5 py-0.5 rounded font-mono font-bold ${analysis.level === "Optimized" ? "bg-emerald-500/10 text-emerald-400" : analysis.level === "Suboptimal" ? "bg-amber-500/10 text-amber-400" : "bg-rose-500/10 text-rose-400"}`}
-                    >
-                      {analysis.level} Mode
-                    </div>
-                    <p className="text-[11px] text-slate-400 leading-relaxed mt-1">{analysis.summary}</p>
-                  </div>
-                </div>
-              )}
-
-              {isAnalyzing && (
-                <div className="text-center py-12 bg-slate-950/30 border border-slate-800 rounded-lg flex flex-col items-center justify-center">
-                  <RefreshCw className="h-7 w-7 text-electric-blue animate-spin mb-3" />
-                  <p className="text-xs font-medium text-slate-300">Auditing pipeline...</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Inspecting workspace…</p>
-                </div>
-              )}
-
-              {analysisError && (
-                <ProviderErrorBlock msg={analysisError} onGoSettings={() => setActiveTab("settings")} />
-              )}
-
-              {analysis && !isAnalyzing && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500 font-medium">Suggestions</span>
-                    <button
-                      type="button"
-                      onClick={handleRunAnalysis}
-                      className="text-[10px] text-electric-blue hover:text-white flex items-center gap-1 cursor-pointer font-bold"
-                    >
-                      <RefreshCw className="h-3 w-3" /> Refresh
-                    </button>
-                  </div>
-                  <div className="space-y-2.5 max-h-[50vh] overflow-y-auto pr-0.5">
-                    {analysis.suggestions.map((s, i) => (
-                      <div
-                        key={i}
-                        className={`p-3.5 rounded-lg border text-xs flex flex-col gap-3 bg-slate-950/45 transition-all ${s.type === "warning" ? "border-rose-500/20 hover:border-rose-500/40" : s.type === "success" ? "border-emerald-500/25 hover:border-emerald-500/40" : "border-slate-800 hover:border-slate-700"}`}
-                      >
-                        <div>
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="font-bold text-slate-100 flex items-center gap-1.5">
-                              {s.type === "warning" ? (
-                                <AlertTriangle className="h-3.5 w-3.5 text-rose-450 shrink-0" />
-                              ) : s.type === "success" ? (
-                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-450 shrink-0" />
-                              ) : (
-                                <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                              )}
-                              {s.title}
-                            </span>
-                            <span
-                              className={`text-[9px] font-mono uppercase tracking-widest px-1.5 rounded font-bold ${s.impact === "High" ? "bg-rose-500/10 text-rose-400" : "bg-slate-800 text-slate-400"}`}
-                            >
-                              {s.impact}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-400 leading-relaxed">{s.description}</p>
-                        </div>
-                        {s.autofix?.pass && (
-                          <div className="pt-2 border-t border-slate-900/60 flex items-center justify-between">
-                            <span className="text-[9px] font-mono text-slate-500">→ {s.autofix.pass}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleApplyAutofix(s.autofix)}
-                              className="bg-electric-blue/10 text-electric-blue hover:bg-electric-blue hover:text-white border border-electric-blue/30 text-[10px] px-2.5 py-1 rounded font-bold flex items-center gap-1 transition-all cursor-pointer"
-                            >
-                              <Check className="h-3 w-3" /> Apply
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={handleRunAnalysis}
-                disabled={isAnalyzing}
-                className="w-full h-10 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs text-slate-200 font-bold flex items-center justify-center gap-2 rounded-lg cursor-pointer transition-colors"
-              >
-                <RefreshCw
-                  className={`h-3.5 w-3.5 text-electric-blue ${isAnalyzing ? "animate-spin" : ""}`}
-                />
-                Analyze Optimization Pipeline
-              </button>
-            </div>
+            <AuditPanel
+              analysis={analysis}
+              isAnalyzing={isAnalyzing}
+              analysisError={analysisError}
+              onApplyAutofix={handleApplyAutofix}
+              onRunAnalysis={handleRunAnalysis}
+              onGoSettings={() => setActiveTab("settings")}
+            />
           </div>
 
           {/* ── Chat ── */}
@@ -1854,11 +1498,11 @@ export function GeminiSidebar({
                       </div>
 
                       {missing && (
-                        <div className="rounded-lg border border-rose-500/25 bg-rose-950/20 p-2.5 space-y-2">
-                          <p className="text-[11px] text-rose-300 leading-relaxed">
+                        <div className="rounded-lg border border-amber-500/25 bg-amber-950/20 p-2.5 space-y-2">
+                          <p className="text-[11px] text-amber-200/90 leading-relaxed">
                             {isLms
-                              ? "LM Studio CLI (`lms`) not found or server not running. Install LM Studio, open it once so the CLI installs, then start the local server."
-                              : "Ollama is not reachable on localhost:11434. Install Ollama and start the app (or `ollama serve`)."}
+                              ? "LM Studio is not running yet. Use 1-Click Download on a model — Olive Studio will install LM Studio (if needed), start the local server, and pull the model."
+                              : "Ollama is not running yet. Use 1-Click Download on a model — Olive Studio will install Ollama (if needed), start `ollama serve`, and pull the model."}
                           </p>
                           <div className="flex flex-wrap gap-2">
                             <button
@@ -1872,7 +1516,7 @@ export function GeminiSidebar({
                               ) : (
                                 <Download className="h-3 w-3" />
                               )}
-                              Install {isLms ? "LM Studio" : "Ollama"}
+                              Setup {isLms ? "LM Studio" : "Ollama"} now
                             </button>
                             <a
                               href={isLms ? "https://lmstudio.ai" : "https://ollama.com"}
@@ -1880,7 +1524,7 @@ export function GeminiSidebar({
                               rel="noreferrer"
                               className={`text-[11px] underline ${accentText}`}
                             >
-                              {isLms ? "lmstudio.ai" : "ollama.com"}
+                              Manual install
                             </a>
                           </div>
                         </div>
@@ -1932,11 +1576,44 @@ export function GeminiSidebar({
                           );
                         })}
                       </div>
+                      {(pullingModel || localInstallInfo || localPullPercent !== null) && (
+                        <div className="mt-2 rounded-lg border border-slate-800 bg-slate-950/80 p-2.5 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[11px] text-slate-200 leading-snug flex items-center gap-1.5 min-w-0">
+                              {pullingModel ? (
+                                <RefreshCw className="h-3 w-3 animate-spin shrink-0 text-electric-blue" />
+                              ) : null}
+                              <span className="truncate">
+                                {localInstallInfo || (pullingModel ? `Working on ${pullingModel}…` : "Ready")}
+                              </span>
+                            </p>
+                            {localPullPercent !== null && (
+                              <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                                {Math.round(localPullPercent)}%
+                              </span>
+                            )}
+                          </div>
+                          {localPullPercent !== null && (
+                            <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-electric-blue transition-[width] duration-300 ease-out"
+                                style={{ width: `${Math.max(2, Math.min(100, localPullPercent))}%` }}
+                              />
+                            </div>
+                          )}
+                          {localPullLog.length > 0 && (
+                            <div className="max-h-24 overflow-y-auto rounded border border-slate-800/80 bg-black/30 px-2 py-1.5 font-mono text-[10px] text-slate-500 space-y-0.5">
+                              {localPullLog.map((line, i) => (
+                                <div key={`${i}-${line.slice(0, 24)}`} className="truncate">
+                                  {line}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {localPullError && (
                         <p className="text-xs text-rose-400 mt-1 leading-relaxed">{localPullError}</p>
-                      )}
-                      {localInstallInfo && (
-                        <p className="text-xs text-emerald-400 mt-1 leading-relaxed">{localInstallInfo}</p>
                       )}
                       <LocalModelManager
                         activeModel={providerStatus.model}

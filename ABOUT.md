@@ -27,12 +27,12 @@ Olive recipes are JSON documents with strict pass ordering, execution-provider c
 
 ## Technology
 
-| Layer | Stack |
-|-------|--------|
-| UI | React 19, Tailwind CSS, Radix UI |
-| Server | Express, Vite (dev), SSE log streaming |
-| Optimization | Python 3.9+, `olive-ai` in project `.venv` |
-| Optional AI | Gemini, OpenAI, Anthropic, Mistral (user-provided keys) |
+| Layer        | Stack                                                              |
+| ------------ | ------------------------------------------------------------------ |
+| UI           | React 19, Tailwind CSS, Radix UI                                   |
+| Server       | Express, Vite (dev), SSE log streaming                             |
+| Optimization | Python 3.10–3.13 (3.12 recommended), `olive-ai` in project `.venv` |
+| Optional AI  | Gemini, OpenAI, Anthropic, Mistral (user-provided keys)            |
 
 ## License & attribution
 
@@ -49,8 +49,8 @@ Created by **Anthony Thompson** — [github.com/tonythethompson/Olive-Studio](ht
 
 Paste these into **Repository → Settings → General → About** on GitHub:
 
-| Field | Value |
-|-------|--------|
-| **Description** | Visual recipe builder and local runner for Microsoft Olive — ONNX conversion, quantization, pruning, and multi-vendor GPU/NPU deployment. |
-| **Website** | *(leave blank or link to your demo/docs)* |
-| **Topics** | `microsoft-olive` `onnx` `onnxruntime` `model-optimization` `quantization` `huggingface` `tensorrt` `openvino` `react` `local-first` `llm` `edge-ai` |
+| Field           | Value                                                                                                                                                |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Description** | Visual recipe builder and local runner for Microsoft Olive — ONNX conversion, quantization, pruning, and multi-vendor GPU/NPU deployment.            |
+| **Website**     | _(leave blank or link to your demo/docs)_                                                                                                            |
+| **Topics**      | `microsoft-olive` `onnx` `onnxruntime` `model-optimization` `quantization` `huggingface` `tensorrt` `openvino` `react` `local-first` `llm` `edge-ai` |

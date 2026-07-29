@@ -103,7 +103,11 @@ fn spawn_node_server(root: &Path) -> Result<(Child, u16), String> {
 /// Rejects "port open but half-ready" — that was causing every UI module to
 /// "Failed to fetch" while Vite was still optimizing deps.
 /// Also verifies the child process is still alive (if provided).
-fn wait_for_health(port: u16, timeout: Duration, child: Option<&mut Child>) -> Result<(), String> {
+fn wait_for_health(
+  port: u16,
+  timeout: Duration,
+  mut child: Option<&mut Child>,
+) -> Result<(), String> {
   let deadline = Instant::now() + timeout;
   let addr = format!("127.0.0.1:{port}");
   let request = format!(

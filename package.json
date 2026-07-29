@@ -27,6 +27,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:coverage:threshold": "vitest run --coverage --coverage.thresholds.lines=90 --coverage.thresholds.statements=88 --coverage.thresholds.branches=80 --coverage.thresholds.functions=85 --coverage.thresholds.perFile=true",
+    "test:server": "vitest run --config vitest.server.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:watch": "vitest",
     "lint": "tsc --noEmit && eslint",
     "lint:quick": "oxlint --import-plugin src/",
