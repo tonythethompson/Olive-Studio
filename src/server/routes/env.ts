@@ -3,8 +3,6 @@
  * Python path, HuggingFace token, venv management.
  */
 import type { Router } from "express";
-import path from "path";
-import fs from "fs";
 
 import {
   getRuntimeEnvStatus,
@@ -16,39 +14,7 @@ import { writeStudioConfig, addVenvToUserPath } from "../services/venv/config.ts
 import { setRuntimeHfToken, getRuntimeHfToken } from "../services/olive/state.ts";
 import { ensureTensorRtRtx } from "./tensorrt.ts";
 import { fsWriteRateLimit } from "../middleware/rateLimit.ts";
-
-/** Validate a user-supplied Python interpreter path before any fs/exec use. */
-function resolveSafePythonPath(
-  pythonPath: string,
-): { ok: true; path: string } | { ok: false; error: string } {
-  if (typeof pythonPath !== "string" || !pythonPath.trim()) {
-    return { ok: false, error: "Missing pythonPath" };
-  }
-  if (pythonPath.includes("\0")) {
-    return { ok: false, error: "Invalid pythonPath" };
-  }
-  const resolved = path.resolve(pythonPath.trim());
-  if (!path.isAbsolute(resolved)) {
-    return { ok: false, error: "pythonPath must be an absolute path" };
-  }
-  let stat: fs.Stats;
-  try {
-    stat = fs.statSync(resolved);
-  } catch {
-    return { ok: false, error: `File not found: ${resolved}` };
-  }
-  if (!stat.isFile()) {
-    return { ok: false, error: `Not a file: ${resolved}` };
-  }
-  const base = path.basename(resolved).toLowerCase();
-  if (!/^python(\d+(\.\d+)*)?(\.exe)?$/.test(base)) {
-    return {
-      ok: false,
-      error: "pythonPath basename must look like a Python interpreter (python, python3, python.exe, …)",
-    };
-  }
-  return { ok: true, path: resolved };
-}
+import { resolveAllowedPythonFile } from "../services/venv/pythonGuard.ts";
 
 export function mountEnvRoutes(router: Router): void {
   // ─── HuggingFace Token Management ──────────────────────────────────────
@@ -98,7 +64,7 @@ export function mountEnvRoutes(router: Router): void {
   // ─── Python Path ──────────────────────────────────────────────────────
   router.post("/env/python-path", fsWriteRateLimit, async (req, res) => {
     const { pythonPath } = req.body ?? {};
-    const safe = resolveSafePythonPath(pythonPath);
+    const safe = resolveAllowedPythonFile(pythonPath);
     if (!safe.ok) {
       return res.status(400).json({ ok: false, error: safe.error });
     }

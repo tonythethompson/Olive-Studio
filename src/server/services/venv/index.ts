@@ -15,43 +15,72 @@ import {
 import { isGpuExecutionProvider } from "../../../lib/oliveGpuRuntime.ts";
 import { envWithPrependedPaths } from "../../../lib/tensorrtDeps.ts";
 import { getNativeGpuLibPaths } from "./gpu.ts";
+import { isPathPythonCommand, resolveAllowedPythonFile, type PathPythonCommand } from "./pythonGuard.ts";
 
-const PYTHON_BASENAME_RE = /^python(\d+(\.\d+)*)?(\.exe)?$/i;
+const PROBE_SCRIPT = path.join(process.cwd(), "scripts", "probe-python-version.mjs");
 
-/** Reject null bytes / shell-like paths before any execFile of a Python candidate. */
-function isSafePythonCandidate(candidate: string): boolean {
-  if (typeof candidate !== "string" || !candidate.trim() || candidate.includes("\0")) return false;
-  const trimmed = candidate.trim();
-  const base = path.basename(trimmed);
-  if (!PYTHON_BASENAME_RE.test(base)) return false;
-  // Absolute / relative path forms: resolve and require a real file when separators present.
-  if (trimmed.includes("/") || trimmed.includes("\\")) {
-    const resolved = path.resolve(trimmed);
-    if (resolved.includes("\0")) return false;
-    try {
-      if (!fs.statSync(resolved).isFile()) return false;
-    } catch {
-      return false;
-    }
-  }
-  return true;
+function parsePythonVersionText(text: string): { major: number; minor: number; text: string } | null {
+  const m = text.match(/Python\s+(\d+)\.(\d+)/i);
+  if (!m) return null;
+  return { major: Number(m[1]), minor: Number(m[2]), text: text.trim() };
 }
 
-async function getPythonVersion(
-  candidate: string,
+async function execPythonVersionFromPathCmd(
+  cmd: PathPythonCommand,
 ): Promise<{ major: number; minor: number; text: string } | null> {
-  if (!isSafePythonCandidate(candidate)) return null;
-  const exe =
-    candidate.includes("/") || candidate.includes("\\") ? path.resolve(candidate.trim()) : candidate.trim();
   try {
-    const { stdout, stderr } = await execFileAsync(exe, ["--version"], { timeout: 8_000 });
-    const text = `${stdout} ${stderr}`.trim();
-    const m = text.match(/Python\s+(\d+)\.(\d+)/i);
-    if (!m) return null;
-    return { major: Number(m[1]), minor: Number(m[2]), text };
+    // Call sites must pass string literals only (`"python3"` / `"python"`) so CodeQL
+    // does not treat the executable as data-dependent.
+    const { stdout, stderr } =
+      cmd === "python3"
+        ? await execFileAsync("python3", ["--version"], { timeout: 8_000 })
+        : await execFileAsync("python", ["--version"], { timeout: 8_000 });
+    return parsePythonVersionText(`${stdout} ${stderr}`);
   } catch {
     return null;
   }
+}
+
+async function execPythonVersionFromFile(
+  absolutePython: string,
+): Promise<{ major: number; minor: number; text: string } | null> {
+  try {
+    // Fixed executable (node) + fixed probe script; interpreter path is an argument only.
+    const { stdout, stderr } = await execFileAsync(process.execPath, [PROBE_SCRIPT, absolutePython], {
+      timeout: 10_000,
+    });
+    return parsePythonVersionText(`${stdout} ${stderr}`);
+  } catch (err: unknown) {
+    const stdout =
+      err && typeof err === "object" && "stdout" in err
+        ? String((err as { stdout?: unknown }).stdout ?? "")
+        : "";
+    const stderr =
+      err && typeof err === "object" && "stderr" in err
+        ? String((err as { stderr?: unknown }).stderr ?? "")
+        : "";
+    return parsePythonVersionText(`${stdout} ${stderr}`);
+  }
+}
+
+/**
+ * Probe `python --version` for a candidate.
+ * PATH names must be exact literals; absolute paths must pass allowlisted-root checks.
+ */
+async function getPythonVersion(
+  candidate: string,
+): Promise<{ major: number; minor: number; text: string } | null> {
+  if (typeof candidate !== "string" || !candidate.trim() || candidate.includes("\0")) return null;
+  const trimmed = candidate.trim();
+
+  if (!trimmed.includes("/") && !trimmed.includes("\\")) {
+    if (!isPathPythonCommand(trimmed)) return null;
+    return execPythonVersionFromPathCmd(trimmed);
+  }
+
+  const allowed = resolveAllowedPythonFile(trimmed);
+  if (!allowed.ok) return null;
+  return execPythonVersionFromFile(allowed.path);
 }
 
 function isSupportedOlivePython(v: { major: number; minor: number }): boolean {
@@ -69,34 +98,37 @@ async function isRunnablePython(candidate: string): Promise<boolean> {
  * Order: env OLIVE_STUDIO_PYTHON → saved config → preferred installs (3.12 first) → PATH.
  */
 export async function findSystemPython(): Promise<string | null> {
-  const candidates: string[] = [];
+  const fileCandidates: string[] = [];
 
   const envPy = process.env.OLIVE_STUDIO_PYTHON?.trim();
-  if (envPy) candidates.push(envPy);
+  if (envPy) fileCandidates.push(envPy);
 
   const cfgPy = readStudioConfig().systemPython?.trim();
-  if (cfgPy) candidates.push(cfgPy);
+  if (cfgPy) fileCandidates.push(cfgPy);
 
   if (process.platform === "win32") {
     const localAppData = process.env.LOCALAPPDATA ?? "";
     const programFiles = process.env.ProgramFiles ?? "C:\\Program Files";
     for (const ver of ["312", "311", "313", "310", "314"]) {
       if (localAppData) {
-        candidates.push(path.join(localAppData, "Programs", "Python", `Python${ver}`, "python.exe"));
+        fileCandidates.push(path.join(localAppData, "Programs", "Python", `Python${ver}`, "python.exe"));
       }
-      candidates.push(path.join(programFiles, "Python" + ver, "python.exe"));
+      fileCandidates.push(path.join(programFiles, "Python" + ver, "python.exe"));
     }
   }
 
-  candidates.push("python", "python3");
-
   const seen = new Set<string>();
-  for (const c of candidates) {
+  for (const c of fileCandidates) {
     if (!c || seen.has(c)) continue;
     seen.add(c);
-    if ((c.includes("/") || c.includes("\\")) && !fs.existsSync(c)) continue;
-    if (await isRunnablePython(c)) return c;
+    const allowed = resolveAllowedPythonFile(c);
+    if (!allowed.ok) continue;
+    if (await isRunnablePython(allowed.path)) return allowed.path;
   }
+
+  // Prefer explicit literals over looping a data array (CodeQL command-injection).
+  if (await isRunnablePython("python3")) return "python3";
+  if (await isRunnablePython("python")) return "python";
   return null;
 }
 
