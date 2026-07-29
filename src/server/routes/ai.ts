@@ -4,7 +4,7 @@
  * Covers: provider management, chat, model catalogs, local models (LM Studio + Ollama),
  * Codex, Devin, pipeline validation, and analysis.
  */
-import type { Router } from "express";
+import { Router } from "express";
 import { spawn, execFile, execSync } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
@@ -918,7 +918,6 @@ async function fallbackModels(provider: string): Promise<Array<{ id: string; lab
 }
 
 export function registerAiRoutes(app: import("express").Express): void {
-  const { Router } = require("express") as typeof import("express");
   const router = Router();
   mountAiRoutes(router);
   app.use("/api", router);

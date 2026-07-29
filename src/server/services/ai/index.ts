@@ -2,11 +2,14 @@
  * AI Provider Service — main entry point.
  *
  * All providers self-register via the plugin registry (./registry.ts).
- * This module re-exports the public API and side-effect imports all provider
- * plugins so they register themselves before any calls.
+ * This module re-exports the public API and side-effect imports provider
+ * plugins so they register before any calls.
  *
- * Adding a new provider = create a file in this directory, call
- * `registerProvider(...)`, and import it below.
+ * OpenAI-compatible backends (mistral, xai, openrouter, groq, together,
+ * kilocode, copilot, openai-compat, chatgpt-sub) register inside `openai.ts`.
+ *
+ * Adding a new provider = create a file (or extend openai.ts), call
+ * `registerProvider(...)`, and import the module below if it is a new file.
  */
 
 // Side-effect imports: register all providers.
