@@ -146,6 +146,7 @@ export async function ensureTensorRt(
     });
     proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
     proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
+    proc.on("error", (err: Error) => reject(new Error(`Failed to launch ${pip}: ${err.message}`)));
     proc.on("close", (code: number | null) =>
       code === 0
         ? resolve()
@@ -277,6 +278,7 @@ export async function ensureDeps(
       });
       proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
       proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
+      proc.on("error", (err: Error) => reject(new Error(`Failed to launch ${pip}: ${err.message}`)));
       proc.on("close", (code: number | null) =>
         code === 0 ? resolve() : reject(new Error(`pip install ${pkg.label} failed (exit ${code})`)),
       );
