@@ -10,6 +10,7 @@ import {
   VENV_DIR,
   OLIVE_GPU_LAUNCHER,
   PYTHON_MIN,
+  PYTHON_MAX_RECOMMENDED,
 } from "./paths.ts";
 import { isGpuExecutionProvider } from "../../../lib/oliveGpuRuntime.ts";
 import { envWithPrependedPaths } from "../../../lib/tensorrtDeps.ts";
@@ -31,7 +32,7 @@ async function getPythonVersion(
 
 function isSupportedOlivePython(v: { major: number; minor: number }): boolean {
   if (v.major !== PYTHON_MIN.major) return false;
-  return v.minor >= PYTHON_MIN.minor;
+  return v.minor >= PYTHON_MIN.minor && v.minor <= PYTHON_MAX_RECOMMENDED.minor;
 }
 
 async function isRunnablePython(candidate: string): Promise<boolean> {
@@ -55,7 +56,7 @@ export async function findSystemPython(): Promise<string | null> {
   if (process.platform === "win32") {
     const localAppData = process.env.LOCALAPPDATA ?? "";
     const programFiles = process.env.ProgramFiles ?? "C:\\Program Files";
-    for (const ver of ["312", "311", "313", "310", "314"]) {
+    for (const ver of ["312", "311", "313", "310"]) {
       if (localAppData) {
         candidates.push(path.join(localAppData, "Programs", "Python", `Python${ver}`, "python.exe"));
       }
