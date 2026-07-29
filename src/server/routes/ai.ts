@@ -552,9 +552,10 @@ export function mountAiRoutes(router: Router): void {
     try {
       const r = await fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/tags`);
       if (!r.ok) return res.json({ installedModels: [], runningModels: [] });
+      const psResPromise = fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/ps`);
       const data = (await r.json()) as { models?: Array<{ name: string }> };
       const installedModels = (data.models ?? []).map((m) => m.name);
-      const psRes = await fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/ps`);
+      const psRes = await psResPromise;
       const psData = psRes.ok
         ? ((await psRes.json()) as { models?: Array<{ name: string }> })
         : { models: [] };
