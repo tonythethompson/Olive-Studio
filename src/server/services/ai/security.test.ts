@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { isIpLiteralHost, isPrivateOrLocalHostname, sanitizeProviderBaseUrl } from "./security.ts";
+import {
+  isIpLiteralHost,
+  isPrivateOrLocalHostname,
+  sanitizeProviderBaseUrl,
+  stripTrailingSlashes,
+} from "./security.ts";
 
 describe("AI provider security", () => {
   describe("isIpLiteralHost", () => {
@@ -70,10 +75,23 @@ describe("AI provider security", () => {
       expect(result).toBe("https://api.openai.com/v1");
     });
 
+    it("strips trailing slashes without regex ReDoS", () => {
+      const result = sanitizeProviderBaseUrl("openai", "https://api.openai.com/v1///");
+      expect(result).toBe("https://api.openai.com/v1");
+    });
+
     it("rejects wrong base URL for provider", () => {
       expect(() => sanitizeProviderBaseUrl("openai", "https://evil.com/v1")).toThrow(
         "baseUrl is not allowed for provider",
       );
+    });
+  });
+
+  describe("stripTrailingSlashes", () => {
+    it("removes trailing slashes", () => {
+      expect(stripTrailingSlashes("https://x.com/v1///")).toBe("https://x.com/v1");
+      expect(stripTrailingSlashes("noslash")).toBe("noslash");
+      expect(stripTrailingSlashes("")).toBe("");
     });
   });
 });

@@ -12,9 +12,43 @@ import {
   getPythonVersion,
   isSupportedOlivePython,
 } from "../services/venv/index.ts";
-import { writeStudioConfig, addVenvToUserPath, getVenvPython } from "../services/venv/config.ts";
+import { writeStudioConfig, addVenvToUserPath } from "../services/venv/config.ts";
 import { setRuntimeHfToken, getRuntimeHfToken } from "../services/olive/state.ts";
 import { ensureTensorRtRtx } from "./tensorrt.ts";
+import { fsWriteRateLimit } from "../middleware/rateLimit.ts";
+
+/** Validate a user-supplied Python interpreter path before any fs/exec use. */
+function resolveSafePythonPath(
+  pythonPath: string,
+): { ok: true; path: string } | { ok: false; error: string } {
+  if (typeof pythonPath !== "string" || !pythonPath.trim()) {
+    return { ok: false, error: "Missing pythonPath" };
+  }
+  if (pythonPath.includes("\0")) {
+    return { ok: false, error: "Invalid pythonPath" };
+  }
+  const resolved = path.resolve(pythonPath.trim());
+  if (!path.isAbsolute(resolved)) {
+    return { ok: false, error: "pythonPath must be an absolute path" };
+  }
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(resolved);
+  } catch {
+    return { ok: false, error: `File not found: ${resolved}` };
+  }
+  if (!stat.isFile()) {
+    return { ok: false, error: `Not a file: ${resolved}` };
+  }
+  const base = path.basename(resolved).toLowerCase();
+  if (!/^python(\d+(\.\d+)*)?(\.exe)?$/.test(base)) {
+    return {
+      ok: false,
+      error: "pythonPath basename must look like a Python interpreter (python, python3, python.exe, …)",
+    };
+  }
+  return { ok: true, path: resolved };
+}
 
 export function mountEnvRoutes(router: Router): void {
   // ─── HuggingFace Token Management ──────────────────────────────────────
@@ -62,15 +96,13 @@ export function mountEnvRoutes(router: Router): void {
   });
 
   // ─── Python Path ──────────────────────────────────────────────────────
-  router.post("/env/python-path", async (req, res) => {
+  router.post("/env/python-path", fsWriteRateLimit, async (req, res) => {
     const { pythonPath } = req.body ?? {};
-    if (!pythonPath || typeof pythonPath !== "string") {
-      return res.status(400).json({ ok: false, error: "Missing pythonPath" });
+    const safe = resolveSafePythonPath(pythonPath);
+    if (!safe.ok) {
+      return res.status(400).json({ ok: false, error: safe.error });
     }
-    const resolved = path.resolve(pythonPath.trim());
-    if (!fs.existsSync(resolved)) {
-      return res.status(400).json({ ok: false, error: `File not found: ${resolved}` });
-    }
+    const resolved = safe.path;
     const pyVer = await getPythonVersion(resolved);
     if (!pyVer) {
       return res.status(400).json({

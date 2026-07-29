@@ -195,7 +195,9 @@ export async function ensureDeps(
           "import torch; print(torch.version.cuda or 'NONE')",
         ]);
         const installedCuda = stdout.trim();
-        const needsGpu = !pkg.installArgs.includes("cpu");
+        const needsGpu = !pkg.installArgs.some(
+          (arg) => typeof arg === "string" && (arg.includes("whl/cpu") || /(?:^|\/)cpu\/?$/.test(arg)),
+        );
         const hasGpu = installedCuda !== "NONE" && installedCuda !== "";
         if (needsGpu === hasGpu) {
           onLine(`[deps] torch already installed (CUDA: ${hasGpu ? installedCuda : "none/CPU"}) ✓`);

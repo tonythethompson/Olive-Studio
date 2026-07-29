@@ -6,6 +6,7 @@ import type {
   ApiErrorResponse,
 } from "../../types.ts";
 import { registerProvider } from "./registry.ts";
+import { stripTrailingSlashes } from "./security.ts";
 
 // ─── Shared OpenAI-compatible call helper ─────────────────────────────────────
 
@@ -57,7 +58,7 @@ export async function callOpenAICompat(
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function resolveOpenAiCompatBase(cfg: ProviderConfig): string {
-  if (cfg.baseUrl?.trim()) return cfg.baseUrl.replace(/\/+$/, "");
+  if (cfg.baseUrl?.trim()) return stripTrailingSlashes(cfg.baseUrl.trim());
   switch (cfg.provider) {
     case "mistral":
       return "https://api.mistral.ai/v1";
@@ -99,7 +100,7 @@ async function callGitHubCopilot(
   messages: AIChatMessage[],
   wantJson: boolean,
 ): Promise<string> {
-  const base = (cfg.baseUrl?.trim() || "https://api.githubcopilot.com").replace(/\/+$/, "");
+  const base = stripTrailingSlashes(cfg.baseUrl?.trim() || "https://api.githubcopilot.com");
   const endpoint = base.endsWith("/v1")
     ? `${base.slice(0, -3)}/chat/completions`
     : `${base}/chat/completions`;

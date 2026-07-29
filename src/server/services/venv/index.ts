@@ -10,16 +10,41 @@ import {
   VENV_DIR,
   OLIVE_GPU_LAUNCHER,
   PYTHON_MIN,
+  PYTHON_MAX_RECOMMENDED,
 } from "./paths.ts";
 import { isGpuExecutionProvider } from "../../../lib/oliveGpuRuntime.ts";
 import { envWithPrependedPaths } from "../../../lib/tensorrtDeps.ts";
 import { getNativeGpuLibPaths } from "./gpu.ts";
 
+const PYTHON_BASENAME_RE = /^python(\d+(\.\d+)*)?(\.exe)?$/i;
+
+/** Reject null bytes / shell-like paths before any execFile of a Python candidate. */
+function isSafePythonCandidate(candidate: string): boolean {
+  if (typeof candidate !== "string" || !candidate.trim() || candidate.includes("\0")) return false;
+  const trimmed = candidate.trim();
+  const base = path.basename(trimmed);
+  if (!PYTHON_BASENAME_RE.test(base)) return false;
+  // Absolute / relative path forms: resolve and require a real file when separators present.
+  if (trimmed.includes("/") || trimmed.includes("\\")) {
+    const resolved = path.resolve(trimmed);
+    if (resolved.includes("\0")) return false;
+    try {
+      if (!fs.statSync(resolved).isFile()) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 async function getPythonVersion(
   candidate: string,
 ): Promise<{ major: number; minor: number; text: string } | null> {
+  if (!isSafePythonCandidate(candidate)) return null;
+  const exe =
+    candidate.includes("/") || candidate.includes("\\") ? path.resolve(candidate.trim()) : candidate.trim();
   try {
-    const { stdout, stderr } = await execFileAsync(candidate, ["--version"], { timeout: 8_000 });
+    const { stdout, stderr } = await execFileAsync(exe, ["--version"], { timeout: 8_000 });
     const text = `${stdout} ${stderr}`.trim();
     const m = text.match(/Python\s+(\d+)\.(\d+)/i);
     if (!m) return null;
@@ -31,7 +56,7 @@ async function getPythonVersion(
 
 function isSupportedOlivePython(v: { major: number; minor: number }): boolean {
   if (v.major !== PYTHON_MIN.major) return false;
-  return v.minor >= PYTHON_MIN.minor;
+  return v.minor >= PYTHON_MIN.minor && v.minor <= PYTHON_MAX_RECOMMENDED.minor;
 }
 
 async function isRunnablePython(candidate: string): Promise<boolean> {

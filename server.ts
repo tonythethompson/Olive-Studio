@@ -13,6 +13,7 @@ import { mountEnvRoutes } from "./src/server/routes/env.ts";
 import { mountOliveRoutes } from "./src/server/routes/olive.ts";
 import { probeTensorRtLoadable } from "./src/server/services/olive/tensorrt.ts";
 import { probeTensorRtRtxLoadable } from "./src/server/services/olive/tensorrt-rtx.ts";
+import { staticServeRateLimit } from "./src/server/middleware/rateLimit.ts";
 
 dotenv.config();
 dotenv.config({ path: ".env.local", override: true });
@@ -156,9 +157,9 @@ async function startServer() {
       console.error(`Production build not found at ${indexHtml}\nRun: pnpm build\nThen:  pnpm start`);
       process.exit(1);
     }
-    app.use(express.static(distPath, { index: "index.html" }));
+    app.use(staticServeRateLimit, express.static(distPath, { index: "index.html" }));
     // SPA fallback for client routes (Express 5-safe; avoid bare "*")
-    app.use((req, res, next) => {
+    app.use(staticServeRateLimit, (req, res, next) => {
       if (req.method !== "GET" && req.method !== "HEAD") return next();
       if (req.path.startsWith("/api")) return next();
       res.sendFile(indexHtml);

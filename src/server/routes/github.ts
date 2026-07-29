@@ -3,6 +3,11 @@
  * Proxies raw.githubusercontent.com fetches to avoid browser CORS issues.
  */
 import type { Router } from "express";
+import { githubProxyRateLimit } from "../middleware/rateLimit.ts";
+
+const OWNER_REPO_RE = /^[A-Za-z0-9_.-]+$/;
+const BRANCH_RE = /^[A-Za-z0-9_./-]+$/;
+const FILE_PATH_RE = /^[A-Za-z0-9_./-]+$/;
 
 function parseGitHubRepoQuery(owner?: string, repo?: string, repoSlug?: string) {
   if (owner && repo) {
@@ -11,8 +16,9 @@ function parseGitHubRepoQuery(owner?: string, repo?: string, repoSlug?: string) 
   if (!repoSlug) return null;
   const clean = repoSlug
     .trim()
-    .replace(/^https:\/\/github.com\//, "")
-    .replace(/^https:\/\/raw.githubusercontent.com\//, "")
+    // Escape dots so "rawXgithubusercontent.com" cannot match.
+    .replace(/^https:\/\/github\.com\//, "")
+    .replace(/^https:\/\/raw\.githubusercontent\.com\//, "")
     .replace(/\.git$/i, "")
     .replace(/\/$/, "");
   const [parsedOwner, parsedRepo] = clean.split("/");
@@ -20,8 +26,12 @@ function parseGitHubRepoQuery(owner?: string, repo?: string, repoSlug?: string) 
   return { owner: parsedOwner, repo: parsedRepo };
 }
 
+function isSafeGitHubComponent(value: string, pattern: RegExp): boolean {
+  return pattern.test(value) && !value.includes("..");
+}
+
 export function mountGithubRoutes(router: Router): void {
-  router.get("/github/raw", async (req, res) => {
+  router.get("/github/raw", githubProxyRateLimit, async (req, res) => {
     const owner = String(req.query.owner || "");
     const repo = String(req.query.repo || "");
     const repoSlug = String(req.query.repoSlug || req.query.repoUrl || "");
@@ -33,7 +43,21 @@ export function mountGithubRoutes(router: Router): void {
       return res.status(400).json({ error: "Missing owner/repo and recipe path." });
     }
 
-    const rawUrl = `https://raw.githubusercontent.com/${parsed.owner}/${parsed.repo}/${branch}/${filePath}`;
+    if (
+      !isSafeGitHubComponent(parsed.owner, OWNER_REPO_RE) ||
+      !isSafeGitHubComponent(parsed.repo, OWNER_REPO_RE) ||
+      !isSafeGitHubComponent(branch, BRANCH_RE) ||
+      !isSafeGitHubComponent(filePath, FILE_PATH_RE)
+    ) {
+      return res.status(400).json({ error: "Invalid GitHub owner, repo, branch, or path." });
+    }
+
+    const rawUrl = new URL(
+      `https://raw.githubusercontent.com/${parsed.owner}/${parsed.repo}/${branch}/${filePath}`,
+    );
+    if (rawUrl.hostname !== "raw.githubusercontent.com" || rawUrl.protocol !== "https:") {
+      return res.status(400).json({ error: "Refusing to fetch from non-GitHub host." });
+    }
 
     try {
       const upstream = await fetch(rawUrl, { headers: { "User-Agent": "olive-studio" } });

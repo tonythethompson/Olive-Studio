@@ -14,7 +14,7 @@ import rateLimit from "express-rate-limit";
 
 import { callAI, getAiProvider, detectEnvProvider, setRuntimeAiProvider } from "../services/ai/index.ts";
 import type { ProviderConfig } from "../types.ts";
-import { sanitizeProviderBaseUrl } from "../services/ai/security.ts";
+import { sanitizeProviderBaseUrl, stripTrailingSlashes } from "../services/ai/security.ts";
 import { ALLOWED_AI_PROVIDERS } from "../services/ai/detect.ts";
 import { parseJsonFromAiResponse, readEnvApiKey } from "../../lib/aiResponse.ts";
 import { buildAiWorkspaceContext, formatAiWorkspaceContextForPrompt } from "../../lib/aiWorkspaceContext.ts";
@@ -29,6 +29,7 @@ import {
   listDevinModels,
   logoutDevin,
 } from "../../lib/devin/client.ts";
+import { authActionRateLimit, heavyCommandRateLimit } from "../middleware/rateLimit.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -347,10 +348,20 @@ export function mountAiRoutes(router: Router): void {
           source: "fallback",
           error: "No API key available. Set an env var or provider in Settings.",
         });
+      let safeBaseUrl: string | undefined;
+      try {
+        safeBaseUrl = sanitizeProviderBaseUrl(provider, baseUrl);
+      } catch (err: unknown) {
+        return res.status(400).json({
+          models: [],
+          source: "fallback",
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
       const modelCatalog = await fetchLiveModelCatalog(
         provider as ProviderConfig["provider"],
         key,
-        baseUrl?.trim() || undefined,
+        safeBaseUrl,
       );
       return res.json(modelCatalog);
     } catch (err: unknown) {
@@ -503,7 +514,7 @@ export function mountAiRoutes(router: Router): void {
     }
   });
 
-  router.post("/ai/local-pull", async (req, res) => {
+  router.post("/ai/local-pull", heavyCommandRateLimit, async (req, res) => {
     const { modelTag } = req.body ?? {};
     if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
     const send = beginPullSse(res);
@@ -756,7 +767,7 @@ export function mountAiRoutes(router: Router): void {
     }
   });
 
-  router.post("/codex/login", async (_req, res) => {
+  router.post("/codex/login", authActionRateLimit, async (_req, res) => {
     try {
       const server = getCodexAppServer();
       if (!server.isReady) return res.status(400).json({ ok: false, error: "Codex app-server not running" });
@@ -772,7 +783,7 @@ export function mountAiRoutes(router: Router): void {
     }
   });
 
-  router.post("/codex/login/cancel", async (req, res) => {
+  router.post("/codex/login/cancel", authActionRateLimit, async (req, res) => {
     try {
       const server = getCodexAppServer();
       if (server.isReady) {
@@ -828,7 +839,7 @@ export function mountAiRoutes(router: Router): void {
     return res.json({ ok: true, authUrl: url });
   });
 
-  router.post("/devin/login/complete", async (req, res) => {
+  router.post("/devin/login/complete", authActionRateLimit, async (req, res) => {
     const { token } = req.body ?? {};
     if (!token) return res.status(400).json({ ok: false, error: "Missing token" });
     try {
@@ -854,15 +865,16 @@ export function mountAiRoutes(router: Router): void {
   });
 }
 
-/** Fetch live model catalog from a provider's API. */
+/** Fetch live model catalog from a provider's API. `baseUrl` must already be sanitized. */
 async function fetchLiveModelCatalog(provider: string, apiKey: string, baseUrl?: string) {
-  const base = baseUrl?.replace(/\/+$/, "") || defaultBaseUrl(provider);
+  const base = stripTrailingSlashes(baseUrl || defaultBaseUrl(provider));
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
   };
   try {
-    const r = await fetch(`${base}/models`, { headers });
+    const modelsUrl = new URL("models", base.endsWith("/") ? base : `${base}/`);
+    const r = await fetch(modelsUrl, { headers });
     if (!r.ok) return { models: [], source: "fallback", error: `HTTP ${r.status}` };
     const data = (await r.json()) as { data?: Array<{ id: string }> };
     const models = (data.data ?? []).map((m) => ({ id: m.id, label: m.id }));

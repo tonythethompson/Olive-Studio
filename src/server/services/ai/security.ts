@@ -13,6 +13,13 @@ export const ALLOWED_BASE_URL_PREFIX_BY_PROVIDER: Partial<Record<ProviderConfig[
   together: ["https://api.together.xyz/v1"],
 };
 
+/** Strip trailing `/` without a regex (avoids ReDoS on long slash runs). */
+export function stripTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47 /* / */) end -= 1;
+  return value.slice(0, end);
+}
+
 export function isIpLiteralHost(hostname: string): boolean {
   if (!hostname) return false;
   if (hostname.includes(":")) return true; // IPv6 literal
@@ -63,7 +70,7 @@ export function sanitizeProviderBaseUrl(provider: string, rawBaseUrl?: string): 
   if (isIpLiteralHost(parsed.hostname) || isPrivateOrLocalHostname(parsed.hostname)) {
     throw new Error("baseUrl host is not allowed");
   }
-  const normalized = parsed.toString().replace(/\/+$/, "");
+  const normalized = stripTrailingSlashes(parsed.toString());
   const allowed = ALLOWED_BASE_URL_PREFIX_BY_PROVIDER[provider as ProviderConfig["provider"]];
   if (allowed && !allowed.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`))) {
     throw new Error(`baseUrl is not allowed for provider: ${provider}`);

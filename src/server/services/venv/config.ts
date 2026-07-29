@@ -34,12 +34,14 @@ export async function addVenvToUserPath(): Promise<{ ok: boolean; error?: string
   const resolved = path.resolve(scripts);
 
   if (process.platform === "win32") {
+    // Single-quoted PowerShell literal: JSON.stringify would leave `$` expandable in "..." strings.
+    const psLiteral = `'${resolved.replace(/'/g, "''")}'`;
     const ps = `
-$scripts = ${JSON.stringify(resolved)}
+$scripts = ${psLiteral}
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 if ($null -eq $userPath) { $userPath = '' }
 $parts = $userPath -split ';' | Where-Object { $_ -ne '' }
-if ($parts | Where-Object { $_.TrimEnd('\\\\') -ieq $scripts.TrimEnd('\\\\') }) {
+if ($parts | Where-Object { $_.TrimEnd('\\') -ieq $scripts.TrimEnd('\\') }) {
   Write-Output 'ALREADY'
   exit 0
 }

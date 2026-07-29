@@ -100,21 +100,21 @@ function loadExisting() {
 }
 
 function mergePasses(existing, extracted) {
-  // Start with extracted (authoritative), then overlay any manual annotations
-  // from the existing file that don't exist in the extracted data.
+  // Start with extracted (authoritative). Only overlay *manual* annotations from
+  // existing entries; never re-introduce catalog metadata keys (_generated, etc.).
   const merged = { ...extracted };
   for (const [name, data] of Object.entries(existing)) {
+    if (name.startsWith("_")) continue; // skip metadata keys
+    if (!data || typeof data !== "object") continue;
     if (!merged[name]) {
-      merged[name] = data; // Preserve manually added passes
+      // Preserve manually added passes only
+      if (data._manual) merged[name] = data;
       continue;
     }
-    // Preserve manual overrides for description and category
-    if (data && typeof data === "object") {
-      const existingPass = data;
-      const mergedPass = merged[name];
-      if (existingPass._manual !== undefined) mergedPass._manual = existingPass._manual;
-      if (existingPass.notes !== undefined) mergedPass.notes = existingPass.notes;
-    }
+    const existingPass = data;
+    const mergedPass = merged[name];
+    if (existingPass._manual !== undefined) mergedPass._manual = existingPass._manual;
+    if (existingPass.notes !== undefined) mergedPass.notes = existingPass.notes;
   }
   return merged;
 }
@@ -131,8 +131,8 @@ async function main() {
   const extracted = await extractPassesFromOlive();
 
   if (!extracted) {
-    console.log("📋 No new data extracted. Keeping existing passes.json.");
-    process.exit(0);
+    console.error("❌ Could not extract passes from olive-ai. Refusing to overwrite passes.json.");
+    process.exit(1);
   }
 
   const existing = loadExisting();

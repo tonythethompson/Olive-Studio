@@ -16,13 +16,13 @@ import { isGpuExecutionProvider } from "../../lib/oliveGpuRuntime.ts";
 import { jobRegistry, getRuntimeHfToken } from "../services/olive/state.ts";
 import { pushLog, startGpuMetricsTimer, stopGpuMetricsTimer } from "../services/olive/gpu.ts";
 import { getVenvPython } from "../services/venv/paths.ts";
-import { ensureVenv, buildOliveRunEnvironment } from "../services/venv/index.ts";
-import { resolveOliveCommand } from "../services/venv/index.ts";
+import { ensureVenv, buildOliveRunEnvironment, resolveOliveCommand } from "../services/venv/index.ts";
 import type { OliveRecipe, OliveJob } from "../types.ts";
+import { oliveRunRateLimit } from "../middleware/rateLimit.ts";
 
 export function mountOliveRoutes(router: Router): void {
   // ─── POST /api/olive/run ──────────────────────────────────────────────
-  router.post("/olive/run", async (req, res) => {
+  router.post("/olive/run", oliveRunRateLimit, async (req, res) => {
     const { recipeJson, cudaVersion = "auto" } = req.body as { recipeJson?: string; cudaVersion?: string };
     if (!recipeJson) {
       return res.status(400).json({ ok: false, error: "Missing recipeJson" });
