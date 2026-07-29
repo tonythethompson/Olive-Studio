@@ -60,13 +60,20 @@ export function mountGithubRoutes(router: Router): void {
     }
 
     try {
-      const upstream = await fetch(rawUrl, { headers: { "User-Agent": "olive-studio" } });
+      const upstream = await fetch(rawUrl, {
+        headers: { "User-Agent": "olive-studio" },
+        signal: AbortSignal.timeout(10_000),
+      });
       if (!upstream.ok) {
         return res.status(upstream.status).json({
           error: `Remote file not found at ${parsed.owner}/${parsed.repo}/${branch}/${filePath} (HTTP ${upstream.status}).`,
         });
       }
       const text = await upstream.text();
+      // Cap payload size before JSON.parse to avoid memory spikes from huge blobs.
+      if (text.length > 5_000_000) {
+        return res.status(413).json({ error: "Remote file is too large to proxy." });
+      }
       try {
         return res.json(JSON.parse(text));
       } catch {

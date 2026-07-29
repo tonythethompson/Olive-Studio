@@ -11,7 +11,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Server } from "http";
 
 import { stubGlobalFetch, restoreGlobalFetch } from "./setup.integration.ts";
-import { app } from "../../../server.ts";
+import { app, markServerReady } from "../../../server.ts";
 
 let server: Server;
 let baseUrl: string;
@@ -20,6 +20,7 @@ let baseUrl: string;
 async function startTestServer(): Promise<{ server: Server; baseUrl: string }> {
   return new Promise((resolve, reject) => {
     const srv = app.listen(0, "127.0.0.1", () => {
+      markServerReady();
       const addr = srv.address();
       if (!addr || typeof addr === "string") {
         reject(new Error(`Could not bind to random port: ${addr}`));

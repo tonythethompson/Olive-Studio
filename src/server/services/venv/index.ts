@@ -109,7 +109,7 @@ export async function findSystemPython(): Promise<string | null> {
   if (process.platform === "win32") {
     const localAppData = process.env.LOCALAPPDATA ?? "";
     const programFiles = process.env.ProgramFiles ?? "C:\\Program Files";
-    for (const ver of ["312", "311", "313", "310", "314"]) {
+    for (const ver of ["312", "311", "313", "310"]) {
       if (localAppData) {
         fileCandidates.push(path.join(localAppData, "Programs", "Python", `Python${ver}`, "python.exe"));
       }

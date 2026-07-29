@@ -81,12 +81,14 @@ export function resolveAllowedPythonFile(
   if (pythonPath.includes("\0")) {
     return { ok: false, error: "Invalid pythonPath" };
   }
-  const resolved = path.resolve(pythonPath.trim());
-  if (!path.isAbsolute(resolved)) {
+  const rawPath = pythonPath.trim();
+  // Check absoluteness before resolve — path.resolve() always yields absolute.
+  if (!path.isAbsolute(rawPath)) {
     return { ok: false, error: "pythonPath must be an absolute path" };
   }
+  const resolved = path.resolve(rawPath);
 
-  const safePath = rebaseOntoAllowedPythonRoot(resolved);
+  let safePath = rebaseOntoAllowedPythonRoot(resolved);
   if (!safePath) {
     return {
       ok: false,
@@ -104,7 +106,13 @@ export function resolveAllowedPythonFile(
 
   let stat: fs.Stats;
   try {
-    // Use rebased path (path.join of allowlisted root + checked relative).
+    // Canonicalize symlinks, then re-verify containment before trusting the path.
+    const real = fs.realpathSync(safePath);
+    const realSafe = rebaseOntoAllowedPythonRoot(real);
+    if (!realSafe) {
+      return { ok: false, error: `pythonPath resolves outside allowed locations: ${safePath}` };
+    }
+    safePath = realSafe;
     stat = fs.statSync(safePath);
   } catch {
     return { ok: false, error: `File not found: ${safePath}` };

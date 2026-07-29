@@ -15,15 +15,10 @@
 
 import path from "path";
 import fs from "fs";
-import type { ProviderConfig } from "./types.ts";
+import type { ProviderConfig, StudioConfig } from "./types.ts";
 import { getRuntimeAiProvider, setRuntimeAiProvider } from "./services/ai/state.ts";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface StudioConfig {
-  /** Absolute path to a system Python interpreter (optional override). */
-  systemPython?: string;
-}
+export type { StudioConfig };
 
 export interface AppConfig {
   /** On-disk config persisted to .olive-studio/config.json. */

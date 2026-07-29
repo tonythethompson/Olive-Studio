@@ -20,6 +20,17 @@ dotenv.config({ path: ".env.local", override: true });
 const app = express();
 app.use(express.json({ limit: "10mb" }));
 
+/** Shared readiness flag: false until listen succeeds (or tests call markServerReady). */
+let serverReady = false;
+
+export function markServerReady(): void {
+  serverReady = true;
+}
+
+export function isServerReady(): boolean {
+  return serverReady;
+}
+
 // CORS early — browser + Tauri webviews (same-origin normally; helps desktop edge cases)
 app.use((req, res, next) => {
   const origin = req.headers.origin;
@@ -94,7 +105,10 @@ app.use("/api", systemRouter);
 
 // ─── Health check (required by Tauri desktop bootstrap) ────────────────────
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", uptime: process.uptime() });
+  if (!serverReady) {
+    return res.status(503).json({ status: "starting", uptime: process.uptime() });
+  }
+  return res.json({ status: "ok", uptime: process.uptime() });
 });
 
 // ─── API 404 fallback ────────────────────────────────────────────────────
@@ -169,6 +183,7 @@ async function startServer() {
 
   await new Promise<void>((resolve) => {
     app.listen(PORT, "0.0.0.0", () => {
+      markServerReady();
       // eslint-disable-next-line no-console -- intentional server startup message
       console.log(`Server running on http://localhost:${PORT}`);
       // eslint-disable-next-line no-console -- intentional server startup message

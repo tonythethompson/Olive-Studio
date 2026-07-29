@@ -105,12 +105,17 @@ export function mountOliveRoutes(router: Router): void {
       });
       proc.on("close", (code) => {
         job.exitCode = code;
-        job.status = code === 0 ? "completed" : "failed";
+        // Preserve intentional cancellation — do not overwrite with failed/completed.
+        if (job.status !== "cancelled") {
+          job.status = code === 0 ? "completed" : "failed";
+        }
         stopGpuMetricsTimer(job);
         pushLog(job, `[done] Olive exited with code ${code ?? "unknown"}`);
       });
       proc.on("error", (err) => {
-        job.status = "failed";
+        if (job.status !== "cancelled") {
+          job.status = "failed";
+        }
         stopGpuMetricsTimer(job);
         pushLog(job, `[error] Failed to start Olive: ${err.message}`);
       });
@@ -178,8 +183,9 @@ export function mountOliveRoutes(router: Router): void {
     const job = jobRegistry.get(jobId);
     if (!job) return res.status(404).json({ error: "Job not found" });
     if (job.process) {
-      job.process.kill("SIGTERM");
       job.status = "cancelled";
+      job.process.kill("SIGTERM");
+      stopGpuMetricsTimer(job);
     }
     return res.json({ ok: true });
   });
