@@ -16,13 +16,12 @@ import { callAI, getAiProvider, detectEnvProvider, setRuntimeAiProvider } from "
 import type { ProviderConfig } from "../types.ts";
 import { sanitizeProviderBaseUrl, stripTrailingSlashes } from "../services/ai/security.ts";
 import { ALLOWED_AI_PROVIDERS } from "../services/ai/detect.ts";
-import { parseJsonFromAiResponse, readEnvApiKey } from "../../lib/aiResponse.ts";
+import { parseJsonFromAiResponse } from "../../lib/aiResponse.ts";
 import { buildAiWorkspaceContext, formatAiWorkspaceContextForPrompt } from "../../lib/aiWorkspaceContext.ts";
 import { validateOliveRecipeStructure } from "../../lib/oliveRecipeSchema.ts";
 import { getCodexAppServer } from "../../lib/codex/CodexAppServerClient.ts";
-import { buildCodexPrompt, codexAsk } from "../../lib/codex/codexAgent.ts";
+import { codexAsk } from "../../lib/codex/codexAgent.ts";
 import {
-  devinChat,
   finishDevinLogin,
   getDevinAccountStatus,
   getDevinSignInUrl,
@@ -83,9 +82,11 @@ async function isOllamaRunning(): Promise<boolean> {
   }
 }
 
+/** Module-level LMS CLI path cache (avoids re-probing disk/PATH on every request). */
+let cachedLmsCli: string | null | undefined;
+
 function findLmsCli(): string | null {
-  let cachedLmsCli: string | null = null;
-  if (cachedLmsCli) return cachedLmsCli;
+  if (cachedLmsCli !== undefined) return cachedLmsCli;
   const home = os.homedir();
   const candidates =
     process.platform === "win32"
@@ -119,6 +120,7 @@ function findLmsCli(): string | null {
   } catch {
     /* not on PATH */
   }
+  cachedLmsCli = null;
   return null;
 }
 
@@ -374,7 +376,7 @@ export function mountAiRoutes(router: Router): void {
   // ─── AI Chat ──────────────────────────────────────────────────────────────
 
   router.post("/ai/chat", async (req, res) => {
-    const { message, workspaceContext, state, chatHistory } = req.body;
+    const { message, chatHistory } = req.body;
     if (!message || typeof message !== "string") return res.status(400).json({ error: "Missing message" });
     try {
       const system = "You are an Olive model optimization assistant.";
@@ -743,7 +745,7 @@ export function mountAiRoutes(router: Router): void {
               await sleepMs(1000);
               if (await isLmsServerRunning()) break;
             }
-          } catch (err: unknown) {
+          } catch {
             /* continue */
           }
         }
