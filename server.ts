@@ -4,8 +4,7 @@ import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import fs from "fs";
 
-import { mountSystemRoutes } from "./src/server/routes/system.ts";
-import type { SystemProbeOptions } from "./src/server/routes/system.ts";
+import { mountSystemRoutes, type SystemProbeOptions } from "./src/server/routes/system.ts";
 import { mountGithubRoutes } from "./src/server/routes/github.ts";
 import { mountAiRoutes } from "./src/server/routes/ai.ts";
 import { mountMcpRoutes } from "./src/server/routes/mcp.ts";
