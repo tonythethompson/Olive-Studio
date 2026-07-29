@@ -550,11 +550,13 @@ export function mountAiRoutes(router: Router): void {
 
   router.get("/ai/ollama-models", async (_req, res) => {
     try {
-      const r = await fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/tags`);
-      if (!r.ok) return res.json({ installedModels: [], runningModels: [] });
-      const data = (await r.json()) as { models?: Array<{ name: string }> };
+      const [tagsRes, psRes] = await Promise.all([
+        fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/tags`),
+        fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/ps`),
+      ]);
+      if (!tagsRes.ok) return res.json({ installedModels: [], runningModels: [] });
+      const data = (await tagsRes.json()) as { models?: Array<{ name: string }> };
       const installedModels = (data.models ?? []).map((m) => m.name);
-      const psRes = await fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/ps`);
       const psData = psRes.ok
         ? ((await psRes.json()) as { models?: Array<{ name: string }> })
         : { models: [] };

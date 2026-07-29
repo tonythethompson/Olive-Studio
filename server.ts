@@ -92,6 +92,11 @@ const systemProbeOpts: SystemProbeOptions = {
 mountSystemRoutes(systemRouter, systemProbeOpts);
 app.use("/api", systemRouter);
 
+// ─── Health check (required by Tauri desktop bootstrap) ────────────────────
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", uptime: process.uptime() });
+});
+
 // ─── API 404 fallback ────────────────────────────────────────────────────
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "API route not found." });

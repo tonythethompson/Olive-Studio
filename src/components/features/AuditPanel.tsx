@@ -80,7 +80,7 @@ export function AuditPanel({
         </div>
       )}
 
-      {analysisError && <ProviderErrorBlock msg={analysisError} onGoSettings={onGoSettings} />}
+      {analysisError ? <ProviderErrorBlock msg={analysisError} onGoSettings={onGoSettings} /> : null}
 
       {analysis && !isAnalyzing && (
         <div className="space-y-3">

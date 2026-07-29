@@ -319,7 +319,7 @@ export function LocalModelManager({
           </p>
         )}
       </div>
-      {error && <p className="text-[11px] text-rose-400">{error}</p>}
+      {error ? <p className="text-[11px] text-rose-400">{error}</p> : null}
     </div>
   );
 }
