@@ -3713,6 +3713,7 @@ This repo also contains `olive-mcp-server/`, a Python MCP server for Microsoft O
 ### Setup
 
 Windows:
+
 ```bash
 cd olive-mcp-server
 python -m venv .venv
@@ -3720,6 +3721,7 @@ python -m venv .venv
 ```
 
 Linux/macOS:
+
 ```bash
 cd olive-mcp-server
 python3 -m venv .venv
@@ -3729,11 +3731,13 @@ python3 -m venv .venv
 ### Test
 
 Windows:
+
 ```bash
 .venv\Scripts\python -m pytest tests -q
 ```
 
 Linux/macOS:
+
 ```bash
 .venv/bin/python -m pytest tests -q
 ```
@@ -3741,6 +3745,7 @@ Linux/macOS:
 ### Run the server
 
 Windows:
+
 ```bash
 .venv\Scripts\python -m olive_mcp_server
 # or
@@ -3748,6 +3753,7 @@ Windows:
 ```
 
 Linux/macOS:
+
 ```bash
 .venv/bin/python -m olive_mcp_server
 # or
@@ -3778,3 +3784,31 @@ The repo root has `.mcp.json`, which registers the server in Claude Code. By def
 
 Reinstall the package if the venv is recreated.
 
+---
+
+## Cursor Cloud specific instructions
+
+Durable notes for Cloud Agents. The startup update script already runs `pnpm install`, so Node deps are ready when a session begins. Node 22 and pnpm 11.17 are available on the base image.
+
+### Primary product: Olive Studio web app (Node/Express + Vite + React)
+
+- Run it with `pnpm dev` (script: `tsx server.ts`). One process runs Express + Vite middleware and listens on `0.0.0.0:3000` → open `http://localhost:3000`. There is no separate frontend/backend to start.
+- Standard commands live in `package.json` scripts and the README "Scripts" table: `pnpm lint` (tsc + eslint), `pnpm test` (Vitest), `pnpm validate:recipe`, `pnpm build`, `pnpm start` (serves the built `dist/server.mjs`).
+- Gotcha: `pnpm lint` prints ESLint warnings but still exits 0 (it runs `eslint --max-warnings 20`). Warnings are expected; only treat a non-zero exit or reported errors as a failure.
+- Gotcha: `npm install` is blocked by a `preinstall` guard — always use `pnpm`.
+- You can build/lint/test/run the app and use the full recipe-builder + validation UI with no Python and no GPU. The hardware probe reports CPU-only in the VM, which is expected.
+- Do NOT trigger an actual Olive optimization ("Execute Live"/batch run) in the cloud VM: on first run the server creates `.venv/` and downloads `olive-ai` (plus CUDA/TensorRT wheels for GPU recipes) and models — heavy, network-dependent, and there is no GPU. Recipe building, JSON export, and validation are the CPU-only flows to exercise.
+
+### Secondary component: Olive MCP server (Python, optional)
+
+- Not started by the app; it is an optional stdio MCP server under `olive-mcp-server/`. The web app can proxy to it via `POST /api/mcp/tool`, but the app runs fine without it.
+- To set it up on a fresh pod (system `python3.12-venv` is required to create a venv and is not part of the update script):
+  ```bash
+  sudo apt-get update && sudo apt-get install -y python3.12-venv
+  cd olive-mcp-server && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+  ```
+- Gotcha: `pip install -e ".[dev]"` resolves `mcp` to 2.x, which removed `mcp.server.fastmcp` and breaks imports/tests. Pin `mcp<2` (mcp 1.29.0 works): `.venv/bin/pip install "mcp<2"`. Then `\.venv/bin/python -m pytest tests -q` passes.
+
+### Misc
+
+- `pnpm a11y:scan` invokes `python` (not `python3`); `python` is not on PATH by default, so alias/symlink it if you need that script.
