@@ -22,7 +22,12 @@ import {
 } from "../services/olive/state.ts";
 import { pushLog, startGpuMetricsTimer, stopGpuMetricsTimer } from "../services/olive/gpu.ts";
 import { getVenvPython } from "../services/venv/paths.ts";
-import { ensureVenv, buildOliveRunEnvironment, resolveOliveCommand } from "../services/venv/index.ts";
+import {
+  ensureVenv,
+  buildOliveRunEnvironment,
+  resolveOliveCommand,
+  detachVenvListener,
+} from "../services/venv/index.ts";
 import type { OliveRecipe, OliveJob } from "../types.ts";
 import { oliveRunRateLimit } from "../middleware/rateLimit.ts";
 
@@ -82,7 +87,12 @@ export function mountOliveRoutes(router: Router): void {
     };
 
     try {
-      const venvResult = await ensureVenv((line) => pushLog(job, line));
+      // Retain the listener so /olive/cancel can detach it if setup is pending.
+      const venvListener = (line: string) => pushLog(job, line);
+      job.venvListener = venvListener;
+      const venvResult = await ensureVenv(venvListener);
+      // Setup finished for this caller — the listener is no longer registered.
+      job.venvListener = undefined;
       if (bailIfCancelled()) return;
       if (!venvResult.ok) {
         job.status = "failed";
@@ -275,6 +285,12 @@ export function mountOliveRoutes(router: Router): void {
     // setup loop checks this status after each await and aborts before spawning.
     job.status = "cancelled";
     pushLog(job, "[cancel] Cancellation requested.");
+    // Detach from shared venv setup so the cancelled job stops receiving install
+    // output while setup (which may serve other jobs) keeps running.
+    if (job.venvListener) {
+      detachVenvListener(job.venvListener);
+      job.venvListener = undefined;
+    }
     if (job.process) {
       job.process.kill("SIGTERM");
       stopGpuMetricsTimer(job);

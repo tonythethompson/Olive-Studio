@@ -190,6 +190,16 @@ export function ensureVenv(onLine: SetupListener): Promise<{ ok: boolean; error?
   return promise;
 }
 
+/**
+ * Detach a previously-registered `ensureVenv` progress listener. Used when a
+ * job is cancelled while setup is still pending, so a cancelled job stops
+ * receiving install output and its closure can be released immediately.
+ * No-op once setup has finished (the listener set is discarded then).
+ */
+export function detachVenvListener(onLine: SetupListener): void {
+  venvSetupInFlight?.listeners.delete(onLine);
+}
+
 async function ensureVenvInner(onLine: (line: string) => void): Promise<{ ok: boolean; error?: string }> {
   const systemPython = await findSystemPython();
   if (!systemPython) {
