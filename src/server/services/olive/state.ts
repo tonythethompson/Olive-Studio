@@ -51,11 +51,27 @@ export function cleanupJobArtifacts(job: OliveJob): void {
   }
 }
 
+/**
+ * Whether the job's child process has actually exited. `/olive/cancel` stamps
+ * `finishedAt` on SIGTERM before the process is confirmed dead, so the sweeper
+ * must not evict a job whose process is still alive (that would orphan it).
+ */
+function hasProcessExited(job: OliveJob): boolean {
+  const proc = job.process;
+  if (proc == null) return true;
+  return proc.exitCode !== null || proc.signalCode !== null;
+}
+
 /** Remove terminal jobs older than the TTL and reclaim their temp files. */
 export function sweepJobRegistry(now: number = Date.now()): number {
   let removed = 0;
   for (const [id, job] of jobRegistry) {
-    if (job.finishedAt != null && TERMINAL_STATUSES.has(job.status) && now - job.finishedAt > JOB_TTL_MS) {
+    if (
+      job.finishedAt != null &&
+      TERMINAL_STATUSES.has(job.status) &&
+      now - job.finishedAt > JOB_TTL_MS &&
+      hasProcessExited(job)
+    ) {
       cleanupJobArtifacts(job);
       jobRegistry.delete(id);
       removed += 1;

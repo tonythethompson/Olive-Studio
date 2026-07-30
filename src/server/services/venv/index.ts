@@ -140,18 +140,40 @@ export async function findSystemPython(): Promise<string | null> {
  * In-progress guard: venv creation + `pip install` are not concurrency-safe
  * (two callers can corrupt the same `.venv`). Concurrent callers share the
  * single in-flight promise instead of racing.
+ *
+ * Progress is fanned out to every attached `onLine` listener, so later callers
+ * (a second `/env/venv-install` stream or a concurrent `/olive/run`) still
+ * receive live install output rather than going silent.
  */
-let venvSetupInFlight: Promise<{ ok: boolean; error?: string }> | null = null;
+interface VenvSetupInFlight {
+  promise: Promise<{ ok: boolean; error?: string }>;
+  listeners: Set<(line: string) => void>;
+}
+let venvSetupInFlight: VenvSetupInFlight | null = null;
 
 export function ensureVenv(onLine: (line: string) => void): Promise<{ ok: boolean; error?: string }> {
   if (venvSetupInFlight) {
-    onLine("[setup] Environment setup already in progress — waiting for it to finish...");
-    return venvSetupInFlight;
+    venvSetupInFlight.listeners.add(onLine);
+    onLine("[setup] Environment setup already in progress — attaching to live output...");
+    return venvSetupInFlight.promise;
   }
-  venvSetupInFlight = ensureVenvInner(onLine).finally(() => {
+
+  const listeners = new Set<(line: string) => void>([onLine]);
+  const broadcast = (line: string) => {
+    for (const listener of listeners) {
+      try {
+        listener(line);
+      } catch {
+        /* listener gone (e.g. closed response) */
+      }
+    }
+  };
+
+  const promise = ensureVenvInner(broadcast).finally(() => {
     venvSetupInFlight = null;
   });
-  return venvSetupInFlight;
+  venvSetupInFlight = { promise, listeners };
+  return promise;
 }
 
 async function ensureVenvInner(onLine: (line: string) => void): Promise<{ ok: boolean; error?: string }> {
