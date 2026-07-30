@@ -127,6 +127,8 @@ export function mountOliveRoutes(router: Router): void {
         stopGpuMetricsTimer(job);
         cleanupJobArtifacts(job);
         pushLog(job, `[done] Olive exited with code ${code ?? "unknown"}`);
+        // Process has exited — clear the handle so the sweeper may reclaim it.
+        job.process = null;
         finalizeJob(job);
       });
       proc.on("error", (err) => {
@@ -136,6 +138,7 @@ export function mountOliveRoutes(router: Router): void {
         stopGpuMetricsTimer(job);
         cleanupJobArtifacts(job);
         pushLog(job, `[error] Failed to start Olive: ${err.message}`);
+        job.process = null;
         finalizeJob(job);
       });
 

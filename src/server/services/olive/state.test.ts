@@ -57,6 +57,33 @@ describe("olive job registry cleanup", () => {
       expect(sweepJobRegistry(Date.now())).toBe(0);
       expect(jobRegistry.has("weird")).toBe(true);
     });
+
+    it("does not evict a cancelled job whose process has not exited (avoids orphaning)", () => {
+      const now = 10_000_000_000;
+      const oldMs = now - 31 * 60_000;
+      // SIGTERM ignored: still-running process (exitCode/signalCode both null).
+      const liveProcess = { exitCode: null, signalCode: null } as unknown as NonNullable<OliveJob["process"]>;
+      jobRegistry.set(
+        "hung",
+        makeJob("hung", { status: "cancelled", finishedAt: oldMs, process: liveProcess }),
+      );
+
+      expect(sweepJobRegistry(now)).toBe(0);
+      expect(jobRegistry.has("hung")).toBe(true);
+    });
+
+    it("evicts a terminal job once its process has exited", () => {
+      const now = 10_000_000_000;
+      const oldMs = now - 31 * 60_000;
+      const exited = { exitCode: 0, signalCode: null } as unknown as NonNullable<OliveJob["process"]>;
+      jobRegistry.set(
+        "exited",
+        makeJob("exited", { status: "completed", finishedAt: oldMs, process: exited }),
+      );
+
+      expect(sweepJobRegistry(now)).toBe(1);
+      expect(jobRegistry.has("exited")).toBe(false);
+    });
   });
 
   describe("cleanupJobArtifacts", () => {
