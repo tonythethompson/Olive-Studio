@@ -23,22 +23,6 @@ const SWEEP_INTERVAL_MS = 5 * 60_000;
 
 const TERMINAL_STATUSES = new Set<OliveJob["status"]>(["completed", "failed", "cancelled"]);
 
-/**
- * Mark a job terminal: stamp `finishedAt` (idempotent) and fire done-subscribers
- * so open SSE streams close immediately instead of waiting for the heartbeat.
- */
-export function finalizeJob(job: OliveJob): void {
-  if (job.finishedAt == null) job.finishedAt = Date.now();
-  const subs = job.doneSubscribers.splice(0);
-  for (const sub of subs) {
-    try {
-      sub();
-    } catch {
-      /* subscriber gone */
-    }
-  }
-}
-
 /** Best-effort removal of a job's temp recipe file. */
 export function cleanupJobArtifacts(job: OliveJob): void {
   if (job.tempRecipePath) {
@@ -55,7 +39,12 @@ export function cleanupJobArtifacts(job: OliveJob): void {
 export function sweepJobRegistry(now: number = Date.now()): number {
   let removed = 0;
   for (const [id, job] of jobRegistry) {
-    if (job.finishedAt != null && TERMINAL_STATUSES.has(job.status) && now - job.finishedAt > JOB_TTL_MS) {
+    if (
+      job.finishedAt != null &&
+      job.exitCode != null &&
+      TERMINAL_STATUSES.has(job.status) &&
+      now - job.finishedAt > JOB_TTL_MS
+    ) {
       cleanupJobArtifacts(job);
       jobRegistry.delete(id);
       removed += 1;
