@@ -70,8 +70,20 @@ export function mountOliveRoutes(router: Router): void {
     const provider = (recipe.systems?.local_system?.config?.accelerators?.[0]?.execution_providers?.[0] ??
       "CPUExecutionProvider") as IHVProvider;
 
+    // Cancellation can arrive during the long setup awaits below, before a
+    // process exists. Bail out (and respond) instead of spawning Olive anyway.
+    const bailIfCancelled = (): boolean => {
+      if (job.status !== "cancelled") return false;
+      pushLog(job, "[cancel] Cancelled during environment setup.");
+      cleanupJobArtifacts(job);
+      finalizeJob(job);
+      res.json({ ok: false, jobId, status: "cancelled" });
+      return true;
+    };
+
     try {
       const venvResult = await ensureVenv((line) => pushLog(job, line));
+      if (bailIfCancelled()) return;
       if (!venvResult.ok) {
         job.status = "failed";
         // Log before finalizeJob so the error reaches any stream before it drains.
@@ -83,6 +95,7 @@ export function mountOliveRoutes(router: Router): void {
 
       const venvPython = getVenvPython();
       const env = await buildOliveRunEnvironment(venvPython, provider, process.env);
+      if (bailIfCancelled()) return;
 
       if (cudaVersion !== "auto") {
         env.CUDA_VERSION = cudaVersion;
@@ -249,14 +262,23 @@ export function mountOliveRoutes(router: Router): void {
     const { jobId } = req.body ?? {};
     const job = jobRegistry.get(jobId);
     if (!job) return res.status(404).json({ error: "Job not found" });
+
+    // Already terminal — nothing to cancel.
+    if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
+      return res.json({ ok: true, status: job.status });
+    }
+
+    // Mark cancelled even during "setting_up" (no process yet). The /olive/run
+    // setup loop checks this status after each await and aborts before spawning.
+    job.status = "cancelled";
+    pushLog(job, "[cancel] Cancellation requested.");
     if (job.process) {
-      job.status = "cancelled";
       job.process.kill("SIGTERM");
       stopGpuMetricsTimer(job);
-      // Fallback finalize in case the process never emits "close"; the close
-      // handler is idempotent (finishedAt is only stamped once).
-      finalizeJob(job);
     }
-    return res.json({ ok: true });
+    // Finalize so open SSE streams close now; the "close" handler (if a process
+    // is running) is idempotent — finishedAt is only stamped once.
+    finalizeJob(job);
+    return res.json({ ok: true, status: job.status });
   });
 }
