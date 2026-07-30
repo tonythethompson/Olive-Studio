@@ -1,1 +1,2 @@
-pnpm lint:quick && pnpm lint
+# Fast local gate only. Full `tsc` + ESLint run in CI.
+pnpm lint:quick
