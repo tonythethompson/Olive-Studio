@@ -77,7 +77,7 @@ Pass combinations are checked against your execution provider (for example, AWQ 
 
 - **Node.js** 22+ (pnpm 11 requirement)
 - **pnpm** 11.17.0+ (the project uses `packageManager: pnpm@11.17.0`; `npm install` is blocked)
-- **Python** 3.9+ (on `PATH`, or set from the app header **Runtime** control if missing)
+- **Python** 3.10–3.13 (3.12 recommended) on `PATH`, or set from the app header **Runtime** control if missing. Matches **olive-ai** (≥3.10; classifiers through 3.13).
 - **Optional:** NVIDIA / Intel / Qualcomm / AMD tooling for GPU or NPU recipes
 - **Optional:** [Hugging Face token](https://huggingface.co/settings/tokens) for gated models
 
@@ -111,7 +111,7 @@ Open **<http://localhost:3000>**.
 
 Runs the same Node server inside a native window (WebView) instead of your browser.
 
-**Extra prerequisites:** [Rust](https://rustup.rs/) toolchain, Windows WebView2 (usually preinstalled), Node 22+, Python 3.9+.
+**Extra prerequisites:** [Rust](https://rustup.rs/) toolchain, Windows WebView2 (usually preinstalled), Node 22+, Python 3.10–3.13 (3.12 recommended).
 
 ```bash
 pnpm install
