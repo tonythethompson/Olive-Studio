@@ -3,9 +3,10 @@
  * before the child process exists. A gated `ensureVenv` mock lets us hold the
  * run in `setting_up`, cancel it, then assert the run aborts without spawning.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import express from "express";
 import type { Server } from "http";
+import fs from "fs";
 
 // ── Controllable ensureVenv gate ──────────────────────────────────────────
 let releaseEnsureVenv: (() => void) | null = null;
@@ -70,6 +71,10 @@ beforeEach(() => {
   jobRegistry.clear();
   spawnSpy.mockClear();
   releaseEnsureVenv = null;
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 async function waitFor<T>(fn: () => T | undefined, timeoutMs = 2000): Promise<T> {
@@ -143,5 +148,40 @@ describe("POST /api/olive/cancel during setup", () => {
     });
     const body = await res.json();
     expect(body).toMatchObject({ ok: true, status: "completed" });
+  });
+});
+
+describe("POST /api/olive/run temp-recipe write failure", () => {
+  it("reclaims the temp recipe file when writing it fails", async () => {
+    vi.spyOn(fs, "mkdirSync").mockReturnValue(undefined as unknown as string);
+    vi.spyOn(fs, "writeFileSync").mockImplementation(() => {
+      throw new Error("ENOSPC: no space left on device");
+    });
+    // Records whether cleanup tried to remove the (partially/never) written file.
+    const rmSpy = vi.spyOn(fs, "rmSync").mockReturnValue(undefined);
+
+    const runPromise = fetch(`${baseUrl}/api/olive/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipeJson: "{}" }),
+    });
+
+    // ensureVenv is gated — release it so setup proceeds to the failing write.
+    const release = await waitFor(() => releaseEnsureVenv ?? undefined);
+    release();
+
+    const res = await runPromise;
+    const body = await res.json();
+    expect(body).toMatchObject({ ok: false });
+    expect(spawnSpy).not.toHaveBeenCalled();
+
+    // tempRecipePath was recorded before the write, so cleanup targeted it.
+    const rmTarget = rmSpy.mock.calls[0]?.[0];
+    expect(String(rmTarget)).toContain("recipe-");
+    expect(String(rmTarget)).toContain(".json");
+
+    const job = [...jobRegistry.values()].at(-1);
+    expect(job?.status).toBe("failed");
+    expect(job?.tempRecipePath).toBeNull();
   });
 });

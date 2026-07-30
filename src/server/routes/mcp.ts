@@ -75,19 +75,44 @@ const KB_CLIENT_MESSAGE: Record<KbFailureReason, string> = {
   invalid: "Knowledge base file is malformed.",
 };
 
+function isStringArray(value: unknown): boolean {
+  return Array.isArray(value) && value.every((v) => typeof v === "string");
+}
+
+/**
+ * Validate a single pass entry against the fields `buildParamSchemas` consumes.
+ * Optional fields are only checked when present, so absent fields still fall back
+ * to their defaults — but a present-but-malformed field is rejected before it
+ * reaches schema rebuilding.
+ */
+function isValidPassEntry(value: unknown): boolean {
+  if (!isObjectRecord(value)) return false;
+  if (typeof value.name !== "string") return false;
+  if (value.type !== undefined && typeof value.type !== "string") return false;
+  if (value.class !== undefined && typeof value.class !== "string") return false;
+  if (value.description !== undefined && typeof value.description !== "string") return false;
+  if (value.typical_compression !== undefined && typeof value.typical_compression !== "string") return false;
+  if (value.input_formats !== undefined && !isStringArray(value.input_formats)) return false;
+  if (value.output_formats !== undefined && !isStringArray(value.output_formats)) return false;
+  if (value.required_params !== undefined && !isStringArray(value.required_params)) return false;
+  if (value.hardware_requirements !== undefined && !isStringArray(value.hardware_requirements)) return false;
+  if (value.gotchas !== undefined && !isStringArray(value.gotchas)) return false;
+  // optional_params is a Record<string, ParamSchema>: object of objects.
+  if (value.optional_params !== undefined) {
+    if (!isObjectRecord(value.optional_params)) return false;
+    if (!Object.values(value.optional_params).every((v) => isObjectRecord(v))) return false;
+  }
+  return true;
+}
+
 /** Runtime shape check for the fields `/mcp/kb-status` and `reloadPassSchemas` consume. */
 function isValidPassesJson(value: unknown): value is PassesJson {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const obj = value as Record<string, unknown>;
-  if (obj.version !== undefined && typeof obj.version !== "string") return false;
-  if (obj.last_updated !== undefined && typeof obj.last_updated !== "string") return false;
-  if (obj.passes !== undefined) {
-    if (!Array.isArray(obj.passes)) return false;
-    // Every entry must be an object with a string `name` (schema keys off it).
-    const entriesOk = obj.passes.every(
-      (p) => typeof p === "object" && p !== null && typeof (p as { name?: unknown }).name === "string",
-    );
-    if (!entriesOk) return false;
+  if (!isObjectRecord(value)) return false;
+  if (value.version !== undefined && typeof value.version !== "string") return false;
+  if (value.last_updated !== undefined && typeof value.last_updated !== "string") return false;
+  if (value.passes !== undefined) {
+    if (!Array.isArray(value.passes)) return false;
+    if (!value.passes.every((p) => isValidPassEntry(p))) return false;
   }
   return true;
 }
@@ -188,7 +213,8 @@ export function mountMcpRoutes(router: Router): void {
     try {
       const kb = readPassesJson();
       if (!kb.ok) {
-        return res.json({ ok: false, ...kbFailureResponse(kb) });
+        // Non-2xx so the client's sync hook enters its error path.
+        return res.status(500).json({ ok: false, ...kbFailureResponse(kb) });
       }
       reloadPassSchemas(kb.data);
       const status = {
