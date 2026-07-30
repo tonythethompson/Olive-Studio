@@ -15,7 +15,7 @@
 // Side-effect imports: register all providers.
 // Order matters for env detection priority — matches old detectEnvProvider chain.
 import "./gemini.ts";
-import "./openai.ts";
+import "./openai.ts"; // Also registers mistral, xai, openrouter, groq, together, kilocode, copilot, openai-compat, chatgpt-sub
 import "./anthropic.ts";
 import "./devin.ts";
 import "./codex.ts";
