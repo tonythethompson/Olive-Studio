@@ -199,6 +199,66 @@ describe("POST /api/olive/cancel during setup", () => {
     const body = await res.json();
     expect(body).toMatchObject({ ok: true, status: "completed" });
   });
+
+  it("escalates SIGTERM to SIGKILL when the child ignores cancellation", async () => {
+    const kill = vi.fn();
+    const once = vi.fn();
+    const proc = {
+      kill,
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      once,
+    };
+
+    jobRegistry.set("stuck-job", {
+      id: "stuck-job",
+      status: "running",
+      exitCode: null,
+      logs: [],
+      subscribers: [],
+      metricSubscribers: [],
+      process: proc as unknown as import("child_process").ChildProcess,
+      latestMetrics: null,
+      metricsTimer: null,
+      sampling: false,
+      tempRecipePath: null,
+      finishedAt: null,
+      doneSubscribers: [],
+    });
+
+    const { CANCEL_SIGKILL_GRACE_MS } = await import("./olive.ts");
+    let escalate: (() => void) | undefined;
+    const realSetTimeout = globalThis.setTimeout.bind(globalThis);
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout").mockImplementation(((
+      fn: TimerHandler,
+      ms?: number,
+      ...args: unknown[]
+    ) => {
+      if (ms === CANCEL_SIGKILL_GRACE_MS && typeof fn === "function") {
+        escalate = () => (fn as (...a: unknown[]) => void)(...args);
+        return { unref() {} } as unknown as ReturnType<typeof setTimeout>;
+      }
+      return realSetTimeout(fn as never, ms as never, ...(args as never[]));
+    }) as typeof setTimeout);
+
+    try {
+      const res = await fetch(`${baseUrl}/api/olive/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: "stuck-job" }),
+      });
+      expect(await res.json()).toMatchObject({ ok: true, status: "cancelled" });
+      expect(kill).toHaveBeenCalledWith("SIGTERM");
+      expect(kill).not.toHaveBeenCalledWith("SIGKILL");
+      expect(escalate).toBeTypeOf("function");
+      expect(once).toHaveBeenCalledWith("close", expect.any(Function));
+
+      escalate!();
+      expect(kill).toHaveBeenCalledWith("SIGKILL");
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+  });
 });
 
 describe("POST /api/olive/run temp-recipe write failure", () => {

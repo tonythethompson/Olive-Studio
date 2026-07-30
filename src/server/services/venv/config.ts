@@ -75,20 +75,23 @@ Write-Output 'ADDED'
   }
   if (shell.endsWith("bash")) {
     // Interactive non-login bash reads ~/.bashrc; login bash reads the first of
-    // ~/.bash_profile / ~/.bash_login / ~/.profile. Cover the login path too so
-    // a fresh login shell actually picks up the export.
+    // ~/.bash_profile / ~/.bash_login / ~/.profile. Cover an existing login
+    // profile when present. Never create ~/.bash_profile: that would shadow
+    // ~/.profile (already in targets) and drop the user's login setup.
     targets.add(path.join(home, ".bashrc"));
     const loginProfile = [".bash_profile", ".bash_login"]
       .map((f) => path.join(home, f))
       .find((p) => fs.existsSync(p));
-    targets.add(loginProfile ?? path.join(home, ".bash_profile"));
+    if (loginProfile) targets.add(loginProfile);
   }
 
   try {
     let allAlready = true;
     for (const profile of targets) {
       const existing = fs.existsSync(profile) ? fs.readFileSync(profile, "utf-8") : "";
-      if (existing.includes(resolved)) continue;
+      // Match the exact export line we write, not a bare path substring (comments
+      // or superstring paths would otherwise false-skip the append).
+      if (existing.split(/\r?\n/).some((l) => l.trim() === exportLine)) continue;
       fs.appendFileSync(profile, `\n${exportLine}\n`, "utf-8");
       allAlready = false;
     }
