@@ -1,0 +1,21 @@
+src/server/__tests__/setup.integration.ts
+  s_4e6f6646dd231f::t_6cb3f365eb468d 70,77-80
+src/server/routes/olive.cancel.test.ts
+  s_4e6f6646dd231f::t_f20c850efea632 242
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e73c5bcb0ab3b3926fe91a922dfa44e70887d225",
+  "prompts": {},
+  "sessions": {
+    "s_4e6f6646dd231f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3b2c56df-4fc5-4b9d-b857-5aaca4ff404b",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
