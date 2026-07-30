@@ -67,13 +67,17 @@ vi.mock("../services/ai/index.ts", async (importOriginal) => {
 let _realFetch: typeof globalThis.fetch | null = null;
 
 function createMockedFetch(): typeof globalThis.fetch {
-  return async (input: RequestInfo | URL, init?: RequestInit) => {
+  const mocked = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     if (url.includes("127.0.0.1:1234")) return mockLmStudio(url, init);
     if (url.includes("127.0.0.1:11434")) return mockOllama(url, init);
 
     return _realFetch!(input, init);
   };
+  // Preserve static fetch helpers (e.g. preconnect) required by newer DOM typings.
+  return Object.assign(mocked, {
+    preconnect: globalThis.fetch.preconnect?.bind(globalThis.fetch),
+  }) as typeof globalThis.fetch;
 }
 
 async function mockLmStudio(url: string, _init?: RequestInit): Promise<Response> {

@@ -239,7 +239,7 @@ describe("POST /api/olive/cancel during setup", () => {
         return { unref() {} } as unknown as ReturnType<typeof setTimeout>;
       }
       return realSetTimeout(fn as never, ms as never, ...(args as never[]));
-    }) as typeof setTimeout);
+    }) as unknown as typeof setTimeout);
 
     try {
       const res = await fetch(`${baseUrl}/api/olive/cancel`, {
