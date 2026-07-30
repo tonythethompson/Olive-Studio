@@ -1,0 +1,19 @@
+.husky/pre-push
+  s_9b8e45f71c8c77::t_4d428d24555c23 1-2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9261ba3488d0ad0762935fae97162d2f79098417",
+  "prompts": {},
+  "sessions": {
+    "s_9b8e45f71c8c77": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "49c89ac5-283f-48e0-a214-04367b5fa214",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
