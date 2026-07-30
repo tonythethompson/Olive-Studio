@@ -1,0 +1,19 @@
+src/server/services/ai/providers.validation.test.ts
+  s_9b8e45f71c8c77::t_efa359593df087 81-89,91-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "36b0653f8614dd50c74841978d4737c49446c333",
+  "prompts": {},
+  "sessions": {
+    "s_9b8e45f71c8c77": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "49c89ac5-283f-48e0-a214-04367b5fa214",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
