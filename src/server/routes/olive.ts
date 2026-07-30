@@ -18,6 +18,7 @@ import {
   getRuntimeHfToken,
   cleanupJobArtifacts,
   startJobRegistrySweeper,
+  finalizeJob,
 } from "../services/olive/state.ts";
 import { pushLog, startGpuMetricsTimer, stopGpuMetricsTimer } from "../services/olive/gpu.ts";
 import { getVenvPython } from "../services/venv/paths.ts";
@@ -62,6 +63,7 @@ export function mountOliveRoutes(router: Router): void {
       sampling: false,
       tempRecipePath: null,
       finishedAt: null,
+      doneSubscribers: [],
     };
     jobRegistry.set(jobId, job);
 
@@ -72,6 +74,8 @@ export function mountOliveRoutes(router: Router): void {
       const venvResult = await ensureVenv((line) => pushLog(job, line));
       if (!venvResult.ok) {
         job.status = "failed";
+        finalizeJob(job);
+        cleanupJobArtifacts(job);
         pushLog(job, `[error] ${venvResult.error}`);
         return res.status(500).json({ ok: false, jobId, error: venvResult.error });
       }
@@ -120,19 +124,19 @@ export function mountOliveRoutes(router: Router): void {
         if (job.status !== "cancelled") {
           job.status = code === 0 ? "completed" : "failed";
         }
-        job.finishedAt = Date.now();
         stopGpuMetricsTimer(job);
         cleanupJobArtifacts(job);
         pushLog(job, `[done] Olive exited with code ${code ?? "unknown"}`);
+        finalizeJob(job);
       });
       proc.on("error", (err) => {
         if (job.status !== "cancelled") {
           job.status = "failed";
         }
-        job.finishedAt = Date.now();
         stopGpuMetricsTimer(job);
         cleanupJobArtifacts(job);
         pushLog(job, `[error] Failed to start Olive: ${err.message}`);
+        finalizeJob(job);
       });
 
       if (isGpuExecutionProvider(provider)) {
@@ -142,10 +146,10 @@ export function mountOliveRoutes(router: Router): void {
       return res.json({ ok: true, jobId });
     } catch (err: unknown) {
       job.status = "failed";
-      job.finishedAt = Date.now();
       cleanupJobArtifacts(job);
       const msg = err instanceof Error ? err.message : String(err);
       pushLog(job, `[error] ${msg}`);
+      finalizeJob(job);
       return res.status(500).json({ ok: false, jobId, error: msg });
     }
   });
@@ -183,8 +187,10 @@ export function mountOliveRoutes(router: Router): void {
         clearInterval(heartbeat);
         heartbeat = null;
       }
-      const idx = job.subscribers.indexOf(sub);
-      if (idx >= 0) job.subscribers.splice(idx, 1);
+      const subIdx = job.subscribers.indexOf(sub);
+      if (subIdx >= 0) job.subscribers.splice(subIdx, 1);
+      const doneIdx = job.doneSubscribers.indexOf(onDone);
+      if (doneIdx >= 0) job.doneSubscribers.splice(doneIdx, 1);
     };
 
     const sub = (line: string) => {
@@ -192,17 +198,25 @@ export function mountOliveRoutes(router: Router): void {
     };
     job.subscribers.push(sub);
 
-    // Heartbeat keeps proxies from buffering/closing an idle stream, and lets us
-    // detect job completion so the stream actually terminates instead of hanging.
+    // Fired the instant the job reaches a terminal state — closes the stream
+    // immediately rather than waiting up to one heartbeat interval.
+    const onDone = () => {
+      if (res.writableEnded) return;
+      res.write(`data: ${JSON.stringify({ done: true, status: job.status, exitCode: job.exitCode })}\n\n`);
+      cleanup();
+      res.end();
+    };
+    job.doneSubscribers.push(onDone);
+
+    // Heartbeat keeps proxies from buffering/closing an idle stream, and acts as
+    // a fallback terminator if the done event was somehow missed.
     heartbeat = setInterval(() => {
       if (res.writableEnded) {
         cleanup();
         return;
       }
       if (isTerminal()) {
-        res.write(`data: ${JSON.stringify({ done: true, status: job.status, exitCode: job.exitCode })}\n\n`);
-        cleanup();
-        res.end();
+        onDone();
         return;
       }
       res.write(`: ping\n\n`);
@@ -233,9 +247,11 @@ export function mountOliveRoutes(router: Router): void {
     if (!job) return res.status(404).json({ error: "Job not found" });
     if (job.process) {
       job.status = "cancelled";
-      job.finishedAt = Date.now();
       job.process.kill("SIGTERM");
       stopGpuMetricsTimer(job);
+      // Fallback finalize in case the process never emits "close"; the close
+      // handler is idempotent (finishedAt is only stamped once).
+      finalizeJob(job);
     }
     return res.json({ ok: true });
   });

@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { jobRegistry, cleanupJobArtifacts, sweepJobRegistry } from "./state.ts";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { jobRegistry, cleanupJobArtifacts, sweepJobRegistry, finalizeJob } from "./state.ts";
 import type { OliveJob } from "../../types.ts";
 import fs from "fs";
 import os from "os";
@@ -19,6 +19,7 @@ function makeJob(id: string, overrides: Partial<OliveJob> = {}): OliveJob {
     sampling: false,
     tempRecipePath: null,
     finishedAt: null,
+    doneSubscribers: [],
     ...overrides,
   };
 }
@@ -79,6 +80,36 @@ describe("olive job registry cleanup", () => {
       const job = makeJob("j", { tempRecipePath: path.join(os.tmpdir(), "does-not-exist-xyz.json") });
       expect(() => cleanupJobArtifacts(job)).not.toThrow();
       expect(job.tempRecipePath).toBeNull();
+    });
+  });
+
+  describe("finalizeJob", () => {
+    it("stamps finishedAt once and fires done-subscribers", () => {
+      const sub = vi.fn();
+      const job = makeJob("j", { status: "completed", finishedAt: null, doneSubscribers: [sub] });
+
+      finalizeJob(job);
+
+      expect(job.finishedAt).toBeTypeOf("number");
+      expect(sub).toHaveBeenCalledOnce();
+      // Subscribers are drained so a second finalize won't double-notify.
+      expect(job.doneSubscribers).toHaveLength(0);
+    });
+
+    it("does not overwrite an existing finishedAt", () => {
+      const job = makeJob("j", { status: "cancelled", finishedAt: 123 });
+      finalizeJob(job);
+      expect(job.finishedAt).toBe(123);
+    });
+
+    it("swallows a throwing subscriber", () => {
+      const bad = vi.fn(() => {
+        throw new Error("gone");
+      });
+      const good = vi.fn();
+      const job = makeJob("j", { doneSubscribers: [bad, good] });
+      expect(() => finalizeJob(job)).not.toThrow();
+      expect(good).toHaveBeenCalledOnce();
     });
   });
 });

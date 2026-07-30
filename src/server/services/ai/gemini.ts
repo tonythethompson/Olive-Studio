@@ -23,11 +23,15 @@ async function call(
     })),
   };
   if (wantJson) body.generationConfig = { responseMimeType: "application/json" };
-  const resp = await fetchWithTimeout(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const resp = await fetchWithTimeout(
+    url,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    cfg.timeoutMs,
+  );
   if (!resp.ok) {
     const err = (await resp.json().catch(() => ({}))) as ApiErrorResponse;
     throw new Error(`Gemini ${resp.status}: ${err.error?.message ?? resp.statusText}`);
