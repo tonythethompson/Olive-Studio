@@ -74,7 +74,14 @@ Write-Output 'ADDED'
     targets.add(path.join(home, ".zshrc"));
   }
   if (shell.endsWith("bash")) {
+    // Interactive non-login bash reads ~/.bashrc; login bash reads the first of
+    // ~/.bash_profile / ~/.bash_login / ~/.profile. Cover the login path too so
+    // a fresh login shell actually picks up the export.
     targets.add(path.join(home, ".bashrc"));
+    const loginProfile = [".bash_profile", ".bash_login"]
+      .map((f) => path.join(home, f))
+      .find((p) => fs.existsSync(p));
+    targets.add(loginProfile ?? path.join(home, ".bash_profile"));
   }
 
   try {

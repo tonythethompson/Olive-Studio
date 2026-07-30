@@ -43,17 +43,24 @@ export async function callOpenAICompat(
     headers["X-Title"] = "Olive Studio";
   }
 
-  const resp = await fetchWithTimeout(`${base}/chat/completions`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  const resp = await fetchWithTimeout(
+    `${base}/chat/completions`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    },
+    cfg.timeoutMs,
+  );
   if (!resp.ok) {
     const err = (await resp.json().catch(() => ({}))) as ApiErrorResponse;
     throw new Error(`${cfg.provider} ${resp.status}: ${err.error?.message ?? resp.statusText}`);
   }
   const data = (await resp.json()) as OpenAIChatResponse;
-  return data.choices?.[0]?.message?.content ?? "";
+  const text = data.choices?.[0]?.message?.content ?? "";
+  // Match gemini/copilot/anthropic: surface an empty response instead of returning "".
+  if (!text.trim()) throw new Error(`${cfg.provider} returned an empty response.`);
+  return text;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -65,6 +72,11 @@ export async function callOpenAICompat(
  */
 function resolveOpenAiCompatBase(cfg: ProviderConfig): string {
   if (cfg.baseUrl?.trim()) return stripTrailingSlashes(cfg.baseUrl.trim());
+  // The generic "openai-compat" provider has no canonical host — require an
+  // explicit baseUrl rather than silently sending keys to api.openai.com.
+  if (cfg.provider === "openai-compat") {
+    throw new Error("openai-compat provider requires an explicit baseUrl.");
+  }
   const registered = getProvider(cfg.provider)?.defaultBaseUrl;
   return stripTrailingSlashes(registered ?? "https://api.openai.com/v1");
 }
@@ -99,21 +111,25 @@ async function callGitHubCopilot(
     ],
   };
 
-  const resp = await fetchWithTimeout(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${cfg.apiKey}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "Copilot-Integration-Id": "vscode-chat",
-      "Editor-Version": "vscode/1.98.2",
-      "Editor-Plugin-Version": "copilot-chat/0.26.7",
-      "User-Agent": "GitHubCopilotChat/0.26.7",
-      "Openai-Intent": "conversation-panel",
-      "X-Request-Id": crypto.randomUUID(),
+  const resp = await fetchWithTimeout(
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${cfg.apiKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "Copilot-Integration-Id": "vscode-chat",
+        "Editor-Version": "vscode/1.98.2",
+        "Editor-Plugin-Version": "copilot-chat/0.26.7",
+        "User-Agent": "GitHubCopilotChat/0.26.7",
+        "Openai-Intent": "conversation-panel",
+        "X-Request-Id": crypto.randomUUID(),
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+    cfg.timeoutMs,
+  );
 
   if (!resp.ok) {
     const errText = await resp.text().catch(() => "");

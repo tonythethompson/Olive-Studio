@@ -33,6 +33,8 @@ export interface ProviderConfig {
   apiKey: string;
   model: string;
   baseUrl?: string;
+  /** Optional per-provider request timeout (ms). Falls back to the shared default. */
+  timeoutMs?: number;
 }
 
 export interface AIChatMessage {
@@ -121,6 +123,8 @@ export interface OliveJob {
   tempRecipePath: string | null;
   /** Epoch ms when the job reached a terminal state (for TTL cleanup). */
   finishedAt: number | null;
+  /** Listeners fired once when the job reaches a terminal state (SSE close). */
+  doneSubscribers: Array<() => void>;
 }
 
 // ─── Venv / Config Types ──────────────────────────────────────────────────────
