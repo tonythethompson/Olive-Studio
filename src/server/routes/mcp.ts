@@ -64,20 +64,108 @@ async function callOliveMcpTool(
   }
 }
 
-/** Read the passes.json KB file synchronously (ESM-safe, no require()). */
-function readPassesJson(): PassesJson | null {
-  try {
-    const passesPath = path.join(
-      process.cwd(),
-      "olive-mcp-server",
-      "olive_mcp_server",
-      "knowledge_base",
-      "passes.json",
-    );
-    return JSON.parse(fs.readFileSync(passesPath, "utf-8")) as PassesJson;
-  } catch {
-    return null;
+type KbFailureReason = "missing" | "unreadable" | "invalid";
+
+type KbReadResult = { ok: true; data: PassesJson } | { ok: false; reason: KbFailureReason; message: string };
+
+/** Stable, non-sensitive client-facing messages (server logs keep the detail). */
+const KB_CLIENT_MESSAGE: Record<KbFailureReason, string> = {
+  missing: "Knowledge base has not been generated yet.",
+  unreadable: "Knowledge base could not be read.",
+  invalid: "Knowledge base file is malformed.",
+};
+
+function isStringArray(value: unknown): boolean {
+  return Array.isArray(value) && value.every((v) => typeof v === "string");
+}
+
+/**
+ * Validate a single pass entry against the fields `buildParamSchemas` consumes.
+ * Optional fields are only checked when present, so absent fields still fall back
+ * to their defaults — but a present-but-malformed field is rejected before it
+ * reaches schema rebuilding.
+ */
+function isValidPassEntry(value: unknown): boolean {
+  if (!isObjectRecord(value)) return false;
+  if (typeof value.name !== "string") return false;
+  if (value.type !== undefined && typeof value.type !== "string") return false;
+  if (value.class !== undefined && typeof value.class !== "string") return false;
+  if (value.description !== undefined && typeof value.description !== "string") return false;
+  if (value.typical_compression !== undefined && typeof value.typical_compression !== "string") return false;
+  if (value.input_formats !== undefined && !isStringArray(value.input_formats)) return false;
+  if (value.output_formats !== undefined && !isStringArray(value.output_formats)) return false;
+  if (value.required_params !== undefined && !isStringArray(value.required_params)) return false;
+  if (value.hardware_requirements !== undefined && !isStringArray(value.hardware_requirements)) return false;
+  if (value.gotchas !== undefined && !isStringArray(value.gotchas)) return false;
+  // optional_params is a Record<string, ParamSchema>: object of objects.
+  if (value.optional_params !== undefined) {
+    if (!isObjectRecord(value.optional_params)) return false;
+    if (!Object.values(value.optional_params).every((v) => isObjectRecord(v))) return false;
   }
+  return true;
+}
+
+/** Runtime shape check for the fields `/mcp/kb-status` and `reloadPassSchemas` consume. */
+function isValidPassesJson(value: unknown): value is PassesJson {
+  if (!isObjectRecord(value)) return false;
+  if (value.version !== undefined && typeof value.version !== "string") return false;
+  if (value.last_updated !== undefined && typeof value.last_updated !== "string") return false;
+  if (value.passes !== undefined) {
+    if (!Array.isArray(value.passes)) return false;
+    if (!value.passes.every((p) => isValidPassEntry(p))) return false;
+  }
+  return true;
+}
+
+/**
+ * Read the passes.json KB file synchronously (ESM-safe, no require()).
+ * Distinguishes a genuinely missing KB from a read/parse/schema failure so callers
+ * don't report a corrupt-but-present KB as merely "unavailable".
+ */
+function readPassesJson(): KbReadResult {
+  const passesPath = path.join(
+    process.cwd(),
+    "olive-mcp-server",
+    "olive_mcp_server",
+    "knowledge_base",
+    "passes.json",
+  );
+  let raw: string;
+  try {
+    raw = fs.readFileSync(passesPath, "utf-8");
+  } catch (err: unknown) {
+    const code =
+      err && typeof err === "object" && "code" in err ? (err as { code?: string }).code : undefined;
+    if (code === "ENOENT") {
+      return {
+        ok: false,
+        reason: "missing",
+        message: "passes.json not found — KB has not been generated yet.",
+      };
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, reason: "unreadable", message };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, reason: "invalid", message: `passes.json is not valid JSON: ${message}` };
+  }
+  if (!isValidPassesJson(parsed)) {
+    return { ok: false, reason: "invalid", message: "passes.json does not match the expected KB schema." };
+  }
+  return { ok: true, data: parsed };
+}
+
+/** Log the detailed reason server-side; return a stable, safe message to clients. */
+function kbFailureResponse(kb: { reason: KbFailureReason; message: string }): {
+  reason: KbFailureReason;
+  error: string;
+} {
+  console.warn(`[mcp] KB unavailable (${kb.reason}): ${kb.message}`);
+  return { reason: kb.reason, error: KB_CLIENT_MESSAGE[kb.reason] };
 }
 
 export function mountMcpRoutes(router: Router): void {
@@ -101,15 +189,16 @@ export function mountMcpRoutes(router: Router): void {
     const cached = getKbStatusCache();
     if (cached) return res.json(cached);
 
-    const data = readPassesJson();
-    if (!data) {
-      return res.json({ available: false, error: "Cannot read passes.json" });
+    const kb = readPassesJson();
+    if (!kb.ok) {
+      // Don't cache a failure — a missing/corrupt KB may be fixed at runtime.
+      return res.json({ available: false, ...kbFailureResponse(kb) });
     }
     const status = {
       available: true,
-      version: data.version ?? "unknown",
-      lastUpdated: data.last_updated ?? null,
-      passCount: data.passes?.length ?? 0,
+      version: kb.data.version ?? "unknown",
+      lastUpdated: kb.data.last_updated ?? null,
+      passCount: kb.data.passes?.length ?? 0,
     };
     setKbStatusCache(status);
     return res.json(status);
@@ -122,16 +211,17 @@ export function mountMcpRoutes(router: Router): void {
     }
     setKbSyncInProgress(true);
     try {
-      const data = readPassesJson();
-      if (!data) {
-        return res.json({ ok: false, error: "Cannot read passes.json" });
+      const kb = readPassesJson();
+      if (!kb.ok) {
+        // Non-2xx so the client's sync hook enters its error path.
+        return res.status(500).json({ ok: false, ...kbFailureResponse(kb) });
       }
-      reloadPassSchemas(data);
+      reloadPassSchemas(kb.data);
       const status = {
         available: true,
-        version: data.version ?? "unknown",
-        lastUpdated: data.last_updated ?? null,
-        passCount: data.passes?.length ?? 0,
+        version: kb.data.version ?? "unknown",
+        lastUpdated: kb.data.last_updated ?? null,
+        passCount: kb.data.passes?.length ?? 0,
         lastSync: new Date().toISOString(),
       };
       setKbStatusCache(status);

@@ -136,7 +136,71 @@ export async function findSystemPython(): Promise<string | null> {
  * Ensures the .venv exists and olive-ai is installed.
  * Streams progress lines through the provided callback.
  */
-export async function ensureVenv(onLine: (line: string) => void): Promise<{ ok: boolean; error?: string }> {
+/**
+ * In-progress guard: venv creation + `pip install` are not concurrency-safe
+ * (two callers can corrupt the same `.venv`). Concurrent callers share the
+ * single in-flight promise instead of racing.
+ *
+ * Progress is fanned out to every attached `onLine` listener, so later callers
+ * (a second `/env/venv-install` stream or a concurrent `/olive/run`) still
+ * receive live install output rather than going silent.
+ */
+type SetupListener = (line: string) => void;
+
+interface VenvSetupInFlight {
+  promise: Promise<{ ok: boolean; error?: string }>;
+  listeners: Set<SetupListener>;
+}
+let venvSetupInFlight: VenvSetupInFlight | null = null;
+
+/**
+ * Deliver a line to one listener; on failure (e.g. a closed SSE response) drop
+ * it so a broken listener isn't retried on every subsequent line.
+ */
+function notifyListener(listeners: Set<SetupListener>, listener: SetupListener, line: string): void {
+  try {
+    listener(line);
+  } catch {
+    listeners.delete(listener);
+  }
+}
+
+export function ensureVenv(onLine: SetupListener): Promise<{ ok: boolean; error?: string }> {
+  if (venvSetupInFlight) {
+    const { listeners } = venvSetupInFlight;
+    listeners.add(onLine);
+    notifyListener(
+      listeners,
+      onLine,
+      "[setup] Environment setup already in progress — attaching to live output...",
+    );
+    return venvSetupInFlight.promise;
+  }
+
+  const listeners = new Set<SetupListener>([onLine]);
+  const broadcast = (line: string) => {
+    // Snapshot so deleting a throwing listener mid-iteration is safe.
+    for (const listener of [...listeners]) notifyListener(listeners, listener, line);
+  };
+
+  const promise = ensureVenvInner(broadcast).finally(() => {
+    venvSetupInFlight = null;
+  });
+  venvSetupInFlight = { promise, listeners };
+  return promise;
+}
+
+/**
+ * Detach a previously-registered `ensureVenv` progress listener. Used when a
+ * job is cancelled while setup is still pending, so a cancelled job stops
+ * receiving install output and its closure can be released immediately.
+ * No-op once setup has finished (the listener set is discarded then).
+ */
+export function detachVenvListener(onLine: SetupListener): void {
+  venvSetupInFlight?.listeners.delete(onLine);
+}
+
+async function ensureVenvInner(onLine: (line: string) => void): Promise<{ ok: boolean; error?: string }> {
   const systemPython = await findSystemPython();
   if (!systemPython) {
     return {

@@ -13,14 +13,28 @@ import { validateOliveRecipeStructure } from "../../lib/oliveRecipeSchema.ts";
 import { enrichRecipeMemoryOffloadForRun } from "../../lib/memoryOffload.ts";
 import { isGpuExecutionProvider } from "../../lib/oliveGpuRuntime.ts";
 
-import { jobRegistry, getRuntimeHfToken } from "../services/olive/state.ts";
+import {
+  jobRegistry,
+  getRuntimeHfToken,
+  cleanupJobArtifacts,
+  startJobRegistrySweeper,
+  finalizeJob,
+} from "../services/olive/state.ts";
 import { pushLog, startGpuMetricsTimer, stopGpuMetricsTimer } from "../services/olive/gpu.ts";
 import { getVenvPython } from "../services/venv/paths.ts";
-import { ensureVenv, buildOliveRunEnvironment, resolveOliveCommand } from "../services/venv/index.ts";
+import {
+  ensureVenv,
+  buildOliveRunEnvironment,
+  resolveOliveCommand,
+  detachVenvListener,
+} from "../services/venv/index.ts";
 import type { OliveRecipe, OliveJob } from "../types.ts";
 import { oliveRunRateLimit } from "../middleware/rateLimit.ts";
 
 export function mountOliveRoutes(router: Router): void {
+  // Reclaim finished jobs + their temp recipe files on a timer.
+  startJobRegistrySweeper();
+
   // ─── POST /api/olive/run ──────────────────────────────────────────────
   router.post("/olive/run", oliveRunRateLimit, async (req, res) => {
     const { recipeJson, cudaVersion = "auto" } = req.body as { recipeJson?: string; cudaVersion?: string };
@@ -52,22 +66,46 @@ export function mountOliveRoutes(router: Router): void {
       latestMetrics: null,
       metricsTimer: null,
       sampling: false,
+      tempRecipePath: null,
+      finishedAt: null,
+      doneSubscribers: [],
     };
     jobRegistry.set(jobId, job);
 
     const provider = (recipe.systems?.local_system?.config?.accelerators?.[0]?.execution_providers?.[0] ??
       "CPUExecutionProvider") as IHVProvider;
 
+    // Cancellation can arrive during the long setup awaits below, before a
+    // process exists. Bail out (and respond) instead of spawning Olive anyway.
+    const bailIfCancelled = (): boolean => {
+      if (job.status !== "cancelled") return false;
+      pushLog(job, "[cancel] Cancelled during environment setup.");
+      cleanupJobArtifacts(job);
+      finalizeJob(job);
+      res.json({ ok: false, jobId, status: "cancelled" });
+      return true;
+    };
+
     try {
-      const venvResult = await ensureVenv((line) => pushLog(job, line));
+      // Retain the listener so /olive/cancel can detach it if setup is pending.
+      const venvListener = (line: string) => pushLog(job, line);
+      job.venvListener = venvListener;
+      const venvResult = await ensureVenv(venvListener);
+      // Setup finished for this caller — the listener is no longer registered.
+      job.venvListener = undefined;
+      if (bailIfCancelled()) return;
       if (!venvResult.ok) {
         job.status = "failed";
+        // Log before finalizeJob so the error reaches any stream before it drains.
         pushLog(job, `[error] ${venvResult.error}`);
+        cleanupJobArtifacts(job);
+        finalizeJob(job);
         return res.status(500).json({ ok: false, jobId, error: venvResult.error });
       }
 
       const venvPython = getVenvPython();
       const env = await buildOliveRunEnvironment(venvPython, provider, process.env);
+      if (bailIfCancelled()) return;
 
       if (cudaVersion !== "auto") {
         env.CUDA_VERSION = cudaVersion;
@@ -80,6 +118,10 @@ export function mountOliveRoutes(router: Router): void {
       const tmpDir = path.join(process.cwd(), ".olive-runs");
       fs.mkdirSync(tmpDir, { recursive: true });
       const configPath = path.join(tmpDir, `recipe-${jobId}.json`);
+      // Record the path before writing so a failed/partial write is still
+      // reclaimable by cleanupJobArtifacts (rmSync force:true tolerates a
+      // never-created file).
+      job.tempRecipePath = configPath;
       fs.writeFileSync(configPath, JSON.stringify(enrichedRecipe, null, 2), "utf-8");
 
       pushLog(job, "[setup] Starting Olive optimization...");
@@ -110,14 +152,21 @@ export function mountOliveRoutes(router: Router): void {
           job.status = code === 0 ? "completed" : "failed";
         }
         stopGpuMetricsTimer(job);
+        cleanupJobArtifacts(job);
         pushLog(job, `[done] Olive exited with code ${code ?? "unknown"}`);
+        // Process has exited — clear the handle so the sweeper may reclaim it.
+        job.process = null;
+        finalizeJob(job);
       });
       proc.on("error", (err) => {
         if (job.status !== "cancelled") {
           job.status = "failed";
         }
-        stopGpuMetricsTimer(job);
         pushLog(job, `[error] Failed to start Olive: ${err.message}`);
+        // Terminal cleanup (stop metrics, remove artifacts, clear the handle,
+        // finalize) is handled by the "close" listener, which fires after "error"
+        // for spawn failures. A post-spawn error (e.g. a failed kill) must not drop
+        // the process handle while the child may still be alive.
       });
 
       if (isGpuExecutionProvider(provider)) {
@@ -127,8 +176,10 @@ export function mountOliveRoutes(router: Router): void {
       return res.json({ ok: true, jobId });
     } catch (err: unknown) {
       job.status = "failed";
+      cleanupJobArtifacts(job);
       const msg = err instanceof Error ? err.message : String(err);
       pushLog(job, `[error] ${msg}`);
+      finalizeJob(job);
       return res.status(500).json({ ok: false, jobId, error: msg });
     }
   });
@@ -151,15 +202,57 @@ export function mountOliveRoutes(router: Router): void {
       res.write(`data: ${JSON.stringify({ line })}\n\n`);
     }
 
+    const isTerminal = () =>
+      job.status === "completed" || job.status === "failed" || job.status === "cancelled";
+
+    // If the job already finished, flush a terminal event and close immediately.
+    if (isTerminal()) {
+      res.write(`data: ${JSON.stringify({ done: true, status: job.status, exitCode: job.exitCode })}\n\n`);
+      return res.end();
+    }
+
+    let heartbeat: ReturnType<typeof setInterval> | null = null;
+    const cleanup = () => {
+      if (heartbeat) {
+        clearInterval(heartbeat);
+        heartbeat = null;
+      }
+      const subIdx = job.subscribers.indexOf(sub);
+      if (subIdx >= 0) job.subscribers.splice(subIdx, 1);
+      const doneIdx = job.doneSubscribers.indexOf(onDone);
+      if (doneIdx >= 0) job.doneSubscribers.splice(doneIdx, 1);
+    };
+
     const sub = (line: string) => {
       if (!res.writableEnded) res.write(`data: ${JSON.stringify({ line })}\n\n`);
     };
     job.subscribers.push(sub);
 
-    req.on("close", () => {
-      const idx = job.subscribers.indexOf(sub);
-      if (idx >= 0) job.subscribers.splice(idx, 1);
-    });
+    // Fired the instant the job reaches a terminal state — closes the stream
+    // immediately rather than waiting up to one heartbeat interval.
+    const onDone = () => {
+      if (res.writableEnded) return;
+      res.write(`data: ${JSON.stringify({ done: true, status: job.status, exitCode: job.exitCode })}\n\n`);
+      cleanup();
+      res.end();
+    };
+    job.doneSubscribers.push(onDone);
+
+    // Heartbeat keeps proxies from buffering/closing an idle stream, and acts as
+    // a fallback terminator if the done event was somehow missed.
+    heartbeat = setInterval(() => {
+      if (res.writableEnded) {
+        cleanup();
+        return;
+      }
+      if (isTerminal()) {
+        onDone();
+        return;
+      }
+      res.write(`: ping\n\n`);
+    }, 15_000);
+
+    req.on("close", cleanup);
   });
 
   // ─── Job Status ───────────────────────────────────────────────────────
@@ -182,11 +275,29 @@ export function mountOliveRoutes(router: Router): void {
     const { jobId } = req.body ?? {};
     const job = jobRegistry.get(jobId);
     if (!job) return res.status(404).json({ error: "Job not found" });
+
+    // Already terminal — nothing to cancel.
+    if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
+      return res.json({ ok: true, status: job.status });
+    }
+
+    // Mark cancelled even during "setting_up" (no process yet). The /olive/run
+    // setup loop checks this status after each await and aborts before spawning.
+    job.status = "cancelled";
+    pushLog(job, "[cancel] Cancellation requested.");
+    // Detach from shared venv setup so the cancelled job stops receiving install
+    // output while setup (which may serve other jobs) keeps running.
+    if (job.venvListener) {
+      detachVenvListener(job.venvListener);
+      job.venvListener = undefined;
+    }
     if (job.process) {
-      job.status = "cancelled";
       job.process.kill("SIGTERM");
       stopGpuMetricsTimer(job);
     }
-    return res.json({ ok: true });
+    // Finalize so open SSE streams close now; the "close" handler (if a process
+    // is running) is idempotent — finishedAt is only stamped once.
+    finalizeJob(job);
+    return res.json({ ok: true, status: job.status });
   });
 }
