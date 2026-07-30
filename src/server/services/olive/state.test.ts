@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { jobRegistry, cleanupJobArtifacts, sweepJobRegistry, finalizeJob } from "./state.ts";
 import type { OliveJob } from "../../types.ts";
 import fs from "fs";
@@ -27,6 +27,10 @@ function makeJob(id: string, overrides: Partial<OliveJob> = {}): OliveJob {
 describe("olive job registry cleanup", () => {
   beforeEach(() => {
     jobRegistry.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe("sweepJobRegistry", () => {
@@ -84,6 +88,31 @@ describe("olive job registry cleanup", () => {
       expect(sweepJobRegistry(now)).toBe(1);
       expect(jobRegistry.has("exited")).toBe(false);
     });
+
+    it("retains a job (and its path) when temp-file cleanup fails, for retry", () => {
+      const now = 10_000_000_000;
+      const oldMs = now - 31 * 60_000;
+      const tmp = path.join(os.tmpdir(), "olive-sweep-retry.json");
+      jobRegistry.set(
+        "stuck",
+        makeJob("stuck", { status: "completed", finishedAt: oldMs, tempRecipePath: tmp }),
+      );
+
+      // Simulate a permission/transient FS error on delete.
+      const spy = vi.spyOn(fs, "rmSync").mockImplementation(() => {
+        throw new Error("EPERM");
+      });
+
+      expect(sweepJobRegistry(now)).toBe(0);
+      expect(jobRegistry.has("stuck")).toBe(true);
+      expect(jobRegistry.get("stuck")?.tempRecipePath).toBe(tmp);
+
+      // Once cleanup can succeed again, the next sweep reclaims it.
+      spy.mockRestore();
+      vi.spyOn(fs, "rmSync").mockImplementation(() => undefined);
+      expect(sweepJobRegistry(now)).toBe(1);
+      expect(jobRegistry.has("stuck")).toBe(false);
+    });
   });
 
   describe("cleanupJobArtifacts", () => {
@@ -100,13 +129,23 @@ describe("olive job registry cleanup", () => {
 
     it("is a no-op when there is no temp file", () => {
       const job = makeJob("j", { tempRecipePath: null });
-      expect(() => cleanupJobArtifacts(job)).not.toThrow();
+      expect(cleanupJobArtifacts(job)).toBe(true);
     });
 
     it("tolerates an already-deleted temp file", () => {
       const job = makeJob("j", { tempRecipePath: path.join(os.tmpdir(), "does-not-exist-xyz.json") });
-      expect(() => cleanupJobArtifacts(job)).not.toThrow();
+      expect(cleanupJobArtifacts(job)).toBe(true);
       expect(job.tempRecipePath).toBeNull();
+    });
+
+    it("returns false and keeps the path when deletion errors", () => {
+      vi.spyOn(fs, "rmSync").mockImplementation(() => {
+        throw new Error("EPERM");
+      });
+      const tmp = path.join(os.tmpdir(), "olive-cleanup-fail.json");
+      const job = makeJob("j", { tempRecipePath: tmp });
+      expect(cleanupJobArtifacts(job)).toBe(false);
+      expect(job.tempRecipePath).toBe(tmp);
     });
   });
 

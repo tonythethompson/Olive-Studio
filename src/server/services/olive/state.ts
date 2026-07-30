@@ -39,15 +39,19 @@ export function finalizeJob(job: OliveJob): void {
   }
 }
 
-/** Best-effort removal of a job's temp recipe file. */
-export function cleanupJobArtifacts(job: OliveJob): void {
-  if (job.tempRecipePath) {
-    try {
-      fs.rmSync(job.tempRecipePath, { force: true });
-    } catch {
-      /* already gone */
-    }
+/**
+ * Remove a job's temp recipe file. Returns whether cleanup succeeded.
+ * `force: true` treats a missing file as success; a permission/transient FS
+ * error returns `false` and keeps `tempRecipePath` so a later sweep can retry.
+ */
+export function cleanupJobArtifacts(job: OliveJob): boolean {
+  if (!job.tempRecipePath) return true;
+  try {
+    fs.rmSync(job.tempRecipePath, { force: true });
     job.tempRecipePath = null;
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -72,9 +76,11 @@ export function sweepJobRegistry(now: number = Date.now()): number {
       now - job.finishedAt > JOB_TTL_MS &&
       hasProcessExited(job)
     ) {
-      cleanupJobArtifacts(job);
-      jobRegistry.delete(id);
-      removed += 1;
+      // Only evict once the temp file is gone; otherwise retain for retry.
+      if (cleanupJobArtifacts(job)) {
+        jobRegistry.delete(id);
+        removed += 1;
+      }
     }
   }
   return removed;

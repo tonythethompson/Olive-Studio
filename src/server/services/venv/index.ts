@@ -145,28 +145,42 @@ export async function findSystemPython(): Promise<string | null> {
  * (a second `/env/venv-install` stream or a concurrent `/olive/run`) still
  * receive live install output rather than going silent.
  */
+type SetupListener = (line: string) => void;
+
 interface VenvSetupInFlight {
   promise: Promise<{ ok: boolean; error?: string }>;
-  listeners: Set<(line: string) => void>;
+  listeners: Set<SetupListener>;
 }
 let venvSetupInFlight: VenvSetupInFlight | null = null;
 
-export function ensureVenv(onLine: (line: string) => void): Promise<{ ok: boolean; error?: string }> {
+/**
+ * Deliver a line to one listener; on failure (e.g. a closed SSE response) drop
+ * it so a broken listener isn't retried on every subsequent line.
+ */
+function notifyListener(listeners: Set<SetupListener>, listener: SetupListener, line: string): void {
+  try {
+    listener(line);
+  } catch {
+    listeners.delete(listener);
+  }
+}
+
+export function ensureVenv(onLine: SetupListener): Promise<{ ok: boolean; error?: string }> {
   if (venvSetupInFlight) {
-    venvSetupInFlight.listeners.add(onLine);
-    onLine("[setup] Environment setup already in progress — attaching to live output...");
+    const { listeners } = venvSetupInFlight;
+    listeners.add(onLine);
+    notifyListener(
+      listeners,
+      onLine,
+      "[setup] Environment setup already in progress — attaching to live output...",
+    );
     return venvSetupInFlight.promise;
   }
 
-  const listeners = new Set<(line: string) => void>([onLine]);
+  const listeners = new Set<SetupListener>([onLine]);
   const broadcast = (line: string) => {
-    for (const listener of listeners) {
-      try {
-        listener(line);
-      } catch {
-        /* listener gone (e.g. closed response) */
-      }
-    }
+    // Snapshot so deleting a throwing listener mid-iteration is safe.
+    for (const listener of [...listeners]) notifyListener(listeners, listener, line);
   };
 
   const promise = ensureVenvInner(broadcast).finally(() => {

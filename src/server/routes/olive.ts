@@ -74,9 +74,10 @@ export function mountOliveRoutes(router: Router): void {
       const venvResult = await ensureVenv((line) => pushLog(job, line));
       if (!venvResult.ok) {
         job.status = "failed";
-        finalizeJob(job);
-        cleanupJobArtifacts(job);
+        // Log before finalizeJob so the error reaches any stream before it drains.
         pushLog(job, `[error] ${venvResult.error}`);
+        cleanupJobArtifacts(job);
+        finalizeJob(job);
         return res.status(500).json({ ok: false, jobId, error: venvResult.error });
       }
 
@@ -135,11 +136,11 @@ export function mountOliveRoutes(router: Router): void {
         if (job.status !== "cancelled") {
           job.status = "failed";
         }
-        stopGpuMetricsTimer(job);
-        cleanupJobArtifacts(job);
         pushLog(job, `[error] Failed to start Olive: ${err.message}`);
-        job.process = null;
-        finalizeJob(job);
+        // Terminal cleanup (stop metrics, remove artifacts, clear the handle,
+        // finalize) is handled by the "close" listener, which fires after "error"
+        // for spawn failures. A post-spawn error (e.g. a failed kill) must not drop
+        // the process handle while the child may still be alive.
       });
 
       if (isGpuExecutionProvider(provider)) {
