@@ -1,29 +1,39 @@
 /**
  * Route-level coverage for cancelling an Olive job *during* environment setup,
- * before the child process exists. A gated `ensureVenv` mock lets us hold the
- * run in `setting_up`, cancel it, then assert the run aborts without spawning.
+ * before the child process exists. Gated `ensureVenv` / `buildOliveRunEnvironment`
+ * mocks let us hold the run in `setting_up` at each setup await, cancel it, then
+ * assert the run aborts without writing a recipe or spawning Olive.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import express from "express";
 import type { Server } from "http";
 import fs from "fs";
 
-// ── Controllable ensureVenv gate ──────────────────────────────────────────
+// ── Controllable setup gates ──────────────────────────────────────────────
+// ensureVenv always pauses on its gate. buildOliveRunEnvironment only pauses
+// when `gateBuildEnv` is set, so most tests aren't blocked by it.
 let releaseEnsureVenv: (() => void) | null = null;
-function ensureVenvGate(): Promise<void> {
-  return new Promise<void>((resolve) => {
-    releaseEnsureVenv = resolve;
-  });
-}
+let releaseBuildEnv: (() => void) | null = null;
+let gateBuildEnv = false;
 
 vi.mock("../services/venv/index.ts", () => ({
   ensureVenv: vi.fn(async (onLine: (line: string) => void) => {
     onLine("[setup] (mock) creating venv…");
-    await ensureVenvGate();
+    await new Promise<void>((resolve) => {
+      releaseEnsureVenv = resolve;
+    });
     return { ok: true };
   }),
-  buildOliveRunEnvironment: vi.fn(async () => ({}) as NodeJS.ProcessEnv),
+  buildOliveRunEnvironment: vi.fn(async () => {
+    if (gateBuildEnv) {
+      await new Promise<void>((resolve) => {
+        releaseBuildEnv = resolve;
+      });
+    }
+    return {} as NodeJS.ProcessEnv;
+  }),
   resolveOliveCommand: vi.fn(() => ({ executable: "python", args: ["-m", "olive"] })),
+  detachVenvListener: vi.fn(),
 }));
 
 // spawn must never be called once the job was cancelled during setup.
@@ -71,6 +81,8 @@ beforeEach(() => {
   jobRegistry.clear();
   spawnSpy.mockClear();
   releaseEnsureVenv = null;
+  releaseBuildEnv = null;
+  gateBuildEnv = false;
 });
 
 afterEach(() => {
@@ -121,6 +133,44 @@ describe("POST /api/olive/cancel during setup", () => {
 
     expect(spawnSpy).not.toHaveBeenCalled();
     expect(jobRegistry.get(jobId)?.status).toBe("cancelled");
+  });
+
+  it("cancels during buildOliveRunEnvironment (after venv) and never writes a recipe or spawns", async () => {
+    gateBuildEnv = true;
+    const writeSpy = vi.spyOn(fs, "writeFileSync").mockReturnValue(undefined);
+
+    const runPromise = fetch(`${baseUrl}/api/olive/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipeJson: "{}" }),
+    });
+
+    // Advance past ensureVenv, then hold inside buildOliveRunEnvironment.
+    (await waitFor(() => releaseEnsureVenv ?? undefined))();
+    await waitFor(() => releaseBuildEnv ?? undefined);
+
+    const jobId = await waitFor(() => {
+      for (const [id, job] of jobRegistry) {
+        if (job.status === "setting_up") return id;
+      }
+      return undefined;
+    });
+
+    const cancelRes = await fetch(`${baseUrl}/api/olive/cancel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobId }),
+    });
+    expect(await cancelRes.json()).toMatchObject({ ok: true, status: "cancelled" });
+
+    // Release the build gate; the run must abort at the post-build cancel check.
+    releaseBuildEnv?.();
+    const runBody = await (await runPromise).json();
+    expect(runBody).toMatchObject({ ok: false, status: "cancelled" });
+
+    expect(jobRegistry.get(jobId)?.status).toBe("cancelled");
+    expect(writeSpy).not.toHaveBeenCalled(); // recipe file never created
+    expect(spawnSpy).not.toHaveBeenCalled();
   });
 
   it("returns terminal status without side effects when the job already finished", async () => {

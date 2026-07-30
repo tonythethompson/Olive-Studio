@@ -125,6 +125,8 @@ export interface OliveJob {
   finishedAt: number | null;
   /** Listeners fired once when the job reaches a terminal state (SSE close). */
   doneSubscribers: Array<() => void>;
+  /** The venv-setup progress listener, retained so it can be detached on cancel. */
+  venvListener?: (line: string) => void;
 }
 
 // ─── Venv / Config Types ──────────────────────────────────────────────────────
