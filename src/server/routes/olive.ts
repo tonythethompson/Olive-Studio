@@ -31,6 +31,9 @@ import {
 import type { OliveRecipe, OliveJob } from "../types.ts";
 import { oliveRunRateLimit } from "../middleware/rateLimit.ts";
 
+/** Grace period after SIGTERM before escalating cancel to SIGKILL. */
+export const CANCEL_SIGKILL_GRACE_MS = 10_000;
+
 export function mountOliveRoutes(router: Router): void {
   // Reclaim finished jobs + their temp recipe files on a timer.
   startJobRegistrySweeper();
@@ -175,7 +178,11 @@ export function mountOliveRoutes(router: Router): void {
 
       return res.json({ ok: true, jobId });
     } catch (err: unknown) {
-      job.status = "failed";
+      // Preserve intentional cancellation — e.g. ensureVenv/buildOliveRunEnvironment
+      // rejecting after /olive/cancel already stamped "cancelled".
+      if (job.status !== "cancelled") {
+        job.status = "failed";
+      }
       cleanupJobArtifacts(job);
       const msg = err instanceof Error ? err.message : String(err);
       pushLog(job, `[error] ${msg}`);
@@ -292,7 +299,17 @@ export function mountOliveRoutes(router: Router): void {
       job.venvListener = undefined;
     }
     if (job.process) {
-      job.process.kill("SIGTERM");
+      const proc = job.process;
+      proc.kill("SIGTERM");
+      // SIGTERM is best-effort; escalate so a stuck Olive child cannot outlive cancel.
+      const killTimer = setTimeout(() => {
+        if (proc.exitCode === null && proc.signalCode === null) {
+          proc.kill("SIGKILL");
+          pushLog(job, "[cancel] Process did not exit after SIGTERM; sent SIGKILL.");
+        }
+      }, CANCEL_SIGKILL_GRACE_MS);
+      if (typeof killTimer.unref === "function") killTimer.unref();
+      proc.once("close", () => clearTimeout(killTimer));
       stopGpuMetricsTimer(job);
     }
     // Finalize so open SSE streams close now; the "close" handler (if a process
