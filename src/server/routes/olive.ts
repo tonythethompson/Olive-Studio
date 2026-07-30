@@ -13,7 +13,12 @@ import { validateOliveRecipeStructure } from "../../lib/oliveRecipeSchema.ts";
 import { enrichRecipeMemoryOffloadForRun } from "../../lib/memoryOffload.ts";
 import { isGpuExecutionProvider } from "../../lib/oliveGpuRuntime.ts";
 
-import { jobRegistry, getRuntimeHfToken } from "../services/olive/state.ts";
+import {
+  jobRegistry,
+  getRuntimeHfToken,
+  cleanupJobArtifacts,
+  startJobRegistrySweeper,
+} from "../services/olive/state.ts";
 import { pushLog, startGpuMetricsTimer, stopGpuMetricsTimer } from "../services/olive/gpu.ts";
 import { getVenvPython } from "../services/venv/paths.ts";
 import { ensureVenv, buildOliveRunEnvironment, resolveOliveCommand } from "../services/venv/index.ts";
@@ -21,6 +26,9 @@ import type { OliveRecipe, OliveJob } from "../types.ts";
 import { oliveRunRateLimit } from "../middleware/rateLimit.ts";
 
 export function mountOliveRoutes(router: Router): void {
+  // Reclaim finished jobs + their temp recipe files on a timer.
+  startJobRegistrySweeper();
+
   // ─── POST /api/olive/run ──────────────────────────────────────────────
   router.post("/olive/run", oliveRunRateLimit, async (req, res) => {
     const { recipeJson, cudaVersion = "auto" } = req.body as { recipeJson?: string; cudaVersion?: string };
@@ -52,6 +60,8 @@ export function mountOliveRoutes(router: Router): void {
       latestMetrics: null,
       metricsTimer: null,
       sampling: false,
+      tempRecipePath: null,
+      finishedAt: null,
     };
     jobRegistry.set(jobId, job);
 
@@ -81,6 +91,7 @@ export function mountOliveRoutes(router: Router): void {
       fs.mkdirSync(tmpDir, { recursive: true });
       const configPath = path.join(tmpDir, `recipe-${jobId}.json`);
       fs.writeFileSync(configPath, JSON.stringify(enrichedRecipe, null, 2), "utf-8");
+      job.tempRecipePath = configPath;
 
       pushLog(job, "[setup] Starting Olive optimization...");
       job.status = "running";
@@ -109,14 +120,18 @@ export function mountOliveRoutes(router: Router): void {
         if (job.status !== "cancelled") {
           job.status = code === 0 ? "completed" : "failed";
         }
+        job.finishedAt = Date.now();
         stopGpuMetricsTimer(job);
+        cleanupJobArtifacts(job);
         pushLog(job, `[done] Olive exited with code ${code ?? "unknown"}`);
       });
       proc.on("error", (err) => {
         if (job.status !== "cancelled") {
           job.status = "failed";
         }
+        job.finishedAt = Date.now();
         stopGpuMetricsTimer(job);
+        cleanupJobArtifacts(job);
         pushLog(job, `[error] Failed to start Olive: ${err.message}`);
       });
 
@@ -127,6 +142,8 @@ export function mountOliveRoutes(router: Router): void {
       return res.json({ ok: true, jobId });
     } catch (err: unknown) {
       job.status = "failed";
+      job.finishedAt = Date.now();
+      cleanupJobArtifacts(job);
       const msg = err instanceof Error ? err.message : String(err);
       pushLog(job, `[error] ${msg}`);
       return res.status(500).json({ ok: false, jobId, error: msg });
@@ -151,15 +168,47 @@ export function mountOliveRoutes(router: Router): void {
       res.write(`data: ${JSON.stringify({ line })}\n\n`);
     }
 
+    const isTerminal = () =>
+      job.status === "completed" || job.status === "failed" || job.status === "cancelled";
+
+    // If the job already finished, flush a terminal event and close immediately.
+    if (isTerminal()) {
+      res.write(`data: ${JSON.stringify({ done: true, status: job.status, exitCode: job.exitCode })}\n\n`);
+      return res.end();
+    }
+
+    let heartbeat: ReturnType<typeof setInterval> | null = null;
+    const cleanup = () => {
+      if (heartbeat) {
+        clearInterval(heartbeat);
+        heartbeat = null;
+      }
+      const idx = job.subscribers.indexOf(sub);
+      if (idx >= 0) job.subscribers.splice(idx, 1);
+    };
+
     const sub = (line: string) => {
       if (!res.writableEnded) res.write(`data: ${JSON.stringify({ line })}\n\n`);
     };
     job.subscribers.push(sub);
 
-    req.on("close", () => {
-      const idx = job.subscribers.indexOf(sub);
-      if (idx >= 0) job.subscribers.splice(idx, 1);
-    });
+    // Heartbeat keeps proxies from buffering/closing an idle stream, and lets us
+    // detect job completion so the stream actually terminates instead of hanging.
+    heartbeat = setInterval(() => {
+      if (res.writableEnded) {
+        cleanup();
+        return;
+      }
+      if (isTerminal()) {
+        res.write(`data: ${JSON.stringify({ done: true, status: job.status, exitCode: job.exitCode })}\n\n`);
+        cleanup();
+        res.end();
+        return;
+      }
+      res.write(`: ping\n\n`);
+    }, 15_000);
+
+    req.on("close", cleanup);
   });
 
   // ─── Job Status ───────────────────────────────────────────────────────
@@ -184,6 +233,7 @@ export function mountOliveRoutes(router: Router): void {
     if (!job) return res.status(404).json({ error: "Job not found" });
     if (job.process) {
       job.status = "cancelled";
+      job.finishedAt = Date.now();
       job.process.kill("SIGTERM");
       stopGpuMetricsTimer(job);
     }

@@ -1,9 +1,6 @@
-import { execFile } from "child_process";
-import { promisify } from "util";
 import type { GpuMetrics } from "../../../lib/gpuMetrics.ts";
 import type { OliveJob } from "../../types.ts";
-
-const execFileAsync = promisify(execFile);
+import { execFileAsync } from "../shared/exec.ts";
 
 /** Records a job log line and notifies its active subscribers. */
 export function pushLog(job: OliveJob, line: string): void {

@@ -136,7 +136,25 @@ export async function findSystemPython(): Promise<string | null> {
  * Ensures the .venv exists and olive-ai is installed.
  * Streams progress lines through the provided callback.
  */
-export async function ensureVenv(onLine: (line: string) => void): Promise<{ ok: boolean; error?: string }> {
+/**
+ * In-progress guard: venv creation + `pip install` are not concurrency-safe
+ * (two callers can corrupt the same `.venv`). Concurrent callers share the
+ * single in-flight promise instead of racing.
+ */
+let venvSetupInFlight: Promise<{ ok: boolean; error?: string }> | null = null;
+
+export function ensureVenv(onLine: (line: string) => void): Promise<{ ok: boolean; error?: string }> {
+  if (venvSetupInFlight) {
+    onLine("[setup] Environment setup already in progress — waiting for it to finish...");
+    return venvSetupInFlight;
+  }
+  venvSetupInFlight = ensureVenvInner(onLine).finally(() => {
+    venvSetupInFlight = null;
+  });
+  return venvSetupInFlight;
+}
+
+async function ensureVenvInner(onLine: (line: string) => void): Promise<{ ok: boolean; error?: string }> {
   const systemPython = await findSystemPython();
   if (!systemPython) {
     return {

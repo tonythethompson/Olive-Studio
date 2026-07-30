@@ -64,19 +64,44 @@ async function callOliveMcpTool(
   }
 }
 
-/** Read the passes.json KB file synchronously (ESM-safe, no require()). */
-function readPassesJson(): PassesJson | null {
+type KbReadResult =
+  | { ok: true; data: PassesJson }
+  | { ok: false; reason: "missing" | "unreadable" | "invalid"; message: string };
+
+/**
+ * Read the passes.json KB file synchronously (ESM-safe, no require()).
+ * Distinguishes a genuinely missing KB from a read/parse failure so callers
+ * don't report a corrupt-but-present KB as merely "unavailable".
+ */
+function readPassesJson(): KbReadResult {
+  const passesPath = path.join(
+    process.cwd(),
+    "olive-mcp-server",
+    "olive_mcp_server",
+    "knowledge_base",
+    "passes.json",
+  );
+  let raw: string;
   try {
-    const passesPath = path.join(
-      process.cwd(),
-      "olive-mcp-server",
-      "olive_mcp_server",
-      "knowledge_base",
-      "passes.json",
-    );
-    return JSON.parse(fs.readFileSync(passesPath, "utf-8")) as PassesJson;
-  } catch {
-    return null;
+    raw = fs.readFileSync(passesPath, "utf-8");
+  } catch (err: unknown) {
+    const code =
+      err && typeof err === "object" && "code" in err ? (err as { code?: string }).code : undefined;
+    if (code === "ENOENT") {
+      return {
+        ok: false,
+        reason: "missing",
+        message: "passes.json not found — KB has not been generated yet.",
+      };
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, reason: "unreadable", message };
+  }
+  try {
+    return { ok: true, data: JSON.parse(raw) as PassesJson };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, reason: "invalid", message: `passes.json is not valid JSON: ${message}` };
   }
 }
 
@@ -101,15 +126,16 @@ export function mountMcpRoutes(router: Router): void {
     const cached = getKbStatusCache();
     if (cached) return res.json(cached);
 
-    const data = readPassesJson();
-    if (!data) {
-      return res.json({ available: false, error: "Cannot read passes.json" });
+    const kb = readPassesJson();
+    if (!kb.ok) {
+      // Don't cache a failure — a missing/corrupt KB may be fixed at runtime.
+      return res.json({ available: false, reason: kb.reason, error: kb.message });
     }
     const status = {
       available: true,
-      version: data.version ?? "unknown",
-      lastUpdated: data.last_updated ?? null,
-      passCount: data.passes?.length ?? 0,
+      version: kb.data.version ?? "unknown",
+      lastUpdated: kb.data.last_updated ?? null,
+      passCount: kb.data.passes?.length ?? 0,
     };
     setKbStatusCache(status);
     return res.json(status);
@@ -122,16 +148,16 @@ export function mountMcpRoutes(router: Router): void {
     }
     setKbSyncInProgress(true);
     try {
-      const data = readPassesJson();
-      if (!data) {
-        return res.json({ ok: false, error: "Cannot read passes.json" });
+      const kb = readPassesJson();
+      if (!kb.ok) {
+        return res.json({ ok: false, reason: kb.reason, error: kb.message });
       }
-      reloadPassSchemas(data);
+      reloadPassSchemas(kb.data);
       const status = {
         available: true,
-        version: data.version ?? "unknown",
-        lastUpdated: data.last_updated ?? null,
-        passCount: data.passes?.length ?? 0,
+        version: kb.data.version ?? "unknown",
+        lastUpdated: kb.data.last_updated ?? null,
+        passCount: kb.data.passes?.length ?? 0,
         lastSync: new Date().toISOString(),
       };
       setKbStatusCache(status);

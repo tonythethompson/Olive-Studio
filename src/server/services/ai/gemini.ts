@@ -6,6 +6,7 @@ import type {
   ApiErrorResponse,
 } from "../../types.ts";
 import { registerProvider } from "./registry.ts";
+import { fetchWithTimeout } from "../shared/http.ts";
 
 async function call(
   cfg: ProviderConfig,
@@ -22,7 +23,7 @@ async function call(
     })),
   };
   if (wantJson) body.generationConfig = { responseMimeType: "application/json" };
-  const resp = await fetch(url, {
+  const resp = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

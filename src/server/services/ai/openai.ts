@@ -5,8 +5,9 @@ import type {
   OpenAIChatResponse,
   ApiErrorResponse,
 } from "../../types.ts";
-import { registerProvider } from "./registry.ts";
+import { registerProvider, getProvider, providerSupportsJsonResponse } from "./registry.ts";
 import { stripTrailingSlashes } from "./security.ts";
+import { fetchWithTimeout } from "../shared/http.ts";
 
 // ─── Shared OpenAI-compatible call helper ─────────────────────────────────────
 
@@ -42,7 +43,7 @@ export async function callOpenAICompat(
     headers["X-Title"] = "Olive Studio";
   }
 
-  const resp = await fetch(`${base}/chat/completions`, {
+  const resp = await fetchWithTimeout(`${base}/chat/completions`, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
@@ -57,39 +58,20 @@ export async function callOpenAICompat(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * Resolve the API base URL for an OpenAI-compatible provider.
+ * Single source of truth: an explicit `baseUrl` override, else the provider's
+ * registered `defaultBaseUrl`, else OpenAI. No per-provider table duplicated here.
+ */
 function resolveOpenAiCompatBase(cfg: ProviderConfig): string {
   if (cfg.baseUrl?.trim()) return stripTrailingSlashes(cfg.baseUrl.trim());
-  switch (cfg.provider) {
-    case "mistral":
-      return "https://api.mistral.ai/v1";
-    case "xai":
-      return "https://api.x.ai/v1";
-    case "openrouter":
-      return "https://openrouter.ai/api/v1";
-    case "groq":
-      return "https://api.groq.com/openai/v1";
-    case "together":
-      return "https://api.together.xyz/v1";
-    case "kilocode":
-      return "https://api.kilo.ai/api/gateway";
-    case "chatgpt-sub":
-    case "openai":
-    case "openai-compat":
-    default:
-      return "https://api.openai.com/v1";
-  }
+  const registered = getProvider(cfg.provider)?.defaultBaseUrl;
+  return stripTrailingSlashes(registered ?? "https://api.openai.com/v1");
 }
 
+/** Delegates to the registry's `supportsJsonResponseFormat` flag (no duplicated switch). */
 export function supportsJsonResponseFormat(cfg: ProviderConfig): boolean {
-  return (
-    cfg.provider === "openai" ||
-    cfg.provider === "chatgpt-sub" ||
-    cfg.provider === "mistral" ||
-    cfg.provider === "xai" ||
-    cfg.provider === "openrouter" ||
-    cfg.provider === "groq" ||
-    cfg.provider === "together"
-  );
+  return providerSupportsJsonResponse(cfg);
 }
 
 // ─── GitHub Copilot (special OpenAI-compat with extra headers) ────────────────
@@ -117,7 +99,7 @@ async function callGitHubCopilot(
     ],
   };
 
-  const resp = await fetch(endpoint, {
+  const resp = await fetchWithTimeout(endpoint, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${cfg.apiKey}`,
