@@ -178,7 +178,11 @@ export function mountOliveRoutes(router: Router): void {
 
       return res.json({ ok: true, jobId });
     } catch (err: unknown) {
-      job.status = "failed";
+      // Preserve intentional cancellation — e.g. ensureVenv/buildOliveRunEnvironment
+      // rejecting after /olive/cancel already stamped "cancelled".
+      if (job.status !== "cancelled") {
+        job.status = "failed";
+      }
       cleanupJobArtifacts(job);
       const msg = err instanceof Error ? err.message : String(err);
       pushLog(job, `[error] ${msg}`);

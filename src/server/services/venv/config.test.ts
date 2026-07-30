@@ -26,6 +26,7 @@ const EXPORT = `export PATH="${RESOLVED}:$PATH"  # olive-studio .venv`;
 describe("addVenvToUserPath (unix)", () => {
   const originalPlatform = process.platform;
   const originalShell = process.env.SHELL;
+  const originalPath = process.env.PATH;
 
   beforeEach(() => {
     Object.defineProperty(process, "platform", { value: "linux", configurable: true });
@@ -46,6 +47,8 @@ describe("addVenvToUserPath (unix)", () => {
     Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
     if (originalShell === undefined) delete process.env.SHELL;
     else process.env.SHELL = originalShell;
+    if (originalPath === undefined) delete process.env.PATH;
+    else process.env.PATH = originalPath;
     vi.restoreAllMocks();
   });
 

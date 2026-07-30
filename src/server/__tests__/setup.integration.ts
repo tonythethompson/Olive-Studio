@@ -75,8 +75,11 @@ function createMockedFetch(): typeof globalThis.fetch {
     return _realFetch!(input, init);
   };
   // Preserve static fetch helpers (e.g. preconnect) required by newer DOM typings.
+  // Read via Reflect.get so we don't depend on undeclared properties on typeof fetch.
+  const preconnect = Reflect.get(globalThis.fetch, "preconnect") as
+    ((this: typeof globalThis.fetch, ...args: unknown[]) => unknown) | undefined;
   return Object.assign(mocked, {
-    preconnect: globalThis.fetch.preconnect?.bind(globalThis.fetch),
+    preconnect: typeof preconnect === "function" ? preconnect.bind(globalThis.fetch) : undefined,
   }) as typeof globalThis.fetch;
 }
 
