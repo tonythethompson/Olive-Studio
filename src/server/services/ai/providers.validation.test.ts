@@ -78,4 +78,27 @@ describe("AI provider empty-response validation", () => {
       callProvider({ provider: "gemini", apiKey: "k", model: "gemini-2.5-flash" }, "sys", [], false),
     ).rejects.toThrow("Gemini returned an empty response.");
   });
+
+  it("Gemini sends API key via header, not URL query", async () => {
+    mockedFetch.mockResolvedValue(
+      jsonResponse({ candidates: [{ content: { parts: [{ text: "hello" }] } }] }),
+    );
+    await callProvider(
+      { provider: "gemini", apiKey: "secret-key", model: "gemini-2.5-flash" },
+      "sys",
+      [],
+      false,
+    );
+
+    const [url, init] = mockedFetch.mock.calls[0] ?? [];
+    expect(String(url)).toBe(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+    );
+    expect(String(url)).not.toContain("secret-key");
+    expect(String(url)).not.toContain("key=");
+    expect((init as RequestInit | undefined)?.headers).toMatchObject({
+      "Content-Type": "application/json",
+      "x-goog-api-key": "secret-key",
+    });
+  });
 });

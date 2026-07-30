@@ -14,7 +14,9 @@ async function call(
   messages: AIChatMessage[],
   wantJson: boolean,
 ): Promise<string> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${cfg.apiKey}`;
+  // Use x-goog-api-key header instead of query param — keys in URLs are logged
+  // by proxies, browsers, and server access logs (SSRF risk).
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent`;
   const body: GeminiRequestBody = {
     system_instruction: { parts: [{ text: system }] },
     contents: messages.map((m) => ({
@@ -27,7 +29,7 @@ async function call(
     url,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": cfg.apiKey },
       body: JSON.stringify(body),
     },
     cfg.timeoutMs,

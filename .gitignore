@@ -36,3 +36,4 @@ bun.lock
 /.cursor/hooks/state/continual-learning.json
 /.cursor/hooks/state/continual-learning-index.json
 /.dirac-cache
+/.qoder
