@@ -141,17 +141,28 @@ export async function findSystemPython(): Promise<string | null> {
  * (two callers can corrupt the same `.venv`). Concurrent callers share the
  * single in-flight promise instead of racing.
  */
-let venvSetupInFlight: Promise<{ ok: boolean; error?: string }> | null = null;
+let venvSetupInFlight: {
+  promise: Promise<{ ok: boolean; error?: string }>;
+  listeners: Set<(line: string) => void>;
+} | null = null;
 
 export function ensureVenv(onLine: (line: string) => void): Promise<{ ok: boolean; error?: string }> {
   if (venvSetupInFlight) {
+    venvSetupInFlight.listeners.add(onLine);
     onLine("[setup] Environment setup already in progress — waiting for it to finish...");
-    return venvSetupInFlight;
+    return venvSetupInFlight.promise;
   }
-  venvSetupInFlight = ensureVenvInner(onLine).finally(() => {
+
+  const listeners = new Set<(line: string) => void>([onLine]);
+  const broadcast = (line: string) => {
+    for (const listener of listeners) listener(line);
+  };
+  const promise = ensureVenvInner(broadcast).finally(() => {
+    listeners.clear();
     venvSetupInFlight = null;
   });
-  return venvSetupInFlight;
+  venvSetupInFlight = { promise, listeners };
+  return promise;
 }
 
 async function ensureVenvInner(onLine: (line: string) => void): Promise<{ ok: boolean; error?: string }> {
