@@ -3714,7 +3714,7 @@ This repo also contains `olive-mcp-server/`, a Python MCP server for Microsoft O
 
 Windows:
 
-```bash
+```powershell
 cd olive-mcp-server
 python -m venv .venv
 .venv\Scripts\pip install -e ".[dev]"
@@ -3732,7 +3732,7 @@ python3 -m venv .venv
 
 Windows:
 
-```bash
+```powershell
 .venv\Scripts\python -m pytest tests -q
 ```
 
@@ -3746,7 +3746,7 @@ Linux/macOS:
 
 Windows:
 
-```bash
+```powershell
 .venv\Scripts\python -m olive_mcp_server
 # or
 .venv\Scripts\olive-mcp-server
@@ -3803,11 +3803,13 @@ Durable notes for Cloud Agents. The startup update script already runs `pnpm ins
 
 - Not started by the app; it is an optional stdio MCP server under `olive-mcp-server/`. The web app can proxy to it via `POST /api/mcp/tool`, but the app runs fine without it.
 - To set it up on a fresh pod (system `python3.12-venv` is required to create a venv and is not part of the update script):
+
   ```bash
   sudo apt-get update && sudo apt-get install -y python3.12-venv
   cd olive-mcp-server && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
   ```
-- Gotcha: `pip install -e ".[dev]"` resolves `mcp` to 2.x, which removed `mcp.server.fastmcp` and breaks imports/tests. Pin `mcp<2` (mcp 1.29.0 works): `.venv/bin/pip install "mcp<2"`. Then `\.venv/bin/python -m pytest tests -q` passes.
+
+- Gotcha: `pip install -e ".[dev]"` resolves `mcp` to 2.x, which removed `mcp.server.fastmcp` and breaks imports/tests. Pin `mcp<2` (mcp 1.29.0 works): `.venv/bin/pip install "mcp<2"`. Then `.venv/bin/python -m pytest tests -q` passes.
 
 ### Misc
 
