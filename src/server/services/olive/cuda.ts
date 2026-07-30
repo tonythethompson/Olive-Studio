@@ -22,6 +22,9 @@ export function parseCudaVersionFromNvidiaSmi(
  * Map a CUDA major.minor version to the closest PyTorch wheel tag.
  * Tiers ordered from newest to oldest — matches the first tier where
  * the detected version is >= the tier's version.
+ *
+ * Versions below the lowest supported tier (CUDA 11.8) return `"cpu"` rather
+ * than forcing an incompatible `cu118` wheel onto e.g. CUDA 11.7 or older.
  */
 export function pickCudaTag(major: number, minor: number): string {
   const tiers = [
@@ -33,7 +36,7 @@ export function pickCudaTag(major: number, minor: number): string {
   for (const t of tiers) {
     if (major > t.major || (major === t.major && minor >= t.minor)) return t.tag;
   }
-  return "cu118";
+  return "cpu";
 }
 
 /**

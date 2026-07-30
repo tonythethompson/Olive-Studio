@@ -1,8 +1,5 @@
 import fs from "fs";
-import { execFile } from "child_process";
-import { promisify } from "util";
-
-const execFileAsync = promisify(execFile);
+import { execFileAsync } from "../shared/exec.ts";
 
 export async function getNativeGpuLibPaths(python: string): Promise<string[]> {
   const script = `

@@ -117,6 +117,10 @@ export interface OliveJob {
   latestMetrics: GpuMetrics | null;
   metricsTimer: ReturnType<typeof setInterval> | null;
   sampling: boolean;
+  /** Temp recipe file written for this run; reclaimed when the job finishes. */
+  tempRecipePath: string | null;
+  /** Epoch ms when the job reached a terminal state (for TTL cleanup). */
+  finishedAt: number | null;
 }
 
 // ─── Venv / Config Types ──────────────────────────────────────────────────────

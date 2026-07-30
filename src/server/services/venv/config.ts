@@ -1,13 +1,13 @@
 import path from "path";
-import { execFile } from "child_process";
-import { promisify } from "util";
 import fs from "fs";
 import os from "os";
 import { envWithPrependedPaths } from "../../../lib/tensorrtDeps.ts";
 import { getVenvPython, getVenvPip, getVenvScriptsDir } from "./paths.ts";
 import { appConfig } from "../../config.ts";
+import { execFileAsync } from "../shared/exec.ts";
 
-export const execFileAsync = promisify(execFile);
+// Re-export the shared helper so existing importers keep working.
+export { execFileAsync };
 
 /** Prepend project .venv Scripts/bin (and optional python dir) so Olive works without system PATH. */
 export function envWithVenvOnPath(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
@@ -63,16 +63,30 @@ Write-Output 'ADDED'
     }
   }
 
-  const profile = path.join(os.homedir(), ".profile");
+  // Target the shells the user actually loads. zsh (macOS default) does not read
+  // ~/.profile for interactive shells, so also write ~/.zshrc there; keep ~/.profile
+  // for bash/sh. Writing to a profile that is never sourced would report a false success.
+  const home = os.homedir();
   const exportLine = `export PATH="${resolved}:$PATH"  # olive-studio .venv`;
+  const targets = new Set<string>([path.join(home, ".profile")]);
+  const shell = process.env.SHELL ?? "";
+  if (process.platform === "darwin" || shell.endsWith("zsh")) {
+    targets.add(path.join(home, ".zshrc"));
+  }
+  if (shell.endsWith("bash")) {
+    targets.add(path.join(home, ".bashrc"));
+  }
+
   try {
-    const existing = fs.existsSync(profile) ? fs.readFileSync(profile, "utf-8") : "";
-    if (existing.includes(resolved)) {
-      return { ok: true, already: true };
+    let allAlready = true;
+    for (const profile of targets) {
+      const existing = fs.existsSync(profile) ? fs.readFileSync(profile, "utf-8") : "";
+      if (existing.includes(resolved)) continue;
+      fs.appendFileSync(profile, `\n${exportLine}\n`, "utf-8");
+      allAlready = false;
     }
-    fs.appendFileSync(profile, `\n${exportLine}\n`, "utf-8");
     process.env.PATH = envWithVenvOnPath(process.env).PATH ?? process.env.PATH;
-    return { ok: true, already: false };
+    return { ok: true, already: allAlready };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, error: msg };
