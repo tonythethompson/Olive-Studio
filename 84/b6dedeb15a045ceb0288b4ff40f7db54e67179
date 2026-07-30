@@ -1,0 +1,25 @@
+src/server/services/venv/config.test.ts
+  s_9b8e45f71c8c77::t_c5caaa3844a422 1-86
+package.json
+  s_9b8e45f71c8c77::t_c5caaa3844a422 17
+AGENTS.md
+  s_9b8e45f71c8c77::t_c5caaa3844a422 3716-3717,3724,3734-3735,3740,3748-3749,3756,3787-3816
+src/server/services/ai/providers.validation.test.ts
+  s_9b8e45f71c8c77::t_c5caaa3844a422 1-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "84b6dedeb15a045ceb0288b4ff40f7db54e67179",
+  "prompts": {},
+  "sessions": {
+    "s_9b8e45f71c8c77": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "49c89ac5-283f-48e0-a214-04367b5fa214",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
