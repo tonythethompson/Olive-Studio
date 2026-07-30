@@ -108,8 +108,11 @@ export function mountOliveRoutes(router: Router): void {
       const tmpDir = path.join(process.cwd(), ".olive-runs");
       fs.mkdirSync(tmpDir, { recursive: true });
       const configPath = path.join(tmpDir, `recipe-${jobId}.json`);
-      fs.writeFileSync(configPath, JSON.stringify(enrichedRecipe, null, 2), "utf-8");
+      // Record the path before writing so a failed/partial write is still
+      // reclaimable by cleanupJobArtifacts (rmSync force:true tolerates a
+      // never-created file).
       job.tempRecipePath = configPath;
+      fs.writeFileSync(configPath, JSON.stringify(enrichedRecipe, null, 2), "utf-8");
 
       pushLog(job, "[setup] Starting Olive optimization...");
       job.status = "running";
