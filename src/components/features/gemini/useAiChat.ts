@@ -28,7 +28,9 @@ export function useAiChat(workspaceContext: unknown) {
   const sendChat = async (presetText?: string) => {
     const text = presetText || inputQuestion;
     if (!text.trim()) return;
-    setChatMessages((prev) => [...prev, { sender: "user", text }]);
+
+    const userMessage: ChatMessage = { sender: "user", text };
+    setChatMessages((prev) => [...prev, userMessage]);
     if (!presetText) setInputQuestion("");
     setIsChatting(true);
     setChatError("");
@@ -39,7 +41,7 @@ export function useAiChat(workspaceContext: unknown) {
         body: JSON.stringify({
           message: text,
           workspaceContext,
-          chatHistory: chatMessages.map((m) => ({
+          chatHistory: [...chatMessages, userMessage].map((m) => ({
             role: m.sender === "user" ? "user" : "assistant",
             content: m.text,
           })),
