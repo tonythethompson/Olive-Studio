@@ -30,6 +30,10 @@ start-server.bat
 /.opencode/
 /.remember/logs/
 /.cursor/hooks/state/
+/.devin
+/.claude
+.review-threads.json
+/dogfood-output
 
 # Lockfiles for non-pnpm package managers (this repo uses pnpm exclusively)
 package-lock.json
