@@ -15,7 +15,7 @@ interface FlagDefinition {
 const FLAG_DEFINITIONS: FlagDefinition[] = [
   {
     key: "multiLora",
-    description: "Multi-LoRA adapter support (requires Olive >= 0.3.0)",
+    description: "Multi-LoRA UI and docs visibility (experimental; Olive >= 0.3.0 required for execution)",
     defaultEnabled: false,
   },
   {
