@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Olive Compatibility Matrix",
+  "description": "Schema for olive-mcp-server knowledge_base/compatibility_matrix.json",
+  "type": "object",
+  "required": ["version", "last_updated", "models"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema/data version",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "last_updated": {
+      "type": "string",
+      "description": "ISO date of last update",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "olive_version_support": {
+      "type": "object",
+      "description": "Tested Olive version range",
+      "properties": {
+        "min": { "type": "string" },
+        "max": { "type": "string" }
+      }
+    },
+    "models": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/model_entry" },
+      "minItems": 1
+    }
+  },
+  "$defs": {
+    "model_entry": {
+      "type": "object",
+      "required": ["model", "frameworks", "hardware"],
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Display name of the model"
+        },
+        "frameworks": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["PyTorch", "ONNX", "HuggingFace", "TensorFlow"]
+          },
+          "minItems": 1
+        },
+        "notes": {
+          "type": "string",
+          "description": "General notes about this model"
+        },
+        "source": {
+          "type": "string",
+          "description": "Citation: Olive GitHub issue, docs URL, or HF benchmark"
+        },
+        "verified": {
+          "type": "boolean",
+          "description": "Whether this entry has been community-confirmed"
+        },
+        "hardware": {
+          "type": "object",
+          "description": "Hardware target → pass compatibility map",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": { "$ref": "#/$defs/pass_compat" }
+          }
+        }
+      }
+    },
+    "pass_compat": {
+      "type": "object",
+      "required": ["support"],
+      "properties": {
+        "support": {
+          "type": "string",
+          "enum": ["supported", "warning", "unsupported"]
+        },
+        "note": {
+          "type": "string"
+        },
+        "typical_accuracy_drop": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
