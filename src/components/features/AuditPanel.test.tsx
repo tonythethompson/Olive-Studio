@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { AuditPanel } from "./AuditPanel";
-import type { AnalysisResult, Suggestion } from "./GeminiSidebar";
+import type { AnalysisResult, Suggestion } from "./gemini/types";
 
 function makeAnalysis(overrides?: Partial<AnalysisResult>): AnalysisResult {
   return {

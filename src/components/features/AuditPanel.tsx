@@ -1,6 +1,6 @@
 import { RefreshCw, AlertTriangle, CheckCircle2, Zap, Check } from "lucide-react";
 import { ProviderErrorBlock } from "./ProviderErrorBlock";
-import type { AnalysisResult, Suggestion } from "./GeminiSidebar";
+import type { AnalysisResult, Suggestion } from "./gemini/types";
 
 interface AuditPanelProps {
   analysis: AnalysisResult | null;
