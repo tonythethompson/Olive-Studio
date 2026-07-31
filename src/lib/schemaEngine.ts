@@ -437,11 +437,11 @@ export function validateRecipeSchema(recipe: unknown): SchemaValidationResult {
         if (typeof adapter.path !== "string" || adapter.path.trim().length === 0) {
           errors.push(`adapters[${i}].path must be a non-empty string`);
         }
-        if (typeof adapter.rank !== "number" || !Number.isFinite(adapter.rank)) {
-          errors.push(`adapters[${i}].rank must be a finite number`);
+        if (typeof adapter.rank !== "number" || !Number.isFinite(adapter.rank) || adapter.rank <= 0) {
+          errors.push(`adapters[${i}].rank must be a positive finite number`);
         }
-        if (typeof adapter.alpha !== "number" || !Number.isFinite(adapter.alpha)) {
-          errors.push(`adapters[${i}].alpha must be a finite number`);
+        if (typeof adapter.alpha !== "number" || !Number.isFinite(adapter.alpha) || adapter.alpha <= 0) {
+          errors.push(`adapters[${i}].alpha must be a positive finite number`);
         }
       }
     }
