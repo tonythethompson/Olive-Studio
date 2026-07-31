@@ -30,7 +30,9 @@ vi.mock("@/lib/oliveRecipeHub", () => ({
   fetchGitHubRecipeJson: () => Promise.resolve(null),
   fetchOliveRecipesCatalogItem: () => Promise.resolve(null),
   getCatalogDeviceFromRecipe: () => "cpu",
-  OLIVE_RECIPES_BRANCH: "main",
+  getRecipesBranch: () => "main",
+  setRecipesBranch: vi.fn(),
+  OLIVE_RECIPES_BRANCH_DEFAULT: "main",
   OLIVE_RECIPES_REPO: "microsoft/olive-recipes",
 }));
 
