@@ -32,6 +32,7 @@ jobs:
         run: python scripts/update_kb.py
 
       - name: Upload report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: kb-update-report
