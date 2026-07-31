@@ -83,7 +83,7 @@ describe("GeminiSidebar", () => {
   });
 
   it("sets aria-hidden when isOpen is false", async () => {
-    let container: HTMLElement;
+    let container: HTMLElement | undefined;
     await act(async () => {
       const result = render(<GeminiSidebar {...defaultProps} isOpen={false} />);
       container = result.container;
