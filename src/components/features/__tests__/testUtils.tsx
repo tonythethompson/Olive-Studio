@@ -42,6 +42,8 @@ export function createMockUIState(partial?: Partial<UIState>): UIState {
  * @param routes - Map of URL substring → response body (serialized as JSON)
  * @returns The fetch spy (call .mockRestore() in afterEach)
  */
+import { vi, beforeEach, afterEach } from "vitest";
+
 export function mockFetchRoutes(routes: Record<string, unknown> = {}) {
   const spy = vi.spyOn(globalThis, "fetch");
   spy.mockImplementation((url: unknown) => {
@@ -54,4 +56,16 @@ export function mockFetchRoutes(routes: Record<string, unknown> = {}) {
     return Promise.resolve(new Response("{}", { status: 200 }));
   });
   return spy;
+}
+
+/** Wires beforeEach/afterEach to install and restore a fetch mock for the given routes. */
+export function useFetchRoutesMock(routes: Record<string, unknown> = {}) {
+  let spy: ReturnType<typeof mockFetchRoutes>;
+  beforeEach(() => {
+    spy = mockFetchRoutes(routes);
+  });
+  afterEach(() => {
+    spy.mockRestore();
+    vi.clearAllMocks();
+  });
 }
