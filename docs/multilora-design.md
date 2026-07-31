@@ -14,7 +14,7 @@ critical for serving multiple fine-tuned variants of the same base model efficie
 
 - Olive must expose multi-adapter optimization as a supported pass configuration
 - Tracking: https://github.com/microsoft/Olive/issues (multi-adapter milestone)
-- Minimum ORT version: 1.21+ (LoRA adapter slot-mapping support)
+- Minimum ORT version: 1.21+ (ORT GenAI `Adapters` API / `set_active_adapter` support)
 
 ## Schema Extension
 
@@ -57,7 +57,8 @@ emitted. When both `adapters[].path` and `passes.lora.config.adapter_path` are p
 the validator does not reject this as a conflict; however, only the pass-level
 `adapter_path` will be used by the builder until multi-adapter builder support is
 implemented (requires Olive >= 0.3.0). For recipes using `adapters[]` today, the
-slot-mapping output will NOT be emitted until builder integration (Phase 4) is complete.
+runtime adapter-loading artifacts will NOT be emitted until builder integration (Phase 4)
+is complete.
 
 ### TypeScript Interface
 
@@ -65,8 +66,8 @@ slot-mapping output will NOT be emitted until builder integration (Phase 4) is c
 interface AdapterConfig {
   name: string;
   path: string;
-  rank: number;
-  alpha: number;
+  rank: number;        // must be a finite number (not NaN/Infinity); NOT required to be positive or integer
+  alpha: number;       // must be a finite number; NOT required to be positive
   targetModules?: string[]; // e.g. ["q_proj", "v_proj"]
 }
 
@@ -77,16 +78,30 @@ interface OliveRecipe {
 }
 ```
 
+**Validation notes (as of `validateRecipeSchema` in `src/lib/schemaEngine.ts`):**
+- `rank` and `alpha` are only validated to be finite numbers (not `NaN` or `Infinity`).
+- They are NOT currently required to be positive or integers by the schema validator.
+- This may be tightened in future versions to enforce positivity and/or integer constraints for `rank`.
+
 ## VRAM Budget Formula
 
 ```
-total_vram = base_model_vram + N * adapter_delta
+total_vram = base_model_vram + sum(adapter_delta_i for i in active_adapters)
 
 where:
   base_model_vram = estimated VRAM for base model (from buildMaxMemoryMap)
-  N = number of active adapters
-  adapter_delta = rank * hidden_dim * 2 bytes * num_layers / 1e9  (GB)
+  adapter_delta_i = rank_i * len(targetModules_i) * hidden_dim * bytes_per_param * 2 / 1e9  (GB)
+    - rank_i, targetModules_i: this adapter's own rank and target module list
+    - bytes_per_param: dtype-dependent (e.g. 4 for fp32, 2 for fp16/bf16)
+    - the "* 2" accounts for both LoRA A and B matrices per targeted module
 ```
+
+**Assumptions:** This estimate assumes LoRA adapters (A/B low-rank matrices) applied to the
+listed `targetModules` only, and that adapter weights use the specified dtype (default
+assumption fp16 if unspecified). It may underestimate for QLoRA or other adapter types with
+different structures. **Implementation status:** This is Phase 2 (not yet implemented); no
+`adapter_delta` calculation currently exists in `src/lib/vramEstimate.ts` or
+`src/lib/memoryOffload.ts`.
 
 ### Thresholds
 
@@ -112,23 +127,38 @@ For GPUs with <= 12GB VRAM:
 3. **Batch Processing:** Each adapter can be a separate batch job variant
 4. **Comparison:** BatchComparisonView shows adapter name as a column
 
-## Slot-Mapping Schema (ORT 1.21+)
+## Runtime Adapter Loading (ORT GenAI Adapters API)
 
-```json
-{
-  "session_options": {
-    "lora_config": {
-      "slot_mapping": {
-        "0": "adapters/customer-support.safetensors",
-        "1": "adapters/code-gen.safetensors"
-      },
-      "active_slot": 0
-    }
-  }
-}
+Adapters are prepared/exported via Olive (Olive-prepared adapter artifacts), then loaded at
+runtime using the ONNX Runtime GenAI `Adapters` API:
+
+```python
+# Load adapters at runtime
+adapters = og.Adapters(model)
+adapters.load("adapters/customer-support", "customer-support")
+adapters.load("adapters/code-gen", "code-generation")
+
+# Switch active adapter during generation
+generator = og.Generator(model, params)
+generator.set_active_adapter(adapters, "customer-support")
+# ... generate with customer-support adapter ...
+
+generator.set_active_adapter(adapters, "code-generation")
+# ... generate with code-generation adapter ...
 ```
 
-Runtime switching is done via `session.set_lora_slot(index)` without model reload.
+**Key behaviors:**
+- Each adapter must be registered with a unique name (the `adapter_name` / `AdapterConfig.name`
+  field serves this purpose); loading two adapters with the same name is treated as a conflict.
+- **Disabling an adapter:** Stop referencing it as the active adapter (base model behavior
+  resumes).
+- **Reordering:** Order does not affect runtime behavior since adapters are referenced by name,
+  not index/slot.
+- **Removing an adapter:** Unload via the Adapters API / drop from the active recipe's
+  `adapters[]` list.
+
+**Integration status:** Runtime and builder integration remain BLOCKED until the E2E test in
+the Graduation Gate passes (2 adapters loaded, switched at runtime, correct output on ORT 1.21+).
 
 ## Graduation Gate
 
@@ -144,5 +174,5 @@ Re-evaluate after Olive 0.3.0 release:
 1. **Schema scaffolding** (this PR): Optional `adapters[]` field, feature flag
 2. **VRAM estimation**: Extend `vramEstimate.ts` with adapter delta calculation
 3. **UI wiring**: Adapter list in InputEnvironmentPanel, gated by `multiLora` flag
-4. **Builder integration**: Emit slot-mapping config when adapters present
+4. **Builder integration**: Emit runtime adapter-loading config (ORT GenAI `Adapters` API) when adapters present
 5. **E2E validation**: Test with real LoRA adapters on CUDA EP
