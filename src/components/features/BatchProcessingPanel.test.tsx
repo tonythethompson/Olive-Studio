@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { createMockUIState, mockFetchRoutes } from "./__tests__/testUtils";
+import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
 
 // Mock the pipeline store to avoid zustand coupling
 const mockSetState = vi.fn();
@@ -31,17 +31,8 @@ vi.mock("@/lib/hardwareProbe", () => ({
 import { BatchProcessingPanel } from "./BatchProcessingPanel";
 
 describe("BatchProcessingPanel", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    fetchSpy = mockFetchRoutes({
-      "hardware-probe": { providers: ["CPUExecutionProvider"] },
-    });
-  });
-
-  afterEach(() => {
-    fetchSpy.mockRestore();
-    vi.clearAllMocks();
+  useFetchRoutesMock({
+    "hardware-probe": { providers: ["CPUExecutionProvider"] },
   });
 
   it("renders the panel heading", () => {

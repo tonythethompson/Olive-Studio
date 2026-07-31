@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { createMockUIState, mockFetchRoutes } from "./__tests__/testUtils";
+import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
 
 // Mock the pipeline store
 const mockSetState = vi.fn();
@@ -54,18 +54,9 @@ vi.mock("@/lib/presetVramEstimate", () => ({
 import { InputEnvironmentPanel } from "./InputEnvironmentPanel";
 
 describe("InputEnvironmentPanel", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    fetchSpy = mockFetchRoutes({
-      "hardware-probe": { providers: ["CPUExecutionProvider"] },
-      "olive-recipes": [],
-    });
-  });
-
-  afterEach(() => {
-    fetchSpy.mockRestore();
-    vi.clearAllMocks();
+  useFetchRoutesMock({
+    "hardware-probe": { providers: ["CPUExecutionProvider"] },
+    "olive-recipes": [],
   });
 
   it("renders the model source tabs", () => {
@@ -82,8 +73,8 @@ describe("InputEnvironmentPanel", () => {
 
   it("displays the model ID input for HuggingFace source", () => {
     render(<InputEnvironmentPanel />);
-    // The HF model ID input should be visible
-    const input = screen.queryByDisplayValue(/meta-llama/i);
-    expect(input || screen.getByText(/hugging\s*face/i)).toBeDefined();
+    // The HF model ID input should be pre-populated with the default model
+    const input = screen.getByDisplayValue(/meta-llama/i);
+    expect(input).toBeDefined();
   });
 });

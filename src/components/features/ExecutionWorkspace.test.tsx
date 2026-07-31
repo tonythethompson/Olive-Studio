@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { createMockUIState, mockFetchRoutes } from "./__tests__/testUtils";
+import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
 
 // Mock the pipeline store
 const mockSetState = vi.fn();
@@ -75,17 +75,8 @@ vi.mock("@/lib/gpuMetrics", () => ({
 import { ExecutionWorkspace } from "./ExecutionWorkspace";
 
 describe("ExecutionWorkspace", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    fetchSpy = mockFetchRoutes({
-      "hardware-probe": { providers: ["CPUExecutionProvider"] },
-    });
-  });
-
-  afterEach(() => {
-    fetchSpy.mockRestore();
-    vi.clearAllMocks();
+  useFetchRoutesMock({
+    "hardware-probe": { providers: ["CPUExecutionProvider"] },
   });
 
   it("renders the workspace heading", () => {
@@ -106,10 +97,16 @@ describe("ExecutionWorkspace", () => {
     }).toThrow(/both be provided or both omitted/);
   });
 
+  it("throws when only setState is provided without state", () => {
+    expect(() => {
+      render(<ExecutionWorkspace setState={mockSetState} />);
+    }).toThrow(/both be provided or both omitted/);
+  });
+
   it("renders recipe JSON view controls", () => {
     render(<ExecutionWorkspace />);
-    // Should have a JSON/code view toggle or button
-    const jsonButton = screen.queryByText(/json/i) || screen.queryByText(/recipe/i);
-    expect(jsonButton || screen.getAllByText(/execute/i)[0]).toBeDefined();
+    // Should have a JSON/code view toggle or recipe-related control
+    const jsonControl = screen.queryByText(/json/i) || screen.queryByText(/recipe/i);
+    expect(jsonControl).not.toBeNull();
   });
 });

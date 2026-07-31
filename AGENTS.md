@@ -24,7 +24,7 @@
 
 ## Architecture
 
-```
+```text
 server.ts                  Express entry (modular routes in src/server/routes/)
 src/
   components/features/     26+ React feature panels (zustand-connected)
@@ -67,8 +67,12 @@ The Olive MCP server (`olive-mcp-server/`) is an optional stdio server. The web 
 ```bash
 cd olive-mcp-server
 python -m venv .venv
+# Linux/macOS:
 .venv/bin/pip install -e ".[dev]" "mcp<2"
 .venv/bin/python -m pytest tests -q
+# Windows (PowerShell):
+# .venv\Scripts\pip install -e ".[dev]" "mcp<2"
+# .venv\Scripts\python -m pytest tests -q
 ```
 
 The `.mcp.json` at repo root registers it for AI coding agents using a relative path (`olive-mcp-server/run.py`).

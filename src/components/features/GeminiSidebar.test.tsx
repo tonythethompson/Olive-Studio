@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeAll } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { createMockUIState, mockFetchRoutes } from "./__tests__/testUtils";
+import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
 
 // Mock the pipeline store
 const mockSetState = vi.fn();
@@ -39,22 +39,13 @@ const defaultProps = {
 };
 
 describe("GeminiSidebar", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  useFetchRoutesMock({
+    "ai/providers": { providers: [] },
+  });
 
   beforeAll(() => {
     // jsdom does not implement scrollIntoView
     Element.prototype.scrollIntoView = vi.fn();
-  });
-
-  beforeEach(() => {
-    fetchSpy = mockFetchRoutes({
-      "ai/providers": { providers: [] },
-    });
-  });
-
-  afterEach(() => {
-    fetchSpy.mockRestore();
-    vi.clearAllMocks();
   });
 
   it("renders when isOpen is true", () => {
@@ -87,10 +78,10 @@ describe("GeminiSidebar", () => {
     expect(screen.getAllByText(/audit/i).length).toBeGreaterThan(0);
   });
 
-  it("does not render content when isOpen is false", () => {
+  it("sets aria-hidden when isOpen is false", () => {
     const { container } = render(<GeminiSidebar {...defaultProps} isOpen={false} />);
-    // When closed, the sidebar should either not render or be hidden
-    // Verify it renders without crashing
-    expect(container).toBeDefined();
+    // The sidebar uses aria-hidden + w-0 rather than conditional rendering
+    const sidebar = container.querySelector("[aria-hidden='true']");
+    expect(sidebar).not.toBeNull();
   });
 });
