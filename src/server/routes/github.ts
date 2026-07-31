@@ -1,6 +1,7 @@
 /**
  * GitHub recipe proxy route handler.
  * Proxies raw.githubusercontent.com fetches to avoid browser CORS issues.
+ * Also serves a paginated recipe catalog endpoint.
  */
 import type { Router } from "express";
 import { githubProxyRateLimit } from "../middleware/rateLimit.ts";
@@ -31,6 +32,46 @@ function isSafeGitHubComponent(value: string, pattern: RegExp): boolean {
 }
 
 export function mountGithubRoutes(router: Router): void {
+  // ─── Paginated Recipe Catalog ────────────────────────────────────────────
+  router.get("/github/catalog", githubProxyRateLimit, async (req, res) => {
+    const page = Math.max(1, parseInt(String(req.query.page || "1"), 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize || "50"), 10)));
+    const arch = String(req.query.arch || "").toLowerCase();
+    const device = String(req.query.device || "").toLowerCase();
+
+    try {
+      // Lazy-load the static catalog server-side (avoids bundling in client)
+      const { OLIVE_RECIPES_CATALOG } = await import("../../data/olive-recipes-catalog.ts");
+
+      let items = OLIVE_RECIPES_CATALOG;
+
+      // Filter by architecture
+      if (arch) {
+        items = items.filter((item: { architecture: string }) =>
+          item.architecture.toLowerCase().includes(arch),
+        );
+      }
+      // Filter by device
+      if (device) {
+        items = items.filter((item: { device: string }) => item.device.toLowerCase().includes(device));
+      }
+
+      const total = items.length;
+      const totalPages = Math.ceil(total / pageSize);
+      const start = (page - 1) * pageSize;
+      const paginated = items.slice(start, start + pageSize);
+
+      return res.json({
+        items: paginated,
+        pagination: { page, pageSize, total, totalPages },
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return res.status(500).json({ error: msg || "Failed to load recipe catalog." });
+    }
+  });
+
+  // ─── Raw File Proxy ──────────────────────────────────────────────────────
   router.get("/github/raw", githubProxyRateLimit, async (req, res) => {
     const owner = String(req.query.owner || "");
     const repo = String(req.query.repo || "");
