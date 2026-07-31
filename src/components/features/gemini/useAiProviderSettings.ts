@@ -69,6 +69,39 @@ export function useAiProviderSettings({
   const providerOption = PROVIDER_OPTIONS.find((p) => p.id === settingsProvider)!;
   const isCompatMode = settingsProvider === "openai-compat" || !!providerOption.baseUrl;
 
+  const isStaleRefresh = (sequence: number) => sequence !== refreshSequenceRef.current;
+
+  const applyFetchedModels = (providerId: ProviderId, models: Array<{ id: string; label: string }>) => {
+    setLiveModelsByProvider((prev) => ({ ...prev, [providerId]: models }));
+    if (providerId === "devin") {
+      setDevinModels(models.map((m) => ({ id: m.id, name: m.label })));
+    }
+    // Keep selection valid when the live list differs from static defaults
+    setSettingsModel((current) => (models.some((m) => m.id === current) ? current : models[0]!.id));
+    setCustomModel((current) => {
+      if (!current || models.some((m) => m.id === current)) return current || models[0]!.id;
+      return models[0]!.id;
+    });
+  };
+
+  const applyModelsResponse = (
+    providerId: ProviderId,
+    data: {
+      models?: Array<{ id: string; label: string }>;
+      source?: "live" | "fallback";
+      error?: string;
+    },
+  ) => {
+    const models = Array.isArray(data.models) ? data.models : [];
+    if (models.length > 0) applyFetchedModels(providerId, models);
+    setModelsSource(data.source ?? (models.length > 0 ? "live" : "fallback"));
+    if (data.error && data.source === "fallback") {
+      setModelsHint(data.error);
+      return;
+    }
+    if (data.source === "live") setModelsHint(null);
+  };
+
   /**
    * Fetch live model catalog for a provider on first selection (or force re-fetch).
    * Uses env/runtime keys on the server; optional client key/baseUrl for typed-but-unsaved creds.
@@ -78,23 +111,23 @@ export function useAiProviderSettings({
     providerId: ProviderId,
     opts?: { force?: boolean; apiKey?: string; baseUrl?: string },
   ) => {
-    if (!opts?.force && modelsFetchedRef.current.has(providerId)) {
-      return;
-    }
+    if (!opts?.force && modelsFetchedRef.current.has(providerId)) return;
+
     modelsFetchedRef.current.add(providerId);
     refreshSequenceRef.current += 1;
     const currentSequence = refreshSequenceRef.current;
     setModelsLoading(true);
     setModelsHint(null);
-    try {
-      const body: { provider: string; apiKey?: string; baseUrl?: string } = {
-        provider: providerId,
-      };
-      const key = opts?.apiKey?.trim();
-      const base = opts?.baseUrl?.trim();
-      if (key) body.apiKey = key;
-      if (base) body.baseUrl = base;
 
+    const body: { provider: string; apiKey?: string; baseUrl?: string } = {
+      provider: providerId,
+    };
+    const key = opts?.apiKey?.trim();
+    const base = opts?.baseUrl?.trim();
+    if (key) body.apiKey = key;
+    if (base) body.baseUrl = base;
+
+    try {
       const r = await fetch("/api/ai/models", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -105,48 +138,16 @@ export function useAiProviderSettings({
         source?: "live" | "fallback";
         error?: string;
       };
-
-      // Guard against stale responses
-      if (currentSequence !== refreshSequenceRef.current) {
-        return;
-      }
-
-      const models = Array.isArray(data.models) ? data.models : [];
-      if (models.length > 0) {
-        setLiveModelsByProvider((prev) => ({ ...prev, [providerId]: models }));
-        if (providerId === "devin") {
-          setDevinModels(models.map((m) => ({ id: m.id, name: m.label })));
-        }
-        // Keep selection valid when the live list differs from static defaults
-        setSettingsModel((current) => {
-          if (models.some((m) => m.id === current)) return current;
-          return models[0]!.id;
-        });
-        setCustomModel((current) => {
-          if (!current || models.some((m) => m.id === current)) return current || models[0]!.id;
-          return models[0]!.id;
-        });
-      }
-      setModelsSource(data.source ?? (models.length > 0 ? "live" : "fallback"));
-      if (data.error && data.source === "fallback") {
-        setModelsHint(data.error);
-      } else if (data.source === "live") {
-        setModelsHint(null);
-      }
+      if (isStaleRefresh(currentSequence)) return;
+      applyModelsResponse(providerId, data);
     } catch (err: unknown) {
-      // Guard against stale responses
-      if (currentSequence !== refreshSequenceRef.current) {
-        return;
-      }
+      if (isStaleRefresh(currentSequence)) return;
       setModelsSource("fallback");
       setModelsHint(err instanceof Error ? err.message : "Could not refresh models");
       // Allow retry on next selection if network failed entirely
       modelsFetchedRef.current.delete(providerId);
     } finally {
-      // Guard against stale responses
-      if (currentSequence === refreshSequenceRef.current) {
-        setModelsLoading(false);
-      }
+      if (!isStaleRefresh(currentSequence)) setModelsLoading(false);
     }
   };
 

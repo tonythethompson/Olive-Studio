@@ -7,6 +7,24 @@ interface UseLocalEngineSetupOptions {
   onModelActivated: () => void | Promise<void>;
 }
 
+type InstallStreamEvent = {
+  type?: string;
+  message?: string;
+  percent?: number;
+  error?: string;
+  openedUrl?: string;
+  ok?: boolean;
+};
+
+type PullStreamEvent = {
+  type?: string;
+  message?: string;
+  percent?: number;
+  error?: string;
+  hint?: string;
+  ok?: boolean;
+};
+
 function readStoredEngine(): LocalEngine {
   try {
     const stored = localStorage.getItem("localEngine");
@@ -17,6 +35,48 @@ function readStoredEngine(): LocalEngine {
   } catch {
     return "lms";
   }
+}
+
+const clampPercent = (percent: number) => Math.max(0, Math.min(100, percent));
+
+const joinErrorParts = (...parts: Array<string | undefined>) => parts.filter(Boolean).join(" - ");
+
+async function readNdjsonLines(
+  body: ReadableStream<Uint8Array>,
+  onLine: (line: string) => void | Promise<void>,
+) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      await onLine(line);
+    }
+  }
+  return buf;
+}
+
+function describeInstallFetchError(err: unknown): string {
+  if (err instanceof TypeError && /fetch/i.test(err.message)) {
+    return "Failed to reach Olive Studio server. Keep pnpm dev / tauri:dev running, then retry.";
+  }
+  return err instanceof Error ? err.message : "Install failed";
+}
+
+function describePullFetchError(err: unknown): string {
+  if (err instanceof Error && err.name === "AbortError") {
+    return "Download timed out (install + pull can take several minutes). Retry once the engine is installed.";
+  }
+  if (err instanceof TypeError && /fetch/i.test(err.message)) {
+    return "Failed to reach Olive Studio server (Failed to fetch). Keep pnpm dev / tauri:dev running, then retry.";
+  }
+  return err instanceof Error ? err.message : "Failed to pull local model.";
 }
 
 /**
@@ -96,6 +156,64 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     }
   };
 
+  const appendPullLog = (message: string) => {
+    setLocalPullLog((prev) => [...prev.slice(-12), message]);
+  };
+
+  const handleInstallStreamEvent = (
+    evt: InstallStreamEvent,
+    state: { openedUrl?: string; ok: boolean; finalMsg: string },
+  ) => {
+    if (typeof evt.percent === "number") {
+      setLocalPullPercent(clampPercent(evt.percent));
+    }
+    if (evt.message) {
+      setLocalInstallInfo(evt.message);
+      appendPullLog(evt.message);
+    }
+    if (evt.openedUrl) state.openedUrl = evt.openedUrl;
+    if (evt.type === "error") {
+      if (state.openedUrl || evt.openedUrl) {
+        window.open(state.openedUrl || evt.openedUrl, "_blank", "noopener,noreferrer");
+      }
+      throw new Error(evt.error || evt.message || "Setup failed");
+    }
+    if (evt.type === "done") {
+      state.ok = true;
+      state.finalMsg = evt.message || state.finalMsg;
+      setLocalPullPercent(100);
+    }
+  };
+
+  const consumeInstallStream = async (body: ReadableStream<Uint8Array>, response: Response) => {
+    const state = { openedUrl: undefined as string | undefined, ok: false, finalMsg: "Engine ready." };
+    await readNdjsonLines(body, (line) => {
+      try {
+        handleInstallStreamEvent(JSON.parse(line) as InstallStreamEvent, state);
+      } catch (e) {
+        if (e instanceof Error && e.message !== "Setup failed" && !e.message.includes("JSON")) {
+          throw e;
+        }
+      }
+    });
+    if (!state.ok && !response.ok) throw new Error(`Setup failed (HTTP ${response.status})`);
+    setLocalInstallInfo(state.finalMsg);
+  };
+
+  const handleInstallJsonFallback = async (r: Response) => {
+    const data = (await r.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+      message?: string;
+      openedUrl?: string;
+    };
+    if (!r.ok || !data.ok) {
+      if (data.openedUrl) window.open(data.openedUrl, "_blank", "noopener,noreferrer");
+      throw new Error(data.error || data.message || `HTTP ${r.status}`);
+    }
+    setLocalInstallInfo(data.message || "Engine ready.");
+  };
+
   const installEngine = async (engine: LocalEngine) => {
     setInstallingEngine(engine);
     setLocalPullError("");
@@ -116,83 +234,70 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
         body: JSON.stringify({ engine }),
       });
       if (!r.body) {
-        const data = (await r.json().catch(() => ({}))) as {
-          ok?: boolean;
-          error?: string;
-          message?: string;
-          openedUrl?: string;
-        };
-        if (!r.ok || !data.ok) {
-          if (data.openedUrl) window.open(data.openedUrl, "_blank", "noopener,noreferrer");
-          throw new Error(data.error || data.message || `HTTP ${r.status}`);
-        }
-        setLocalInstallInfo(data.message || "Engine ready.");
+        await handleInstallJsonFallback(r);
       } else {
-        const reader = r.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = "";
-        let ok = false;
-        let finalMsg = "Engine ready.";
-        let openedUrl: string | undefined;
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split("\n");
-          buf = lines.pop() ?? "";
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-              const evt = JSON.parse(line) as {
-                type?: string;
-                message?: string;
-                percent?: number;
-                error?: string;
-                openedUrl?: string;
-                ok?: boolean;
-              };
-              if (typeof evt.percent === "number") {
-                setLocalPullPercent(Math.max(0, Math.min(100, evt.percent)));
-              }
-              if (evt.message) {
-                setLocalInstallInfo(evt.message);
-                setLocalPullLog((prev) => [...prev.slice(-12), evt.message!]);
-              }
-              if (evt.openedUrl) openedUrl = evt.openedUrl;
-              if (evt.type === "error") {
-                if (openedUrl || evt.openedUrl) {
-                  window.open(openedUrl || evt.openedUrl, "_blank", "noopener,noreferrer");
-                }
-                throw new Error(evt.error || evt.message || "Setup failed");
-              }
-              if (evt.type === "done") {
-                ok = true;
-                finalMsg = evt.message || finalMsg;
-                setLocalPullPercent(100);
-              }
-            } catch (e) {
-              if (e instanceof Error && e.message !== "Setup failed" && !e.message.includes("JSON")) {
-                throw e;
-              }
-            }
-          }
-        }
-        if (!ok && !r.ok) throw new Error(`Setup failed (HTTP ${r.status})`);
-        setLocalInstallInfo(finalMsg);
+        await consumeInstallStream(r.body, r);
       }
       markEngineReady(engine);
     } catch (err: unknown) {
-      if (err instanceof TypeError && /fetch/i.test(err.message)) {
-        setLocalPullError(
-          "Failed to reach Olive Studio server. Keep pnpm dev / tauri:dev running, then retry.",
-        );
-      } else {
-        setLocalPullError(err instanceof Error ? err.message : "Install failed");
-      }
+      setLocalPullError(describeInstallFetchError(err));
       setLocalInstallInfo(null);
     } finally {
       setInstallingEngine(null);
     }
+  };
+
+  const handlePullStreamEvent = (evt: PullStreamEvent, state: { gotDone: boolean; finalMessage: string }) => {
+    if (typeof evt.percent === "number" && Number.isFinite(evt.percent)) {
+      setLocalPullPercent(clampPercent(evt.percent));
+    }
+    if (evt.message) {
+      setLocalInstallInfo(evt.message);
+      if (evt.type === "log" || evt.type === "step" || evt.type === "progress") {
+        appendPullLog(evt.message);
+      }
+    }
+    if (evt.type === "error") {
+      throw new Error(joinErrorParts(evt.error || "Pull failed", evt.hint));
+    }
+    if (evt.type === "done") {
+      state.gotDone = true;
+      state.finalMessage = evt.message || "Model ready.";
+      setLocalPullPercent(100);
+    }
+  };
+
+  const consumePullStream = async (r: Response) => {
+    if (!r.ok && !r.body) {
+      const data = (await r.json().catch(() => ({}))) as { error?: string; hint?: string };
+      throw new Error(joinErrorParts(data.error || `HTTP ${r.status}`, data.hint));
+    }
+    if (!r.body) throw new Error(`Empty response (HTTP ${r.status})`);
+
+    const state = { gotDone: false, finalMessage: "" };
+    const buf = await readNdjsonLines(r.body, (line) => {
+      try {
+        handlePullStreamEvent(JSON.parse(line) as PullStreamEvent, state);
+      } catch (e) {
+        if (e instanceof SyntaxError) return;
+        throw e;
+      }
+    });
+
+    // Legacy JSON body (non-stream) if server ever falls back
+    if (!state.gotDone && r.headers.get("content-type")?.includes("application/json") && buf.trim()) {
+      const data = JSON.parse(buf) as { ok?: boolean; error?: string; message?: string };
+      if (data.error) throw new Error(data.error);
+      if (data.ok) {
+        state.gotDone = true;
+        state.finalMessage = data.message || "Model ready.";
+      }
+    }
+    if (!state.gotDone && !r.ok) {
+      throw new Error(`Pull failed (HTTP ${r.status})`);
+    }
+
+    setLocalInstallInfo(state.finalMessage || "Model ready.");
   };
 
   const pullLocalModel = async (modelTag: string, source: LocalEngine = "lms") => {
@@ -224,87 +329,11 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
         clearTimeout(timeout);
       }
 
-      if (!r.ok && !r.body) {
-        const data = (await r.json().catch(() => ({}))) as { error?: string; hint?: string };
-        throw new Error([data.error || `HTTP ${r.status}`, data.hint].filter(Boolean).join(" — "));
-      }
-      if (!r.body) throw new Error(`Empty response (HTTP ${r.status})`);
-
-      const reader = r.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      let gotDone = false;
-      let finalMessage = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          let evt: {
-            type?: string;
-            message?: string;
-            percent?: number;
-            error?: string;
-            hint?: string;
-            ok?: boolean;
-          };
-          try {
-            evt = JSON.parse(line) as typeof evt;
-          } catch {
-            continue;
-          }
-          if (typeof evt.percent === "number" && Number.isFinite(evt.percent)) {
-            setLocalPullPercent(Math.max(0, Math.min(100, evt.percent)));
-          }
-          if (evt.message) {
-            setLocalInstallInfo(evt.message);
-            if (evt.type === "log" || evt.type === "step" || evt.type === "progress") {
-              setLocalPullLog((prev) => [...prev.slice(-12), evt.message!]);
-            }
-          }
-          if (evt.type === "error") {
-            throw new Error([evt.error || "Pull failed", evt.hint].filter(Boolean).join(" — "));
-          }
-          if (evt.type === "done") {
-            gotDone = true;
-            finalMessage = evt.message || "Model ready.";
-            setLocalPullPercent(100);
-          }
-        }
-      }
-
-      // Legacy JSON body (non-stream) if server ever falls back
-      if (!gotDone && r.headers.get("content-type")?.includes("application/json") && buf.trim()) {
-        const data = JSON.parse(buf) as { ok?: boolean; error?: string; message?: string };
-        if (data.error) throw new Error(data.error);
-        if (data.ok) {
-          gotDone = true;
-          finalMessage = data.message || "Model ready.";
-        }
-      }
-      if (!gotDone && !r.ok) {
-        throw new Error(`Pull failed (HTTP ${r.status})`);
-      }
-
-      setLocalInstallInfo(finalMessage || "Model ready.");
+      await consumePullStream(r);
       markEngineReady(source);
       await onModelActivated();
     } catch (err: unknown) {
-      if (err instanceof Error && err.name === "AbortError") {
-        setLocalPullError(
-          "Download timed out (install + pull can take several minutes). Retry once the engine is installed.",
-        );
-      } else if (err instanceof TypeError && /fetch/i.test(err.message)) {
-        setLocalPullError(
-          "Failed to reach Olive Studio server (Failed to fetch). Keep pnpm dev / tauri:dev running, then retry.",
-        );
-      } else {
-        setLocalPullError(err instanceof Error ? err.message : "Failed to pull local model.");
-      }
+      setLocalPullError(describePullFetchError(err));
       setLocalInstallInfo(null);
     } finally {
       setPullingModel(null);

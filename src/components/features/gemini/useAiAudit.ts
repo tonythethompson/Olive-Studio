@@ -7,6 +7,81 @@ interface UseAiAuditOptions {
   setState: (partial: Partial<UIState>) => void;
 }
 
+const scheduleReaudit = (runAnalysis: () => void | Promise<void>) => {
+  setTimeout(() => void runAnalysis(), 400);
+};
+
+const parseScalarValue = (value: string): string | number | boolean => {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  if (isNaN(Number(value))) return value;
+  return Number(value);
+};
+
+const applyJsonPassPatch = (
+  pass: string,
+  obj: Record<string, unknown>,
+  state: UIState,
+  setState: (partial: Partial<UIState>) => void,
+) => {
+  if (pass === "ihvProvider" || pass === "cudaVersion") {
+    setState({ [pass]: obj[pass] } as Partial<UIState>);
+    return;
+  }
+
+  const passKey = pass.startsWith("passes.") ? pass.slice(7) : pass;
+  // If the object has multiple pass keys, merge all; else set single key
+  const looksLikePasses = Object.keys(obj).some((k) => k in state.passes || k === passKey);
+  if (looksLikePasses && !("ihvProvider" in obj)) {
+    setState({
+      passes: {
+        ...state.passes,
+        ...(obj as Partial<UIState["passes"]>),
+        // TRT RTX / AWQ suggestions should not leave structured pruning on
+        ...(obj.quantMethod === "awq" ? { pruning: false } : {}),
+      },
+    });
+    return;
+  }
+
+  setState(obj as Partial<UIState>);
+};
+
+const applyScalarPassPatch = (
+  pass: string,
+  value: string,
+  state: UIState,
+  setState: (partial: Partial<UIState>) => void,
+) => {
+  if (pass === "ihvProvider") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setState({ ihvProvider: value as any });
+    return;
+  }
+  if (pass === "cudaVersion") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setState({ cudaVersion: value as any });
+    return;
+  }
+
+  const passKey = pass.startsWith("passes.") ? pass.slice(7) : pass;
+  const parsed = parseScalarValue(value);
+  const nextPasses: UIState["passes"] = {
+    ...state.passes,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [passKey]: parsed as any,
+  };
+  // Enabling structured pruning on TensorRT RTX: leave quant as-is; validation will suggest AWQ
+  if (passKey === "quantMethod" && value === "awq") {
+    nextPasses.pruning = false;
+    nextPasses.quantization = true;
+  }
+  if (passKey === "quantPrecision" && (value === "int4" || value === "int8")) {
+    nextPasses.quantization = true;
+  }
+  setState({ passes: nextPasses });
+};
+
 /**
  * Owns the pipeline audit: running `/api/ai/analyze-state` and applying the
  * assistant's autofix patches back onto the pipeline state.
@@ -55,61 +130,21 @@ export function useAiAudit({ state, setState }: UseAiAuditOptions) {
   const applyAutofix = (autofix: Suggestion["autofix"]) => {
     if (!autofix?.pass) return;
     const { pass, value } = autofix;
+
     // Multi-field JSON patches from the assistant: {"quantMethod":"awq","quantPrecision":"int4"}
     if (value.trim().startsWith("{")) {
       try {
         const obj = JSON.parse(value) as Record<string, unknown>;
-        if (pass === "ihvProvider" || pass === "cudaVersion") {
-          setState({ [pass]: obj[pass] } as Partial<UIState>);
-        } else {
-          const passKey = pass.startsWith("passes.") ? pass.slice(7) : pass;
-          // If the object has multiple pass keys, merge all; else set single key
-          const looksLikePasses = Object.keys(obj).some((k) => k in state.passes || k === passKey);
-          if (looksLikePasses && !("ihvProvider" in obj)) {
-            setState({
-              passes: {
-                ...state.passes,
-                ...(obj as Partial<UIState["passes"]>),
-                // TRT RTX / AWQ suggestions should not leave structured pruning on
-                ...(obj.quantMethod === "awq" ? { pruning: false } : {}),
-              },
-            });
-          } else {
-            setState(obj as Partial<UIState>);
-          }
-        }
-        setTimeout(() => void runAnalysis(), 400);
+        applyJsonPassPatch(pass, obj, state, setState);
+        scheduleReaudit(runAnalysis);
         return;
       } catch {
         /* fall through to scalar apply */
       }
     }
-    if (pass === "ihvProvider") {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setState({ ihvProvider: value as any });
-    } else if (pass === "cudaVersion") {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setState({ cudaVersion: value as any });
-    } else {
-      const passKey = pass.startsWith("passes.") ? pass.slice(7) : pass;
-      const parsed =
-        value === "true" ? true : value === "false" ? false : isNaN(Number(value)) ? value : Number(value);
-      const nextPasses: UIState["passes"] = {
-        ...state.passes,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        [passKey]: parsed as any,
-      };
-      // Enabling structured pruning on TensorRT RTX: leave quant as-is; validation will suggest AWQ
-      if (passKey === "quantMethod" && value === "awq") {
-        nextPasses.pruning = false;
-        nextPasses.quantization = true;
-      }
-      if (passKey === "quantPrecision" && (value === "int4" || value === "int8")) {
-        nextPasses.quantization = true;
-      }
-      setState({ passes: nextPasses });
-    }
-    setTimeout(() => void runAnalysis(), 400);
+
+    applyScalarPassPatch(pass, value, state, setState);
+    scheduleReaudit(runAnalysis);
   };
 
   return {
