@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
 
 // Mock the pipeline store
@@ -13,7 +13,14 @@ vi.mock("@/lib/stores/pipelineStore", () => ({
 
 // Mock hardware probe
 vi.mock("@/lib/hardwareProbe", () => ({
-  fetchHardwareProbe: () => Promise.resolve({ providers: ["CPUExecutionProvider"] }),
+  fetchHardwareProbe: () =>
+    Promise.resolve({
+      probedAt: "now",
+      platform: { cpuModel: "Test CPU", cpuCores: 8, os: "win", arch: "x64" },
+      detectedProviders: ["CPUExecutionProvider"],
+      recommendedProvider: "CPUExecutionProvider",
+      notes: [],
+    }),
 }));
 
 // Mock olive recipe hub (network-heavy)
@@ -55,24 +62,36 @@ import { InputEnvironmentPanel } from "./InputEnvironmentPanel";
 
 describe("InputEnvironmentPanel", () => {
   useFetchRoutesMock({
-    "hardware-probe": { providers: ["CPUExecutionProvider"] },
+    "hardware-probe": {
+      probedAt: "now",
+      platform: { cpuModel: "Test CPU", cpuCores: 8, os: "win", arch: "x64" },
+      detectedProviders: ["CPUExecutionProvider"],
+      recommendedProvider: "CPUExecutionProvider",
+      notes: [],
+    },
     "olive-recipes": [],
   });
 
-  it("renders the model source tabs", () => {
-    render(<InputEnvironmentPanel />);
+  it("renders the model source tabs", async () => {
+    await act(async () => {
+      render(<InputEnvironmentPanel />);
+    });
     // Should show HuggingFace tab by default
     expect(screen.getAllByText(/hugging\s*face/i).length).toBeGreaterThan(0);
   });
 
-  it("renders with controlled state props", () => {
+  it("renders with controlled state props", async () => {
     const state = createMockUIState({ modelSource: "local" });
-    render(<InputEnvironmentPanel state={state} setState={mockSetState} />);
+    await act(async () => {
+      render(<InputEnvironmentPanel state={state} setState={mockSetState} />);
+    });
     expect(screen.getAllByText(/local/i).length).toBeGreaterThan(0);
   });
 
-  it("displays the model ID input for HuggingFace source", () => {
-    render(<InputEnvironmentPanel />);
+  it("displays the model ID input for HuggingFace source", async () => {
+    await act(async () => {
+      render(<InputEnvironmentPanel />);
+    });
     // The HF model ID input should be pre-populated with the default model
     const input = screen.getByDisplayValue(/meta-llama/i);
     expect(input).toBeDefined();

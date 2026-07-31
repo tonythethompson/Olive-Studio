@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
 
 // Mock the pipeline store to avoid zustand coupling
@@ -24,7 +24,12 @@ vi.mock("@/lib/hooks", () => ({
 
 // Mock hardware probe
 vi.mock("@/lib/hardwareProbe", () => ({
-  fetchHardwareProbe: () => Promise.resolve({ providers: ["CPUExecutionProvider"] }),
+  fetchHardwareProbe: () =>
+    Promise.resolve({
+      providers: ["CPUExecutionProvider"],
+      detectedProviders: ["CPUExecutionProvider"],
+      cpuModel: "Test CPU",
+    }),
   getSelectableProviders: () => ["CPUExecutionProvider"],
 }));
 
@@ -35,25 +40,33 @@ describe("BatchProcessingPanel", () => {
     "hardware-probe": { providers: ["CPUExecutionProvider"] },
   });
 
-  it("renders the panel heading", () => {
-    render(<BatchProcessingPanel />);
+  it("renders the panel heading", async () => {
+    await act(async () => {
+      render(<BatchProcessingPanel />);
+    });
     expect(screen.getAllByText(/batch/i).length).toBeGreaterThan(0);
   });
 
-  it("renders with controlled state props", () => {
+  it("renders with controlled state props", async () => {
     const state = createMockUIState();
-    render(<BatchProcessingPanel state={state} setState={mockSetState} />);
+    await act(async () => {
+      render(<BatchProcessingPanel state={state} setState={mockSetState} />);
+    });
     expect(screen.getAllByText(/batch/i).length).toBeGreaterThan(0);
   });
 
-  it("shows empty state when no jobs exist", () => {
-    render(<BatchProcessingPanel />);
+  it("shows empty state when no jobs exist", async () => {
+    await act(async () => {
+      render(<BatchProcessingPanel />);
+    });
     // The panel should render without errors when no batch jobs are present
     expect(screen.queryByText(/running/i)).toBeNull();
   });
 
-  it("renders the Custom Job button to add jobs", () => {
-    render(<BatchProcessingPanel />);
+  it("renders the Custom Job button to add jobs", async () => {
+    await act(async () => {
+      render(<BatchProcessingPanel />);
+    });
     const addButton = screen.getByRole("button", { name: /custom job/i });
     expect(addButton).toBeDefined();
   });

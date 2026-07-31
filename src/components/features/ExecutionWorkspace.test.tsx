@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
 
 // Mock the pipeline store
@@ -24,7 +24,13 @@ vi.mock("@/lib/hooks", () => ({
 
 // Mock hardware probe
 vi.mock("@/lib/hardwareProbe", () => ({
-  fetchHardwareProbe: () => Promise.resolve({ providers: ["CPUExecutionProvider"] }),
+  fetchHardwareProbe: () =>
+    Promise.resolve({
+      providers: ["CPUExecutionProvider"],
+      detectedProviders: ["CPUExecutionProvider"],
+      cpuModel: "Test CPU",
+    }),
+  getProviderAvailabilityBlock: () => null,
 }));
 
 // Mock vram estimate (accesses state.passes fields not in minimal mock)
@@ -76,17 +82,25 @@ import { ExecutionWorkspace } from "./ExecutionWorkspace";
 
 describe("ExecutionWorkspace", () => {
   useFetchRoutesMock({
-    "hardware-probe": { providers: ["CPUExecutionProvider"] },
+    "hardware-probe": {
+      providers: ["CPUExecutionProvider"],
+      detectedProviders: ["CPUExecutionProvider"],
+      cpuModel: "Test CPU",
+    },
   });
 
-  it("renders the workspace heading", () => {
-    render(<ExecutionWorkspace />);
+  it("renders the workspace heading", async () => {
+    await act(async () => {
+      render(<ExecutionWorkspace />);
+    });
     expect(screen.getAllByText(/execute/i).length).toBeGreaterThan(0);
   });
 
-  it("renders with controlled state props", () => {
+  it("renders with controlled state props", async () => {
     const state = createMockUIState();
-    render(<ExecutionWorkspace state={state} setState={mockSetState} />);
+    await act(async () => {
+      render(<ExecutionWorkspace state={state} setState={mockSetState} />);
+    });
     expect(screen.getAllByText(/execute/i).length).toBeGreaterThan(0);
   });
 
@@ -103,8 +117,10 @@ describe("ExecutionWorkspace", () => {
     }).toThrow(/both be provided or both omitted/);
   });
 
-  it("renders recipe JSON view controls", () => {
-    render(<ExecutionWorkspace />);
+  it("renders recipe JSON view controls", async () => {
+    await act(async () => {
+      render(<ExecutionWorkspace />);
+    });
     // Should have a JSON/code view toggle or recipe-related control
     const jsonControl = screen.queryByText(/json/i) || screen.queryByText(/recipe/i);
     expect(jsonControl).not.toBeNull();

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
 
 // Mock the pipeline store
@@ -48,36 +48,48 @@ describe("GeminiSidebar", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it("renders when isOpen is true", () => {
-    render(<GeminiSidebar {...defaultProps} />);
+  it("renders when isOpen is true", async () => {
+    await act(async () => {
+      render(<GeminiSidebar {...defaultProps} />);
+    });
     // Sidebar should be visible with tab content
     expect(screen.getAllByText(/audit/i).length).toBeGreaterThan(0);
   });
 
-  it("renders tab navigation (audit, chat, settings)", () => {
-    render(<GeminiSidebar {...defaultProps} />);
+  it("renders tab navigation (audit, chat, settings)", async () => {
+    await act(async () => {
+      render(<GeminiSidebar {...defaultProps} />);
+    });
     expect(screen.getAllByText(/chat/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/settings/i).length).toBeGreaterThan(0);
   });
 
-  it("calls onClose when close button is clicked", () => {
+  it("calls onClose when close button is clicked", async () => {
     const onClose = vi.fn();
-    render(<GeminiSidebar isOpen={true} onClose={onClose} />);
+    await act(async () => {
+      render(<GeminiSidebar isOpen={true} onClose={onClose} />);
+    });
     const closeButton = screen.getByRole("button", { name: /close sidebar/i });
     fireEvent.click(closeButton);
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("renders with controlled state props", () => {
+  it("renders with controlled state props", async () => {
     const state = createMockUIState();
-    render(<GeminiSidebar {...defaultProps} state={state} setState={mockSetState} />);
+    await act(async () => {
+      render(<GeminiSidebar {...defaultProps} state={state} setState={mockSetState} />);
+    });
     expect(screen.getAllByText(/audit/i).length).toBeGreaterThan(0);
   });
 
-  it("sets aria-hidden when isOpen is false", () => {
-    const { container } = render(<GeminiSidebar {...defaultProps} isOpen={false} />);
+  it("sets aria-hidden when isOpen is false", async () => {
+    let container: HTMLElement;
+    await act(async () => {
+      const result = render(<GeminiSidebar {...defaultProps} isOpen={false} />);
+      container = result.container;
+    });
     // The sidebar uses aria-hidden + w-0 rather than conditional rendering
-    const sidebar = container.querySelector("[aria-hidden='true']");
+    const sidebar = container!.querySelector("[aria-hidden='true']");
     expect(sidebar).not.toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { LocalModelManager } from "./LocalModelManager";
 
 // ── Mock fetch with proper spy cleanup ─────────────────────────────────────
@@ -61,7 +61,11 @@ describe("LocalModelManager — empty states", () => {
   it("renders nothing when no models and not loading", async () => {
     mockFetch();
 
-    const { container } = render(<LocalModelManager isOpen />);
+    let container: HTMLElement;
+    await act(async () => {
+      const res = render(<LocalModelManager isOpen />);
+      container = res.container;
+    });
 
     // After fetch resolves and models stay empty, the component returns null
     await waitFor(() => {
@@ -73,7 +77,9 @@ describe("LocalModelManager — empty states", () => {
     // Return a never-resolving promise to keep loading true
     fetchSpy.mockImplementation(() => new Promise(() => {}));
 
-    render(<LocalModelManager isOpen />);
+    act(() => {
+      render(<LocalModelManager isOpen />);
+    });
 
     expect(screen.getByText("Refreshing…")).toBeDefined();
   });
@@ -90,7 +96,9 @@ describe("LocalModelManager — models display", () => {
       },
     });
 
-    render(<LocalModelManager isOpen />);
+    await act(async () => {
+      render(<LocalModelManager isOpen />);
+    });
 
     await waitFor(() => {
       expect(screen.getByText("Installed Models")).toBeDefined();
@@ -109,7 +117,9 @@ describe("LocalModelManager — models display", () => {
       },
     });
 
-    render(<LocalModelManager isOpen />);
+    await act(async () => {
+      render(<LocalModelManager isOpen />);
+    });
 
     await waitFor(() => {
       expect(screen.getByText("Load")).toBeDefined();
@@ -124,7 +134,9 @@ describe("LocalModelManager — models display", () => {
       },
     });
 
-    render(<LocalModelManager isOpen />);
+    await act(async () => {
+      render(<LocalModelManager isOpen />);
+    });
 
     await waitFor(() => {
       expect(screen.getByText("Unload")).toBeDefined();
@@ -143,7 +155,9 @@ describe("LocalModelManager — search filtering", () => {
       },
     });
 
-    render(<LocalModelManager isOpen />);
+    await act(async () => {
+      render(<LocalModelManager isOpen />);
+    });
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText("Search models…")).toBeDefined();
@@ -158,7 +172,9 @@ describe("LocalModelManager — search filtering", () => {
       },
     });
 
-    render(<LocalModelManager isOpen />);
+    await act(async () => {
+      render(<LocalModelManager isOpen />);
+    });
 
     await waitFor(() => {
       expect(screen.getByText("Alpha")).toBeDefined();
@@ -180,7 +196,9 @@ describe("LocalModelManager — search filtering", () => {
       },
     });
 
-    render(<LocalModelManager isOpen />);
+    await act(async () => {
+      render(<LocalModelManager isOpen />);
+    });
 
     await waitFor(() => {
       expect(screen.getByText("Alpha")).toBeDefined();
@@ -200,7 +218,9 @@ describe("LocalModelManager — search filtering", () => {
       },
     });
 
-    render(<LocalModelManager isOpen />);
+    await act(async () => {
+      render(<LocalModelManager isOpen />);
+    });
 
     await waitFor(() => {
       expect(screen.getByText("Alpha")).toBeDefined();
@@ -227,7 +247,9 @@ describe("LocalModelManager — publisher groups", () => {
       },
     });
 
-    render(<LocalModelManager isOpen />);
+    await act(async () => {
+      render(<LocalModelManager isOpen />);
+    });
 
     await waitFor(() => {
       expect(screen.getByText("meta-llama")).toBeDefined();
@@ -253,7 +275,9 @@ describe("LocalModelManager — keyboard shortcut", () => {
       },
     });
 
-    render(<LocalModelManager isOpen />);
+    await act(async () => {
+      render(<LocalModelManager isOpen />);
+    });
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText("Search models…")).toBeDefined();
@@ -264,10 +288,12 @@ describe("LocalModelManager — keyboard shortcut", () => {
     expect(document.activeElement).toBe(input);
   });
 
-  it("does not crash when Cmd+K is used while sidebar is closed", () => {
+  it("does not crash when Cmd+K is used while sidebar is closed", async () => {
     mockFetch();
 
-    render(<LocalModelManager isOpen={false} />);
+    await act(async () => {
+      render(<LocalModelManager isOpen={false} />);
+    });
 
     // No crash
     fireEvent.keyDown(window, { key: "k", metaKey: true });
