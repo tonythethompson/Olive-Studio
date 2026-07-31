@@ -1,6 +1,7 @@
 /**
  * Hook for lazy-loading the recipe catalog from the server-side paginated endpoint.
- * Falls back to the static catalog when offline or when the server is unavailable.
+ * Requires the Express server to be running; surfaces an error state if the
+ * server is unavailable (callers may fall back to `loadSuggestedRecipes()`).
  */
 import { useInfiniteQuery } from "@tanstack/react-query";
 import type { RecipeCatalogItem } from "@/lib/oliveRecipeHub";

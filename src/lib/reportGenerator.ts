@@ -179,18 +179,66 @@ export function printReportAsPdf(records: JobHistoryRecord[], options: ReportOpt
 function markdownToPrintHtml(markdown: string): string {
   const escaped = markdown.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-  const htmlBody = escaped
-    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
-    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
-    .replace(/^# (.+)$/gm, "<h1>$1</h1>")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/`(.+?)`/g, "<code>$1</code>")
-    .replace(/^- (.+)$/gm, "<li>$1</li>")
-    .replace(/^\| (.+)$/gm, "<tr><td>$1</td></tr>")
-    .replace(/^---$/gm, "<hr/>")
-    .replace(/\n\n/g, "</p><p>")
-    .replace(/\n/g, "<br/>");
+  // Process line-by-line to properly group tables and lists
+  const lines = escaped.split("\n");
+  const out: string[] = [];
+  let inTable = false;
+  let inList = false;
+
+  for (const line of lines) {
+    const isTableRow = /^\|(.+)\|$/.test(line.trim());
+    const isSeparator = /^\|[\s\-:|]+\|$/.test(line.trim());
+    const isListItem = /^- (.+)$/.test(line);
+
+    // Close table if we're leaving table context
+    if (inTable && !isTableRow) {
+      out.push("</table>");
+      inTable = false;
+    }
+    // Close list if we're leaving list context
+    if (inList && !isListItem) {
+      out.push("</ul>");
+      inList = false;
+    }
+
+    if (isSeparator) {
+      continue; // skip separator rows
+    } else if (isTableRow) {
+      if (!inTable) {
+        out.push("<table>");
+        inTable = true;
+      }
+      const cells = line
+        .trim()
+        .replace(/^\||\|$/g, "")
+        .split("|")
+        .map((c) => `<td>${inlineFmt(c.trim())}</td>`)
+        .join("");
+      out.push(`<tr>${cells}</tr>`);
+    } else if (isListItem) {
+      if (!inList) {
+        out.push("<ul>");
+        inList = true;
+      }
+      out.push(`<li>${inlineFmt(line.replace(/^- /, ""))}</li>`);
+    } else if (/^### (.+)$/.test(line)) {
+      out.push(`<h3>${inlineFmt(line.slice(4))}</h3>`);
+    } else if (/^## (.+)$/.test(line)) {
+      out.push(`<h2>${inlineFmt(line.slice(3))}</h2>`);
+    } else if (/^# (.+)$/.test(line)) {
+      out.push(`<h1>${inlineFmt(line.slice(2))}</h1>`);
+    } else if (/^---$/.test(line)) {
+      out.push("<hr/>");
+    } else if (line.trim() === "") {
+      out.push("<br/>");
+    } else {
+      out.push(`<p>${inlineFmt(line)}</p>`);
+    }
+  }
+  if (inTable) out.push("</table>");
+  if (inList) out.push("</ul>");
+
+  const htmlBody = out.join("\n");
 
   return `<!DOCTYPE html>
 <html>
@@ -206,9 +254,18 @@ function markdownToPrintHtml(markdown: string): string {
   code { background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-size: 0.9em; }
   li { margin: 2px 0; }
   hr { border: none; border-top: 1px solid #e2e8f0; margin: 1rem 0; }
+  p { margin: 0.25rem 0; }
   @media print { body { margin: 0; } }
 </style>
 </head>
-<body><p>${htmlBody}</p></body>
+<body>${htmlBody}</body>
 </html>`;
+}
+
+/** Apply inline formatting (bold, italic, code) to a string. */
+function inlineFmt(s: string): string {
+  return s
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/`(.+?)`/g, "<code>$1</code>");
 }

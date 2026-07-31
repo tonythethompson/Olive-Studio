@@ -168,6 +168,7 @@ export function InputEnvironmentPanel({
   const [syncError, setSyncError] = useState("");
   const [repoUrl, setRepoUrl] = useState(`https://github.com/${OLIVE_RECIPES_REPO}`);
   const [repoBranch, setRepoBranch] = useState(getRecipesBranch());
+  const [branchPinned, setBranchPinned] = useState(() => getRecipesBranch() !== OLIVE_RECIPES_BRANCH_DEFAULT);
   const [repoPath, setRepoPath] = useState(
     "Qwen-Qwen2.5-1.5B-Instruct/NvTensorRtRtx/Qwen2.5-1.5B-Instruct_model_builder_fp16.json",
   );
@@ -1157,26 +1158,27 @@ export function InputEnvironmentPanel({
                               <button
                                 type="button"
                                 title={
-                                  repoBranch !== OLIVE_RECIPES_BRANCH_DEFAULT
-                                    ? `Pinned to ${repoBranch} — click to reset`
+                                  branchPinned
+                                    ? `Pinned to ${repoBranch} — click to unpin`
                                     : "Pin this branch for all recipe fetches"
                                 }
                                 className="h-9 px-2 rounded border text-[10px] font-medium transition-colors shrink-0"
                                 style={{
-                                  borderColor:
-                                    repoBranch !== OLIVE_RECIPES_BRANCH_DEFAULT ? "#8DA840" : undefined,
-                                  color: repoBranch !== OLIVE_RECIPES_BRANCH_DEFAULT ? "#8DA840" : undefined,
+                                  borderColor: branchPinned ? "#8DA840" : undefined,
+                                  color: branchPinned ? "#8DA840" : undefined,
                                 }}
                                 onClick={() => {
-                                  if (repoBranch !== OLIVE_RECIPES_BRANCH_DEFAULT) {
+                                  if (branchPinned) {
                                     setRecipesBranch(null);
                                     setRepoBranch(OLIVE_RECIPES_BRANCH_DEFAULT);
+                                    setBranchPinned(false);
                                   } else {
                                     setRecipesBranch(repoBranch);
+                                    setBranchPinned(true);
                                   }
                                 }}
                               >
-                                {repoBranch !== OLIVE_RECIPES_BRANCH_DEFAULT ? "Unpin" : "Pin"}
+                                {branchPinned ? "Unpin" : "Pin"}
                               </button>
                             </div>
                           </div>

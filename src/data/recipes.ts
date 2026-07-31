@@ -25,7 +25,10 @@ export async function loadSuggestedRecipes(): Promise<RecipeItem[]> {
 /**
  * Synchronous accessor for backward compatibility.
  * Returns the cached catalog if already loaded, otherwise an empty array.
- * Prefer `loadSuggestedRecipes()` for new code.
+ * **Do not rely on this in new code** — use `loadSuggestedRecipes()` (async)
+ * or the server-side `/api/github/catalog` endpoint instead.
+ * This array is populated asynchronously after module load; React components
+ * reading it during initial render will see [] until the import resolves.
  */
 export const SUGGESTED_RECIPES: RecipeItem[] = [];
 
