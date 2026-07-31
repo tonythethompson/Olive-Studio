@@ -210,7 +210,7 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
   const { body, ...rest } = options;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...((rest.headers as Record<string, string>) ?? {}),
+    ...(rest.headers as Record<string, string>),
   };
 
   const response = await fetch(`/api${endpoint}`, {

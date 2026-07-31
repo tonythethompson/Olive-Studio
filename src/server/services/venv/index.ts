@@ -180,7 +180,7 @@ export function ensureVenv(onLine: SetupListener): Promise<{ ok: boolean; error?
   const listeners = new Set<SetupListener>([onLine]);
   const broadcast = (line: string) => {
     // Snapshot so deleting a throwing listener mid-iteration is safe.
-    for (const listener of [...listeners]) notifyListener(listeners, listener, line);
+    for (const listener of Array.from(listeners)) notifyListener(listeners, listener, line);
   };
 
   const promise = ensureVenvInner(broadcast).finally(() => {

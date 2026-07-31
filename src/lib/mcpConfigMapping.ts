@@ -282,7 +282,7 @@ export function mapMcpConfigToUiState(
         );
       }
 
-      const override: PassRecipeOverride = { ...(overrides[passType] ?? {}) };
+      const override: PassRecipeOverride = { ...overrides[passType] };
 
       if (typeof raw.output_name === "string" && raw.output_name.trim()) {
         override.output_name = raw.output_name.trim();
@@ -293,14 +293,14 @@ export function mapMcpConfigToUiState(
       const params = isRecord(raw.params) ? raw.params : isRecord(raw.config) ? raw.config : null;
       if (params) {
         mapFlatParams(params, patches.passes ?? currentPasses, patches, logs);
-        override.config = { ...(override.config ?? {}), ...params };
+        override.config = { ...override.config, ...params };
         logs.push(`[MCP FIX] Stored ${passType} config overrides: ${Object.keys(params).join(", ")}`);
       }
 
       // Other top-level fields on the pass entry (e.g. disable_search)
       for (const [k, v] of Object.entries(raw)) {
         if (k === "output_name" || k === "params" || k === "config" || k === "type") continue;
-        override.config = { ...(override.config ?? {}), [k]: v };
+        override.config = { ...override.config, [k]: v };
         logs.push(`[MCP FIX] Stored ${passType}.${k} = ${JSON.stringify(v)}`);
       }
 
@@ -348,9 +348,9 @@ export function mapMcpConfigToUiState(
       patches.passRecipeOverrides = {
         ...existing,
         OnnxConversion: {
-          ...(existing.OnnxConversion ?? {}),
+          ...existing.OnnxConversion,
           config: {
-            ...(existing.OnnxConversion?.config ?? {}),
+            ...existing.OnnxConversion?.config,
             use_external_data_format: flat.use_external_data_format,
           },
         },
@@ -483,9 +483,9 @@ export function mapMcpQuirksToUiState(
     overrides = {
       ...overrides,
       [type]: {
-        ...(overrides[type] ?? {}),
+        ...overrides[type],
         ...ov,
-        config: { ...(overrides[type]?.config ?? {}), ...(ov.config ?? {}) },
+        config: { ...overrides[type]?.config, ...ov.config },
       },
     };
   };
@@ -607,7 +607,7 @@ export function mapMcpQuirksToUiState(
 
   if (Object.keys(overrides).length > 0) {
     patches.passRecipeOverrides = {
-      ...(patches.passRecipeOverrides ?? {}),
+      ...patches.passRecipeOverrides,
       ...overrides,
     };
   }
@@ -618,7 +618,7 @@ export function mapMcpQuirksToUiState(
 function mergePartialUiState(a: Partial<UIState>, b: Partial<UIState>): Partial<UIState> {
   const out: Partial<UIState> = { ...a, ...b };
   if (a.passes || b.passes) {
-    out.passes = { ...(a.passes ?? {}), ...(b.passes ?? {}) } as UIState["passes"];
+    out.passes = { ...a.passes, ...b.passes } as UIState["passes"];
   }
   if (a.passRecipeOverrides || b.passRecipeOverrides) {
     const types = new Set([
@@ -632,7 +632,7 @@ function mergePartialUiState(a: Partial<UIState>, b: Partial<UIState>): Partial<
       merged[t] = {
         ...left,
         ...right,
-        config: { ...(left?.config ?? {}), ...(right?.config ?? {}) },
+        config: { ...left?.config, ...right?.config },
       };
     }
     out.passRecipeOverrides = merged;

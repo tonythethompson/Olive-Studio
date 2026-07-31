@@ -166,11 +166,12 @@ export function ExecutionWorkspace({
       return;
     }
 
-    const { patches, logs, appliedQuirks, notedQuirks } = applyMcpDiagnosticToUiState(
-      mcpDiagnostic,
-      state.passes,
-      state.passRecipeOverrides,
-    );
+    const {
+      patches,
+      logs,
+      appliedQuirks,
+      notedQuirks: _notedQuirks,
+    } = applyMcpDiagnosticToUiState(mcpDiagnostic, state.passes, state.passRecipeOverrides);
 
     const hasPatches = Object.keys(patches).length > 0;
     if (!hasPatches && logs.length === 0) {

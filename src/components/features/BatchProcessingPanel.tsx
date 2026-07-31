@@ -777,11 +777,12 @@ export function BatchProcessingPanel({
                     onApplyFix={() => {
                       const diagnostic = batchDiagnostics[selectedJob.id];
                       if (!diagnostic || !canApplyMcpDiagnostic(diagnostic)) return;
-                      const { patches, logs, appliedQuirks, notedQuirks } = applyMcpDiagnosticToUiState(
-                        diagnostic,
-                        state.passes,
-                        state.passRecipeOverrides,
-                      );
+                      const {
+                        patches,
+                        logs,
+                        appliedQuirks,
+                        notedQuirks: _notedQuirks,
+                      } = applyMcpDiagnosticToUiState(diagnostic, state.passes, state.passRecipeOverrides);
                       if (Object.keys(patches).length > 0 || appliedQuirks.length > 0) {
                         if (Object.keys(patches).length > 0) setState(patches);
                         // Append mapping logs to job logs, matching ExecutionWorkspace behavior

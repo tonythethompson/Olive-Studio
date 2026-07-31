@@ -12,7 +12,6 @@ import {
   Send,
   X,
   RefreshCw,
-  Zap,
   Check,
   Lightbulb,
   MessageSquareCode,
