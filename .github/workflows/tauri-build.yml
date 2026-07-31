@@ -23,7 +23,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 11
+          version: 11.17
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -42,10 +42,7 @@ jobs:
           workspaces: src-tauri
 
       - name: Build Tauri (NSIS + MSIX)
-        run: |
-          cd src-tauri
-          cargo build --release --target x86_64-pc-windows-msvc
-          npx @tauri-apps/cli build --target x86_64-pc-windows-msvc --bundles nsis,msix
+        run: pnpm exec tauri build --target x86_64-pc-windows-msvc --bundles nsis,msix
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 

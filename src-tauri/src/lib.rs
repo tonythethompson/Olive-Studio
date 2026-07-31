@@ -298,8 +298,8 @@ pub fn run() {
 
       // Cold-start telemetry: log time from run() to first successful health-check
       let elapsed = cold_start.elapsed();
-      log::info!("[cold-start] Ready in {:.0}ms", elapsed.as_millis());
-      eprintln!("[olive-studio] cold-start: {:.0}ms", elapsed.as_millis());
+      log::info!("[cold-start] Ready in {}ms", elapsed.as_millis());
+      eprintln!("[olive-studio] cold-start: {}ms", elapsed.as_millis());
 
       if cfg!(debug_assertions) {
         app.handle().plugin(
