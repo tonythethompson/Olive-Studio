@@ -320,6 +320,7 @@ export function useAiProviderSettings({
             body: JSON.stringify({ provider: "codex", model: settingsModel || "default" }),
           });
           await fetchProviderStatus();
+          onProviderActivated();
           break;
         }
       }
