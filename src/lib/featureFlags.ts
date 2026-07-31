@@ -4,7 +4,7 @@
  * Zero runtime cost when flags are off — checks are simple boolean reads.
  */
 
-type FlagKey = "multiLora" | "lazyCatalog" | "batchComparison" | "reportExport";
+export type FlagKey = "multiLora" | "lazyCatalog" | "batchComparison" | "reportExport";
 
 interface FlagDefinition {
   key: FlagKey;
