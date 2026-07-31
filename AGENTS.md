@@ -55,6 +55,17 @@ src-tauri/                 Tauri 2 shell (optional — app runs without it)
 - **ESLint warnings are expected:** `pnpm lint` runs `eslint --max-warnings 20` and exits 0 with warnings. Only treat non-zero exit or reported errors as failure.
 - **Python alias:** `pnpm a11y:scan` invokes `python` (not `python3`); ensure `python` is on PATH.
 - **Integration test mocks:** `src/server/__tests__/setup.integration.ts` mocks child_process, AI providers, and fetch. Tests start a real Express server on a random port.
+- **Commitlint scopes:** Conventional commits enforced (`<type>(<scope>): <subject>`). Allowed scopes: `recipe-builder`, `pipeline-validation`, `recipe-pipeline`, `quantization`, `pruning`, `peft`, `conversion`, `hardware-probe`, `ai-assistant`, `graph`, `batch`, `infra`, `ui`, `deps`, `ci`, `docs`, `mcp`, `types`, `test`, `chore`, `fix`, `perf`, `refactor`, `style`, `build`.
+
+## Lint Rules (error level)
+
+- `no-console` — only `console.warn` and `console.error` allowed (no `console.log`)
+- `react-hooks/set-state-in-render` — setState in render is always a bug
+- `react-hooks/refs` — accessing `ref.current` during render breaks reactivity
+- `react-hooks/use-memo` — missing `useMemo`/`useCallback` where the compiler would have applied them
+- `react-hooks/static-components` — components defined inside other components re-mount on every render
+- `react-hooks/error-boundaries` — missing error boundaries
+- `no-throw-literal` — throw Error objects, not raw values
 
 ## CI Pipeline
 

@@ -670,10 +670,134 @@ def expand_troubleshooting():
     print(f"troubleshooting.json now has {len(data['entries'])} entries")
 
 
+def expand_compatibility_matrix():
+    """Add candidate model entries from known Olive-supported architectures.
+
+    This generates skeleton entries that should be verified against actual
+    Olive runs before marking as verified=true.
+    """
+    data = load("compatibility_matrix.json")
+    existing = {m["model"] for m in data["models"]}
+
+    candidates = [
+        {
+            "model": "Llama 3.2 1B",
+            "frameworks": ["PyTorch", "ONNX", "HuggingFace"],
+            "source": "https://huggingface.co/meta-llama/Llama-3.2-1B",
+            "verified": False,
+            "hardware": {
+                "NVIDIA RTX 4090": {
+                    "NVModelOptQuantization": {
+                        "support": "supported",
+                        "note": "Tiny model; FP16 or int4 both fit easily.",
+                        "typical_accuracy_drop": "<1%",
+                    }
+                },
+                "Qualcomm Snapdragon NPU": {
+                    "QNNQuantization": {
+                        "support": "supported",
+                        "note": "1B fits NPU memory; int4 for best throughput.",
+                        "typical_accuracy_drop": "2-3%",
+                    }
+                },
+            },
+        },
+        {
+            "model": "Qwen2.5 32B",
+            "frameworks": ["PyTorch", "ONNX", "HuggingFace"],
+            "source": "https://huggingface.co/Qwen/Qwen2.5-32B",
+            "verified": False,
+            "hardware": {
+                "NVIDIA A100": {
+                    "NVModelOptQuantization": {
+                        "support": "supported",
+                        "note": "AWQ int4 with group_size 128; fits 80GB.",
+                        "typical_accuracy_drop": "<3%",
+                    }
+                }
+            },
+        },
+        {
+            "model": "Phi-3.5 Mini",
+            "frameworks": ["PyTorch", "ONNX", "HuggingFace"],
+            "source": "https://huggingface.co/microsoft/Phi-3.5-mini-instruct",
+            "verified": False,
+            "hardware": {
+                "NVIDIA RTX 4090": {
+                    "NVModelOptQuantization": {
+                        "support": "supported",
+                        "note": "AWQ int4 stable; similar to Phi-3-mini path.",
+                        "typical_accuracy_drop": "<1.5%",
+                    }
+                },
+                "Intel Core i9 CPU": {
+                    "OnnxStaticQuantization": {
+                        "support": "supported",
+                        "note": "INT8 for CPU deployment.",
+                        "typical_accuracy_drop": "1-2%",
+                    }
+                },
+            },
+        },
+        {
+            "model": "DeepSeek V2 Lite",
+            "frameworks": ["PyTorch", "HuggingFace"],
+            "source": "https://huggingface.co/deepseek-ai/DeepSeek-V2-Lite",
+            "verified": False,
+            "hardware": {
+                "NVIDIA RTX 4090": {
+                    "OnnxConversion": {
+                        "support": "warning",
+                        "note": "MoE architecture; verify ORT supports all ops.",
+                        "typical_accuracy_drop": "n/a",
+                    },
+                    "NVModelOptQuantization": {
+                        "support": "warning",
+                        "note": "MoE routing may not fuse; test carefully.",
+                        "typical_accuracy_drop": "2-4%",
+                    }
+                }
+            },
+        },
+        {
+            "model": "SegFormer B0",
+            "frameworks": ["PyTorch", "ONNX"],
+            "source": "https://huggingface.co/nvidia/segformer-b0-finetuned-ade-512-512",
+            "verified": False,
+            "hardware": {
+                "NVIDIA RTX 4090": {
+                    "OnnxStaticQuantization": {
+                        "support": "supported",
+                        "note": "INT8 static quant stable for segmentation.",
+                        "typical_accuracy_drop": "<1% mIoU",
+                    }
+                },
+                "Intel Core i9 CPU": {
+                    "OpenVINOConversion": {
+                        "support": "supported",
+                        "note": "OpenVINO IR for CPU segmentation.",
+                        "typical_accuracy_drop": "n/a",
+                    }
+                },
+            },
+        },
+    ]
+
+    added = 0
+    for c in candidates:
+        if c["model"] not in existing:
+            data["models"].append(c)
+            added += 1
+
+    save("compatibility_matrix.json", data)
+    print(f"compatibility_matrix.json: added {added} candidates, now {len(data['models'])} models")
+
+
 def main():
     expand_passes()
     expand_hardware_profiles()
     expand_troubleshooting()
+    expand_compatibility_matrix()
 
 
 if __name__ == "__main__":

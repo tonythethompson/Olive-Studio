@@ -1,0 +1,21 @@
+services:
+  olive-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - MCP_TRANSPORT=sse
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+    volumes:
+      # Mount local knowledge_base for hot-reload during development
+      - ./olive_mcp_server/knowledge_base:/app/olive_mcp_server/knowledge_base:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; r=urllib.request.urlopen('http://localhost:8000/sse',timeout=3); r.close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
