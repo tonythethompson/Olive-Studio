@@ -45,4 +45,4 @@ tauri-plugin-log = "2"
 # the tauri dependency and remove this ignore from .github/dependabot.yml:
 #   ignore:
 #     - dependency-name: "glib"
-#       versions: ["< 0.20.0"]
+#       versions: [">= 0.20.0"]
