@@ -124,4 +124,29 @@ export function mountEnvRoutes(router: Router): void {
       return res.status(500).json({ ok: false, error: msg });
     }
   });
+
+  // ─── Olive Version Detection ────────────────────────────────────────────
+  router.get("/olive/version", async (_req, res) => {
+    try {
+      const { getVenvPythonPath } = await import("../services/venv/paths.ts");
+      const python = getVenvPythonPath();
+      if (!python) {
+        return res.json({ installed: false, version: null });
+      }
+      const { execFile } = await import("child_process");
+      const { promisify } = await import("util");
+      const execFileAsync = promisify(execFile);
+      const { stdout } = await execFileAsync(python, ["-m", "pip", "show", "olive-ai"], {
+        timeout: 10_000,
+      });
+      const match = stdout.match(/^Version:\s*(.+)$/m);
+      if (!match) {
+        return res.json({ installed: false, version: null });
+      }
+      return res.json({ installed: true, version: match[1].trim() });
+    } catch {
+      // pip show fails if olive-ai is not installed
+      return res.json({ installed: false, version: null });
+    }
+  });
 }
