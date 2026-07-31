@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { createMockUIState } from "./__tests__/testUtils";
 
@@ -22,6 +22,9 @@ describe("GeminiSidebar flows", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("audits on open, chats, and renders provider settings", async () => {
     const routes: Record<string, unknown> = {
       "ai/provider": { source: "user", provider: "gemini", model: "gemini-2.5-flash" },
