@@ -11,7 +11,7 @@ versioned knowledge base.
 - 84 passes documented in `passes.json`
 - 14 hardware profiles in `hardware_profiles.json`
 - 20 troubleshooting entries in `troubleshooting.json`
-- 20 model entries in `compatibility_matrix.json`
+- 35 model entries in `compatibility_matrix.json`
 - 10 integration recipes in `integration_recipes.json`
 - 3 quirk categories in `quirks.json`
 - 130 pytest tests passing
@@ -128,5 +128,6 @@ top-level `.mcp.json` wires this server to Claude via `olive-mcp-server/run.py`.
 
 ## Roadmap
 
-- Add deployment docs (Docker / serverless)
-- Expand compatibility matrix with more models
+- [x] Add deployment docs (Docker / serverless) — see [docs/deployment.md](docs/deployment.md)
+- [ ] Expand compatibility matrix with more models
+- [ ] Olive version tracking (0.2.0 → current support)

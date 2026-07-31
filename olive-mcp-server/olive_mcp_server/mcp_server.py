@@ -4,9 +4,18 @@ This server exposes tools that help AI agents query, configure, and
 troubleshoot Microsoft Olive model optimization workflows.
 
 Usage:
-    python -m olive_mcp_server
-    olive-mcp-server
+    python -m olive_mcp_server              # stdio transport (default)
+    python -m olive_mcp_server --sse        # SSE/HTTP transport
+    olive-mcp-server                        # console script (stdio)
+
+Environment variables:
+    MCP_TRANSPORT  - "stdio" (default) or "sse"
+    MCP_HOST       - Bind address for SSE transport (default: 127.0.0.1)
+    MCP_PORT       - Port for SSE transport (default: 8000)
 """
+
+import os
+import sys
 
 from mcp.server.fastmcp import FastMCP
 
@@ -48,7 +57,26 @@ for tool in TOOLS:
 
 
 def main() -> None:
-    mcp.run()
+    """Run the MCP server with the configured transport.
+
+    Transport selection:
+      - CLI flag: --sse or --stdio
+      - Environment: MCP_TRANSPORT=sse|stdio (default: stdio)
+    """
+    transport = os.environ.get("MCP_TRANSPORT", "stdio").lower()
+
+    # CLI flag overrides environment
+    if "--sse" in sys.argv:
+        transport = "sse"
+    elif "--stdio" in sys.argv:
+        transport = "stdio"
+
+    if transport == "sse":
+        host = os.environ.get("MCP_HOST", "127.0.0.1")
+        port = int(os.environ.get("MCP_PORT", "8000"))
+        mcp.run(transport="sse", host=host, port=port)
+    else:
+        mcp.run()
 
 
 if __name__ == "__main__":
