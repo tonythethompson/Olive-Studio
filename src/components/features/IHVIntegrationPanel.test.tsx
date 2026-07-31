@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
 
 // Mock the pipeline store
@@ -13,7 +13,14 @@ vi.mock("@/lib/stores/pipelineStore", () => ({
 
 // Mock hardware probe
 vi.mock("@/lib/hardwareProbe", () => ({
-  fetchHardwareProbe: () => Promise.resolve({ providers: ["CPUExecutionProvider"] }),
+  fetchHardwareProbe: () =>
+    Promise.resolve({
+      probedAt: "now",
+      platform: { cpuModel: "Test CPU", cpuCores: 8, os: "win", arch: "x64" },
+      detectedProviders: ["CPUExecutionProvider"],
+      recommendedProvider: "CPUExecutionProvider",
+      notes: [],
+    }),
   getSelectableProviders: () => ["CPUExecutionProvider", "CUDAExecutionProvider"],
   isProviderDetectedLocally: () => false,
 }));
@@ -55,18 +62,28 @@ import { IHVIntegrationPanel, getCellCompatibility } from "./IHVIntegrationPanel
 
 describe("IHVIntegrationPanel", () => {
   useFetchRoutesMock({
-    "hardware-probe": { providers: ["CPUExecutionProvider"] },
+    "hardware-probe": {
+      probedAt: "now",
+      platform: { cpuModel: "Test CPU", cpuCores: 8, os: "win", arch: "x64" },
+      detectedProviders: ["CPUExecutionProvider"],
+      recommendedProvider: "CPUExecutionProvider",
+      notes: [],
+    },
   });
 
-  it("renders the provider selection panel", () => {
-    render(<IHVIntegrationPanel />);
+  it("renders the provider selection panel", async () => {
+    await act(async () => {
+      render(<IHVIntegrationPanel />);
+    });
     // Panel should render with provider-related content
     expect(screen.getAllByText(/provider/i).length).toBeGreaterThan(0);
   });
 
-  it("renders with controlled state props", () => {
+  it("renders with controlled state props", async () => {
     const state = createMockUIState({ ihvProvider: "CUDAExecutionProvider" });
-    render(<IHVIntegrationPanel state={state} setState={mockSetState} />);
+    await act(async () => {
+      render(<IHVIntegrationPanel state={state} setState={mockSetState} />);
+    });
     expect(screen.getAllByText(/provider/i).length).toBeGreaterThan(0);
   });
 });
