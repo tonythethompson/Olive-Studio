@@ -1,0 +1,27 @@
+src/components/features/gemini/useAiAudit.ts
+  s_f74081a1440ffc::t_ef6e425c6745ae 10-84,133,138-139,145-147
+src/components/features/gemini/useAiProviderSettings.ts
+  s_f74081a1440ffc::t_b7fe6236a6cb31 72-73,75-79,81-104,114-115,122-130,141-142,144,150
+  s_f74081a1440ffc::t_f400ab1d35a1ed 74,80
+src/components/features/gemini/useLocalEngineSetup.ts
+  s_f74081a1440ffc::t_f400ab1d35a1ed 42,188,250
+  s_f74081a1440ffc::t_f8e6d9b337e393 10-27,40-41,43-81,159-187,189-198,200-216,237,243,251-302,332,336
+  s_f74081a1440ffc::t_8c02f5dd600d0d 239
+  s_f74081a1440ffc::t_4739d0cb4a28d8 199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4dc3f41bbf64f6425e8ed64d622bf839f3ec044a",
+  "prompts": {},
+  "sessions": {
+    "s_f74081a1440ffc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "de95d892-02e7-4b3c-acb5-94377e3c0210",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
