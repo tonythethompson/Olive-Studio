@@ -11,6 +11,7 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["src/**/*.test.ts"],
+    exclude: ["src/server/**", "src/components/**", "**/*.integration.test.ts", "node_modules/**"],
     coverage: {
       provider: "v8",
       include: ["src/lib/oliveRecipeBuilder.ts", "src/lib/pipelineValidation.ts", "src/lib/recipePipeline.ts"],

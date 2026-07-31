@@ -1,0 +1,44 @@
+name: KB Auto-Update
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Monday 06:00 UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: kb-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: olive-mcp-server
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: olive-mcp-server/pyproject.toml
+
+      - name: Install dependencies
+        run: pip install -e . "mcp<2"
+
+      - name: Run KB update
+        run: python scripts/update_kb.py
+
+      - name: Upload report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: kb-update-report
+          path: |
+            olive-mcp-server/olive_mcp_server/knowledge_base/update_report.json
+            olive-mcp-server/olive_mcp_server/knowledge_base/candidate_quirks.json
+          retention-days: 30

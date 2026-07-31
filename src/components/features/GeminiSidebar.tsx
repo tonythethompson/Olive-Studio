@@ -1263,6 +1263,7 @@ export function GeminiSidebar({
           </div>
           <button
             type="button"
+            aria-label="Close sidebar"
             onClick={onClose}
             className="h-8 w-8 rounded-lg hover:bg-slate-800 border border-slate-800/55 flex items-center justify-center text-slate-400 hover:text-slate-100 transition-colors cursor-pointer shrink-0"
           >

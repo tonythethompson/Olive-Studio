@@ -84,3 +84,25 @@ updates:
         update-types:
           - "version-update:semver-major"
           - "version-update:semver-minor"
+
+  # ── Tauri (Rust) ──────────────────────────────────────────────────────
+  # The Tauri sidecar depends on the GTK3 gtk-rs 0.18.x stack, which pins
+  # glib to 0.18.x (semver-incompatible with the patched 0.20.0).
+  # glib >= 0.20 requires the GTK4 migration tracked at:
+  #   https://github.com/tauri-apps/tauri/issues/12563
+  #   https://github.com/tauri-apps/tauri/pull/14684
+  # The VariantStrIter unsoundness (GHSA alert) only affects Linux builds;
+  # the GTK stack is never compiled on Windows or macOS.
+  - package-ecosystem: "cargo"
+    directory: "/src-tauri"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "chore"
+    labels:
+      - "dependencies"
+      - "rust"
+    ignore:
+      - dependency-name: "glib"
+        versions: [">= 0.20.0"]
