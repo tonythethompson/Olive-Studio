@@ -140,7 +140,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : prev.length < 3 ? [...prev, id] : prev,
+      prev.includes(id) ? prev.filter((item) => item !== id) : prev.length < 6 ? [...prev, id] : prev,
     );
   };
 
@@ -174,7 +174,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
                 Run History & Side-by-Side Comparison
               </h2>
               <p className="text-xs text-slate-400">
-                Persisted in local IndexedDB. Select up to 3 runs to compare side-by-side.
+                Persisted in local IndexedDB. Select up to 6 runs to compare side-by-side.
               </p>
             </div>
           </div>
@@ -459,7 +459,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
         {/* Modal Footer */}
         <div className="px-6 py-3 border-t border-slate-800 bg-slate-900/60 flex items-center justify-between text-xs text-slate-400">
           <div>
-            Showing {filteredHistory.length} of {history.length} runs. Select up to 3 runs to compare.
+            Showing {filteredHistory.length} of {history.length} runs. Select up to 6 runs to compare.
           </div>
           <button
             type="button"

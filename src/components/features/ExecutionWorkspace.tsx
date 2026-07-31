@@ -48,8 +48,9 @@ import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProb
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { GpuMetricsBar } from "@/components/features/GpuMetricsBar";
 import { parseGpuMetrics, type GpuMetrics } from "@/lib/gpuMetrics";
-import { saveJobHistory } from "@/lib/jobHistoryStore";
+import { saveJobHistory, getJobHistory } from "@/lib/jobHistoryStore";
 import { JobHistoryModal } from "@/components/features/JobHistoryModal";
+import { downloadMarkdownReport } from "@/lib/reportGenerator";
 
 const RecipeGraphView = lazy(() => import("./RecipeGraphView").then((m) => ({ default: m.RecipeGraphView })));
 
@@ -1314,6 +1315,16 @@ ${
                 onClick={() => setIsHistoryOpen(true)}
               >
                 <History className="h-3.5 w-3.5 mr-1.5" /> Run History
+              </Button>
+              <Button
+                variant="outline"
+                className="h-8 px-3 text-xs border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
+                onClick={async () => {
+                  const history = await getJobHistory();
+                  if (history.length > 0) downloadMarkdownReport(history.slice(0, 6));
+                }}
+              >
+                <Download className="h-3.5 w-3.5 mr-1.5" /> Export Report
               </Button>
               <Button
                 variant="outline"

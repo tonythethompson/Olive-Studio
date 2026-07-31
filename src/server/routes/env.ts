@@ -128,8 +128,8 @@ export function mountEnvRoutes(router: Router): void {
   // ─── Olive Version Detection ────────────────────────────────────────────
   router.get("/olive/version", async (_req, res) => {
     try {
-      const { getVenvPythonPath } = await import("../services/venv/paths.ts");
-      const python = getVenvPythonPath();
+      const { getVenvPython } = await import("../services/venv/paths.ts");
+      const python = getVenvPython();
       if (!python) {
         return res.json({ installed: false, version: null });
       }

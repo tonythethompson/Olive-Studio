@@ -33,7 +33,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi"],
+    "targets": ["nsis", "msi", "msix"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -48,6 +48,11 @@
     "windows": {
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
+      },
+      "msix": {
+        "displayName": "Olive Studio",
+        "publisher": "CN=TonyThompson",
+        "minimumSystemVersion": "10.0.17763.0"
       }
     }
   }
