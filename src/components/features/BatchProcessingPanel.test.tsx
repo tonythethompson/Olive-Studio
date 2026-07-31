@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, act } from "@testing-library/react";
 import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
+import { BatchProcessingPanel } from "./BatchProcessingPanel";
 
 // Mock the pipeline store to avoid zustand coupling
 const mockSetState = vi.fn();
@@ -34,8 +35,6 @@ vi.mock("@/lib/hardwareProbe", () => ({
     }),
   getSelectableProviders: () => ["CPUExecutionProvider"],
 }));
-
-import { BatchProcessingPanel } from "./BatchProcessingPanel";
 
 describe("BatchProcessingPanel", () => {
   useFetchRoutesMock({
