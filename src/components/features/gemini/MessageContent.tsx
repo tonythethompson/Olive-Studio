@@ -41,9 +41,13 @@ export function renderMessageContent(text: string) {
       });
       if (isBullet)
         return (
-          <li key={`${i}-${j}`} className="ml-3.5 list-disc text-xs text-slate-300 leading-relaxed my-0.5">
-            {elems}
-          </li>
+          <div
+            key={`${i}-${j}`}
+            className="ml-3.5 text-xs text-slate-300 leading-relaxed my-0.5 flex gap-1"
+          >
+            <span aria-hidden="true">•</span>
+            <span>{elems}</span>
+          </div>
         );
       if (line.trim().startsWith("### "))
         return (
