@@ -3,7 +3,38 @@ import { createInactivePasses, DEFAULT_PASSES } from "@/lib/defaultPasses";
 import { memoryOffloadFromRecipe } from "@/lib/memoryOffload";
 
 export const OLIVE_RECIPES_REPO = "microsoft/olive-recipes";
-export const OLIVE_RECIPES_BRANCH = "main";
+export const OLIVE_RECIPES_BRANCH_DEFAULT = "main";
+
+/**
+ * Returns the active recipes branch/ref.
+ * Reads from localStorage pin first, then falls back to default.
+ * Allows users to pin a specific tag/branch for reproducible recipe imports.
+ */
+export function getRecipesBranch(): string {
+  try {
+    const pinned = localStorage.getItem("olive:recipes-branch");
+    if (pinned && /^[A-Za-z0-9_./-]+$/.test(pinned)) return pinned;
+  } catch {
+    // localStorage unavailable (SSR / Tauri edge case)
+  }
+  return OLIVE_RECIPES_BRANCH_DEFAULT;
+}
+
+/** Pin the recipes branch/ref for subsequent fetches. Pass null to reset. */
+export function setRecipesBranch(ref: string | null): void {
+  try {
+    if (ref) {
+      localStorage.setItem("olive:recipes-branch", ref);
+    } else {
+      localStorage.removeItem("olive:recipes-branch");
+    }
+  } catch {
+    // noop
+  }
+}
+
+/** @deprecated Use getRecipesBranch() for dynamic resolution. */
+export const OLIVE_RECIPES_BRANCH = OLIVE_RECIPES_BRANCH_DEFAULT;
 
 export interface RecipeCatalogItem {
   name: string;
@@ -114,7 +145,7 @@ export async function fetchGitHubRecipeJson(
 export async function fetchOliveRecipesCatalogItem(
   item: RecipeCatalogItem,
   repo = OLIVE_RECIPES_REPO,
-  branch = OLIVE_RECIPES_BRANCH,
+  branch = getRecipesBranch(),
 ): Promise<unknown> {
   const { json } = await fetchGitHubRecipeJson(repo, branch, item.repoPath);
   return json;

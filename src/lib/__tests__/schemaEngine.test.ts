@@ -304,6 +304,124 @@ describe("validateRecipeSchema", () => {
     );
     expect(r.valid).toBe(true);
   });
+
+  it("accepts a valid adapters array", () => {
+    const r = validateRecipeSchema(
+      validRecipe({
+        adapters: [
+          { name: "support", path: "adapters/support.safetensors", rank: 16, alpha: 32 },
+          { name: "code", path: "adapters/code.safetensors", rank: 8, alpha: 16 },
+        ],
+      }),
+    );
+    expect(r.valid).toBe(true);
+    expect(r.errors).toEqual([]);
+  });
+
+  it("rejects non-array adapters", () => {
+    const r = validateRecipeSchema(validRecipe({ adapters: "not-an-array" }));
+    expect(r.valid).toBe(false);
+    expect(r.errors.some((e) => e.includes("adapters must be an array"))).toBe(true);
+  });
+
+  it("rejects non-object adapter entries", () => {
+    const r = validateRecipeSchema(validRecipe({ adapters: ["bad"] }));
+    expect(r.valid).toBe(false);
+    expect(r.errors.some((e) => e.includes("adapters[0] must be an object"))).toBe(true);
+  });
+
+  it("rejects empty adapter name", () => {
+    const r = validateRecipeSchema(
+      validRecipe({
+        adapters: [{ name: "", path: "adapters/x.safetensors", rank: 16, alpha: 32 }],
+      }),
+    );
+    expect(r.valid).toBe(false);
+    expect(r.errors.some((e) => e.includes("adapters[0].name"))).toBe(true);
+  });
+
+  it("rejects empty adapter path", () => {
+    const r = validateRecipeSchema(
+      validRecipe({
+        adapters: [{ name: "x", path: "", rank: 16, alpha: 32 }],
+      }),
+    );
+    expect(r.valid).toBe(false);
+    expect(r.errors.some((e) => e.includes("adapters[0].path"))).toBe(true);
+  });
+
+  it("rejects non-positive rank", () => {
+    const zero = validateRecipeSchema(
+      validRecipe({ adapters: [{ name: "x", path: "p", rank: 0, alpha: 32 }] }),
+    );
+    expect(zero.valid).toBe(false);
+    expect(zero.errors.some((e) => e.includes("adapters[0].rank must be a positive integer"))).toBe(true);
+
+    const negative = validateRecipeSchema(
+      validRecipe({ adapters: [{ name: "x", path: "p", rank: -2, alpha: 32 }] }),
+    );
+    expect(negative.valid).toBe(false);
+    expect(negative.errors.some((e) => e.includes("adapters[0].rank must be a positive integer"))).toBe(true);
+  });
+
+  it("rejects fractional rank", () => {
+    const r = validateRecipeSchema(
+      validRecipe({ adapters: [{ name: "x", path: "p", rank: 16.5, alpha: 32 }] }),
+    );
+    expect(r.valid).toBe(false);
+    expect(r.errors.some((e) => e.includes("adapters[0].rank must be a positive integer"))).toBe(true);
+  });
+
+  it("rejects non-positive alpha", () => {
+    const zero = validateRecipeSchema(
+      validRecipe({ adapters: [{ name: "x", path: "p", rank: 16, alpha: 0 }] }),
+    );
+    expect(zero.valid).toBe(false);
+    expect(zero.errors.some((e) => e.includes("adapters[0].alpha must be a positive finite number"))).toBe(
+      true,
+    );
+
+    const negative = validateRecipeSchema(
+      validRecipe({ adapters: [{ name: "x", path: "p", rank: 16, alpha: -1 }] }),
+    );
+    expect(negative.valid).toBe(false);
+    expect(
+      negative.errors.some((e) => e.includes("adapters[0].alpha must be a positive finite number")),
+    ).toBe(true);
+  });
+
+  it("rejects non-finite alpha", () => {
+    const r = validateRecipeSchema(
+      validRecipe({ adapters: [{ name: "x", path: "p", rank: 16, alpha: Number.NaN }] }),
+    );
+    expect(r.valid).toBe(false);
+    expect(r.errors.some((e) => e.includes("adapters[0].alpha must be a positive finite number"))).toBe(true);
+  });
+
+  it("rejects invalid targetModules", () => {
+    const nonArray = validateRecipeSchema(
+      validRecipe({ adapters: [{ name: "x", path: "p", rank: 16, alpha: 32, targetModules: "q_proj" }] }),
+    );
+    expect(nonArray.valid).toBe(false);
+    expect(nonArray.errors.some((e) => e.includes("adapters[0].targetModules"))).toBe(true);
+
+    const emptyString = validateRecipeSchema(
+      validRecipe({
+        adapters: [{ name: "x", path: "p", rank: 16, alpha: 32, targetModules: [""] }],
+      }),
+    );
+    expect(emptyString.valid).toBe(false);
+    expect(emptyString.errors.some((e) => e.includes("adapters[0].targetModules"))).toBe(true);
+  });
+
+  it("accepts valid targetModules", () => {
+    const r = validateRecipeSchema(
+      validRecipe({
+        adapters: [{ name: "x", path: "p", rank: 16, alpha: 32, targetModules: ["q_proj", "v_proj"] }],
+      }),
+    );
+    expect(r.valid).toBe(true);
+  });
 });
 
 // ─── reloadPassSchemas & getKbMetadata ────────────────────────────────────────

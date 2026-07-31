@@ -2,36 +2,36 @@
 
 @theme {
   /* Warm olive-tinted dark palette — kills the cold blue-black AI default */
-  --color-slate-50:  #F5F3EC;
-  --color-slate-100: #EDEAE0;
-  --color-slate-200: #DEDBD0;
-  --color-slate-300: #C8C5B8;
-  --color-slate-400: #8E9082;
+  --color-slate-50: #f5f3ec;
+  --color-slate-100: #edeae0;
+  --color-slate-200: #dedbd0;
+  --color-slate-300: #c8c5b8;
+  --color-slate-400: #8e9082;
   --color-slate-500: #636556;
   --color-slate-600: #474937;
   --color-slate-700: #343625;
-  --color-slate-750: #2A2C20;
-  --color-slate-800: #22241A;
-  --color-slate-850: #1C1E15;
-  --color-slate-900: #14150F;
-  --color-slate-950: #0D0E0A;
+  --color-slate-750: #2a2c20;
+  --color-slate-800: #22241a;
+  --color-slate-850: #1c1e15;
+  --color-slate-900: #14150f;
+  --color-slate-950: #0d0e0a;
 
   /* Olive accent — the actual color the product is named after */
-  --color-electric-blue: #8DA840;
-  --color-electric-blue-dark: #6B8A28;
-  --color-olive: #8DA840;
-  --color-olive-dark: #6B8A28;
+  --color-electric-blue: #8da840;
+  --color-electric-blue-dark: #6b8a28;
+  --color-olive: #8da840;
+  --color-olive-dark: #6b8a28;
 
   /* Adjusted greens for success states */
-  --color-emerald-accent: #7DB060;
-  --color-emerald-dark: #5C8A44;
+  --color-emerald-accent: #7db060;
+  --color-emerald-dark: #5c8a44;
 
   /* Flatten border-radius — precision tool, not marketing dashboard */
-  --radius-sm:  1px;
-  --radius:     2px;
-  --radius-md:  2px;
-  --radius-lg:  3px;
-  --radius-xl:  3px;
+  --radius-sm: 1px;
+  --radius: 2px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 3px;
   --radius-2xl: 4px;
   --radius-3xl: 4px;
 
@@ -72,16 +72,80 @@
 
 /* Olive pulse — replaces the cyan neon glow */
 @keyframes pulsar-glow {
-  0%, 100% {
+  0%,
+  100% {
     r: 3px;
-    filter: drop-shadow(0 0 2px #8DA840);
+    filter: drop-shadow(0 0 2px #8da840);
   }
   50% {
     r: 5px;
-    filter: drop-shadow(0 0 5px #8DA840);
+    filter: drop-shadow(0 0 5px #8da840);
   }
 }
 
 .glow-pulsar {
   animation: pulsar-glow 2s ease-in-out infinite;
+}
+
+/* ─── Print styles for PDF export via window.print() ─────────────────────── */
+@media print {
+  body {
+    background: #fff !important;
+    color: #1a1a2e !important;
+    font-size: 11px;
+  }
+
+  /* Hide app chrome — only print the report container */
+  .no-print,
+  nav,
+  header,
+  footer,
+  aside,
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* Ensure report content fills the page */
+  [data-print-area] {
+    position: static !important;
+    width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #fff !important;
+    color: #1a1a2e !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  /* Tables in print */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  th,
+  td {
+    border: 1px solid #cbd5e1;
+    padding: 4px 8px;
+    text-align: left;
+    font-size: 10px;
+  }
+  th {
+    background: #f1f5f9 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Avoid page breaks inside table rows */
+  tr {
+    page-break-inside: avoid;
+  }
+
+  a[href]::after {
+    content: none; /* Don't append URLs */
+  }
 }
