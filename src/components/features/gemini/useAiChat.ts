@@ -41,7 +41,8 @@ export function useAiChat(workspaceContext: unknown) {
         body: JSON.stringify({
           message: text,
           workspaceContext,
-          chatHistory: [...chatMessages, userMessage].map((m) => ({
+          // Prior turns only: the route appends `message` onto chatHistory for the LLM.
+          chatHistory: chatMessages.map((m) => ({
             role: m.sender === "user" ? "user" : "assistant",
             content: m.text,
           })),
