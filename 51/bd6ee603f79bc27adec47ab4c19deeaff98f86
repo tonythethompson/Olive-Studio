@@ -1,0 +1,24 @@
+src/components/features/LocalModelManager.test.tsx
+  s_6a89a9e818a987::t_731108b3751dcb 76,80
+src/components/features/BatchProcessingPanel.test.tsx
+  s_6a89a9e818a987::t_cdae3868cc4d00 29-30,32-33,42-48
+src/components/features/ExecutionWorkspace.test.tsx
+  s_6a89a9e818a987::t_0264860e1c4ad2 29-30,32-33
+  s_6a89a9e818a987::t_cda27dd82d5d6d 88-89,91-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "51bd6ee603f79bc27adec47ab4c19deeaff98f86",
+  "prompts": {},
+  "sessions": {
+    "s_6a89a9e818a987": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f15f6cfa-de6a-4d73-aa68-50a258d87c3b",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
