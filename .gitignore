@@ -13,6 +13,9 @@ coverage/
 # Storybook build output
 storybook-static/
 
+# Local dev scripts
+start-server.bat
+
 # Playwright
 /test-results/
 /playwright-report/

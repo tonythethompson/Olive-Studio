@@ -50,11 +50,49 @@ Consolidated release targets. Sources: `ORIGINAL_REQUEST.md` (R1-R7), `OLIVE_MCP
 
 ## Backlog / v0.4+
 
-- [ ] Tauri production packaging — NSIS/MSI installer (experimental)
-- [ ] MultiLoRA adapter support — multiple adapters per base model (experimental)
+- [ ] Tauri production packaging — NSIS/MSI installer (experimental, see criteria below)
+- [ ] MultiLoRA adapter support — multiple adapters per base model (experimental, see criteria below)
 - [ ] Cloud sync for recipe presets
 - [ ] Collaborative recipe sharing (GitHub Gist export)
 - [ ] ONNX Runtime WebGPU inference preview
+
+### Experimental Feature Graduation Criteria
+
+#### Tauri Desktop App
+
+**Risks / unknowns:**
+
+- NSIS/MSI code-signing requires a paid certificate; unsigned builds trigger SmartScreen warnings
+- Auto-update mechanism (tauri-updater) needs a stable hosting endpoint for update manifests
+- Binary size (~80 MB) vs. web-only deployment; CI must produce signed artifacts
+- WebView2 runtime availability on older Windows 10 LTSC images
+
+**Graduation criteria (all must be true):**
+
+- [ ] Signed installer (EV or OV cert) passes SmartScreen without warnings
+- [ ] Auto-update flow tested end-to-end (staged rollout → download → restart)
+- [ ] CI produces installer artifacts on every tagged release
+- [ ] Cold-start time ≤ 3 s on a 4 GB RAM VM (Windows 10 LTSC)
+
+**Re-evaluate:** after v0.3.0 ships (target 2026-08-15)
+
+#### MultiLoRA Adapter Support
+
+**Risks / unknowns:**
+
+- Olive `OrtTransformersOptimization` pass has limited multi-adapter graph fusion support
+- VRAM contention when loading >2 adapters simultaneously on consumer GPUs (≤ 12 GB)
+- No upstream Olive test coverage for adapter switching at inference time
+- Recipe schema must express adapter-to-slot mapping without breaking existing single-adapter recipes
+
+**Graduation criteria (all must be true):**
+
+- [ ] Olive ≥ 0.3.0 documents multi-adapter optimization as a supported pass configuration
+- [ ] End-to-end test: 2 adapters loaded, switched at runtime, correct output on ONNX Runtime 1.21+
+- [ ] VRAM budget stays within 110% of single-adapter baseline for 2-adapter config
+- [ ] Recipe schema extension reviewed and backward-compatible with v0.2.0 recipes
+
+**Re-evaluate:** after Olive 0.3.0 release (track microsoft/Olive#releases)
 
 ---
 

@@ -14,7 +14,12 @@ export default defineConfig({
     exclude: ["src/server/**", "src/components/**", "**/*.integration.test.ts", "node_modules/**"],
     coverage: {
       provider: "v8",
-      include: ["src/lib/oliveRecipeBuilder.ts", "src/lib/pipelineValidation.ts", "src/lib/recipePipeline.ts"],
+      include: [
+        "src/lib/**/*.ts",
+        "src/components/features/**/*.tsx",
+        "src/server/routes/**/*.ts",
+      ],
+      exclude: ["**/*.test.*", "**/__tests__/**"],
       reporter: ["text", "lcov"],
       reportsDirectory: "./coverage",
     },
