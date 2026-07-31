@@ -420,6 +420,30 @@ export function validateRecipeSchema(recipe: unknown): SchemaValidationResult {
     validateSystemRef(recipe.systems, recipe.engine.target, "target", errors);
   }
 
+  // ── adapters (optional, multi-LoRA scaffolding) ────────────────
+  if (recipe.adapters !== undefined) {
+    if (!Array.isArray(recipe.adapters)) {
+      errors.push("adapters must be an array when present");
+    } else {
+      for (let i = 0; i < recipe.adapters.length; i++) {
+        const adapter = recipe.adapters[i];
+        if (!isObject(adapter)) {
+          errors.push(`adapters[${i}] must be an object`);
+          continue;
+        }
+        if (typeof adapter.name !== "string" || adapter.name.trim().length === 0) {
+          errors.push(`adapters[${i}].name must be a non-empty string`);
+        }
+        if (typeof adapter.path !== "string" || adapter.path.trim().length === 0) {
+          errors.push(`adapters[${i}].path must be a non-empty string`);
+        }
+        if (adapter.rank !== undefined && typeof adapter.rank !== "number") {
+          errors.push(`adapters[${i}].rank must be a number when present`);
+        }
+      }
+    }
+  }
+
   return { valid: errors.length === 0, errors };
 }
 
