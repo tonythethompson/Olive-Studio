@@ -6,6 +6,9 @@ on:
       - "v*"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -44,6 +47,7 @@ jobs:
       - name: Build Tauri (NSIS + MSIX)
         run: pnpm exec tauri build --target x86_64-pc-windows-msvc --bundles nsis,msix
         env:
+          # Tauri updater artifact signing (not Windows Authenticode/MSIX code signing)
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
       - name: Upload NSIS artifact
@@ -59,10 +63,3 @@ jobs:
           name: olive-studio-msix
           path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msix/*.msix
           if-no-files-found: error
-
-      - name: Upload MSI artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: olive-studio-msi
-          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
-          if-no-files-found: warn

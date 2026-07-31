@@ -297,8 +297,8 @@ pub fn run() {
       navigate_main_to_server(app.handle(), actual_port);
 
       // Cold-start telemetry: log time from run() to first successful health-check
+      // Note: log plugin isn't registered yet, so use eprintln for guaranteed output.
       let elapsed = cold_start.elapsed();
-      log::info!("[cold-start] Ready in {}ms", elapsed.as_millis());
       eprintln!("[olive-studio] cold-start: {}ms", elapsed.as_millis());
 
       if cfg!(debug_assertions) {
