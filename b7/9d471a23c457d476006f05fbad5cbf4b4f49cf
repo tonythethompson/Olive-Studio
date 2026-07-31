@@ -1,0 +1,19 @@
+src/components/features/gemini/useAiChat.ts
+  s_f74081a1440ffc::t_2439e0b9b6842f 44-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b79d471a23c457d476006f05fbad5cbf4b4f49cf",
+  "prompts": {},
+  "sessions": {
+    "s_f74081a1440ffc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "de95d892-02e7-4b3c-acb5-94377e3c0210",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
