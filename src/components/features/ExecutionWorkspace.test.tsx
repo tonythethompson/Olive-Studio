@@ -26,9 +26,11 @@ vi.mock("@/lib/hooks", () => ({
 vi.mock("@/lib/hardwareProbe", () => ({
   fetchHardwareProbe: () =>
     Promise.resolve({
-      providers: ["CPUExecutionProvider"],
+      probedAt: "now",
+      platform: { cpuModel: "Test CPU", cpuCores: 8, os: "win", arch: "x64" },
       detectedProviders: ["CPUExecutionProvider"],
-      cpuModel: "Test CPU",
+      recommendedProvider: "CPUExecutionProvider",
+      notes: [],
     }),
   getProviderAvailabilityBlock: () => null,
 }));
@@ -83,9 +85,11 @@ import { ExecutionWorkspace } from "./ExecutionWorkspace";
 describe("ExecutionWorkspace", () => {
   useFetchRoutesMock({
     "hardware-probe": {
-      providers: ["CPUExecutionProvider"],
+      probedAt: "now",
+      platform: { cpuModel: "Test CPU", cpuCores: 8, os: "win", arch: "x64" },
       detectedProviders: ["CPUExecutionProvider"],
-      cpuModel: "Test CPU",
+      recommendedProvider: "CPUExecutionProvider",
+      notes: [],
     },
   });
 

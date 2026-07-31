@@ -26,9 +26,11 @@ vi.mock("@/lib/hooks", () => ({
 vi.mock("@/lib/hardwareProbe", () => ({
   fetchHardwareProbe: () =>
     Promise.resolve({
-      providers: ["CPUExecutionProvider"],
+      probedAt: "now",
+      platform: { cpuModel: "Test CPU", cpuCores: 8, os: "win", arch: "x64" },
       detectedProviders: ["CPUExecutionProvider"],
-      cpuModel: "Test CPU",
+      recommendedProvider: "CPUExecutionProvider",
+      notes: [],
     }),
   getSelectableProviders: () => ["CPUExecutionProvider"],
 }));
@@ -37,7 +39,13 @@ import { BatchProcessingPanel } from "./BatchProcessingPanel";
 
 describe("BatchProcessingPanel", () => {
   useFetchRoutesMock({
-    "hardware-probe": { providers: ["CPUExecutionProvider"] },
+    "hardware-probe": {
+      probedAt: "now",
+      platform: { cpuModel: "Test CPU", cpuCores: 8, os: "win", arch: "x64" },
+      detectedProviders: ["CPUExecutionProvider"],
+      recommendedProvider: "CPUExecutionProvider",
+      notes: [],
+    },
   });
 
   it("renders the panel heading", async () => {

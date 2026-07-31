@@ -73,11 +73,11 @@ describe("LocalModelManager — empty states", () => {
     });
   });
 
-  it("shows refreshing text while loading", () => {
+  it("shows refreshing text while loading", async () => {
     // Return a never-resolving promise to keep loading true
     fetchSpy.mockImplementation(() => new Promise(() => {}));
 
-    act(() => {
+    await act(async () => {
       render(<LocalModelManager isOpen />);
     });
 
