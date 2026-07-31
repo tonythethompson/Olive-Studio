@@ -1,0 +1,71 @@
+import { describe, it, expect, vi, beforeAll } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { createMockUIState } from "./__tests__/testUtils";
+
+const mockSetState = vi.fn();
+vi.mock("@/lib/stores/pipelineStore", () => ({
+  usePipelineState: () => ({ state: createMockUIState(), setState: mockSetState }),
+}));
+vi.mock("@/lib/aiWorkspaceContext", () => ({
+  buildAiWorkspaceContext: () => "ctx",
+  buildChatPresetQueries: () => ["Why is my model slow?"],
+  buildWorkspaceContextSummary: () => "summary",
+}));
+vi.mock("./LocalModelManager", () => ({
+  LocalModelManager: () => <div data-testid="lmm" />,
+}));
+
+import { GeminiSidebar } from "./GeminiSidebar";
+
+describe("GeminiSidebar flows", () => {
+  beforeAll(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("audits on open, chats, and renders provider settings", async () => {
+    const routes: Record<string, unknown> = {
+      "ai/provider": { source: "user", provider: "gemini", model: "gemini-2.5-flash" },
+      "analyze-state": { score: 82, level: "Good", summary: "Looks fine", suggestions: [] },
+      "ai/chat": { text: "**Because** quantization is off." },
+      "ai/models": { models: [{ id: "gemini-2.5-pro", label: "gemini-2.5-pro" }], source: "live" },
+      "local-health": { healthy: true, lmsInstalled: true },
+      "ollama-health": { healthy: true },
+    };
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation((url: unknown) => {
+      const urlStr = String(url);
+      const match = Object.entries(routes).find(([pattern]) => urlStr.includes(pattern));
+      return Promise.resolve(
+        new Response(JSON.stringify(match ? match[1] : {}), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    });
+
+    render(<GeminiSidebar isOpen onClose={vi.fn()} />);
+
+    // Header reflects the active provider and the audit auto-runs
+    await waitFor(() => expect(screen.getByText(/Google Gemini \/ gemini-2.5-flash/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Looks fine")).toBeTruthy());
+
+    // Chat tab: preset query round-trips through /api/ai/chat
+    fireEvent.click(screen.getByRole("button", { name: /^Chat$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Why is my model slow\?/ }));
+    await waitFor(() => expect(screen.getByText(/quantization is off/)).toBeTruthy());
+
+    // Settings tab: provider + model selects wired to the live catalog
+    fireEvent.click(screen.getByRole("button", { name: /^Settings$/ }));
+    const provider = screen.getByLabelText("AI provider") as HTMLSelectElement;
+    expect(provider.value).toBe("gemini");
+    await waitFor(() => expect(screen.getByText("Live catalog")).toBeTruthy());
+    // Router providers (compat mode) additionally offer a free-text model id
+    fireEvent.change(provider, { target: { value: "openrouter" } });
+    await waitFor(() =>
+      expect((screen.getByLabelText("AI model") as HTMLSelectElement).value).toBe("gemini-2.5-pro"),
+    );
+    expect(screen.getByPlaceholderText(/Or type a model id/)).toBeTruthy();
+    expect(screen.getByPlaceholderText(/localhost:11434/)).toBeTruthy();
+    expect(screen.getByText("1-Click Local AI Setup")).toBeTruthy();
+    expect(spy).toHaveBeenCalledWith("/api/ai/models", expect.objectContaining({ method: "POST" }));
+  });
+});

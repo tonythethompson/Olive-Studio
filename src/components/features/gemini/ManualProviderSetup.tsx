@@ -1,0 +1,251 @@
+import { Check, Key, RefreshCw } from "lucide-react";
+import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
+import { CATEGORY_LABELS, PROVIDER_OPTIONS, type ProviderId } from "./aiProviderCatalog";
+import { CodexAccountPanel } from "./CodexAccountPanel";
+import { DevinAccountPanel } from "./DevinAccountPanel";
+import type { AiProviderSettings } from "./useAiProviderSettings";
+
+interface ProvidersProp {
+  providers: AiProviderSettings;
+}
+
+/** Provider dropdown with category separators. */
+function ProviderSelect({ providers }: ProvidersProp) {
+  return (
+    <div>
+      <label htmlFor="gemini-settings-provider" className="text-xs text-slate-400 mb-1 block">
+        Provider
+      </label>
+      <select
+        id="gemini-settings-provider"
+        aria-label="AI provider"
+        value={providers.settingsProvider}
+        onChange={(e) => providers.selectProvider(e.target.value as ProviderId)}
+        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue cursor-pointer"
+      >
+        {PROVIDER_OPTIONS.reduce<ReactNode[]>((acc, p, i) => {
+          const prev = i > 0 ? PROVIDER_OPTIONS[i - 1] : null;
+          if (!prev || prev.category !== p.category) {
+            acc.push(
+              <option key={`cat-${p.category}`} value="" disabled className="text-slate-500 font-bold">
+                ── {CATEGORY_LABELS[p.category] ?? p.category} ──
+              </option>,
+            );
+          }
+          acc.push(
+            <option key={p.id} value={p.id}>
+              {p.name}
+              {p.description ? ` — ${p.description}` : ""}
+            </option>,
+          );
+          return acc;
+        }, [])}
+      </select>
+    </div>
+  );
+}
+
+/** "Live catalog" / "Defaults" badge plus the manual refresh button. */
+function ModelSourceBadge({ providers }: ProvidersProp) {
+  const { modelsLoading, modelsSource } = providers;
+  return (
+    <div className="flex items-center gap-2">
+      {modelsLoading ? (
+        <span className="text-[10px] text-slate-500 flex items-center gap-1">
+          <RefreshCw className="h-2.5 w-2.5 animate-spin" />
+          Refreshing…
+        </span>
+      ) : modelsSource === "live" ? (
+        <span className="text-[10px] text-emerald-500/80">Live catalog</span>
+      ) : modelsSource === "fallback" ? (
+        <span className="text-[10px] text-slate-500">Defaults</span>
+      ) : null}
+      <button
+        type="button"
+        title="Refresh model list from provider"
+        disabled={modelsLoading}
+        onClick={() => providers.refreshModels()}
+        className="text-[10px] text-slate-400 hover:text-electric-blue disabled:opacity-40 flex items-center gap-0.5"
+      >
+        <RefreshCw className={cn("h-2.5 w-2.5", modelsLoading && "animate-spin")} />
+        Refresh
+      </button>
+    </div>
+  );
+}
+
+/** Model input: free text for openai-compat, list + free text for routers, list otherwise. */
+function ModelInput({ providers }: ProvidersProp) {
+  const { isCompatMode, settingsProvider, displayedModels, customModel, settingsModel } = providers;
+
+  if (isCompatMode && settingsProvider === "openai-compat") {
+    return (
+      <input
+        placeholder="Model name (e.g. llama3.1:8b, deepseek-r1)"
+        value={customModel}
+        onChange={(e) => providers.setCustomModel(e.target.value)}
+        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+      />
+    );
+  }
+
+  if (isCompatMode && displayedModels.length > 0) {
+    // OpenAI-compat routers (xAI, OpenRouter, …): show live list + allow free text
+    const selected = customModel || settingsModel;
+    const isKnown = displayedModels.some((m) => m.id === selected);
+    return (
+      <div className="space-y-1.5">
+        <select
+          id="gemini-settings-model"
+          aria-label="AI model"
+          value={isKnown ? selected : ""}
+          onChange={(e) => {
+            providers.setSettingsModel(e.target.value);
+            providers.setCustomModel(e.target.value);
+          }}
+          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue cursor-pointer"
+        >
+          {!isKnown && <option value="">Select a model…</option>}
+          {displayedModels.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+        <input
+          placeholder="Or type a model id…"
+          value={customModel}
+          onChange={(e) => {
+            providers.setCustomModel(e.target.value);
+            providers.setSettingsModel(e.target.value);
+          }}
+          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <select
+      id="gemini-settings-model"
+      aria-label="AI model"
+      value={settingsModel}
+      onChange={(e) => providers.setSettingsModel(e.target.value)}
+      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue cursor-pointer"
+    >
+      {displayedModels.map((m) => (
+        <option key={m.id} value={m.id}>
+          {m.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function ModelField({ providers }: ProvidersProp) {
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <label htmlFor="gemini-settings-model" className="text-xs text-slate-400 block">
+          Model
+        </label>
+        <ModelSourceBadge providers={providers} />
+      </div>
+      <ModelInput providers={providers} />
+      {providers.modelsHint && (
+        <p className="mt-1 text-[10px] text-slate-500 leading-snug">{providers.modelsHint}</p>
+      )}
+    </div>
+  );
+}
+
+/** Base URL (compat providers only) + API key input and the save button. */
+function ApiKeyForm({ providers }: ProvidersProp) {
+  const { isCompatMode, providerOption, settingsBaseUrl, settingsApiKey, isSavingProvider } = providers;
+  return (
+    <>
+      {isCompatMode && (
+        <div>
+          <label className="text-xs text-slate-400 mb-1 block">Base URL</label>
+          <input
+            type="text"
+            placeholder="http://localhost:11434/v1"
+            value={settingsBaseUrl}
+            onChange={(e) => providers.setSettingsBaseUrl(e.target.value)}
+            onBlur={() => providers.refreshModelsForTypedBaseUrl()}
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+          />
+          <p className="text-[10px] text-slate-600 mt-1">Works with LM Studio, vLLM, Ollama, etc.</p>
+        </div>
+      )}
+
+      <div>
+        <label className="text-xs text-slate-400 mb-1 flex items-center gap-1.5 block">
+          <Key className="h-3 w-3" />
+          API Key
+          {"keyEnvVar" in providerOption && providerOption.keyEnvVar && (
+            <span className="text-[9px] text-slate-600">
+              (or env: <code className="font-mono">{providerOption.keyEnvVar}</code>)
+            </span>
+          )}
+        </label>
+        <input
+          type="password"
+          autoComplete="off"
+          placeholder="Stored in memory only, never persisted to disk"
+          value={settingsApiKey}
+          onChange={(e) => providers.setSettingsApiKey(e.target.value)}
+          onBlur={() => providers.refreshModelsForTypedApiKey()}
+          onKeyDown={(e) => e.key === "Enter" && void providers.saveProvider()}
+          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={() => void providers.saveProvider()}
+        disabled={isSavingProvider}
+        className="w-full h-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer"
+      >
+        {isSavingProvider ? (
+          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Check className="h-3.5 w-3.5" />
+        )}
+        Save & Activate
+      </button>
+    </>
+  );
+}
+
+/** Manual provider setup: pick provider + model, then sign in or save a key. */
+export function ManualProviderSetup({ providers }: ProvidersProp) {
+  const { settingsProvider, providerOption, providerSaveError } = providers;
+  return (
+    <div className="space-y-3">
+      <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">
+        Manual Provider Setup
+      </p>
+
+      <ProviderSelect providers={providers} />
+      <ModelField providers={providers} />
+
+      {settingsProvider === "codex" ? (
+        <CodexAccountPanel providers={providers} />
+      ) : settingsProvider === "devin" ? (
+        <DevinAccountPanel providers={providers} />
+      ) : (
+        <ApiKeyForm providers={providers} />
+      )}
+
+      {providerSaveError && <p className="text-xs text-rose-400">{providerSaveError}</p>}
+
+      {"docsUrl" in providerOption && providerOption.docsUrl && (
+        <p className="text-[10px] text-slate-600 text-center">
+          Docs: <span className="font-mono text-slate-500">{providerOption.docsUrl}</span>
+        </p>
+      )}
+    </div>
+  );
+}
