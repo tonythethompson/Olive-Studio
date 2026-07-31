@@ -66,8 +66,10 @@ is complete.
 interface AdapterConfig {
   name: string;
   path: string;
-  rank: number;        // must be a finite number (not NaN/Infinity); NOT required to be positive or integer
-  alpha: number;       // must be a finite number; NOT required to be positive
+  /** Positive integer (> 0). Matches the LoRA pass `lora_rank` constraint. */
+  rank: number;
+  /** Positive finite number (> 0). */
+  alpha: number;
   targetModules?: string[]; // e.g. ["q_proj", "v_proj"]
 }
 
@@ -79,17 +81,18 @@ interface OliveRecipe {
 ```
 
 **Validation notes (as of `validateRecipeSchema` in `src/lib/schemaEngine.ts`):**
-- `rank` and `alpha` are only validated to be finite numbers (not `NaN` or `Infinity`).
-- They are NOT currently required to be positive or integers by the schema validator.
-- This may be tightened in future versions to enforce positivity and/or integer constraints for `rank`.
+- `rank` must be a positive integer (`> 0`).
+- `alpha` must be a positive finite number (`> 0`, not `NaN` or `Infinity`).
+- `targetModules`, when present, must be an array of non-empty strings.
 
 ## VRAM Budget Formula
 
-```
+```text
 total_vram = base_model_vram + sum(adapter_delta_i for i in active_adapters)
 
 where:
   base_model_vram = estimated VRAM for base model (from buildMaxMemoryMap)
+  active_adapters = enabled entries in adapters[]
   adapter_delta_i = rank_i * len(targetModules_i) * hidden_dim * bytes_per_param * 2 / 1e9  (GB)
     - rank_i, targetModules_i: this adapter's own rank and target module list
     - bytes_per_param: dtype-dependent (e.g. 4 for fp32, 2 for fp16/bf16)
@@ -135,8 +138,8 @@ runtime using the ONNX Runtime GenAI `Adapters` API:
 ```python
 # Load adapters at runtime
 adapters = og.Adapters(model)
-adapters.load("adapters/customer-support", "customer-support")
-adapters.load("adapters/code-gen", "code-generation")
+adapters.load("adapters/customer-support.onnx_adapter", "customer-support")
+adapters.load("adapters/code-gen.onnx_adapter", "code-generation")
 
 # Switch active adapter during generation
 generator = og.Generator(model, params)
