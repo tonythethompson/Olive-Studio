@@ -14,7 +14,7 @@ services:
       - ./olive_mcp_server/knowledge_base:/app/olive_mcp_server/knowledge_base:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/sse')"]
+      test: ["CMD", "python", "-c", "import urllib.request; r=urllib.request.urlopen('http://localhost:8000/sse',timeout=3); r.close()"]
       interval: 30s
       timeout: 5s
       retries: 3

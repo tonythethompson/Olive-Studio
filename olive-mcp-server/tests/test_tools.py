@@ -305,6 +305,18 @@ def test_no_version_warning_within_range():
     assert "version_warning" not in result
 
 
+def test_version_warning_semver_ordering():
+    """Multi-digit minor versions must compare numerically, not lexicographically."""
+    # 0.10.0 > 0.4.0 numerically, but "0.10.0" < "0.4.0" lexicographically
+    result = get_model_compatibility(
+        model_name="Llama 3.1 8B",
+        framework="PyTorch",
+        olive_version="0.10.0",
+    )
+    assert "version_warning" in result
+    assert "outside the tested range" in result["version_warning"]
+
+
 def test_model_index_returns_consistent_results():
     """Dict-indexed lookup should return same data as linear scan would."""
     result = get_model_compatibility(

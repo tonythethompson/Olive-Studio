@@ -35,7 +35,7 @@ jobs:
 
       - name: Check PyPI for new olive-ai versions
         run: |
-          LATEST=$(python -c "import urllib.request, json; data = json.loads(urllib.request.urlopen('https://pypi.org/pypi/olive-ai/json').read()); print(data['info']['version'])")
+          LATEST=$(python -c "import urllib.request, json; data = json.loads(urllib.request.urlopen('https://pypi.org/pypi/olive-ai/json', timeout=15).read()); print(data['info']['version'])")
           echo "Latest olive-ai on PyPI: $LATEST"
           echo "olive_latest_version=$LATEST" >> "$GITHUB_OUTPUT"
         id: pypi

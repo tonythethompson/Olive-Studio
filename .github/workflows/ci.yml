@@ -134,4 +134,4 @@ jobs:
 
       - name: Verify image runs
         run: |
-          docker run --rm olive-mcp-server:test python -c "from olive_mcp_server.mcp_server import mcp; print(f'Tools: {len(mcp._tool_manager._tools)}')"
+          docker run --rm --entrypoint python olive-mcp-server:test -c "from olive_mcp_server.mcp_server import mcp; tools = mcp._tool_manager._tools; print(f'Tools: {len(tools)}'); assert len(tools) >= 10, f'Expected >=10 tools, got {len(tools)}'"

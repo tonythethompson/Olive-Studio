@@ -47,7 +47,12 @@ function etagConditional(req: Request, res: Response, etag: string, body: string
   res.setHeader("ETag", etag);
   res.setHeader("Cache-Control", "private, max-age=60");
   const clientEtag = req.headers["if-none-match"];
-  if (clientEtag === etag) {
+  // If-None-Match may be a comma-separated list or "*"; handle weak ETags (W/…)
+  const matches =
+    clientEtag === "*" ||
+    (typeof clientEtag === "string" &&
+      clientEtag.split(",").some((e) => e.trim().replace(/^W\//, "") === etag));
+  if (matches) {
     res.status(304).end();
     return true;
   }
@@ -138,7 +143,11 @@ export function mountGithubRoutes(router: Router): void {
         return res.status(413).json({ error: "Remote file is too large to proxy." });
       }
       // Validate JSON before caching
-      JSON.parse(text);
+      try {
+        JSON.parse(text);
+      } catch {
+        return res.status(415).json({ error: "Remote file is not valid JSON." });
+      }
       const etag = cacheSet(cacheKey, text);
       etagConditional(req, res, etag, text);
     } catch (error: unknown) {

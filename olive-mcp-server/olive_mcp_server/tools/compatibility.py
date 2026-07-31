@@ -77,11 +77,17 @@ def get_model_compatibility(
         v_min = version_support.get("min", "")
         v_max = version_support.get("max", "")
         if v_min and v_max:
-            if olive_version < v_min or olive_version > v_max:
-                result["version_warning"] = (
-                    f"Olive {olive_version} is outside the tested range "
-                    f"({v_min} – {v_max}). Pass configurations may differ."
-                )
+            from packaging.version import Version, InvalidVersion
+    
+            try:
+                ov = Version(olive_version)
+                if ov < Version(v_min) or ov > Version(v_max):
+                    result["version_warning"] = (
+                        f"Olive {olive_version} is outside the tested range "
+                        f"({v_min} \u2013 {v_max}). Pass configurations may differ."
+                    )
+            except InvalidVersion:
+                pass  # non-semver string; skip comparison
 
     if hardware_target:
         target = normalize_hardware(hardware_target)

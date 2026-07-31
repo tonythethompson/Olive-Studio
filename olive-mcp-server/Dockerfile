@@ -43,6 +43,6 @@ ENV MCP_HOST=0.0.0.0
 ENV MCP_PORT=8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/sse')" || exit 1
+  CMD python -c "import urllib.request; r=urllib.request.urlopen('http://localhost:8000/sse',timeout=3); r.close()" || exit 1
 
 ENTRYPOINT ["python", "-m", "olive_mcp_server"]
