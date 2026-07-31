@@ -73,7 +73,7 @@ export function isFeatureEnabled(key: FlagKey): boolean {
 
 /**
  * Persist a feature flag override to localStorage.
- * Pass null to clear the override and revert to default.
+ * Pass null to clear the localStorage override and fall back to the URL override or default.
  */
 export function setFeatureFlag(key: FlagKey, enabled: boolean | null): void {
   try {

@@ -93,7 +93,7 @@ For GPUs with <= 12GB VRAM:
 
 - Hard-cap at 2 adapters maximum
 - Reduce `buildMaxMemoryMap()` GPU budget from 90% to 80% when multi-adapter active
-- Extends existing logic in `src/lib/memoryOffload.ts` L27
+- Extends existing logic in `src/lib/memoryOffload.ts` (`buildMaxMemoryMap()`)
 
 ## UI Integration
 
