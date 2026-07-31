@@ -118,3 +118,20 @@ jobs:
 
       - name: Pytest
         run: python -m pytest tests -q --tb=short
+
+  docker-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Build MCP server Docker image
+        run: docker build -t olive-mcp-server:test ./olive-mcp-server
+
+      - name: Verify image runs
+        run: |
+          docker run --rm olive-mcp-server:test python -c "from olive_mcp_server.mcp_server import mcp; print(f'Tools: {len(mcp._tool_manager._tools)}')"
