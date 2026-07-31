@@ -26,22 +26,21 @@ jobs:
         with:
           result-encoding: string
           script: |
-            // Determine PR number from workflow_dispatch input or pull_request event
+            // Determine PR number from workflow_dispatch input, pull_request event, or check_suite
             let prNumber = context.payload.inputs?.pr_number;
             
             if (!prNumber && context.payload.pull_request) {
               prNumber = context.payload.pull_request.number;
             }
             
+            // For check_suite events, get PR from check runs
+            if (!prNumber && context.payload.check_suite?.pull_requests?.length > 0) {
+              prNumber = context.payload.check_suite.pull_requests[0].number;
+            }
+            
             if (!prNumber) {
               console.log('No PR number found');
               return 'no_pr';
-            }
-            
-            // For auto-trigger, only run for dependabot
-            if (context.eventName === 'pull_request' && context.actor !== 'dependabot[bot]') {
-              console.log('Not a Dependabot PR, skipping');
-              return 'not_dependabot';
             }
             
             console.log(`Checking PR #${prNumber}`);
@@ -53,8 +52,8 @@ jobs:
               pull_number: parseInt(prNumber),
             });
             
-            // Check if PR is from Dependabot (for manual trigger)
-            if (context.eventName === 'workflow_dispatch' && pr.user.login !== 'dependabot[bot]') {
+            // Check if PR is from Dependabot
+            if (pr.user.login !== 'dependabot[bot]') {
               console.log('PR is not from Dependabot');
               return 'not_dependabot';
             }
@@ -100,16 +99,12 @@ jobs:
             }
             
             console.log('All checks passed! PR is ready to merge.');
-            console.log(`::set-output name=pr_number::${prNumber}`);
             return 'ready';
 
       - name: Merge the PR
         if: steps.check.outputs.result == 'ready'
         run: |
-          pr_number="${{ github.event.inputs.pr_number || github.event.pull_request.number }}"
-          if [ -z "$pr_number" ]; then
-            pr_number="${{ steps.check.outputs.pr_number }}"
-          fi
+          pr_number="${{ github.event.inputs.pr_number || github.event.pull_request.number || github.event.check_suite.pull_requests[0].number }}"
           gh pr merge --admin --merge "$pr_number"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
