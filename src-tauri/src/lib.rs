@@ -240,8 +240,6 @@ fn navigate_main_to_server(app: &AppHandle, port: u16) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  let cold_start = Instant::now();
-
   let port: u16 = std::env::var("PORT")
     .ok()
     .and_then(|s| s.parse().ok())
@@ -295,11 +293,6 @@ pub fn run() {
 
       // Always land on Express origin so relative fetch("/api/...") works.
       navigate_main_to_server(app.handle(), actual_port);
-
-      // Cold-start telemetry: log time from run() to first successful health-check
-      // Note: log plugin isn't registered yet, so use eprintln for guaranteed output.
-      let elapsed = cold_start.elapsed();
-      eprintln!("[olive-studio] cold-start: {}ms", elapsed.as_millis());
 
       if cfg!(debug_assertions) {
         app.handle().plugin(
