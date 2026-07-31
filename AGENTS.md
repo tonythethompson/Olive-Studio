@@ -40,13 +40,13 @@ src-tauri/                 Tauri 2 shell (optional — app runs without it)
 
 ## Testing Tiers
 
-| Config file                        | Scope                              | Command                 |
-| ---------------------------------- | ---------------------------------- | ----------------------- |
-| `vitest.config.ts`                 | src/lib/ unit tests                | `pnpm test`             |
-| `vitest.server.config.ts`          | src/server/ unit tests             | `pnpm test:server`      |
-| `vitest.integration.config.ts`     | Integration (all externals mocked) | `pnpm test:integration` |
-| `vitest.component.config.ts`       | Component tests (jsdom)            | `pnpm test:component`   |
-| `olive-mcp-server/tests/` (pytest) | Python MCP tools                   | `pytest tests -q`       |
+| Config file                        | Scope                              | Command                                            |
+| ---------------------------------- | ---------------------------------- | -------------------------------------------------- |
+| `vitest.config.ts`                 | src/lib/ unit tests                | `pnpm test`                                        |
+| `vitest.server.config.ts`          | src/server/ unit tests             | `pnpm test:server`                                 |
+| `vitest.integration.config.ts`     | Integration (all externals mocked) | `pnpm test:integration`                            |
+| `vitest.component.config.ts`       | Component tests (jsdom)            | `pnpm test:component`                              |
+| `olive-mcp-server/tests/` (pytest) | Python MCP tools                   | `cd olive-mcp-server && python -m pytest tests -q` |
 
 ## Gotchas
 

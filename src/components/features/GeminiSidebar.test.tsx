@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
 
@@ -63,11 +63,7 @@ describe("GeminiSidebar", () => {
   it("calls onClose when close button is clicked", () => {
     const onClose = vi.fn();
     render(<GeminiSidebar isOpen={true} onClose={onClose} />);
-    // The close button is an icon-only <button> with <X /> — find via getAllByRole
-    const buttons = screen.getAllByRole("button");
-    // First button in the sidebar header is the dismiss (X) control
-    const closeButton = buttons[0];
-    expect(closeButton).toBeDefined();
+    const closeButton = screen.getByRole("button", { name: /close sidebar/i });
     fireEvent.click(closeButton);
     expect(onClose).toHaveBeenCalled();
   });
