@@ -90,8 +90,8 @@ function isSafeGitHubComponent(value: string, pattern: RegExp): boolean {
 export function mountGithubRoutes(router: Router): void {
   // ─── Paginated Recipe Catalog ────────────────────────────────────────────
   router.get("/github/catalog", githubProxyRateLimit, async (req, res) => {
-    const page = Math.max(1, parseInt(String(req.query.page || "1"), 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize || "50"), 10)));
+    const page = Math.max(1, parseInt(String(req.query.page || "1"), 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize || "50"), 10) || 50));
     const arch = String(req.query.arch || "").toLowerCase();
     const device = String(req.query.device || "").toLowerCase();
 
