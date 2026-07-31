@@ -20,8 +20,8 @@ importers:
         specifier: ^2.8.0
         version: 2.13.0(supports-color@7.2.0)
       '@mendable/firecrawl-js':
-        specifier: ^4.30.1
-        version: 4.30.1(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
+        specifier: ^4.31.1
+        version: 4.31.1(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
       '@openai/codex-sdk':
         specifier: ^0.145.0
         version: 0.145.0
@@ -883,8 +883,8 @@ packages:
       '@types/react': '>=16'
       react: '>=16'
 
-  '@mendable/firecrawl-js@4.30.1':
-    resolution: {integrity: sha512-IgHPJySbobF6cQox9d/A7wJhplwdfuCzCawIKnI06NeF3AJIBASdEV/GWugB4zH1Hbq6VsmpMPClFBP/YN+meA==}
+  '@mendable/firecrawl-js@4.31.1':
+    resolution: {integrity: sha512-JBMlAXuFEzUB2CXDzvVEBdqjjChSDJ0RScXwuhGSD4/dhimj1GY23Q7vmcd2HpJnA0EAlNs0ENC+JICCFOtKsA==}
     engines: {node: '>=22.0.0'}
 
   '@napi-rs/wasm-runtime@1.1.6':
@@ -2962,8 +2962,8 @@ packages:
     resolution: {integrity: sha512-78/PXT1wlLLDgTzDs7sjq9hzz0vXD+zn+7wypEe4fXQxCmdmqfGsEPQxmiCSQI3ajFV91bVSsvNtrJRiW6nGng==}
     engines: {node: '>=10'}
 
-  firecrawl@4.16.0:
-    resolution: {integrity: sha512-7SJ/FWhZBtW2gTCE/BsvU+gbfIpfTq+D9IH82l9MacauLVptaY6EdYAhrK3YSMC9yr5NxvxRcpZKcXG/nqjiiQ==}
+  firecrawl@4.30.1:
+    resolution: {integrity: sha512-gW9nId70DeSNFIwW8YX8XINvr2xslCxjYLcaWe6As0NFPnTeaP0yQmKWNOA77vk/PcZaeGFrwFdR6s3eqBZiwA==}
     engines: {node: '>=22.0.0'}
 
   flat-cache@4.0.1:
@@ -5458,10 +5458,10 @@ snapshots:
       '@types/react': 19.2.17
       react: 19.2.8
 
-  '@mendable/firecrawl-js@4.30.1(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)':
+  '@mendable/firecrawl-js@4.31.1(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)':
     dependencies:
       axios: 1.18.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
-      firecrawl: 4.16.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
+      firecrawl: 4.30.1(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
       typescript-event-target: 1.1.2
       zod: 3.25.76
       zod-to-json-schema: 3.25.2(zod@3.25.76)
@@ -7622,7 +7622,7 @@ snapshots:
       locate-path: 6.0.0
       path-exists: 4.0.0
 
-  firecrawl@4.16.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0):
+  firecrawl@4.30.1(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0):
     dependencies:
       axios: 1.18.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
       typescript-event-target: 1.1.2
