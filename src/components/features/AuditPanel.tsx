@@ -55,7 +55,7 @@ export function AuditPanel({
             </span>
           </div>
           <div>
-            <h4 className="text-sm font-medium text-slate-100">Pipeline efficiency</h4>
+            <h3 className="text-sm font-medium text-slate-100">Pipeline efficiency</h3>
             <div
               className={`mt-0.5 text-[10px] inline-block px-1.5 py-0.5 rounded font-mono font-bold ${
                 analysis.level === "Optimized"

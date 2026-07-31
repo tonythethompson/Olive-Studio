@@ -55,7 +55,7 @@ export function RecipeGraphView({
   /* eslint-enable react-hooks/exhaustive-deps */
 
   return (
-    <div className="flex flex-col h-full overflow-x-auto">
+    <div className="flex flex-col h-full min-h-[560px] overflow-x-auto">
       <GraphCanvas
         state={state}
         selectedNodeId={selectedNodeId}
@@ -64,7 +64,7 @@ export function RecipeGraphView({
         layoutTick={layoutTick}
         onLayoutTick={bumpLayout}
       />
-      <div className="px-3 py-2">
+      <div className="px-3 py-1.5 border-t border-slate-900/80">
         <RecipeValidationPanel state={state} setState={setState} />
       </div>
       <StepInspector

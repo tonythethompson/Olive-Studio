@@ -62,7 +62,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const [compatValidated, setCompatValidated] = useState(false);
   const [mcpParamWarnings, setMcpParamWarnings] = useState<McpParamWarning[]>([]);
   const [mcpParamLoading, setMcpParamLoading] = useState(false);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [showCompatDetails, setShowCompatDetails] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const forceRefreshRef = useRef(false);
@@ -282,11 +282,11 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     return (
       <div
         data-testid="recipe-validation-panel"
-        className="rounded-lg border border-emerald-800/50 bg-emerald-950/20 p-3"
+        className="rounded-lg border border-emerald-800/50 bg-emerald-950/20 px-3 py-2"
       >
         <div className="flex items-center gap-2 text-emerald-400">
-          <CheckCircle className="h-4 w-4" />
-          <span className="text-xs font-medium">Recipe validated — no issues found</span>
+          <CheckCircle className="h-4 w-4 shrink-0" />
+          <span className="text-xs font-medium">Recipe validated. No issues found.</span>
         </div>
       </div>
     );

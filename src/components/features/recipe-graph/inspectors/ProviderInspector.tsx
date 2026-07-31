@@ -7,6 +7,7 @@ import {
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
 import { prepareProviderChange } from "@/lib/pipelineValidation";
+import { navigatePipeline } from "@/lib/pipelineNavigation";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { UIState } from "@/types";
 import { AlertTriangle, Cpu as TargetIcon, Loader2 } from "lucide-react";
@@ -63,9 +64,7 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
         </p>
         <button
           type="button"
-          onClick={() =>
-            document.getElementById("ihv")?.scrollIntoView({ behavior: "smooth", block: "start" })
-          }
+          onClick={() => navigatePipeline("ihv")}
           className="mt-2 text-[10px] text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer"
         >
           Full hardware options in step 02

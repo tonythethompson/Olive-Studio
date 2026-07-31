@@ -50,6 +50,7 @@ import {
   List,
   RefreshCw,
   HardDrive,
+  XCircle,
 } from "lucide-react";
 
 export { getProviderConflicts };
@@ -397,7 +398,7 @@ export function IHVIntegrationPanel({
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <HardDrive className="h-4 w-4 text-electric-blue shrink-0" />
-                  <h4 className="text-sm font-medium text-slate-200">Detected on this machine</h4>
+                  <h3 className="text-sm font-medium text-slate-200">Detected on this machine</h3>
                   {probeLoading && <span className="text-[10px] font-mono text-slate-500">Scanning…</span>}
                 </div>
                 {probeError ? (
@@ -598,26 +599,31 @@ export function IHVIntegrationPanel({
                   let cardClasses =
                     "relative flex flex-col rounded-xl border p-4.5 transition-all duration-200 cursor-pointer ";
                   let badgeText = "";
+                  let BadgeIcon: typeof CheckCircle | null = null;
                   let badgeColor = "";
 
                   if (isSelected) {
                     if (cardBlocked) {
                       cardClasses += "border-rose-500 bg-rose-500/5";
                       badgeText = cardHardwareBlocked ? "Unavailable hardware" : "Critical Conflict";
+                      BadgeIcon = XCircle;
                       badgeColor = "bg-rose-500/10 text-rose-400 border-rose-550/25";
                     } else if (cardHasWarning) {
                       cardClasses += "border-amber-500 bg-amber-500/5";
                       badgeText = "Warning Conflict";
+                      BadgeIcon = AlertTriangle;
                       badgeColor = "bg-amber-500/10 text-amber-400 border-amber-550/25";
                     } else {
                       cardClasses += "border-electric-blue bg-electric-blue/5";
                       badgeText = !detectedLocally && !probeLoading ? "Active (not local)" : "Active Target";
+                      BadgeIcon = CheckCircle;
                       badgeColor = "bg-electric-blue/10 text-electric-blue border-electric-blue/20";
                     }
                   } else if (cardHardwareBlocked) {
                     cardClasses +=
                       "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-75 hover:border-slate-700";
                     badgeText = "Not on this system";
+                    BadgeIcon = XCircle;
                     badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
                   } else if (
                     p.id === "NvTensorRTRTXExecutionProvider" &&
@@ -626,26 +632,31 @@ export function IHVIntegrationPanel({
                   ) {
                     cardClasses += "border-amber-900/40 bg-amber-950/10 opacity-95 hover:border-amber-500/40";
                     badgeText = "Plugin install needed";
+                    BadgeIcon = AlertTriangle;
                     badgeColor = "bg-amber-500/10 text-amber-400 border-amber-500/20";
                   } else if (!detectedLocally && !probeLoading) {
                     cardClasses +=
                       "border-slate-850/60 bg-zinc-950/30 opacity-80 hover:opacity-100 hover:border-slate-700";
                     badgeText = "Not on this system";
+                    BadgeIcon = AlertCircle;
                     badgeColor = "bg-slate-800/80 text-slate-500 border-slate-700/60";
                   } else if (cardHasCritical) {
                     cardClasses +=
                       "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-100 hover:border-rose-500/40";
                     badgeText = "Incompatible";
+                    BadgeIcon = XCircle;
                     badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
                   } else if (cardHasWarning) {
                     cardClasses +=
                       "border-amber-950/35 bg-zinc-950/40 opacity-75 hover:opacity-100 hover:border-amber-500/40";
                     badgeText = "Needs Adjust";
+                    BadgeIcon = AlertTriangle;
                     badgeColor = "bg-amber-500/5 text-amber-400/80 border-amber-550/15";
                   } else {
                     cardClasses +=
                       "border-slate-800/80 bg-slate-900/40 hover:bg-slate-900 hover:border-slate-700";
                     badgeText = "Compatible with active passes";
+                    BadgeIcon = CheckCircle;
                     badgeColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/15";
                   }
 
@@ -704,8 +715,9 @@ export function IHVIntegrationPanel({
                               {p.name}
                             </p>
                             <span
-                              className={`text-[9px] font-mono uppercase tracking-wider font-extrabold px-2 py-0.5 rounded border ${badgeColor}`}
+                              className={`inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider font-extrabold px-2 py-0.5 rounded border ${badgeColor}`}
                             >
+                              {BadgeIcon ? <BadgeIcon className="h-3 w-3" aria-hidden /> : null}
                               {badgeText}
                             </span>
                           </div>
@@ -952,6 +964,7 @@ export function IHVIntegrationPanel({
                   )}
                 </div>
                 <Switch
+                  aria-label="Hybrid memory offload"
                   disabled={!isMemoryOffloadAvailable(state)}
                   checked={isMemoryOffloadAvailable(state) && state.memoryOffload === "auto"}
                   onCheckedChange={(checked) => setState({ memoryOffload: checked ? "auto" : "gpu_only" })}
@@ -1024,10 +1037,10 @@ export function IHVIntegrationPanel({
             <div className="flex flex-col gap-6 mb-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
                     <Activity className="h-4.5 w-4.5 text-electric-blue shrink-0" />
                     Pass ↔ Provider Compatibility Matrix
-                  </h4>
+                  </h3>
                   <p className="text-xs text-slate-500 mt-1 max-w-2xl">
                     Rule-based pass compatibility for each execution provider. Green cells mean the pass is
                     allowed on that backend; hardware availability is shown separately in the probe banner and
@@ -1137,11 +1150,13 @@ export function IHVIntegrationPanel({
             ) : activeTab === "matrix" ? (
               /* TAB 1: VALIDATION MATRIX INTERACTIVE HEATMAP */
               <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/25 mt-2 shadow-xl animate-in fade-in duration-300">
-                <div className="overflow-x-auto">
-                  <table
-                    aria-label="Pass and execution provider compatibility matrix"
-                    className="w-full text-left border-collapse min-w-[720px]"
-                  >
+                <div
+                  className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Pass and execution provider compatibility matrix"
+                >
+                  <table className="w-full text-left border-collapse min-w-[720px]">
                     <thead>
                       <tr className="border-b border-slate-800/80 bg-slate-900/30">
                         {/* Header Cell 1 */}
@@ -1578,6 +1593,7 @@ export function IHVIntegrationPanel({
                                 : `Direct toggle on ${providers.find((p) => p.id === state.ihvProvider)?.name}`}
                           </span>
                           <Switch
+                            aria-label={`Toggle ${v.name} pass`}
                             disabled={toggleDisabled}
                             checked={toggleDisabled ? false : isActiveState}
                             onCheckedChange={(checked) => {
@@ -1597,9 +1613,9 @@ export function IHVIntegrationPanel({
 
           {/* Vendor Specific Flags - Show dynamically based on selection */}
           <div className="mt-8 pt-6 border-t border-slate-800">
-            <h4 className="text-sm font-medium mb-4 text-slate-300 flex items-center gap-2">
+            <h3 className="text-sm font-medium mb-4 text-slate-300 flex items-center gap-2">
               <Settings2 className="w-4 h-4" /> Target Specific Flags
-            </h4>
+            </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {state.ihvProvider === "TensorrtExecutionProvider" ||
@@ -1607,17 +1623,21 @@ export function IHVIntegrationPanel({
                 <>
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label>Use fp16</Label>
+                      <Label htmlFor="flag-use-fp16">Use fp16</Label>
                       <p className="text-xs text-slate-500">Enable Tensor Core math.</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch id="flag-use-fp16" aria-label="Use fp16" defaultChecked />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label>Enable TensorRT Graph Optimizations</Label>
+                      <Label htmlFor="flag-trt-graph-opts">Enable TensorRT Graph Optimizations</Label>
                       <p className="text-xs text-slate-500">Build TensorRT engines dynamically.</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      id="flag-trt-graph-opts"
+                      aria-label="Enable TensorRT Graph Optimizations"
+                      defaultChecked
+                    />
                   </div>
                 </>
               ) : state.ihvProvider === "OpenVINOExecutionProvider" ? (

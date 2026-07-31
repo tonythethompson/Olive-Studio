@@ -39,6 +39,7 @@ import {
   History,
   Square,
   Wrench,
+  MoreHorizontal,
 } from "lucide-react";
 import JSZip from "jszip";
 import { cn } from "@/lib/utils";
@@ -129,6 +130,7 @@ export function ExecutionWorkspace({
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [recipeView, setRecipeViewRaw] = useState<"graph" | "json" | "browser-test" | "benchmark">("graph");
   const [visitedRecipeViews, setVisitedRecipeViews] = useState<Set<string>>(new Set(["graph"]));
+  const [moreToolsOpen, setMoreToolsOpen] = useState(false);
   const [, startRecipeTransition] = useTransition();
   const setRecipeView = (view: "graph" | "json" | "browser-test" | "benchmark") => {
     startRecipeTransition(() => {
@@ -964,7 +966,7 @@ ${
                   </Button>
                   <Button
                     variant="default"
-                    className="text-xs h-9 bg-electric-blue hover:bg-electric-blue/90 text-white"
+                    className="text-xs h-9 bg-electric-blue hover:bg-electric-blue/90 text-slate-950"
                     onClick={handleExportDownload}
                   >
                     <Download className="h-4 w-4 mr-1.5" /> Save File (.json)
@@ -1085,7 +1087,7 @@ ${
                           <option value="4">4 Threads (Standard Core)</option>
                           <option value="8">8 Threads (Performance Rig)</option>
                         </select>
-                        <span className="text-[10px] text-slate-500 block leading-tight">
+                        <span className="text-[11px] text-slate-400 block leading-tight">
                           Determines maximum browser/mobile parallel worker operations.
                         </span>
                       </div>
@@ -1107,7 +1109,7 @@ ${
                           <option value="performance">Performance Focus (Accelerated)</option>
                           <option value="memory">Memory Conservative (Low-Memory)</option>
                         </select>
-                        <span className="text-[10px] text-slate-500 block leading-tight">
+                        <span className="text-[11px] text-slate-400 block leading-tight">
                           Configured to leverage WebGPU execution providers or WASM pipelines.
                         </span>
                       </div>
@@ -1128,7 +1130,7 @@ ${
                         type="button"
                         className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${
                           owrSelectedFile === "onnx_model_manifest.json"
-                            ? "bg-electric-blue text-white font-medium"
+                            ? "bg-electric-blue text-slate-950 font-medium"
                             : "text-slate-400 hover:text-slate-200"
                         }`}
                         onClick={() => setOwrSelectedFile("onnx_model_manifest.json")}
@@ -1139,7 +1141,7 @@ ${
                         type="button"
                         className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${
                           owrSelectedFile === "ort_config.json"
-                            ? "bg-electric-blue text-white font-medium"
+                            ? "bg-electric-blue text-slate-950 font-medium"
                             : "text-slate-400 hover:text-slate-200"
                         }`}
                         onClick={() => setOwrSelectedFile("ort_config.json")}
@@ -1151,7 +1153,7 @@ ${
                           type="button"
                           className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${
                             owrSelectedFile === "web_init.js"
-                              ? "bg-electric-blue text-white font-medium"
+                              ? "bg-electric-blue text-slate-950 font-medium"
                               : "text-slate-400 hover:text-slate-200"
                           }`}
                           onClick={() => setOwrSelectedFile("web_init.js")}
@@ -1163,7 +1165,7 @@ ${
                           type="button"
                           className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${
                             owrSelectedFile === "mobile_init.kt"
-                              ? "bg-electric-blue text-white font-medium"
+                              ? "bg-electric-blue text-slate-950 font-medium"
                               : "text-slate-400 hover:text-slate-200"
                           }`}
                           onClick={() => setOwrSelectedFile("mobile_init.kt")}
@@ -1218,7 +1220,7 @@ ${
                         </Button>
                         <Button
                           variant="default"
-                          className="text-xs h-9 bg-electric-blue hover:bg-electric-blue-dark text-white font-bold"
+                          className="text-xs h-9 bg-electric-blue hover:bg-electric-blue-dark text-slate-950 font-bold"
                           onClick={handleDownloadOwrBundle}
                         >
                           <Download className="h-4 w-4 mr-1.5" /> Download Bundle (.zip)
@@ -1236,25 +1238,29 @@ ${
       <Card
         className={cn(
           "flex flex-col overflow-hidden",
-          recipeView === "graph" ? "min-h-[520px]" : "min-h-[420px]",
+          recipeView === "graph" ? "min-h-[560px] wide:min-h-[680px]" : "min-h-[420px]",
         )}
       >
         <CardHeader
           title="Olive Recipe Definition"
           description={
             recipeView === "graph"
-              ? "Interactive graph of the compilation and configuration pipeline."
+              ? undefined
               : "The exact JSON schema that will be sent to the Olive Engine."
           }
           badge={
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex bg-slate-900 border border-slate-800 rounded p-0.5">
+              <div
+                className="flex bg-slate-900 border border-slate-800 rounded p-0.5"
+                role="group"
+                aria-label="Recipe view"
+              >
                 <button
                   type="button"
                   onClick={() => setRecipeView("graph")}
                   className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${
                     recipeView === "graph"
-                      ? "bg-electric-blue text-white"
+                      ? "bg-electric-blue text-slate-950"
                       : "text-slate-400 hover:text-slate-200"
                   }`}
                 >
@@ -1265,33 +1271,11 @@ ${
                   onClick={() => setRecipeView("json")}
                   className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${
                     recipeView === "json"
-                      ? "bg-electric-blue text-white"
+                      ? "bg-electric-blue text-slate-950"
                       : "text-slate-400 hover:text-slate-200"
                   }`}
                 >
                   <Code className="h-3 w-3" /> JSON Code
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRecipeView("browser-test")}
-                  className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${
-                    recipeView === "browser-test"
-                      ? "bg-electric-blue text-white"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  <Globe className="h-3 w-3" /> Browser Test
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRecipeView("benchmark")}
-                  className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${
-                    recipeView === "benchmark"
-                      ? "bg-electric-blue text-white"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  <Gauge className="h-3 w-3" /> Benchmark
                 </button>
               </div>
               {recipeView === "graph" && (
@@ -1299,6 +1283,7 @@ ${
                   type="button"
                   onClick={() => setShowGraphDot((v) => !v)}
                   title={showGraphDot ? "Hide flow dot" : "Show flow dot"}
+                  aria-label={showGraphDot ? "Hide flow dot" : "Show flow dot"}
                   className={`h-8 w-8 flex items-center justify-center rounded border transition-colors cursor-pointer ${
                     showGraphDot
                       ? "border-electric-blue/30 text-electric-blue hover:bg-electric-blue/10"
@@ -1311,24 +1296,80 @@ ${
               <Button
                 variant="outline"
                 className="h-8 px-3 text-xs border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
-                onClick={() => setIsHistoryOpen(true)}
-              >
-                <History className="h-3.5 w-3.5 mr-1.5" /> Run History
-              </Button>
-              <Button
-                variant="outline"
-                className="h-8 px-3 text-xs border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
                 onClick={() => setIsExportOpen(true)}
               >
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Export Recipe
               </Button>
-              <Button
-                variant="outline"
-                className="h-8 px-3 text-xs border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
-                onClick={() => setIsOwrExportOpen(true)}
-              >
-                <Globe className="h-3.5 w-3.5 mr-1.5" /> Export for OWR
-              </Button>
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  className="h-8 px-2.5 text-xs border-slate-700 text-slate-300 hover:border-slate-500"
+                  aria-expanded={moreToolsOpen}
+                  aria-haspopup="menu"
+                  onClick={() => setMoreToolsOpen((open) => !open)}
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5 mr-1" /> More
+                </Button>
+                {moreToolsOpen && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 z-20 mt-1 min-w-[180px] rounded-lg border border-slate-800 bg-slate-950 p-1 shadow-xl"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] cursor-pointer ${
+                        recipeView === "browser-test"
+                          ? "bg-electric-blue/15 text-electric-blue"
+                          : "text-slate-300 hover:bg-slate-900"
+                      }`}
+                      onClick={() => {
+                        setRecipeView("browser-test");
+                        setMoreToolsOpen(false);
+                      }}
+                    >
+                      <Globe className="h-3 w-3" /> Browser Test
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] cursor-pointer ${
+                        recipeView === "benchmark"
+                          ? "bg-electric-blue/15 text-electric-blue"
+                          : "text-slate-300 hover:bg-slate-900"
+                      }`}
+                      onClick={() => {
+                        setRecipeView("benchmark");
+                        setMoreToolsOpen(false);
+                      }}
+                    >
+                      <Gauge className="h-3 w-3" /> Benchmark
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer"
+                      onClick={() => {
+                        setIsHistoryOpen(true);
+                        setMoreToolsOpen(false);
+                      }}
+                    >
+                      <History className="h-3 w-3" /> Run History
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer"
+                      onClick={() => {
+                        setIsOwrExportOpen(true);
+                        setMoreToolsOpen(false);
+                      }}
+                    >
+                      <Globe className="h-3 w-3" /> Export for OWR
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           }
         />
@@ -1338,10 +1379,14 @@ ${
           return (
             <CardContent
               key={view}
-              className={cn("flex-1 overflow-hidden p-0 min-h-[420px]", isActive ? "block" : "hidden")}
+              className={cn(
+                "flex-1 overflow-hidden p-0",
+                view === "graph" ? "min-h-[560px]" : "min-h-[420px]",
+                isActive ? "block" : "hidden",
+              )}
             >
               {view === "graph" && (
-                <Suspense fallback={<LoadingFallback label="Loading graph editor..." minH="520px" />}>
+                <Suspense fallback={<LoadingFallback label="Loading graph editor..." minH="560px" />}>
                   <RecipeGraphView state={state} setState={setState} showDot={showGraphDot} />
                 </Suspense>
               )}
@@ -1396,11 +1441,11 @@ ${
                 </span>
               )}
               <Button
-                variant="outline"
-                className="h-8 px-2.5 text-xs border-slate-700 text-slate-300 hover:border-electric-blue/40 hover:text-electric-blue"
+                variant="ghost"
+                className="h-8 px-2.5 text-xs text-slate-400 hover:text-electric-blue"
                 onClick={() => onOpenAiAudit?.()}
               >
-                Review
+                Review with Assistant
               </Button>
             </div>
           }
@@ -1499,12 +1544,12 @@ ${
               {executionLogs.length > 0 && (
                 <div className="flex items-center justify-between gap-2 px-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-500 font-mono">
+                    <span className="text-[11px] text-slate-400 font-mono">
                       {selectedLogIndices.size > 0
                         ? `${selectedLogIndices.size} line${selectedLogIndices.size > 1 ? "s" : ""} selected`
                         : `${executionLogs.length} lines`}
                     </span>
-                    <span className="text-[10px] text-slate-600 hidden sm:inline">
+                    <span className="text-[11px] text-slate-400 hidden sm:inline">
                       Click to select · Shift+click for range · Ctrl/Cmd+click for multi
                     </span>
                   </div>
@@ -1514,7 +1559,7 @@ ${
                         type="button"
                         onClick={handleDiagnoseSelected}
                         disabled={isDiagnosing}
-                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded border border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50 transition-all cursor-pointer disabled:opacity-50"
+                        className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded border border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50 transition-all cursor-pointer disabled:opacity-50"
                       >
                         <Wrench className="h-3 w-3" /> Diagnose Selected
                       </button>
@@ -1523,7 +1568,7 @@ ${
                       type="button"
                       onClick={handleDiagnoseAll}
                       disabled={isDiagnosing || executionLogs.length === 0}
-                      className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600 transition-all cursor-pointer disabled:opacity-50"
+                      className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded border border-slate-700 text-slate-300 hover:text-slate-100 hover:border-slate-600 transition-all cursor-pointer disabled:opacity-50"
                     >
                       <Wrench className="h-3 w-3" /> Diagnose All
                     </button>
