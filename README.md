@@ -264,6 +264,12 @@ See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ---
 
+## Roadmap
+
+See [ROADMAP.md](./ROADMAP.md) for release targets and v0.3.0 planning.
+
+---
+
 ## Contributing
 
 Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, conventions, and PR checklist.

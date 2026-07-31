@@ -5,6 +5,10 @@ on:
     branches: [main, master]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -29,6 +33,15 @@ jobs:
 
       - name: Tests
         run: pnpm test
+
+      - name: Server unit tests
+        run: pnpm test:server
+
+      - name: Integration tests
+        run: pnpm test:integration
+
+      - name: Component tests
+        run: pnpm test:component
 
       - name: Recipe builder smoke test
         run: pnpm validate:recipe
@@ -74,3 +87,23 @@ jobs:
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v4
+
+  python-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: olive-mcp-server
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: olive-mcp-server/pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev]" "mcp<2"
+
+      - name: Pytest
+        run: python -m pytest tests -q --tb=short
