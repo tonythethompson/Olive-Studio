@@ -4,7 +4,7 @@
  * Provides helpers for mocking the pipeline store and fetch routes,
  * following the patterns established in LocalModelManager.test.tsx.
  */
-import { vi } from "vitest";
+import { vi, beforeEach, afterEach } from "vitest";
 import type { UIState } from "@/types";
 
 /** Minimal valid UIState for rendering components in isolation. */
@@ -42,8 +42,6 @@ export function createMockUIState(partial?: Partial<UIState>): UIState {
  * @param routes - Map of URL substring → response body (serialized as JSON)
  * @returns The fetch spy (call .mockRestore() in afterEach)
  */
-import { vi, beforeEach, afterEach } from "vitest";
-
 export function mockFetchRoutes(routes: Record<string, unknown> = {}) {
   const spy = vi.spyOn(globalThis, "fetch");
   spy.mockImplementation((url: unknown) => {

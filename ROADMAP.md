@@ -44,7 +44,7 @@ Consolidated release targets. Sources: `ORIGINAL_REQUEST.md` (R1-R7), `OLIVE_MCP
 
 ### Product
 
-- [ ] Recipe import from olive-recipes catalog (GitHub lazy-load)
+- [ ] Recipe import from olive-recipes catalog (full GitHub lazy-load + version pinning; basic catalog browsing shipped in v0.2.0)
 - [ ] Multi-model batch comparison view
 - [ ] Export optimization report (PDF/Markdown)
 

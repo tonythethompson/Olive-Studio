@@ -256,9 +256,14 @@ GitHub Actions runs on push/PR to `main` / `master`:
 - `pnpm install --frozen-lockfile`
 - `pnpm audit --audit-level high`
 - `pnpm lint`
-- `pnpm test`
+- `pnpm test` (unit)
+- `pnpm test:server`
+- `pnpm test:integration`
+- `pnpm test:component`
 - `pnpm validate:recipe`
+- `pnpm build` + artifact assert + prod smoke
 - CodeQL analysis
+- `python-tests` job: pytest for `olive-mcp-server/`
 
 See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 

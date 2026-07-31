@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { createMockUIState, mockFetchRoutes } from "./__tests__/testUtils";
 
 // Mock the pipeline store to avoid zustand coupling
@@ -17,6 +17,7 @@ vi.mock("@/lib/hooks", () => ({
   useMcpDiagnosticKeyed: () => ({
     fetchKeyedDiagnostic: vi.fn(),
     diagnostics: {},
+    diagnosingKeys: {},
     diagnosticKey: "current",
   }),
 }));
@@ -60,10 +61,9 @@ describe("BatchProcessingPanel", () => {
     expect(screen.queryByText(/running/i)).toBeNull();
   });
 
-  it("renders add job button", () => {
+  it("renders the Custom Job button to add jobs", () => {
     render(<BatchProcessingPanel />);
-    const addButton = screen.queryByRole("button", { name: /add/i });
-    // Add button may be icon-only; verify panel renders without crash
-    expect(addButton || screen.getAllByText(/batch/i)[0]).toBeDefined();
+    const addButton = screen.getByRole("button", { name: /custom job/i });
+    expect(addButton).toBeDefined();
   });
 });

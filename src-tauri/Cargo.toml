@@ -19,3 +19,30 @@ tauri-build = { version = "2.6.3", features = [] }
 log = "0.4"
 tauri = { version = "2.11.3", features = [] }
 tauri-plugin-log = "2"
+
+# ── Transitive dependency safety notes ─────────────────────────────────────
+#
+# glib (GHSA — VariantStrIter unsoundness, fixed in 0.20.0)
+#
+# The Tauri sidecar pulls in the GTK3 gtk-rs 0.18.x stack (gtk, gdk,
+# webkit2gtk, gio, atk, pango, cairo-rs), all of which pin glib = "0.18".
+# Version 0.20.0 is semver-incompatible and cannot be resolved without
+# upgrading the entire GTK stack.
+#
+# Risk assessment:
+#   • The GTK stack is compiled ONLY on Linux (target_os = "linux").
+#   • On Windows and macOS the glib crate is present in Cargo.lock but
+#     never compiled or linked — zero runtime exposure.
+#   • The unsoundness in VariantStrIter::impl_get (passing &p instead of
+#     &mut p as an out-argument to g_variant_get_child) causes UB under
+#     optimized builds with recent rustc, but only if the code is reached.
+#
+# Upstream tracking:
+#   • Tauri GTK4 migration: https://github.com/tauri-apps/tauri/issues/12563
+#   • Migration PR:        https://github.com/tauri-apps/tauri/pull/14684
+#
+# Action: When Tauri releases a version with the GTK4 migration, update
+# the tauri dependency and remove this ignore from .github/dependabot.yml:
+#   ignore:
+#     - dependency-name: "glib"
+#       versions: ["< 0.20.0"]

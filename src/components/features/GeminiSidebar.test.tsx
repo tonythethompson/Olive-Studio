@@ -72,15 +72,13 @@ describe("GeminiSidebar", () => {
   it("calls onClose when close button is clicked", () => {
     const onClose = vi.fn();
     render(<GeminiSidebar isOpen={true} onClose={onClose} />);
-    // Find and click the close button (X icon button)
-    const closeButton = screen.queryByRole("button", { name: /close/i }) || screen.queryByLabelText(/close/i);
-    if (closeButton) {
-      fireEvent.click(closeButton);
-      expect(onClose).toHaveBeenCalled();
-    } else {
-      // Close button may be icon-only without aria-label; verify render succeeded
-      expect(screen.getAllByText(/audit/i).length).toBeGreaterThan(0);
-    }
+    // The close button is an icon-only <button> with <X /> — find via getAllByRole
+    const buttons = screen.getAllByRole("button");
+    // First button in the sidebar header is the dismiss (X) control
+    const closeButton = buttons[0];
+    expect(closeButton).toBeDefined();
+    fireEvent.click(closeButton);
+    expect(onClose).toHaveBeenCalled();
   });
 
   it("renders with controlled state props", () => {
