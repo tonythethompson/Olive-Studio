@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mergeDetectedProviders, pickRecommendedProvider } from "@/lib/hardwareProbe";
 
 describe("mergeDetectedProviders TensorRT", () => {
-  it("marks classic TensorRT as detected on NVIDIA GPU even before SDK install", () => {
+  it("does not infer classic TensorRT until the runtime probe succeeds", () => {
     const detected = mergeDetectedProviders({
       hasNvidiaGpu: true,
       hasRocmGpu: false,
@@ -11,8 +11,19 @@ describe("mergeDetectedProviders TensorRT", () => {
       tensorRtRtxLoadable: true,
     });
     expect(detected).toContain("CUDAExecutionProvider");
-    expect(detected).toContain("TensorrtExecutionProvider");
+    expect(detected).not.toContain("TensorrtExecutionProvider");
     expect(detected).toContain("NvTensorRTRTXExecutionProvider");
+  });
+
+  it("includes classic TensorRT when the runtime probe succeeds", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: true,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      tensorRtLoadable: true,
+      tensorRtRtxLoadable: false,
+    });
+    expect(detected).toContain("TensorrtExecutionProvider");
   });
 
   it("does not recommend uninstalled classic TensorRT over CUDA", () => {

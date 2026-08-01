@@ -216,11 +216,17 @@ export function useMcpDiagnosticKeyed(): {
   }, []);
 
   const fetchKeyedDiagnostic = useCallback(async (key: string, logs: string[]) => {
+    if (logs.length === 0) return null;
     abortMapRef.current.get(key)?.abort();
     const controller = new AbortController();
     abortMapRef.current.set(key, controller);
 
     setDiagnosingKeys((prev) => ({ ...prev, [key]: true }));
+    setDiagnostics((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
     setErrors((prev) => ({ ...prev, [key]: null }));
     try {
       const { diagnostic: result, error: fetchError } = await requestMcpDiagnostic(logs, controller.signal);

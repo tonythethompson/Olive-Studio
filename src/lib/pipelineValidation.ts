@@ -6,6 +6,8 @@ import { isKnownPass, getPassSchema } from "@/lib/schemaEngine";
 
 export type PipelineValidationOptions = {
   hardwareProbe?: HardwareProbeResult | null;
+  /** Block browser-only EPs from local Olive runs (Execute Live / batch queue). */
+  forLocalExecution?: boolean;
 };
 
 export type IssueSeverity = "critical" | "warning" | "info";
@@ -606,6 +608,22 @@ function getPassCatalogIssues(state: UIState, recipe: OliveRecipe): PipelineIssu
   return issues;
 }
 
+function getLocalExecutionIssues(state: UIState, forLocalExecution?: boolean): PipelineIssue[] {
+  if (!forLocalExecution || state.ihvProvider !== "WebGpuExecutionProvider") {
+    return [];
+  }
+  return [
+    {
+      id: "webgpu-local-execution-unsupported",
+      severity: "critical",
+      title: "WebGPU cannot run via local Olive Python",
+      description:
+        "WebGpuExecutionProvider is a browser deploy target (ONNX Runtime Web), not a local Python EP. Export the recipe and use Browser Test / WebGPU benchmark instead of Execute Live.",
+      affectedPasses: ["provider"],
+    },
+  ];
+}
+
 function dedupeIssues(issues: PipelineIssue[]): PipelineIssue[] {
   const byId = new Map<string, PipelineIssue>();
   for (const issue of issues) {
@@ -628,6 +646,7 @@ export function getPipelineValidation(
     ...getCrossPassIssues(state),
     ...getProviderIssues(state),
     ...getProviderHardwareIssues(state, options?.hardwareProbe),
+    ...getLocalExecutionIssues(state, options?.forLocalExecution),
     ...getAdvisoryIssues(state),
     ...getRecipeRuntimeIssues(state, recipe),
     ...getPassCatalogIssues(state, recipe),

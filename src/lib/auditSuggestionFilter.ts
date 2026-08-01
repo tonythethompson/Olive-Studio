@@ -42,8 +42,8 @@ function suggestionText(s: AuditSuggestion): string {
   return `${s.title}\n${s.description}\n${s.autofix.pass}\n${s.autofix.value}`;
 }
 
-function isNvidiaGpuEp(ep: string): boolean {
-  return /CUDA|NvTensorRTRTX|Tensorrt|ROCM|WebGpu/i.test(ep);
+function isNvidiaFamilyEp(ep: string): boolean {
+  return /CUDAExecutionProvider|NvTensorRTRTXExecutionProvider|TensorrtExecutionProvider/.test(ep);
 }
 
 /**
@@ -53,7 +53,10 @@ export function isAuditSuggestionRelevant(suggestion: AuditSuggestion, ctx: Audi
   const text = suggestionText(suggestion);
   const model = ctx.model.displayName || ctx.model.huggingFaceId || "";
   const ep = ctx.hardware.executionProvider;
-  const asr = modelLooksLikeAsr(model);
+  const asr =
+    modelLooksLikeAsr(model) ||
+    ctx.model.hfTask === "automatic-speech-recognition" ||
+    ctx.model.hfTask === "speech-recognition";
   const llm = modelLooksLikeLlm(model);
 
   // Speech/ASR advice on non-ASR models (classic junk for Llama audits).
@@ -76,7 +79,7 @@ export function isAuditSuggestionRelevant(suggestion: AuditSuggestion, ctx: Audi
   }
 
   // Cross-vendor EP noise on NVIDIA GPU targets.
-  if (isNvidiaGpuEp(ep)) {
+  if (isNvidiaFamilyEp(ep)) {
     if (OPEN_VINO_ON_NVIDIA.test(text) && /execution_provider|switch\s+to|use\s+openvino/i.test(text)) {
       return false;
     }

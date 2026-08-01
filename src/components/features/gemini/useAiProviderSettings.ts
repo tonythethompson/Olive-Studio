@@ -477,8 +477,8 @@ export function useAiProviderSettings({
     }
   };
 
-  /** Activate LM Studio / Ollama as openai-compat local provider. */
-  const enableLocalAiProvider = async (source: "lms" | "ollama", modelTag: string) => {
+  /** Activate LM Studio / Ollama as openai-compat local provider. Returns true on success. */
+  const enableLocalAiProvider = async (source: "lms" | "ollama", modelTag: string): Promise<boolean> => {
     const baseUrl = source === "ollama" ? "http://127.0.0.1:11434/v1" : "http://127.0.0.1:1234/v1";
     setIsSavingProvider(true);
     setProviderSaveError("");
@@ -501,8 +501,10 @@ export function useAiProviderSettings({
       setSettingsBaseUrl(baseUrl);
       await fetchProviderStatus();
       onProviderActivated();
+      return true;
     } catch (err: unknown) {
       setProviderSaveError(err instanceof Error ? err.message : "Failed to enable local provider.");
+      return false;
     } finally {
       setIsSavingProvider(false);
     }

@@ -28,6 +28,10 @@ export function buildRecipeFromState(
   const recipe = buildOliveRecipe(sanitized);
   const recipeJson = serializeRecipe(recipe);
   const validation = getPipelineValidation(sanitized, options);
+  const executionValidation = getPipelineValidation(sanitized, {
+    ...options,
+    forLocalExecution: true,
+  });
   const schema = validateOliveRecipeStructure(recipe);
 
   return {
@@ -37,7 +41,7 @@ export function buildRecipeFromState(
     validation,
     schema,
     advisories: getRemainingAdvisories(sanitized),
-    isRunnable: !validation.isBlocked && schema.valid,
+    isRunnable: !executionValidation.isBlocked && schema.valid,
   };
 }
 

@@ -2,6 +2,7 @@ import type { ProviderConfig } from "../../types.ts";
 import { readStudioConfig, writeStudioConfig } from "../../config.ts";
 import { getProvider } from "./registry.ts";
 import { readEnvApiKey } from "../../../lib/aiResponse.ts";
+import { sanitizeProviderBaseUrl } from "./security.ts";
 
 /** Runtime AI provider override (set via /api/ai/provider endpoint). */
 let runtimeAiProvider: ProviderConfig | null = null;
@@ -66,11 +67,23 @@ export function restoreProviderFromPreference(pref: AiPreference): ProviderConfi
     return null;
   }
 
+  let baseUrl = pref.baseUrl ?? plugin.defaultBaseUrl;
+  if (baseUrl) {
+    try {
+      baseUrl = sanitizeProviderBaseUrl(pref.provider, baseUrl);
+    } catch {
+      if (pref.provider === "openai-compat") {
+        return null;
+      }
+      baseUrl = undefined;
+    }
+  }
+
   return {
     provider: pref.provider,
     apiKey: envKey ?? "",
     model: pref.model || plugin.defaultModel,
-    baseUrl: pref.baseUrl ?? plugin.defaultBaseUrl,
+    baseUrl,
   };
 }
 

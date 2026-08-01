@@ -96,7 +96,8 @@ export function GeminiSidebar({
   const local = useLocalEngineSetup({
     isOpen,
     onModelActivated: async (modelTag, source) => {
-      await providers.enableLocalAiProvider(source, modelTag);
+      const ok = await providers.enableLocalAiProvider(source, modelTag);
+      if (!ok) return;
       audit.resetAnalysis();
       setActiveTab("audit");
     },

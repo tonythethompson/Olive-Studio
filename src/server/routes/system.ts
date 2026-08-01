@@ -144,6 +144,8 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   let onnxRuntimeProviders: string[] | undefined;
   let tensorrt: HardwareProbeResult["tensorrt"];
   let tensorRtRtx: HardwareProbeResult["tensorRtRtx"];
+  let tensorRtVenvLoadable = false;
+  let tensorRtRtxVenvLoadable = false;
 
   const venvPython = getVenvPython();
   const pythonCandidates: string[] = [];
@@ -164,12 +166,18 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     }
     if (!tensorrt?.loadable) {
       const trt = await opts.probeTensorRtLoadable(python);
+      if (python === venvPython && trt.loadable) {
+        tensorRtVenvLoadable = true;
+      }
       if (trt.loadable || !tensorrt) {
         tensorrt = trt;
       }
     }
     if (!tensorRtRtx?.loadable) {
       const rtx = await opts.probeTensorRtRtxLoadable(python);
+      if (python === venvPython && rtx.loadable) {
+        tensorRtRtxVenvLoadable = true;
+      }
       if (rtx.loadable || !tensorRtRtx) {
         tensorRtRtx = rtx;
       }
@@ -232,8 +240,8 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     onnxRuntimeProviders,
     detectedProviders,
     recommendedProvider: pickRecommendedProvider(detectedProviders, {
-      tensorRtRtxLoadable: tensorRtRtx?.loadable === true,
-      tensorRtLoadable: tensorrt?.loadable === true,
+      tensorRtRtxLoadable: tensorRtRtxVenvLoadable,
+      tensorRtLoadable: tensorRtVenvLoadable,
     }),
     notes,
   };
