@@ -1,0 +1,77 @@
+src/components/features/gemini/LocalAiSetupCard.tsx
+  s_ef617d0cda07e0::t_fddbf291d8224c 242-249
+src/components/features/EnterpriseInfraPanel.tsx
+  s_ef617d0cda07e0::t_73abf002032570 61,68
+src/components/features/InputEnvironmentPanel.tsx
+  s_ef617d0cda07e0::t_2e9ff0939663c7 1665,1670-1671,1679-1683,1697,1699-1701
+  s_ef617d0cda07e0::t_755f12d7ea2f58 1849,1852-1854,1856
+  s_ef617d0cda07e0::t_aff9230e516d2e 1802,1806-1808,1810,1831
+  s_ef617d0cda07e0::t_59b37a45bcccb4 1018
+  s_ef617d0cda07e0::t_404a99eb08989a 2026-2030
+  s_ef617d0cda07e0::t_51b0f39813471b 1990-1993,1995,2009
+  s_ef617d0cda07e0::t_9c2b280df02769 1879
+src/components/features/IHVIntegrationPanel.tsx
+  s_ef617d0cda07e0::t_a388bedec7124a 1315,1320-1332,1364
+  s_ef617d0cda07e0::t_6bccc0a3ab62da 1523,1529
+  s_ef617d0cda07e0::t_8f732b17a08b8d 1647-1652,1662-1663
+  s_ef617d0cda07e0::t_35c91a3c216942 1176,1182-1219,1221-1223,1225-1228,1230-1247
+src/components/features/GeminiSidebar.flows.test.tsx
+  s_ef617d0cda07e0::t_ceee2e54de7f76 55,60
+src/components/features/KbSyncIndicator.tsx
+  s_ef617d0cda07e0::t_a15e1b18424525 18
+src/components/features/RuntimeEnvControls.tsx
+  s_ef617d0cda07e0::t_232bca831198cd 46-54
+  s_ef617d0cda07e0::t_551a53fdb1c710 151-153,162-163
+  s_ef617d0cda07e0::t_e13789eb16c75c 187-192
+src/components/features/gemini/ChatPanel.tsx
+  s_ef617d0cda07e0::t_678c9c5308fc77 89,98
+src/components/features/GeminiSidebar.tsx
+  s_ef617d0cda07e0::t_744f7d75f76f27 212-214,236-238
+  s_ef617d0cda07e0::t_4f69ea45ac588c 107-115,133,163-167,171-174,192-194
+src/components/DesktopMinimumViewport.tsx
+  s_ef617d0cda07e0::t_0005c7e12530cd 15-19,24-25,31,49,52-58,60-72
+src/components/features/recipe-graph/inspectors/ProviderInspector.tsx
+  s_ef617d0cda07e0::t_18abce9c7ffc31 75
+  s_ef617d0cda07e0::t_752e7c63418acf 1,10-14
+  s_ef617d0cda07e0::t_d6ba613b74d6b1 72-73
+src/components/features/ExecutionWorkspace.tsx
+  s_ef617d0cda07e0::t_6e1620d263251f 135,137-154
+  s_ef617d0cda07e0::t_6ea60451d2f77b 1323,1328-1329,1336
+src/components/features/VramEstimateBanner.tsx
+  s_ef617d0cda07e0::t_1d5dc9297be05d 244
+src/components/features/CompatStatus.tsx
+  s_ef617d0cda07e0::t_5d5e4c639eacb1 1,5
+src/components/features/recipe-graph/inspectors/InputInspector.tsx
+  s_ef617d0cda07e0::t_000783839e6d2a 1,3-7
+  s_ef617d0cda07e0::t_8abcbd78ba82cb 24,27,34-35,37
+src/App.tsx
+  s_ef617d0cda07e0::t_c705f86e7aaa8a 1,15-20
+  s_ef617d0cda07e0::t_e7dd8535fb9221 83-88,91-92,100-102
+  s_ef617d0cda07e0::t_5b7b83d963fb2b 208-209,224
+src/components/features/recipe-graph/RecipeValidationPanel.tsx
+  s_ef617d0cda07e0::t_72dc831feb548c 352-355
+  s_ef617d0cda07e0::t_0e0865325c3903 304-305
+src/components/features/gemini/ManualProviderSetup.tsx
+  s_ef617d0cda07e0::t_b0c98ac7078d6b 170-172,174,187-190,200
+src/components/features/gemini/DevinAccountPanel.tsx
+  s_ef617d0cda07e0::t_c68a5102bf1281 59-61,63
+src/lib/pipelineNavigation.ts
+  s_ef617d0cda07e0::t_34277571903bf2 1-3,7-11,14-16,18,20-23,31
+  s_ef617d0cda07e0::t_866f5b90a0e546 12-13,17,19,24-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8fe61f9cf1f7f33806f9a63f805be64b9d5efd26",
+  "prompts": {},
+  "sessions": {
+    "s_ef617d0cda07e0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e530e917-b3ef-4f10-ab62-892512a908b2",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
