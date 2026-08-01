@@ -275,3 +275,32 @@ def test_live_fetch_generation_ignores_stale_completion(monkeypatch: pytest.Monk
     t1.join(timeout=5)
 
     assert "NEWER" in next(iter(docs_search._LIVE_CACHE.values()))
+
+
+def test_live_index_does_not_overwrite_newer_generation(monkeypatch: pytest.MonkeyPatch):
+    """A stale (older fetch_time) live-index build must not clobber a newer one.
+
+    Simulates: build for fetch_time=100 starts, a newer fetch_time=200 build
+    completes and publishes first, then the stale build's publish attempt
+    must be discarded rather than roll the cache back to fetch_time=100.
+    """
+
+    def fake_build(texts):
+        return np.ones((len(list(texts)), 384), dtype=np.float32)
+
+    monkeypatch.setattr(docs_search, "build_kb_index", fake_build)
+
+    # Newer generation publishes first.
+    monkeypatch.setattr(
+        docs_search, "_fetch_live_docs", lambda: ({"index": "newer content"}, 200.0)
+    )
+    docs_search._get_live_index()
+    assert docs_search._LIVE_EMBED_CACHE_TIME == 200.0
+
+    # Stale generation (older fetch_time) attempts to publish after.
+    monkeypatch.setattr(
+        docs_search, "_fetch_live_docs", lambda: ({"index": "older content"}, 100.0)
+    )
+    docs_search._get_live_index()
+    assert docs_search._LIVE_EMBED_CACHE_TIME == 200.0
+    assert docs_search._LIVE_SNIPPETS[0][1] == "newer content"

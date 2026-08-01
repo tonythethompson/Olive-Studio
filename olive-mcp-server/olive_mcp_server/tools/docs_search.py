@@ -249,17 +249,20 @@ def _split_live_snippets(pages: dict[str, str]) -> list[tuple[str, str]]:
 
 
 def _get_live_index() -> tuple[list[tuple[str, str]], np.ndarray]:
-    """Return live snippets and their embeddings, rebuilding on cache refresh."""
+    """Return live snippets and their embeddings, rebuilding on cache refresh.
+
+    Cache-hit and publish checks use ``_LIVE_EMBEDDINGS is not None`` (not
+    truthiness of ``_LIVE_SNIPPETS``) so an empty-but-built live index is
+    still cached rather than rebuilt on every call. Publication also refuses
+    to overwrite a newer generation's cache with a stale (smaller
+    ``fetch_time``) build that raced behind it.
+    """
     global _LIVE_SNIPPETS, _LIVE_EMBEDDINGS, _LIVE_EMBED_CACHE_TIME
 
     pages, fetch_time = _fetch_live_docs()
 
     with _LIVE_INDEX_LOCK:
-        if (
-            _LIVE_EMBEDDINGS is not None
-            and _LIVE_SNIPPETS
-            and _LIVE_EMBED_CACHE_TIME == fetch_time
-        ):
+        if _LIVE_EMBEDDINGS is not None and _LIVE_EMBED_CACHE_TIME == fetch_time:
             return _LIVE_SNIPPETS, _LIVE_EMBEDDINGS
 
     snippets = _split_live_snippets(pages) if pages else []
@@ -269,12 +272,12 @@ def _get_live_index() -> tuple[list[tuple[str, str]], np.ndarray]:
         embeddings = build_kb_index([t for _, t in snippets])
 
     with _LIVE_INDEX_LOCK:
-        if (
-            _LIVE_EMBEDDINGS is not None
-            and _LIVE_SNIPPETS
-            and _LIVE_EMBED_CACHE_TIME == fetch_time
-        ):
+        if _LIVE_EMBEDDINGS is not None and _LIVE_EMBED_CACHE_TIME == fetch_time:
             return _LIVE_SNIPPETS, _LIVE_EMBEDDINGS
+        if _LIVE_EMBEDDINGS is not None and fetch_time < _LIVE_EMBED_CACHE_TIME:
+            # A newer generation already published while this one was
+            # encoding; discard this stale build rather than clobber it.
+            return snippets, embeddings
 
         _LIVE_SNIPPETS = snippets
         _LIVE_EMBEDDINGS = embeddings
