@@ -134,13 +134,20 @@ describe("BatchProcessingPanel", () => {
       return Promise.reject(new Error("Unexpected fetch"));
     });
 
-    // Mock EventSource for the valid job's stream
+    // Mock EventSource for the valid job's stream. Capture the "done"
+    // listener so the test can immediately signal a successful run,
+    // letting the sequential job loop proceed to the invalid job.
+    const doneListeners: Array<(e: { data: string }) => void> = [];
     const mockEventSource = {
-      addEventListener: vi.fn(),
+      addEventListener: vi.fn((event: string, cb: (e: { data: string }) => void) => {
+        if (event === "done") doneListeners.push(cb);
+      }),
       close: vi.fn(),
       onerror: null,
     };
-    global.EventSource = vi.fn(() => mockEventSource) as unknown as typeof EventSource;
+    global.EventSource = vi.fn(function EventSourceMock() {
+      return mockEventSource;
+    }) as unknown as typeof EventSource;
 
     await act(async () => {
       render(<BatchProcessingPanel state={stateWithJobs} setState={mockSetState} />);
@@ -151,6 +158,10 @@ describe("BatchProcessingPanel", () => {
 
     await act(async () => {
       await userEvent.click(startButton);
+      // Let the valid job's SSE stream complete so the sequential loop
+      // moves on to validate the invalid job.
+      await waitFor(() => expect(doneListeners.length).toBeGreaterThan(0));
+      doneListeners.forEach((cb) => cb({ data: JSON.stringify({ exitCode: 0 }) }));
     });
 
     // Wait for the validation and state updates

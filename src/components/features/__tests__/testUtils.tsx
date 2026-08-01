@@ -30,6 +30,7 @@ export function createMockUIState(partial?: Partial<UIState>): UIState {
     activeJobId: null,
     passes: {
       conversion: true,
+      conversionFormat: "onnx",
       conversionSourceFormat: "pytorch",
       quantization: false,
       quantizationMethod: "gptq",
