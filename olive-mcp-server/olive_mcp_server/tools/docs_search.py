@@ -336,6 +336,8 @@ def search_olive_documentation(query: str, top_k: int = 5, live: bool = True) ->
     terms = [t.lower() for t in query.split() if t]
     if not terms:
         return {"query": query, "count": 0, "results": [], "note": "Empty query."}
+    if top_k == 0:
+        return {"query": query, "count": 0, "results": [], "note": "No results requested."}
 
     per_source = max(top_k * 2, 10)
     local_results = _search_local(query, per_source)
