@@ -89,7 +89,8 @@ function extractBalancedJson(text: string): string | null {
  */
 export function softRepairJson(text: string): string {
   let s = text.trim();
-  // Strip // and /* */ comments outside strings (best-effort, line-oriented).
+  // Strip // and /* */ comments with a regex (best-effort; not string-aware, so
+  // comment-like text inside JSON string values can be altered).
   s = s.replace(/^\s*\/\/.*$/gm, "");
   s = s.replace(/\/\*[\s\S]*?\*\//g, "");
   // Trailing commas before } or ]

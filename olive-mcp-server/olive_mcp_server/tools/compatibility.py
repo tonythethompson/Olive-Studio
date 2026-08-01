@@ -28,7 +28,7 @@ def get_model_compatibility(
     fw = normalize_framework(framework)
     passes = {p["name"]: p for p in load_passes()}
 
-    matched = [m for m in models if m["model"] == key]
+    matched = [m for m in models if normalize_model(m["model"]) == key]
     if not matched:
         return {
             "note": f"'{model_name}' is not in the local compatibility matrix. Use get_quantization_strategy and get_pass_chain to design a custom workflow.",

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { resolveAuditAutofix } from "@/lib/auditAutofix";
 import type { UIState } from "@/types";
 import type { AnalysisResult, Suggestion } from "./types";
@@ -18,18 +18,23 @@ export function useAiAudit({ state, setState }: UseAiAuditOptions) {
   const [analysisError, setAnalysisError] = useState("");
   /** When true, the next analyze call includes previousScore for continuity. */
   const continuityScoreRef = useRef<number | null>(null);
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
-  const runAnalysis = async (opts?: { previousScore?: number | null }) => {
+  const runAnalysis = async (opts?: { previousScore?: number | null; stateOverride?: UIState }) => {
     setIsAnalyzing(true);
     setAnalysisError("");
     const previousScore = opts?.previousScore !== undefined ? opts.previousScore : continuityScoreRef.current;
     continuityScoreRef.current = null;
+    const snapshot = opts?.stateOverride ?? stateRef.current;
     try {
       const r = await fetch("/api/ai/analyze-state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          state,
+          state: snapshot,
           ...(typeof previousScore === "number" ? { previousScore } : {}),
         }),
       });
@@ -63,12 +68,18 @@ export function useAiAudit({ state, setState }: UseAiAuditOptions) {
 
   const applyAutofix = (autofix: Suggestion["autofix"]) => {
     if (!autofix?.pass) return;
-    const patch = resolveAuditAutofix(autofix, state);
+    const current = stateRef.current;
+    const patch = resolveAuditAutofix(autofix, current);
     if (!patch) return;
     const prior = analysis?.score ?? null;
+    const next: UIState = {
+      ...current,
+      ...patch,
+      passes: { ...current.passes, ...patch.passes },
+    };
     setState(patch);
     continuityScoreRef.current = prior;
-    setTimeout(() => void runAnalysis({ previousScore: prior }), 400);
+    setTimeout(() => void runAnalysis({ previousScore: prior, stateOverride: next }), 400);
   };
 
   return {
