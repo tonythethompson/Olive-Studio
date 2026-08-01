@@ -24,11 +24,19 @@ export function DesktopMinimumViewport({
   const [isNarrow, setIsNarrow] = useState(false);
 
   useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+
     const media = window.matchMedia(`(max-width: ${minWidthPx - 1}px)`);
     const sync = () => setIsNarrow(media.matches);
     sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
+
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", sync);
+      return () => media.removeEventListener("change", sync);
+    }
+
+    media.addListener(sync);
+    return () => media.removeListener(sync);
   }, [minWidthPx]);
 
   if (!isNarrow) return children;
