@@ -194,7 +194,7 @@ def _search_local(query: str, top_k: int) -> list[dict[str, Any]]:
     return _keyword_search(_load_kb_text(), terms, top_k)
 
 
-def _fetch_live_docs() -> dict[str, str]:
+def _fetch_live_docs() -> tuple[dict[str, str], float]:
     """Fetch (and cache) the live Olive docs landing page.
 
     Concurrent fetches take a generation token; only the latest generation may
@@ -205,7 +205,7 @@ def _fetch_live_docs() -> dict[str, str]:
     with _LIVE_FETCH_LOCK:
         now = time.monotonic()
         if _LIVE_CACHE and (now - _LAST_FETCH_TIME) < _LIVE_CACHE_TTL_SECONDS:
-            return dict(_LIVE_CACHE)
+            return dict(_LIVE_CACHE), _LAST_FETCH_TIME
         _LIVE_FETCH_GENERATION += 1
         my_generation = _LIVE_FETCH_GENERATION
 
@@ -227,7 +227,7 @@ def _fetch_live_docs() -> dict[str, str]:
         pass  # Keep stale cache or return empty on failure.
 
     with _LIVE_FETCH_LOCK:
-        return dict(_LIVE_CACHE)
+        return dict(_LIVE_CACHE), _LAST_FETCH_TIME
 
 
 def _split_live_snippets(pages: dict[str, str]) -> list[tuple[str, str]]:
@@ -245,9 +245,7 @@ def _get_live_index() -> tuple[list[tuple[str, str]], np.ndarray]:
     """Return live snippets and their embeddings, rebuilding on cache refresh."""
     global _LIVE_SNIPPETS, _LIVE_EMBEDDINGS, _LIVE_EMBED_CACHE_TIME
 
-    pages = _fetch_live_docs()
-    with _LIVE_FETCH_LOCK:
-        fetch_time = _LAST_FETCH_TIME
+    pages, fetch_time = _fetch_live_docs()
 
     with _LIVE_INDEX_LOCK:
         if (
@@ -296,7 +294,7 @@ def _search_live(query: str, top_k: int) -> list[dict[str, Any]]:
         return _keyword_search(snippets, terms, top_k)
     except Exception:  # noqa: BLE001
         try:
-            pages = _fetch_live_docs()
+            pages, _ = _fetch_live_docs()
             if not pages:
                 return []
             return _keyword_search(_split_live_snippets(pages), terms, top_k)
