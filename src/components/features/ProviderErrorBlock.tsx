@@ -1,11 +1,23 @@
 import { AlertTriangle } from "lucide-react";
 
+/** Structured error kinds from the response parser (not inferred from message text). */
+export type ProviderErrorKind = "invalid_model_json";
+
 /**
  * Renders an error message, distinguishing provider-configuration errors
  * (which show a "go to Settings" prompt) from generic errors.
  */
-export function ProviderErrorBlock({ msg, onGoSettings }: { msg: string; onGoSettings: () => void }) {
-  const isJsonModelErr = /not valid JSON|Expected ','|Unexpected token|JSON at position/i.test(msg);
+export function ProviderErrorBlock({
+  msg,
+  onGoSettings,
+  kind,
+}: {
+  msg: string;
+  onGoSettings: () => void;
+  kind?: ProviderErrorKind;
+}) {
+  // Model-specific copy only when the parser supplies a structured kind.
+  const isJsonModelErr = kind === "invalid_model_json";
   const isProviderErr =
     !isJsonModelErr &&
     (msg.includes("not configured") ||
@@ -22,8 +34,8 @@ export function ProviderErrorBlock({ msg, onGoSettings }: { msg: string; onGoSet
         <div>
           <span className="font-bold block text-amber-100">Model returned invalid JSON</span>
           <p className="mt-1 leading-relaxed text-slate-400">
-            Your account/provider connection is fine. This model struggled to format the audit response. Try
-            Analyze again, or pick a larger model in Settings.
+            This model struggled to format the audit response. Try Analyze again, or pick a larger model in
+            Settings.
           </p>
           <p className="mt-2 text-[10px] text-slate-500 font-mono break-words">{msg}</p>
         </div>
@@ -67,7 +79,10 @@ export function ProviderErrorBlock({ msg, onGoSettings }: { msg: string; onGoSet
       <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-500" />
       <div>
         <span className="font-bold block text-rose-200">Error</span>
-        {msg}
+        <p className="mt-1 leading-relaxed">{msg}</p>
+        <p className="mt-2 text-[10px] text-slate-500 leading-relaxed">
+          If retrying fails, verify the configured endpoint in Settings.
+        </p>
       </div>
     </div>
   );
