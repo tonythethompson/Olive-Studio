@@ -21,7 +21,9 @@ import {
   fetchGitHubRecipeJson,
   fetchOliveRecipesCatalogItem,
   getCatalogDeviceFromRecipe,
-  OLIVE_RECIPES_BRANCH,
+  getRecipesBranch,
+  setRecipesBranch,
+  OLIVE_RECIPES_BRANCH_DEFAULT,
   OLIVE_RECIPES_REPO,
   type RecipeCatalogItem,
 } from "@/lib/oliveRecipeHub";
@@ -167,7 +169,8 @@ export function InputEnvironmentPanel({
   const [syncStatus, setSyncStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [syncError, setSyncError] = useState("");
   const [repoUrl, setRepoUrl] = useState(`https://github.com/${OLIVE_RECIPES_REPO}`);
-  const [repoBranch, setRepoBranch] = useState(OLIVE_RECIPES_BRANCH);
+  const [repoBranch, setRepoBranch] = useState(getRecipesBranch());
+  const [branchPinned, setBranchPinned] = useState(() => getRecipesBranch() !== OLIVE_RECIPES_BRANCH_DEFAULT);
   const [repoPath, setRepoPath] = useState(
     "Qwen-Qwen2.5-1.5B-Instruct/NvTensorRtRtx/Qwen2.5-1.5B-Instruct_model_builder_fp16.json",
   );
@@ -1182,11 +1185,38 @@ export function InputEnvironmentPanel({
                               <GitBranch className="h-3.5 w-3.5 text-electric-blue" />
                               Target Branch
                             </Label>
-                            <Input
-                              value={repoBranch}
-                              onChange={(e) => setRepoBranch(e.target.value)}
-                              className="font-mono text-xs h-9"
-                            />
+                            <div className="flex gap-1.5">
+                              <Input
+                                value={repoBranch}
+                                onChange={(e) => setRepoBranch(e.target.value)}
+                                className="font-mono text-xs h-9 flex-1"
+                              />
+                              <button
+                                type="button"
+                                title={
+                                  branchPinned
+                                    ? `Pinned to ${repoBranch} — click to unpin`
+                                    : "Pin this branch for all recipe fetches"
+                                }
+                                className="h-9 px-2 rounded border text-[10px] font-medium transition-colors shrink-0"
+                                style={{
+                                  borderColor: branchPinned ? "#8DA840" : undefined,
+                                  color: branchPinned ? "#8DA840" : undefined,
+                                }}
+                                onClick={() => {
+                                  if (branchPinned) {
+                                    setRecipesBranch(null);
+                                    setRepoBranch(OLIVE_RECIPES_BRANCH_DEFAULT);
+                                    setBranchPinned(false);
+                                  } else {
+                                    setRecipesBranch(repoBranch);
+                                    setBranchPinned(true);
+                                  }
+                                }}
+                              >
+                                {branchPinned ? "Unpin" : "Pin"}
+                              </button>
+                            </div>
                           </div>
                           <div className="space-y-2">
                             <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
@@ -1243,19 +1273,19 @@ export function InputEnvironmentPanel({
                             {
                               label: "Qwen2.5 TRT-RTX FP16",
                               repo: `https://github.com/${OLIVE_RECIPES_REPO}`,
-                              branch: OLIVE_RECIPES_BRANCH,
+                              branch: OLIVE_RECIPES_BRANCH_DEFAULT,
                               path: "Qwen-Qwen2.5-1.5B-Instruct/NvTensorRtRtx/Qwen2.5-1.5B-Instruct_model_builder_fp16.json",
                             },
                             {
                               label: "Whisper Tiny CPU INT8",
                               repo: `https://github.com/${OLIVE_RECIPES_REPO}`,
-                              branch: OLIVE_RECIPES_BRANCH,
+                              branch: OLIVE_RECIPES_BRANCH_DEFAULT,
                               path: "openai-whisper-tiny/cpu/whisper-tiny_cpu_int8.json",
                             },
                             {
                               label: "Phi-3.5 Mini DirectML",
                               repo: `https://github.com/${OLIVE_RECIPES_REPO}`,
-                              branch: OLIVE_RECIPES_BRANCH,
+                              branch: OLIVE_RECIPES_BRANCH_DEFAULT,
                               path: "microsoft-Phi-3.5-mini-instruct/aitk/phi3_5_dml_config.json",
                             },
                             {
@@ -1989,7 +2019,6 @@ export function InputEnvironmentPanel({
                                           <button
                                             type="button"
                                             onClick={() =>
-                                               
                                               setSelectedFileName(
                                                 (selectedFileDetailed.lineage as any).parent,
                                               )
