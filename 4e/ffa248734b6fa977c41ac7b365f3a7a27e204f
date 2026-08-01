@@ -1,0 +1,185 @@
+src/server/services/ai/openai.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 22-24,35-38,60-66,283-363,366
+  s_d35b29515e08d0::t_3629f2d55f516e 365,367
+src/server/routes/tensorrt.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 2,4,13-19
+src/components/features/ProviderErrorBlock.tsx
+  s_d35b29515e08d0::t_a78d9ace47b3b6 8,10-32,54-58,60
+src/lib/__tests__/hooks.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 197,200,206,209-211
+src/server/services/olive/tensorrt-rtx.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 13,16,68-120,122-124,127,131-138,141-148,166
+src/lib/providerCatalog.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 70,74
+src/lib/hardwareProbe.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-43
+src/lib/presetVramEstimate.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-81
+src/server/services/ai/oliveMcpKnowledge.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-112
+src/server/services/olive/cuda.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 26-28,34-35
+src/server/types.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 32-44,75,150-164
+src/lib/aiResponse.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-65
+src/components/features/AuditPanel.tsx
+  s_d35b29515e08d0::t_a78d9ace47b3b6 3,58,98-105,113-126,130-134,136-152,154-155
+src/lib/auditAutofix.ts
+  s_d35b29515e08d0::t_1edf9ed4fb3cff 60
+  s_d35b29515e08d0::t_64443e02e071b3 17
+  s_d35b29515e08d0::t_a78d9ace47b3b6 73,104-111,141,224,245,247-252,255
+  s_d35b29515e08d0::t_e31d129aaa0293 162,165-168,180,184
+src/lib/logFailurePatterns.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-125,127-134
+src/lib/modelCatalog.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-47,49-87
+server.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 9,190-196,200,203-204
+src/server/routes/mcp.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 16,18-19,129-134,136-144,149-159,169-174,184-194,201,213-215,217
+src/lib/hooks/useKbSync.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1,22-25,27-43,54,56,67,71,126-134,144
+src/lib/auditSuggestionFilter.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 23
+src/lib/presetVramEstimate.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 9,121-124,131,133,135-163,167-168
+olive-mcp-server/olive_mcp_server/knowledge_base/troubleshooting.json
+  s_d35b29515e08d0::t_45e96569a3d89a 39,83,101,124,138,154,162,174,193,213,239,257,265,281,304,324,344,363,383,405,423,439-477,654
+src/types.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 94,158-162
+  s_d35b29515e08d0::t_7f44e8ae286f46 89-90
+src/lib/__tests__/pipelineValidation.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 464
+src/components/features/BatchProcessingPanel.test.tsx
+  s_d35b29515e08d0::t_a78d9ace47b3b6 22
+src/lib/hardwareProbe.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 94-96,98,112,114,117,120,143,147,170-173
+src/lib/__tests__/quirkCoverageFromMcp.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 44-47
+src/components/features/BatchProcessingPanel.tsx
+  s_d35b29515e08d0::t_a78d9ace47b3b6 62,778
+.gitignore
+  s_d35b29515e08d0::t_a78d9ace47b3b6 33-36,48
+src/lib/__tests__/aiWorkspaceContext.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-84
+src/server/services/mcp/client.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-75,77-106
+src/server/routes/env.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 5,15,19-47,70,72-76,143-145,147-158,161,165-166,168-171,173-176
+src/lib/tensorrtDeps.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1,4-18
+src/lib/chatScope.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-36,38-65,67-77
+src/server/routes/system.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 194-195,236
+src/components/features/MCPDiagnosticCard.tsx
+  s_d35b29515e08d0::t_d025e97ba172b3 186
+  s_d35b29515e08d0::t_a78d9ace47b3b6 4,7-8,15,17-18,25-26,28,37,48-56,78-97,140-143,157-160,166-168,173-174,177-185,189-206,216-217
+src/lib/tensorrtDeps.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 10-11
+src/lib/hooks.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 3,60-61,70-129,139,142,147,165,168-172,174-175
+src/lib/__tests__/oliveRecipeBuilder.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 39-41,177,181,209,216-222
+src/lib/oliveRecipeBuilder.ts
+  s_d35b29515e08d0::t_fdba8c20ab7766 22,34,36
+  s_d35b29515e08d0::t_a78d9ace47b3b6 15-16,168-170,172-174
+  s_d35b29515e08d0::t_5b1baae5fe97d0 171
+olive-mcp-server/olive_mcp_server/knowledge_base/quirks.json
+  s_d35b29515e08d0::t_e18acb4f72e786 135
+src/lib/codex/CodexAppServerClient.ts
+  s_d35b29515e08d0::t_b309fbc0ec5b20 364
+  s_d35b29515e08d0::t_a78d9ace47b3b6 7-9,13-15,17,53-62,98-104,106,138-139,141-172,228-231,233,236-239,266-272,285-286,329-363,377-379
+  s_d35b29515e08d0::t_a2415bd2c2c0e6 232,234
+src/server/services/ai/registry.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 9,74-83,88-93,102,104
+src/lib/mcpConfigMapping.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 699,703
+src/server/services/ai/security.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 88-126
+src/server/services/olive/cuda.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 6-8,28-32
+src/server/services/ai/state.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 2-4,9-14,19-20,22-67,70-74
+src/lib/codex/CodexAppServerClient.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-18
+src/lib/pipelineValidation.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 543-581,632,640-641
+src/server/routes/ai.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 22-26,28-31,36,38-39,41,52-66,124-126,197-214,223,239,251-291,295-298,302-308,310-312,324,326,336,341-348,358-392,394-401,403-406,408-437,441-461,463-471,475-476,478,486-498,503-504,511-513,539,541-542,544-550,559,566,571-591,628,631-645,648-650,652,663-664,673-725,727-734,738-743,754-760,764,781-789,791,794,796,799,802-809,811-812,815,820-824,857,861,874,877,893-894,987-1006,1023-1025,1029,1031,1131,1137-1140,1208-1210,1212-1214,1230-1231,1242,1329-1334,1338-1340,1342-1346,1348-1363,1365-1377,1379-1382,1384-1387,1397-1405,1407-1416,1418-1436,1438-1441,1443,1445-1447,1449-1456,1458-1492,1494-1524,1526-1532,1534-1564,1569-1571,1584-1595
+src/server/services/ai/security.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 14-20,74-84
+src/lib/devin/client.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 67-71,74-78,84-88,93,101-107
+src/server/services/ai/registry.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 3-4,48-56,86-87,108-109,113-123
+src/lib/__tests__/mcpConfigMapping.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 369-383
+src/lib/hooks/useKbSync.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-26,28-35
+src/lib/chatScope.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-120
+src/lib/auditAnalysis.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 35
+src/lib/auditSuggestionFilter.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 8,98,100,103
+src/server/services/ai/index.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 9-10,23,26,30,32-51
+src/server/services/olive/tensorrt.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 2,4-6,13,15,17,23-27,54-88,90-92,144,147,151-162,177-178
+  s_8f52f85d19bfb3::t_02784c45de0083 89,93
+.serena/.gitignore
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-2
+pnpm-workspace.yaml
+  s_d35b29515e08d0::t_a78d9ace47b3b6 15-22
+src/lib/auditAnalysis.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1,3-82
+src/server/services/ai/cloudflare.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-51
+src/lib/vramEstimate.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 289-291,293-297
+src/server/__tests__/routes.integration.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 94,103-104
+src/server/routes/mcp.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 77-79,81,84
+src/lib/logFailurePatterns.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-12,14-29,31-40
+package.json
+  s_d35b29515e08d0::t_a78d9ace47b3b6 102-104,127
+src/lib/modelCatalog.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-37,39-50
+src/components/features/AuditPanel.test.tsx
+  s_d35b29515e08d0::t_a78d9ace47b3b6 4,163
+src/server/services/ai/oliveMcpKnowledge.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-68,70-264,267-334
+src/lib/aiWorkspaceContext.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 3-23,38,40-43,60-61,65-70,100,126-150,152-179,184-185,200,202-203,228-229,252-282,320-329,336-346,354,370-373,407
+README.md
+  s_d35b29515e08d0::t_aa79d3ecb14599 149,151-159
+  s_d35b29515e08d0::t_a78d9ace47b3b6 160-164,224
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4effa248734b6fa977c41ac7b365f3a7a27e204f",
+  "prompts": {},
+  "sessions": {
+    "s_8f52f85d19bfb3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a9b23e9a-1ba7-4a42-949f-a3151b295e92",
+        "model": "composer-2.5-fast"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    },
+    "s_d35b29515e08d0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f88350b3-eb33-4d77-8be0-90da0daad3f7",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
