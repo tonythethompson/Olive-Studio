@@ -35,6 +35,9 @@ start-server.bat
 .review-threads.json
 /dogfood-output
 
+# Local Olive optimization outputs (ONNX, footprints, run history)
+/models/
+
 # Lockfiles for non-pnpm package managers (this repo uses pnpm exclusively)
 package-lock.json
 yarn.lock
