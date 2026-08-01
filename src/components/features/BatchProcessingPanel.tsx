@@ -112,15 +112,34 @@ export function BatchProcessingPanel({
     const queuedJobs = (state.batchJobs || []).filter((j) => j.status === "queued");
     if (queuedJobs.length === 0) return;
 
-    const queueValidation = getPipelineValidation(state, { forLocalExecution: true });
-    if (queueValidation.isBlocked) {
-      return;
-    }
-
     setIsProcessing(true);
 
     // Process jobs sequentially
     for (const job of queuedJobs) {
+      // Materialize this job's state to validate it before execution
+      const jobState: UIState = {
+        ...state,
+        modelSource: job.modelSource,
+        hfModelId: job.modelSource === "huggingface" ? job.modelIdentifier : state.hfModelId,
+        azureModelPath: job.modelSource === "azure" ? job.modelIdentifier : state.azureModelPath,
+        ihvProvider: job.provider,
+      };
+      const jobValidation = getPipelineValidation(jobState, { forLocalExecution: true });
+      if (jobValidation.isBlocked) {
+        const errorLogs = [
+          ...((jobsRef.current ?? []).find((j) => j.id === job.id)?.logs || []),
+          `[ERROR] Job validation failed: ${jobValidation.statusLabel}`,
+          ...jobValidation.issues.filter((i) => i.severity === "critical").map((i) => `[ERROR] ${i.title}`),
+        ];
+        setState({
+          batchJobs: (jobsRef.current ?? []).map((j) =>
+            j.id === job.id ? { ...j, status: "failed", logs: errorLogs } : j,
+          ),
+        });
+        fetchKeyedDiagnostic(job.id, errorLogs);
+        continue;
+      }
+
       const recipe = buildOliveRecipeFromBatchJob(job, state);
       setState({
         batchJobs: (jobsRef.current ?? []).map((j) =>

@@ -49,7 +49,8 @@ export function isKnownLocalOpenAiCompatUrl(parsed: URL): boolean {
 }
 
 export function isPrivateOrLocalHostname(hostname: string): boolean {
-  const h = hostname.toLowerCase();
+  // Normalize bracketed IPv6 hostnames consistently with isLoopbackHostname
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (
     h === "localhost" ||
     h.endsWith(".localhost") ||

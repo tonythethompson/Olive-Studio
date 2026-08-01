@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Label, Select } from "@/components/ui";
 import {
   fetchHardwareProbe,
@@ -10,6 +10,7 @@ import { prepareProviderChange } from "@/lib/pipelineValidation";
 import {
   navigatePipeline,
   isPipelineOliveRunning,
+  subscribePipelineOliveRunning,
   PIPELINE_NAV_BLOCKED_MESSAGE,
 } from "@/lib/pipelineNavigation";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
@@ -44,7 +45,7 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
   }, [selectableProviders, state.ihvProvider]);
 
   const currentHardwareBlock = getProviderAvailabilityBlock(state.ihvProvider, hardwareProbe);
-  const ihvNavBlocked = isPipelineOliveRunning();
+  const ihvNavBlocked = useSyncExternalStore(subscribePipelineOliveRunning, isPipelineOliveRunning);
 
   const handleProviderChange = (nextProvider: UIState["ihvProvider"]) => {
     if (nextProvider === state.ihvProvider) {

@@ -148,14 +148,21 @@ async function isOllamaRunning(): Promise<boolean> {
 
 /** Module-level LMS CLI path cache (avoids re-probing disk/PATH on every request). */
 let cachedLmsCli: string | null | undefined;
+let lmsCliMissAt = 0;
+const LMS_CLI_MISS_TTL_MS = 5000;
 
 function resetLmsCliCache(): void {
   cachedLmsCli = undefined;
+  lmsCliMissAt = 0;
 }
 
 function findLmsCli(): string | null {
-  // Only reuse a positive cache hit. A prior miss must not block re-probe after install.
+  // Reuse a positive cache hit immediately
   if (cachedLmsCli) return cachedLmsCli;
+  // Reuse a cached miss within TTL to avoid repeated expensive probes
+  if (cachedLmsCli === null && lmsCliMissAt > 0 && Date.now() - lmsCliMissAt < LMS_CLI_MISS_TTL_MS) {
+    return null;
+  }
   const home = os.homedir();
   const candidates =
     process.platform === "win32"
@@ -169,6 +176,7 @@ function findLmsCli(): string | null {
   for (const c of candidates) {
     if (c && fs.existsSync(c)) {
       cachedLmsCli = c;
+      lmsCliMissAt = 0;
       return cachedLmsCli;
     }
   }
@@ -184,11 +192,15 @@ function findLmsCli(): string | null {
       ?.trim();
     if (result && fs.existsSync(result)) {
       cachedLmsCli = result;
+      lmsCliMissAt = 0;
       return cachedLmsCli;
     }
   } catch {
     /* not on PATH */
   }
+  // Cache the miss with timestamp
+  cachedLmsCli = null;
+  lmsCliMissAt = Date.now();
   return null;
 }
 
@@ -359,7 +371,13 @@ async function ensureOllamaReady(onProgress?: (evt: EnsureProgressEvt) => void):
   }
   if (!ollamaEnsureInFlight) {
     ollamaEnsureInFlight = ensureOllamaReadyImpl((evt) => {
-      for (const sub of ollamaProgressSubscribers) sub(evt);
+      for (const sub of ollamaProgressSubscribers) {
+        try {
+          sub(evt);
+        } catch (err) {
+          console.error("[ensureOllamaReady] Progress subscriber threw:", err);
+        }
+      }
     }).finally(() => {
       ollamaEnsureInFlight = null;
     });
@@ -469,7 +487,13 @@ async function ensureLmsReady(onProgress?: (evt: EnsureProgressEvt) => void): Pr
   }
   if (!lmsEnsureInFlight) {
     lmsEnsureInFlight = ensureLmsReadyImpl((evt) => {
-      for (const sub of lmsProgressSubscribers) sub(evt);
+      for (const sub of lmsProgressSubscribers) {
+        try {
+          sub(evt);
+        } catch (err) {
+          console.error("[ensureLmsReady] Progress subscriber threw:", err);
+        }
+      }
     }).finally(() => {
       lmsEnsureInFlight = null;
     });
