@@ -457,27 +457,40 @@ describe("Route integration tests", () => {
 
     it("returns SSE error when LM Studio CLI is not installed", async () => {
       // findLmsCli() uses execSync("where lms") which fails on systems
-      // without LM Studio. The handler sends an SSE error event.
+      // without LM Studio. The handler streams NDJSON (or legacy SSE) events.
       const res = await fetch(`${baseUrl}/api/ai/local-pull`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ modelTag: "llama-3.2-3b-instruct" }),
       });
 
-      // Returns SSE or JSON depending on CLI availability
       const text = await res.text();
-      // Should contain an error event or a pull progress event
       expect(text.length).toBeGreaterThan(0);
-      // The SSE format: "data: {...}\n\n"
+
+      // Legacy SSE: "data: {...}\n\n"
       if (text.startsWith("data: ")) {
         const lines = text.split("\n\n").filter(Boolean);
-        const firstEvent = JSON.parse(lines[0].replace(/^data: /, ""));
+        const firstEvent = JSON.parse(lines[0]!.replace(/^data: /, ""));
         expect(firstEvent).toHaveProperty("type");
-      } else {
-        // If CLI was found, the pull may have already returned a non-SSE
-        // error response. Verify it's valid JSON.
-        expect(() => JSON.parse(text)).not.toThrow();
+        return;
       }
+
+      // Current handler: application/x-ndjson (one JSON object per line).
+      const contentType = res.headers.get("content-type") ?? "";
+      if (contentType.includes("ndjson") || text.includes("\n")) {
+        const rows = text
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => JSON.parse(line) as { type?: string });
+        expect(rows.length).toBeGreaterThan(0);
+        expect(rows.some((row) => typeof row.type === "string")).toBe(true);
+        return;
+      }
+
+      // Single JSON error object fallback.
+      const body = JSON.parse(text) as { error?: string; type?: string };
+      expect(body.error || body.type).toBeTruthy();
     });
   });
 
