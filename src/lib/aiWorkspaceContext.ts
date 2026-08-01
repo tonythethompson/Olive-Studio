@@ -1,6 +1,6 @@
 import { UIState } from "@/types";
 import { getPipelineValidation, getProviderConflicts } from "@/lib/pipelineValidation";
-import { buildOliveRecipe } from "@/lib/oliveRecipeBuilder";
+import { buildOliveRecipe, resolveHfTask } from "@/lib/oliveRecipeBuilder";
 import type { HardwareProbeResult } from "@/lib/hardwareProbe";
 
 export interface AiWorkspaceProbeSummary {
@@ -27,6 +27,10 @@ export interface AiWorkspaceContext {
   model: {
     huggingFaceId: string;
     huggingFaceDataset: string;
+    /** Resolved Olive/HF task written into recipes (explicit or inferred). */
+    hfTask: string;
+    /** True when hfTask came from inference, not an explicit UI override. */
+    hfTaskInferred: boolean;
     localFileNames: string[];
     azurePath: string;
     displayName: string;
@@ -183,12 +187,16 @@ export function buildAiWorkspaceContext(
   const displayName = resolveModelDisplayName(state);
   const recipePreviewChars = opts?.recipePreviewChars ?? 3500;
   const logTail = recentLogTail(state);
+  const explicitTask = state.hfTask?.trim() ?? "";
+  const hfTask = resolveHfTask(state);
 
   return {
     modelSource: state.modelSource,
     model: {
       huggingFaceId: state.hfModelId,
       huggingFaceDataset: state.hfDataset,
+      hfTask,
+      hfTaskInferred: !explicitTask,
       localFileNames: state.localFiles.map((f) => f.name),
       azurePath: state.azureModelPath,
       displayName,
@@ -236,6 +244,7 @@ export function formatAiWorkspaceContextForPrompt(ctx: AiWorkspaceContext): stri
     "Current Olive Studio workspace (live UI selections):",
     `- Model source: ${ctx.modelSource}`,
     `- Model: ${ctx.model.displayName}`,
+    `- HF / Olive task: ${ctx.model.hfTask}${ctx.model.hfTaskInferred ? " (inferred from model id)" : " (set in UI)"}`,
   ];
 
   if (ctx.model.huggingFaceDataset) {

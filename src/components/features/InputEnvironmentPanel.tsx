@@ -21,9 +21,7 @@ import {
   fetchGitHubRecipeJson,
   fetchOliveRecipesCatalogItem,
   getCatalogDeviceFromRecipe,
-  getRecipesBranch,
-  setRecipesBranch,
-  OLIVE_RECIPES_BRANCH_DEFAULT,
+  OLIVE_RECIPES_BRANCH,
   OLIVE_RECIPES_REPO,
   type RecipeCatalogItem,
 } from "@/lib/oliveRecipeHub";
@@ -43,6 +41,7 @@ import {
 import { isNvTensorRtRtxCatalogPath } from "@/lib/tensorrtRtxDeps";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { estimateVramForCatalogPreset } from "@/lib/presetVramEstimate";
+import { CompatCountSummary, CompatStatusPill } from "@/components/features/CompatStatus";
 import {
   DownloadCloud,
   KeyRound,
@@ -59,6 +58,7 @@ import {
   Copy,
   ChevronRight,
   ChevronUp,
+  ChevronDown,
   Info,
   FileCode,
   Activity,
@@ -97,6 +97,8 @@ function presetDisplayName(name: string): { title: string; meta: string } {
   }
   return { title: name, meta: "" };
 }
+
+type RecipeSortMode = "recommended" | "name-asc" | "name-desc" | "size-asc" | "size-desc";
 
 /**
  * Renders the model source configuration and Olive recipe management panel.
@@ -167,8 +169,7 @@ export function InputEnvironmentPanel({
   const [syncStatus, setSyncStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [syncError, setSyncError] = useState("");
   const [repoUrl, setRepoUrl] = useState(`https://github.com/${OLIVE_RECIPES_REPO}`);
-  const [repoBranch, setRepoBranch] = useState(getRecipesBranch());
-  const [branchPinned, setBranchPinned] = useState(() => getRecipesBranch() !== OLIVE_RECIPES_BRANCH_DEFAULT);
+  const [repoBranch, setRepoBranch] = useState(OLIVE_RECIPES_BRANCH);
   const [repoPath, setRepoPath] = useState(
     "Qwen-Qwen2.5-1.5B-Instruct/NvTensorRtRtx/Qwen2.5-1.5B-Instruct_model_builder_fp16.json",
   );
@@ -190,12 +191,14 @@ export function InputEnvironmentPanel({
   const [applyingRecipePath, setApplyingRecipePath] = useState<string | null>(null);
   const [appliedRecipeLabel, setAppliedRecipeLabel] = useState<string | null>(null);
   const [recipeRailExpanded, setRecipeRailExpanded] = useState(true);
+  const [sourceConfigExpanded, setSourceConfigExpanded] = useState(false);
   const [localModelHints, setLocalModelHints] = useState<LocalModelHints | null>(null);
   const [localHintsLoading, setLocalHintsLoading] = useState(false);
   const [showLocalRecipeMatchesOnly, setShowLocalRecipeMatchesOnly] = useState(false);
   const [hideIncompatibleRecipes, setHideIncompatibleRecipes] = useState(true);
   const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
   const [hardwareProbeLoading, setHardwareProbeLoading] = useState(true);
+  const [recipeSort, setRecipeSort] = useState<RecipeSortMode>("recommended");
 
   const recipeRailCollapsed = Boolean(appliedRecipeLabel) && !recipeRailExpanded;
 
@@ -239,6 +242,7 @@ export function InputEnvironmentPanel({
       setState(deriveUiStateFromOliveRecipe(json, { replacePasses: true }));
       setAppliedRecipeLabel(item.name);
       setRecipeRailExpanded(false);
+      setSourceConfigExpanded(true);
       setImportJson(JSON.stringify(json, null, 2));
       setImportError(null);
       const mismatchNote =
@@ -270,13 +274,33 @@ export function InputEnvironmentPanel({
   const handleApplyCuratedRecipeAnyway = (item: RecipeCatalogItem) =>
     applyCuratedRecipe(item, { allowIncompatible: true });
 
-  const handleFetchRemote = async () => {
+  const handleFetchRemote = async (overrides?: { url?: string; branch?: string; path?: string }) => {
+    const url = (overrides?.url ?? repoUrl).trim();
+    const branch = (overrides?.branch ?? repoBranch).trim() || "main";
+    const path = (overrides?.path ?? repoPath).trim();
+
+    if (overrides?.url !== undefined) setRepoUrl(overrides.url);
+    if (overrides?.branch !== undefined) setRepoBranch(overrides.branch);
+    if (overrides?.path !== undefined) setRepoPath(overrides.path);
+
+    if (!url) {
+      setSyncStatus("error");
+      setSyncError("GitHub repository URL is required.");
+      return;
+    }
+    if (!path) {
+      setSyncStatus("error");
+      setSyncError("Recipe path is required.");
+      return;
+    }
+
     setSyncStatus("loading");
     setSyncError("");
 
     try {
-      const { json } = await fetchGitHubRecipeJson(repoUrl, repoBranch, repoPath);
+      const { json } = await fetchGitHubRecipeJson(url, branch, path);
       setImportJson(JSON.stringify(json, null, 2));
+      setImportError(null);
       setSyncStatus("success");
       setRecipeSuccessMsg("Downloaded remote recipe payload! Inspect in Editor tab.");
       setTimeout(() => setRecipeSuccessMsg(null), 4000);
@@ -308,6 +332,7 @@ export function InputEnvironmentPanel({
     setState(deriveUiStateFromOliveRecipe(recipe, { replacePasses: true }));
     setAppliedRecipeLabel("Custom JSON recipe");
     setRecipeRailExpanded(false);
+    setSourceConfigExpanded(true);
     setImportError(null);
     setRecipeSuccessMsg(
       hw.tier === "unavailable"
@@ -390,19 +415,57 @@ export function InputEnvironmentPanel({
       );
     }
 
-    return rows
-      .map((item) => ({
-        item,
-        match: localModelHints ? scoreRecipeMatchForLocal(localModelHints, item) : null,
-        hardware: assessCatalogItemHardwareCompatibility(item, hardwareProbe),
-      }))
-      .sort((a, b) => {
-        const hwOrder = { compatible: 0, unknown: 1, unavailable: 2 };
-        const hwDiff = hwOrder[a.hardware.tier] - hwOrder[b.hardware.tier];
-        if (hwDiff !== 0) return hwDiff;
-        return (b.match?.score ?? -1) - (a.match?.score ?? -1);
-      });
-  }, [filteredRecipes, localModelHints, showLocalRecipeMatchesOnly, hideIncompatibleRecipes, hardwareProbe]);
+    const decorated = rows.map((item) => ({
+      item,
+      match: localModelHints ? scoreRecipeMatchForLocal(localModelHints, item) : null,
+      hardware: assessCatalogItemHardwareCompatibility(item, hardwareProbe),
+      modelTitle: presetDisplayName(item.name).title,
+      inferenceGb: estimateVramForCatalogPreset(item, hardwareProbe).inferenceGb,
+    }));
+
+    decorated.sort((a, b) => {
+      if (recipeSort === "name-asc" || recipeSort === "name-desc") {
+        const byTitle = a.modelTitle.localeCompare(b.modelTitle, undefined, { sensitivity: "base" });
+        if (byTitle !== 0) return recipeSort === "name-asc" ? byTitle : -byTitle;
+        const byName = a.item.name.localeCompare(b.item.name, undefined, { sensitivity: "base" });
+        return recipeSort === "name-asc" ? byName : -byName;
+      }
+
+      if (recipeSort === "size-asc" || recipeSort === "size-desc") {
+        const bySize = a.inferenceGb - b.inferenceGb;
+        if (bySize !== 0) return recipeSort === "size-asc" ? bySize : -bySize;
+        return a.modelTitle.localeCompare(b.modelTitle, undefined, { sensitivity: "base" });
+      }
+
+      const hwOrder = { compatible: 0, unknown: 1, unavailable: 2 } as const;
+      const hwDiff = hwOrder[a.hardware.tier] - hwOrder[b.hardware.tier];
+      if (hwDiff !== 0) return hwDiff;
+      return (b.match?.score ?? -1) - (a.match?.score ?? -1);
+    });
+
+    return decorated;
+  }, [
+    filteredRecipes,
+    localModelHints,
+    showLocalRecipeMatchesOnly,
+    hideIncompatibleRecipes,
+    hardwareProbe,
+    recipeSort,
+  ]);
+
+  const groupedRecipes = useMemo(() => {
+    const groups = new Map<string, { title: string; rows: typeof curatedRecipesWithMatch }>();
+    for (const row of curatedRecipesWithMatch) {
+      const { title } = presetDisplayName(row.item.name);
+      const existing = groups.get(title);
+      if (existing) {
+        existing.rows.push(row);
+      } else {
+        groups.set(title, { title, rows: [row] });
+      }
+    }
+    return [...groups.values()];
+  }, [curatedRecipesWithMatch]);
 
   const pathSuggestions = SUGGESTED_RECIPES.filter((item) => {
     if (!repoPath.trim()) return true;
@@ -721,8 +784,8 @@ export function InputEnvironmentPanel({
       {/* Unified Model Source + Recipe split panel */}
       <Card className="border-slate-800/80">
         <CardHeader
-          title="Model Source & Data"
-          description="Start from an Olive recipe preset or configure Hugging Face, local, and Azure sources directly."
+          title="Recipes & model source"
+          description="Start from an Olive recipe preset. Configure Hugging Face, local, or Azure sources when you need a custom model."
         />
         <CardContent>
           {recipeRailCollapsed && (
@@ -746,7 +809,7 @@ export function InputEnvironmentPanel({
               </div>
               <Button
                 type="button"
-                className="h-8 shrink-0 self-start px-3 text-[11px] bg-electric-blue hover:bg-electric-blue-dark text-white sm:self-center"
+                className="h-8 shrink-0 self-start px-3 text-[11px] bg-electric-blue hover:bg-electric-blue-dark text-slate-950 sm:self-center"
                 onClick={() => {
                   setRecipeRailExpanded(true);
                   setActiveRecipeTab("starter");
@@ -757,11 +820,11 @@ export function InputEnvironmentPanel({
             </div>
           )}
 
-          <div className={cn("flex flex-col gap-6 xl:gap-8", !recipeRailCollapsed && "xl:flex-row")}>
+          <div className="flex flex-col gap-6">
             {!recipeRailCollapsed && (
-              <aside className="min-w-0 shrink-0 xl:w-1/2">
+              <aside className="min-w-0 w-full" aria-label="Recipes">
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-medium text-slate-400">Recipes</h3>
+                  <h3 className="text-sm font-semibold text-slate-100">Recipes</h3>
                   {appliedRecipeLabel && (
                     <button
                       type="button"
@@ -805,7 +868,7 @@ export function InputEnvironmentPanel({
                     </TabsList>
 
                     {activeRecipeTab === "starter" && (
-                      <p className="text-[10px] text-slate-500 font-mono mb-3">
+                      <p className="text-[11px] text-slate-400 font-mono mb-3">
                         {curatedRecipesWithMatch.length} of {SUGGESTED_RECIPES.length} presets
                         {localModelHints && !localHintsLoading
                           ? ` · ${localMatchSummary?.match ?? 0} match local upload`
@@ -828,7 +891,7 @@ export function InputEnvironmentPanel({
                       <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5 space-y-2">
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                            <p className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400">
                               Hardware compatibility
                             </p>
                             {hardwareProbeLoading ? (
@@ -837,22 +900,18 @@ export function InputEnvironmentPanel({
                                 Probing this machine…
                               </p>
                             ) : hardwareProbe ? (
-                              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                                <span className="text-emerald-400">
-                                  {hardwareMatchSummary?.compatible ?? 0} compatible
-                                </span>
-                                <span className="text-slate-600"> · </span>
-                                <span className="text-rose-400">
-                                  {hardwareMatchSummary?.unavailable ?? 0} incompatible
-                                </span>
-                                <span className="text-slate-600"> · </span>
-                                <span className="text-slate-500">
+                              <div className="mt-1 space-y-1">
+                                <CompatCountSummary
+                                  compatible={hardwareMatchSummary?.compatible ?? 0}
+                                  incompatible={hardwareMatchSummary?.unavailable ?? 0}
+                                />
+                                <p className="text-[11px] text-slate-400">
                                   Detected:{" "}
                                   {hardwareProbe.detectedProviders
                                     .map((p) => p.replace("ExecutionProvider", ""))
                                     .join(", ")}
-                                </span>
-                              </p>
+                                </p>
+                              </div>
                             ) : (
                               <p className="text-xs text-slate-500 mt-1">
                                 Hardware probe unavailable — compatibility not verified.
@@ -860,7 +919,7 @@ export function InputEnvironmentPanel({
                             )}
                           </div>
                           {hardwareProbe && !hardwareProbeLoading && (
-                            <label className="flex items-center gap-2 text-[10px] text-slate-400 cursor-pointer shrink-0">
+                            <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer shrink-0">
                               <input
                                 type="checkbox"
                                 checked={hideIncompatibleRecipes}
@@ -884,7 +943,7 @@ export function InputEnvironmentPanel({
                         <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5 space-y-2">
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                              <p className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400">
                                 Local model recipe match
                               </p>
                               {localHintsLoading ? (
@@ -925,7 +984,7 @@ export function InputEnvironmentPanel({
                               )}
                             </div>
                             {localModelHints && !localHintsLoading && (localMatchSummary?.match ?? 0) > 0 && (
-                              <label className="flex items-center gap-2 text-[10px] text-slate-400 cursor-pointer shrink-0">
+                              <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer shrink-0">
                                 <input
                                   type="checkbox"
                                   checked={showLocalRecipeMatchesOnly}
@@ -957,7 +1016,7 @@ export function InputEnvironmentPanel({
                             </button>
                           )}
                         </div>
-                        <fieldset className="grid grid-cols-2 gap-2 border-0 p-0 m-0 min-w-0">
+                        <fieldset className="grid grid-cols-1 sm:grid-cols-3 gap-2 border-0 p-0 m-0 min-w-0">
                           <legend className="sr-only">Recipe filters</legend>
                           <Select
                             id="recipe-architecture-filter"
@@ -993,109 +1052,139 @@ export function InputEnvironmentPanel({
                             <option value="OpenVINO">Intel OpenVINO</option>
                             <option value="CPU">Universal CPU</option>
                           </Select>
+                          <Select
+                            id="recipe-sort"
+                            aria-label="Sort recipes"
+                            value={recipeSort}
+                            onChange={(e) => setRecipeSort(e.target.value as RecipeSortMode)}
+                            className="h-9 text-xs py-1"
+                          >
+                            <option value="recommended">Sort: Recommended</option>
+                            <option value="name-asc">Sort: Name A-Z</option>
+                            <option value="name-desc">Sort: Name Z-A</option>
+                            <option value="size-asc">Sort: Size (smallest)</option>
+                            <option value="size-desc">Sort: Size (largest)</option>
+                          </Select>
                         </fieldset>
                       </div>
 
                       <div className="max-h-[420px] overflow-y-auto rounded border border-slate-800 divide-y divide-slate-800/80">
-                        {curatedRecipesWithMatch.map(({ item, match, hardware }) => {
-                          const hwBlocked = hardware.tier === "unavailable";
-                          const { title, meta } = presetDisplayName(item.name);
-                          const vramEst = estimateVramForCatalogPreset(item, hardwareProbe);
-                          const statusParts: string[] = [];
-                          if (hardware.tier === "compatible") statusParts.push("Compatible");
-                          else if (hardware.tier === "unavailable") statusParts.push("Incompatible");
-                          else statusParts.push("Unverified");
-                          if (localModelHints && match?.tier === "match") statusParts.push("Matches upload");
-                          else if (localModelHints && match?.tier === "possible")
-                            statusParts.push("Possible match");
-                          if (item.metadataSource !== "recipe") statusParts.push("Approx. metadata");
-
-                          return (
-                            <div
-                              key={item.repoPath}
-                              title={hardware.reason}
-                              className={cn(
-                                "px-3 py-2.5 flex items-start gap-3 text-left",
-                                hwBlocked && "opacity-90",
-                              )}
-                            >
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-baseline gap-2 flex-wrap">
-                                  <h4 className="text-sm font-medium text-slate-200">{title}</h4>
-                                  {meta && <span className="text-xs text-slate-500">{meta}</span>}
-                                </div>
-                                <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
-                                  {item.description}
-                                </p>
-                                <p className="text-[11px] text-slate-500 font-mono mt-1">
-                                  {vramEst.summaryLine}
-                                </p>
-                                {vramEst.fitHint && (
-                                  <p className="text-[11px] text-amber-500/90 mt-0.5">{vramEst.fitHint}</p>
-                                )}
-                                <p className="text-[11px] text-slate-600 mt-0.5">
-                                  {statusParts.join(" · ")} · {item.device} · {item.architecture}
-                                </p>
-                                {hwBlocked && (
-                                  <p className="text-[11px] text-rose-400/80 mt-0.5 line-clamp-1">
-                                    {hardware.reason}
-                                  </p>
-                                )}
-                              </div>
-                              <div className="flex gap-1.5 shrink-0 pt-0.5">
-                                <Button
-                                  variant="outline"
-                                  type="button"
-                                  className="h-7 px-2 text-[10px] bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
-                                  disabled={applyingRecipePath === item.repoPath}
-                                  onClick={async () => {
-                                    try {
-                                      const json = await fetchOliveRecipesCatalogItem(item);
-                                      setImportJson(JSON.stringify(json, null, 2));
-                                      setActiveRecipeTab("editor");
-                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                    } catch (err: any) {
-                                      setSyncStatus("error");
-                                      setSyncError(err.message || "Failed to load recipe JSON.");
-                                    }
-                                  }}
-                                >
-                                  JSON
-                                </Button>
-                                {hwBlocked ? (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="h-7 px-2 text-[10px] border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
-                                    disabled={applyingRecipePath === item.repoPath}
-                                    onClick={() => handleApplyCuratedRecipeAnyway(item)}
-                                  >
-                                    {applyingRecipePath === item.repoPath ? (
-                                      <Loader2 className="h-3 w-3 animate-spin" />
-                                    ) : (
-                                      "Apply anyway"
-                                    )}
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    type="button"
-                                    className="h-7 px-2.5 text-[10px] bg-electric-blue hover:bg-electric-blue-dark text-white"
-                                    disabled={applyingRecipePath === item.repoPath}
-                                    onClick={() => handleApplyCuratedRecipe(item)}
-                                  >
-                                    {applyingRecipePath === item.repoPath ? (
-                                      <Loader2 className="h-3 w-3 animate-spin" />
-                                    ) : (
-                                      "Apply"
-                                    )}
-                                  </Button>
-                                )}
-                              </div>
+                        {groupedRecipes.map(({ title: modelTitle, rows }) => (
+                          <div key={modelTitle} className="bg-slate-950/20">
+                            <div className="sticky top-0 z-[1] flex items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2">
+                              <h3 className="text-sm font-semibold text-slate-100 truncate">{modelTitle}</h3>
+                              <span className="shrink-0 text-[11px] font-mono text-slate-400">
+                                {rows.length} target{rows.length === 1 ? "" : "s"}
+                              </span>
                             </div>
-                          );
-                        })}
+                            <div className="divide-y divide-slate-900/80">
+                              {rows.map(({ item, match, hardware }) => {
+                                const hwBlocked = hardware.tier === "unavailable";
+                                const { meta } = presetDisplayName(item.name);
+                                const vramEst = estimateVramForCatalogPreset(item, hardwareProbe);
+                                const statusParts: string[] = [];
+                                if (localModelHints && match?.tier === "match")
+                                  statusParts.push("Matches upload");
+                                else if (localModelHints && match?.tier === "possible")
+                                  statusParts.push("Possible match");
+                                if (item.metadataSource !== "recipe") statusParts.push("Approx. metadata");
 
-                        {curatedRecipesWithMatch.length === 0 && (
+                                return (
+                                  <div
+                                    key={item.repoPath}
+                                    title={hardware.reason}
+                                    className={cn(
+                                      "px-3 py-2 flex items-start gap-3 text-left",
+                                      hwBlocked && "opacity-90",
+                                    )}
+                                  >
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="inline-flex items-center rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[11px] font-mono text-slate-100">
+                                          {item.device}
+                                        </span>
+                                        <CompatStatusPill tier={hardware.tier} />
+                                        {meta && (
+                                          <span className="text-[11px] text-slate-400 truncate">{meta}</span>
+                                        )}
+                                      </div>
+                                      <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
+                                        {item.description}
+                                      </p>
+                                      <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                                        {vramEst.summaryLine}
+                                        <span className="text-slate-600"> · </span>
+                                        {item.architecture}
+                                        {statusParts.length > 0 ? ` · ${statusParts.join(" · ")}` : ""}
+                                      </p>
+                                      {vramEst.fitHint && (
+                                        <p className="text-[11px] text-amber-500/90 mt-0.5">
+                                          {vramEst.fitHint}
+                                        </p>
+                                      )}
+                                      {hwBlocked && (
+                                        <p className="text-[11px] text-rose-400/80 mt-0.5 line-clamp-1">
+                                          {hardware.reason}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <div className="flex gap-1.5 shrink-0 pt-0.5">
+                                      <Button
+                                        variant="outline"
+                                        type="button"
+                                        className="h-7 px-2 text-[10px] bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
+                                        disabled={applyingRecipePath === item.repoPath}
+                                        onClick={async () => {
+                                          try {
+                                            const json = await fetchOliveRecipesCatalogItem(item);
+                                            setImportJson(JSON.stringify(json, null, 2));
+                                            setActiveRecipeTab("editor");
+                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                          } catch (err: any) {
+                                            setSyncStatus("error");
+                                            setSyncError(err.message || "Failed to load recipe JSON.");
+                                          }
+                                        }}
+                                      >
+                                        JSON
+                                      </Button>
+                                      {hwBlocked ? (
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          className="h-7 px-2 text-[10px] border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
+                                          disabled={applyingRecipePath === item.repoPath}
+                                          onClick={() => handleApplyCuratedRecipeAnyway(item)}
+                                        >
+                                          {applyingRecipePath === item.repoPath ? (
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                          ) : (
+                                            "Apply anyway"
+                                          )}
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          type="button"
+                                          className="h-7 px-2.5 text-[10px] bg-electric-blue hover:bg-electric-blue-dark text-slate-950"
+                                          disabled={applyingRecipePath === item.repoPath}
+                                          onClick={() => handleApplyCuratedRecipe(item)}
+                                        >
+                                          {applyingRecipePath === item.repoPath ? (
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                          ) : (
+                                            "Apply"
+                                          )}
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+
+                        {groupedRecipes.length === 0 && (
                           <div className="p-6 text-center">
                             <Search className="h-6 w-6 text-slate-700 mx-auto mb-2" />
                             <p className="text-xs font-semibold text-slate-400">
@@ -1149,38 +1238,11 @@ export function InputEnvironmentPanel({
                               <GitBranch className="h-3.5 w-3.5 text-electric-blue" />
                               Target Branch
                             </Label>
-                            <div className="flex gap-1.5">
-                              <Input
-                                value={repoBranch}
-                                onChange={(e) => setRepoBranch(e.target.value)}
-                                className="font-mono text-xs h-9 flex-1"
-                              />
-                              <button
-                                type="button"
-                                title={
-                                  branchPinned
-                                    ? `Pinned to ${repoBranch} — click to unpin`
-                                    : "Pin this branch for all recipe fetches"
-                                }
-                                className="h-9 px-2 rounded border text-[10px] font-medium transition-colors shrink-0"
-                                style={{
-                                  borderColor: branchPinned ? "#8DA840" : undefined,
-                                  color: branchPinned ? "#8DA840" : undefined,
-                                }}
-                                onClick={() => {
-                                  if (branchPinned) {
-                                    setRecipesBranch(null);
-                                    setRepoBranch(OLIVE_RECIPES_BRANCH_DEFAULT);
-                                    setBranchPinned(false);
-                                  } else {
-                                    setRecipesBranch(repoBranch);
-                                    setBranchPinned(true);
-                                  }
-                                }}
-                              >
-                                {branchPinned ? "Unpin" : "Pin"}
-                              </button>
-                            </div>
+                            <Input
+                              value={repoBranch}
+                              onChange={(e) => setRepoBranch(e.target.value)}
+                              className="font-mono text-xs h-9"
+                            />
                           </div>
                           <div className="space-y-2">
                             <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
@@ -1205,9 +1267,9 @@ export function InputEnvironmentPanel({
 
                         <Button
                           type="button"
-                          onClick={handleFetchRemote}
+                          onClick={() => void handleFetchRemote()}
                           disabled={syncStatus === "loading" || !repoUrl.trim()}
-                          className="w-full text-xs h-9 bg-electric-blue hover:bg-electric-blue-dark text-white"
+                          className="w-full text-xs h-9 bg-electric-blue hover:bg-electric-blue-dark text-slate-950"
                         >
                           {syncStatus === "loading" ? (
                             <>
@@ -1237,19 +1299,19 @@ export function InputEnvironmentPanel({
                             {
                               label: "Qwen2.5 TRT-RTX FP16",
                               repo: `https://github.com/${OLIVE_RECIPES_REPO}`,
-                              branch: OLIVE_RECIPES_BRANCH_DEFAULT,
+                              branch: OLIVE_RECIPES_BRANCH,
                               path: "Qwen-Qwen2.5-1.5B-Instruct/NvTensorRtRtx/Qwen2.5-1.5B-Instruct_model_builder_fp16.json",
                             },
                             {
                               label: "Whisper Tiny CPU INT8",
                               repo: `https://github.com/${OLIVE_RECIPES_REPO}`,
-                              branch: OLIVE_RECIPES_BRANCH_DEFAULT,
+                              branch: OLIVE_RECIPES_BRANCH,
                               path: "openai-whisper-tiny/cpu/whisper-tiny_cpu_int8.json",
                             },
                             {
                               label: "Phi-3.5 Mini DirectML",
                               repo: `https://github.com/${OLIVE_RECIPES_REPO}`,
-                              branch: OLIVE_RECIPES_BRANCH_DEFAULT,
+                              branch: OLIVE_RECIPES_BRANCH,
                               path: "microsoft-Phi-3.5-mini-instruct/aitk/phi3_5_dml_config.json",
                             },
                             {
@@ -1258,27 +1320,48 @@ export function InputEnvironmentPanel({
                               branch: "main",
                               path: "examples/resnet/resnet_ptq.json",
                             },
-                          ].map((sc, i) => (
-                            <button
-                              key={i}
-                              type="button"
-                              onClick={() => {
-                                setRepoUrl(sc.repo);
-                                setRepoBranch(sc.branch);
-                                setRepoPath(sc.path);
-                                setSyncStatus("idle");
-                                setSyncError("");
-                              }}
-                              className="text-left p-2.5 bg-slate-950/80 hover:bg-slate-950 border border-slate-900 hover:border-electric-blue/20 hover:text-white rounded-lg text-xs text-slate-300 transition-all font-sans cursor-pointer group"
-                            >
-                              <span className="font-semibold block text-slate-200 group-hover:text-electric-blue transition-colors">
-                                {sc.label}
-                              </span>
-                              <span className="text-[10px] text-slate-500 block truncate font-mono mt-0.5">
-                                {sc.path}
-                              </span>
-                            </button>
-                          ))}
+                          ].map((sc, i) => {
+                            const isActive =
+                              repoPath === sc.path &&
+                              repoBranch === sc.branch &&
+                              (repoUrl.includes("olive-recipes")
+                                ? sc.repo.includes("olive-recipes")
+                                : repoUrl.replace(/\/$/, "") === sc.repo.replace(/\/$/, ""));
+                            return (
+                              <button
+                                key={i}
+                                type="button"
+                                disabled={syncStatus === "loading"}
+                                aria-label={`Pull ${sc.label} into JSON editor`}
+                                onClick={() => {
+                                  void handleFetchRemote({
+                                    url: sc.repo,
+                                    branch: sc.branch,
+                                    path: sc.path,
+                                  });
+                                }}
+                                className={`text-left p-2.5 rounded-lg text-xs transition-all font-sans cursor-pointer group disabled:opacity-50 disabled:cursor-wait border ${
+                                  isActive
+                                    ? "bg-electric-blue/10 border-electric-blue/40 text-slate-100"
+                                    : "bg-slate-950/80 hover:bg-slate-950 border-slate-900 hover:border-electric-blue/20 text-slate-300"
+                                }`}
+                              >
+                                <span
+                                  className={`font-semibold block transition-colors ${
+                                    isActive
+                                      ? "text-electric-blue"
+                                      : "text-slate-200 group-hover:text-electric-blue"
+                                  }`}
+                                >
+                                  {sc.label}
+                                  {syncStatus === "loading" && repoPath === sc.path ? " · pulling…" : ""}
+                                </span>
+                                <span className="text-[10px] text-slate-500 block truncate font-mono mt-0.5">
+                                  {sc.path}
+                                </span>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     </TabsContent>
@@ -1329,7 +1412,7 @@ export function InputEnvironmentPanel({
                             type="button"
                             onClick={() => handleImport(false)}
                             disabled={!importJson.trim()}
-                            className="text-xs h-8 bg-electric-blue hover:bg-electric-blue-dark text-white cursor-pointer"
+                            className="text-xs h-8 bg-electric-blue hover:bg-electric-blue-dark text-slate-950 cursor-pointer"
                           >
                             <FileJson className="h-3.5 w-3.5 mr-1.5" />
                             Parse & Apply Configuration
@@ -1342,678 +1425,712 @@ export function InputEnvironmentPanel({
               </aside>
             )}
 
-            <div
-              className={cn(
-                "min-w-0 flex-1",
-                !recipeRailCollapsed &&
-                  "border-t border-slate-800/80 pt-6 xl:border-t-0 xl:border-l xl:border-slate-800/80 xl:pl-8 xl:pt-0",
-              )}
-            >
-              <h3 className="text-sm font-medium text-slate-400 mb-4 flex items-center gap-1.5">
-                <DownloadCloud className="h-3.5 w-3.5 text-electric-blue" />
-                Source config
-              </h3>
-
-              {appliedRecipeLabel && (
-                <div className="mb-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5 text-xs text-slate-300">
-                  <span className="text-emerald-400 font-semibold">From recipe:</span> {appliedRecipeLabel}
-                  <span className="text-slate-500"> · </span>
-                  <span className="font-mono text-[11px] text-slate-400">
-                    {state.modelSource === "huggingface" && state.hfModelId
-                      ? `HF · ${state.hfModelId}`
-                      : state.modelSource === "local"
-                        ? `Local · ${state.localFiles.length} file(s)`
-                        : state.modelSource === "azure" && state.azureModelPath
-                          ? `Azure · ${state.azureModelPath}`
-                          : state.modelSource}
-                  </span>
-                </div>
-              )}
-
-              <Tabs
-                value={state.modelSource}
-                onValueChange={(v) => setState({ modelSource: v as UIState["modelSource"] })}
-                className="w-full"
-              >
-                <TabsList className="mb-6 !grid h-auto w-full grid-cols-3 gap-1 rounded-xl border border-slate-800 bg-slate-950 p-1.5">
-                  <TabsTrigger
-                    value="huggingface"
-                    title="Hugging Face Hub"
-                    className="w-full rounded-lg px-2 py-2.5 text-[11px] sm:text-xs"
-                  >
-                    <DownloadCloud className="mr-1.5 h-4 w-4 shrink-0" />
-                    <span className="truncate">Hugging Face</span>
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="local"
-                    title="Local Machine"
-                    className="w-full rounded-lg px-2 py-2.5 text-[11px] sm:text-xs"
-                  >
-                    <HardDrive className="mr-1.5 h-4 w-4 shrink-0" />
-                    <span className="truncate">Local</span>
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="azure"
-                    title="Azure ML Model"
-                    className="w-full rounded-lg px-2 py-2.5 text-[11px] sm:text-xs"
-                  >
-                    <Cloud className="mr-1.5 h-4 w-4 shrink-0" />
-                    <span className="truncate">Azure ML</span>
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="huggingface" className="space-y-6 animate-in fade-in">
-                  <div className="grid gap-3">
-                    <Label htmlFor="modelId">Hugging Face Model ID</Label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-                      <Input
-                        id="modelId"
-                        placeholder="e.g. meta-llama/Llama-2-7b-hf"
-                        className="pl-9"
-                        value={state.hfModelId}
-                        onChange={(e) => setState({ hfModelId: e.target.value })}
-                      />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                      <span className="text-[11px] text-slate-500 mr-1">Quick Select:</span>
-                      <button
-                        type="button"
-                        onClick={() => setState({ hfModelId: "meta-llama/Meta-Llama-3-8B" })}
-                        className="text-[11px] text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
-                      >
-                        Meta-Llama-3
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setState({
-                            hfModelId: "microsoft/Phi-3-mini-4k-instruct",
-                          })
-                        }
-                        className="text-[11px] text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
-                      >
-                        Phi-3 Mini
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setState({ hfModelId: "openai/whisper-large-v3" })}
-                        className="text-[11px] text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
-                      >
-                        Whisper Large V3
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setState({
-                            hfModelId: "stabilityai/stable-diffusion-xl-base-1.0",
-                          })
-                        }
-                        className="text-[11px] text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
-                      >
-                        Stable Diffusion XL
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setState({ hfModelId: "bert-base-uncased" })}
-                        className="text-[11px] text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
-                      >
-                        BERT Base
-                      </button>
-                    </div>
+            <div className="min-w-0 w-full">
+              {!sourceConfigExpanded && !recipeRailCollapsed ? (
+                <button
+                  type="button"
+                  onClick={() => setSourceConfigExpanded(true)}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-dashed border-slate-700 bg-slate-950/40 px-4 py-3 text-left transition-colors hover:border-electric-blue/40 hover:bg-slate-950/70 cursor-pointer"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-200 flex items-center gap-1.5">
+                      <DownloadCloud className="h-3.5 w-3.5 text-electric-blue" />
+                      Configure model source
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">
+                      Optional custom path: Hugging Face, local files, or Azure ML. Prefer a recipe preset
+                      above when you can.
+                    </p>
                   </div>
-
-                  {/* HuggingFace Token */}
-                  <div className="p-4 rounded-xl border border-slate-800 bg-slate-900/30 space-y-3">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <Label className="flex items-center gap-1.5 mb-0">
-                        <KeyRound className="h-3.5 w-3.5 text-amber-400" />
-                        HuggingFace Token
-                      </Label>
-                      {hfTokenStatus === "loading" && (
-                        <span className="text-[10px] text-slate-500 font-mono">Checking...</span>
-                      )}
-                      {hfTokenStatus === "environment" && (
-                        <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono font-semibold">
-                          ✓ Found in Windows env vars
-                        </span>
-                      )}
-                      {hfTokenStatus === "user" && (
-                        <span className="text-[10px] bg-electric-blue/10 border border-electric-blue/20 text-electric-blue px-2 py-0.5 rounded font-mono font-semibold">
-                          ✓ Set for this session
-                        </span>
-                      )}
-                      {hfTokenStatus === "none" && (
-                        <span className="text-[10px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-mono">
-                          Not set — required for gated models
-                        </span>
-                      )}
-                    </div>
-
-                    {hfTokenStatus !== "environment" && hfTokenStatus !== "loading" && (
-                      <div className="flex gap-2">
-                        <div className="relative flex-1">
-                          <KeyRound className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-                          <input
-                            type="password"
-                            placeholder="hf_..."
-                            autoComplete="off"
-                            className="w-full pl-9 pr-3 h-9 bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-electric-blue rounded-md font-mono text-xs text-slate-200 placeholder:text-slate-600 outline-none"
-                            value={hfTokenInput}
-                            onChange={(e) => setHfTokenInput(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && handleSubmitToken()}
-                          />
-                        </div>
-                        <Button
-                          type="button"
-                          onClick={handleSubmitToken}
-                          disabled={!hfTokenInput.trim() || isSubmittingToken}
-                          className="h-9 px-4 text-xs bg-electric-blue hover:bg-electric-blue/90 text-white font-bold"
-                        >
-                          {isSubmittingToken ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
-                        </Button>
-                        {hfTokenStatus === "user" && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={handleClearToken}
-                            className="h-9 px-3 text-xs border-red-500/30 text-red-400 hover:bg-red-500/10"
-                          >
-                            Clear
-                          </Button>
-                        )}
-                      </div>
+                  <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />
+                </button>
+              ) : (
+                <>
+                  <div className="mb-4 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-medium text-slate-400 flex items-center gap-1.5">
+                      <DownloadCloud className="h-3.5 w-3.5 text-electric-blue" />
+                      Source config
+                    </h3>
+                    {!recipeRailCollapsed && (
+                      <button
+                        type="button"
+                        onClick={() => setSourceConfigExpanded(false)}
+                        className="flex cursor-pointer items-center gap-1 text-[10px] font-mono text-slate-500 hover:text-slate-300"
+                      >
+                        <ChevronUp className="h-3 w-3" />
+                        Hide
+                      </button>
                     )}
-
-                    <p className="text-[10px] text-slate-500 leading-relaxed">
-                      Stored in server memory only — never written to disk or returned to the client. Set{" "}
-                      <code className="text-slate-400 font-mono">HF_TOKEN</code> in Windows environment
-                      variables for persistent access without re-entering each session.
-                    </p>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="grid gap-3">
-                      <Label htmlFor="hf-task-type">Task Type</Label>
-                      <Select
-                        id="hf-task-type"
-                        aria-label="Hugging Face task type"
-                        value={state.hfTask || ""}
-                        onChange={(e) => setState({ hfTask: e.target.value })}
-                      >
-                        <option value="">Auto (from model id)</option>
-                        <option value="text-generation">Text Generation</option>
-                        <option value="feature-extraction">Feature Extraction</option>
-                        <option value="text-classification">Text Classification</option>
-                        <option value="fill-mask">Fill Mask</option>
-                        <option value="text2text-generation">Text2Text Generation</option>
-                        <option value="speech-recognition">Speech Recognition</option>
-                        <option value="image-classification">Image Classification</option>
-                        <option value="object-detection">Object Detection</option>
-                        <option value="sentence-similarity">Sentence Similarity</option>
-                        <option value="conversational">Conversational</option>
-                      </Select>
-                      <p className="text-[10px] text-slate-500 leading-relaxed">
-                        Written into Olive <code className="font-mono text-slate-400">input_model</code> task
-                        / hf_config.task. Embedding models (GTE, BGE, E5) should use Feature Extraction.
-                      </p>
-                    </div>
-                    <div className="grid gap-3">
-                      <Label htmlFor="dataset">Calibration Dataset (Optional)</Label>
-                      <Input
-                        id="dataset"
-                        placeholder="e.g. wikitext"
-                        value={state.hfDataset}
-                        onChange={(e) => setState({ hfDataset: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-4">
-                    <div className="grid gap-3">
-                      <Label htmlFor="user-script">User Script Path (Optional)</Label>
-                      <Input
-                        id="user-script"
-                        placeholder="e.g. ./user_script.py"
-                        value={state.userScript || ""}
-                        onChange={(e) => setState({ userScript: e.target.value || undefined })}
-                      />
-                      <p className="text-[10px] text-slate-500 leading-relaxed">
-                        Path to a Python script with eval/calibration functions required by some optimization
-                        passes.
-                      </p>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="local" className="space-y-6 animate-in fade-in">
-                  <div className="border-2 border-dashed border-slate-800 rounded-xl p-8 flex flex-col items-center justify-center bg-slate-900/30 text-center hover:bg-slate-900/50 transition-colors">
-                    <div className="h-12 w-12 rounded-full bg-electric-blue/10 flex items-center justify-center mb-4">
-                      <FolderUp className="h-6 w-6 text-electric-blue" />
-                    </div>
-                    <h4 className="font-medium text-slate-200 mb-1">Upload Local Model Files</h4>
-                    <p className="text-sm text-slate-500 mb-6 max-w-md">
-                      Select your model weights and configurations. For massive LLMs, you can upload chunked
-                      weights (e.g. <code className="text-electric-blue">.bin.001</code>,{" "}
-                      <code className="text-electric-blue">.bin.002</code>).
-                    </p>
-                    <input
-                      type="file"
-                      multiple
-                      className="hidden"
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                    />
-                    <Button onClick={() => fileInputRef.current?.click()} variant="outline">
-                      Browse Files
-                    </Button>
-                  </div>
-
-                  {state.localFiles.length > 0 && (
-                    <div className="space-y-4">
-                      <Label className="text-sm font-semibold text-slate-300">
-                        Uploaded Model Files ({state.localFiles.length})
-                      </Label>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {state.localFiles.map((file, i) => {
-                          const isChunk = getBaseName(file.name) !== null;
-                          const isCurSelected = activeFileSelectedName === file.name;
-                          return (
-                            <div
-                              key={i}
-                              onClick={() => setSelectedFileName(file.name)}
-                              className={`flex items-center justify-between p-3 rounded-lg border group transition-all cursor-pointer ${
-                                isCurSelected
-                                  ? "bg-electric-blue/10 border-electric-blue/60 shadow-sm ring-1 ring-electric-blue/25"
-                                  : isChunk
-                                    ? "bg-slate-900 border-electric-blue/25 hover:border-slate-705 hover:bg-slate-900/80"
-                                    : "bg-slate-950 border-slate-800 hover:border-slate-700 hover:bg-slate-950/80"
-                              }`}
-                            >
-                              <div className="flex items-center gap-3 overflow-hidden">
-                                <FileIcon
-                                  className={`h-4 w-4 shrink-0 transition-colors ${isCurSelected ? "text-electric-blue" : isChunk ? "text-blue-400" : "text-slate-500"}`}
-                                />
-                                <div className="truncate">
-                                  <p
-                                    className={`text-sm font-medium truncate transition-colors ${isCurSelected ? "text-white" : "text-slate-300 group-hover:text-slate-200"}`}
-                                  >
-                                    {file.name}
-                                  </p>
-                                  <p className="text-xs text-slate-500 font-mono">{formatSize(file.size)}</p>
-                                </div>
-                              </div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  removeFile(file.name);
-                                }}
-                                className="text-slate-600 hover:text-red-400 p-1 rounded hover:bg-slate-900 transition-colors shrink-0 cursor-pointer"
-                              >
-                                <X className="h-4 w-4" />
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Chunk Reconstruction UI */}
-                      {reconstructableGroups().map(([base, files]) => (
-                        <div
-                          key={base}
-                          className="mt-4 p-4 rounded-lg bg-electric-blue/5 border border-electric-blue/20"
-                        >
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                            <div className="space-y-1">
-                              <h5 className="text-sm font-medium text-electric-blue flex items-center gap-2">
-                                <Layers className="h-4 w-4" />
-                                Model Reconstruction Available
-                              </h5>
-                              <p className="text-xs text-slate-400">
-                                Detected {files.length} parts for <strong>{base}</strong> (
-                                {formatSize(files.reduce((a, b) => a + b.size, 0))}
-                                ).
-                              </p>
-                            </div>
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                              <Button
-                                variant="outline"
-                                className="border-electric-blue/50 text-electric-blue hover:bg-electric-blue hover:text-white"
-                                onClick={() => startReconstruction(base, files)}
-                                disabled={isReconstructing}
-                              >
-                                {isReconstructing ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Assembling...
-                                  </>
-                                ) : (
-                                  "Reconstruct Binary"
-                                )}
-                              </Button>
-                              {downloadUrl && downloadName && (
-                                <a
-                                  href={downloadUrl}
-                                  download={downloadName}
-                                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded text-xs text-emerald-400 font-semibold transition-all"
-                                >
-                                  <DownloadCloud className="h-3.5 w-3.5" />
-                                  Download {downloadName}
-                                </a>
-                              )}
-                            </div>
-                          </div>
-
-                          {isReconstructing && (
-                            <div className="mt-4 space-y-1.5 animate-in fade-in">
-                              <div className="flex justify-between text-xs text-electric-blue font-mono">
-                                <span>Progress</span>
-                                <span>{Math.round(reconstructProgress)}%</span>
-                              </div>
-                              <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
-                                <div
-                                  className="h-full bg-electric-blue transition-all duration-200 ease-out"
-                                  style={{ width: `${reconstructProgress}%` }}
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-
-                      {/* File Preview & Metadata Panel */}
-                      <div className="mt-6 border-t border-slate-900 pt-6 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                              <Activity className="h-4 w-4 text-emerald-400 animate-pulse" />
-                              Model File Metadata & Inspector
-                            </h4>
-                            <p className="text-xs text-slate-500">
-                              Lists sizes, verified hash integrity signatures, and segment lineages for local
-                              resources.
-                            </p>
-                          </div>
-                          {selectedFileDetailed && (
-                            <div className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono font-medium">
-                              {selectedFileDetailed.status}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-950/40 rounded-xl border border-slate-800/80 p-5 overflow-hidden">
-                          {/* Left Column: Inspectable Items Selector */}
-                          <div className="lg:col-span-12 xl:col-span-5 space-y-4 border-r border-slate-900 xl:pr-5">
-                            <div className="space-y-2">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                                Active Workspace Files ({state.localFiles.length})
-                              </span>
-                              <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                                {state.localFiles.map((file, idx) => {
-                                  const isCurSelected = activeFileSelectedName === file.name;
-                                  const isChunk = getBaseName(file.name) !== null;
-                                  return (
-                                    <div
-                                      key={idx}
-                                      onClick={() => setSelectedFileName(file.name)}
-                                      className={`flex items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
-                                        isCurSelected
-                                          ? "bg-electric-blue/10 border-electric-blue/60 text-white shadow-sm"
-                                          : "bg-slate-950/60 border-slate-900/60 text-slate-400 hover:border-slate-800 hover:bg-slate-950 hover:text-slate-200"
-                                      }`}
-                                    >
-                                      <div className="flex items-center gap-2 overflow-hidden w-full">
-                                        <FileIcon
-                                          className={`h-3.5 w-3.5 shrink-0 ${isCurSelected ? "text-electric-blue" : isChunk ? "text-blue-400" : "text-slate-500"}`}
-                                        />
-                                        <div className="truncate flex-1">
-                                          <div className="text-xs font-medium truncate">{file.name}</div>
-                                          <div className="text-[10px] font-mono text-slate-500 leading-tight">
-                                            {isChunk ? "Segment block" : "Active baseline"} •{" "}
-                                            {formatSize(file.size)}
-                                          </div>
-                                        </div>
-                                        <ChevronRight
-                                          className={`h-3 w-3 shrink-0 opacity-50 ${isCurSelected ? "text-electric-blue opacity-100 translate-x-0.5 transition-transform" : ""}`}
-                                        />
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* Reconstructed Lineages Section */}
-                            <div className="space-y-2">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 pt-2 border-t border-slate-900/40">
-                                <History className="h-3 w-3 text-amber-500" /> Reconstructed Lineages (
-                                {reconstructedHistory.length})
-                              </span>
-                              {reconstructedHistory.length === 0 ? (
-                                <div className="p-3 text-center border border-dashed border-slate-900 rounded-lg bg-slate-950/20 text-[11px] text-slate-500 italic font-mono leading-relaxed">
-                                  No reconstructions performed in this workspace session yet.
-                                </div>
-                              ) : (
-                                <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                                  {reconstructedHistory.map((item, idx) => {
-                                    const isCurSelected = activeFileSelectedName === item.baseName;
-                                    return (
-                                      <div
-                                        key={idx}
-                                        onClick={() => setSelectedFileName(item.baseName)}
-                                        className={`flex items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
-                                          isCurSelected
-                                            ? "bg-amber-500/10 border-amber-500/50 text-white"
-                                            : "bg-slate-950/60 border-slate-900/60 text-slate-400 hover:border-slate-800 hover:bg-slate-950 hover:text-slate-200"
-                                        }`}
-                                      >
-                                        <div className="flex items-center gap-2 overflow-hidden w-full">
-                                          <Cpu
-                                            className={`h-3.5 w-3.5 shrink-0 ${isCurSelected ? "text-amber-500" : "text-amber-400/80"}`}
-                                          />
-                                          <div className="truncate flex-1">
-                                            <div className="text-xs font-medium truncate">
-                                              {item.baseName}
-                                            </div>
-                                            <div className="text-[10px] font-mono text-slate-500 leading-tight">
-                                              Reconstituted • {formatSize(item.totalSize)} (
-                                              {item.chunks.length} parts)
-                                            </div>
-                                          </div>
-                                          <ChevronRight
-                                            className={`h-3 w-3 shrink-0 opacity-50 ${isCurSelected ? "text-amber-500 opacity-100 translate-x-0.5 transition-transform" : ""}`}
-                                          />
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Right Column: Detailed Metadata Inspector View */}
-                          <div className="lg:col-span-12 xl:col-span-7 flex flex-col justify-between space-y-4">
-                            {selectedFileDetailed ? (
-                              <div className="space-y-4 h-full flex flex-col justify-between">
-                                <div className="space-y-3">
-                                  {/* File Details Title */}
-                                  <div>
-                                    <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1.5">
-                                      <FileCode className="h-3.5 w-3.5 text-slate-400" />
-                                      {getFileFormatLabel(selectedFileDetailed.name)}
-                                    </div>
-                                    <h5 className="text-sm font-semibold text-slate-200 truncate mt-0.5">
-                                      {selectedFileDetailed.name}
-                                    </h5>
-                                    <p className="text-xs text-slate-400 leading-relaxed mt-1 italic">
-                                      "{getFileDescription(selectedFileDetailed.name)}"
-                                    </p>
-                                  </div>
-
-                                  {/* Detailed Metadata Grid */}
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950 border border-slate-900 rounded-lg p-3.5 font-sans">
-                                    <div>
-                                      <span className="text-[10px] font-mono text-slate-500 uppercase block leading-none mb-1">
-                                        Size Specification
-                                      </span>
-                                      <span className="text-xs font-bold text-slate-300 font-mono">
-                                        {formatSize(selectedFileDetailed.size)}
-                                      </span>
-                                      <span className="text-[10px] text-slate-500 block leading-none font-mono mt-0.5">
-                                        {selectedFileDetailed.size.toLocaleString()} bytes
-                                      </span>
-                                    </div>
-                                    <div>
-                                      <span className="text-[10px] font-mono text-slate-500 uppercase block leading-none mb-1">
-                                        Verification Checksum
-                                      </span>
-                                      <div className="flex items-center gap-1.5 mt-0.5">
-                                        <span
-                                          className="text-[11px] font-semibold font-mono text-emerald-400 bg-emerald-500/5 px-1.5 py-0.5 border border-emerald-500/10 rounded truncate max-w-[170px]"
-                                          title={getDisplayHash(selectedFileDetailed.name)}
-                                        >
-                                          {getDisplayHash(selectedFileDetailed.name).substring(0, 24)}...
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            handleCopyHash(getDisplayHash(selectedFileDetailed.name))
-                                          }
-                                          className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-900 transition-colors cursor-pointer"
-                                        >
-                                          {copiedHash === getDisplayHash(selectedFileDetailed.name) ? (
-                                            <Check className="h-3.5 w-3.5 text-emerald-400" />
-                                          ) : (
-                                            <Copy className="h-3.5 w-3.5" />
-                                          )}
-                                        </button>
-                                      </div>
-                                    </div>
-                                    <div className="col-span-1 sm:col-span-2 border-t border-slate-900/60 pt-2.5 mt-1">
-                                      <span className="text-[10px] font-mono text-slate-500 uppercase block mb-1.5">
-                                        Structural Analysis Properties
-                                      </span>
-                                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                                        {getSimulatedTensors(
-                                          selectedFileDetailed.name,
-                                          selectedFileDetailed.size,
-                                        ).map((item, i) => (
-                                          <div
-                                            key={i}
-                                            className="flex items-center justify-between text-[11px] border-b border-dashed border-slate-900 pb-1"
-                                          >
-                                            <span className="text-slate-500 capitalize">
-                                              {item.key.replace(/_/g, " ")}
-                                            </span>
-                                            <span className="text-slate-300 font-mono font-medium">
-                                              {item.val}
-                                            </span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Custom display based on lineage */}
-                                  {selectedFileDetailed.lineage && selectedFileDetailed.reconstructed && (
-                                    <div className="space-y-2 animate-in slide-in-from-bottom-1 duration-200">
-                                      <div className="text-[10px] font-mono text-amber-500 uppercase flex items-center gap-1">
-                                        <History className="h-3 w-3" /> Reconnection Segment Lineage mapping
-                                      </div>
-                                      <div className="bg-amber-500/[0.02] border border-amber-500/15 rounded-lg p-3 space-y-2 max-h-[140px] overflow-y-auto">
-                                        <p className="text-[11px] text-amber-400/80 leading-relaxed">
-                                          This model file was compiled locally at{" "}
-                                          <code className="text-white bg-slate-900 px-1 py-0.5 rounded font-mono text-[10px]">
-                                            {new Date(
-                                              (selectedFileDetailed.lineage as ReconstructedItem)
-                                                .reconstructedAt,
-                                            ).toLocaleTimeString()}
-                                          </code>{" "}
-                                          from the following byte segments:
-                                        </p>
-                                        <div className="space-y-1.5">
-                                          {(selectedFileDetailed.lineage as ReconstructedItem).chunks.map(
-                                            (ch, idx) => (
-                                              <div
-                                                key={idx}
-                                                onClick={() => setSelectedFileName(ch.name)}
-                                                className="flex items-center justify-between text-[10px] font-mono p-1.5 bg-slate-950 rounded border border-slate-900 hover:border-slate-800 cursor-pointer transition-colors"
-                                              >
-                                                <div className="flex items-center gap-1.5 truncate">
-                                                  <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse shrink-0" />
-                                                  <span className="text-slate-300 font-medium truncate">
-                                                    {ch.name}
-                                                  </span>
-                                                </div>
-                                                <div className="text-slate-500 flex items-center gap-2">
-                                                  <span>{formatSize(ch.size)}</span>
-                                                  <span className="text-slate-600">
-                                                    ({ch.hash.substring(7, 15)})
-                                                  </span>
-                                                </div>
-                                              </div>
-                                            ),
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* If selected file is an archived/historical chunk segment, render back-link */}
-                                  {selectedFileDetailed.status === "Archived Chunk Segment" && (
-                                    <div className="p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between text-xs text-slate-400">
-                                      <span className="flex items-center gap-1.5">
-                                        <Info className="h-3.5 w-3.5 text-emerald-400" />
-                                        Component part of reconstructed model
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                          setSelectedFileName((selectedFileDetailed.lineage as any).parent)
-                                        }
-                                        className="text-[10px] font-mono text-emerald-400 hover:underline hover:text-emerald-300 font-semibold cursor-pointer"
-                                      >
-                                        Go to assembled model →
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-center justify-center text-center p-8 border border-dashed border-slate-950 rounded-xl bg-slate-950/20 h-full">
-                                <FileIcon className="h-10 w-10 text-slate-700 mb-3 animate-pulse" />
-                                <span className="text-xs text-slate-400 font-medium font-sans">
-                                  No File Selected for Analysis
-                                </span>
-                                <p className="text-[11px] text-slate-600 max-w-xs mt-1 leading-normal">
-                                  Click on any file block or reconstruction lineage row in the index list to
-                                  audit layer specifications, datatypes, and hash values.
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                  {appliedRecipeLabel && (
+                    <div className="mb-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5 text-xs text-slate-300">
+                      <span className="text-emerald-400 font-semibold">From recipe:</span>{" "}
+                      {appliedRecipeLabel}
+                      <span className="text-slate-500"> · </span>
+                      <span className="font-mono text-[11px] text-slate-400">
+                        {state.modelSource === "huggingface" && state.hfModelId
+                          ? `HF · ${state.hfModelId}`
+                          : state.modelSource === "local"
+                            ? `Local · ${state.localFiles.length} file(s)`
+                            : state.modelSource === "azure" && state.azureModelPath
+                              ? `Azure · ${state.azureModelPath}`
+                              : state.modelSource}
+                      </span>
                     </div>
                   )}
-                </TabsContent>
 
-                <TabsContent value="azure" className="space-y-6 animate-in fade-in">
-                  <div className="grid gap-3">
-                    <Label htmlFor="azureModel">Azure ML Workspace Path</Label>
-                    <div className="relative">
-                      <Cloud className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-                      <Input
-                        id="azureModel"
-                        placeholder="azureml://subscriptions/.../models/my-model/versions/1"
-                        className="pl-9 font-mono text-sm"
-                        value={state.azureModelPath}
-                        onChange={(e) => setState({ azureModelPath: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                </TabsContent>
-              </Tabs>
+                  <Tabs
+                    value={state.modelSource}
+                    onValueChange={(v) => setState({ modelSource: v as UIState["modelSource"] })}
+                    className="w-full"
+                  >
+                    <TabsList className="mb-6 !grid h-auto w-full grid-cols-3 gap-1 rounded-xl border border-slate-800 bg-slate-950 p-1.5">
+                      <TabsTrigger
+                        value="huggingface"
+                        title="Hugging Face Hub"
+                        className="w-full rounded-lg px-2 py-2.5 text-[11px] sm:text-xs"
+                      >
+                        <DownloadCloud className="mr-1.5 h-4 w-4 shrink-0" />
+                        <span className="truncate">Hugging Face</span>
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="local"
+                        title="Local Machine"
+                        className="w-full rounded-lg px-2 py-2.5 text-[11px] sm:text-xs"
+                      >
+                        <HardDrive className="mr-1.5 h-4 w-4 shrink-0" />
+                        <span className="truncate">Local</span>
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="azure"
+                        title="Azure ML Model"
+                        className="w-full rounded-lg px-2 py-2.5 text-[11px] sm:text-xs"
+                      >
+                        <Cloud className="mr-1.5 h-4 w-4 shrink-0" />
+                        <span className="truncate">Azure ML</span>
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="huggingface" className="space-y-6 animate-in fade-in">
+                      <div className="grid gap-3">
+                        <Label htmlFor="modelId">Hugging Face Model ID</Label>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                          <Input
+                            id="modelId"
+                            placeholder="e.g. meta-llama/Llama-2-7b-hf"
+                            className="pl-9"
+                            value={state.hfModelId}
+                            onChange={(e) => setState({ hfModelId: e.target.value })}
+                          />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          <span className="text-[11px] text-slate-500 mr-1">Quick Select:</span>
+                          <button
+                            type="button"
+                            onClick={() => setState({ hfModelId: "meta-llama/Meta-Llama-3-8B" })}
+                            className="text-[11px] text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
+                          >
+                            Meta-Llama-3
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setState({
+                                hfModelId: "microsoft/Phi-3-mini-4k-instruct",
+                              })
+                            }
+                            className="text-[11px] text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
+                          >
+                            Phi-3 Mini
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setState({ hfModelId: "openai/whisper-large-v3" })}
+                            className="text-[11px] text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
+                          >
+                            Whisper Large V3
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setState({
+                                hfModelId: "stabilityai/stable-diffusion-xl-base-1.0",
+                              })
+                            }
+                            className="text-[11px] text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
+                          >
+                            Stable Diffusion XL
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setState({ hfModelId: "bert-base-uncased" })}
+                            className="text-[11px] text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
+                          >
+                            BERT Base
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* HuggingFace Token */}
+                      <div className="p-4 rounded-xl border border-slate-800 bg-slate-900/30 space-y-3">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <Label className="flex items-center gap-1.5 mb-0">
+                            <KeyRound className="h-3.5 w-3.5 text-amber-400" />
+                            HuggingFace Token
+                          </Label>
+                          {hfTokenStatus === "loading" && (
+                            <span className="text-[10px] text-slate-500 font-mono">Checking...</span>
+                          )}
+                          {hfTokenStatus === "environment" && (
+                            <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono font-semibold">
+                              ✓ Found in Windows env vars
+                            </span>
+                          )}
+                          {hfTokenStatus === "user" && (
+                            <span className="text-[10px] bg-electric-blue/10 border border-electric-blue/20 text-electric-blue px-2 py-0.5 rounded font-mono font-semibold">
+                              ✓ Set for this session
+                            </span>
+                          )}
+                          {hfTokenStatus === "none" && (
+                            <span className="text-[10px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-mono">
+                              Not set — required for gated models
+                            </span>
+                          )}
+                        </div>
+
+                        {hfTokenStatus !== "environment" && hfTokenStatus !== "loading" && (
+                          <div className="flex gap-2">
+                            <div className="relative flex-1">
+                              <KeyRound className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                              <input
+                                type="password"
+                                placeholder="hf_..."
+                                autoComplete="off"
+                                className="w-full pl-9 pr-3 h-9 bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-electric-blue rounded-md font-mono text-xs text-slate-200 placeholder:text-slate-600 outline-none"
+                                value={hfTokenInput}
+                                onChange={(e) => setHfTokenInput(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && handleSubmitToken()}
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              onClick={handleSubmitToken}
+                              disabled={!hfTokenInput.trim() || isSubmittingToken}
+                              className="h-9 px-4 text-xs bg-electric-blue hover:bg-electric-blue/90 text-slate-950 font-bold"
+                            >
+                              {isSubmittingToken ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+                            </Button>
+                            {hfTokenStatus === "user" && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleClearToken}
+                                className="h-9 px-3 text-xs border-red-500/30 text-red-400 hover:bg-red-500/10"
+                              >
+                                Clear
+                              </Button>
+                            )}
+                          </div>
+                        )}
+
+                        <p className="text-[10px] text-slate-500 leading-relaxed">
+                          Stored in server memory only — never written to disk or returned to the client. Set{" "}
+                          <code className="text-slate-400 font-mono">HF_TOKEN</code> in Windows environment
+                          variables for persistent access without re-entering each session.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid gap-3">
+                          <Label htmlFor="hf-task-type">Task Type</Label>
+                          <Select
+                            id="hf-task-type"
+                            aria-label="Hugging Face task type"
+                            value={state.hfTask || ""}
+                            onChange={(e) => setState({ hfTask: e.target.value })}
+                          >
+                            <option value="">Auto (from model id)</option>
+                            <option value="text-generation">Text Generation</option>
+                            <option value="feature-extraction">Feature Extraction</option>
+                            <option value="text-classification">Text Classification</option>
+                            <option value="fill-mask">Fill Mask</option>
+                            <option value="text2text-generation">Text2Text Generation</option>
+                            <option value="speech-recognition">Speech Recognition</option>
+                            <option value="image-classification">Image Classification</option>
+                            <option value="object-detection">Object Detection</option>
+                            <option value="sentence-similarity">Sentence Similarity</option>
+                            <option value="conversational">Conversational</option>
+                          </Select>
+                          <p className="text-[10px] text-slate-500 leading-relaxed">
+                            Written into Olive <code className="font-mono text-slate-400">input_model</code>{" "}
+                            task / hf_config.task. Embedding models (GTE, BGE, E5) should use Feature
+                            Extraction.
+                          </p>
+                        </div>
+                        <div className="grid gap-3">
+                          <Label htmlFor="dataset">Calibration Dataset (Optional)</Label>
+                          <Input
+                            id="dataset"
+                            placeholder="e.g. wikitext"
+                            value={state.hfDataset}
+                            onChange={(e) => setState({ hfDataset: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 gap-4">
+                        <div className="grid gap-3">
+                          <Label htmlFor="user-script">User Script Path (Optional)</Label>
+                          <Input
+                            id="user-script"
+                            placeholder="e.g. ./user_script.py"
+                            value={state.userScript || ""}
+                            onChange={(e) => setState({ userScript: e.target.value || undefined })}
+                          />
+                          <p className="text-[10px] text-slate-500 leading-relaxed">
+                            Path to a Python script with eval/calibration functions required by some
+                            optimization passes.
+                          </p>
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="local" className="space-y-6 animate-in fade-in">
+                      <div className="border-2 border-dashed border-slate-800 rounded-xl p-8 flex flex-col items-center justify-center bg-slate-900/30 text-center hover:bg-slate-900/50 transition-colors">
+                        <div className="h-12 w-12 rounded-full bg-electric-blue/10 flex items-center justify-center mb-4">
+                          <FolderUp className="h-6 w-6 text-electric-blue" />
+                        </div>
+                        <h4 className="font-medium text-slate-200 mb-1">Upload Local Model Files</h4>
+                        <p className="text-sm text-slate-500 mb-6 max-w-md">
+                          Select your model weights and configurations. For massive LLMs, you can upload
+                          chunked weights (e.g. <code className="text-electric-blue">.bin.001</code>,{" "}
+                          <code className="text-electric-blue">.bin.002</code>).
+                        </p>
+                        <input
+                          type="file"
+                          multiple
+                          className="hidden"
+                          ref={fileInputRef}
+                          onChange={handleFileChange}
+                        />
+                        <Button onClick={() => fileInputRef.current?.click()} variant="outline">
+                          Browse Files
+                        </Button>
+                      </div>
+
+                      {state.localFiles.length > 0 && (
+                        <div className="space-y-4">
+                          <Label className="text-sm font-semibold text-slate-300">
+                            Uploaded Model Files ({state.localFiles.length})
+                          </Label>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {state.localFiles.map((file, i) => {
+                              const isChunk = getBaseName(file.name) !== null;
+                              const isCurSelected = activeFileSelectedName === file.name;
+                              return (
+                                <div
+                                  key={i}
+                                  onClick={() => setSelectedFileName(file.name)}
+                                  className={`flex items-center justify-between p-3 rounded-lg border group transition-all cursor-pointer ${
+                                    isCurSelected
+                                      ? "bg-electric-blue/10 border-electric-blue/60 shadow-sm ring-1 ring-electric-blue/25"
+                                      : isChunk
+                                        ? "bg-slate-900 border-electric-blue/25 hover:border-slate-705 hover:bg-slate-900/80"
+                                        : "bg-slate-950 border-slate-800 hover:border-slate-700 hover:bg-slate-950/80"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3 overflow-hidden">
+                                    <FileIcon
+                                      className={`h-4 w-4 shrink-0 transition-colors ${isCurSelected ? "text-electric-blue" : isChunk ? "text-blue-400" : "text-slate-500"}`}
+                                    />
+                                    <div className="truncate">
+                                      <p
+                                        className={`text-sm font-medium truncate transition-colors ${isCurSelected ? "text-white" : "text-slate-300 group-hover:text-slate-200"}`}
+                                      >
+                                        {file.name}
+                                      </p>
+                                      <p className="text-xs text-slate-500 font-mono">
+                                        {formatSize(file.size)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeFile(file.name);
+                                    }}
+                                    className="text-slate-600 hover:text-red-400 p-1 rounded hover:bg-slate-900 transition-colors shrink-0 cursor-pointer"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Chunk Reconstruction UI */}
+                          {reconstructableGroups().map(([base, files]) => (
+                            <div
+                              key={base}
+                              className="mt-4 p-4 rounded-lg bg-electric-blue/5 border border-electric-blue/20"
+                            >
+                              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div className="space-y-1">
+                                  <h5 className="text-sm font-medium text-electric-blue flex items-center gap-2">
+                                    <Layers className="h-4 w-4" />
+                                    Model Reconstruction Available
+                                  </h5>
+                                  <p className="text-xs text-slate-400">
+                                    Detected {files.length} parts for <strong>{base}</strong> (
+                                    {formatSize(files.reduce((a, b) => a + b.size, 0))}
+                                    ).
+                                  </p>
+                                </div>
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                                  <Button
+                                    variant="outline"
+                                    className="border-electric-blue/50 text-electric-blue hover:bg-electric-blue hover:text-slate-950"
+                                    onClick={() => startReconstruction(base, files)}
+                                    disabled={isReconstructing}
+                                  >
+                                    {isReconstructing ? (
+                                      <>
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Assembling...
+                                      </>
+                                    ) : (
+                                      "Reconstruct Binary"
+                                    )}
+                                  </Button>
+                                  {downloadUrl && downloadName && (
+                                    <a
+                                      href={downloadUrl}
+                                      download={downloadName}
+                                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded text-xs text-emerald-400 font-semibold transition-all"
+                                    >
+                                      <DownloadCloud className="h-3.5 w-3.5" />
+                                      Download {downloadName}
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+
+                              {isReconstructing && (
+                                <div className="mt-4 space-y-1.5 animate-in fade-in">
+                                  <div className="flex justify-between text-xs text-electric-blue font-mono">
+                                    <span>Progress</span>
+                                    <span>{Math.round(reconstructProgress)}%</span>
+                                  </div>
+                                  <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-electric-blue transition-all duration-200 ease-out"
+                                      style={{ width: `${reconstructProgress}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+
+                          {/* File Preview & Metadata Panel */}
+                          <div className="mt-6 border-t border-slate-900 pt-6 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                                  <Activity className="h-4 w-4 text-emerald-400 animate-pulse" />
+                                  Model File Metadata & Inspector
+                                </h4>
+                                <p className="text-xs text-slate-500">
+                                  Lists sizes, verified hash integrity signatures, and segment lineages for
+                                  local resources.
+                                </p>
+                              </div>
+                              {selectedFileDetailed && (
+                                <div className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono font-medium">
+                                  {selectedFileDetailed.status}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-950/40 rounded-xl border border-slate-800/80 p-5 overflow-hidden">
+                              {/* Left Column: Inspectable Items Selector */}
+                              <div className="lg:col-span-12 xl:col-span-5 space-y-4 border-r border-slate-900 xl:pr-5">
+                                <div className="space-y-2">
+                                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                                    Active Workspace Files ({state.localFiles.length})
+                                  </span>
+                                  <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+                                    {state.localFiles.map((file, idx) => {
+                                      const isCurSelected = activeFileSelectedName === file.name;
+                                      const isChunk = getBaseName(file.name) !== null;
+                                      return (
+                                        <div
+                                          key={idx}
+                                          onClick={() => setSelectedFileName(file.name)}
+                                          className={`flex items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                                            isCurSelected
+                                              ? "bg-electric-blue/10 border-electric-blue/60 text-white shadow-sm"
+                                              : "bg-slate-950/60 border-slate-900/60 text-slate-400 hover:border-slate-800 hover:bg-slate-950 hover:text-slate-200"
+                                          }`}
+                                        >
+                                          <div className="flex items-center gap-2 overflow-hidden w-full">
+                                            <FileIcon
+                                              className={`h-3.5 w-3.5 shrink-0 ${isCurSelected ? "text-electric-blue" : isChunk ? "text-blue-400" : "text-slate-500"}`}
+                                            />
+                                            <div className="truncate flex-1">
+                                              <div className="text-xs font-medium truncate">{file.name}</div>
+                                              <div className="text-[10px] font-mono text-slate-500 leading-tight">
+                                                {isChunk ? "Segment block" : "Active baseline"} •{" "}
+                                                {formatSize(file.size)}
+                                              </div>
+                                            </div>
+                                            <ChevronRight
+                                              className={`h-3 w-3 shrink-0 opacity-50 ${isCurSelected ? "text-electric-blue opacity-100 translate-x-0.5 transition-transform" : ""}`}
+                                            />
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                {/* Reconstructed Lineages Section */}
+                                <div className="space-y-2">
+                                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 pt-2 border-t border-slate-900/40">
+                                    <History className="h-3 w-3 text-amber-500" /> Reconstructed Lineages (
+                                    {reconstructedHistory.length})
+                                  </span>
+                                  {reconstructedHistory.length === 0 ? (
+                                    <div className="p-3 text-center border border-dashed border-slate-900 rounded-lg bg-slate-950/20 text-[11px] text-slate-500 italic font-mono leading-relaxed">
+                                      No reconstructions performed in this workspace session yet.
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+                                      {reconstructedHistory.map((item, idx) => {
+                                        const isCurSelected = activeFileSelectedName === item.baseName;
+                                        return (
+                                          <div
+                                            key={idx}
+                                            onClick={() => setSelectedFileName(item.baseName)}
+                                            className={`flex items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                                              isCurSelected
+                                                ? "bg-amber-500/10 border-amber-500/50 text-white"
+                                                : "bg-slate-950/60 border-slate-900/60 text-slate-400 hover:border-slate-800 hover:bg-slate-950 hover:text-slate-200"
+                                            }`}
+                                          >
+                                            <div className="flex items-center gap-2 overflow-hidden w-full">
+                                              <Cpu
+                                                className={`h-3.5 w-3.5 shrink-0 ${isCurSelected ? "text-amber-500" : "text-amber-400/80"}`}
+                                              />
+                                              <div className="truncate flex-1">
+                                                <div className="text-xs font-medium truncate">
+                                                  {item.baseName}
+                                                </div>
+                                                <div className="text-[10px] font-mono text-slate-500 leading-tight">
+                                                  Reconstituted • {formatSize(item.totalSize)} (
+                                                  {item.chunks.length} parts)
+                                                </div>
+                                              </div>
+                                              <ChevronRight
+                                                className={`h-3 w-3 shrink-0 opacity-50 ${isCurSelected ? "text-amber-500 opacity-100 translate-x-0.5 transition-transform" : ""}`}
+                                              />
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Right Column: Detailed Metadata Inspector View */}
+                              <div className="lg:col-span-12 xl:col-span-7 flex flex-col justify-between space-y-4">
+                                {selectedFileDetailed ? (
+                                  <div className="space-y-4 h-full flex flex-col justify-between">
+                                    <div className="space-y-3">
+                                      {/* File Details Title */}
+                                      <div>
+                                        <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1.5">
+                                          <FileCode className="h-3.5 w-3.5 text-slate-400" />
+                                          {getFileFormatLabel(selectedFileDetailed.name)}
+                                        </div>
+                                        <h5 className="text-sm font-semibold text-slate-200 truncate mt-0.5">
+                                          {selectedFileDetailed.name}
+                                        </h5>
+                                        <p className="text-xs text-slate-400 leading-relaxed mt-1 italic">
+                                          "{getFileDescription(selectedFileDetailed.name)}"
+                                        </p>
+                                      </div>
+
+                                      {/* Detailed Metadata Grid */}
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950 border border-slate-900 rounded-lg p-3.5 font-sans">
+                                        <div>
+                                          <span className="text-[10px] font-mono text-slate-500 uppercase block leading-none mb-1">
+                                            Size Specification
+                                          </span>
+                                          <span className="text-xs font-bold text-slate-300 font-mono">
+                                            {formatSize(selectedFileDetailed.size)}
+                                          </span>
+                                          <span className="text-[10px] text-slate-500 block leading-none font-mono mt-0.5">
+                                            {selectedFileDetailed.size.toLocaleString()} bytes
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-[10px] font-mono text-slate-500 uppercase block leading-none mb-1">
+                                            Verification Checksum
+                                          </span>
+                                          <div className="flex items-center gap-1.5 mt-0.5">
+                                            <span
+                                              className="text-[11px] font-semibold font-mono text-emerald-400 bg-emerald-500/5 px-1.5 py-0.5 border border-emerald-500/10 rounded truncate max-w-[170px]"
+                                              title={getDisplayHash(selectedFileDetailed.name)}
+                                            >
+                                              {getDisplayHash(selectedFileDetailed.name).substring(0, 24)}...
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleCopyHash(getDisplayHash(selectedFileDetailed.name))
+                                              }
+                                              className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-900 transition-colors cursor-pointer"
+                                            >
+                                              {copiedHash === getDisplayHash(selectedFileDetailed.name) ? (
+                                                <Check className="h-3.5 w-3.5 text-emerald-400" />
+                                              ) : (
+                                                <Copy className="h-3.5 w-3.5" />
+                                              )}
+                                            </button>
+                                          </div>
+                                        </div>
+                                        <div className="col-span-1 sm:col-span-2 border-t border-slate-900/60 pt-2.5 mt-1">
+                                          <span className="text-[10px] font-mono text-slate-500 uppercase block mb-1.5">
+                                            Structural Analysis Properties
+                                          </span>
+                                          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                                            {getSimulatedTensors(
+                                              selectedFileDetailed.name,
+                                              selectedFileDetailed.size,
+                                            ).map((item, i) => (
+                                              <div
+                                                key={i}
+                                                className="flex items-center justify-between text-[11px] border-b border-dashed border-slate-900 pb-1"
+                                              >
+                                                <span className="text-slate-500 capitalize">
+                                                  {item.key.replace(/_/g, " ")}
+                                                </span>
+                                                <span className="text-slate-300 font-mono font-medium">
+                                                  {item.val}
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Custom display based on lineage */}
+                                      {selectedFileDetailed.lineage && selectedFileDetailed.reconstructed && (
+                                        <div className="space-y-2 animate-in slide-in-from-bottom-1 duration-200">
+                                          <div className="text-[10px] font-mono text-amber-500 uppercase flex items-center gap-1">
+                                            <History className="h-3 w-3" /> Reconnection Segment Lineage
+                                            mapping
+                                          </div>
+                                          <div className="bg-amber-500/[0.02] border border-amber-500/15 rounded-lg p-3 space-y-2 max-h-[140px] overflow-y-auto">
+                                            <p className="text-[11px] text-amber-400/80 leading-relaxed">
+                                              This model file was compiled locally at{" "}
+                                              <code className="text-white bg-slate-900 px-1 py-0.5 rounded font-mono text-[10px]">
+                                                {new Date(
+                                                  (selectedFileDetailed.lineage as ReconstructedItem)
+                                                    .reconstructedAt,
+                                                ).toLocaleTimeString()}
+                                              </code>{" "}
+                                              from the following byte segments:
+                                            </p>
+                                            <div className="space-y-1.5">
+                                              {(selectedFileDetailed.lineage as ReconstructedItem).chunks.map(
+                                                (ch, idx) => (
+                                                  <div
+                                                    key={idx}
+                                                    onClick={() => setSelectedFileName(ch.name)}
+                                                    className="flex items-center justify-between text-[10px] font-mono p-1.5 bg-slate-950 rounded border border-slate-900 hover:border-slate-800 cursor-pointer transition-colors"
+                                                  >
+                                                    <div className="flex items-center gap-1.5 truncate">
+                                                      <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse shrink-0" />
+                                                      <span className="text-slate-300 font-medium truncate">
+                                                        {ch.name}
+                                                      </span>
+                                                    </div>
+                                                    <div className="text-slate-500 flex items-center gap-2">
+                                                      <span>{formatSize(ch.size)}</span>
+                                                      <span className="text-slate-600">
+                                                        ({ch.hash.substring(7, 15)})
+                                                      </span>
+                                                    </div>
+                                                  </div>
+                                                ),
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* If selected file is an archived/historical chunk segment, render back-link */}
+                                      {selectedFileDetailed.status === "Archived Chunk Segment" && (
+                                        <div className="p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between text-xs text-slate-400">
+                                          <span className="flex items-center gap-1.5">
+                                            <Info className="h-3.5 w-3.5 text-emerald-400" />
+                                            Component part of reconstructed model
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setSelectedFileName(
+                                                (selectedFileDetailed.lineage as any).parent,
+                                              )
+                                            }
+                                            className="text-[10px] font-mono text-emerald-400 hover:underline hover:text-emerald-300 font-semibold cursor-pointer"
+                                          >
+                                            Go to assembled model →
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col items-center justify-center text-center p-8 border border-dashed border-slate-950 rounded-xl bg-slate-950/20 h-full">
+                                    <FileIcon className="h-10 w-10 text-slate-700 mb-3 animate-pulse" />
+                                    <span className="text-xs text-slate-400 font-medium font-sans">
+                                      No File Selected for Analysis
+                                    </span>
+                                    <p className="text-[11px] text-slate-600 max-w-xs mt-1 leading-normal">
+                                      Click on any file block or reconstruction lineage row in the index list
+                                      to audit layer specifications, datatypes, and hash values.
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="azure" className="space-y-6 animate-in fade-in">
+                      <div className="grid gap-3">
+                        <Label htmlFor="azureModel">Azure ML Workspace Path</Label>
+                        <div className="relative">
+                          <Cloud className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                          <Input
+                            id="azureModel"
+                            placeholder="azureml://subscriptions/.../models/my-model/versions/1"
+                            className="pl-9 font-mono text-sm"
+                            value={state.azureModelPath}
+                            onChange={(e) => setState({ azureModelPath: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </>
+              )}
             </div>
           </div>
         </CardContent>

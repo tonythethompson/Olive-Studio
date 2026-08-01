@@ -12,6 +12,8 @@ const llamaNvCtx: AuditFilterContext = {
   model: {
     huggingFaceId: "meta-llama/Meta-Llama-3-8B",
     huggingFaceDataset: "",
+    hfTask: "text-generation",
+    hfTaskInferred: true,
     localFileNames: [],
     azurePath: "",
     displayName: "meta-llama/Meta-Llama-3-8B",
