@@ -1,0 +1,138 @@
+src/components/DesktopMinimumViewport.tsx
+  s_0b4f64255d17ae::t_04c8fe5ac3e12a 24-27
+src/lib/__tests__/oliveRecipeBuilder.test.ts
+  s_c0d1e52f52c3a1::t_0bf0ba8a59c6e4 7
+  s_c0d1e52f52c3a1::t_7180e7075f5262 73-84
+src/lib/auditAnalysis.ts
+  s_0b4f64255d17ae::t_2b552f9515a2a6 94,99
+src/lib/aiResponse.test.ts
+  s_0b4f64255d17ae::t_57869b0b09ce7a 62-66
+src/lib/chatScope.test.ts
+  s_d35b29515e08d0::t_ec203833fa4487 54-63
+src/lib/codex/CodexAppServerClient.ts
+  s_d35b29515e08d0::t_53583944357352 245,248,250-262,266-270,284,300,304
+  s_d35b29515e08d0::t_ee6ec6db988aa5 40,46-48
+  s_d35b29515e08d0::t_be97fbbcd4263b 49-51
+  s_d35b29515e08d0::t_008af8dbe63acd 132-141
+src/server/services/olive/tensorrt-rtx.ts
+  s_c0d1e52f52c3a1::t_bf49804e252887 56-63,65,67,73-75,78
+  s_c0d1e52f52c3a1::t_8fcb20eaeceeeb 130-140
+src/server/routes/env.ts
+  s_0b4f64255d17ae::t_7b11b02047fd1e 84,88
+  s_0b4f64255d17ae::t_b7066d328a56d8 19-30
+src/lib/cloudflare/wrangler.test.ts
+  s_c0d1e52f52c3a1::t_9a2d432ce41a42 20-39
+  s_c0d1e52f52c3a1::t_7158897d52ddb9 2
+src/lib/assistantSettingsMode.ts
+  s_0b4f64255d17ae::t_784fb271f14869 33-42
+src/components/features/RuntimeEnvControls.tsx
+  s_0b4f64255d17ae::t_53f15e0b038751 202-205
+src/lib/cloudflare/client.ts
+  s_c0d1e52f52c3a1::t_bba346c07663c5 141,143
+src/lib/auditAutofix.ts
+  s_c0d1e52f52c3a1::t_446b4b27cd5275 206-207,209-210
+  s_c0d1e52f52c3a1::t_0d694431c73683 120-135
+  s_c0d1e52f52c3a1::t_a4b80581d6bdb9 243-250,253-254,256-257
+src/lib/oliveRecipeBuilder.ts
+  s_c0d1e52f52c3a1::t_91c17b00aad4e8 37-40
+src/server/services/ai/state.ts
+  s_0b4f64255d17ae::t_0d888dd85c6775 62-67
+  s_0b4f64255d17ae::t_17d32676350a17 19-23
+src/server/services/ai/oliveMcpKnowledge.ts
+  s_0b4f64255d17ae::t_f3a7cf31a35b9d 219,224
+  s_0b4f64255d17ae::t_e4a9d859905bf1 250-256
+  s_0b4f64255d17ae::t_32feb836118364 159,180,185-190,192
+  s_0b4f64255d17ae::t_ab96a2be6ab879 107-158
+src/lib/chatScope.ts
+  s_d35b29515e08d0::t_fe3f38e2570611 105-109
+  s_d35b29515e08d0::t_c72e2c7c76844c 72-73
+src/lib/codex/CodexAppServerClient.test.ts
+  s_d35b29515e08d0::t_1bb191202f859b 19-29
+src/lib/__tests__/aiWorkspaceContext.test.ts
+  s_d35b29515e08d0::t_53289f5aa293bf 78-88
+src/server/routes/mcp.ts
+  s_0b4f64255d17ae::t_a0bf9a9f5fbea7 130-132
+src/server/services/olive/tensorrt.ts
+  s_c0d1e52f52c3a1::t_6ea9b295003c87 90-100
+  s_c0d1e52f52c3a1::t_b32d06e730f7fd 23-29
+src/server/services/ai/index.ts
+  s_0b4f64255d17ae::t_f4c6a376ac6d01 40
+.agents/skills/vite-react-best-practices/rules/vite-troubleshooting.md
+  s_0b4f64255d17ae::t_7766676f74d3ca 5,7-22,33,41,46
+src/lib/cloudflare/credentials.ts
+  s_c0d1e52f52c3a1::t_0ea6891b3d09fb 64-68
+src/lib/auditAutofix.test.ts
+  s_c0d1e52f52c3a1::t_3ccc3459bda8a5 91-96,98-101
+src/components/features/MCPDiagnosticCard.tsx
+  s_0b4f64255d17ae::t_6c6ee1f3a1ac32 63-81
+src/lib/cloudflare/wrangler.ts
+  s_c0d1e52f52c3a1::t_65779269819081 112-121
+  s_c0d1e52f52c3a1::t_9e6f2cb5e30a59 101-111,122-134
+  s_c0d1e52f52c3a1::t_6c652c0df331eb 145
+src/lib/oliveGpuRuntime.ts
+  s_c0d1e52f52c3a1::t_8352bd82ad925b 41-63
+src/components/features/ExecutionWorkspace.tsx
+  s_c0d1e52f52c3a1::t_006b4d1c1eb1f4 617
+  s_c0d1e52f52c3a1::t_4f6ee19dee11e2 1513,1515
+  s_c0d1e52f52c3a1::t_eee57bb0decc6a 160-161
+  s_c0d1e52f52c3a1::t_1aec8c73a445c0 181
+  s_c0d1e52f52c3a1::t_e28948367f72a2 598,601
+  s_c0d1e52f52c3a1::t_d5b13314395c07 738
+src/server/loadStudioEnv.ts
+  s_0b4f64255d17ae::t_ea15f1801603ed 113,115
+  s_0b4f64255d17ae::t_85489b300003cf 72,74
+src/lib/oliveRecipeHub.ts
+  s_c0d1e52f52c3a1::t_4122811e2f7c97 447-452,458
+src/lib/aiResponse.ts
+  s_0b4f64255d17ae::t_70d0687f76a407 10-11
+  s_0b4f64255d17ae::t_34f0c51bef7814 39-41,87-99
+src/lib/aiWorkspaceContext.ts
+  s_d35b29515e08d0::t_44a1e4f802bbb3 147-185,189-191,195-197
+  s_d35b29515e08d0::t_015ae1ba5e2d68 272-277
+src/lib/presetVramEstimate.ts
+  s_0b4f64255d17ae::t_71e1cbc8d85848 123
+src/server/services/mcp/client.ts
+  s_d35b29515e08d0::t_be97fbbcd4263b 22
+  s_d35b29515e08d0::t_657e5b7b39fb97 3,6,13-21
+  s_d35b29515e08d0::t_bf1304d9222adb 82
+src/server/services/ai/cloudflare.ts
+  s_0b4f64255d17ae::t_8dbcb3c37474eb 18-20,24,26
+src/server/routes/ai.ts
+  s_0b4f64255d17ae::t_6b6fe10f7406c9 497-502
+  s_0b4f64255d17ae::t_84a4f76370355e 103-128
+src/server/config.ts
+  s_0b4f64255d17ae::t_f76025c3721f72 19
+  s_0b4f64255d17ae::t_467ec2c3de6c58 122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3c70ef9d3a97a98eeb8d1380e7d0f1a0149c3dfd",
+  "prompts": {},
+  "sessions": {
+    "s_0b4f64255d17ae": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "46e89714-1524-4436-89b3-7b173cdddc5f",
+        "model": "composer-2.5-fast"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    },
+    "s_c0d1e52f52c3a1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d4e477c7-274f-45b7-8998-da121e968fc5",
+        "model": "composer-2.5-fast"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    },
+    "s_d35b29515e08d0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f88350b3-eb33-4d77-8be0-90da0daad3f7",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
