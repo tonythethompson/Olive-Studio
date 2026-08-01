@@ -191,8 +191,8 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   } else if (nvidia?.gpus.length) {
     notes.push(
       tensorrt?.detail
-        ? `TensorRT listed by ORT but not loadable: ${tensorrt.detail}`
-        : "TensorRT not loadable — Olive will auto-install tensorrt on run when TensorRT is the hardware target.",
+        ? `Full TensorRT SDK not ready (${tensorrt.detail}). GPU is compatible — install tensorrt from Hardware or on first TensorRT run.`
+        : "Full TensorRT SDK (nvinfer_10) not in .venv yet. GPU is compatible — use Install in Hardware, or Olive installs it on first TensorRT run.",
     );
   }
 
@@ -233,6 +233,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     detectedProviders,
     recommendedProvider: pickRecommendedProvider(detectedProviders, {
       tensorRtRtxLoadable: tensorRtRtx?.loadable === true,
+      tensorRtLoadable: tensorrt?.loadable === true,
     }),
     notes,
   };

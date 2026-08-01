@@ -286,6 +286,16 @@ export function getSelectedGpuVramGb(
   return Math.max(...vramMb) / 1024;
 }
 
+/** Largest discrete GPU VRAM on this machine, regardless of catalog recipe device. */
+export function getPrimaryGpuVramGb(probe: HardwareProbeResult | null | undefined): number | null {
+  if (!probe) return null;
+  const vramMb = [...(probe.nvidia?.gpus ?? []), ...(probe.rocm?.gpus ?? [])]
+    .map((gpu) => gpu.vramMb)
+    .filter((value): value is number => value != null && value > 0);
+  if (!vramMb.length) return null;
+  return Math.max(...vramMb) / 1024;
+}
+
 export function compareVramFit(neededGb: number, availableGb: number): VramFit {
   if (neededGb <= availableGb * 0.85) return "fits";
   if (neededGb <= availableGb * 1.05) return "tight";

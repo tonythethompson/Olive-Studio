@@ -6,7 +6,7 @@ vi.mock("../../../lib/aiResponse.ts", () => ({
   isPlaceholderEnvValue: vi.fn((v: string) => !v || v.startsWith("my_")),
 }));
 
-// Side-effect import: triggers all 14 providers to register themselves.
+// Side-effect import: triggers all providers to register themselves.
 import "./index.ts";
 
 import {
@@ -71,10 +71,26 @@ describe("Provider registration", () => {
       hasEnvVars: true,
     },
     { name: "kilocode", label: "Kilo Code", defaultModel: "anthropic/claude-sonnet-4", hasEnvVars: true },
+    { name: "opencode", label: "OpenCode Zen", defaultModel: "kimi-k2.7-code", hasEnvVars: true },
+    { name: "opencode-go", label: "OpenCode Go", defaultModel: "kimi-k2.7-code", hasEnvVars: true },
+    {
+      name: "fireworks",
+      label: "Fireworks AI",
+      defaultModel: "accounts/fireworks/models/llama-v3p3-70b-instruct",
+      hasEnvVars: true,
+    },
+    { name: "nvidia", label: "NVIDIA NIM", defaultModel: "meta/llama-3.1-8b-instruct", hasEnvVars: true },
+    { name: "huggingface", label: "Hugging Face", defaultModel: "moonshotai/Kimi-K2.5", hasEnvVars: true },
     { name: "copilot", label: "GitHub Copilot", defaultModel: "gpt-4o", hasEnvVars: true },
     { name: "openai-compat", label: "OpenAI-Compatible API", defaultModel: "gpt-4o-mini", hasEnvVars: true },
     { name: "devin", label: "Devin (Cognition AI)", defaultModel: "swe-1-6", hasEnvVars: false },
     { name: "codex", label: "OpenAI Codex CLI", defaultModel: "default", hasEnvVars: false },
+    {
+      name: "cloudflare",
+      label: "Cloudflare Workers AI",
+      defaultModel: "@cf/meta/llama-3.1-8b-instruct",
+      hasEnvVars: true,
+    },
     {
       name: "anthropic",
       label: "Anthropic Claude",
@@ -83,9 +99,9 @@ describe("Provider registration", () => {
     },
   ];
 
-  it("all 14 providers are registered", () => {
+  it("all expected providers are registered", () => {
     const names = registeredProviderNames();
-    expect(names.size).toBeGreaterThanOrEqual(14);
+    expect(names.size).toBeGreaterThanOrEqual(16);
     for (const { name } of EXPECTED_PROVIDERS) {
       expect(names.has(name), `missing: ${name}`).toBe(true);
     }

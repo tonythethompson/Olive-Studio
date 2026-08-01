@@ -30,6 +30,10 @@ start-server.bat
 /.opencode/
 /.remember/logs/
 /.cursor/hooks/state/
+/.devin
+/.claude
+.review-threads.json
+/dogfood-output
 
 # Lockfiles for non-pnpm package managers (this repo uses pnpm exclusively)
 package-lock.json
@@ -40,6 +44,5 @@ bun.lock
 /.cursor/hooks/state/continual-learning-index.json
 /.dirac-cache
 /.qoder
-.review-threads.json
 /dogfood-output
-.serena/project.local.yml
+.serena/project.yml

@@ -23,11 +23,16 @@ export function parseCudaVersionFromNvidiaSmi(
  * Tiers ordered from newest to oldest — matches the first tier where
  * the detected version is >= the tier's version.
  *
+ * Auto-detect prefers stable wheels: CUDA 13.x → cu130 (PyTorch 2.11+ primary).
+ * cu132 remains available as an explicit override (experimental in recent PyTorch cycles).
+ *
  * Versions below the lowest supported tier (CUDA 11.8) return `"cpu"` rather
  * than forcing an incompatible `cu118` wheel onto e.g. CUDA 11.7 or older.
  */
 export function pickCudaTag(major: number, minor: number): string {
   const tiers = [
+    { major: 13, minor: 0, tag: "cu130" },
+    { major: 12, minor: 8, tag: "cu128" },
     { major: 12, minor: 6, tag: "cu126" },
     { major: 12, minor: 4, tag: "cu124" },
     { major: 12, minor: 1, tag: "cu121" },

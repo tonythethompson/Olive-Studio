@@ -2,12 +2,11 @@ import express, { Router } from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import fs from "fs";
-
 import { loadStudioEnv } from "./src/server/loadStudioEnv.ts";
 import { mountSystemRoutes, type SystemProbeOptions } from "./src/server/routes/system.ts";
 import { mountGithubRoutes } from "./src/server/routes/github.ts";
 import { mountAiRoutes } from "./src/server/routes/ai.ts";
-import { mountMcpRoutes } from "./src/server/routes/mcp.ts";
+import { mountMcpRoutes, performKbSync } from "./src/server/routes/mcp.ts";
 import { mountEnvRoutes } from "./src/server/routes/env.ts";
 import { mountOliveRoutes } from "./src/server/routes/olive.ts";
 import { probeTensorRtLoadable } from "./src/server/services/olive/tensorrt.ts";
@@ -188,6 +187,21 @@ async function startServer() {
       console.log(`Server running on http://localhost:${PORT}`);
       // eslint-disable-next-line no-console -- intentional server startup message
       console.log(`Open http://localhost:${PORT} in your browser`);
+      // Soft KB sync on boot: reload passes.json and persist freshness so the
+      // header does not start "stale" after every server restart.
+      try {
+        const result = performKbSync();
+        if (result.ok) {
+          // eslint-disable-next-line no-console -- intentional server startup message
+          console.log(`[kb] synced at startup (${result.status.passCount ?? "?"} passes)`);
+        } else {
+           
+          console.warn("[kb] startup sync skipped:", result.body.error ?? "unavailable");
+        }
+      } catch (err: unknown) {
+         
+        console.warn("[kb] startup sync failed:", err instanceof Error ? err.message : err);
+      }
       resolve();
     });
   });

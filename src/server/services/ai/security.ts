@@ -11,6 +11,13 @@ export const ALLOWED_BASE_URL_PREFIX_BY_PROVIDER: Partial<Record<ProviderConfig[
   openrouter: ["https://openrouter.ai/api/v1"],
   groq: ["https://api.groq.com/openai/v1"],
   together: ["https://api.together.xyz/v1"],
+  opencode: ["https://opencode.ai/zen/v1"],
+  "opencode-go": ["https://opencode.ai/zen/go/v1"],
+  fireworks: ["https://api.fireworks.ai/inference/v1"],
+  nvidia: ["https://integrate.api.nvidia.com/v1"],
+  huggingface: ["https://router.huggingface.co/v1"],
+  // Account id is path segment: …/accounts/{32hex}/ai/v1
+  cloudflare: ["https://api.cloudflare.com/client/v4/accounts"],
 };
 
 /** Strip trailing `/` without a regex (avoids ReDoS on long slash runs). */
@@ -61,13 +68,20 @@ export function sanitizeProviderBaseUrl(provider: string, rawBaseUrl?: string): 
   } catch {
     throw new Error("Invalid baseUrl");
   }
-  if (parsed.protocol !== "https:") {
-    throw new Error("baseUrl must use https");
-  }
   if (parsed.username || parsed.password) {
     throw new Error("baseUrl must not include credentials");
   }
-  if (isIpLiteralHost(parsed.hostname) || isPrivateOrLocalHostname(parsed.hostname)) {
+
+  const host = parsed.hostname.toLowerCase();
+  const isLoopback =
+    host === "localhost" || host.endsWith(".localhost") || host === "127.0.0.1" || host === "::1";
+  // Local engines (Ollama / LM Studio) are openai-compat over plain HTTP on loopback only.
+  const allowLocalEngine = provider === "openai-compat" && isLoopback;
+
+  if (parsed.protocol !== "https:" && !(allowLocalEngine && parsed.protocol === "http:")) {
+    throw new Error("baseUrl must use https");
+  }
+  if (!allowLocalEngine && (isIpLiteralHost(parsed.hostname) || isPrivateOrLocalHostname(parsed.hostname))) {
     throw new Error("baseUrl host is not allowed");
   }
   const normalized = stripTrailingSlashes(parsed.toString());

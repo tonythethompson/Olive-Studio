@@ -91,12 +91,11 @@ export function mergeDetectedProviders(input: {
   // nvidia-smi / rocm-smi / openvino fill gaps when the installed ORT wheel lacks GPU EPs.
   if (input.hasNvidiaGpu) {
     detected.add("CUDAExecutionProvider");
-    // TensorRT RTX is GPU-compatible on consumer NVIDIA cards even before the
-    // tensorrt-rtx pip package is installed — the app can install it on demand.
+    // Both TensorRT paths are GPU-compatible on NVIDIA cards even before the
+    // pip packages are installed — the app can install them on demand.
+    // (Full TensorRT SDK works on GeForce Turing+; TRT RTX is the lighter consumer path.)
     detected.add("NvTensorRTRTXExecutionProvider");
-    if (tensorRtOk) {
-      detected.add("TensorrtExecutionProvider");
-    }
+    detected.add("TensorrtExecutionProvider");
   }
   if (input.hasRocmGpu) {
     detected.add("ROCMExecutionProvider");
@@ -110,15 +109,15 @@ export function mergeDetectedProviders(input: {
 
 export function pickRecommendedProvider(
   detected: IHVProvider[],
-  opts?: { tensorRtRtxLoadable?: boolean },
+  opts?: { tensorRtRtxLoadable?: boolean; tensorRtLoadable?: boolean },
 ): IHVProvider {
-  // Prefer TensorRT RTX only when the runtime package is already loadable;
-  // otherwise CUDA is the better default (TRT RTX can be installed on demand).
+  // Prefer installed acceleration stacks; otherwise CUDA is the safe NVIDIA default.
   const priority: IHVProvider[] = [
     ...(opts?.tensorRtRtxLoadable ? (["NvTensorRTRTXExecutionProvider"] as const) : []),
-    "TensorrtExecutionProvider",
+    ...(opts?.tensorRtLoadable ? (["TensorrtExecutionProvider"] as const) : []),
     "CUDAExecutionProvider",
     "NvTensorRTRTXExecutionProvider",
+    "TensorrtExecutionProvider",
     "ROCMExecutionProvider",
     "OpenVINOExecutionProvider",
     "WebGpuExecutionProvider",
@@ -141,11 +140,11 @@ function undetectedProviderReason(provider: IHVProvider): string {
     case "CUDAExecutionProvider":
       return "NVIDIA CUDA was not detected (no NVIDIA GPU or CUDA execution provider on this machine).";
     case "TensorrtExecutionProvider":
-      return "Full TensorRT (nvinfer_10 / datacenter SDK) is not loadable. Consumer GeForce GPUs should use TensorRT RTX (NvTensorRTRTX) or CUDA instead — that is separate from full TensorRT.";
+      return "Full TensorRT needs an NVIDIA GPU (Turing / GeForce RTX 20xx or newer). Install the TensorRT SDK into .venv from Hardware, or it installs on first TensorRT run.";
     case "NvTensorRTRTXExecutionProvider":
       return "TensorRT RTX needs an NVIDIA GPU. On GeForce RTX, install tensorrt-rtx from Hardware (or it installs on first run). This is not the same as full TensorRT.";
     case "WebGpuExecutionProvider":
-      return "WebGPU requires a browser environment with the WebGPU API (Chrome 113+ / Edge 113+ / Firefox Nightly). Not available in node-based probing contexts.";
+      return "WebGPU is a browser deploy target (ONNX Runtime Web), not a local Python EP. Select it to build web-oriented recipes, then run Browser Test / WebGPU benchmark in Recipe & run (Chrome 113+ / Edge 113+).";
     case "CPUExecutionProvider":
       return "";
     default: {
@@ -168,6 +167,10 @@ export function getProviderAvailabilityBlock(
   provider: IHVProvider,
   probe: HardwareProbeResult | null | undefined,
 ): { reason: string } | null {
+  // WebGPU is a browser deploy target (ORT Web), not a local Python EP to probe.
+  if (provider === "WebGpuExecutionProvider") {
+    return null;
+  }
   if (provider === "CPUExecutionProvider") {
     return null;
   }

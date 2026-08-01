@@ -74,12 +74,14 @@ describe("GET /api/mcp/kb-status", () => {
     expect(res1.status).toBe(200);
     const body1 = await res1.json();
     expect(body1).toMatchObject({ available: true, version: "2.0", passCount: 1 });
-    expect(spy).toHaveBeenCalledTimes(1);
+    const kbReads = () =>
+      spy.mock.calls.filter((call) => String(call[0]).replace(/\\/g, "/").includes("passes.json")).length;
+    expect(kbReads()).toBe(1);
 
-    // Second call is served from cache — no additional file read.
+    // Second call is served from cache — no additional KB file read.
     const res2 = await fetch(`${baseUrl}/api/mcp/kb-status`);
     expect((await res2.json()).available).toBe(true);
-    expect(spy).toHaveBeenCalledTimes(1);
+    expect(kbReads()).toBe(1);
   });
 
   it("reports a missing KB with a sanitized message", async () => {

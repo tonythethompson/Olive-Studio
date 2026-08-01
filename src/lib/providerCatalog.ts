@@ -67,11 +67,11 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     id: "TensorrtExecutionProvider",
     name: "NVIDIA TensorRT",
     shortName: "TensorRT",
-    desc: "Datacenter / full TensorRT SDK (nvinfer_10) for maximum throughput.",
+    desc: "Full TensorRT SDK (nvinfer_10) for maximum throughput on NVIDIA GPUs.",
     icon: Layers,
     tooltip: {
       requirements:
-        "NVIDIA GPU with full TensorRT SDK 10.x (nvinfer_10) installed. Typical for datacenter A100/H100.",
+        "NVIDIA GPU Turing or newer (GeForce RTX 20xx+, Quadro, datacenter). Requires full TensorRT 10.x SDK (nvinfer_10) in .venv — installable from Hardware. For a lighter consumer path, prefer TensorRT RTX.",
       quantMethods: "AWQ INT4 (recommended), GPTQ INT4. INT8 requires QDQ-format ONNX graph.",
       recommendation:
         "AWQ INT4 skips TensorRT calibration and provides the fastest build times. Use for maximum throughput in production.",

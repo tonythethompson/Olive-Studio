@@ -1,7 +1,6 @@
 import { RefreshCw, AlertTriangle, CheckCircle2, Zap, Check } from "lucide-react";
-import { isAuditAutofixApplyable } from "@/lib/auditAutofix";
 import { ProviderErrorBlock } from "./ProviderErrorBlock";
-import type { AnalysisResult, Suggestion } from "./gemini/types";
+import type { AnalysisResult, Suggestion } from "./GeminiSidebar";
 
 interface AuditPanelProps {
   analysis: AnalysisResult | null;
@@ -56,7 +55,7 @@ export function AuditPanel({
             </span>
           </div>
           <div>
-            <h4 className="text-sm font-medium text-slate-100">Pipeline efficiency</h4>
+            <h3 className="text-sm font-medium text-slate-100">Pipeline efficiency</h3>
             <div
               className={`mt-0.5 text-[10px] inline-block px-1.5 py-0.5 rounded font-mono font-bold ${
                 analysis.level === "Optimized"
@@ -96,60 +95,64 @@ export function AuditPanel({
             </button>
           </div>
           <div className="space-y-2.5 max-h-[50vh] overflow-y-auto pr-0.5">
-            {analysis.suggestions.map((s, i) => (
-              <div
-                key={i}
-                className={`p-3.5 rounded-lg border text-xs flex flex-col gap-3 bg-slate-950/45 transition-all ${
-                  s.type === "warning"
-                    ? "border-rose-500/20 hover:border-rose-500/40"
-                    : s.type === "success"
-                      ? "border-emerald-500/25 hover:border-emerald-500/40"
-                      : "border-slate-800 hover:border-slate-700"
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="font-bold text-slate-100 flex items-center gap-1.5">
-                      {s.type === "warning" ? (
-                        <AlertTriangle className="h-3.5 w-3.5 text-rose-450 shrink-0" />
-                      ) : s.type === "success" ? (
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-450 shrink-0" />
-                      ) : (
-                        <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                      )}
-                      {s.title}
-                    </span>
-                    <span
-                      className={`text-[9px] font-mono uppercase tracking-widest px-1.5 rounded font-bold ${
-                        s.impact === "High" ? "bg-rose-500/10 text-rose-400" : "bg-slate-800 text-slate-400"
-                      }`}
-                    >
-                      {s.impact}
-                    </span>
+            {analysis.suggestions.length === 0 ? (
+              <p className="text-[11px] text-slate-500 leading-relaxed px-0.5">
+                No actionable changes for this workspace. Empty is fine; Audit does not invent filler cards.
+              </p>
+            ) : (
+              analysis.suggestions.map((s, i) => (
+                <div
+                  key={i}
+                  className={`p-3.5 rounded-lg border text-xs flex flex-col gap-3 bg-slate-950/45 transition-all ${
+                    s.type === "warning"
+                      ? "border-rose-500/20 hover:border-rose-500/40"
+                      : s.type === "success"
+                        ? "border-emerald-500/25 hover:border-emerald-500/40"
+                        : "border-slate-800 hover:border-slate-700"
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-start justify-between gap-2 mb-1 min-w-0">
+                      <span className="font-bold text-slate-100 flex items-start gap-1.5 min-w-0">
+                        {s.type === "warning" ? (
+                          <AlertTriangle className="h-3.5 w-3.5 text-rose-450 shrink-0 mt-0.5" />
+                        ) : s.type === "success" ? (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-450 shrink-0 mt-0.5" />
+                        ) : (
+                          <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                        )}
+                        <span className="min-w-0 break-words">{s.title}</span>
+                      </span>
+                      <span
+                        className={`shrink-0 text-[9px] font-mono uppercase tracking-widest px-1.5 rounded font-bold ${
+                          s.impact === "High" ? "bg-rose-500/10 text-rose-400" : "bg-slate-800 text-slate-400"
+                        }`}
+                      >
+                        {s.impact}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed break-words">{s.description}</p>
                   </div>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">{s.description}</p>
+                  {s.autofix?.pass && (
+                    <div className="pt-2 border-t border-slate-900/60 flex flex-wrap items-center gap-2 justify-between min-w-0">
+                      <span
+                        className="text-[9px] font-mono text-slate-500 min-w-0 flex-1 basis-[10rem] break-all"
+                        title={s.autofix.pass}
+                      >
+                        → {s.autofix.pass}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onApplyAutofix(s.autofix)}
+                        className="shrink-0 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue hover:text-white border border-electric-blue/30 text-[10px] px-2.5 py-1 rounded font-bold inline-flex items-center gap-1 transition-all cursor-pointer"
+                      >
+                        <Check className="h-3 w-3 shrink-0" /> Apply
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {s.autofix?.pass && isAuditAutofixApplyable(s.autofix) && (
-                  <div className="pt-2 border-t border-slate-900/60 flex items-center justify-between">
-                    <span className="text-[9px] font-mono text-slate-500">→ {s.autofix.pass}</span>
-                    <button
-                      type="button"
-                      onClick={() => onApplyAutofix(s.autofix)}
-                      className="bg-electric-blue/10 text-electric-blue hover:bg-electric-blue hover:text-white border border-electric-blue/30 text-[10px] px-2.5 py-1 rounded font-bold flex items-center gap-1 transition-all cursor-pointer"
-                    >
-                      <Check className="h-3 w-3" /> Apply
-                    </button>
-                  </div>
-                )}
-                {s.autofix?.pass && !isAuditAutofixApplyable(s.autofix) && (
-                  <div className="pt-2 border-t border-slate-900/60">
-                    <span className="text-[9px] text-slate-600">
-                      Advisory only (no matching UI field to Apply).
-                    </span>
-                  </div>
-                )}
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       )}

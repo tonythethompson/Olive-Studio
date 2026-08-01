@@ -366,5 +366,20 @@ describe("mapMcpConfigToUiState", () => {
       expect(canApplyMcpDiagnostic({ relevant_quirks: ["Some unrelated tip"] })).toBe(false);
       expect(matchActionableQuirks(["External Data Format"])).toContain("onnx-external-data");
     });
+
+    it("canApplyMcpDiagnostic respects applyable=false", () => {
+      expect(
+        canApplyMcpDiagnostic({
+          applyable: false,
+          updated_config: { engine: { cache_dir: "/tmp" } },
+        }),
+      ).toBe(false);
+      expect(
+        canApplyMcpDiagnostic({
+          applyable: true,
+          updated_config: { engine: { cache_dir: "/tmp" } },
+        }),
+      ).toBe(true);
+    });
   });
 });

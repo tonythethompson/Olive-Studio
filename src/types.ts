@@ -85,13 +85,13 @@ export interface UIState {
   localFiles: { name: string; size: number }[];
   azureModelPath: string;
   hfModelId: string;
-  /** Hugging Face / Olive input task (e.g. text-generation, feature-extraction). Empty/omitted = infer from model id. */
-  hfTask?: string;
   hfDataset: string;
+  /** Explicit HF pipeline task; empty/omitted means infer from model id. */
+  hfTask?: string;
   ihvProvider: IHVProvider;
   /** Hugging Face load_kwargs device_map — GPU + host RAM when auto. */
   memoryOffload: "gpu_only" | "auto";
-  cudaVersion: "auto" | "cpu" | "cu118" | "cu121" | "cu124" | "cu126";
+  cudaVersion: "auto" | "cpu" | "cu118" | "cu121" | "cu124" | "cu126" | "cu128" | "cu130" | "cu132";
   cacheDir: string;
   azureStr: string;
   distributedCaching: boolean;
@@ -155,4 +155,9 @@ export interface McpDiagnostic {
   workaround: string;
   updated_config?: Record<string, unknown>;
   relevant_quirks?: string[];
+  /** olive | studio when matched; null/omitted when no match. */
+  domain?: "olive" | "studio" | null;
+  /** When false, Apply Fix stays disabled even if updated_config is present. */
+  applyable?: boolean;
+  related_olive_entry?: string | null;
 }

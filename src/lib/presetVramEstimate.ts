@@ -6,6 +6,7 @@ import {
   estimateVramRequirement,
   formatMemoryGb,
   getHybridMemoryPoolGb,
+  getPrimaryGpuVramGb,
   getSelectedGpuVramGb,
 } from "@/lib/vramEstimate";
 import { IHVProvider, UIState } from "@/types";
@@ -117,28 +118,54 @@ export function estimateVramForCatalogPreset(
 ): PresetVramEstimate {
   const sketch = buildUiStateSketchFromCatalogItem(item);
   const estimate = estimateVramRequirement(sketch);
-  const availableGb = getSelectedGpuVramGb(probe ?? null, sketch.ihvProvider);
+  // Always use the machine's GPU when present so CPU recipes still warn when the
+  // model footprint will not fit the card (catalog device does not hide VRAM risk).
+  const availableGb =
+    getPrimaryGpuVramGb(probe ?? null) ?? getSelectedGpuVramGb(probe ?? null, sketch.ihvProvider);
   const systemRamGb = probe?.platform.systemRamGb ?? null;
 
   const beforeLabel = estimate.usesGpu ? "VRAM" : "RAM";
   const peakLabel = estimate.usesGpu ? "peak VRAM" : "peak RAM";
 
   let fitHint: string | null = null;
-  if (estimate.usesGpu && availableGb != null) {
+  if (availableGb != null) {
     const inferenceFit = compareVramFit(estimate.inferenceGb, availableGb);
-    const poolGb = systemRamGb != null ? getHybridMemoryPoolGb(availableGb, systemRamGb) : availableGb;
-    const runFit = compareVramFit(estimate.peakRunGb, poolGb);
-
-    if (runFit === "insufficient") {
-      fitHint = "Peak run may need hybrid offload";
-    } else if (runFit === "tight" || inferenceFit === "tight") {
-      fitHint = "Tight on this GPU";
-    } else if (inferenceFit === "insufficient") {
+    if (inferenceFit === "insufficient") {
       fitHint = "Deployed model may exceed GPU VRAM";
+    } else if (estimate.usesGpu) {
+      // Peak must be judged against GPU VRAM first. Comparing only to the hybrid
+      // GPU+RAM pool hid warnings when Olive peak exceeded the card but fit in RAM.
+      const peakOnGpuFit = compareVramFit(estimate.peakRunGb, availableGb);
+      const poolGb = systemRamGb != null ? getHybridMemoryPoolGb(availableGb, systemRamGb) : availableGb;
+      const peakOnPoolFit = compareVramFit(estimate.peakRunGb, poolGb);
+
+      if (peakOnGpuFit === "insufficient") {
+        fitHint =
+          peakOnPoolFit === "insufficient"
+            ? "Peak run may need hybrid offload"
+            : "Peak Olive run may exceed GPU VRAM";
+      } else if (inferenceFit === "tight" || peakOnGpuFit === "tight") {
+        fitHint = "Tight on this GPU";
+      } else if (peakOnPoolFit === "insufficient") {
+        fitHint = "Peak run may need hybrid offload";
+      }
+    } else if (inferenceFit === "tight") {
+      fitHint = "Tight on this GPU";
     }
   }
 
-  const summaryLine = `~${formatMemoryGb(estimate.sourceWeightGb)} ${beforeLabel} model · ~${formatMemoryGb(estimate.peakRunGb)} ${peakLabel} during run`;
+  // CPU recipes: also surface host-RAM pressure when peak exceeds system memory.
+  if (!fitHint && !estimate.usesGpu && systemRamGb != null) {
+    const peakRamFit = compareVramFit(estimate.peakRunGb, systemRamGb);
+    if (peakRamFit === "insufficient") {
+      fitHint = "Peak run may exceed system RAM";
+    } else if (peakRamFit === "tight") {
+      fitHint = "Tight on system RAM";
+    }
+  }
+
+  // Use deployed (post-pass) size so quantized presets do not look like FP16 footprints.
+  const summaryLine = `~${formatMemoryGb(estimate.inferenceGb)} ${beforeLabel} model · ~${formatMemoryGb(estimate.peakRunGb)} ${peakLabel} during run`;
 
   return {
     inferenceGb: estimate.inferenceGb,

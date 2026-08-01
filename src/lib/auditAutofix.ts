@@ -13,8 +13,8 @@ const TOP_LEVEL = new Set([
   "memoryOffload",
   "modelSource",
   "hfModelId",
-  "hfTask",
   "hfDataset",
+  "hfTask",
   "cacheDir",
 ]);
 
@@ -49,25 +49,6 @@ const PASS_KEYS = new Set([
   "diffusionLora",
 ]);
 
-/** Hugging Face / Olive task strings the UI can set. */
-export const HF_TASK_VALUES = new Set([
-  "text-generation",
-  "text-classification",
-  "feature-extraction",
-  "fill-mask",
-  "text2text-generation",
-  "speech-recognition",
-  "automatic-speech-recognition",
-  "image-classification",
-  "object-detection",
-  "conversational",
-  "sentence-similarity",
-  "question-answering",
-  "token-classification",
-  "translation",
-  "summarization",
-]);
-
 /** Aliases / Olive recipe paths → UI pass or sentinel keys. */
 const PASS_ALIASES: Array<{ pattern: RegExp; key: string }> = [
   { pattern: /input_model_dtype|conversionInputTargetTypes/i, key: "conversionInputTargetTypes" },
@@ -76,10 +57,9 @@ const PASS_ALIASES: Array<{ pattern: RegExp; key: string }> = [
   { pattern: /quant_precision|quantPrecision/i, key: "quantPrecision" },
   { pattern: /\bint8_quant\b|Int8Quantization/i, key: "__enable_int8_ptq__" },
   { pattern: /\btensor_rt\b|TensorRTPass\b/i, key: "__reject_tensor_rt_pass__" },
+  { pattern: /^hfTask$|^(input_model\.)?(config\.)?task$/i, key: "hfTask" },
   // Prefer exact ihvProvider; avoid matching Olive execution_providers arrays.
   { pattern: /^ihvProvider$/i, key: "ihvProvider" },
-  { pattern: /^(hf)?[_-]?task$/i, key: "hfTask" },
-  { pattern: /hf_config\.task|input_model.*\.task/i, key: "hfTask" },
 ];
 
 function stripPassPrefix(pass: string): string {
@@ -90,45 +70,9 @@ function stripPassPrefix(pass: string): string {
     .replace(/^passes\./i, "");
 }
 
-function normalizeDtype(value: string): string {
-  const v = value.trim().toLowerCase().replace(/['"]/g, "");
-  if (v === "fp16" || v === "float16" || v === "half") return "float16";
-  if (v === "bf16" || v === "bfloat16") return "bfloat16";
-  if (v === "fp32" || v === "float32") return "float32";
-  return value.trim();
-}
-
-function normalizeHfTaskValue(value: string): string | null {
-  const v = value.trim().toLowerCase().replace(/['"]/g, "");
-  if (!v) return null;
-  if (v === "asr" || v === "automatic-speech-recognition") return "speech-recognition";
-  if (HF_TASK_VALUES.has(v)) return v;
-  return null;
-}
-
-export { normalizeHfTaskValue };
-
-/**
- * Map autofix.pass (and optional value) onto a canonical UI field.
- * When the model says `input_model` / `hf_config` with a known task value, treat as hfTask.
- */
-export function canonicalizeAutofixPass(pass: string, value?: string): string | null {
+export function canonicalizeAutofixPass(pass: string): string | null {
   const raw = pass.trim();
   if (!raw) return null;
-
-  // "Use FP16 / float16" advice is conversion dtype, not PTQ quantPrecision.
-  // Must run before PASS_KEYS early-return for exact "quantPrecision".
-  if (value) {
-    const dtype = normalizeDtype(value);
-    const looksFloatDtype = dtype === "float16" || dtype === "bfloat16" || dtype === "float32";
-    if (
-      looksFloatDtype &&
-      (/^(quantPrecision|precision|dtype|input_model_dtype|conversionInputTargetTypes)$/i.test(raw) ||
-        /quantPrecision|precision|dtype|input_model_dtype/i.test(stripPassPrefix(raw)))
-    ) {
-      return "conversionInputTargetTypes";
-    }
-  }
 
   if (TOP_LEVEL.has(raw)) return raw;
   if (PASS_KEYS.has(raw)) return raw;
@@ -141,14 +85,8 @@ export function canonicalizeAutofixPass(pass: string, value?: string): string | 
     if (pattern.test(raw) || pattern.test(stripped)) return key;
   }
 
-  // Models often put the HF task on a bare input_model pass.
-  if (value && normalizeHfTaskValue(value) && /^(input_model|hf_config|model)$/i.test(stripped)) {
-    return "hfTask";
-  }
-
   // Last path segment if it is a known UI key.
   const last = stripped.split(".").pop()?.trim() ?? "";
-  if (last === "task" && (!value || normalizeHfTaskValue(value))) return "hfTask";
   if (TOP_LEVEL.has(last) || PASS_KEYS.has(last)) return last;
 
   return null;
@@ -161,6 +99,14 @@ function parseScalar(value: string): string | number | boolean {
     return Number(value);
   }
   return value;
+}
+
+function normalizeDtype(value: string): string {
+  const v = value.trim().toLowerCase().replace(/['"]/g, "");
+  if (v === "fp16" || v === "float16" || v === "half") return "float16";
+  if (v === "bf16" || v === "bfloat16") return "bfloat16";
+  if (v === "fp32" || v === "float32") return "float32";
+  return value.trim();
 }
 
 function normalizeQuantPrecision(value: string): "int4" | "int8" | "fp16" | null {
@@ -192,7 +138,7 @@ export function resolveAuditAutofix(
     }
   }
 
-  const key = canonicalizeAutofixPass(autofix.pass, value);
+  const key = canonicalizeAutofixPass(autofix.pass);
   if (!key) return null;
   if (key === "__reject_tensor_rt_pass__") return null;
 
@@ -213,13 +159,13 @@ export function resolveAuditAutofix(
   if (key === "cudaVersion" || key === "memoryOffload" || key === "modelSource") {
     return { [key]: value } as Partial<UIState>;
   }
-  if (key === "hfModelId" || key === "hfDataset" || key === "cacheDir") {
+  if (key === "hfModelId" || key === "hfDataset" || key === "hfTask" || key === "cacheDir") {
     return { [key]: value };
   }
-  if (key === "hfTask") {
-    const task = normalizeHfTaskValue(value);
-    if (!task) return null;
-    return { hfTask: task };
+
+  // Olive / model shorthand: task → hfTask
+  if (key === "task" || /^input_model\.?(config\.)?task$/i.test(autofix.pass)) {
+    return { hfTask: value };
   }
 
   if (!PASS_KEYS.has(key)) return null;
@@ -231,10 +177,11 @@ export function resolveAuditAutofix(
   } else if (key === "quantPrecision") {
     const prec = normalizeQuantPrecision(value);
     if (!prec) return null;
-    // Half precision is a conversion/runtime dtype. Never enable the quant toggle for it.
+    // fp16 is a conversion dtype, not a quantizer toggle
     if (prec === "fp16") {
       nextPasses.conversion = true;
       nextPasses.conversionInputTargetTypes = "float16";
+      nextPasses.quantPrecision = "fp16";
     } else {
       nextPasses.quantization = true;
       nextPasses.quantPrecision = prec;
@@ -274,10 +221,7 @@ function resolveJsonAutofix(
       passPatch.conversionInputTargetTypes = normalizeDtype(v);
     } else if (canon === "quantPrecision" && typeof v === "string") {
       const prec = normalizeQuantPrecision(v);
-      if (prec === "fp16") {
-        passPatch.conversion = true;
-        passPatch.conversionInputTargetTypes = "float16";
-      } else if (prec) {
+      if (prec) {
         passPatch.quantization = true;
         passPatch.quantPrecision = prec;
       }
@@ -298,21 +242,15 @@ function resolveJsonAutofix(
 /** True when Apply can write a real UI field for this suggestion. */
 export function isAuditAutofixApplyable(autofix: AuditAutofixInput | undefined | null): boolean {
   if (!autofix?.pass) return false;
-  const key = canonicalizeAutofixPass(autofix.pass, autofix.value);
+  const key = canonicalizeAutofixPass(autofix.pass);
   if (!key || key === "__reject_tensor_rt_pass__") return false;
-  if (key === "__enable_int8_ptq__") return Boolean(autofix.value?.trim());
-  if (key === "hfTask") return Boolean(normalizeHfTaskValue(autofix.value ?? ""));
-  if (TOP_LEVEL.has(key) || PASS_KEYS.has(key)) {
-    if (!autofix.value?.trim()) return false;
-    if (autofix.value.trim().startsWith("{")) {
-      try {
-        JSON.parse(autofix.value);
-        return true;
-      } catch {
-        return false;
-      }
+  if (autofix.value.trim().startsWith("{")) {
+    try {
+      JSON.parse(autofix.value);
+      return true;
+    } catch {
+      return false;
     }
-    return true;
   }
-  return false;
+  return true;
 }

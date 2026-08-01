@@ -461,7 +461,7 @@ describe("getPipelineValidation", () => {
     );
     expect(blocked.statusLabel).toMatch(/blocking/);
     const success = getPipelineValidation(baseState({ ihvProvider: "CUDAExecutionProvider" }));
-    expect(success.statusLabel).toBe("Recipe validated");
+    expect(success.statusLabel).toBe("Local checks passed");
   });
 });
 

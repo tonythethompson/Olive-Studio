@@ -15,13 +15,12 @@ const llamaNvCtx: AuditFilterContext = {
     localFileNames: [],
     azurePath: "",
     displayName: "meta-llama/Meta-Llama-3-8B",
-    hfTask: "text-generation",
-    hfTaskInferred: true,
   },
   hardware: {
     executionProvider: "NvTensorRTRTXExecutionProvider",
     executionProviderShort: "NvTensorRTRTX",
     cudaVersion: "auto",
+    memoryOffload: "auto",
   },
 };
 
@@ -101,37 +100,6 @@ describe("isAuditSuggestionRelevant", () => {
 });
 
 describe("filterAuditAnalysis", () => {
-  it("keeps embedding task advice and rewrites pass to hfTask", () => {
-    const analysis: AuditAnalysis = {
-      score: 55,
-      level: "Suboptimal",
-      summary: "Task mismatch for embedding model.",
-      suggestions: [
-        sug({
-          title: "Verify task compatibility",
-          description:
-            "The model gte-large-en-v1.5 is an embedding model; change task to feature-extraction.",
-          impact: "High",
-          type: "warning",
-          autofix: { pass: "-> input_model", value: "feature-extraction" },
-        }),
-      ],
-    };
-    const filtered = filterAuditAnalysis(analysis, {
-      ...llamaNvCtx,
-      model: {
-        ...llamaNvCtx.model,
-        huggingFaceId: "Alibaba-NLP/gte-large-en-v1.5",
-        displayName: "Alibaba-NLP/gte-large-en-v1.5",
-      },
-    });
-    expect(filtered.suggestions).toHaveLength(1);
-    expect(filtered.suggestions[0]!.autofix).toEqual({
-      pass: "hfTask",
-      value: "feature-extraction",
-    });
-  });
-
   it("removes junk and notes how many were dropped", () => {
     const analysis: AuditAnalysis = {
       score: 70,

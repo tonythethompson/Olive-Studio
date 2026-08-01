@@ -696,8 +696,10 @@ export function canApplyMcpDiagnostic(
   diagnostic: {
     updated_config?: Record<string, unknown>;
     relevant_quirks?: string[];
+    applyable?: boolean;
   } | null,
 ): boolean {
   if (!diagnostic) return false;
+  if (diagnostic.applyable === false) return false;
   return !!(diagnostic.updated_config && Object.keys(diagnostic.updated_config).length > 0);
 }
