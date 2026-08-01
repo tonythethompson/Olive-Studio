@@ -48,10 +48,12 @@ vi.mock("@/lib/recipeModelMatch", () => ({
 vi.mock("@/lib/recipeHardwareCompatibility", () => ({
   assessCatalogItemHardwareCompatibility: () => ({
     tier: "compatible",
+    targetDevice: "CPU",
     reason: "mocked",
   }),
   assessRecipeHardwareCompatibility: () => ({
     tier: "compatible",
+    targetDevice: "CPU",
     reason: "mocked",
   }),
   summarizeRecipeHardwareCompatibility: () => ({
@@ -103,9 +105,9 @@ describe("InputEnvironmentPanel", () => {
 
   it("displays the model ID input for HuggingFace source", async () => {
     render(<InputEnvironmentPanel />);
-    const configure = screen.getByText(/configure model source/i);
+    const configureButton = screen.getByRole("button", { name: /configure model source/i });
     await act(async () => {
-      fireEvent.click(configure.closest("button") ?? configure);
+      fireEvent.click(configureButton);
     });
     expect(screen.getByDisplayValue(/meta-llama/i)).toBeDefined();
   });
