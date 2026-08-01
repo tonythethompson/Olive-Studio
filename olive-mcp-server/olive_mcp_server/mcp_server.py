@@ -42,6 +42,10 @@ _TOOL_IMPORTS: dict[str, tuple[str, str]] = {
         "olive_mcp_server.tools.tradeoff",
         "evaluate_optimization_tradeoff",
     ),
+    "get_context_for_pipeline": (
+        "olive_mcp_server.tools.passive_context",
+        "get_context_for_pipeline",
+    ),
 }
 
 _mcp_instance: Any | None = None
