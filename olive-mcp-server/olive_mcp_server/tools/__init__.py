@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 import json
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -60,28 +61,38 @@ def load_quirks() -> dict[str, Any]:
     return load_json("quirks.json").get("categories", {})
 
 
+@lru_cache(maxsize=1)
+def _cached_troubleshooting() -> tuple[dict[str, Any], ...]:
+    entries = load_json("troubleshooting.json").get("entries", [])
+    return tuple(_normalize_entry(e, default_domain="olive") for e in entries)
+
+
 def load_troubleshooting() -> list[dict[str, Any]]:
-    """Load and normalize Olive troubleshooting entries.
-    
+    """Load and normalize Olive troubleshooting entries (cached; returns a list copy).
+
     Returns:
     	list[dict[str, Any]]: Troubleshooting entries with normalized domains and applyability values.
     """
-    entries = load_json("troubleshooting.json").get("entries", [])
-    return [_normalize_entry(e, default_domain="olive") for e in entries]
+    return list(_cached_troubleshooting())
+
+
+@lru_cache(maxsize=1)
+def _cached_studio_troubleshooting() -> tuple[dict[str, Any], ...]:
+    try:
+        entries = load_json("studio_troubleshooting.json").get("entries", [])
+    except FileNotFoundError:
+        return ()
+    return tuple(_normalize_entry(e, default_domain="studio") for e in entries)
 
 
 def load_studio_troubleshooting() -> list[dict[str, Any]]:
     """
-    Load and normalize studio troubleshooting entries.
-    
+    Load and normalize studio troubleshooting entries (cached; returns a list copy).
+
     Returns:
     	list[dict[str, Any]]: The normalized troubleshooting entries, or an empty list when the data file is unavailable.
     """
-    try:
-        entries = load_json("studio_troubleshooting.json").get("entries", [])
-    except FileNotFoundError:
-        return []
-    return [_normalize_entry(e, default_domain="studio") for e in entries]
+    return list(_cached_studio_troubleshooting())
 
 
 def _normalize_entry(entry: dict[str, Any], default_domain: str) -> dict[str, Any]:

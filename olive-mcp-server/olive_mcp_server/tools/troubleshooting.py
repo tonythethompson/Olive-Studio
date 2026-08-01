@@ -220,15 +220,13 @@ def _build_relevant_quirks(
 
 
 def _pool_for_domain(domain: DomainName) -> list[dict[str, Any]]:
-    """Load troubleshooting entries for the requested domain, preserving Olive-first ordering for automatic matching."""
-    olive = load_troubleshooting()
-    studio = load_studio_troubleshooting()
+    """Load troubleshooting entries for the requested domain only (auto loads both, Olive first)."""
     if domain == "olive":
-        return olive
+        return load_troubleshooting()
     if domain == "studio":
-        return studio
-    # auto: olive first in list order for stable olive-first scoring ties broken by search order
-    return olive + studio
+        return load_studio_troubleshooting()
+    # auto: olive first for stable olive-first scoring when ties break by search order
+    return load_troubleshooting() + load_studio_troubleshooting()
 
 
 def _best_match(
@@ -349,19 +347,12 @@ def troubleshoot_olive_error(
         matched_entry = best.get("id")
         matched_domain = matched_domain or best.get("domain") or "olive"
         applyable = bool(best.get("applyable"))
-        # Guidance-only entries must not expose a tempting empty-success Apply path
-        if not applyable:
-            # Keep updated_config for display if present but Apply will be disabled via applyable
-            pass
 
     freq_key = _get_frequency_key(matched_entry, error_message)
     freq = _record_occurrence(freq_key)
 
+    # Keep updated_config for display even when applyable is false (UI Apply stays gated by applyable).
     updated_config = best.get("updated_config", {}) or {}
-    if not applyable:
-        # Prefer empty config for non-applyable so UI Apply stays off consistently
-        # unless the entry explicitly ships a note-only config (still applyable=false).
-        pass
 
     return {
         "matched_entry": matched_entry,

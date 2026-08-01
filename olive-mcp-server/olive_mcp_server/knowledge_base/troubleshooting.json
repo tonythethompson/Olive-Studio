@@ -547,7 +547,7 @@
         "pytorch_model.bin",
         "model.safetensors.index.json",
         "Unable to load weights",
-        "OSError: .*weight"
+        "OSError:"
       ],
       "title": "Model weight files missing or incomplete download",
       "root_cause": "HF cache is incomplete or the repo uses a weight layout Olive/transformers cannot load.",

@@ -1,8 +1,19 @@
+import { pinnedTensorRtInstallArgs, pinnedTensorRtLabel } from "./tensorrtDeps.ts";
+
 /**
  * Stable onnxruntime-gpu on PyPI is CUDA 12.x through 1.26.x.
  * 1.27+ wheels are CUDA 13 builds but cu13 pip runtime packages are not fully published yet.
+ * Do not enable cu130/cu132 until ORT + nvidia-*-cu13 pins resolve on PyPI.
  */
 export const PINNED_ORT_GPU_VERSION = "1.26.0";
+
+/** PyTorch CUDA tags Olive Studio can fully resolve to installable pins. */
+export const RESOLVABLE_CUDA_TAGS = ["cu118", "cu121", "cu124", "cu126", "cu128"] as const;
+export type ResolvableCudaTag = (typeof RESOLVABLE_CUDA_TAGS)[number];
+
+export function isResolvableCudaTag(tag: string): tag is ResolvableCudaTag {
+  return (RESOLVABLE_CUDA_TAGS as readonly string[]).includes(tag);
+}
 
 export const CUDA12_RUNTIME_PACKAGES: Array<{
   importName: string;
@@ -29,6 +40,34 @@ export const CUDA12_RUNTIME_PACKAGES: Array<{
     label: "nvidia-nvjitlink-cu12",
   },
 ];
+
+export type CudaTagResolution = {
+  tag: ResolvableCudaTag;
+  torchIndexUrl: string;
+  ortInstallArgs: string[];
+  ortLabel: string;
+  runtimePackages: typeof CUDA12_RUNTIME_PACKAGES;
+  /** Classic TensorRT pin compatible with onnxruntime-gpu 1.26 / CUDA 12. */
+  tensorRtInstallArgs: string[];
+  tensorRtLabel: string;
+};
+
+/**
+ * Resolve install pins for a supported CUDA tag.
+ * Returns null for cpu/auto/unsupported tags (cu130, cu132, …).
+ */
+export function resolveCudaTag(tag: string): CudaTagResolution | null {
+  if (!isResolvableCudaTag(tag)) return null;
+  return {
+    tag,
+    torchIndexUrl: `https://download.pytorch.org/whl/${tag}`,
+    ortInstallArgs: pinnedOrtGpuInstallArgs(),
+    ortLabel: pinnedOrtGpuLabel(),
+    runtimePackages: CUDA12_RUNTIME_PACKAGES,
+    tensorRtInstallArgs: pinnedTensorRtInstallArgs(),
+    tensorRtLabel: pinnedTensorRtLabel(),
+  };
+}
 
 export function pinnedOrtGpuInstallArgs(): string[] {
   return [`onnxruntime-gpu==${PINNED_ORT_GPU_VERSION}`];

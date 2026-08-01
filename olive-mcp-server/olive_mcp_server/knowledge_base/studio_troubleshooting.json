@@ -81,7 +81,7 @@
     {
       "id": "studio-tensorrt-pip-invalid-requirement",
       "domain": "studio",
-      "patterns": ["Invalid requirement", "==10.9.0.34", "tensorrt", "pip install"],
+      "patterns": ["Invalid requirement", "==10.9.0.34"],
       "title": "TensorRT install used a bare version pin",
       "root_cause": "Olive Studio Hardware install must pass a package name (for example tensorrt==…) not a lone ==version string.",
       "solution": "Use Hardware → Install for TensorRT / TensorRT RTX, or pip install tensorrt==<version> / tensorrt-rtx explicitly in the app .venv. Retry after a successful install.",

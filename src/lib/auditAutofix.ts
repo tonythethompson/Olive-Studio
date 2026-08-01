@@ -188,8 +188,6 @@ const CUDA_VERSIONS = new Set<UIState["cudaVersion"]>([
   "cu124",
   "cu126",
   "cu128",
-  "cu130",
-  "cu132",
 ]);
 const MEMORY_OFFLOADS = new Set<UIState["memoryOffload"]>(["gpu_only", "auto"]);
 const MODEL_SOURCES = new Set<UIState["modelSource"]>(["huggingface", "local", "azure"]);

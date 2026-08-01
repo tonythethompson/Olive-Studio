@@ -4,6 +4,7 @@
  * parseCudaVersionFromNvidiaSmi and pickCudaTag are the canonical implementations.
  * routes/system.ts was duplicating them — it should import from here instead.
  */
+import { isResolvableCudaTag } from "../../../lib/oliveGpuRuntime.ts";
 import { execFileAsync } from "../shared/exec.ts";
 import { getVenvPython } from "../venv/paths.ts";
 
@@ -19,7 +20,8 @@ export function parseCudaVersionFromNvidiaSmi(
 }
 
 /**
- * Selects the newest compatible PyTorch wheel tag for a CUDA version.
+ * Selects the newest resolvable PyTorch wheel tag for a CUDA version.
+ * CUDA 13+ maps to cu128 (highest tag with ORT 1.26 + nvidia-*-cu12 pins).
  *
  * @param major - The CUDA major version
  * @param minor - The CUDA minor version
@@ -27,13 +29,14 @@ export function parseCudaVersionFromNvidiaSmi(
  */
 export function pickCudaTag(major: number, minor: number): string {
   const tiers = [
-    { major: 13, minor: 0, tag: "cu130" },
     { major: 12, minor: 8, tag: "cu128" },
     { major: 12, minor: 6, tag: "cu126" },
     { major: 12, minor: 4, tag: "cu124" },
     { major: 12, minor: 1, tag: "cu121" },
     { major: 11, minor: 8, tag: "cu118" },
   ];
+  // Driver CUDA 13.x can run cu128 wheels; cu130/cu132 are not resolvable yet.
+  if (major >= 13) return "cu128";
   for (const t of tiers) {
     if (major > t.major || (major === t.major && minor >= t.minor)) return t.tag;
   }
@@ -51,8 +54,13 @@ export function pickCudaTag(major: number, minor: number): string {
  */
 export async function detectCudaTag(preferred: string, onLine: (line: string) => void): Promise<string> {
   if (preferred && preferred !== "auto") {
-    onLine(`[deps] CUDA version override: ${preferred}`);
-    return preferred;
+    if (preferred === "cpu" || isResolvableCudaTag(preferred)) {
+      onLine(`[deps] CUDA version override: ${preferred}`);
+      return preferred;
+    }
+    onLine(
+      `[deps] Unsupported CUDA tag "${preferred}" (no ORT/cu12 resolution); falling back to auto-detect`,
+    );
   }
 
   // Check existing torch in venv first — avoids reinstall when already correct
