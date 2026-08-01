@@ -281,7 +281,7 @@ def _get_live_index() -> tuple[list[tuple[str, str]], np.ndarray]:
         if _LIVE_EMBEDDINGS is not None and fetch_time < _LIVE_EMBED_CACHE_TIME:
             # A newer generation already published while this one was
             # encoding; discard this stale build rather than clobber it.
-            return snippets, embeddings
+            return _LIVE_SNIPPETS, _LIVE_EMBEDDINGS
 
         _LIVE_SNIPPETS = snippets
         _LIVE_EMBEDDINGS = embeddings
