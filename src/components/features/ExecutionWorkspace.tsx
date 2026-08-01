@@ -832,10 +832,8 @@ ${
               setGpuMetrics(null);
               onRunStateChange?.(false);
               recordJobCompletion(targetJobId, finalStatus, reportedExit);
-              if (failed) {
-                setMcpFixApplied("");
-                void fetchKeyedDiagnostic("current", currentLogs);
-              }
+              // Auto-diagnose is owned by the executionStatus==="failed" effect below.
+              if (failed) setMcpFixApplied("");
             });
             return currentLogs;
           });
@@ -868,13 +866,8 @@ ${
                 setIsRunning(false);
                 onRunStateChange?.(false);
                 recordJobCompletion(targetJobId, finalStatus, statusData.exitCode);
-                if (finalStatus === "failed") {
-                  setMcpFixApplied("");
-                  setExecutionLogs((currentLogs) => {
-                    fetchKeyedDiagnostic("current", currentLogs);
-                    return currentLogs;
-                  });
-                }
+                // Auto-diagnose is owned by the executionStatus==="failed" effect.
+                if (finalStatus === "failed") setMcpFixApplied("");
                 return;
               } else if (statusData.status === "running" || statusData.status === "setting_up") {
                 serverSaysRunning = true;

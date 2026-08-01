@@ -93,6 +93,20 @@ describe("resolveAuditAutofix", () => {
     expect(resolveAuditAutofix({ pass: "quantMethod", value: "not-a-method" }, state)).toBeNull();
   });
 
+  it("rejects invented ihvProvider values", () => {
+    expect(resolveAuditAutofix({ pass: "ihvProvider", value: "NotAProvider" }, state)).toBeNull();
+    expect(resolveAuditAutofix({ pass: "ihvProvider", value: "CUDA-EP" }, state)).toBeNull();
+  });
+
+  it("accepts canonical and alias ihvProvider values", () => {
+    expect(
+      resolveAuditAutofix({ pass: "ihvProvider", value: "CUDAExecutionProvider" }, state)?.ihvProvider,
+    ).toBe("CUDAExecutionProvider");
+    expect(resolveAuditAutofix({ pass: "ihvProvider", value: "CUDA" }, state)?.ihvProvider).toBe(
+      "CUDAExecutionProvider",
+    );
+  });
+
   it("maps JSON fp16 quantPrecision through conversion dtype", () => {
     const patch = resolveAuditAutofix({ pass: "passes", value: '{"quantPrecision":"fp16"}' }, state);
     expect(patch?.passes?.conversion).toBe(true);

@@ -263,16 +263,19 @@ def troubleshoot_olive_error(
         olive_best, olive_score = _best_match(
             load_troubleshooting(), error_message, pass_name, config_context
         )
-        if olive_best is not None and olive_score > 0:
+        studio_best, studio_score = _best_match(
+            load_studio_troubleshooting(), error_message, pass_name, config_context
+        )
+        # Score both pools; Olive wins ties so generic Olive guidance stays stable.
+        if studio_score > olive_score and studio_best is not None and studio_score > 0:
+            best = studio_best
+            matched_domain = "studio"
+        elif olive_best is not None and olive_score > 0:
             best = olive_best
             matched_domain = "olive"
-        else:
-            studio_best, studio_score = _best_match(
-                load_studio_troubleshooting(), error_message, pass_name, config_context
-            )
-            if studio_best is not None and studio_score > 0:
-                best = studio_best
-                matched_domain = "studio"
+        elif studio_best is not None and studio_score > 0:
+            best = studio_best
+            matched_domain = "studio"
     else:
         pool = _pool_for_domain(resolved)
         hit, score = _best_match(pool, error_message, pass_name, config_context)
