@@ -73,7 +73,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
     };
 
     window.addEventListener("resize", updateMenuPos);
-    window.addEventListener("scroll", updateMenuPos, true);
+    window.addEventListener("scroll", updateMenuPos, { capture: true, passive: true });
     document.addEventListener("mousedown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
