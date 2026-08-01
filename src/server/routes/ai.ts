@@ -434,6 +434,7 @@ async function ensureOllamaReadyImpl(
           : "Ollama serve did not start. Run `ollama serve` manually, then retry.",
     };
   }
+
   return { ok: true, steps };
 }
 

@@ -2,11 +2,18 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, act, fireEvent } from "@testing-library/react";
 import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
 
-// Mock the pipeline store
-const mockSetState = vi.fn();
+// Stable store mock: creating a fresh UIState each render churns effect deps
+// (e.g. state.localFiles) and can leave act()/findBy hanging.
+const { mockSetState, mockPipelineState } = vi.hoisted(() => {
+  const mockSetState = vi.fn();
+  // Inline defaults mirror createMockUIState(); resolved after imports via Object.assign below.
+  const mockPipelineState = {} as ReturnType<typeof createMockUIState>;
+  return { mockSetState, mockPipelineState };
+});
+
 vi.mock("@/lib/stores/pipelineStore", () => ({
   usePipelineState: () => ({
-    state: createMockUIState(),
+    state: mockPipelineState,
     setState: mockSetState,
   }),
 }));
@@ -74,6 +81,8 @@ vi.mock("@/lib/presetVramEstimate", () => ({
 }));
 
 import { InputEnvironmentPanel } from "./InputEnvironmentPanel";
+
+Object.assign(mockPipelineState, createMockUIState());
 
 describe("InputEnvironmentPanel", () => {
   useFetchRoutesMock({

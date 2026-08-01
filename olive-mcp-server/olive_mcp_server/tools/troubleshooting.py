@@ -295,6 +295,12 @@ def troubleshoot_olive_error(
     freq = _record_occurrence(freq_key)
     updated_config = best.get("updated_config", {}) or {}
 
+    updated_config = best.get("updated_config", {}) or {}
+    if not applyable:
+        # Prefer empty config for non-applyable so UI Apply stays off consistently
+        # unless the entry explicitly ships a note-only config (still applyable=false).
+        pass
+
     return {
         "matched_entry": matched_entry,
         "domain": matched_domain,

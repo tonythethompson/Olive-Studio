@@ -319,6 +319,92 @@ registerOpenAiCompatProvider({
   supportsJsonResponseFormat: true,
 });
 
+// OpenCode Zen (pay-per-use gateway).
+// Defaults to a /chat/completions model: Claude uses /messages and GPT uses /responses.
+registerProvider({
+  name: "opencode",
+  label: "OpenCode Zen",
+  defaultModel: "kimi-k2.7-code",
+  defaultBaseUrl: "https://opencode.ai/zen/v1",
+  envVarNames: ["OPENCODE_API_KEY"],
+  buildConfig: (apiKey) => ({
+    provider: "opencode",
+    apiKey,
+    model: "kimi-k2.7-code",
+    baseUrl: "https://opencode.ai/zen/v1",
+  }),
+  call: callOpenAICompat,
+  supportsJsonResponseFormat: true,
+});
+
+// OpenCode Go (subscription gateway for curated open models)
+registerProvider({
+  name: "opencode-go",
+  label: "OpenCode Go",
+  defaultModel: "kimi-k2.7-code",
+  defaultBaseUrl: "https://opencode.ai/zen/go/v1",
+  envVarNames: ["OPENCODE_API_KEY"],
+  buildConfig: (apiKey) => ({
+    provider: "opencode-go",
+    apiKey,
+    model: "kimi-k2.7-code",
+    baseUrl: "https://opencode.ai/zen/go/v1",
+  }),
+  call: callOpenAICompat,
+  supportsJsonResponseFormat: true,
+});
+
+// Fireworks AI
+registerProvider({
+  name: "fireworks",
+  label: "Fireworks AI",
+  defaultModel: "accounts/fireworks/models/llama-v3p3-70b-instruct",
+  defaultBaseUrl: "https://api.fireworks.ai/inference/v1",
+  envVarNames: ["FIREWORKS_API_KEY"],
+  buildConfig: (apiKey) => ({
+    provider: "fireworks",
+    apiKey,
+    model: "accounts/fireworks/models/llama-v3p3-70b-instruct",
+    baseUrl: "https://api.fireworks.ai/inference/v1",
+  }),
+  call: callOpenAICompat,
+  supportsJsonResponseFormat: true,
+});
+
+// NVIDIA NIM (build.nvidia.com / integrate.api.nvidia.com)
+registerProvider({
+  name: "nvidia",
+  label: "NVIDIA NIM",
+  defaultModel: "meta/llama-3.1-8b-instruct",
+  defaultBaseUrl: "https://integrate.api.nvidia.com/v1",
+  envVarNames: ["NVIDIA_API_KEY"],
+  buildConfig: (apiKey) => ({
+    provider: "nvidia",
+    apiKey,
+    model: "meta/llama-3.1-8b-instruct",
+    baseUrl: "https://integrate.api.nvidia.com/v1",
+  }),
+  call: callOpenAICompat,
+  supportsJsonResponseFormat: true,
+});
+
+// Hugging Face Inference Providers (OpenAI-compatible router)
+registerProvider({
+  name: "huggingface",
+  label: "Hugging Face",
+  defaultModel: "moonshotai/Kimi-K2.5",
+  defaultBaseUrl: "https://router.huggingface.co/v1",
+  envVarNames: ["HF_TOKEN", "HUGGINGFACE_API_KEY"],
+  buildConfig: (apiKey) => ({
+    provider: "huggingface",
+    apiKey,
+    model: "moonshotai/Kimi-K2.5",
+    baseUrl: "https://router.huggingface.co/v1",
+  }),
+  call: callOpenAICompat,
+  supportsJsonResponseFormat: true,
+});
+
 // GitHub Copilot
 registerProvider({
   name: "copilot",

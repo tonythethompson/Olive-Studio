@@ -7,7 +7,7 @@
       "author": "ant-gravity",
       "license": "MIT",
       "tags": ["react", "vite", "performance", "best-practices"],
-      "installation": "npx skills add claudiocebpaz/vite-react-best-practices"
+      "installation": "pnpm dlx skills add claudiocebpaz/vite-react-best-practices"
     }
   ],
   "categories": [

@@ -123,6 +123,10 @@ export function ExecutionWorkspace({
   const [liveJobId, setLiveJobId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
+  const executionLogsRef = useRef<string[]>([]);
+  useEffect(() => {
+    executionLogsRef.current = executionLogs;
+  }, [executionLogs]);
   const [executionStatus, setExecutionStatus] = useState<
     "idle" | "running" | "completed" | "failed" | "cancelled"
   >("idle");

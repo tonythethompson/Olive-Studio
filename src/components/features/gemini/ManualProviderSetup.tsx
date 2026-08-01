@@ -82,6 +82,8 @@ function ModelInput({ providers }: ProvidersProp) {
   if (isCompatMode && settingsProvider === "openai-compat") {
     return (
       <input
+        id="gemini-settings-model"
+        aria-label="Custom model name"
         placeholder="Model name (e.g. llama3.1:8b, deepseek-r1)"
         value={customModel}
         onChange={(e) => providers.setCustomModel(e.target.value)}
@@ -113,15 +115,22 @@ function ModelInput({ providers }: ProvidersProp) {
             </option>
           ))}
         </select>
-        <input
-          placeholder="Or type a model id…"
-          value={customModel}
-          onChange={(e) => {
-            providers.setCustomModel(e.target.value);
-            providers.setSettingsModel(e.target.value);
-          }}
-          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
-        />
+        <div>
+          <label htmlFor="gemini-settings-custom-model" className="sr-only">
+            Custom model id
+          </label>
+          <input
+            id="gemini-settings-custom-model"
+            aria-label="Custom model id"
+            placeholder="Or type a model id…"
+            value={customModel}
+            onChange={(e) => {
+              providers.setCustomModel(e.target.value);
+              providers.setSettingsModel(e.target.value);
+            }}
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+          />
+        </div>
       </div>
     );
   }
@@ -160,7 +169,11 @@ function ModelField({ providers }: ProvidersProp) {
   );
 }
 
-/** Base URL (compat providers only) + API key input and the save button. */
+/**
+ * Renders provider connection fields and a button to save and activate the provider.
+ *
+ * @param providers - Provider settings, state, and actions used by the form
+ */
 function ApiKeyForm({ providers }: ProvidersProp) {
   const {
     isCompatMode,
@@ -175,8 +188,11 @@ function ApiKeyForm({ providers }: ProvidersProp) {
     <>
       {isCompatMode && (
         <div>
-          <label className="text-xs text-slate-400 mb-1 block">Base URL</label>
+          <label htmlFor="gemini-settings-base-url" className="text-xs text-slate-400 mb-1 block">
+            Base URL
+          </label>
           <input
+            id="gemini-settings-base-url"
             type="text"
             placeholder="http://localhost:11434/v1"
             value={settingsBaseUrl}
@@ -192,7 +208,10 @@ function ApiKeyForm({ providers }: ProvidersProp) {
       )}
 
       <div>
-        <label className="text-xs text-slate-400 mb-1 flex items-center gap-1.5 block">
+        <label
+          htmlFor="gemini-settings-api-key"
+          className="text-xs text-slate-400 mb-1 flex items-center gap-1.5"
+        >
           <Key className="h-3 w-3" />
           API Key
           {"keyEnvVar" in providerOption && providerOption.keyEnvVar && (
@@ -202,6 +221,7 @@ function ApiKeyForm({ providers }: ProvidersProp) {
           )}
         </label>
         <input
+          id="gemini-settings-api-key"
           type="password"
           autoComplete="off"
           placeholder="Stored in memory only, never persisted to disk"

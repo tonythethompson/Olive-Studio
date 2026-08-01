@@ -7,6 +7,14 @@ BeautifulSoup / requests in the project .venv.
 
 from __future__ import annotations
 
+Heavy tool modules (docs search, etc.) are imported lazily via ``__getattr__``
+so the HTTP diagnosis path can load ``troubleshooting`` without requiring
+BeautifulSoup / requests in the project .venv.
+"""
+
+from __future__ import annotations
+
+import importlib
 import json
 from pathlib import Path
 from typing import Any

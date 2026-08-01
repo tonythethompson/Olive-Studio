@@ -16,6 +16,23 @@ export default defineConfig({
 });
 ```
 
+## 1b. External modules in library-mode builds
+
+**Cause:** Library builds leave dependencies out of the bundle when they are listed as externals.
+**Fix:** Configure `build.rollupOptions.external` (and matching `output.globals` when needed). Do not use `ssr.noExternal` for library-mode packaging.
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  build: {
+    lib: { entry: "src/index.ts", formats: ["es"] },
+    rollupOptions: {
+      external: ["react", "react-dom"],
+    },
+  },
+});
+```
+
 ## 2. "Cannot find module" (dev / client)
 
 **Cause:** Missing dependency, wrong import path, or a CJS package that Vite has not pre-optimized for the browser graph.
