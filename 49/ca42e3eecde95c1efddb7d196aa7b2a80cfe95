@@ -1,0 +1,54 @@
+olive-mcp-server/tests/test_docs_search_semantic.py
+  s_1b10dc5220b409::t_53c0ad65de63e9 17,27
+  s_1b10dc5220b409::t_f89a0fb117adf5 18-23,28-33
+  s_1b10dc5220b409::t_1f0af2b194ec7e 150,159
+  s_1b10dc5220b409::t_c28a087061474a 164-175
+  s_1b10dc5220b409::t_eba79393f50403 204,226
+  s_1b10dc5220b409::t_246d4f3b0812e7 231
+  s_1b10dc5220b409::t_83c70935727dcb 236,238-245,251-256,262-277
+olive-mcp-server/olive_mcp_server/tools/embeddings.py
+  s_1b10dc5220b409::t_128729af3c2880 10-11
+olive-mcp-server/Dockerfile
+  s_1b10dc5220b409::t_b28effee6b0874 13-17,19-22
+  s_1b10dc5220b409::t_342e3a355f0716 43
+  s_1b10dc5220b409::t_98b09805802549 58
+olive-mcp-server/pyproject.toml
+  s_1b10dc5220b409::t_47c5403b48970b 14-15
+olive-mcp-server/olive_mcp_server/tools/troubleshooting.py
+  s_1b10dc5220b409::t_cc0efebfd6970b 53
+  s_1b10dc5220b409::t_3f18ff8c15fc1d 173-179
+  s_1b10dc5220b409::t_44570a93faa36c 415-443
+  s_1b10dc5220b409::t_5b58bfed02d984 467,469
+  s_1b10dc5220b409::t_2846a8822b6aa7 513
+olive-mcp-server/olive_mcp_server/tools/docs_search.py
+  s_1b10dc5220b409::t_47fe9c2cd09516 10
+  s_1b10dc5220b409::t_8cba2ec3236cf9 26-27
+  s_1b10dc5220b409::t_86348befe3c81e 46,49
+  s_1b10dc5220b409::t_6dac4c7fca5a44 82-87,96
+  s_1b10dc5220b409::t_7e7172478c8832 199-200
+  s_1b10dc5220b409::t_eef2a4abda555a 210
+  s_1b10dc5220b409::t_36dccab504a7ac 233-234
+  s_1b10dc5220b409::t_c59ede9aeb5985 302-303,309-310
+  s_1b10dc5220b409::t_ae6bddaa300ad9 350-354
+olive-mcp-server/olive_mcp_server/tools/passive_context.py
+  s_1b10dc5220b409::t_cecdde8687c17b 9,15
+  s_1b10dc5220b409::t_e254714b48fa6f 108-109
+src/server/services/ai/oliveMcpKnowledge.ts
+  s_1b10dc5220b409::t_a889bb6a21eb89 140-144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "49ca42e3eecde95c1efddb7d196aa7b2a80cfe95",
+  "prompts": {},
+  "sessions": {
+    "s_1b10dc5220b409": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "85b51c99-7caa-4c75-a477-fd438a149008",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
