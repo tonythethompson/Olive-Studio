@@ -603,7 +603,7 @@ export function mountAiRoutes(router: Router): void {
     });
   });
 
-  router.post("/ai/provider", (req, res) => {
+  router.post("/ai/provider", authActionRateLimit, (req, res) => {
     const { provider, apiKey, model, baseUrl } = req.body ?? {};
     if (!provider) return res.status(400).json({ error: "Missing provider" });
     if (!ALLOWED_AI_PROVIDERS.has(provider))
@@ -624,14 +624,14 @@ export function mountAiRoutes(router: Router): void {
       provider === "cloudflare" ||
       Boolean(
         normalizedBaseUrl &&
-          (() => {
-            try {
-              const hostname = new URL(normalizedBaseUrl).hostname.toLowerCase();
-              return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-            } catch {
-              return false;
-            }
-          })(),
+        (() => {
+          try {
+            const hostname = new URL(normalizedBaseUrl).hostname.toLowerCase();
+            return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+          } catch {
+            return false;
+          }
+        })(),
       );
     if (!resolvedKey && !allowEmptyKey) {
       return res.status(400).json({
@@ -763,14 +763,14 @@ export function mountAiRoutes(router: Router): void {
         provider === "openai-compat" &&
         Boolean(
           safeBaseUrl &&
-            (() => {
-              try {
-                const hostname = new URL(safeBaseUrl).hostname.toLowerCase();
-                return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-              } catch {
-                return false;
-              }
-            })(),
+          (() => {
+            try {
+              const hostname = new URL(safeBaseUrl).hostname.toLowerCase();
+              return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+            } catch {
+              return false;
+            }
+          })(),
         );
       if (!key && !allowEmptyKey) {
         return res.json({
@@ -1553,7 +1553,8 @@ async function fetchAnthropicModelCatalog(apiKey: string) {
 }
 
 async function fetchCopilotModelCatalog(apiKey: string, baseUrl?: string) {
-  const base = stripTrailingSlashes(baseUrl || "https://api.githubcopilot.com");
+  const sanitized = sanitizeProviderBaseUrl("copilot", baseUrl);
+  const base = stripTrailingSlashes(sanitized || "https://api.githubcopilot.com");
   const modelsUrl = base.endsWith("/models") ? base : `${base}/models`;
   const r = await fetch(modelsUrl, {
     headers: {

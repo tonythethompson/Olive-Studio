@@ -48,6 +48,7 @@ describe("loadStudioEnv", () => {
   });
 
   it("hydrateProcessEnvFromWindows fills missing process keys from persisted map", () => {
+    const platformSpy = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
     const exec = vi.fn(() =>
       JSON.stringify({
         TEST_OLIVE_GEMINI_KEY: "from-windows-user",
@@ -55,11 +56,15 @@ describe("loadStudioEnv", () => {
       }),
     ) as unknown as typeof import("node:child_process").execFileSync;
 
-    process.env.TEST_OLIVE_OPENROUTER_KEY = "already-in-process";
-    const filled = hydrateProcessEnvFromWindows([...TRACKED], { exec });
-    expect(process.env.TEST_OLIVE_GEMINI_KEY).toBe("from-windows-user");
-    expect(process.env.TEST_OLIVE_OPENROUTER_KEY).toBe("already-in-process");
-    expect(filled).toEqual(["TEST_OLIVE_GEMINI_KEY"]);
+    try {
+      process.env.TEST_OLIVE_OPENROUTER_KEY = "already-in-process";
+      const filled = hydrateProcessEnvFromWindows([...TRACKED], { exec });
+      expect(process.env.TEST_OLIVE_GEMINI_KEY).toBe("from-windows-user");
+      expect(process.env.TEST_OLIVE_OPENROUTER_KEY).toBe("already-in-process");
+      expect(filled).toEqual(["TEST_OLIVE_GEMINI_KEY"]);
+    } finally {
+      platformSpy.mockRestore();
+    }
   });
 
   it("readWindowsPersistedEnv returns {} off Windows", () => {
