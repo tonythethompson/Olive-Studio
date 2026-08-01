@@ -133,6 +133,57 @@ function normalizeQuantMethod(value: string): UIState["passes"]["quantMethod"] |
   return QUANT_METHODS.has(v) ? v : null;
 }
 
+const IHV_PROVIDERS = new Set<IHVProvider>([
+  "CPUExecutionProvider",
+  "CUDAExecutionProvider",
+  "TensorrtExecutionProvider",
+  "NvTensorRTRTXExecutionProvider",
+  "OpenVINOExecutionProvider",
+  "QNNExecutionProvider",
+  "ROCMExecutionProvider",
+  "WebGpuExecutionProvider",
+]);
+
+const CUDA_VERSIONS = new Set<UIState["cudaVersion"]>([
+  "auto",
+  "cpu",
+  "cu118",
+  "cu121",
+  "cu124",
+  "cu126",
+  "cu128",
+  "cu130",
+  "cu132",
+]);
+const MEMORY_OFFLOADS = new Set<UIState["memoryOffload"]>(["gpu_only", "auto"]);
+const MODEL_SOURCES = new Set<UIState["modelSource"]>(["huggingface", "local", "azure"]);
+
+function normalizeIhvProvider(value: string): IHVProvider | null {
+  const raw = value.trim();
+  if (IHV_PROVIDERS.has(raw as IHVProvider)) return raw as IHVProvider;
+  const compact = raw.replace(/\s+/g, "");
+  const aliases: Record<string, IHVProvider> = {
+    cuda: "CUDAExecutionProvider",
+    cudaprovider: "CUDAExecutionProvider",
+    cudaexecutionprovider: "CUDAExecutionProvider",
+    cpu: "CPUExecutionProvider",
+    cpuexecutionprovider: "CPUExecutionProvider",
+    tensorrt: "TensorrtExecutionProvider",
+    tensorrtexecutionprovider: "TensorrtExecutionProvider",
+    nvtensorrtrtx: "NvTensorRTRTXExecutionProvider",
+    nvtensorrtrtxexecutionprovider: "NvTensorRTRTXExecutionProvider",
+    openvino: "OpenVINOExecutionProvider",
+    openvinoexecutionprovider: "OpenVINOExecutionProvider",
+    qnn: "QNNExecutionProvider",
+    qnnexecutionprovider: "QNNExecutionProvider",
+    rocm: "ROCMExecutionProvider",
+    rocmexecutionprovider: "ROCMExecutionProvider",
+    webgpu: "WebGpuExecutionProvider",
+    webgpuexecutionprovider: "WebGpuExecutionProvider",
+  };
+  return aliases[compact.toLowerCase()] ?? null;
+}
+
 /**
  * Build a UIState patch for an audit autofix, or null if it cannot be applied safely.
  */
@@ -170,10 +221,20 @@ export function resolveAuditAutofix(
   }
 
   if (key === "ihvProvider") {
-    return { ihvProvider: value as IHVProvider };
+    const provider = normalizeIhvProvider(value);
+    return provider ? { ihvProvider: provider } : null;
   }
-  if (key === "cudaVersion" || key === "memoryOffload" || key === "modelSource") {
-    return { [key]: value } as Partial<UIState>;
+  if (key === "cudaVersion") {
+    const v = value.trim().toLowerCase() as UIState["cudaVersion"];
+    return CUDA_VERSIONS.has(v) ? { cudaVersion: v } : null;
+  }
+  if (key === "memoryOffload") {
+    const v = value.trim().toLowerCase() as UIState["memoryOffload"];
+    return MEMORY_OFFLOADS.has(v) ? { memoryOffload: v } : null;
+  }
+  if (key === "modelSource") {
+    const v = value.trim().toLowerCase() as UIState["modelSource"];
+    return MODEL_SOURCES.has(v) ? { modelSource: v } : null;
   }
   if (key === "hfModelId" || key === "hfDataset" || key === "hfTask" || key === "cacheDir") {
     return { [key]: value };
@@ -221,10 +282,17 @@ function resolveJsonAutofix(
   obj: Record<string, unknown>,
   state: Pick<UIState, "passes" | "ihvProvider">,
 ): Partial<UIState> | null {
-  if (pass === "ihvProvider" || pass === "cudaVersion") {
-    const v = obj[pass];
+  if (pass === "ihvProvider") {
+    const v = obj.ihvProvider;
     if (typeof v !== "string") return null;
-    return { [pass]: v } as Partial<UIState>;
+    const provider = normalizeIhvProvider(v);
+    return provider ? { ihvProvider: provider } : null;
+  }
+  if (pass === "cudaVersion") {
+    const v = obj.cudaVersion;
+    if (typeof v !== "string") return null;
+    const tag = v.trim().toLowerCase() as UIState["cudaVersion"];
+    return CUDA_VERSIONS.has(tag) ? { cudaVersion: tag } : null;
   }
 
   const passPatch: Partial<UIState["passes"]> = {};
