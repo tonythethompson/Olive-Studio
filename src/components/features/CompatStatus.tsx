@@ -29,7 +29,7 @@ interface CompatStatusPillProps {
 
 /** Color plus icon so hardware status is not color-only. */
 export function CompatStatusPill({ tier, className, size = "sm" }: CompatStatusPillProps) {
-  const { label, Icon, className: tierClass } = TIER_UI[tier];
+  const { label, Icon, className: tierClass } = TIER_UI[tier] ?? TIER_UI.unknown;
   return (
     <span
       className={cn(

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
 
 // Mock the pipeline store
@@ -45,9 +45,23 @@ vi.mock("@/lib/recipeModelMatch", () => ({
 
 // Mock recipe hardware compatibility
 vi.mock("@/lib/recipeHardwareCompatibility", () => ({
-  assessCatalogItemHardwareCompatibility: () => ({ compatible: true }),
-  assessRecipeHardwareCompatibility: () => ({ compatible: true }),
-  summarizeRecipeHardwareCompatibility: () => "",
+  assessCatalogItemHardwareCompatibility: () => ({
+    tier: "compatible",
+    targetDevice: "CPU",
+    reason: "mocked",
+  }),
+  assessRecipeHardwareCompatibility: () => ({
+    tier: "compatible",
+    targetDevice: "CPU",
+    reason: "mocked",
+  }),
+  summarizeRecipeHardwareCompatibility: () => ({ compatible: 0, unavailable: 0, unknown: 0 }),
+}));
+
+// Keep the presets catalog empty in unit tests (avoids 215KB dynamic import churn)
+vi.mock("@/data/recipes", () => ({
+  SUGGESTED_RECIPES: [],
+  loadSuggestedRecipes: () => Promise.resolve([]),
 }));
 
 // Mock tensorrt deps
@@ -94,8 +108,13 @@ describe("InputEnvironmentPanel", () => {
     await act(async () => {
       render(<InputEnvironmentPanel />);
     });
+    // Presets-first IA keeps source config collapsed until opened
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /configure model source/i }));
+    });
     // The HF model ID input should be pre-populated with the default model
-    const input = screen.getByDisplayValue(/meta-llama/i);
-    expect(input).toBeDefined();
+    expect((screen.getByLabelText(/hugging face model id/i) as HTMLInputElement).value).toMatch(
+      /meta-llama/i,
+    );
   });
 });
