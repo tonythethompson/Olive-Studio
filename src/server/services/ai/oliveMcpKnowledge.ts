@@ -216,22 +216,25 @@ export async function optionalWebSearchFallback(query: string): Promise<string |
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8_000);
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ query: query.slice(0, 400) }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      results?: Array<{ title?: string; url?: string; snippet?: string }>;
-    };
-    const rows = (data.results ?? []).slice(0, 5);
-    if (rows.length === 0) return null;
-    return rows
-      .map((r, i) => `${i + 1}. ${r.title ?? "result"}\n   ${r.url ?? ""}\n   ${r.snippet ?? ""}`)
-      .join("\n");
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ query: query.slice(0, 400) }),
+        signal: controller.signal,
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as {
+        results?: Array<{ title?: string; url?: string; snippet?: string }>;
+      };
+      const rows = (data.results ?? []).slice(0, 5);
+      if (rows.length === 0) return null;
+      return rows
+        .map((r, i) => `${i + 1}. ${r.title ?? "result"}\n   ${r.url ?? ""}\n   ${r.snippet ?? ""}`)
+        .join("\n");
+    } finally {
+      clearTimeout(timeout);
+    }
   } catch {
     return null;
   }
