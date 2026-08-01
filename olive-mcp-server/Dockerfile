@@ -17,7 +17,7 @@ COPY olive_mcp_server/ ./olive_mcp_server/
 # "already satisfied" to the next install so it isn't pulled again from PyPI.
 RUN pip install --no-cache-dir --prefix=/install \
     --index-url https://download.pytorch.org/whl/cpu \
-    torch \
+    "torch==2.5.1" \
  && PYTHONPATH="$(echo /install/lib/python*/site-packages)" \
     pip install --no-cache-dir --prefix=/install \
     . "mcp<2"
