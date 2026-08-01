@@ -166,7 +166,10 @@ def test_search_olive_documentation_with_live_source(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(
         docs_search,
         "_fetch_live_docs",
-        lambda: {"index": "Live docs mention calibration data and quantization."},
+        lambda: (
+            {"index": "Live docs mention calibration data and quantization."},
+            0.0,
+        ),
     )
     result = search_olive_documentation(query="calibration data", top_k=3, live=True)
     assert result["count"] > 0
