@@ -52,12 +52,12 @@ describe("GeminiSidebar flows", () => {
     await waitFor(() => expect(screen.getByText("Looks fine")).toBeTruthy());
 
     // Chat tab: preset query round-trips through /api/ai/chat
-    fireEvent.click(screen.getByRole("button", { name: /^Chat$/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Chat$/ }));
     fireEvent.click(screen.getByRole("button", { name: /Why is my model slow\?/ }));
     await waitFor(() => expect(screen.getByText(/quantization is off/)).toBeTruthy());
 
     // Settings tab: provider + model selects wired to the live catalog
-    fireEvent.click(screen.getByRole("button", { name: /^Settings$/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Settings$/ }));
     const provider = screen.getByLabelText("AI provider") as HTMLSelectElement;
     expect(provider.value).toBe("gemini");
     await waitFor(() => expect(screen.getByText("Live catalog")).toBeTruthy());

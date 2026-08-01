@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Label, Select } from "@/components/ui";
 import {
   fetchHardwareProbe,
@@ -7,7 +7,11 @@ import {
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
 import { prepareProviderChange } from "@/lib/pipelineValidation";
-import { navigatePipeline } from "@/lib/pipelineNavigation";
+import {
+  isPipelineOliveRunning,
+  navigatePipeline,
+  subscribePipelineOliveRunning,
+} from "@/lib/pipelineNavigation";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { UIState } from "@/types";
 import { AlertTriangle, Cpu as TargetIcon, Loader2 } from "lucide-react";
@@ -16,6 +20,7 @@ import type { InspectorProps } from "./types";
 export function ProviderInspector({ state, setState }: InspectorProps) {
   const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
   const [probeLoading, setProbeLoading] = useState(true);
+  const navBlocked = useSyncExternalStore(subscribePipelineOliveRunning, isPipelineOliveRunning, () => false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: on-mount hardware probe
@@ -64,8 +69,10 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
         </p>
         <button
           type="button"
+          disabled={navBlocked}
+          title={navBlocked ? "Unavailable while an Olive run is in progress" : undefined}
           onClick={() => navigatePipeline("ihv")}
-          className="mt-2 text-[10px] text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer"
+          className="mt-2 text-[10px] text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:no-underline"
         >
           Full hardware options in step 02
         </button>

@@ -1,5 +1,10 @@
+import { useSyncExternalStore } from "react";
 import { Database } from "lucide-react";
-import { navigatePipeline } from "@/lib/pipelineNavigation";
+import {
+  isPipelineOliveRunning,
+  navigatePipeline,
+  subscribePipelineOliveRunning,
+} from "@/lib/pipelineNavigation";
 import { getModelSourceSummary } from "../nodePreview";
 import type { InspectorProps } from "./types";
 
@@ -11,22 +16,25 @@ const SOURCE_LABELS = {
 
 export function InputInspector({ state }: InspectorProps) {
   const sourceLabel = SOURCE_LABELS[state.modelSource] ?? state.modelSource;
+  const navBlocked = useSyncExternalStore(subscribePipelineOliveRunning, isPipelineOliveRunning, () => false);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <h3 className="text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1">
+        <h4 className="text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1">
           <Database className="h-3.5 w-3.5 text-electric-blue" />
           Input Framework Model Source
-        </h3>
+        </h4>
         <p className="text-xs text-slate-400 leading-relaxed">
           Loads baseline weights into PyTorch abstract structure. Model is parsed into computational nodes
           before launching the Olive engine execution cascade.
         </p>
         <button
           type="button"
+          disabled={navBlocked}
+          title={navBlocked ? "Unavailable while an Olive run is in progress" : undefined}
           onClick={() => navigatePipeline("input")}
-          className="mt-2 text-[10px] text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer"
+          className="mt-2 text-[10px] text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:no-underline"
         >
           Edit model source in step 01
         </button>

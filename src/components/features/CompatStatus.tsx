@@ -1,11 +1,8 @@
-import { CheckCircle2, CircleHelp, XCircle } from "lucide-react";
+import { CheckCircle2, CircleHelp, XCircle, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RecipeHardwareCompatTier } from "@/lib/recipeHardwareCompatibility";
 
-const TIER_UI: Record<
-  RecipeHardwareCompatTier,
-  { label: string; Icon: typeof CheckCircle2; className: string }
-> = {
+const TIER_UI: Record<RecipeHardwareCompatTier, { label: string; Icon: LucideIcon; className: string }> = {
   compatible: {
     label: "Compatible",
     Icon: CheckCircle2,

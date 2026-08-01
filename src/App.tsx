@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw } from "lucide-react";
 import { InputEnvironmentPanel } from "@/components/features/InputEnvironmentPanel";
@@ -12,7 +12,12 @@ import { RuntimeEnvControls } from "@/components/features/RuntimeEnvControls";
 import { TitleBar } from "@/components/TitleBar";
 import { DesktopMinimumViewport } from "@/components/DesktopMinimumViewport";
 import { cn } from "@/lib/utils";
-import { OLIVE_PIPELINE_NAVIGATE, type PipelineViewId } from "@/lib/pipelineNavigation";
+import {
+  OLIVE_PIPELINE_NAVIGATE,
+  isPipelineViewId,
+  setPipelineOliveRunning,
+  type PipelineViewId,
+} from "@/lib/pipelineNavigation";
 
 const BatchProcessingPanel = lazy(() =>
   import("@/components/features/BatchProcessingPanel").then((m) => ({ default: m.BatchProcessingPanel })),
@@ -75,16 +80,26 @@ function Dashboard() {
     setTriggerAiAudit(true);
   };
 
+  const mainRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    setPipelineOliveRunning(isOliveRunning);
+  }, [isOliveRunning]);
+
   useEffect(() => {
     const onNavigate = (event: Event) => {
-      const detail = (event as CustomEvent<PipelineViewId>).detail;
-      if (detail !== "input" && detail !== "ihv" && detail !== "execute") return;
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (!isPipelineViewId(detail)) return;
       if (isOliveRunning && detail !== "execute") return;
       setActiveView(detail);
     };
     window.addEventListener(OLIVE_PIPELINE_NAVIGATE, onNavigate);
     return () => window.removeEventListener(OLIVE_PIPELINE_NAVIGATE, onNavigate);
   }, [isOliveRunning]);
+
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
+  }, [activeView]);
 
   return (
     <DesktopMinimumViewport>
@@ -190,6 +205,8 @@ function Dashboard() {
                 </div>
                 <button
                   type="button"
+                  aria-expanded={isAiSidebarOpen}
+                  aria-controls="assistant-panel"
                   onClick={() => setIsAiSidebarOpen((open) => !open)}
                   className={cn(
                     "px-2.5 wide:px-3 py-1.5 border text-sm flex items-center gap-1.5 transition-colors cursor-pointer shrink-0",
@@ -204,6 +221,7 @@ function Dashboard() {
               </header>
 
               <main
+                ref={mainRef}
                 id="main"
                 className="flex-1 overflow-y-auto px-3 py-5 wide:px-6 wide:py-8 min-[1000px]:px-10 h-full"
               >
@@ -216,7 +234,6 @@ function Dashboard() {
                         key={id}
                         id={id}
                         className={cn("mx-auto w-full max-w-7xl", !isActive && "hidden")}
-                        aria-hidden={!isActive}
                         {...(!isActive ? { inert: true } : {})}
                       >
                         <header className="mb-5 pb-4 border-b border-slate-800">

@@ -241,7 +241,7 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
             </p>
           </div>
           <span
-            className="text-[10px] text-slate-600 font-mono self-start mt-0.5"
+            className="text-[10px] text-slate-400 font-mono self-start mt-0.5"
             title="Heuristic from model id and active passes, not a profiled measurement"
           >
             {estimate.confidence} confidence

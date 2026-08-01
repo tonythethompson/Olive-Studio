@@ -167,8 +167,11 @@ function ApiKeyForm({ providers }: ProvidersProp) {
     <>
       {isCompatMode && (
         <div>
-          <label className="text-xs text-slate-400 mb-1 block">Base URL</label>
+          <label htmlFor="gemini-settings-base-url" className="text-xs text-slate-400 mb-1 block">
+            Base URL
+          </label>
           <input
+            id="gemini-settings-base-url"
             type="text"
             placeholder="http://localhost:11434/v1"
             value={settingsBaseUrl}
@@ -181,7 +184,10 @@ function ApiKeyForm({ providers }: ProvidersProp) {
       )}
 
       <div>
-        <label className="text-xs text-slate-400 mb-1 flex items-center gap-1.5 block">
+        <label
+          htmlFor="gemini-settings-api-key"
+          className="text-xs text-slate-400 mb-1 flex items-center gap-1.5"
+        >
           <Key className="h-3 w-3" />
           API Key
           {"keyEnvVar" in providerOption && providerOption.keyEnvVar && (
@@ -191,6 +197,7 @@ function ApiKeyForm({ providers }: ProvidersProp) {
           )}
         </label>
         <input
+          id="gemini-settings-api-key"
           type="password"
           autoComplete="off"
           placeholder="Stored in memory only, never persisted to disk"

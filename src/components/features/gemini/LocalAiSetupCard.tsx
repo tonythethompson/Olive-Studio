@@ -239,6 +239,14 @@ export function LocalAiSetupCard({ local, activeModel, isOpen }: LocalAiSetupCar
           className={`inline-block w-2 h-2 shrink-0 rounded-full ${
             healthy === true ? "bg-emerald-400" : healthy === false ? "bg-rose-400" : "bg-slate-500"
           }`}
+          role="status"
+          aria-label={
+            healthy === true
+              ? `${engineName} ready`
+              : healthy === false
+                ? `${engineName} not reachable`
+                : `Checking ${engineName}`
+          }
           title={
             healthy === true
               ? `${engineName} ready`

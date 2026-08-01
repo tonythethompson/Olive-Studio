@@ -301,6 +301,8 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
       <div className="w-full flex items-center justify-between p-3 hover:bg-slate-800/50 transition-colors">
         <button
           type="button"
+          aria-expanded={expanded}
+          aria-controls="recipe-validation-issue-list"
           onClick={() => setExpanded(!expanded)}
           className="flex items-center gap-2 flex-1 min-w-0 text-left cursor-pointer"
         >
@@ -347,7 +349,10 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
 
       {/* Issue list */}
       {expanded && (
-        <div className="border-t border-slate-800 divide-y divide-slate-800/50">
+        <div
+          id="recipe-validation-issue-list"
+          className="border-t border-slate-800 divide-y divide-slate-800/50"
+        >
           {allIssues.map((issue) => (
             <div
               key={issue.id}

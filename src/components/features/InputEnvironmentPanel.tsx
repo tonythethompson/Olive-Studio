@@ -1015,7 +1015,7 @@ export function InputEnvironmentPanel({
                         {groupedRecipes.map(({ title: modelTitle, rows }) => (
                           <div key={modelTitle} className="bg-slate-950/20">
                             <div className="sticky top-0 z-[1] flex items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2">
-                              <h3 className="text-sm font-semibold text-slate-100 truncate">{modelTitle}</h3>
+                              <h4 className="text-sm font-semibold text-slate-100 truncate">{modelTitle}</h4>
                               <span className="shrink-0 text-[11px] font-mono text-slate-400">
                                 {rows.length} target{rows.length === 1 ? "" : "s"}
                               </span>
@@ -1662,14 +1662,13 @@ export function InputEnvironmentPanel({
                             Uploaded Model Files ({state.localFiles.length})
                           </Label>
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {state.localFiles.map((file, i) => {
+                            {state.localFiles.map((file) => {
                               const isChunk = getBaseName(file.name) !== null;
                               const isCurSelected = activeFileSelectedName === file.name;
                               return (
                                 <div
-                                  key={i}
-                                  onClick={() => setSelectedFileName(file.name)}
-                                  className={`flex items-center justify-between p-3 rounded-lg border group transition-all cursor-pointer ${
+                                  key={file.name}
+                                  className={`flex items-center justify-between p-3 rounded-lg border group transition-all ${
                                     isCurSelected
                                       ? "bg-electric-blue/10 border-electric-blue/60 shadow-sm ring-1 ring-electric-blue/25"
                                       : isChunk
@@ -1677,7 +1676,11 @@ export function InputEnvironmentPanel({
                                         : "bg-slate-950 border-slate-800 hover:border-slate-700 hover:bg-slate-950/80"
                                   }`}
                                 >
-                                  <div className="flex items-center gap-3 overflow-hidden">
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedFileName(file.name)}
+                                    className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden text-left cursor-pointer"
+                                  >
                                     <FileIcon
                                       className={`h-4 w-4 shrink-0 transition-colors ${isCurSelected ? "text-electric-blue" : isChunk ? "text-blue-400" : "text-slate-500"}`}
                                     />
@@ -1691,12 +1694,11 @@ export function InputEnvironmentPanel({
                                         {formatSize(file.size)}
                                       </p>
                                     </div>
-                                  </div>
+                                  </button>
                                   <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      removeFile(file.name);
-                                    }}
+                                    type="button"
+                                    aria-label={`Remove ${file.name}`}
+                                    onClick={() => removeFile(file.name)}
                                     className="text-slate-600 hover:text-red-400 p-1 rounded hover:bg-slate-900 transition-colors shrink-0 cursor-pointer"
                                   >
                                     <X className="h-4 w-4" />
@@ -1797,14 +1799,15 @@ export function InputEnvironmentPanel({
                                     Active Workspace Files ({state.localFiles.length})
                                   </span>
                                   <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                                    {state.localFiles.map((file, idx) => {
+                                    {state.localFiles.map((file) => {
                                       const isCurSelected = activeFileSelectedName === file.name;
                                       const isChunk = getBaseName(file.name) !== null;
                                       return (
-                                        <div
-                                          key={idx}
+                                        <button
+                                          type="button"
+                                          key={file.name}
                                           onClick={() => setSelectedFileName(file.name)}
-                                          className={`flex items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                                          className={`flex w-full items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
                                             isCurSelected
                                               ? "bg-electric-blue/10 border-electric-blue/60 text-white shadow-sm"
                                               : "bg-slate-950/60 border-slate-900/60 text-slate-400 hover:border-slate-800 hover:bg-slate-950 hover:text-slate-200"
@@ -1825,7 +1828,7 @@ export function InputEnvironmentPanel({
                                               className={`h-3 w-3 shrink-0 opacity-50 ${isCurSelected ? "text-electric-blue opacity-100 translate-x-0.5 transition-transform" : ""}`}
                                             />
                                           </div>
-                                        </div>
+                                        </button>
                                       );
                                     })}
                                   </div>
@@ -1843,13 +1846,14 @@ export function InputEnvironmentPanel({
                                     </div>
                                   ) : (
                                     <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                                      {reconstructedHistory.map((item, idx) => {
+                                      {reconstructedHistory.map((item) => {
                                         const isCurSelected = activeFileSelectedName === item.baseName;
                                         return (
-                                          <div
-                                            key={idx}
+                                          <button
+                                            type="button"
+                                            key={item.baseName}
                                             onClick={() => setSelectedFileName(item.baseName)}
-                                            className={`flex items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                                            className={`flex w-full items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
                                               isCurSelected
                                                 ? "bg-amber-500/10 border-amber-500/50 text-white"
                                                 : "bg-slate-950/60 border-slate-900/60 text-slate-400 hover:border-slate-800 hover:bg-slate-950 hover:text-slate-200"
@@ -1872,7 +1876,7 @@ export function InputEnvironmentPanel({
                                                 className={`h-3 w-3 shrink-0 opacity-50 ${isCurSelected ? "text-amber-500 opacity-100 translate-x-0.5 transition-transform" : ""}`}
                                               />
                                             </div>
-                                          </div>
+                                          </button>
                                         );
                                       })}
                                     </div>
@@ -1983,11 +1987,12 @@ export function InputEnvironmentPanel({
                                             </p>
                                             <div className="space-y-1.5">
                                               {(selectedFileDetailed.lineage as ReconstructedItem).chunks.map(
-                                                (ch, idx) => (
-                                                  <div
-                                                    key={idx}
+                                                (ch) => (
+                                                  <button
+                                                    type="button"
+                                                    key={ch.name}
                                                     onClick={() => setSelectedFileName(ch.name)}
-                                                    className="flex items-center justify-between text-[10px] font-mono p-1.5 bg-slate-950 rounded border border-slate-900 hover:border-slate-800 cursor-pointer transition-colors"
+                                                    className="flex w-full items-center justify-between text-[10px] font-mono p-1.5 bg-slate-950 rounded border border-slate-900 hover:border-slate-800 cursor-pointer transition-colors text-left"
                                                   >
                                                     <div className="flex items-center gap-1.5 truncate">
                                                       <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse shrink-0" />
@@ -2001,7 +2006,7 @@ export function InputEnvironmentPanel({
                                                         ({ch.hash.substring(7, 15)})
                                                       </span>
                                                     </div>
-                                                  </div>
+                                                  </button>
                                                 ),
                                               )}
                                             </div>
@@ -2018,11 +2023,11 @@ export function InputEnvironmentPanel({
                                           </span>
                                           <button
                                             type="button"
-                                            onClick={() =>
-                                              setSelectedFileName(
-                                                (selectedFileDetailed.lineage as any).parent,
-                                              )
-                                            }
+                                            onClick={() => {
+                                              const lineage = selectedFileDetailed.lineage as
+                                                (ReconstructedItem & { parent?: string }) | null;
+                                              if (lineage?.parent) setSelectedFileName(lineage.parent);
+                                            }}
                                             className="text-[10px] font-mono text-emerald-400 hover:underline hover:text-emerald-300 font-semibold cursor-pointer"
                                           >
                                             Go to assembled model →

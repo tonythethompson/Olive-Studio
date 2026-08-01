@@ -1173,71 +1173,78 @@ export function IHVIntegrationPanel({
                           return (
                             <th
                               key={p.id}
-                              onClick={() => {
-                                // Allow selecting undetected providers for cross-compile / remote targets
-                                const detected = detectedProviders.includes(p.id);
-                                if (!detected) {
-                                  setState({ ihvProvider: p.id });
-                                  return;
-                                }
-                                const patch = prepareProviderChange(state, p.id, hardwareProbe);
-                                if (patch) {
-                                  setState(patch);
-                                }
-                              }}
-                              className={`p-2 px-1 text-center cursor-pointer transition-all relative select-none ${
+                              className={`p-2 px-1 text-center transition-all relative select-none ${
                                 isSelectedProvider
                                   ? "bg-electric-blue/10 border-l border-r border-t-2 border-t-electric-blue border-l-electric-blue/20 border-r-electric-blue/20"
                                   : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/30"
                               }`}
                             >
-                              <div className="flex flex-col items-center justify-center gap-1 py-1">
-                                <div
-                                  className={`p-1 rounded border leading-none transition-all ${
-                                    isSelectedProvider
-                                      ? "bg-electric-blue/10 border-electric-blue/50 text-electric-blue"
-                                      : "bg-slate-900 border-slate-800 text-slate-500"
-                                  }`}
-                                >
-                                  <HIcon className="h-3 w-3" />
-                                </div>
-                                <span
-                                  className={`text-[10px] font-mono font-semibold leading-none text-center ${
-                                    isSelectedProvider
-                                      ? "text-electric-blue"
-                                      : detectedLocally
-                                        ? "text-slate-400"
-                                        : "text-slate-600"
-                                  }`}
-                                >
-                                  {p.shortName}
-                                </span>
-                                {!detectedLocally && !probeLoading && (
-                                  <span className="text-[7px] font-mono text-slate-600 uppercase tracking-wide leading-none">
-                                    Absent
-                                  </span>
-                                )}
-                                {detectedLocally && !isSelectedProvider && (
-                                  <span className="text-[7px] font-mono text-emerald-600 uppercase tracking-wide leading-none">
-                                    Local
-                                  </span>
-                                )}
-                                {isSelectedProvider ? (
-                                  <div className="flex items-center gap-1">
-                                    <span className="flex h-1.5 w-1.5 relative">
-                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                                    </span>
-                                    <span className="text-[8px] tracking-widest font-mono font-black uppercase text-electric-blue leading-none">
-                                      Active
-                                    </span>
+                              <button
+                                type="button"
+                                aria-label={`Select ${p.shortName} provider`}
+                                aria-pressed={isSelectedProvider}
+                                onClick={() => {
+                                  // Allow selecting undetected providers for cross-compile / remote targets
+                                  const detected = detectedProviders.includes(p.id);
+                                  if (!detected) {
+                                    setState({ ihvProvider: p.id });
+                                    return;
+                                  }
+                                  const patch = prepareProviderChange(state, p.id, hardwareProbe);
+                                  if (patch) {
+                                    setState(patch);
+                                  }
+                                }}
+                                className="w-full cursor-pointer"
+                              >
+                                <div className="flex flex-col items-center justify-center gap-1 py-1">
+                                  <div
+                                    className={`p-1 rounded border leading-none transition-all ${
+                                      isSelectedProvider
+                                        ? "bg-electric-blue/10 border-electric-blue/50 text-electric-blue"
+                                        : "bg-slate-900 border-slate-800 text-slate-500"
+                                    }`}
+                                  >
+                                    <HIcon className="h-3 w-3" />
                                   </div>
-                                ) : (
-                                  <span className="text-[8px] font-mono text-slate-700 uppercase tracking-wider leading-none select-none hover:text-slate-400">
-                                    Select
+                                  <span
+                                    className={`text-[10px] font-mono font-semibold leading-none text-center ${
+                                      isSelectedProvider
+                                        ? "text-electric-blue"
+                                        : detectedLocally
+                                          ? "text-slate-400"
+                                          : "text-slate-600"
+                                    }`}
+                                  >
+                                    {p.shortName}
                                   </span>
-                                )}
-                              </div>
+                                  {!detectedLocally && !probeLoading && (
+                                    <span className="text-[7px] font-mono text-slate-600 uppercase tracking-wide leading-none">
+                                      Absent
+                                    </span>
+                                  )}
+                                  {detectedLocally && !isSelectedProvider && (
+                                    <span className="text-[7px] font-mono text-emerald-600 uppercase tracking-wide leading-none">
+                                      Local
+                                    </span>
+                                  )}
+                                  {isSelectedProvider ? (
+                                    <div className="flex items-center gap-1">
+                                      <span className="flex h-1.5 w-1.5 relative">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                      </span>
+                                      <span className="text-[8px] tracking-widest font-mono font-black uppercase text-electric-blue leading-none">
+                                        Active
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[8px] font-mono text-slate-700 uppercase tracking-wider leading-none select-none hover:text-slate-400">
+                                      Select
+                                    </span>
+                                  )}
+                                </div>
+                              </button>
                             </th>
                           );
                         })}
@@ -1301,17 +1308,28 @@ export function IHVIntegrationPanel({
                               return (
                                 <td
                                   key={p.id}
-                                  onClick={handleCellClick}
                                   className={`p-2 text-center transition-all ${
                                     isSelectedProvider
                                       ? "bg-electric-blue/5 border-l border-r border-electric-blue/10"
                                       : "hover:bg-slate-900/30"
-                                  } ${comp.status === "unsupported" || comp.status === "blocked" ? "cursor-not-allowed" : "cursor-pointer"}`}
+                                  }`}
                                 >
                                   <TooltipProvider delayDuration={150}>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
-                                        <div className="inline-flex items-center justify-center p-1 cursor-help">
+                                        <button
+                                          type="button"
+                                          onClick={handleCellClick}
+                                          disabled={
+                                            comp.status === "unsupported" || comp.status === "blocked"
+                                          }
+                                          aria-label={`${v.name} on ${p.shortName}: ${comp.label}`}
+                                          className={`inline-flex items-center justify-center p-1 disabled:cursor-not-allowed disabled:opacity-60 ${
+                                            comp.status === "unsupported" || comp.status === "blocked"
+                                              ? ""
+                                              : "cursor-pointer"
+                                          }`}
+                                        >
                                           {comp.status === "supported" ? (
                                             isCurrentlyActiveInCore ? (
                                               <div className="flex h-6 items-center gap-1 p-1 px-3 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10.5px] font-mono font-medium">
@@ -1343,7 +1361,7 @@ export function IHVIntegrationPanel({
                                               <Lock className="h-3 w-3" />
                                             </div>
                                           )}
-                                        </div>
+                                        </button>
                                       </TooltipTrigger>
 
                                       <TooltipContent
@@ -1502,13 +1520,13 @@ export function IHVIntegrationPanel({
                               >
                                 {v.category}
                               </span>
-                              <h5
+                              <h4
                                 className={`text-sm font-semibold leading-snug ${
                                   isUnsupportedOnCurrent ? "text-slate-500" : "text-slate-100"
                                 }`}
                               >
                                 {v.name}
-                              </h5>
+                              </h4>
                             </div>
 
                             {isUnsupportedOnCurrent ? (
@@ -1626,7 +1644,12 @@ export function IHVIntegrationPanel({
                       <Label htmlFor="flag-use-fp16">Use fp16</Label>
                       <p className="text-xs text-slate-500">Enable Tensor Core math.</p>
                     </div>
-                    <Switch id="flag-use-fp16" aria-label="Use fp16" defaultChecked />
+                    <Switch
+                      id="flag-use-fp16"
+                      aria-label="Use fp16"
+                      disabled
+                      title="Not wired to recipe generation yet"
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
@@ -1636,7 +1659,8 @@ export function IHVIntegrationPanel({
                     <Switch
                       id="flag-trt-graph-opts"
                       aria-label="Enable TensorRT Graph Optimizations"
-                      defaultChecked
+                      disabled
+                      title="Not wired to recipe generation yet"
                     />
                   </div>
                 </>

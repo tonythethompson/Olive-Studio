@@ -15,7 +15,7 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
     syncTime == null || !Number.isFinite(syncTime) || Date.now() - syncTime > 7 * 24 * 60 * 60 * 1000;
 
   const staleTitle =
-    syncTime == null
+    syncTime == null || !Number.isFinite(syncTime)
       ? "Pass catalog age unknown. Sync to refresh Olive pass docs from the official knowledge base."
       : `Pass catalog last updated ${new Date(syncTime).toLocaleString()}. Older than 7 days; sync to pull the latest Olive docs.`;
 

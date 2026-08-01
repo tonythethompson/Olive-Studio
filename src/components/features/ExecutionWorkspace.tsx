@@ -132,7 +132,26 @@ export function ExecutionWorkspace({
   const [recipeView, setRecipeViewRaw] = useState<"graph" | "json" | "browser-test" | "benchmark">("graph");
   const [visitedRecipeViews, setVisitedRecipeViews] = useState<Set<string>>(new Set(["graph"]));
   const [moreToolsOpen, setMoreToolsOpen] = useState(false);
+  const moreToolsRef = useRef<HTMLDivElement>(null);
   const [, startRecipeTransition] = useTransition();
+
+  useEffect(() => {
+    if (!moreToolsOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!moreToolsRef.current?.contains(event.target as Node)) {
+        setMoreToolsOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMoreToolsOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [moreToolsOpen]);
   const setRecipeView = (view: "graph" | "json" | "browser-test" | "benchmark") => {
     startRecipeTransition(() => {
       setRecipeViewRaw(view);
@@ -1301,24 +1320,24 @@ ${
               >
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Export Recipe
               </Button>
-              <div className="relative">
+              <div className="relative" ref={moreToolsRef}>
                 <Button
                   variant="outline"
                   className="h-8 px-2.5 text-xs border-slate-700 text-slate-300 hover:border-slate-500"
                   aria-expanded={moreToolsOpen}
-                  aria-haspopup="menu"
+                  aria-haspopup="true"
+                  aria-controls="execution-more-tools"
                   onClick={() => setMoreToolsOpen((open) => !open)}
                 >
                   <MoreHorizontal className="h-3.5 w-3.5 mr-1" /> More
                 </Button>
                 {moreToolsOpen && (
                   <div
-                    role="menu"
+                    id="execution-more-tools"
                     className="absolute right-0 z-20 mt-1 min-w-[180px] rounded-lg border border-slate-800 bg-slate-950 p-1 shadow-xl"
                   >
                     <button
                       type="button"
-                      role="menuitem"
                       className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] cursor-pointer ${
                         recipeView === "browser-test"
                           ? "bg-electric-blue/15 text-electric-blue"
@@ -1333,7 +1352,6 @@ ${
                     </button>
                     <button
                       type="button"
-                      role="menuitem"
                       className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] cursor-pointer ${
                         recipeView === "benchmark"
                           ? "bg-electric-blue/15 text-electric-blue"
@@ -1348,7 +1366,6 @@ ${
                     </button>
                     <button
                       type="button"
-                      role="menuitem"
                       className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer"
                       onClick={() => {
                         setIsHistoryOpen(true);
@@ -1359,7 +1376,6 @@ ${
                     </button>
                     <button
                       type="button"
-                      role="menuitem"
                       className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer"
                       onClick={() => {
                         void (async () => {
@@ -1373,7 +1389,6 @@ ${
                     </button>
                     <button
                       type="button"
-                      role="menuitem"
                       className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer"
                       onClick={() => {
                         setIsOwrExportOpen(true);

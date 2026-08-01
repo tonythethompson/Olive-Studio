@@ -104,6 +104,15 @@ export function GeminiSidebar({
     onAuditOpened?.();
   }, [openToAudit]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, onClose]);
+
   const providerLabel =
     providerSource !== "none"
       ? `${PROVIDER_OPTIONS.find((p) => p.id === providers.providerStatus.provider)?.name ?? providers.providerStatus.provider} / ${providers.providerStatus.model}`
@@ -121,6 +130,7 @@ export function GeminiSidebar({
         />
       ) : null}
       <aside
+        id="assistant-panel"
         aria-label="Assistant"
         className={cn(
           "h-full shrink-0 overflow-hidden border-l border-slate-800 bg-slate-900 transition-[width] duration-300 ease-in-out",
@@ -150,10 +160,18 @@ export function GeminiSidebar({
 
           {/* Tabs */}
           <div className="p-4 border-b border-slate-800/60 bg-slate-950/20 shrink-0">
-            <div className="grid grid-cols-3 bg-slate-950/90 p-1 border border-slate-850 rounded-lg transform-gpu">
+            <div
+              role="tablist"
+              aria-label="Assistant panels"
+              className="grid grid-cols-3 bg-slate-950/90 p-1 border border-slate-850 rounded-lg transform-gpu"
+            >
               {TABS.map(({ id, label, Icon }) => (
                 <button
                   type="button"
+                  role="tab"
+                  id={`assistant-tab-${id}`}
+                  aria-selected={activeTab === id}
+                  aria-controls={`assistant-panel-${id}`}
                   key={id}
                   onClick={() => handleTabChange(id)}
                   className={`py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer border ${activeTab === id ? "bg-slate-900 text-electric-blue shadow-sm border-slate-800/40" : "text-slate-400 hover:text-slate-200 border-transparent"}`}
@@ -171,6 +189,9 @@ export function GeminiSidebar({
           <div className="flex-1 overflow-hidden relative transform-gpu">
             {/* ── Audit ── */}
             <div
+              role="tabpanel"
+              id="assistant-panel-audit"
+              aria-labelledby="assistant-tab-audit"
               className={cn(
                 "absolute inset-0 p-4 overflow-y-auto",
                 activeTab === "audit" ? "block" : "hidden",
@@ -188,6 +209,9 @@ export function GeminiSidebar({
 
             {/* ── Chat ── */}
             <div
+              role="tabpanel"
+              id="assistant-panel-chat"
+              aria-labelledby="assistant-tab-chat"
               className={cn(
                 "absolute inset-0 p-4 overflow-y-auto",
                 activeTab === "chat" ? "block" : "hidden",
@@ -209,6 +233,9 @@ export function GeminiSidebar({
 
             {/* ── Settings ── */}
             <div
+              role="tabpanel"
+              id="assistant-panel-settings"
+              aria-labelledby="assistant-tab-settings"
               className={cn(
                 "absolute inset-0 p-4 overflow-y-auto",
                 activeTab === "settings" ? "block" : "hidden",
