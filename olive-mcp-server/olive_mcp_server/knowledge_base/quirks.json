@@ -1,6 +1,6 @@
 {
-  "version": "0.2.0",
-  "last_updated": "2026-07-24",
+  "version": "0.3.0",
+  "last_updated": "2026-07-31",
   "categories": {
     "quantization": [
       {
@@ -106,6 +106,32 @@
         "title": "QNN Operator Whitelist",
         "description": "QNN only supports a subset of ONNX ops. LayerNorm, GELU, and some gather/reshape patterns may need replacement or partitioning. Use QNNPreprocess when available.",
         "source": "https://onnxruntime.ai/docs/execution-providers/QNN-ExecutionProvider.html"
+      }
+    ],
+    "studio": [
+      {
+        "id": "studio-hfmodel-required",
+        "title": "HfModel for Hugging Face sources",
+        "description": "Olive 0.13+ rejects hf_config on PyTorchModel. Olive Studio must emit type HfModel with model_path set to the HF id for Hugging Face inputs.",
+        "source": "Olive Studio recipe builder"
+      },
+      {
+        "id": "studio-parse-apply",
+        "title": "Parse & Apply after pull",
+        "description": "Pull from GitHub and Microsoft Olive shortcuts only fill the JSON editor. Pipeline UI state updates after Parse & Apply.",
+        "source": "Olive Studio Input panel"
+      },
+      {
+        "id": "studio-applyable-flag",
+        "title": "Apply Fix needs applyable config",
+        "description": "Diagnose may return guidance-only Studio entries (applyable=false). Follow Recommended Fix text; Apply stays disabled until updated_config maps into UI state.",
+        "source": "Olive Studio MCP diagnostic"
+      },
+      {
+        "id": "studio-mcp-version-pin",
+        "title": "Pin mcp package below 2",
+        "description": "Olive MCP server imports mcp.server.fastmcp, which mcp 2.x removes. Install with mcp<2 in the same venv Olive Studio uses.",
+        "source": "Olive Studio AGENTS.md"
       }
     ]
   }

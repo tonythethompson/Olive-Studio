@@ -5,16 +5,17 @@ and troubleshoot Microsoft Olive model optimization workflows.
 
 ## Status
 
-Phase 1-4: 14 registered tools, live external fetchers, and an expanded,
-versioned knowledge base.
+Phase 1-4: 15 registered tools (including `diagnose_error` alias), live external
+fetchers, and a versioned knowledge base with Olive + Olive Studio domains.
 
 - 84 passes documented in `passes.json`
 - 14 hardware profiles in `hardware_profiles.json`
-- 20 troubleshooting entries in `troubleshooting.json`
-- 35 model entries in `compatibility_matrix.json`
+- 32 Olive troubleshooting entries in `troubleshooting.json` (`domain: olive`)
+- 8 Studio troubleshooting entries in `studio_troubleshooting.json` (`domain: studio`)
+- 20 model entries in `compatibility_matrix.json`
 - 10 integration recipes in `integration_recipes.json`
-- 3 quirk categories in `quirks.json`
-- 130 pytest tests passing
+- 6 quirk categories in `quirks.json` (includes `studio`)
+- pytest covers domain routing (`auto` / `olive` / `studio`) and Apply flags
 
 ## Setup
 
@@ -74,7 +75,8 @@ python olive-mcp-server/run.py
 | `get_quantization_strategy`       | Recommend a quantization approach for model + hardware         |
 | `get_hardware_optimization_guide` | Return a hardware-specific optimization path                   |
 | `get_pass_chain`                  | Validate and explain an ordered pass chain                     |
-| `troubleshoot_olive_error`        | Diagnose a common Olive error with workarounds                 |
+| `troubleshoot_olive_error`        | Diagnose Olive or Studio errors (`domain`: auto/olive/studio)  |
+| `diagnose_error`                  | Alias for `troubleshoot_olive_error`                           |
 | `get_error_frequency_summary`     | Return the most frequently occurring Olive errors              |
 | `get_model_compatibility`         | Check Olive support for a model/framework combo                |
 | `get_cli_command`                 | Generate a ready-to-run Olive CLI command                      |
@@ -88,10 +90,22 @@ python olive-mcp-server/run.py
 
 - `knowledge_base/passes.json` - pass catalog with parameters and gotchas
 - `knowledge_base/hardware_profiles.json` - hardware target profiles
-- `knowledge_base/quirks.json` - common behaviors and pitfalls
-- `knowledge_base/troubleshooting.json` - error diagnosis rules
+- `knowledge_base/quirks.json` - common behaviors and pitfalls (incl. `studio`)
+- `knowledge_base/troubleshooting.json` - Olive runtime error diagnosis rules
+- `knowledge_base/studio_troubleshooting.json` - Olive Studio / builder / UI diagnosis rules
 - `knowledge_base/compatibility_matrix.json` - model compatibility matrix
 - `knowledge_base/integration_recipes.json` - ready-to-run Olive recipe templates
+
+### Diagnose domains
+
+`troubleshoot_olive_error` / `diagnose_error` accept `domain`:
+
+- `auto` (default): score Olive entries first; on miss try Studio
+- `olive`: Olive runtime KB only
+- `studio`: Olive Studio KB only
+
+Responses include `domain` (`olive` | `studio` | null) and `applyable` (bool).
+When `applyable` is false, Olive Studio disables Apply Fix and shows guidance only.
 
 ## Fetchers and update mechanism
 
@@ -128,6 +142,5 @@ top-level `.mcp.json` wires this server to Claude via `olive-mcp-server/run.py`.
 
 ## Roadmap
 
-- [x] Add deployment docs (Docker / serverless) — see [docs/deployment.md](docs/deployment.md)
-- [ ] Expand compatibility matrix with more models
-- [ ] Olive version tracking (0.2.0 → current support)
+- Add deployment docs (Docker / serverless)
+- Expand compatibility matrix with more models

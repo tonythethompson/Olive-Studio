@@ -4,10 +4,17 @@
  * Auth + account/rate-limits live here. Recipe Q&A turns use `@openai/codex-sdk`,
  * which reuses the same local Codex auth store after ChatGPT login.
  *
+ * Olive Studio launches `codex app-server --stdio` as a child process; having the
+ * Codex CLI on PATH is enough (you do not need a separate daemon running).
+ *
  * @see https://developers.openai.com/codex/app-server
  */
 
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import {
+  spawn,
+  type ChildProcessWithoutNullStreams,
+  type SpawnOptionsWithoutStdio,
+} from "node:child_process";
 import { createInterface } from "node:readline";
 import { EventEmitter } from "node:events";
 
@@ -30,20 +37,28 @@ export type CodexRateLimits = {
 };
 
 type JsonRpcRequest = {
-  jsonrpc?: "2.0";
   method: string;
   id: number;
   params?: unknown;
 };
 
 type JsonRpcResponse = {
-  jsonrpc?: "2.0";
   id?: number | string | null;
   result?: unknown;
   error?: { code?: number; message?: string; data?: unknown };
   method?: string;
   params?: unknown;
 };
+
+/**
+ * On Windows, bare `codex` / `.cmd` Volta shims need `shell: true`.
+ * A direct `.exe` path can spawn without a shell.
+ */
+export function codexSpawnUsesShell(command: string, platform = process.platform): boolean {
+  if (platform !== "win32") return false;
+  if (/\.exe$/i.test(command.trim())) return false;
+  return true;
+}
 
 export class CodexAppServerClient extends EventEmitter {
   private child: ChildProcessWithoutNullStreams | null = null;
@@ -80,12 +95,15 @@ export class CodexAppServerClient extends EventEmitter {
     }
 
     let child: ChildProcessWithoutNullStreams;
+    const useShell = codexSpawnUsesShell(this.codexPath);
+    const spawnOpts: SpawnOptionsWithoutStdio & { windowsHide?: boolean; shell?: boolean } = {
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+      env: { ...process.env },
+      ...(useShell ? { shell: true } : {}),
+    };
     try {
-      child = spawn(this.codexPath, ["app-server", "--stdio"], {
-        stdio: ["pipe", "pipe", "pipe"],
-        windowsHide: true,
-        env: { ...process.env },
-      });
+      child = spawn(this.codexPath, ["app-server", "--stdio"], spawnOpts) as ChildProcessWithoutNullStreams;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(
@@ -117,7 +135,41 @@ export class CodexAppServerClient extends EventEmitter {
     });
 
     child.on("error", (err) => {
+      this.started = false;
+      this.initialized = false;
       this.emit("error", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      // Surface spawn failures (common on Windows without shell) to pending start().
+      for (const [, p] of this.pending) {
+        clearTimeout(p.timer);
+        p.reject(new Error(`Codex app-server spawn failed: ${msg}`));
+      }
+      this.pending.clear();
+    });
+
+    // If the process fails immediately (ENOENT), wait briefly then fail clearly.
+    await new Promise<void>((resolve, reject) => {
+      const onEarlyExit = (code: number | null, signal: NodeJS.Signals | null) => {
+        reject(
+          new Error(
+            `Codex app-server exited immediately (code=${code}, signal=${signal}). Is \`codex\` on PATH?`,
+          ),
+        );
+      };
+      const onEarlyError = (err: Error) => {
+        reject(
+          new Error(
+            `Failed to start Codex app-server (${err.message}). Install the Codex CLI and ensure it is on PATH.`,
+          ),
+        );
+      };
+      child.once("exit", onEarlyExit);
+      child.once("error", onEarlyError);
+      setTimeout(() => {
+        child.off("exit", onEarlyExit);
+        child.off("error", onEarlyError);
+        resolve();
+      }, 150);
     });
 
     await this.initialize();
@@ -173,6 +225,18 @@ export class CodexAppServerClient extends EventEmitter {
     }
   }
 
+  private writeLine(payload: object): void {
+    const child = this.child;
+    if (!child?.stdin.writable) {
+      throw new Error("Codex app-server is not running");
+    }
+    child.stdin.write(`${JSON.stringify(payload)}\n`);
+  }
+
+  private notify(method: string, params?: unknown): void {
+    this.writeLine(params !== undefined ? { method, params } : { method });
+  }
+
   private async request<T = unknown>(method: string, params?: unknown, timeoutMs = 60_000): Promise<T> {
     if (!this.child?.stdin.writable) {
       await this.start();
@@ -184,7 +248,6 @@ export class CodexAppServerClient extends EventEmitter {
 
     const id = this.nextId++;
     const payload: JsonRpcRequest = {
-      jsonrpc: "2.0",
       method,
       id,
       ...(params !== undefined ? { params } : {}),
@@ -200,13 +263,13 @@ export class CodexAppServerClient extends EventEmitter {
         reject,
         timer,
       });
-      child.stdin.write(`${JSON.stringify(payload)}\n`, (err) => {
-        if (err) {
-          clearTimeout(timer);
-          this.pending.delete(id);
-          reject(err);
-        }
-      });
+      try {
+        this.writeLine(payload);
+      } catch (err) {
+        clearTimeout(timer);
+        this.pending.delete(id);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
     });
   }
 
@@ -219,6 +282,8 @@ export class CodexAppServerClient extends EventEmitter {
       },
       capabilities: null,
     });
+    // Protocol expects an initialized notification after a successful initialize.
+    this.notify("initialized");
     this.initialized = true;
   }
 
@@ -261,6 +326,42 @@ export class CodexAppServerClient extends EventEmitter {
     await this.start();
     return this.request("getAuthStatus", {});
   }
+
+  /** Live model catalog from the signed-in Codex app-server (`model/list`). */
+  async listModels(): Promise<Array<{ id: string; label: string; isDefault?: boolean }>> {
+    await this.start();
+    const out: Array<{ id: string; label: string; isDefault?: boolean }> = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 20; page++) {
+      const result = await this.request<{
+        data?: Array<{
+          id?: string;
+          model?: string;
+          displayName?: string;
+          hidden?: boolean;
+          isDefault?: boolean;
+        }>;
+        nextCursor?: string | null;
+      }>("model/list", {
+        includeHidden: false,
+        ...(cursor ? { cursor } : {}),
+        limit: 100,
+      });
+      for (const m of result.data ?? []) {
+        if (m.hidden) continue;
+        const id = (m.id || m.model || "").trim();
+        if (!id) continue;
+        out.push({
+          id,
+          label: (m.displayName || id).trim(),
+          ...(m.isDefault ? { isDefault: true } : {}),
+        });
+      }
+      cursor = result.nextCursor ?? undefined;
+      if (!cursor) break;
+    }
+    return out;
+  }
 }
 
 /** Process-wide singleton (lazy). */
@@ -271,4 +372,9 @@ export function getCodexAppServer(): CodexAppServerClient {
     singleton = new CodexAppServerClient(process.env.CODEX_PATH || "codex");
   }
   return singleton;
+}
+
+/** Test helper: reset the singleton between tests. */
+export function resetCodexAppServerForTests(): void {
+  singleton = null;
 }

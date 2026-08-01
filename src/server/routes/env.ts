@@ -2,7 +2,7 @@
  * Environment / venv route handlers.
  * Python path, HuggingFace token, venv management.
  */
-import type { Router } from "express";
+import type { Request, Response, Router } from "express";
 
 import {
   getRuntimeEnvStatus,
@@ -12,9 +12,38 @@ import {
 } from "../services/venv/index.ts";
 import { writeStudioConfig, addVenvToUserPath } from "../services/venv/config.ts";
 import { setRuntimeHfToken, getRuntimeHfToken } from "../services/olive/state.ts";
-import { ensureTensorRtRtx } from "./tensorrt.ts";
+import { ensureTensorRtRtx, ensureTensorRt } from "./tensorrt.ts";
 import { fsWriteRateLimit } from "../middleware/rateLimit.ts";
 import { resolveAllowedPythonFile } from "../services/venv/pythonGuard.ts";
+
+function streamNdjsonInstall(
+  res: Response,
+  run: (onLine: (line: string) => void) => Promise<{ ok: boolean; error?: string; libsDir?: string | null }>,
+) {
+  res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("X-Accel-Buffering", "no");
+  if (typeof res.flushHeaders === "function") res.flushHeaders();
+
+  const onLine = (line: string) => {
+    if (!res.writableEnded) res.write(`${JSON.stringify({ type: "log", message: line })}\n`);
+  };
+
+  return run(onLine)
+    .then((result) => {
+      if (!res.writableEnded) {
+        res.write(`${JSON.stringify({ type: "done", ...result })}\n`);
+        res.end();
+      }
+    })
+    .catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!res.writableEnded) {
+        res.write(`${JSON.stringify({ type: "done", ok: false, error: msg })}\n`);
+        res.end();
+      }
+    });
+}
 
 export function mountEnvRoutes(router: Router): void {
   // ─── HuggingFace Token Management ──────────────────────────────────────
@@ -38,17 +67,13 @@ export function mountEnvRoutes(router: Router): void {
     return res.json({ ok: true });
   });
 
-  // ─── TensorRT RTX Install ─────────────────────────────────────────────
+  // ─── TensorRT installs (NDJSON stream; creates .venv if needed) ────────
   router.post("/env/install-tensorrt-rtx", async (_req, res) => {
-    const lines: string[] = [];
-    const onLine = (line: string) => lines.push(line);
-    try {
-      const result = await ensureTensorRtRtx(onLine);
-      return res.json({ ...result, lines });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return res.status(500).json({ ok: false, error: msg, lines });
-    }
+    await streamNdjsonInstall(res, ensureTensorRtRtx);
+  });
+
+  router.post("/env/install-tensorrt", async (_req, res) => {
+    await streamNdjsonInstall(res, ensureTensorRt);
   });
 
   // ─── Runtime Status ───────────────────────────────────────────────────
@@ -115,38 +140,38 @@ export function mountEnvRoutes(router: Router): void {
     }
   });
 
+  // JSON alias used by RuntimeEnvControls "Install Olive venv"
+  router.post("/env/ensure-venv", async (_req, res) => {
+    const lines: string[] = [];
+    try {
+      const result = await ensureVenv((line) => lines.push(line));
+      if (!result.ok) {
+        return res
+          .status(500)
+          .json({ ok: false, error: result.error, lines, ...(await getRuntimeEnvStatus()) });
+      }
+      return res.json({
+        ok: true,
+        message: "Olive venv ready.",
+        lines,
+        ...(await getRuntimeEnvStatus()),
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return res.status(500).json({ ok: false, error: msg, lines });
+    }
+  });
+
   // ─── Add Venv to PATH ─────────────────────────────────────────────────
-  router.post("/env/venv-path", async (_req, res) => {
+  const handleAddVenvToPath = async (_req: Request, res: Response) => {
     try {
       return res.json(await addVenvToUserPath());
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       return res.status(500).json({ ok: false, error: msg });
     }
-  });
-
-  // ─── Olive Version Detection ────────────────────────────────────────────
-  router.get("/olive/version", async (_req, res) => {
-    try {
-      const { getVenvPython } = await import("../services/venv/paths.ts");
-      const python = getVenvPython();
-      if (!python) {
-        return res.json({ installed: false, version: null });
-      }
-      const { execFile } = await import("child_process");
-      const { promisify } = await import("util");
-      const execFileAsync = promisify(execFile);
-      const { stdout } = await execFileAsync(python, ["-m", "pip", "show", "olive-ai"], {
-        timeout: 10_000,
-      });
-      const match = stdout.match(/^Version:\s*(.+)$/m);
-      if (!match) {
-        return res.json({ installed: false, version: null });
-      }
-      return res.json({ installed: true, version: match[1].trim() });
-    } catch {
-      // pip show fails if olive-ai is not installed
-      return res.json({ installed: false, version: null });
-    }
-  });
+  };
+  router.post("/env/venv-path", handleAddVenvToPath);
+  // Alias matching RuntimeEnvControls
+  router.post("/env/add-venv-to-path", handleAddVenvToPath);
 }

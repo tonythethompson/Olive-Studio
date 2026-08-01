@@ -12,15 +12,14 @@ const NPU_PROVIDERS: IHVProvider[] = ["QNNExecutionProvider"];
 
 export function inferHfTask(modelId: string): string {
   const id = modelId.toLowerCase();
-  if (id.includes("whisper")) return "speech-recognition";
+  // Transformers pipeline / Olive HfModel expect this exact task id (not "speech-recognition").
+  if (id.includes("whisper")) return "automatic-speech-recognition";
   if (
     id.includes("gte-") ||
     id.includes("bge-") ||
     id.includes("e5-") ||
     id.includes("embedding") ||
-    id.includes("sentence-transformers") ||
-    id.includes("minilm") ||
-    id.includes("mpnet")
+    id.includes("sentence-transformers")
   ) {
     return "feature-extraction";
   }
@@ -32,9 +31,9 @@ export function inferHfTask(modelId: string): string {
   return "text-generation";
 }
 
-/** Explicit UI override, otherwise infer from the Hugging Face model id. */
+/** Prefer explicit UI task; otherwise infer from the HF model id. */
 export function resolveHfTask(state: Pick<UIState, "hfTask" | "hfModelId">): string {
-  const explicit = state.hfTask?.trim();
+  const explicit = (state.hfTask || "").trim();
   if (explicit) return explicit;
   return inferHfTask(state.hfModelId || "");
 }
@@ -166,20 +165,15 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   const useMemoryOffload = isMemoryOffloadActive(state);
 
   if (state.modelSource === "huggingface") {
+    // Olive 0.13+ PyTorchModelHandler rejects hf_config; always use HfModel.
+    (recipe.input_model as { type: string }).type = "HfModel";
+    inputConfig.model_path = state.hfModelId || "unspecified";
+    inputConfig.task = resolveHfTask(state);
+    if (state.hfDataset) {
+      inputConfig.dataset = state.hfDataset;
+    }
     if (useMemoryOffload) {
-      (recipe.input_model as { type: string }).type = "HfModel";
-      inputConfig.model_path = state.hfModelId || "unspecified";
-      inputConfig.task = resolveHfTask(state);
-      if (state.hfDataset) {
-        inputConfig.dataset = state.hfDataset;
-      }
       inputConfig.load_kwargs = buildHfLoadKwargs(state.ihvProvider, null);
-    } else {
-      inputConfig.hf_config = {
-        model_name: state.hfModelId || "unspecified",
-        task: resolveHfTask(state),
-        ...(state.hfDataset ? { dataset: state.hfDataset } : {}),
-      };
     }
   } else if (state.modelSource === "local") {
     inputConfig.model_path = "./local_models";

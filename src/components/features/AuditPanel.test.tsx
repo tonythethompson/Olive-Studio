@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { AuditPanel } from "./AuditPanel";
-import type { AnalysisResult, Suggestion } from "./gemini/types";
+import type { AnalysisResult, Suggestion } from "./GeminiSidebar";
 
 function makeAnalysis(overrides?: Partial<AnalysisResult>): AnalysisResult {
   return {
@@ -160,6 +160,7 @@ describe("AuditPanel", () => {
 
     // Suggestions header should still render
     expect(screen.getByText("Suggestions")).toBeDefined();
+    expect(screen.getByText(/No actionable changes/i)).toBeDefined();
   });
 
   it("shows Refresh button when analysis exists", () => {

@@ -19,6 +19,7 @@ vi.mock("@/lib/hooks", () => ({
     fetchKeyedDiagnostic: vi.fn(),
     diagnostics: {},
     diagnosingKeys: {},
+    errors: {},
     diagnosticKey: "current",
   }),
 }));

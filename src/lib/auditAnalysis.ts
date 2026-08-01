@@ -32,12 +32,7 @@ function clampScore(n: unknown): number {
 }
 
 function normalizeLevel(raw: unknown, score: number): AuditAnalysis["level"] {
-  if (raw === "Optimized" || raw === "Suboptimal" || raw === "Critical") {
-    // Keep level consistent with score bands when the model contradicts itself.
-    if (raw === "Critical" && score >= 45) return score >= 80 ? "Optimized" : "Suboptimal";
-    if (raw === "Optimized" && score < 80) return score >= 45 ? "Suboptimal" : "Critical";
-    return raw;
-  }
+  if (raw === "Optimized" || raw === "Suboptimal" || raw === "Critical") return raw;
   if (score >= 80) return "Optimized";
   if (score >= 45) return "Suboptimal";
   return "Critical";
@@ -131,27 +126,6 @@ export function normalizeAuditAnalysis(parsed: unknown): AuditAnalysis | null {
     level: normalizeLevel(parsed.level, score),
     summary,
     suggestions,
-  };
-}
-
-/**
- * Soft-clamp noisy LLM re-audit cliffs after the user Applied a suggestion.
- * Full Analyze (no previousScore) is unchanged.
- */
-export function stabilizeAuditScore(
-  analysis: AuditAnalysis,
-  previousScore: number | null | undefined,
-  maxDrop = 15,
-): AuditAnalysis {
-  if (previousScore == null || !Number.isFinite(previousScore)) return analysis;
-  if (analysis.score >= previousScore - maxDrop) {
-    return { ...analysis, level: normalizeLevel(analysis.level, analysis.score) };
-  }
-  const score = Math.max(0, Math.round(previousScore - maxDrop));
-  return {
-    ...analysis,
-    score,
-    level: normalizeLevel(undefined, score),
   };
 }
 

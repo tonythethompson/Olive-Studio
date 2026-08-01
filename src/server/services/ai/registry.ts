@@ -1,11 +1,7 @@
 import type { ProviderConfig, AIChatMessage } from "../../types.ts";
 import { matchedEnvApiKeyName, readEnvApiKey } from "../../../lib/aiResponse.ts";
-
-export type EnvCredentialStatus = {
-  present: boolean;
-  envVar: string | null;
-  usable: boolean;
-};
+import { resolveCloudflareAuth } from "../../../lib/cloudflare/client.ts";
+import { cloudflareAiBaseUrl } from "../../../lib/cloudflare/credentials.ts";
 
 // ─── Plugin Interface ─────────────────────────────────────────────────────────
 
@@ -49,6 +45,15 @@ export interface AiProviderPlugin {
   supportsJsonResponseFormat?: boolean;
 }
 
+export type EnvCredentialStatus = {
+  /** Non-placeholder key present in process.env (Windows user/system + dotenv). */
+  present: boolean;
+  /** Env var name that matched (never the secret value). */
+  envVar: string | null;
+  /** Enough env/file state to activate without pasting a key in the UI. */
+  usable: boolean;
+};
+
 // ─── Registry ─────────────────────────────────────────────────────────────────
 
 const providers = new Map<ProviderConfig["provider"], AiProviderPlugin>();
@@ -78,7 +83,8 @@ export function registeredProviderNames(): Set<ProviderConfig["provider"]> {
 
 /**
  * Per-provider env credential presence for Settings UI.
- * Does not return secret values. Callers may pass extra usable checks via `extraUsable`.
+ * Does not return secret values. Callers may pass extra usable checks
+ * (e.g. Cloudflare account id) via `extraUsable`.
  */
 export function listEnvCredentialStatus(
   extraUsable?: Partial<Record<ProviderConfig["provider"], boolean>>,
@@ -99,9 +105,22 @@ export function listEnvCredentialStatus(
  * Scan environment variables across all registered providers.
  * Returns a ProviderConfig for the first one that has a valid key set.
  * Providers are checked in registration order.
+ *
+ * Cloudflare Wrangler/file credentials count even without CLOUDFLARE_API_TOKEN in env.
  */
 export function detectEnvProvider(): ProviderConfig | null {
   for (const plugin of providers.values()) {
+    if (plugin.name === "cloudflare") {
+      const auth = resolveCloudflareAuth();
+      if (auth) {
+        return {
+          provider: "cloudflare",
+          apiKey: auth.apiToken,
+          model: plugin.defaultModel,
+          baseUrl: cloudflareAiBaseUrl(auth.accountId),
+        };
+      }
+    }
     const key = readEnvApiKey(...plugin.envVarNames);
     if (key) {
       return plugin.buildConfig(key);

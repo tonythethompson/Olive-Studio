@@ -1,7 +1,6 @@
 allowBuilds:
   '@google/genai': true
   '@mendable/firecrawl-js': true
-  '@swc/core': true
   esbuild: true
   protobufjs: true
 minimumReleaseAgeExclude:
@@ -13,3 +12,11 @@ overrides:
   uuid@<11.1.1: '>=11.1.1'
   minimatch: '^10.2.5'
   brace-expansion: '5.0.8'
+peerDependencyRules:
+  # Storybook 8 still declares vite<=6; Olive Studio runs Vite 8 (Rolldown).
+  allowedVersions:
+    vite: '*'
+# Transitive only: Storybook docgen + google-auth/node-fetch polyfill.
+allowedDeprecatedVersions:
+  glob: '10'
+  node-domexception: '*'

@@ -91,7 +91,7 @@ describe("Route integration tests", () => {
   // ─── GET /api/ai/models ──────────────────────────────────────────────────
 
   describe("GET /api/ai/models", () => {
-    it("returns static model catalog", async () => {
+    it("returns empty legacy catalog (live catalogs use POST)", async () => {
       const res = await fetch(`${baseUrl}/api/ai/models`);
 
       expect(res.status).toBe(200);
@@ -100,22 +100,8 @@ describe("Route integration tests", () => {
       const body = await res.json();
       expect(body).toHaveProperty("models");
       expect(Array.isArray(body.models)).toBe(true);
-      expect(body.models.length).toBeGreaterThan(0);
-    });
-
-    it("includes known providers in model list", async () => {
-      const res = await fetch(`${baseUrl}/api/ai/models`);
-      const body = await res.json();
-
-      const ids = body.models.map((m: { id: string }) => m.id);
-      expect(ids).toContain("gpt-4o");
-      expect(ids).toContain("gemini-2.5-flash");
-
-      // Each model should have id and provider
-      for (const m of body.models) {
-        expect(typeof m.id).toBe("string");
-        expect(typeof m.provider).toBe("string");
-      }
+      expect(body.models).toEqual([]);
+      expect(body.source).toBe("fallback");
     });
   });
 

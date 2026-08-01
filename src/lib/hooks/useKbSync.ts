@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 
 export interface KbStatus {
   available: boolean;
@@ -19,6 +19,28 @@ export interface KbSyncResult {
 
 const SYNC_TIMEOUT_MS = 130_000;
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+export const KB_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Prefer last sync stamp; fall back to catalog last_updated. */
+export function kbFreshnessMs(
+  status: Pick<KbStatus, "lastSync" | "lastUpdated"> | null | undefined,
+): number | null {
+  const raw = status?.lastSync ?? status?.lastUpdated ?? null;
+  if (!raw) return null;
+  // Date-only stamps (YYYY-MM-DD) are treated as end-of-day UTC so a catalog
+  // updated "today" is not immediately ~24h old at local afternoon.
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T23:59:59.999Z` : raw;
+  const ms = Date.parse(normalized);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+export function isKbStatusStale(
+  status: Pick<KbStatus, "lastSync" | "lastUpdated"> | null | undefined,
+  now = Date.now(),
+): boolean {
+  const syncTime = kbFreshnessMs(status);
+  return syncTime == null || now - syncTime > KB_STALE_AFTER_MS;
+}
 
 /**
  * Provides knowledge base status, synchronization controls, and refresh state.
@@ -29,8 +51,9 @@ export function useKbSync() {
   const [status, setStatus] = useState<KbStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const autoSyncAttempted = useRef(false);
 
-  const fetchStatus = useCallback(async () => {
+  const fetchStatus = useCallback(async (): Promise<KbStatus | null> => {
     try {
       const res = await fetch("/api/mcp/kb-status");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -41,9 +64,11 @@ export function useKbSync() {
       } else {
         setError(null);
       }
+      return data;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
+      return null;
     }
   }, []);
 
@@ -98,8 +123,15 @@ export function useKbSync() {
   }, [fetchStatus]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetchStatus is async; setState runs after await, not synchronously
-    void fetchStatus();
+     
+    void (async () => {
+      const initial = await fetchStatus();
+      if (autoSyncAttempted.current) return;
+      autoSyncAttempted.current = true;
+      if (initial?.available && isKbStatusStale(initial)) {
+        await syncKb();
+      }
+    })();
     const interval = setInterval(() => void fetchStatus(), REFRESH_INTERVAL_MS);
     const onVisibility = () => {
       if (document.visibilityState === "visible") void fetchStatus();
@@ -109,7 +141,7 @@ export function useKbSync() {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [fetchStatus]);
+  }, [fetchStatus, syncKb]);
 
   return { status, syncing, error, syncKb, refreshStatus: fetchStatus };
 }

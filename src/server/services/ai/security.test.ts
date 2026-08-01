@@ -85,6 +85,45 @@ describe("AI provider security", () => {
         "baseUrl is not allowed for provider",
       );
     });
+
+    it("allows loopback http for openai-compat (Ollama / LM Studio)", () => {
+      expect(sanitizeProviderBaseUrl("openai-compat", "http://127.0.0.1:11434/v1")).toBe(
+        "http://127.0.0.1:11434/v1",
+      );
+      expect(sanitizeProviderBaseUrl("openai-compat", "http://localhost:1234/v1")).toBe(
+        "http://localhost:1234/v1",
+      );
+    });
+
+    it("still rejects LAN http and non-loopback for openai-compat", () => {
+      expect(() => sanitizeProviderBaseUrl("openai-compat", "http://192.168.1.10:11434/v1")).toThrow(
+        "baseUrl must use https",
+      );
+      expect(() => sanitizeProviderBaseUrl("openai", "http://127.0.0.1:11434/v1")).toThrow(
+        "baseUrl must use https",
+      );
+    });
+
+    it("allows Cloudflare account-scoped AI base URLs", () => {
+      const account = "a".repeat(32);
+      const url = `https://api.cloudflare.com/client/v4/accounts/${account}/ai/v1`;
+      expect(sanitizeProviderBaseUrl("cloudflare", url)).toBe(url);
+      expect(() =>
+        sanitizeProviderBaseUrl("cloudflare", "https://evil.example/client/v4/accounts/x/ai/v1"),
+      ).toThrow(/not allowed/);
+    });
+
+    it("allows Fireworks, NVIDIA, and Hugging Face prefixes", () => {
+      expect(sanitizeProviderBaseUrl("fireworks", "https://api.fireworks.ai/inference/v1")).toBe(
+        "https://api.fireworks.ai/inference/v1",
+      );
+      expect(sanitizeProviderBaseUrl("nvidia", "https://integrate.api.nvidia.com/v1")).toBe(
+        "https://integrate.api.nvidia.com/v1",
+      );
+      expect(sanitizeProviderBaseUrl("huggingface", "https://router.huggingface.co/v1")).toBe(
+        "https://router.huggingface.co/v1",
+      );
+    });
   });
 
   describe("stripTrailingSlashes", () => {

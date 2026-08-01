@@ -28,9 +28,7 @@ import {
   FolderPlus,
   Sparkles,
   AlertCircle,
-  BarChart3,
 } from "lucide-react";
-import { BatchComparisonView } from "./BatchComparisonView";
 
 /**
  * Renders a panel for managing, running, and inspecting sequential batch-processing jobs.
@@ -55,13 +53,13 @@ export function BatchProcessingPanel({
   const jobsRef = useRef<typeof state.batchJobs>(state.batchJobs || []);
   const [showAddForm, setShowAddForm] = useState(false);
   const handleToggleAddForm = useCallback(() => setShowAddForm((v) => !v), []);
-  const [showComparison, setShowComparison] = useState(false);
 
   // MCP Diagnostic State — keyed by job ID
   const {
     fetchKeyedDiagnostic,
     diagnostics: batchDiagnostics,
     diagnosingKeys: diagnosingJobs,
+    errors: batchDiagnoseErrors,
   } = useMcpDiagnosticKeyed();
   const [appliedFixJobId, setAppliedFixJobId] = useAutoClearError(3000);
 
@@ -412,43 +410,8 @@ export function BatchProcessingPanel({
                 >
                   <RotateCcw className="h-3.5 w-3.5 text-slate-400" />
                 </Button>
-                {counts.completed >= 2 && (
-                  <Button
-                    variant="outline"
-                    className="h-8 text-xs px-3 border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
-                    onClick={() => setShowComparison((v) => !v)}
-                  >
-                    <BarChart3 className="h-3.5 w-3.5 mr-1" /> Compare
-                  </Button>
-                )}
               </div>
             </div>
-
-            {/* Batch Comparison View */}
-            {showComparison && (
-              <BatchComparisonView
-                records={jobs
-                  .filter((j) => j.status === "completed")
-                  .slice(0, 6)
-                  .map((j) => ({
-                    id: j.id,
-                    jobId: j.id,
-                    modelId: j.modelIdentifier || j.name || "unknown",
-                    ihvProvider: j.provider || "CUDAExecutionProvider",
-                    memoryOffload: "none",
-                    status: "completed" as const,
-                    exitCode: 0,
-                    durationMs: parseInt(j.metrics?.latency || "0", 10) || 0,
-                    timestamp: new Date().toISOString(),
-                    passCount: j.passes?.length ?? 0,
-                    passNames: j.passes ?? [],
-                    vramEstimateGb: j.metrics?.memory ? parseFloat(j.metrics.memory) : undefined,
-                    logSummary: undefined,
-                    recipeJson: j.recipeJson ?? "",
-                  }))}
-                onClose={() => setShowComparison(false)}
-              />
-            )}
 
             {/* Slide down Custom form */}
             {showAddForm && (
@@ -812,6 +775,7 @@ export function BatchProcessingPanel({
                     diagnostic={batchDiagnostics[selectedJob.id] ?? null}
                     isDiagnosing={diagnosingJobs[selectedJob.id] ?? false}
                     fixApplied={appliedFixJobId === selectedJob.id ? "applied" : ""}
+                    error={batchDiagnoseErrors[selectedJob.id] ?? null}
                     onApplyFix={() => {
                       const diagnostic = batchDiagnostics[selectedJob.id];
                       if (!diagnostic || !canApplyMcpDiagnostic(diagnostic)) return;

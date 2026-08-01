@@ -64,21 +64,33 @@ export function logoutDevin(): void {
   clearDevinCredentials();
 }
 
-export async function listDevinModels(): Promise<Array<{ id: string; name: string; disabled?: boolean }>> {
+export async function listDevinModels(): Promise<{
+  models: Array<{ id: string; name: string; disabled?: boolean }>;
+  source: "live" | "fallback";
+  error?: string;
+}> {
   const creds = loadDevinCredentials();
   if (!creds) {
-    return DEVIN_FALLBACK_MODELS.map((m) => ({ ...m }));
+    return {
+      models: [],
+      source: "fallback",
+      error: "Sign in to Devin to load models for your plan.",
+    };
   }
   try {
     const catalog = await getCachedCatalog(creds.apiKey, creds.apiServerUrl || "https://server.codeium.com");
     const entries: ModelCatalogEntry[] = catalog ? [...catalog.byUid.values()] : [];
     if (entries.length === 0) {
-      return DEVIN_FALLBACK_MODELS.map((m) => ({ ...m }));
+      return {
+        models: [],
+        source: "fallback",
+        error: "Devin returned an empty model catalog.",
+      };
     }
     // Prefer enabled models; keep a reasonable list for the dropdown
     const enabled = entries.filter((e) => !e.disabled);
     const source = enabled.length > 0 ? enabled : entries;
-    return source
+    const models = source
       .slice(0, 80)
       .map((e) => ({
         id: e.modelUid,
@@ -86,8 +98,13 @@ export async function listDevinModels(): Promise<Array<{ id: string; name: strin
         disabled: e.disabled,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  } catch {
-    return DEVIN_FALLBACK_MODELS.map((m) => ({ ...m }));
+    return { models, source: "live" };
+  } catch (err: unknown) {
+    return {
+      models: [],
+      source: "fallback",
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 

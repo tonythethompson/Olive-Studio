@@ -7,7 +7,8 @@
 export const PINNED_TENSORRT_VERSION = "10.9.0.34";
 
 export function pinnedTensorRtInstallArgs(): string[] {
-  return ["tensorrt", `==${PINNED_TENSORRT_VERSION}`];
+  // Single requirement token so pip does not treat "==version" as a second package.
+  return [`tensorrt==${PINNED_TENSORRT_VERSION}`];
 }
 
 export function pinnedTensorRtLabel(): string {

@@ -3,8 +3,6 @@
  * Tool proxy, KB status, KB sync.
  */
 import type { Router } from "express";
-import { execFile } from "child_process";
-import { promisify } from "util";
 import path from "path";
 import fs from "fs";
 
@@ -15,53 +13,13 @@ import {
   isKbSyncInProgress,
   setKbSyncInProgress,
 } from "../services/mcp/state.ts";
+import { callOliveMcpTool } from "../services/mcp/client.ts";
 import { kbStatusRateLimit, kbSyncRateLimit } from "../middleware/rateLimit.ts";
-import { getVenvPython } from "../services/venv/paths.ts";
-
-const execFileAsync = promisify(execFile);
-
-/** Sanitize a tool name to prevent command injection. */
-function sanitizeToolName(name: string): string {
-  return name.replace(/[^a-zA-Z0-9_-]/g, "");
-}
+import { readStudioConfig, writeStudioConfig } from "../config.ts";
+import type { KbStatusCache } from "../types.ts";
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/** Invokes a tool function in olive_mcp_server and returns its result. */
-async function callOliveMcpTool(
-  toolName: string,
-  args: Record<string, unknown>,
-): Promise<{ result?: unknown; error?: string }> {
-  const serverDir = path.join(process.cwd(), "olive-mcp-server");
-  const venvPython = getVenvPython();
-  const safeName = sanitizeToolName(toolName);
-  const argsJson = JSON.stringify(args);
-
-  try {
-    const { stdout, stderr } = await execFileAsync(
-      venvPython,
-      [
-        "-c",
-        `from olive_mcp_server.mcp_server import call_tool; print(call_tool("${safeName}", ${argsJson}))`,
-      ],
-      { timeout: 30_000, cwd: serverDir },
-    );
-    const output = `${stdout} ${stderr}`.trim();
-    try {
-      const parsed = JSON.parse(output);
-      if (isObjectRecord(parsed) && parsed.error) {
-        return { error: String(parsed.error) };
-      }
-      return { result: parsed };
-    } catch {
-      return { result: output };
-    }
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { error: msg || `MCP tool ${safeName} failed` };
-  }
 }
 
 type KbFailureReason = "missing" | "unreadable" | "invalid";
@@ -168,6 +126,38 @@ function kbFailureResponse(kb: { reason: KbFailureReason; message: string }): {
   return { reason: kb.reason, error: KB_CLIENT_MESSAGE[kb.reason] };
 }
 
+function readPersistedKbLastSync(): string | null {
+  const value = readStudioConfig().kbLastSync;
+  if (typeof value !== "string" || !value.trim()) return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? value.trim() : null;
+}
+
+function buildKbStatus(data: PassesJson, lastSync?: string | null): KbStatusCache {
+  return {
+    available: true,
+    version: data.version ?? "unknown",
+    lastUpdated: data.last_updated ?? null,
+    passCount: data.passes?.length ?? 0,
+    lastSync: lastSync ?? readPersistedKbLastSync(),
+  };
+}
+
+/** Reload local passes.json into the schema engine and stamp freshness (persisted). */
+export function performKbSync():
+  { ok: true; status: KbStatusCache } | { ok: false; statusCode: number; body: Record<string, unknown> } {
+  const kb = readPassesJson();
+  if (!kb.ok) {
+    return { ok: false, statusCode: 500, body: { ok: false, ...kbFailureResponse(kb) } };
+  }
+  reloadPassSchemas(kb.data);
+  const lastSync = new Date().toISOString();
+  writeStudioConfig({ kbLastSync: lastSync });
+  const status = buildKbStatus(kb.data, lastSync);
+  setKbStatusCache(status);
+  return { ok: true, status };
+}
+
 export function mountMcpRoutes(router: Router): void {
   // ─── MCP Tool Proxy ───────────────────────────────────────────────────
   router.post("/mcp/tool", async (req, res) => {
@@ -176,8 +166,12 @@ export function mountMcpRoutes(router: Router): void {
       return res.status(400).json({ error: "Missing toolName" });
     }
     try {
-      const result = await callOliveMcpTool(toolName, args ?? {});
-      return res.json(result);
+      const out = await callOliveMcpTool(toolName, args ?? {});
+      if (out.error) {
+        return res.status(500).json({ error: out.error });
+      }
+      // Clients expect the tool payload at the top level (not `{ result: ... }`).
+      return res.json(out.result ?? {});
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       return res.status(500).json({ error: msg });
@@ -187,19 +181,24 @@ export function mountMcpRoutes(router: Router): void {
   // ─── KB Status ────────────────────────────────────────────────────────
   router.get("/mcp/kb-status", kbStatusRateLimit, (_req, res) => {
     const cached = getKbStatusCache();
-    if (cached) return res.json(cached);
+    if (cached) {
+      if (!cached.lastSync) {
+        const persisted = readPersistedKbLastSync();
+        if (persisted) {
+          const merged = { ...cached, lastSync: persisted };
+          setKbStatusCache(merged);
+          return res.json(merged);
+        }
+      }
+      return res.json(cached);
+    }
 
     const kb = readPassesJson();
     if (!kb.ok) {
       // Don't cache a failure — a missing/corrupt KB may be fixed at runtime.
       return res.json({ available: false, ...kbFailureResponse(kb) });
     }
-    const status = {
-      available: true,
-      version: kb.data.version ?? "unknown",
-      lastUpdated: kb.data.last_updated ?? null,
-      passCount: kb.data.passes?.length ?? 0,
-    };
+    const status = buildKbStatus(kb.data);
     setKbStatusCache(status);
     return res.json(status);
   });
@@ -211,21 +210,11 @@ export function mountMcpRoutes(router: Router): void {
     }
     setKbSyncInProgress(true);
     try {
-      const kb = readPassesJson();
-      if (!kb.ok) {
-        // Non-2xx so the client's sync hook enters its error path.
-        return res.status(500).json({ ok: false, ...kbFailureResponse(kb) });
+      const result = performKbSync();
+      if (!result.ok) {
+        return res.status(result.statusCode).json(result.body);
       }
-      reloadPassSchemas(kb.data);
-      const status = {
-        available: true,
-        version: kb.data.version ?? "unknown",
-        lastUpdated: kb.data.last_updated ?? null,
-        passCount: kb.data.passes?.length ?? 0,
-        lastSync: new Date().toISOString(),
-      };
-      setKbStatusCache(status);
-      return res.json({ ok: true, ...status });
+      return res.json({ ok: true, ...result.status });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       return res.json({ ok: false, error: msg });

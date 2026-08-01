@@ -5,7 +5,7 @@
 
 import type { AiWorkspaceContext } from "./aiWorkspaceContext.ts";
 import type { AuditAnalysis, AuditSuggestion } from "./auditAnalysis.ts";
-import { canonicalizeAutofixPass, isAuditAutofixApplyable, normalizeHfTaskValue } from "./auditAutofix.ts";
+import { canonicalizeAutofixPass, isAuditAutofixApplyable } from "./auditAutofix.ts";
 
 export type AuditFilterContext = Pick<AiWorkspaceContext, "model" | "hardware">;
 
@@ -95,16 +95,12 @@ export function isAuditSuggestionRelevant(suggestion: AuditSuggestion, ctx: Audi
 
 /** Rewrite autofix.pass to the canonical UI field when we know the mapping. */
 export function normalizeAuditSuggestion(suggestion: AuditSuggestion): AuditSuggestion {
-  const key = canonicalizeAutofixPass(suggestion.autofix.pass, suggestion.autofix.value);
+  const key = canonicalizeAutofixPass(suggestion.autofix.pass);
   if (!key || key.startsWith("__")) return suggestion;
-  const value =
-    key === "hfTask"
-      ? (normalizeHfTaskValue(suggestion.autofix.value) ?? suggestion.autofix.value)
-      : suggestion.autofix.value;
-  if (key === suggestion.autofix.pass && value === suggestion.autofix.value) return suggestion;
+  if (key === suggestion.autofix.pass) return suggestion;
   return {
     ...suggestion,
-    autofix: { pass: key, value },
+    autofix: { ...suggestion.autofix, pass: key },
   };
 }
 

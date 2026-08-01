@@ -63,7 +63,6 @@ export type ChatActionPatch = {
   memoryOffload?: UIState["memoryOffload"];
   modelSource?: ModelSource;
   hfModelId?: string;
-  hfTask?: string;
   hfDataset?: string;
   cacheDir?: string;
   passes?: Partial<UIState["passes"]>;
@@ -127,9 +126,6 @@ export function sanitizeChatActionPatch(raw: unknown): ChatActionPatch | null {
   if (typeof raw.hfModelId === "string" && raw.hfModelId.trim()) {
     patch.hfModelId = raw.hfModelId.trim().slice(0, 256);
   }
-  if (typeof raw.hfTask === "string" && raw.hfTask.trim()) {
-    patch.hfTask = raw.hfTask.trim().slice(0, 64);
-  }
   if (typeof raw.hfDataset === "string") {
     patch.hfDataset = raw.hfDataset.trim().slice(0, 256);
   }
@@ -150,7 +146,6 @@ export function chatPatchToUiState(state: UIState, patch: ChatActionPatch): Part
   if (patch.memoryOffload) next.memoryOffload = patch.memoryOffload;
   if (patch.modelSource) next.modelSource = patch.modelSource;
   if (patch.hfModelId !== undefined) next.hfModelId = patch.hfModelId;
-  if (patch.hfTask !== undefined) next.hfTask = patch.hfTask;
   if (patch.hfDataset !== undefined) next.hfDataset = patch.hfDataset;
   if (patch.cacheDir !== undefined) next.cacheDir = patch.cacheDir;
   if (patch.passes) {
@@ -179,7 +174,6 @@ export function summarizeChatPatch(patch: ChatActionPatch): string {
   if (patch.cudaVersion) bits.push(`cuda=${patch.cudaVersion}`);
   if (patch.memoryOffload) bits.push(`offload=${patch.memoryOffload}`);
   if (patch.hfModelId) bits.push(`model=${patch.hfModelId}`);
-  if (patch.hfTask) bits.push(`task=${patch.hfTask}`);
   if (patch.passes) {
     for (const [k, v] of Object.entries(patch.passes)) {
       bits.push(`${k}=${JSON.stringify(v)}`);
@@ -403,7 +397,6 @@ export const CHAT_JSON_RESPONSE_CONTRACT = `Respond with JSON only (no markdown 
         "memoryOffload": "auto",
         "modelSource": "huggingface",
         "hfModelId": "org/model",
-        "hfTask": "feature-extraction",
         "hfDataset": "dataset",
         "cacheDir": "~/.cache/olive",
         "passes": { "quantization": true, "quantMethod": "awq", "quantPrecision": "int4" }

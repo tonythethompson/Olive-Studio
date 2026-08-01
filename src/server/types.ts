@@ -29,7 +29,19 @@ export interface ProviderConfig {
     | "devin"
     | "kilocode"
     /** OpenAI Codex via local app-server + SDK (ChatGPT Plus/Pro subscription). */
-    | "codex";
+    | "codex"
+    /** OpenCode Zen gateway (pay-per-use curated models). */
+    | "opencode"
+    /** OpenCode Go gateway ($10/mo open models plan). */
+    | "opencode-go"
+    /** Fireworks AI (OpenAI-compatible). */
+    | "fireworks"
+    /** NVIDIA NIM / build.nvidia.com (OpenAI-compatible). */
+    | "nvidia"
+    /** Hugging Face Inference Providers router (OpenAI-compatible). */
+    | "huggingface"
+    /** Cloudflare Workers AI via Wrangler OAuth or API token. */
+    | "cloudflare";
   apiKey: string;
   model: string;
   baseUrl?: string;
@@ -60,6 +72,7 @@ export interface OpenAIChatRequestBody {
   model: string;
   messages: Array<{ role: string; content: string }>;
   response_format?: { type: string };
+  max_tokens?: number;
 }
 
 export interface OpenAIChatResponse {
@@ -134,6 +147,21 @@ export interface OliveJob {
 export interface StudioConfig {
   /** Absolute path to a system Python interpreter (optional override). */
   systemPython?: string;
+  /**
+   * Last Assistant provider selection (no API keys).
+   * Restored across server restarts so env detection does not reset the model
+   * to a provider default (e.g. OpenRouter → openai/gpt-4o).
+   */
+  aiPreference?: {
+    provider: ProviderConfig["provider"];
+    model: string;
+    baseUrl?: string;
+  };
+  /**
+   * ISO timestamp of the last successful KB sync (reload + freshness stamp).
+   * Survives server restarts so the header does not flip back to "stale".
+   */
+  kbLastSync?: string;
 }
 
 // ─── Recipe Dependency Types ──────────────────────────────────────────────────

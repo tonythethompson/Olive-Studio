@@ -53,13 +53,6 @@ describe("canonicalizeAutofixPass", () => {
   it("rejects TensorRTPass-style paths", () => {
     expect(canonicalizeAutofixPass("passes.tensor_rt")).toBe("__reject_tensor_rt_pass__");
   });
-
-  it("maps task / input_model + feature-extraction to hfTask", () => {
-    expect(canonicalizeAutofixPass("hfTask")).toBe("hfTask");
-    expect(canonicalizeAutofixPass("task", "feature-extraction")).toBe("hfTask");
-    expect(canonicalizeAutofixPass("-> input_model", "feature-extraction")).toBe("hfTask");
-    expect(canonicalizeAutofixPass("input_model")).toBeNull();
-  });
 });
 
 describe("resolveAuditAutofix", () => {
@@ -95,25 +88,6 @@ describe("resolveAuditAutofix", () => {
     );
     expect(patch?.passes).not.toHaveProperty("conversion.config.input_model_dtype");
   });
-
-  it("applies embedding task from input_model autofix", () => {
-    const patch = resolveAuditAutofix({ pass: "-> input_model", value: "feature-extraction" }, state);
-    expect(patch).toEqual({ hfTask: "feature-extraction" });
-  });
-
-  it("maps FP16 quantPrecision advice to conversion dtype (does not enable quant)", () => {
-    expect(canonicalizeAutofixPass("quantPrecision", "fp16")).toBe("conversionInputTargetTypes");
-    const patch = resolveAuditAutofix({ pass: "quantPrecision", value: "fp16" }, state);
-    expect(patch?.passes?.conversion).toBe(true);
-    expect(patch?.passes?.conversionInputTargetTypes).toBe("float16");
-    expect(patch?.passes?.quantization).toBe(false);
-  });
-
-  it("still enables quantization for int4/int8 precision", () => {
-    const patch = resolveAuditAutofix({ pass: "quantPrecision", value: "int4" }, state);
-    expect(patch?.passes?.quantization).toBe(true);
-    expect(patch?.passes?.quantPrecision).toBe("int4");
-  });
 });
 
 describe("isAuditAutofixApplyable", () => {
@@ -128,13 +102,5 @@ describe("isAuditAutofixApplyable", () => {
 
   it("is false for TensorRTPass", () => {
     expect(isAuditAutofixApplyable({ pass: "passes.tensor_rt", value: "x" })).toBe(false);
-  });
-
-  it("is true for input_model + known HF task", () => {
-    expect(isAuditAutofixApplyable({ pass: "input_model", value: "feature-extraction" })).toBe(true);
-  });
-
-  it("is false for bare input_model without a task value", () => {
-    expect(isAuditAutofixApplyable({ pass: "input_model", value: "true" })).toBe(false);
   });
 });

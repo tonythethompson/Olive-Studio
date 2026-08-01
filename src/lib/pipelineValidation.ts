@@ -540,6 +540,45 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
   return issues;
 }
 
+/** Catch recipe config that will fail at Olive/Transformers runtime. */
+function getRecipeRuntimeIssues(state: UIState, recipe: OliveRecipe): PipelineIssue[] {
+  const issues: PipelineIssue[] = [];
+  const input = recipe.input_model as { type?: string; config?: Record<string, unknown> } | undefined;
+  const task = typeof input?.config?.task === "string" ? input.config.task : "";
+  const modelPath =
+    typeof input?.config?.model_path === "string" ? input.config.model_path : state.hfModelId || "";
+
+  if (task === "speech-recognition") {
+    issues.push({
+      id: "hf-task-speech-recognition-invalid",
+      severity: "critical",
+      title: "Invalid Hugging Face task",
+      description:
+        "Recipe uses task `speech-recognition`, which Transformers rejects. Whisper/ASR must use `automatic-speech-recognition` or Olive exits with no output model.",
+      affectedTabs: ["input"],
+      affectedPasses: ["input_model"],
+    });
+  }
+
+  if (
+    state.modelSource === "huggingface" &&
+    /whisper/i.test(modelPath) &&
+    task &&
+    task !== "automatic-speech-recognition"
+  ) {
+    issues.push({
+      id: "hf-task-whisper-mismatch",
+      severity: "critical",
+      title: "Whisper task mismatch",
+      description: `Whisper model "${modelPath}" has task \`${task}\`. Use \`automatic-speech-recognition\`.`,
+      affectedTabs: ["input"],
+      affectedPasses: ["input_model"],
+    });
+  }
+
+  return issues;
+}
+
 /**
  * Identifies generated Olive pipeline steps with unknown pass types.
  *
@@ -590,6 +629,7 @@ export function getPipelineValidation(
     ...getProviderIssues(state),
     ...getProviderHardwareIssues(state, options?.hardwareProbe),
     ...getAdvisoryIssues(state),
+    ...getRecipeRuntimeIssues(state, recipe),
     ...getPassCatalogIssues(state, recipe),
     ...getPassChainIssues(state, recipe),
   ]);
@@ -597,7 +637,8 @@ export function getPipelineValidation(
   const criticalCount = issues.filter((i) => i.severity === "critical").length;
   const warningCount = issues.filter((i) => i.severity === "warning").length;
 
-  let statusLabel = "Recipe validated";
+  // Local heuristics / schema only — not "Olive run succeeded" and not Assistant audit.
+  let statusLabel = "Local checks passed";
   let statusTone: PipelineValidationResult["statusTone"] = "success";
 
   if (criticalCount > 0) {
