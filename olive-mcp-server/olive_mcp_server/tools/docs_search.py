@@ -36,6 +36,11 @@ _LIVE_FETCH_LOCK = threading.Lock()
 # Monotonic generation so out-of-order HTTP completions cannot overwrite a
 # fresher cache entry started later.
 _LIVE_FETCH_GENERATION = 0
+# Generation number of the fetch that last actually published to _LIVE_CACHE.
+# Tracking this (rather than comparing against _LIVE_FETCH_GENERATION, the
+# highest *started* generation) means an older fetch that succeeds is not
+# discarded just because a newer generation started and then failed.
+_LIVE_FETCH_PUBLISHED_GENERATION = 0
 
 # Live snippet embedding cache (tied to _LAST_FETCH_TIME).
 _LIVE_SNIPPETS: list[tuple[str, str]] = []
@@ -207,7 +212,7 @@ def _fetch_live_docs() -> tuple[dict[str, str], float]:
     Concurrent fetches take a generation token; only the latest generation may
     publish, so a slow older response cannot overwrite a fresher one.
     """
-    global _LIVE_CACHE, _LAST_FETCH_TIME, _LIVE_FETCH_GENERATION
+    global _LIVE_CACHE, _LAST_FETCH_TIME, _LIVE_FETCH_GENERATION, _LIVE_FETCH_PUBLISHED_GENERATION
 
     with _LIVE_FETCH_LOCK:
         now = time.monotonic()
@@ -226,14 +231,16 @@ def _fetch_live_docs() -> tuple[dict[str, str], float]:
             fetched = {k: v for k, v in pages.items() if isinstance(v, str)}
             if fetched:
                 with _LIVE_FETCH_LOCK:
-                    # Publish unless a newer generation has already succeeded
-                    # (empty cache means no generation has published yet, so
-                    # an older completion racing behind a newer *failure* is
-                    # still the only good data available and must not be
-                    # discarded).
-                    if my_generation == _LIVE_FETCH_GENERATION or not _LIVE_CACHE:
+                    # Publish unless a generation newer than this one has
+                    # already published. Comparing against the last
+                    # *published* generation (not the highest *started* one)
+                    # means an older fetch that succeeds still gets to
+                    # publish when a newer sibling generation started but
+                    # never actually completed successfully.
+                    if my_generation >= _LIVE_FETCH_PUBLISHED_GENERATION:
                         _LIVE_CACHE = fetched
                         _LAST_FETCH_TIME = time.monotonic()
+                        _LIVE_FETCH_PUBLISHED_GENERATION = my_generation
     except Exception:
         logger.debug("Live docs fetch failed; keeping stale cache", exc_info=True)
 

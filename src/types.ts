@@ -91,7 +91,11 @@ export interface UIState {
   ihvProvider: IHVProvider;
   /** Hugging Face load_kwargs device_map — GPU + host RAM when auto. */
   memoryOffload: "gpu_only" | "auto";
-  /** Only tags with full dep resolution (torch index + ORT 1.26 + cu12 runtime). */
+  /**
+   * cu118-cu128 have full dep resolution (torch index + ORT 1.26 + cu12 runtime).
+   * cu130/cu132 are driver-identification only — no package pins yet; selecting
+   * them surfaces an "unsupported CUDA tag" error at recipe-build time.
+   */
   cudaVersion: "auto" | "cpu" | "cu118" | "cu121" | "cu124" | "cu126" | "cu128" | "cu130" | "cu132";
   cacheDir: string;
   azureStr: string;

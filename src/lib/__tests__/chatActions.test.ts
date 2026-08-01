@@ -152,6 +152,13 @@ describe("parseChatStructuredReply", () => {
 
     const dontQuantize = salvageChatActionPatchFromLooseJson({ task: "don't apply quantization" });
     expect(dontQuantize?.passes?.quantization).toBeUndefined();
+
+    // Informational/off-topic mentions of "quant" must not enable it either
+    // (not negated, but not an affirmative instruction).
+    const infoTask = salvageChatActionPatchFromLooseJson({
+      task: "check quantization compatibility",
+    });
+    expect(infoTask?.passes?.quantization).toBeUndefined();
   });
 
   it("strips misleading Apply instructions when no patch exists", () => {

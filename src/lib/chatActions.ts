@@ -224,13 +224,18 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
       const isActionField = key === "step" || key === "action" || key === "task";
       const isNegated =
         typeof value === "string" &&
-        /\b(no|not|never|disable|skip|without|unavailable|cannot|can't|don't|won't|unable\s+to|avoid)\b/i.test(value);
+        /\b(no|not|never|disable|skip|without|unavailable|cannot|can't|don't|won't|unable\s+to|avoid)\b/i.test(
+          value,
+        );
 
       if (
         !isNegated &&
         (/quant/i.test(key) || (isActionField && typeof value === "string" && /quant/i.test(value))) &&
         (value === true ||
-          (typeof value === "string" && /apply|enable|true|int[48]|awq|gptq|ptq|quant/i.test(value)))
+          (typeof value === "string" &&
+            /^(true|apply|apply_quantization|enable|enabled|int4|int8|awq|gptq|ptq|hqq|rtn|spinquant|quarot)$/i.test(
+              value.trim(),
+            )))
       ) {
         passes.quantization = true;
         if (typeof value === "string") {
