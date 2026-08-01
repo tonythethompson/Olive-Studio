@@ -17,7 +17,7 @@ const IHV_PROVIDERS = new Set<string>([
   "WebGpuExecutionProvider",
 ]);
 
-const CUDA_VERSIONS = new Set(["auto", "cpu", "cu118", "cu121", "cu124", "cu126", "cu128", "cu130", "cu132"]);
+const CUDA_VERSIONS = new Set(["auto", "cpu", "cu118", "cu121", "cu124", "cu126", "cu128"]);
 const MODEL_SOURCES = new Set(["huggingface", "local", "azure"]);
 const MEMORY_OFFLOAD = new Set(["gpu_only", "auto"]);
 
