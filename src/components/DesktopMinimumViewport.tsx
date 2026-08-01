@@ -12,6 +12,12 @@ interface DesktopMinimumViewportProps {
   minWidthPx?: number;
 }
 
+/**
+ * Determines whether the viewport is narrower than the specified minimum width.
+ *
+ * @param minWidthPx - The minimum supported viewport width in pixels
+ * @returns `true` if the viewport is narrower than `minWidthPx`, `false` otherwise; returns `false` when viewport media queries are unavailable
+ */
 function readIsNarrow(minWidthPx: number): boolean {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
   return window.matchMedia(`(max-width: ${minWidthPx - 1}px)`).matches;
