@@ -121,7 +121,7 @@ async function runWranglerJson<T>(args: string[], timeoutMs = 30_000): Promise<T
     if (/EINVAL/i.test(msg)) {
       throw new Error(
         `Failed to run Wrangler (${msg}). On Windows, set WRANGLER_PATH to wrangler.cmd, or install Wrangler (` +
-          `npm i -g wrangler) and retry Sync. You can also paste CLOUDFLARE_API_TOKEN + account id below.`,
+          `pnpm add -g wrangler) and retry Sync. You can also paste CLOUDFLARE_API_TOKEN + account id below.`,
       );
     }
     throw new Error(msg || "Wrangler command failed.");
