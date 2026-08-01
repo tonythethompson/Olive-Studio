@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
 
 // Mock the pipeline store
@@ -32,6 +32,7 @@ vi.mock("@/lib/oliveRecipeHub", () => ({
   getCatalogDeviceFromRecipe: () => "cpu",
   getRecipesBranch: () => "main",
   setRecipesBranch: vi.fn(),
+  OLIVE_RECIPES_BRANCH: "main",
   OLIVE_RECIPES_BRANCH_DEFAULT: "main",
   OLIVE_RECIPES_REPO: "microsoft/olive-recipes",
 }));
@@ -39,15 +40,25 @@ vi.mock("@/lib/oliveRecipeHub", () => ({
 // Mock recipe model match
 vi.mock("@/lib/recipeModelMatch", () => ({
   buildLocalModelHints: () => [],
-  scoreRecipeMatchForLocal: () => 0,
+  scoreRecipeMatchForLocal: () => ({ tier: "none", score: 0 }),
   summarizeLocalRecipeMatches: () => [],
 }));
 
 // Mock recipe hardware compatibility
 vi.mock("@/lib/recipeHardwareCompatibility", () => ({
-  assessCatalogItemHardwareCompatibility: () => ({ compatible: true }),
-  assessRecipeHardwareCompatibility: () => ({ compatible: true }),
-  summarizeRecipeHardwareCompatibility: () => "",
+  assessCatalogItemHardwareCompatibility: () => ({
+    tier: "compatible",
+    reason: "mocked",
+  }),
+  assessRecipeHardwareCompatibility: () => ({
+    tier: "compatible",
+    reason: "mocked",
+  }),
+  summarizeRecipeHardwareCompatibility: () => ({
+    compatible: 0,
+    unavailable: 0,
+    unknown: 0,
+  }),
 }));
 
 // Mock tensorrt deps
@@ -91,11 +102,11 @@ describe("InputEnvironmentPanel", () => {
   });
 
   it("displays the model ID input for HuggingFace source", async () => {
+    render(<InputEnvironmentPanel />);
+    const configure = screen.getByText(/configure model source/i);
     await act(async () => {
-      render(<InputEnvironmentPanel />);
+      fireEvent.click(configure.closest("button") ?? configure);
     });
-    // The HF model ID input should be pre-populated with the default model
-    const input = screen.getByDisplayValue(/meta-llama/i);
-    expect(input).toBeDefined();
+    expect(screen.getByDisplayValue(/meta-llama/i)).toBeDefined();
   });
 });
