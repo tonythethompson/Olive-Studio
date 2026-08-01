@@ -7,7 +7,7 @@ The model is loaded lazily on first encode call, not at import time.
 from __future__ import annotations
 
 import threading
-from typing import Any, Sequence
+from typing import Any, Iterable
 
 import numpy as np
 
@@ -37,18 +37,19 @@ def is_model_loaded() -> bool:
     return _model is not None
 
 
-def encode_texts(texts: Sequence[str]) -> np.ndarray:
+def encode_texts(texts: Iterable[str]) -> np.ndarray:
     """Encode a batch of texts into an (N, 384) float32 matrix.
 
     Rows are L2-normalized (``normalize_embeddings=True``). Callers may still
     pass the matrix through ``cosine_similarity_scores``, which re-normalizes
     safely for zero rows and non-normalized inputs.
     """
-    if not texts:
+    texts_list = list(texts) if texts is not None else []
+    if not texts_list:
         return np.zeros((0, EMBEDDING_DIM), dtype=np.float32)
     model = _get_model()
     embeddings = model.encode(
-        list(texts),
+        texts_list,
         convert_to_numpy=True,
         show_progress_bar=False,
         normalize_embeddings=True,
