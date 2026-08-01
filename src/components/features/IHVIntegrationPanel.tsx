@@ -26,7 +26,6 @@ import {
   prepareProviderChange,
 } from "@/lib/pipelineValidation";
 import { isMemoryOffloadAvailable, hasHuggingFaceModel } from "@/lib/memoryOffload";
-import { isResolvableCudaTag } from "@/lib/oliveGpuRuntime";
 import { isGpuProvider, formatMemoryGb } from "@/lib/vramEstimate";
 import {
   fetchHardwareProbe,
@@ -1153,13 +1152,7 @@ export function IHVIntegrationPanel({
                   <select
                     id="cuda-version-override"
                     aria-label="PyTorch CUDA Version"
-                    value={
-                      state.cudaVersion === "auto" ||
-                      state.cudaVersion === "cpu" ||
-                      isResolvableCudaTag(state.cudaVersion ?? "")
-                        ? (state.cudaVersion ?? "auto")
-                        : "auto"
-                    }
+                    value={state.cudaVersion ?? "auto"}
                     onChange={(e) => setState({ cudaVersion: e.target.value as UIState["cudaVersion"] })}
                     className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-electric-blue shrink-0 cursor-pointer"
                   >
@@ -1170,6 +1163,8 @@ export function IHVIntegrationPanel({
                     <option value="cu124">CUDA 12.4</option>
                     <option value="cu126">CUDA 12.6</option>
                     <option value="cu128">CUDA 12.8</option>
+                    <option value="cu130">CUDA 13.0 (driver only — no package pins yet)</option>
+                    <option value="cu132">CUDA 13.2 (driver only — no package pins yet)</option>
                   </select>
                 </div>
               </div>
