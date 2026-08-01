@@ -73,10 +73,12 @@ export function sanitizeProviderBaseUrl(provider: string, rawBaseUrl?: string): 
   }
 
   const host = parsed.hostname.toLowerCase();
-  const isLoopback =
-    host === "localhost" || host.endsWith(".localhost") || host === "127.0.0.1" || host === "::1";
+  const isLoopback = host === "localhost" || host === "127.0.0.1" || host === "::1";
   // Local engines (Ollama / LM Studio) are openai-compat over plain HTTP on loopback only.
-  const allowLocalEngine = provider === "openai-compat" && isLoopback;
+  const allowLocalEngine =
+    provider === "openai-compat" &&
+    isLoopback &&
+    process.env.OLIVE_ALLOW_LOOPBACK_HTTP === "1";
 
   if (parsed.protocol !== "https:" && !(allowLocalEngine && parsed.protocol === "http:")) {
     throw new Error("baseUrl must use https");
