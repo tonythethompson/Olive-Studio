@@ -56,8 +56,10 @@ describe("GeminiSidebar flows", () => {
     fireEvent.click(screen.getByRole("button", { name: /Why is my model slow\?/ }));
     await waitFor(() => expect(screen.getByText(/quantization is off/)).toBeTruthy());
 
-    // Settings tab: provider + model selects wired to the live catalog
+    // Settings tab: Cloud provider form by default (gemini is cloud)
     fireEvent.click(screen.getByRole("button", { name: /^Settings$/ }));
+    expect(screen.getByRole("tab", { name: "Cloud" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Local" })).toBeTruthy();
     const provider = screen.getByLabelText("AI provider") as HTMLSelectElement;
     expect(provider.value).toBe("gemini");
     await waitFor(() => expect(screen.getByText("Live catalog")).toBeTruthy());
@@ -68,7 +70,11 @@ describe("GeminiSidebar flows", () => {
     );
     expect(screen.getByPlaceholderText(/Or type a model id/)).toBeTruthy();
     expect(screen.getByPlaceholderText(/localhost:11434/)).toBeTruthy();
-    expect(screen.getByText("1-Click Local AI Setup")).toBeTruthy();
+    // Local tab: LM Studio / Ollama inventory (not mixed into Cloud)
+    fireEvent.click(screen.getByRole("tab", { name: "Local" }));
+    expect(screen.getByText("LM Studio")).toBeTruthy();
+    expect(screen.getByText("Ollama")).toBeTruthy();
+    expect(screen.getByText(/Starter downloads/i)).toBeTruthy();
     expect(spy).toHaveBeenCalledWith("/api/ai/models", expect.objectContaining({ method: "POST" }));
   });
 });

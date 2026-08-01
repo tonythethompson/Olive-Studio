@@ -17,6 +17,7 @@ export interface ProviderStatus {
   source: "env" | "user" | "none";
   provider?: string;
   model?: string;
+  baseUrl?: string | null;
 }
 
 /** Which sidebar tab is currently visible. */

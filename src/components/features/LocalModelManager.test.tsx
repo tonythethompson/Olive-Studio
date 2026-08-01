@@ -58,18 +58,15 @@ function mockFetch(
 // ── 1. Empty / loading states ───────────────────────────────────────────────
 
 describe("LocalModelManager — empty states", () => {
-  it("renders nothing when no models and not loading", async () => {
+  it("shows empty hint when no models and not loading", async () => {
     mockFetch();
 
-    let container: HTMLElement | undefined;
     await act(async () => {
-      const res = render(<LocalModelManager isOpen />);
-      container = res.container;
+      render(<LocalModelManager isOpen emptyHint="No models yet." />);
     });
 
-    // After fetch resolves and models stay empty, the component returns null
     await waitFor(() => {
-      expect(container!.innerHTML).toBe("");
+      expect(screen.getByText("No models yet.")).toBeTruthy();
     });
   });
 

@@ -7,6 +7,7 @@ import {
   buildChatPresetQueries,
   buildWorkspaceContextSummary,
 } from "@/lib/aiWorkspaceContext";
+import { chatPatchToUiState, sanitizeChatActionPatch, type ChatAction } from "@/lib/chatActions";
 import { Bot, X, Lightbulb, MessageSquareCode, Settings2 } from "lucide-react";
 import { AuditPanel } from "./AuditPanel";
 import { PROVIDER_OPTIONS } from "./gemini/aiProviderCatalog";
@@ -67,6 +68,14 @@ export function GeminiSidebar({
   const audit = useAiAudit({ state, setState });
   const chat = useAiChat(workspaceContext);
 
+  const handleApplyChatAction = (messageIndex: number, action: ChatAction) => {
+    const patch = sanitizeChatActionPatch(action.patch);
+    if (!patch) return;
+    setState(chatPatchToUiState(state, patch));
+    chat.markActionApplied(messageIndex, action.id);
+    setTimeout(() => void audit.runAnalysis(), 400);
+  };
+
   const providers = useAiProviderSettings({
     isOpen,
     activeTab,
@@ -80,8 +89,8 @@ export function GeminiSidebar({
 
   const local = useLocalEngineSetup({
     isOpen,
-    onModelActivated: async () => {
-      await providers.refreshProviderStatus();
+    onModelActivated: async (modelTag, source) => {
+      await providers.enableLocalAiProvider(source, modelTag);
       audit.resetAnalysis();
       setActiveTab("audit");
     },
@@ -185,6 +194,7 @@ export function GeminiSidebar({
               onInputChange={chat.setInputQuestion}
               onSend={(presetText) => void chat.sendChat(presetText)}
               onGoSettings={() => setActiveTab("settings")}
+              onApplyAction={handleApplyChatAction}
             />
           </div>
 
@@ -200,13 +210,17 @@ export function GeminiSidebar({
         </div>
 
         {/* Footer */}
-        <div className="p-3.5 border-t border-slate-800 shrink-0 bg-slate-950/85">
+        <div className="p-3.5 border-t border-slate-800 shrink-0 bg-slate-950/85 space-y-1.5">
           <div className="flex items-center gap-2 text-[10px] text-slate-500 justify-center">
             <Bot className="h-3 w-3 text-slate-600" />
             <span>
               Target: <span className="text-slate-400 font-mono">{state.ihvProvider}</span>
             </span>
           </div>
+          <p className="text-[10px] text-slate-600 text-center leading-snug px-1">
+            AI can be wrong. Verify Audit, Chat, and Apply changes against your model, EP, and Olive docs
+            before running jobs.
+          </p>
         </div>
       </div>
     </div>

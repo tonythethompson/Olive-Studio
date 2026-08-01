@@ -41,3 +41,5 @@ bun.lock
 /.dirac-cache
 /.qoder
 .review-threads.json
+/dogfood-output
+.serena/project.local.yml

@@ -38,6 +38,26 @@ olive-mcp-server/          Python FastMCP stdio server (14 tools, 84 passes, 14 
 src-tauri/                 Tauri 2 shell (optional — app runs without it)
 ```
 
+## Assistant AI providers (backburner)
+
+Do not implement unless explicitly requested. Prefer Custom / openai-compat for OpenAI-shaped hosts until then.
+
+| Candidate                        | Notes                                                                                                    |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Azure OpenAI / Microsoft Foundry | First-class provider: deployment-as-model, `api-key` and/or Bearer, optional `api-version`               |
+| AWS Bedrock                      | Converse / SigV4 (or Bedrock OpenAI-compat gateway if standardized)                                      |
+| Google Vertex AI                 | Gemini via GCP/ADC; separate from AI Studio Gemini key path                                              |
+| IBM watsonx                      | Enterprise non-OpenAI auth/catalog                                                                       |
+| Perplexity                       | Thin OpenAI-compat preset (Custom works today)                                                           |
+| Qwen / Alibaba DashScope         | API preset (intl vs CN base); not a Subscription entry                                                   |
+| Nous Portal                      | Subscription-style multi-model gateway (Hermes/Nous); distinct from OpenClaw/Hermes local agent gateways |
+| DeepSeek                         | Thin OpenAI-compat preset (`api.deepseek.com`); Custom works today                                       |
+| Kimi / Moonshot                  | Thin OpenAI-compat preset (intl vs CN base); also reachable via OpenRouter / OpenCode / HF today         |
+| GLM / Zhipu                      | Thin OpenAI-compat preset (Zhipu / BigModel); Custom works today                                         |
+| MiniMax                          | Thin OpenAI-compat preset; Custom works today                                                            |
+
+Out of scope for this list: Microsoft 365 Agents / Copilot Studio agents (channel runtime, not a model provider). OpenClaw / Hermes agent gateways and Cursor SDK stay Custom/local / agent-runtime (not chat providers) unless demand justifies a first-class entry.
+
 ## Testing Tiers
 
 | Config file                        | Scope                              | Command                                            |
@@ -55,17 +75,6 @@ src-tauri/                 Tauri 2 shell (optional — app runs without it)
 - **ESLint warnings are expected:** `pnpm lint` runs `eslint --max-warnings 20` and exits 0 with warnings. Only treat non-zero exit or reported errors as failure.
 - **Python alias:** `pnpm a11y:scan` invokes `python` (not `python3`); ensure `python` is on PATH.
 - **Integration test mocks:** `src/server/__tests__/setup.integration.ts` mocks child_process, AI providers, and fetch. Tests start a real Express server on a random port.
-- **Commitlint scopes:** Conventional commits enforced (`<type>(<scope>): <subject>`). Allowed scopes: `recipe-builder`, `pipeline-validation`, `recipe-pipeline`, `quantization`, `pruning`, `peft`, `conversion`, `hardware-probe`, `ai-assistant`, `graph`, `batch`, `infra`, `ui`, `deps`, `ci`, `docs`, `mcp`, `types`, `test`, `chore`, `fix`, `perf`, `refactor`, `style`, `build`.
-
-## Lint Rules (error level)
-
-- `no-console` — only `console.warn` and `console.error` allowed (no `console.log`)
-- `react-hooks/set-state-in-render` — setState in render is always a bug
-- `react-hooks/refs` — accessing `ref.current` during render breaks reactivity
-- `react-hooks/use-memo` — missing `useMemo`/`useCallback` where the compiler would have applied them
-- `react-hooks/static-components` — components defined inside other components re-mount on every render
-- `react-hooks/error-boundaries` — missing error boundaries
-- `no-throw-literal` — throw Error objects, not raw values
 
 ## CI Pipeline
 

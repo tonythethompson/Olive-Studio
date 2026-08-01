@@ -85,6 +85,8 @@ export interface UIState {
   localFiles: { name: string; size: number }[];
   azureModelPath: string;
   hfModelId: string;
+  /** Hugging Face / Olive input task (e.g. text-generation, feature-extraction). Empty/omitted = infer from model id. */
+  hfTask?: string;
   hfDataset: string;
   ihvProvider: IHVProvider;
   /** Hugging Face load_kwargs device_map — GPU + host RAM when auto. */

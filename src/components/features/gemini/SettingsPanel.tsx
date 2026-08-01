@@ -1,3 +1,9 @@
+import { useEffect, useState } from "react";
+import {
+  deriveAssistantSettingsMode,
+  preferredEngineFromBaseUrl,
+  type AssistantSettingsMode,
+} from "@/lib/assistantSettingsMode";
 import { PROVIDER_OPTIONS } from "./aiProviderCatalog";
 import { LocalAiSetupCard } from "./LocalAiSetupCard";
 import { ManualProviderSetup } from "./ManualProviderSetup";
@@ -43,19 +49,91 @@ function ActiveProviderCard({ providers }: ActiveProviderCardProps) {
   );
 }
 
+interface SettingsModeTabsProps {
+  mode: AssistantSettingsMode;
+  onChange: (mode: AssistantSettingsMode) => void;
+}
+
+function SettingsModeTabs({ mode, onChange }: SettingsModeTabsProps) {
+  return (
+    <div
+      className="flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-950 p-0.5"
+      role="tablist"
+      aria-label="Settings mode"
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={mode === "local"}
+        onClick={() => onChange("local")}
+        className={`flex-1 cursor-pointer rounded-md px-3 py-2 text-xs font-bold transition-all ${
+          mode === "local"
+            ? "border border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+            : "border border-transparent text-slate-500 hover:text-slate-300"
+        }`}
+      >
+        Local
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={mode === "cloud"}
+        onClick={() => onChange("cloud")}
+        className={`flex-1 cursor-pointer rounded-md px-3 py-2 text-xs font-bold transition-all ${
+          mode === "cloud"
+            ? "border border-electric-blue/40 bg-electric-blue/15 text-electric-blue"
+            : "border border-transparent text-slate-500 hover:text-slate-300"
+        }`}
+      >
+        Cloud
+      </button>
+    </div>
+  );
+}
+
 interface SettingsPanelProps {
   providers: AiProviderSettings;
   local: LocalEngineSetup;
   isOpen: boolean;
 }
 
-/** Settings tab: active provider, 1-click local AI setup, manual provider setup. */
+/** Settings tab: active provider, Local | Cloud subtabs. */
 export function SettingsPanel({ providers, local, isOpen }: SettingsPanelProps) {
+  const [settingsMode, setSettingsMode] = useState<AssistantSettingsMode>(() =>
+    deriveAssistantSettingsMode(providers.providerStatus.provider, providers.settingsBaseUrl),
+  );
+
+  useEffect(() => {
+    const next = deriveAssistantSettingsMode(
+      providers.providerStatus.provider ?? providers.settingsProvider,
+      providers.settingsBaseUrl || providers.providerStatus.baseUrl,
+    );
+    setSettingsMode(next);
+    const engine = preferredEngineFromBaseUrl(providers.settingsBaseUrl || providers.providerStatus.baseUrl);
+    if (engine && engine !== local.preferredEngine) {
+      local.selectPreferredEngine(engine);
+    }
+    // Only re-derive when the active provider identity changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providers.providerStatus.provider, providers.providerStatus.baseUrl, providers.providerStatus.source]);
+
   return (
-    <div className="space-y-5">
-      <ActiveProviderCard providers={providers} />
-      <LocalAiSetupCard local={local} activeModel={providers.providerStatus.model} isOpen={isOpen} />
-      <ManualProviderSetup providers={providers} />
+    <div className="space-y-4">
+      <div className="space-y-3 sticky top-0 z-10 bg-slate-950/95 pb-1 backdrop-blur-sm">
+        <ActiveProviderCard providers={providers} />
+        <SettingsModeTabs mode={settingsMode} onChange={setSettingsMode} />
+      </div>
+
+      {settingsMode === "local" ? (
+        <LocalAiSetupCard
+          local={local}
+          activeModel={providers.providerStatus.model}
+          isOpen={isOpen}
+          onActivate={(modelTag, source) => void providers.enableLocalAiProvider(source, modelTag)}
+        />
+      ) : (
+        <ManualProviderSetup providers={providers} />
+      )}
     </div>
   );
 }

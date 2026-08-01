@@ -1,5 +1,11 @@
 import type { ProviderConfig, AIChatMessage } from "../../types.ts";
-import { readEnvApiKey } from "../../../lib/aiResponse.ts";
+import { matchedEnvApiKeyName, readEnvApiKey } from "../../../lib/aiResponse.ts";
+
+export type EnvCredentialStatus = {
+  present: boolean;
+  envVar: string | null;
+  usable: boolean;
+};
 
 // ─── Plugin Interface ─────────────────────────────────────────────────────────
 
@@ -68,6 +74,23 @@ export function allProviders(): IterableIterator<AiProviderPlugin> {
 /** Set of all registered provider names. */
 export function registeredProviderNames(): Set<ProviderConfig["provider"]> {
   return new Set(providers.keys());
+}
+
+/**
+ * Per-provider env credential presence for Settings UI.
+ * Does not return secret values. Callers may pass extra usable checks via `extraUsable`.
+ */
+export function listEnvCredentialStatus(
+  extraUsable?: Partial<Record<ProviderConfig["provider"], boolean>>,
+): Record<string, EnvCredentialStatus> {
+  const out: Record<string, EnvCredentialStatus> = {};
+  for (const plugin of providers.values()) {
+    const envVar = matchedEnvApiKeyName(...plugin.envVarNames) ?? null;
+    const present = Boolean(envVar);
+    const usable = present && (extraUsable?.[plugin.name] ?? true);
+    out[plugin.name] = { present, envVar, usable };
+  }
+  return out;
 }
 
 // ─── Detection ────────────────────────────────────────────────────────────────

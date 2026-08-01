@@ -1535,13 +1535,28 @@ export function InputEnvironmentPanel({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="grid gap-3">
                       <Label htmlFor="hf-task-type">Task Type</Label>
-                      <Select id="hf-task-type">
+                      <Select
+                        id="hf-task-type"
+                        aria-label="Hugging Face task type"
+                        value={state.hfTask || ""}
+                        onChange={(e) => setState({ hfTask: e.target.value })}
+                      >
+                        <option value="">Auto (from model id)</option>
                         <option value="text-generation">Text Generation</option>
+                        <option value="feature-extraction">Feature Extraction</option>
                         <option value="text-classification">Text Classification</option>
+                        <option value="fill-mask">Fill Mask</option>
+                        <option value="text2text-generation">Text2Text Generation</option>
+                        <option value="speech-recognition">Speech Recognition</option>
                         <option value="image-classification">Image Classification</option>
                         <option value="object-detection">Object Detection</option>
+                        <option value="sentence-similarity">Sentence Similarity</option>
                         <option value="conversational">Conversational</option>
                       </Select>
+                      <p className="text-[10px] text-slate-500 leading-relaxed">
+                        Written into Olive <code className="font-mono text-slate-400">input_model</code> task
+                        / hf_config.task. Embedding models (GTE, BGE, E5) should use Feature Extraction.
+                      </p>
                     </div>
                     <div className="grid gap-3">
                       <Label htmlFor="dataset">Calibration Dataset (Optional)</Label>

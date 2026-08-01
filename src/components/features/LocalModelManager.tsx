@@ -12,10 +12,19 @@ export function LocalModelManager({
   activeModel,
   isOpen,
   engine = "all",
+  onActivate,
+  showTitle = true,
+  emptyHint,
 }: {
   activeModel?: string;
   isOpen: boolean;
   engine?: "lms" | "ollama" | "all";
+  /** Called after a model is loaded into the local engine so the parent can set Active Provider. */
+  onActivate?: (modelTag: string, source: "lms" | "ollama") => void | Promise<void>;
+  /** When false, parent owns the section heading (Settings Local panel). */
+  showTitle?: boolean;
+  /** Shown when the engine has no installed models (after load finishes). */
+  emptyHint?: string;
 }) {
   const [models, setModels] = useState<Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }>>([]);
   const [loading, setLoading] = useState(false);
@@ -171,6 +180,7 @@ export function LocalModelManager({
         throw new Error(d.error || `HTTP ${r.status}`);
       }
       await refresh();
+      if (onActivate) await onActivate(modelTag, source);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Load failed");
     } finally {
@@ -200,14 +210,18 @@ export function LocalModelManager({
     }
   };
 
-  if (models.length === 0 && !loading) return null;
-
   return (
-    <div className="mt-3 space-y-2">
+    <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">
-          Installed Models
-        </p>
+        {showTitle ? (
+          <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">
+            Installed Models
+          </p>
+        ) : (
+          <span className="text-[10px] text-slate-500">
+            {loading ? "Checking installed models…" : `${models.length} installed`}
+          </span>
+        )}
         <button
           type="button"
           onClick={() => void refresh()}
@@ -217,6 +231,11 @@ export function LocalModelManager({
           {loading ? "Refreshing…" : "Refresh"}
         </button>
       </div>
+      {!loading && models.length === 0 ? (
+        <p className="text-[11px] text-slate-500 leading-relaxed py-1">
+          {emptyHint ?? "No models installed for this engine yet."}
+        </p>
+      ) : null}
       <div className="space-y-1.5">
         {models.length > 3 && (
           <div className="relative">

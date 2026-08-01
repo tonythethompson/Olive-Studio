@@ -1,9 +1,9 @@
 import express, { Router } from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import dotenv from "dotenv";
 import fs from "fs";
 
+import { loadStudioEnv } from "./src/server/loadStudioEnv.ts";
 import { mountSystemRoutes, type SystemProbeOptions } from "./src/server/routes/system.ts";
 import { mountGithubRoutes } from "./src/server/routes/github.ts";
 import { mountAiRoutes } from "./src/server/routes/ai.ts";
@@ -14,8 +14,8 @@ import { probeTensorRtLoadable } from "./src/server/services/olive/tensorrt.ts";
 import { probeTensorRtRtxLoadable } from "./src/server/services/olive/tensorrt-rtx.ts";
 import { staticServeRateLimit } from "./src/server/middleware/rateLimit.ts";
 
-dotenv.config();
-dotenv.config({ path: ".env.local", override: true });
+// After imports: hydrate .env / .env.local / Windows User+Machine API keys into process.env.
+loadStudioEnv();
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
