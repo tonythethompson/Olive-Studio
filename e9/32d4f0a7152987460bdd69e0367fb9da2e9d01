@@ -1,0 +1,22 @@
+src/components/features/__tests__/testUtils.tsx
+  s_1b10dc5220b409::t_c4e2c438cc7fcd 33
+src/components/features/BatchProcessingPanel.test.tsx
+  s_1b10dc5220b409::t_5020c382335d69 137-140,142-144,161-164
+  s_1b10dc5220b409::t_80ca938f459622 148-150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e932d4f0a7152987460bdd69e0367fb9da2e9d01",
+  "prompts": {},
+  "sessions": {
+    "s_1b10dc5220b409": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "85b51c99-7caa-4c75-a477-fd438a149008",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
