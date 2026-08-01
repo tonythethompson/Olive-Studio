@@ -1,0 +1,37 @@
+src/components/features/gemini/useAiAudit.ts
+  s_d35b29515e08d0::t_68de070a55ee27 1,21-24,26,31,37,71-72,75-79,82
+src/lib/aiResponse.ts
+  s_d35b29515e08d0::t_e90b92e3ffbf0b 92-93
+src/components/features/gemini/aiProviderCatalog.ts
+  s_d35b29515e08d0::t_5c54ec87b328bb 101-150,152-160
+src/components/features/InputEnvironmentPanel.tsx
+  s_d35b29515e08d0::t_7d1256a7d09f65 1660
+  s_d35b29515e08d0::t_9c99ecbcbaed5e 1668-1669
+src/server/services/ai/oliveMcpKnowledge.ts
+  s_d35b29515e08d0::t_624b5ba4edee5b 148
+src/components/features/ExecutionWorkspace.tsx
+  s_d35b29515e08d0::t_fa5c2b1cfa73de 44,54-55
+  s_d35b29515e08d0::t_be97fbbcd4263b 1402-1406
+  s_d35b29515e08d0::t_96a186ac049df4 1407-1414
+src/components/features/GeminiSidebar.tsx
+  s_d35b29515e08d0::t_253c0c9d5e9fc3 74-80
+  s_d35b29515e08d0::t_d62b23091e4287 82
+olive-mcp-server/olive_mcp_server/tools/compatibility.py
+  s_d35b29515e08d0::t_a6f06ee3cf7a81 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "696b97be9403d817efb6d9b81097d038b05cebe1",
+  "prompts": {},
+  "sessions": {
+    "s_d35b29515e08d0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f88350b3-eb33-4d77-8be0-90da0daad3f7",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
