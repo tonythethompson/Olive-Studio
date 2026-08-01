@@ -1,0 +1,19 @@
+olive-mcp-server/tests/test_tools.py
+  s_1b10dc5220b409::t_d354b22ecceac8 163-169,172-176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b895245ff04836c5e62bcd2496b2b06a2a29c411",
+  "prompts": {},
+  "sessions": {
+    "s_1b10dc5220b409": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "85b51c99-7caa-4c75-a477-fd438a149008",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
