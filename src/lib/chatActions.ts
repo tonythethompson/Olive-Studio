@@ -223,7 +223,8 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
 
       const isActionField = key === "step" || key === "action" || key === "task";
       const isNegated =
-        typeof value === "string" && /\b(no|not|never|disable|skip|without|unavailable)\b/i.test(value);
+        typeof value === "string" &&
+        /\b(no|not|never|disable|skip|without|unavailable|cannot|can't|don't|won't|unable\s+to|avoid)\b/i.test(value);
 
       if (
         !isNegated &&

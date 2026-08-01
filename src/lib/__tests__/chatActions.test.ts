@@ -143,6 +143,15 @@ describe("parseChatStructuredReply", () => {
 
     const negatedConvert = salvageChatActionPatchFromLooseJson({ step: "skip onnx conversion" });
     expect(negatedConvert?.passes?.conversion).toBeUndefined();
+
+    const contractedQuant = salvageChatActionPatchFromLooseJson({ step: "can't quantize" });
+    expect(contractedQuant?.passes?.quantization).toBeUndefined();
+
+    const cannotConvert = salvageChatActionPatchFromLooseJson({ action: "cannot convert to onnx" });
+    expect(cannotConvert?.passes?.conversion).toBeUndefined();
+
+    const dontQuantize = salvageChatActionPatchFromLooseJson({ task: "don't apply quantization" });
+    expect(dontQuantize?.passes?.quantization).toBeUndefined();
   });
 
   it("strips misleading Apply instructions when no patch exists", () => {
