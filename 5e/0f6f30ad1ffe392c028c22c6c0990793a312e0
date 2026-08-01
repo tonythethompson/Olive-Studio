@@ -1,0 +1,163 @@
+src/components/features/GeminiSidebar.flows.test.tsx
+  s_d35b29515e08d0::t_292691b4526ee7 59,61-62,73-77
+src/lib/assistantSettingsMode.ts
+  s_d35b29515e08d0::t_101aafb4a8a414 1-32,36-37
+src/lib/auditAutofix.test.ts
+  s_d35b29515e08d0::t_a7cfd8fc255c28 1,3-55,63-75,77-96,117-130,140
+  s_d35b29515e08d0::t_f2f63b04a6c461 2,76
+  s_c0d1e52f52c3a1::t_3ccc3459bda8a5 97-98,107-108
+  s_d35b29515e08d0::t_60febf29edd335 102-103
+  s_d35b29515e08d0::t_d29298e441656f 110-111,116
+  s_d35b29515e08d0::t_40e7be7d486a48 139
+src/types.ts
+  s_d35b29515e08d0::t_7f44e8ae286f46 89
+package.json
+  s_d35b29515e08d0::t_478f4e436b9d54 113
+src/components/features/gemini/useAiProviderSettings.ts
+  s_d35b29515e08d0::t_88f842ee814051 436-439,441,450,462,464,482-510
+  s_d35b29515e08d0::t_5443cb347cf4a0 555
+src/components/features/InputEnvironmentPanel.tsx
+  s_d35b29515e08d0::t_70e91e7fb53ade 100,272,392,995,1435,1442,1453,1465,1517,1521,1631,1704,1712,1734,1741,1762,1782-1783,1882,1921,1995
+  s_d35b29515e08d0::t_bbe2cb2273fd14 1876-1877,1888
+src/index.css
+  s_d35b29515e08d0::t_1796799b784375 38-40,84-96
+  s_d35b29515e08d0::t_d4823ec502e7b8 41-74
+.env.example
+  s_d35b29515e08d0::t_101aafb4a8a414 40-50,53-58,68-71,73-74,76
+src/components/features/gemini/useAiChat.ts
+  s_d35b29515e08d0::t_f2f63b04a6c461 8-9,14,63-85,88,98-108,117
+src/lib/auditSuggestionFilter.ts
+  s_d35b29515e08d0::t_101aafb4a8a414 1-7,9-11,13-44,47-51,53-55,57-78,80-97,99,105-106,108-111,113-127
+  s_d35b29515e08d0::t_f2f63b04a6c461 12,52,112
+src/server/loadStudioEnv.test.ts
+  s_d35b29515e08d0::t_101aafb4a8a414 1-4,6-57,63-72
+  s_d35b29515e08d0::t_f2f63b04a6c461 5
+src/lib/auditAnalysis.ts
+  s_d35b29515e08d0::t_101aafb4a8a414 1-34,41-98,102-133,155-157,159-199,201-212,214-218,220-225,227-232
+  s_d35b29515e08d0::t_82c3278ec0c248 158
+src/components/features/LocalModelManager.tsx
+  s_d35b29515e08d0::t_101aafb4a8a414 15-17,22-27,183,214,216-224,234-238
+src/components/features/VramEstimateBanner.tsx
+  s_d35b29515e08d0::t_f2f63b04a6c461 109-111,114-146,148-155,160,167,177,184,192-221,268-271,278-283
+src/components/features/AuditPanel.tsx
+  s_d35b29515e08d0::t_a78d9ace47b3b6 59
+AGENTS.md
+  s_d35b29515e08d0::t_f2f63b04a6c461 41-60
+index.html
+  s_d35b29515e08d0::t_54e6fa8c11f323 9
+src/server/services/ai/registry.ts
+  s_d35b29515e08d0::t_6a86aa821f1374 2
+  s_d35b29515e08d0::t_a78d9ace47b3b6 51
+  s_d35b29515e08d0::t_0869df07fa8529 79-80,82-89,91-95
+src/lib/__tests__/assistantSettingsMode.test.ts
+  s_d35b29515e08d0::t_101aafb4a8a414 1-27
+src/components/features/gemini/useLocalEngineSetup.ts
+  s_d35b29515e08d0::t_8eb21553ae32f6 7
+  s_d35b29515e08d0::t_9bf2f2bac1c176 334
+src/components/features/GeminiSidebar.tsx
+  s_d35b29515e08d0::t_ea79e20d5fa59c 10
+  s_d35b29515e08d0::t_c6650f8a1187bf 70
+  s_d35b29515e08d0::t_033b318cdffdbd 71-73,75,77-78
+  s_d35b29515e08d0::t_1a3027805eea12 92
+  s_d35b29515e08d0::t_6508f178795e41 197
+  s_d35b29515e08d0::t_9274b94daf296d 213,220-223
+src/components/features/gemini/ManualProviderSetup.tsx
+  s_d35b29515e08d0::t_f2f63b04a6c461 39,195-198,245
+src/components/features/gemini/SettingsPanel.tsx
+  s_d35b29515e08d0::t_f2f63b04a6c461 1-6,52-93,100,102-119,121-131,133-136
+src/components/features/gemini/useAiAudit.ts
+  s_d35b29515e08d0::t_f2f63b04a6c461 2,19-20,25-26,31,33-34,60,67-70
+src/lib/aiResponse.ts
+  s_d35b29515e08d0::t_a5adb5c184cf8c 12-29,31-37,41-80,83-91,93-106,133-139
+src/components/features/gemini/types.ts
+  s_d35b29515e08d0::t_6c0749f6a12a8e 20
+src/components/features/gemini/LocalAiSetupCard.tsx
+  s_d35b29515e08d0::t_f2f63b04a6c461 82-83,140,202,206,208,215-216,222,227-228,256-266,280-295
+src/lib/__tests__/oliveRecipeBuilder.test.ts
+  s_c0d1e52f52c3a1::t_7180e7075f5262 71,77-79
+src/lib/auditSuggestionFilter.test.ts
+  s_d35b29515e08d0::t_101aafb4a8a414 1-7,10-17,20-103,135-160
+src-tauri/tauri.conf.json
+  s_d35b29515e08d0::t_589c3381b07db0 17-18
+src/lib/chatActions.ts
+  s_d35b29515e08d0::t_f2f63b04a6c461 1-65,67-96,98-128,132-152,154-181,183-405,407-421
+server.ts
+  s_d35b29515e08d0::t_a5adb5c184cf8c 6,17-18
+src/components/features/__tests__/testUtils.tsx
+  s_d35b29515e08d0::t_46a9638f66a43d 17
+src/server/loadStudioEnv.ts
+  s_d35b29515e08d0::t_101aafb4a8a414 1-72,74-91,97-111,113,115-129
+  s_d35b29515e08d0::t_f2f63b04a6c461 92-96
+src/server/routes/ai.ts
+  s_d35b29515e08d0::t_f2f63b04a6c461 17,21,23,307-312,317-327,341-343,350-351,353,355-356,360,426,430-431,433,435-436,438,446-452,488,500-508,510-511,516,521-528,530,532,636-638
+  s_d35b29515e08d0::t_d0813b1bddd6a4 25-29
+  s_0b4f64255d17ae::t_84a4f76370355e 80-81
+  s_d35b29515e08d0::t_a78d9ace47b3b6 162-164,198,201,230,250,252-254,314-316,354,970,992,995
+  s_d35b29515e08d0::t_1e66bbb559d53c 283
+  s_d35b29515e08d0::t_7ccaefa0aa2550 284-285
+vite.config.ts
+  s_d35b29515e08d0::t_97e997a909c9e1 2
+src/components/features/LocalModelManager.test.tsx
+  s_d35b29515e08d0::t_101aafb4a8a414 61,65,69
+src/components/DesktopMinimumViewport.tsx
+  s_d35b29515e08d0::t_cbf391f729bbb7 1-23,25-50
+.gitignore
+  s_d35b29515e08d0::t_a78d9ace47b3b6 33-36
+src/components/features/gemini/ChatPanel.tsx
+  s_d35b29515e08d0::t_4394ead7f13bc3 20,35,55-67,69-73
+  s_d35b29515e08d0::t_7da8b7103caec2 68
+src/lib/oliveRecipeHub.ts
+  s_d35b29515e08d0::t_4bc00c86ad31b9 450-453
+src/App.tsx
+  s_d35b29515e08d0::t_cbf391f729bbb7 1,13,15,43,65,73-74,81-124,126-147,151-166,168-174,177-197,199-201,203,206-207,209,211-212,214-235,237-267,269-272,274-297,299-309,312-314
+src/lib/auditAutofix.ts
+  s_d35b29515e08d0::t_a7cfd8fc255c28 1-9,20-49,71-80,83-90,107-108,116-118,133-141,149-150,152-163,166-171,174-194,196-210,215,217,223-233,242-243,246-258,261,263-276,283-285,288-300,302,314,316,318
+  s_d35b29515e08d0::t_adc8c306840030 10-15,18-19,69-70,142-143
+  s_d35b29515e08d0::t_64443e02e071b3 16
+  s_d35b29515e08d0::t_a78d9ace47b3b6 164-165
+  s_d35b29515e08d0::t_f85ed5ccfb6586 172-173
+  s_d35b29515e08d0::t_7b133d5a6d6991 212
+  s_d35b29515e08d0::t_65b1d35f3ae589 218
+  s_d35b29515e08d0::t_a509fba6904077 235-241
+src/lib/__tests__/chatActions.test.ts
+  s_d35b29515e08d0::t_101aafb4a8a414 1-140
+src/lib/stores/pipelineStore.ts
+  s_d35b29515e08d0::t_a4bfb25ff92811 11
+src/lib/aiWorkspaceContext.ts
+  s_d35b29515e08d0::t_70e91e7fb53ade 13-16,104-105,156
+  s_d35b29515e08d0::t_a78d9ace47b3b6 97-98,169-171,209-210,215-216
+src/lib/oliveRecipeBuilder.ts
+  s_d35b29515e08d0::t_f3778b03c4ea4d 16-20,24-26,36,39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "5e0f6f30ad1ffe392c028c22c6c0990793a312e0",
+  "prompts": {},
+  "sessions": {
+    "s_0b4f64255d17ae": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "46e89714-1524-4436-89b3-7b173cdddc5f",
+        "model": "composer-2.5-fast"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    },
+    "s_c0d1e52f52c3a1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d4e477c7-274f-45b7-8998-da121e968fc5",
+        "model": "composer-2.5-fast"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    },
+    "s_d35b29515e08d0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f88350b3-eb33-4d77-8be0-90da0daad3f7",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}

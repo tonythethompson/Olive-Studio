@@ -1,0 +1,28 @@
+src/server/services/ai/oliveMcpKnowledge.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-68,70-126,128-131,138,140-147,149-169,171-195,202-218,238-267,270-337,237
+  s_0b4f64255d17ae::t_e4a9d859905bf1 225
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "faa69b83289865336446404135f0f70b1ae420bf",
+  "prompts": {},
+  "sessions": {
+    "s_0b4f64255d17ae": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "46e89714-1524-4436-89b3-7b173cdddc5f",
+        "model": "composer-2.5-fast"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    },
+    "s_d35b29515e08d0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f88350b3-eb33-4d77-8be0-90da0daad3f7",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}

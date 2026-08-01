@@ -1,0 +1,35 @@
+src/components/features/recipe-graph/inspectors/InputInspector.tsx
+  s_d35b29515e08d0::t_02691fa4662452 2,6-14,18,21,28,31,35-37
+src/components/features/recipe-graph/RecipeValidationPanel.tsx
+  s_d35b29515e08d0::t_515c2b8524a222 65,285,288-289
+src/components/features/EnterpriseInfraPanel.tsx
+  s_d35b29515e08d0::t_02691fa4662452 68
+src/components/features/KbSyncIndicator.tsx
+  s_d35b29515e08d0::t_515c2b8524a222 3,10-16,19-28,30-37,39-41,44-49,56-58,60,65
+src/components/features/CompatStatus.tsx
+  s_d35b29515e08d0::t_02691fa4662452 1-79
+src/components/features/ExecutionWorkspace.tsx
+  s_d35b29515e08d0::t_96a186ac049df4 1399
+src/components/features/RuntimeEnvControls.tsx
+  s_d35b29515e08d0::t_515c2b8524a222 1,28-29,48-75,77-86,95,131,151,153-201,203-208,210,220-231,233,237-241,243,245-247,250-252,255,258-259,264-271,275,284,291,295,297,301,306,368-370
+src/components/features/recipe-graph/GraphCanvas.tsx
+  s_d35b29515e08d0::t_02691fa4662452 1,7-19,75-111,276-282,295,313,319,326,335,338-346,361,364-367,369-370,394-395,400,403-406,408-409,423-424,434-436,448-450,457-460,462-463,484-486,493
+src/components/features/recipe-graph/inspectors/ProviderInspector.tsx
+  s_d35b29515e08d0::t_02691fa4662452 10,67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9cfa9eb9976131fa3e3d6aa9679b9ba510b6393c",
+  "prompts": {},
+  "sessions": {
+    "s_d35b29515e08d0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f88350b3-eb33-4d77-8be0-90da0daad3f7",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}

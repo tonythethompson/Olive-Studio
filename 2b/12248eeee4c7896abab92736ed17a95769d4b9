@@ -1,0 +1,128 @@
+src/components/features/GeminiSidebar.tsx
+  s_d35b29515e08d0::t_ea79e20d5fa59c 10
+  s_d35b29515e08d0::t_c6650f8a1187bf 70
+  s_d35b29515e08d0::t_033b318cdffdbd 71-73,81,83-84
+  s_d35b29515e08d0::t_1a3027805eea12 98
+  s_d35b29515e08d0::t_6508f178795e41 204
+  s_d35b29515e08d0::t_9274b94daf296d 220,227-230
+  s_d35b29515e08d0::t_253c0c9d5e9fc3 74-80
+  s_da107fccb58d2e::t_317b2e84f41860 99-100
+.agents/skills/vite-react-best-practices/rules/vite-build-validation.md
+  s_da107fccb58d2e::t_17f6733064eea7 3,22,27-30,35-38
+src/components/features/gemini/useAiProviderSettings.ts
+  s_d35b29515e08d0::t_88f842ee814051 436-439,441,450,462,464,482-503,505-506,508-512
+  s_d35b29515e08d0::t_5443cb347cf4a0 557
+  s_da107fccb58d2e::t_e99efb7253f34c 480-481
+  s_da107fccb58d2e::t_885a18ff165210 504,507
+src/lib/auditSuggestionFilter.ts
+  s_d35b29515e08d0::t_101aafb4a8a414 1-7,9-11,13-44,47-51,53-55,60-81,83-100,102,104-105,107-110,112-126
+  s_d35b29515e08d0::t_f2f63b04a6c461 12,52,111
+  s_d35b29515e08d0::t_a78d9ace47b3b6 8,101,103,106
+  s_da107fccb58d2e::t_7086bdabb4872f 45-46
+  s_da107fccb58d2e::t_1ff94d0c04d790 56-59
+  s_da107fccb58d2e::t_6cf0e5bcb66e8f 82
+src/lib/hooks.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 3,60-61,70-113,116-129,139,142,147,165,168-172,174-175
+  s_da107fccb58d2e::t_051401cf8c982d 219,225-229
+src/server/routes/system.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 202-203
+  s_da107fccb58d2e::t_7adb062b2b6d3a 147-148
+  s_da107fccb58d2e::t_470436248f7207 169-171,178-180
+  s_da107fccb58d2e::t_a0bd13d1ea9bc7 243-244
+src/components/features/gemini/SettingsPanel.tsx
+  s_d35b29515e08d0::t_f2f63b04a6c461 1-6,52-93,100,102-119,121-131,136-139
+  s_da107fccb58d2e::t_bf840678b2fa2f 132-135
+src/lib/__tests__/hooks.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 197,200,206,209-211
+  s_d35b29515e08d0::t_68af423d190f37 300
+  s_da107fccb58d2e::t_e83c566a73606b 166
+src/lib/modelCatalog.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-9,11-47,49-87
+  s_da107fccb58d2e::t_bf872fda6c1da6 10
+src/server/services/ai/registry.ts
+  s_d35b29515e08d0::t_6a86aa821f1374 2
+  s_d35b29515e08d0::t_a78d9ace47b3b6 47,3-4,48-55,86-87,108-109,113-123
+  s_d35b29515e08d0::t_0869df07fa8529 84-85,88-95,97-101,56
+  s_da107fccb58d2e::t_197e0f4e0a4db7 96
+src/server/services/ai/security.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 88,119-149,103-104
+  s_d35b29515e08d0::t_d1597c455ef011 106-118,90,92-95,98-102
+  s_da107fccb58d2e::t_05b8e37e757ad3 89,91,96-97,105
+src/lib/hardwareProbe.test.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-4,6-13,29-54,19-22,24-25,27-28
+  s_da107fccb58d2e::t_0f23f0ea8082c5 16-17,5,14,18,23,26
+src/server/services/ai/security.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 14-20,83-84,86,91-95,38,44
+  s_da107fccb58d2e::t_81c9ed3977c5c1 85,39-43
+  s_da107fccb58d2e::t_e9bbe82d40b665 90
+src/lib/hardwareProbe.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 111,113,116,119,142,146,169-172
+  s_da107fccb58d2e::t_46539a6b9e90f4 95-97
+src/lib/chatActions.ts
+  s_d35b29515e08d0::t_f2f63b04a6c461 1-86,103-111,115-145,147-432,96,101-102,113-114
+  s_da107fccb58d2e::t_309aeda935e48c 87-95,97-100
+  s_da107fccb58d2e::t_0d0047dd9fdf95 112
+src/server/services/ai/state.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 2-4,10-15,25-26,28-62,82-85,87-89,92-96,23-24,68,80-81
+  s_da107fccb58d2e::t_91b581c637005b 69,70-79,86
+  s_0b4f64255d17ae::t_17d32676350a17 20-22
+  s_0b4f64255d17ae::t_0d888dd85c6775 63-67
+  s_da107fccb58d2e::t_dca8b84e93f487 5
+src/components/features/IHVIntegrationPanel.tsx
+  s_da107fccb58d2e::t_c27aa97d6fedb7 318
+  s_da107fccb58d2e::t_b505f2a7039c23 375,395
+  s_da107fccb58d2e::t_0cca1b14edd6dd 875,916
+olive-mcp-server/olive_mcp_server/mcp_server.py
+  s_da107fccb58d2e::t_a9f2ac4177ddfb 14-15
+  s_da107fccb58d2e::t_fe99872b2d053e 108-113,115-121,127-128
+src/server/routes/ai.ts
+  s_d35b29515e08d0::t_f2f63b04a6c461 21,29,31,565-570,606-616,630-632,649-650,652,669-670,674,812,826-827,829,831-832,834,847-848,850-853,859,896-907,909,915-922,924-925,1041-1043,382,390,435,446-447,452,454,457,461,466,470,787
+  s_0b4f64255d17ae::t_84a4f76370355e 101-102,286,298,103-105,107,110,113,119-124
+  s_d35b29515e08d0::t_a78d9ace47b3b6 213-215,269,321,360,504,507,572-574,653,1362,1478,1482,217-234,243,259,272-274,277-279,281-285,288-292,294-297,300-301,308,311,315-318,322-328,330-332,344,346,356,361-368,378-381,384-389,391-412,414-421,423-426,428-434,436-445,448-451,453,455-456,458-460,462-465,467-469,471-473,475-481,483-491,495-496,503,508-509,516-518,544,546-547,549-555,564,571,576-588,597-599,601-604,651,654-668,671-673,675,686-687,696,698-702,704-717,719-733,735-748,750-756,761-766,788-794,798,815-823,825,828,830,833,836-843,845-846,849,854-858,891,895,908,927-928,1021-1027,1030-1037,1040,1065,1165,1171-1174,1242-1244,1246-1248,1264-1265,1276,1363-1368,1372-1374,1376-1380,1382-1397,1399-1411,1413-1416,1418-1421,1431-1439,1441-1450,1452-1470,1472-1475,1477,1479-1481,1483-1490,1492-1526,1528-1558,1560-1566,1568,1572-1599,1604-1606,1619-1630,785,111-112,114-118,125-127,595-596
+  s_d35b29515e08d0::t_1e66bbb559d53c 541
+  s_d35b29515e08d0::t_7ccaefa0aa2550 542-543,147,235,271,275,312,314,319,329,376,413,422,427,474,482,492,494,505,521,548,575,605,749,758,774,795,824,835,844,1369,1371,1375,1381,1398,1412,1417,1440,1451,1476,1491,1527,1567,128
+  s_d35b29515e08d0::t_b43077d22019e8 697,718,734,591,593
+  s_d35b29515e08d0::t_4b89ba37edb5e0 703,1029,1039,641,644,646
+  s_d35b29515e08d0::t_98b272618525c3 619
+  s_d35b29515e08d0::t_cf458cebddfe75 106,108-109
+  s_0b4f64255d17ae::t_6b6fe10f7406c9 497-502
+  s_d35b29515e08d0::t_dea7b6b2e3a1c8 1120
+  s_da107fccb58d2e::t_133bbf254c6f0f 589-590,592,594,600
+src/lib/pipelineValidation.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 545-583,651,659-660
+  s_da107fccb58d2e::t_26cdcd26fec1a2 9-10
+  s_da107fccb58d2e::t_0b913f8d8f3371 612-626
+  s_da107fccb58d2e::t_111699c45a4e0e 649
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2b12248eeee4c7896abab92736ed17a95769d4b9",
+  "prompts": {},
+  "sessions": {
+    "s_0b4f64255d17ae": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "46e89714-1524-4436-89b3-7b173cdddc5f",
+        "model": "composer-2.5-fast"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    },
+    "s_d35b29515e08d0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f88350b3-eb33-4d77-8be0-90da0daad3f7",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    },
+    "s_da107fccb58d2e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9d5aeab5-a5f0-4a78-b997-cfe2969c6beb",
+        "model": "composer-2.5-fast"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}

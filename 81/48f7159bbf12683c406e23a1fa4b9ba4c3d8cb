@@ -1,0 +1,81 @@
+src/lib/auditAutofix.ts
+  s_d35b29515e08d0::t_a7cfd8fc255c28 1-9,20-49,52-59,61-70,74-85,88-101,112-117,187-207,209-223,238,240,246-256,266,269,272-284,293,296-309,319-320,323,326-338,340,347-348,350,105,110-111,242,130,134-135,146,160,185-186,226,230,290
+  s_d35b29515e08d0::t_adc8c306840030 10-15,18-19,86-87
+  s_d35b29515e08d0::t_a78d9ace47b3b6 102-103,73,104,106-109,208,310,339,341-346,349
+  s_d35b29515e08d0::t_f85ed5ccfb6586 118-119,136-144,161-184
+  s_d35b29515e08d0::t_7b133d5a6d6991 234,224,227,231,235
+  s_d35b29515e08d0::t_65b1d35f3ae589 241
+  s_d35b29515e08d0::t_a509fba6904077 258-260,262-265
+  s_d35b29515e08d0::t_64443e02e071b3 17
+  s_d35b29515e08d0::t_1edf9ed4fb3cff 60
+  s_d35b29515e08d0::t_e31d129aaa0293 239,243-245,257,261
+  s_c0d1e52f52c3a1::t_0d694431c73683 120-128,131-133
+  s_d35b29515e08d0::t_d5b05181c2171a 129,145,147-159
+  s_c0d1e52f52c3a1::t_446b4b27cd5275 267-268,270-271
+  s_c0d1e52f52c3a1::t_a4b80581d6bdb9 311-318,321-322,324-325
+  s_d35b29515e08d0::t_fd67221f4c33c4 225,285-286,288-289,291-292
+  s_d35b29515e08d0::t_00a59355e65f01 228-229,232-233,236-237
+  s_d35b29515e08d0::t_42155054125d44 287
+  s_d35b29515e08d0::t_fb7a0f4c38b8b9 294-295
+src/server/services/ai/oliveMcpKnowledge.ts
+  s_d35b29515e08d0::t_a78d9ace47b3b6 1-68,70-106,162-181,183-186,193,195-202,204-220,222-225,227-251,259-275,295-324,327-394,294,124,128-129,131,144-145,160-161,258
+  s_0b4f64255d17ae::t_e4a9d859905bf1 282,252-257
+  s_d35b29515e08d0::t_624b5ba4edee5b 203
+  s_0b4f64255d17ae::t_ab96a2be6ab879 107-123,125-127,130,132-133,138-143,146-159
+  s_0b4f64255d17ae::t_32feb836118364 182,187-192,194
+  s_0b4f64255d17ae::t_f3a7cf31a35b9d 221,226
+  s_d35b29515e08d0::t_81a3105053050a 134-135,137
+olive-mcp-server/olive_mcp_server/tools/troubleshooting.py
+  s_d35b29515e08d0::t_9e1c920556be79 266-273,276-278
+src/lib/auditAutofix.test.ts
+  s_d35b29515e08d0::t_a7cfd8fc255c28 1,3-68,70-89,116-129,131,95,100,102,109
+  s_d35b29515e08d0::t_f2f63b04a6c461 2,69
+  s_c0d1e52f52c3a1::t_3ccc3459bda8a5 90,92-93,110,112-114
+  s_d35b29515e08d0::t_40e7be7d486a48 94,115,99,108
+  s_d35b29515e08d0::t_60febf29edd335 96,101,106-107
+  s_d35b29515e08d0::t_230d8199725545 97-98,105
+src/components/features/ExecutionWorkspace.tsx
+  s_d35b29515e08d0::t_96a186ac049df4 1396,1405-1409
+  s_d35b29515e08d0::t_fa5c2b1cfa73de 44,54-55
+  s_d35b29515e08d0::t_be97fbbcd4263b 1397-1401
+  s_c0d1e52f52c3a1::t_eee57bb0decc6a 160-161
+  s_c0d1e52f52c3a1::t_1aec8c73a445c0 181
+  s_c0d1e52f52c3a1::t_e28948367f72a2 598,601
+  s_c0d1e52f52c3a1::t_006b4d1c1eb1f4 617
+  s_c0d1e52f52c3a1::t_d5b13314395c07 738
+  s_c0d1e52f52c3a1::t_4f6ee19dee11e2 1506,1508
+  s_d35b29515e08d0::t_5c189a12f19f9b 835-836
+  s_d35b29515e08d0::t_6ff94859506abb 869-870
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8148f7159bbf12683c406e23a1fa4b9ba4c3d8cb",
+  "prompts": {},
+  "sessions": {
+    "s_0b4f64255d17ae": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "46e89714-1524-4436-89b3-7b173cdddc5f",
+        "model": "composer-2.5-fast"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    },
+    "s_c0d1e52f52c3a1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d4e477c7-274f-45b7-8998-da121e968fc5",
+        "model": "composer-2.5-fast"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    },
+    "s_d35b29515e08d0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f88350b3-eb33-4d77-8be0-90da0daad3f7",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
