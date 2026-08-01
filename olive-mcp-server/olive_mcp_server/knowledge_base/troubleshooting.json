@@ -467,16 +467,8 @@
       "title": "ONNX Runtime CUDA EP missing from Python environment",
       "root_cause": "CPU-only onnxruntime is installed, or GPU EP was not built into the wheel.",
       "solution": "Install onnxruntime-gpu matching your CUDA tag in the same venv Olive uses. Confirm with python -c \"import onnxruntime as ort; print(ort.get_available_providers())\".",
-      "updated_config": {
-        "passes": {
-          "OnnxModelOptimizer": {
-            "params": {
-              "graph_optimization_level": "all"
-            }
-          }
-        }
-      },
-      "applyable": true
+      "updated_config": {},
+      "applyable": false
     },
     {
       "id": "olive-hf-auth-401",
