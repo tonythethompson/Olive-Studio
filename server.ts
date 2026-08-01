@@ -185,8 +185,6 @@ async function startServer() {
       markServerReady();
       // eslint-disable-next-line no-console -- intentional server startup message
       console.log(`Server running on http://localhost:${PORT}`);
-      // eslint-disable-next-line no-console -- intentional server startup message
-      console.log(`Open http://localhost:${PORT} in your browser`);
       // Soft KB sync on boot: reload passes.json and persist freshness so the
       // header does not start "stale" after every server restart.
       try {
