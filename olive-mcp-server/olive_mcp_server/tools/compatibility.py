@@ -56,23 +56,19 @@ def get_model_compatibility(
 
     if hardware_target:
         target = normalize_hardware(hardware_target)
-        if target in hardware_matrix:
-            hw_compat = hardware_matrix[target]
-            result["selected_hardware"] = target
-            result["hardware_compatibility"] = hw_compat
-            result["compatibility_warnings"] = [
-                {
-                    "pass_name": pass_name,
-                    "note": pass_info.get("note", ""),
-                    "typical_accuracy_drop": pass_info.get("typical_accuracy_drop", ""),
-                }
-                for pass_name, pass_info in hw_compat.items()
-                if pass_info.get("support") == "warning"
-            ]
-        else:
-            result["selected_hardware"] = target
-            result["hardware_compatibility"] = {}
-            result["compatibility_warnings"] = []
+        hw_compat = hardware_matrix.get(target, {})
+        result["selected_hardware"] = target
+        result["hardware_compatibility"] = hw_compat
+        result["compatibility_warnings"] = [
+            {
+                "pass_name": pass_name,
+                "note": pass_info.get("note", ""),
+                "typical_accuracy_drop": pass_info.get("typical_accuracy_drop", ""),
+            }
+            for pass_name, pass_info in hw_compat.items()
+            if pass_info.get("support") == "warning"
+        ]
+        if not hw_compat:
             result["hardware_note"] = f"No compatibility data for {target}"
 
     return result

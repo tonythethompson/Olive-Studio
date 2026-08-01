@@ -165,204 +165,157 @@ async function callGitHubCopilot(
 
 // ─── Plugin Registrations ─────────────────────────────────────────────────────
 
-// OpenAI
-registerProvider({
+/**
+ * Register a standard OpenAI-compatible provider whose `buildConfig` is just
+ * `{ provider, apiKey, model: defaultModel, baseUrl: defaultBaseUrl }`.
+ * Providers with bespoke `buildConfig`/`call` logic (e.g. Copilot, openai-compat)
+ * register directly via `registerProvider` instead.
+ */
+function registerOpenAiCompatProvider(spec: {
+  name: ProviderConfig["provider"];
+  label: string;
+  defaultModel: string;
+  defaultBaseUrl: string;
+  envVarNames: string[];
+  supportsJsonResponseFormat?: boolean;
+}): void {
+  registerProvider({
+    name: spec.name,
+    label: spec.label,
+    defaultModel: spec.defaultModel,
+    defaultBaseUrl: spec.defaultBaseUrl,
+    envVarNames: spec.envVarNames,
+    buildConfig: (apiKey) => ({
+      provider: spec.name,
+      apiKey,
+      model: spec.defaultModel,
+      baseUrl: spec.defaultBaseUrl,
+    }),
+    call: callOpenAICompat,
+    supportsJsonResponseFormat: spec.supportsJsonResponseFormat,
+  });
+}
+
+registerOpenAiCompatProvider({
   name: "openai",
   label: "OpenAI",
   defaultModel: "gpt-4o-mini",
   defaultBaseUrl: "https://api.openai.com/v1",
   envVarNames: ["OPENAI_API_KEY"],
-  buildConfig: (apiKey) => ({ provider: "openai", apiKey, model: "gpt-4o-mini" }),
-  call: callOpenAICompat,
   supportsJsonResponseFormat: true,
 });
 
 // ChatGPT subscription (using same API key as OpenAI)
-registerProvider({
+registerOpenAiCompatProvider({
   name: "chatgpt-sub",
   label: "ChatGPT Plus/Pro Subscription",
   defaultModel: "gpt-4o-mini",
   defaultBaseUrl: "https://api.openai.com/v1",
   envVarNames: [], // Only available via runtime override
-  buildConfig: (apiKey) => ({ provider: "chatgpt-sub", apiKey, model: "gpt-4o-mini" }),
-  call: callOpenAICompat,
   supportsJsonResponseFormat: true,
 });
 
-// Mistral
-registerProvider({
+registerOpenAiCompatProvider({
   name: "mistral",
   label: "Mistral AI",
   defaultModel: "mistral-large-latest",
   defaultBaseUrl: "https://api.mistral.ai/v1",
   envVarNames: ["MISTRAL_API_KEY"],
-  buildConfig: (apiKey) => ({ provider: "mistral", apiKey, model: "mistral-large-latest" }),
-  call: callOpenAICompat,
   supportsJsonResponseFormat: true,
 });
 
 // xAI / Grok
-registerProvider({
+registerOpenAiCompatProvider({
   name: "xai",
   label: "xAI Grok",
   defaultModel: "grok-3",
   defaultBaseUrl: "https://api.x.ai/v1",
   envVarNames: ["XAI_API_KEY"],
-  buildConfig: (apiKey) => ({ provider: "xai", apiKey, model: "grok-3", baseUrl: "https://api.x.ai/v1" }),
-  call: callOpenAICompat,
   supportsJsonResponseFormat: true,
 });
 
-// OpenRouter
-registerProvider({
+registerOpenAiCompatProvider({
   name: "openrouter",
   label: "OpenRouter",
   defaultModel: "openai/gpt-4o",
   defaultBaseUrl: "https://openrouter.ai/api/v1",
   envVarNames: ["OPENROUTER_API_KEY"],
-  buildConfig: (apiKey) => ({
-    provider: "openrouter",
-    apiKey,
-    model: "openai/gpt-4o",
-    baseUrl: "https://openrouter.ai/api/v1",
-  }),
-  call: callOpenAICompat,
   supportsJsonResponseFormat: true,
 });
 
-// Groq
-registerProvider({
+registerOpenAiCompatProvider({
   name: "groq",
   label: "Groq",
   defaultModel: "llama-4-scout-17b-16e-instruct",
   defaultBaseUrl: "https://api.groq.com/openai/v1",
   envVarNames: ["GROQ_API_KEY"],
-  buildConfig: (apiKey) => ({
-    provider: "groq",
-    apiKey,
-    model: "llama-4-scout-17b-16e-instruct",
-    baseUrl: "https://api.groq.com/openai/v1",
-  }),
-  call: callOpenAICompat,
   supportsJsonResponseFormat: true,
 });
 
-// Together AI
-registerProvider({
+registerOpenAiCompatProvider({
   name: "together",
   label: "Together AI",
   defaultModel: "meta-llama/Llama-4-Scout-17B-16E-Instruct",
   defaultBaseUrl: "https://api.together.xyz/v1",
   envVarNames: ["TOGETHER_API_KEY"],
-  buildConfig: (apiKey) => ({
-    provider: "together",
-    apiKey,
-    model: "meta-llama/Llama-4-Scout-17B-16E-Instruct",
-    baseUrl: "https://api.together.xyz/v1",
-  }),
-  call: callOpenAICompat,
   supportsJsonResponseFormat: true,
 });
 
-// Kilo Code
-registerProvider({
+registerOpenAiCompatProvider({
   name: "kilocode",
   label: "Kilo Code",
   defaultModel: "anthropic/claude-sonnet-4",
   defaultBaseUrl: "https://api.kilo.ai/api/gateway",
   envVarNames: ["KILO_API_KEY", "KILOCODE_API_KEY"],
-  buildConfig: (apiKey) => ({
-    provider: "kilocode",
-    apiKey,
-    model: "anthropic/claude-sonnet-4",
-    baseUrl: "https://api.kilo.ai/api/gateway",
-  }),
-  call: callOpenAICompat,
 });
 
 // OpenCode Zen (pay-per-use gateway).
 // Defaults to a /chat/completions model: Claude uses /messages and GPT uses /responses.
-registerProvider({
+registerOpenAiCompatProvider({
   name: "opencode",
   label: "OpenCode Zen",
   defaultModel: "kimi-k2.7-code",
   defaultBaseUrl: "https://opencode.ai/zen/v1",
   envVarNames: ["OPENCODE_API_KEY"],
-  buildConfig: (apiKey) => ({
-    provider: "opencode",
-    apiKey,
-    model: "kimi-k2.7-code",
-    baseUrl: "https://opencode.ai/zen/v1",
-  }),
-  call: callOpenAICompat,
   supportsJsonResponseFormat: true,
 });
 
 // OpenCode Go (subscription gateway for curated open models)
-registerProvider({
+registerOpenAiCompatProvider({
   name: "opencode-go",
   label: "OpenCode Go",
   defaultModel: "kimi-k2.7-code",
   defaultBaseUrl: "https://opencode.ai/zen/go/v1",
   envVarNames: ["OPENCODE_API_KEY"],
-  buildConfig: (apiKey) => ({
-    provider: "opencode-go",
-    apiKey,
-    model: "kimi-k2.7-code",
-    baseUrl: "https://opencode.ai/zen/go/v1",
-  }),
-  call: callOpenAICompat,
   supportsJsonResponseFormat: true,
 });
 
-// Fireworks AI
-registerProvider({
+registerOpenAiCompatProvider({
   name: "fireworks",
   label: "Fireworks AI",
   defaultModel: "accounts/fireworks/models/llama-v3p3-70b-instruct",
   defaultBaseUrl: "https://api.fireworks.ai/inference/v1",
   envVarNames: ["FIREWORKS_API_KEY"],
-  buildConfig: (apiKey) => ({
-    provider: "fireworks",
-    apiKey,
-    model: "accounts/fireworks/models/llama-v3p3-70b-instruct",
-    baseUrl: "https://api.fireworks.ai/inference/v1",
-  }),
-  call: callOpenAICompat,
   supportsJsonResponseFormat: true,
 });
 
 // NVIDIA NIM (build.nvidia.com / integrate.api.nvidia.com)
-registerProvider({
+registerOpenAiCompatProvider({
   name: "nvidia",
   label: "NVIDIA NIM",
   defaultModel: "meta/llama-3.1-8b-instruct",
   defaultBaseUrl: "https://integrate.api.nvidia.com/v1",
   envVarNames: ["NVIDIA_API_KEY"],
-  buildConfig: (apiKey) => ({
-    provider: "nvidia",
-    apiKey,
-    model: "meta/llama-3.1-8b-instruct",
-    baseUrl: "https://integrate.api.nvidia.com/v1",
-  }),
-  call: callOpenAICompat,
   supportsJsonResponseFormat: true,
 });
 
 // Hugging Face Inference Providers (OpenAI-compatible router)
-registerProvider({
+registerOpenAiCompatProvider({
   name: "huggingface",
   label: "Hugging Face",
   defaultModel: "moonshotai/Kimi-K2.5",
   defaultBaseUrl: "https://router.huggingface.co/v1",
   envVarNames: ["HF_TOKEN", "HUGGINGFACE_API_KEY"],
-  buildConfig: (apiKey) => ({
-    provider: "huggingface",
-    apiKey,
-    model: "moonshotai/Kimi-K2.5",
-    baseUrl: "https://router.huggingface.co/v1",
-  }),
-  call: callOpenAICompat,
   supportsJsonResponseFormat: true,
 });
 

@@ -7,10 +7,11 @@ BeautifulSoup / requests in the project .venv.
 
 from __future__ import annotations
 
-import importlib
 import json
 from pathlib import Path
 from typing import Any
+
+from .._lazy import resolve_lazy_attr
 
 KB_DIR = Path(__file__).parent.parent / "knowledge_base"
 
@@ -85,14 +86,13 @@ def load_integration_recipes() -> list[dict[str, Any]]:
     return load_json("integration_recipes.json").get("recipes", [])
 
 
+_cache: dict[str, Any] = {}
+
+
 def __getattr__(name: str) -> Any:
-    target = _LAZY_EXPORTS.get(name)
-    if target is None:
+    value = resolve_lazy_attr(name, _LAZY_EXPORTS, _cache, __name__)
+    if value is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    module_name, attr = target
-    module = importlib.import_module(module_name, __name__)
-    value = getattr(module, attr)
-    globals()[name] = value
     return value
 
 

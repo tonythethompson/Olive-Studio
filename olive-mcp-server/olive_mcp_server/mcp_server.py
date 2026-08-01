@@ -10,10 +10,11 @@ Usage:
 
 from __future__ import annotations
 
-import importlib
 import os
 import sys
 from typing import Any
+
+from ._lazy import resolve_lazy_attr
 
 # name → (module path, attribute). Lazy so HTTP diagnosis does not pull in
 # optional deps like BeautifulSoup just to troubleshoot an Olive traceback.
@@ -49,16 +50,7 @@ _resolved_tools: dict[str, Any] = {}
 
 
 def _resolve_tool(name: str):
-    if name in _resolved_tools:
-        return _resolved_tools[name]
-    target = _TOOL_IMPORTS.get(name)
-    if target is None:
-        return None
-    module_name, attr = target
-    module = importlib.import_module(module_name)
-    fn = getattr(module, attr)
-    _resolved_tools[name] = fn
-    return fn
+    return resolve_lazy_attr(name, _TOOL_IMPORTS, _resolved_tools, __name__)
 
 
 def call_tool(name: str, args: dict | None = None):

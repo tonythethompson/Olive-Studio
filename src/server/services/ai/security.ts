@@ -33,11 +33,14 @@ export function isIpLiteralHost(hostname: string): boolean {
   return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname);
 }
 
+function isLoopbackHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
 /** Ollama / LM Studio loopback endpoints used by the built-in Local AI flow. */
 export function isKnownLocalOpenAiCompatUrl(parsed: URL): boolean {
-  const host = parsed.hostname.toLowerCase();
-  const isLoopback = host === "localhost" || host === "127.0.0.1" || host === "::1";
-  if (!isLoopback || parsed.protocol !== "http:") return false;
+  if (!isLoopbackHostname(parsed.hostname) || parsed.protocol !== "http:") return false;
   const port = parsed.port ? Number(parsed.port) : 80;
   return port === 11434 || port === 1234;
 }
@@ -81,12 +84,10 @@ export function sanitizeProviderBaseUrl(provider: string, rawBaseUrl?: string): 
     throw new Error("baseUrl must not include credentials");
   }
 
-  const host = parsed.hostname.toLowerCase();
-  const isLoopback = host === "localhost" || host === "127.0.0.1" || host === "::1";
   // Local engines (Ollama / LM Studio) are openai-compat over plain HTTP on loopback only.
   const allowLocalEngine =
     provider === "openai-compat" &&
-    isLoopback &&
+    isLoopbackHostname(parsed.hostname) &&
     (process.env.OLIVE_ALLOW_LOOPBACK_HTTP === "1" || isKnownLocalOpenAiCompatUrl(parsed));
 
   if (parsed.protocol !== "https:" && !(allowLocalEngine && parsed.protocol === "http:")) {

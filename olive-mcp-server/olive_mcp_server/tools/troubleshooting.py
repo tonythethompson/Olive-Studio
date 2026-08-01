@@ -221,6 +221,23 @@ def _resolve_domain(domain: str | None) -> DomainName:
     return "auto"
 
 
+def _select_auto_match(
+    error_message: str, pass_name: str, config_context: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Score both KB pools; Olive wins ties so generic Olive guidance stays stable."""
+    olive_best, olive_score = _best_match(load_troubleshooting(), error_message, pass_name, config_context)
+    studio_best, studio_score = _best_match(
+        load_studio_troubleshooting(), error_message, pass_name, config_context
+    )
+    if studio_score > olive_score and studio_best is not None:
+        return studio_best, "studio"
+    if olive_best is not None:
+        return olive_best, "olive"
+    if studio_best is not None:
+        return studio_best, "studio"
+    return None, None
+
+
 def _no_match_payload() -> dict[str, Any]:
     return {
         "matched_entry": None,
@@ -256,55 +273,27 @@ def troubleshoot_olive_error(
     """
     resolved = _resolve_domain(domain)
 
-    best: dict[str, Any] | None = None
-    matched_domain: str | None = None
-
     if resolved == "auto":
-        olive_best, olive_score = _best_match(
-            load_troubleshooting(), error_message, pass_name, config_context
-        )
-        studio_best, studio_score = _best_match(
-            load_studio_troubleshooting(), error_message, pass_name, config_context
-        )
-        # Score both pools; Olive wins ties so generic Olive guidance stays stable.
-        if studio_score > olive_score and studio_best is not None and studio_score > 0:
-            best = studio_best
-            matched_domain = "studio"
-        elif olive_best is not None and olive_score > 0:
-            best = olive_best
-            matched_domain = "olive"
-        elif studio_best is not None and studio_score > 0:
-            best = studio_best
-            matched_domain = "studio"
+        best, matched_domain = _select_auto_match(error_message, pass_name, config_context)
     else:
         pool = _pool_for_domain(resolved)
-        hit, score = _best_match(pool, error_message, pass_name, config_context)
-        if hit is not None and score > 0:
-            best = hit
-            matched_domain = str(hit.get("domain") or resolved)
+        best, _ = _best_match(pool, error_message, pass_name, config_context)
+        matched_domain = str(best.get("domain") or resolved) if best is not None else None
 
     if best is None:
         best = _no_match_payload()
         matched_entry = None
-        matched_domain = None
         applyable = False
     else:
         matched_entry = best.get("id")
         matched_domain = matched_domain or best.get("domain") or "olive"
+        # Guidance-only entries (applyable=False) still return updated_config for
+        # display, but the UI disables Apply based on this flag.
         applyable = bool(best.get("applyable"))
-        # Guidance-only entries must not expose a tempting empty-success Apply path
-        if not applyable:
-            # Keep updated_config for display if present but Apply will be disabled via applyable
-            pass
 
     freq_key = _get_frequency_key(matched_entry, error_message)
     freq = _record_occurrence(freq_key)
-
     updated_config = best.get("updated_config", {}) or {}
-    if not applyable:
-        # Prefer empty config for non-applyable so UI Apply stays off consistently
-        # unless the entry explicitly ships a note-only config (still applyable=false).
-        pass
 
     return {
         "matched_entry": matched_entry,

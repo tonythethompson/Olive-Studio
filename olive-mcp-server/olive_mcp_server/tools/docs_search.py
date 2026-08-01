@@ -50,9 +50,10 @@ def _score_terms(text: str, terms: list[str]) -> int:
     return sum(1 for term in terms if term in text_lower)
 
 
-def _search_local(terms: list[str], top_k: int) -> list[dict[str, Any]]:
+def _rank_sources(sources: list[tuple[str, str]], terms: list[str], top_k: int) -> list[dict[str, Any]]:
+    """Score `(path, text)` pairs against `terms` and return the top matches."""
     scored = []
-    for path, text in _load_kb_text():
+    for path, text in sources:
         score = _score_terms(text, terms)
         if score == 0:
             continue
@@ -63,6 +64,10 @@ def _search_local(terms: list[str], top_k: int) -> list[dict[str, Any]]:
         })
     scored.sort(key=lambda x: x["relevance"], reverse=True)
     return scored[:top_k]
+
+
+def _search_local(terms: list[str], top_k: int) -> list[dict[str, Any]]:
+    return _rank_sources(_load_kb_text(), terms, top_k)
 
 
 def _fetch_live_docs() -> dict[str, str]:
@@ -106,18 +111,7 @@ def _search_live(terms: list[str], top_k: int) -> list[dict[str, Any]]:
         pages = _fetch_live_docs()
         if not pages:
             return []
-        scored = []
-        for path, text in _split_live_snippets(pages):
-            score = _score_terms(text, terms)
-            if score == 0:
-                continue
-            scored.append({
-                "source": path,
-                "snippet": text[:300],
-                "relevance": score,
-            })
-        scored.sort(key=lambda x: x["relevance"], reverse=True)
-        return scored[:top_k]
+        return _rank_sources(_split_live_snippets(pages), terms, top_k)
     except Exception:  # noqa: BLE001
         return []
 
