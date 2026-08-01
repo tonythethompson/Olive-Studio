@@ -72,7 +72,10 @@ def call_tool(name: str, args: dict | None = None):
     tool = _resolve_tool(name)
     if tool is None:
         return {"error": f"Unknown tool: {name}"}
-    return tool(**payload)
+    try:
+        return tool(**payload)
+    except TypeError as exc:
+        return {"error": f"Invalid arguments for {name}: {exc}"}
 
 
 def _iter_tools():
