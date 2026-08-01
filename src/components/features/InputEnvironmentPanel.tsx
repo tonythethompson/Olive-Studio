@@ -1657,16 +1657,16 @@ export function InputEnvironmentPanel({
                             <option value="text-classification">Text Classification</option>
                             <option value="fill-mask">Fill Mask</option>
                             <option value="text2text-generation">Text2Text Generation</option>
-                            <option value="speech-recognition">Speech Recognition</option>
+                            <option value="automatic-speech-recognition">Automatic Speech Recognition</option>
                             <option value="image-classification">Image Classification</option>
                             <option value="object-detection">Object Detection</option>
                             <option value="sentence-similarity">Sentence Similarity</option>
                             <option value="conversational">Conversational</option>
                           </Select>
                           <p className="text-[10px] text-slate-500 leading-relaxed">
-                            Written into Olive <code className="font-mono text-slate-400">input_model</code>{" "}
-                            task / hf_config.task. Embedding models (GTE, BGE, E5) should use Feature
-                            Extraction.
+                            Written into Olive{" "}
+                            <code className="font-mono text-slate-400">input_model.config.task</code>.
+                            Embedding models (GTE, BGE, E5) should use Feature Extraction.
                           </p>
                         </div>
                         <div className="grid gap-3">

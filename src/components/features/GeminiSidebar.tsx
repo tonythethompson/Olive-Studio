@@ -71,9 +71,15 @@ export function GeminiSidebar({
   const handleApplyChatAction = (messageIndex: number, action: ChatAction) => {
     const patch = sanitizeChatActionPatch(action.patch);
     if (!patch) return;
-    setState(chatPatchToUiState(state, patch));
+    const partial = chatPatchToUiState(state, patch);
+    const next: UIState = {
+      ...state,
+      ...partial,
+      passes: partial.passes ?? state.passes,
+    };
+    setState(partial);
     chat.markActionApplied(messageIndex, action.id);
-    setTimeout(() => void audit.runAnalysis(), 400);
+    setTimeout(() => void audit.runAnalysis({ stateOverride: next }), 400);
   };
 
   const providers = useAiProviderSettings({

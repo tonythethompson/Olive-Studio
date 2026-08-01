@@ -145,7 +145,7 @@ export function selectOliveMcpToolsForChat(
   workspace?: AiWorkspaceContext | null,
 ): McpToolRequest[] {
   const requests: McpToolRequest[] = [
-    { toolName: "search_olive_documentation", args: { query: message.slice(0, 500), top_k: 6, live: true } },
+    { toolName: "search_olive_documentation", args: { query: message.slice(0, 500), top_k: 6, live: false } },
   ];
 
   if (looksLikeError(message) || looksLikeStudioIssue(message)) {
