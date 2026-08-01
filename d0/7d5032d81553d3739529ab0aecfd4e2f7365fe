@@ -1,0 +1,99 @@
+src/components/features/InputEnvironmentPanel.tsx
+  s_ef617d0cda07e0::t_400e9001383de6 988
+  s_ef617d0cda07e0::t_cf07727192e9ef 432,435,439,442-452
+  s_ef617d0cda07e0::t_f2001a495dc2b7 1293-1296
+  s_ef617d0cda07e0::t_28da8560b94ae1 741
+  s_ef617d0cda07e0::t_c1dd0121a563ff 496,506-509
+  s_ef617d0cda07e0::t_dffd449579a4ca 643,645-654
+  s_ef617d0cda07e0::t_7798962f394853 747-751
+  s_ef617d0cda07e0::t_8e6e205b4b3b3e 1962-1964,1968-1974,1976,1981-1984,1986-1988,1991,2007
+  s_ef617d0cda07e0::t_d1bd957f209fa7 1977
+  s_ef617d0cda07e0::t_97fd47104c13e8 1121-1126,1142-1145
+  s_ef617d0cda07e0::t_7154cffb7fc695 1367-1370,1377-1379,1381
+  s_ef617d0cda07e0::t_40facde54e67a5 909-912
+src/components/features/IHVIntegrationPanel.tsx
+  s_134a6f3a2fb187::t_5aeec972b48fc7 1809-1817
+  s_134a6f3a2fb187::t_c935c7a608c2ee 1316,1320
+  s_134a6f3a2fb187::t_2ce5b265afb555 1747
+  s_ef617d0cda07e0::t_0836289013368e 1385
+  s_134a6f3a2fb187::t_d72be9e21da368 1157-1172
+  s_134a6f3a2fb187::t_f8908674184ee7 279-443,445-450,452-460,462-835
+  s_134a6f3a2fb187::t_ac406568580aff 54
+  s_ef617d0cda07e0::t_e1ff9844bc9056 1386
+  s_134a6f3a2fb187::t_85b0badd8c405d 1759-1771
+  s_134a6f3a2fb187::t_2d3edf4c66f0e3 36
+  s_134a6f3a2fb187::t_9c6a51405364ca 1199
+src/components/features/EnterpriseInfraPanel.tsx
+  s_ef617d0cda07e0::t_33e2e0e79b96f7 61,68
+src/components/features/GeminiSidebar.test.tsx
+  s_ef617d0cda07e0::t_63b35fb4a963ed 98,101,104,120,123
+  s_ef617d0cda07e0::t_d55359855c8878 95-97,99-100,102-103,105-119,121-122,124-128
+src/components/features/recipe-graph/inspectors/ProviderInspector.tsx
+  s_ef617d0cda07e0::t_ae0c34a5279693 73-74
+  s_ef617d0cda07e0::t_0e02af5788ed19 13
+  s_ef617d0cda07e0::t_672245d6d960df 76-80
+src/components/features/ExecutionWorkspace.tsx
+  s_ef617d0cda07e0::t_26773b2995574a 1125,1137
+  s_ef617d0cda07e0::t_9561bb6eb81b48 372-378
+  s_ef617d0cda07e0::t_c73a5b85f969e7 48
+src/lib/__tests__/pipelineNavigation.test.ts
+  s_ef617d0cda07e0::t_4e5d516b33e682 1
+  s_ef617d0cda07e0::t_a80c567330a188 2-68
+src/components/features/recipe-graph/inspectors/InputInspector.tsx
+  s_ef617d0cda07e0::t_e0f66378e64846 6,35-36
+  s_ef617d0cda07e0::t_8f9bd6e9a1fa2f 38-42
+src/components/features/gemini/LocalAiSetupCard.tsx
+  s_ef617d0cda07e0::t_c2b2af317ed40f 204-245,251,269,271,274,276-278,286,291,298
+src/components/features/recipe-graph/GraphCanvas.tsx
+  s_d08599fa5fd71a::t_a7c56e7415a493 4-15
+  s_d08599fa5fd71a::t_9db00f56bec4e2 176-184,186-187,191-202
+  s_d08599fa5fd71a::t_b2629b1bc0a10f 236,240,245,247,249,253
+src/lib/pipelineNavigation.ts
+  s_ef617d0cda07e0::t_b9c76ee48ed528 6-13,41-61,64
+src/lib/__tests__/owrExportConfigs.test.ts
+  s_ef617d0cda07e0::t_63cbd97528a54d 23
+  s_ef617d0cda07e0::t_f20a8c482fff4a 1,3-22,24-49
+src/App.tsx
+  s_ef617d0cda07e0::t_eabc32543443d0 16,19-20,22
+  s_ef617d0cda07e0::t_0e4d8bc3d85e8c 176-180
+  s_ef617d0cda07e0::t_f82875ce4923b7 133-141
+  s_ef617d0cda07e0::t_c34c8d80fa45e6 17
+  s_ef617d0cda07e0::t_aaf16178ad29bf 98-102
+  s_ef617d0cda07e0::t_1ffa2d0be8d698 81,105-110,112-123,171,183,187,193
+src/components/features/gemini/ManualProviderSetup.tsx
+  s_ef617d0cda07e0::t_3c6cac8bfb0cfa 85-86,118-133
+src/lib/owrExportConfigs.ts
+  s_ef617d0cda07e0::t_1fd1cf3eb31413 1-31,33-221
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d07d5032d81553d3739529ab0aecfd4e2f7365fe",
+  "prompts": {},
+  "sessions": {
+    "s_134a6f3a2fb187": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7b84fbfe-60e2-4b3f-a65c-cfc8b3e2a42f",
+        "model": "composer-2.5-fast"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    },
+    "s_d08599fa5fd71a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "df58616c-4176-4a44-8697-efdd627d976d",
+        "model": "composer-2.5-fast"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    },
+    "s_ef617d0cda07e0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e530e917-b3ef-4f10-ab62-892512a908b2",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
