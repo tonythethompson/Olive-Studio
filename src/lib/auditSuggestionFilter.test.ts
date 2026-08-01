@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
+import type { AuditAnalysis, AuditSuggestion } from "./auditAnalysis.ts";
 import {
   filterAuditAnalysis,
   isAuditSuggestionRelevant,
   modelLooksLikeAsr,
   modelLooksLikeLlm,
+  type AuditFilterContext,
 } from "./auditSuggestionFilter.ts";
-import type { AuditAnalysis, AuditSuggestion } from "./auditAnalysis.ts";
-import type { AuditFilterContext } from "./auditSuggestionFilter.ts";
 
 const llamaNvCtx: AuditFilterContext = {
   model: {

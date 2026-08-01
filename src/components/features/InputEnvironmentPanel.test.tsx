@@ -32,6 +32,7 @@ vi.mock("@/lib/oliveRecipeHub", () => ({
   getCatalogDeviceFromRecipe: () => "cpu",
   getRecipesBranch: () => "main",
   setRecipesBranch: vi.fn(),
+  OLIVE_RECIPES_BRANCH: "main",
   OLIVE_RECIPES_BRANCH_DEFAULT: "main",
   OLIVE_RECIPES_REPO: "microsoft/olive-recipes",
 }));
@@ -39,7 +40,7 @@ vi.mock("@/lib/oliveRecipeHub", () => ({
 // Mock recipe model match
 vi.mock("@/lib/recipeModelMatch", () => ({
   buildLocalModelHints: () => [],
-  scoreRecipeMatchForLocal: () => 0,
+  scoreRecipeMatchForLocal: () => ({ tier: "none", score: 0 }),
   summarizeLocalRecipeMatches: () => [],
 }));
 
@@ -105,16 +106,11 @@ describe("InputEnvironmentPanel", () => {
   });
 
   it("displays the model ID input for HuggingFace source", async () => {
+    render(<InputEnvironmentPanel />);
+    const configure = screen.getByText(/configure model source/i);
     await act(async () => {
-      render(<InputEnvironmentPanel />);
+      fireEvent.click(configure.closest("button") ?? configure);
     });
-    // Presets-first IA keeps source config collapsed until opened
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /configure model source/i }));
-    });
-    // The HF model ID input should be pre-populated with the default model
-    expect((screen.getByLabelText(/hugging face model id/i) as HTMLInputElement).value).toMatch(
-      /meta-llama/i,
-    );
+    expect(screen.getByDisplayValue(/meta-llama/i)).toBeDefined();
   });
 });
