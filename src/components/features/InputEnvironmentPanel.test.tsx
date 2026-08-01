@@ -2,11 +2,18 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, act, fireEvent } from "@testing-library/react";
 import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
 
-// Mock the pipeline store
-const mockSetState = vi.fn();
+// Stable store mock: creating a fresh UIState each render churns effect deps
+// (e.g. state.localFiles) and can leave act()/findBy hanging.
+const { mockSetState, mockPipelineState } = vi.hoisted(() => {
+  const mockSetState = vi.fn();
+  // Inline defaults mirror createMockUIState(); resolved after imports via Object.assign below.
+  const mockPipelineState = {} as ReturnType<typeof createMockUIState>;
+  return { mockSetState, mockPipelineState };
+});
+
 vi.mock("@/lib/stores/pipelineStore", () => ({
   usePipelineState: () => ({
-    state: createMockUIState(),
+    state: mockPipelineState,
     setState: mockSetState,
   }),
 }));
@@ -77,6 +84,8 @@ vi.mock("@/lib/presetVramEstimate", () => ({
 
 import { InputEnvironmentPanel } from "./InputEnvironmentPanel";
 
+Object.assign(mockPipelineState, createMockUIState());
+
 describe("InputEnvironmentPanel", () => {
   useFetchRoutesMock({
     "hardware-probe": {
@@ -106,11 +115,18 @@ describe("InputEnvironmentPanel", () => {
   });
 
   it("displays the model ID input for HuggingFace source", async () => {
-    render(<InputEnvironmentPanel />);
-    const configureButton = screen.getByRole("button", { name: /configure model source/i });
+    // Avoid await act(click) / findBy: expanding this panel leaves async updates
+    // unsettled, so act-based waits hang past the default timeout in CI.
+    const { container } = render(<InputEnvironmentPanel />);
     await act(async () => {
-      fireEvent.click(configureButton);
+      await Promise.resolve();
     });
-    expect(screen.getByDisplayValue(/meta-llama/i)).toBeDefined();
+    const configureLabel = screen.getByText(/configure model source/i);
+    act(() => {
+      fireEvent.click(configureLabel.closest("button") ?? configureLabel);
+    });
+    const input = container.querySelector("#modelId") as HTMLInputElement | null;
+    expect(input).toBeTruthy();
+    expect(input?.value).toMatch(/meta-llama/i);
   });
 });
