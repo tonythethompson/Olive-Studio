@@ -87,12 +87,19 @@ describe("AI provider security", () => {
     });
 
     it("allows loopback http for openai-compat (Ollama / LM Studio)", () => {
-      expect(sanitizeProviderBaseUrl("openai-compat", "http://127.0.0.1:11434/v1")).toBe(
-        "http://127.0.0.1:11434/v1",
-      );
-      expect(sanitizeProviderBaseUrl("openai-compat", "http://localhost:1234/v1")).toBe(
-        "http://localhost:1234/v1",
-      );
+      const prev = process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
+      process.env.OLIVE_ALLOW_LOOPBACK_HTTP = "1";
+      try {
+        expect(sanitizeProviderBaseUrl("openai-compat", "http://127.0.0.1:11434/v1")).toBe(
+          "http://127.0.0.1:11434/v1",
+        );
+        expect(sanitizeProviderBaseUrl("openai-compat", "http://localhost:1234/v1")).toBe(
+          "http://localhost:1234/v1",
+        );
+      } finally {
+        if (prev === undefined) delete process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
+        else process.env.OLIVE_ALLOW_LOOPBACK_HTTP = prev;
+      }
     });
 
     it("still rejects LAN http and non-loopback for openai-compat", () => {

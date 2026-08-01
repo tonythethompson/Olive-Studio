@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import type { ChatAction } from "@/lib/chatActions";
-import { sanitizeChatActionPatch } from "@/lib/chatActions";
+import { sanitizeChatActionPatch, type ChatAction } from "@/lib/chatActions";
 
 export interface ChatMessage {
   sender: "user" | "assistant";
