@@ -1,7 +1,18 @@
 import { useLayoutEffect, useRef, type KeyboardEvent, type ReactElement } from "react";
 import { getPipelineValidation } from "@/lib/pipelineValidation";
 import { UIState } from "@/types";
-import { buildPipelineSteps, buildSegmentCurve, type GraphPoint } from "./graphLayout";
+import { buildPipelineSteps, type GraphPoint } from "./graphLayout";
+import {
+  buildConnectionSegmentPath,
+  getPassNodeButtonClass,
+  getPassNodeIconClass,
+  getPassNodeIssueDotClass,
+  getPassNodeStatusBadgeClass,
+  getPassNodeStatusLabel,
+  getPassNodeTitleClass,
+  renderBypassLanePath,
+  renderConnectionSegmentGroup,
+} from "./graphCanvasHelpers";
 import { getNodePreviewData } from "./nodePreview";
 
 /** Left-to-right / reading order for arrow-key graph navigation. */
@@ -162,90 +173,33 @@ export function GraphCanvas({
       const tStartBefore = Math.max(0, tStart - 0.001);
       const tEndAfter = Math.min(1, tEnd + 0.001);
 
-      let d: string;
+      const segment = buildConnectionSegmentPath({
+        fromNodeId: fromNode.id,
+        toNodeId: toNode.id,
+        hasSkip,
+        parentRect,
+        arcYTop,
+        getConnectionPoints,
+      });
+      if (!segment) continue;
 
-      if (hasSkip) {
-        const points = getConnectionPoints(fromNode.id, toNode.id);
-        const dx = points ? points.to.x - points.from.x : 0;
-        const dy = points ? points.to.y - points.from.y : 0;
-        // Skipped passes in pipeline order, but nodes stack vertically (e.g. conversion → quant):
-        // draw a direct down connector instead of arcing over the whole graph.
-        const useDirectVertical = points && Math.abs(dy) > Math.abs(dx);
-
-        if (useDirectVertical) {
-          d = buildSegmentCurve(points.from, points.to);
-        } else {
-          const fromElem = document.getElementById(`node-btn-${fromNode.id}`);
-          const toElem = document.getElementById(`node-btn-${toNode.id}`);
-          if (!fromElem || !toElem) continue;
-
-          const fromR = fromElem.getBoundingClientRect();
-          const toR = toElem.getBoundingClientRect();
-          const fromX = fromR.left - parentRect.left + fromR.width / 2;
-          const fromY = fromR.top - parentRect.top;
-          const toX = toR.left - parentRect.left + toR.width / 2;
-          const toY = toR.top - parentRect.top;
-          const arcY = arcYTop;
-
-          d = `M ${fromX} ${fromY} C ${fromX} ${arcY}, ${toX} ${arcY}, ${toX} ${toY}`;
-
-          paths.push(
-            <path
-              key={`bypass-lane-${fromNode.id}-${toNode.id}`}
-              d={d}
-              fill="none"
-              stroke="rgba(100, 116, 139, 0.08)"
-              strokeWidth="8"
-              className="transition-all duration-300"
-            />,
-          );
-        }
-      } else {
-        const points = getConnectionPoints(fromNode.id, toNode.id);
-        if (!points) continue;
-        d = buildSegmentCurve(points.from, points.to);
+      if (segment.bypassLane) {
+        paths.push(renderBypassLanePath(segment.bypassLane.key, segment.bypassLane.d));
       }
 
       paths.push(
-        <g key={`${fromNode.id}-${toNode.id}`}>
-          <path
-            d={d}
-            fill="none"
-            stroke={hasSkip ? "rgba(141, 168, 64, 0.08)" : "rgba(141, 168, 64, 0.12)"}
-            strokeWidth={hasSkip ? 5 : 6}
-            className="transition-all duration-300"
-          />
-          <path
-            d={d}
-            fill="none"
-            stroke="url(#wireGradient)"
-            strokeWidth={hasSkip ? 1.5 : 2}
-            strokeDasharray="6 6"
-            strokeOpacity={hasSkip ? 0.6 : 1}
-            className="transition-all duration-300"
-          >
-            <animate attributeName="stroke-dashoffset" from="12" to="0" dur="0.7s" repeatCount="indefinite" />
-          </path>
-          {showDot && (
-            <circle r={3.5} fill="#8DA840" opacity="0">
-              <animateMotion
-                dur={`${totalDur}s`}
-                repeatCount="indefinite"
-                path={d}
-                calcMode="linear"
-                keyPoints="0;0;1;1"
-                keyTimes={`0;${tStart};${tEnd};1`}
-              />
-              <animate
-                attributeName="opacity"
-                dur={`${totalDur}s`}
-                repeatCount="indefinite"
-                values="0;0;1;1;0;0"
-                keyTimes={`0;${tStartBefore};${tStart};${tEnd};${tEndAfter};1`}
-              />
-            </circle>
-          )}
-        </g>,
+        renderConnectionSegmentGroup({
+          fromNodeId: fromNode.id,
+          toNodeId: toNode.id,
+          d: segment.d,
+          hasSkip,
+          showDot,
+          totalDur,
+          tStart,
+          tEnd,
+          tStartBefore,
+          tEndAfter,
+        }),
       );
     }
 
@@ -279,66 +233,24 @@ export function GraphCanvas({
         tabIndex={isSelected ? 0 : -1}
         onClick={() => focusNode(id)}
         onKeyDown={(event) => handleNodeKeyDown(event, id)}
-        className={`group text-left p-2.5 rounded-lg border transition-all duration-300 relative flex flex-col justify-between focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
-          isSelected
-            ? issueLevel === "critical"
-              ? "border-rose-500 bg-rose-950/20 ring-1 ring-rose-500"
-              : issueLevel === "warning"
-                ? "border-amber-500 bg-amber-950/10 ring-1 ring-amber-500"
-                : "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue"
-            : issueLevel === "critical"
-              ? "border-rose-700/60 bg-rose-950/10 hover:border-rose-600"
-              : issueLevel === "warning"
-                ? "border-amber-700/50 bg-amber-950/5 hover:border-amber-600"
-                : active
-                  ? "border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/60"
-                  : "border-dashed border-slate-400/70 bg-slate-900/35 hover:border-slate-300 hover:bg-slate-900/55"
-        }`}
+        className={getPassNodeButtonClass(isSelected, issueLevel, active)}
       >
         {issueLevel && (
           <span
-            className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${issueLevel === "critical" ? "bg-rose-500" : "bg-amber-400"}`}
+            className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${getPassNodeIssueDotClass(issueLevel)}`}
           />
         )}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <div
-              className={`p-1 rounded ${
-                issueLevel === "critical"
-                  ? "bg-rose-950/40 border border-rose-700/40 text-rose-400"
-                  : issueLevel === "warning"
-                    ? "bg-amber-950/30 border border-amber-700/30 text-amber-400"
-                    : active
-                      ? "bg-electric-blue/10 border border-electric-blue/20 text-electric-blue"
-                      : "bg-slate-900 border border-dashed border-slate-400 text-slate-300"
-              }`}
-            >
-              {nd.icon}
-            </div>
+            <div className={`p-1 rounded ${getPassNodeIconClass(issueLevel, active)}`}>{nd.icon}</div>
             <span
-              className={`text-[10px] font-mono px-1.5 py-0.5 rounded border uppercase whitespace-nowrap tracking-wide ${
-                issueLevel === "critical"
-                  ? "bg-rose-950/40 text-rose-400 border-rose-700/40"
-                  : issueLevel === "warning"
-                    ? "bg-amber-950/30 text-amber-400 border-amber-700/30"
-                    : active
-                      ? "bg-slate-950 text-electric-blue border-electric-blue/20"
-                      : "bg-slate-950 text-slate-200 border-slate-400 border-dashed"
-              }`}
+              className={`text-[10px] font-mono px-1.5 py-0.5 rounded border uppercase whitespace-nowrap tracking-wide ${getPassNodeStatusBadgeClass(issueLevel, active)}`}
             >
-              {issueLevel === "critical"
-                ? "Conflict"
-                : issueLevel === "warning"
-                  ? "Warning"
-                  : active
-                    ? "Active"
-                    : "Off"}
+              {getPassNodeStatusLabel(issueLevel, active)}
             </span>
           </div>
           <h4
-            className={`text-xs font-bold truncate leading-snug ${
-              active || issueLevel ? "text-slate-100" : "text-slate-300"
-            }`}
+            className={`text-xs font-bold truncate leading-snug ${getPassNodeTitleClass(issueLevel, active)}`}
           >
             {nd.title}
           </h4>

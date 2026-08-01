@@ -82,6 +82,8 @@ function ModelInput({ providers }: ProvidersProp) {
   if (isCompatMode && settingsProvider === "openai-compat") {
     return (
       <input
+        id="gemini-settings-model"
+        aria-label="Custom model name"
         placeholder="Model name (e.g. llama3.1:8b, deepseek-r1)"
         value={customModel}
         onChange={(e) => providers.setCustomModel(e.target.value)}
@@ -113,15 +115,22 @@ function ModelInput({ providers }: ProvidersProp) {
             </option>
           ))}
         </select>
-        <input
-          placeholder="Or type a model id…"
-          value={customModel}
-          onChange={(e) => {
-            providers.setCustomModel(e.target.value);
-            providers.setSettingsModel(e.target.value);
-          }}
-          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
-        />
+        <div>
+          <label htmlFor="gemini-settings-custom-model" className="sr-only">
+            Custom model id
+          </label>
+          <input
+            id="gemini-settings-custom-model"
+            aria-label="Custom model id"
+            placeholder="Or type a model id…"
+            value={customModel}
+            onChange={(e) => {
+              providers.setCustomModel(e.target.value);
+              providers.setSettingsModel(e.target.value);
+            }}
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+          />
+        </div>
       </div>
     );
   }

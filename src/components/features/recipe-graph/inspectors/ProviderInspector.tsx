@@ -10,6 +10,7 @@ import { prepareProviderChange } from "@/lib/pipelineValidation";
 import {
   isPipelineOliveRunning,
   navigatePipeline,
+  PIPELINE_NAV_BLOCKED_MESSAGE,
   subscribePipelineOliveRunning,
 } from "@/lib/pipelineNavigation";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
@@ -69,10 +70,14 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
         </p>
         <button
           type="button"
-          disabled={navBlocked}
-          title={navBlocked ? "Unavailable while an Olive run is in progress" : undefined}
+          aria-disabled={navBlocked}
+          title={navBlocked ? PIPELINE_NAV_BLOCKED_MESSAGE : undefined}
           onClick={() => navigatePipeline("ihv")}
-          className="mt-2 text-[10px] text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:no-underline"
+          className={
+            navBlocked
+              ? "mt-2 text-[10px] text-electric-blue opacity-40 cursor-not-allowed"
+              : "mt-2 text-[10px] text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer"
+          }
         >
           Full hardware options in step 02
         </button>

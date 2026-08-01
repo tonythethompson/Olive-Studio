@@ -3,6 +3,7 @@ import { Database } from "lucide-react";
 import {
   isPipelineOliveRunning,
   navigatePipeline,
+  PIPELINE_NAV_BLOCKED_MESSAGE,
   subscribePipelineOliveRunning,
 } from "@/lib/pipelineNavigation";
 import { getModelSourceSummary } from "../nodePreview";
@@ -31,10 +32,14 @@ export function InputInspector({ state }: InspectorProps) {
         </p>
         <button
           type="button"
-          disabled={navBlocked}
-          title={navBlocked ? "Unavailable while an Olive run is in progress" : undefined}
+          aria-disabled={navBlocked}
+          title={navBlocked ? PIPELINE_NAV_BLOCKED_MESSAGE : undefined}
           onClick={() => navigatePipeline("input")}
-          className="mt-2 text-[10px] text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:no-underline"
+          className={
+            navBlocked
+              ? "mt-2 text-[10px] text-electric-blue opacity-40 cursor-not-allowed"
+              : "mt-2 text-[10px] text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer"
+          }
         >
           Edit model source in step 01
         </button>

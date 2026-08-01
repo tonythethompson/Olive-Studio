@@ -92,4 +92,38 @@ describe("GeminiSidebar", () => {
     const sidebar = container!.querySelector("[aria-hidden='true']");
     expect(sidebar).not.toBeNull();
   });
+
+  it("compact sidebar: scrim dismiss, inert/aria-hidden, responsive classes, Escape", async () => {
+    const onClose = vi.fn();
+    let view: ReturnType<typeof render> | undefined;
+
+    await act(async () => {
+      view = render(<GeminiSidebar isOpen={true} onClose={onClose} />);
+    });
+
+    const openAside = view!.container.querySelector("#assistant-panel");
+    expect(openAside).not.toBeNull();
+    expect(openAside!.getAttribute("aria-hidden")).toBe("false");
+    expect(openAside!.hasAttribute("inert")).toBe(false);
+    expect(openAside!.className).toMatch(/max-wide:fixed/);
+    expect(openAside!.className).toMatch(/wide:w-\[420px\]/);
+
+    const scrim = screen.getByRole("button", { name: /dismiss assistant/i });
+    expect(scrim.className).toMatch(/wide:hidden/);
+    fireEvent.click(scrim);
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      view!.rerender(<GeminiSidebar isOpen={false} onClose={onClose} />);
+    });
+
+    const closedAside = view!.container.querySelector("#assistant-panel");
+    expect(closedAside).not.toBeNull();
+    expect(closedAside!.getAttribute("aria-hidden")).toBe("true");
+    expect(closedAside!.hasAttribute("inert")).toBe(true);
+    expect(screen.queryByRole("button", { name: /dismiss assistant/i })).toBeNull();
+  });
 });

@@ -429,17 +429,27 @@ export function InputEnvironmentPanel({
   }).slice(0, 40);
 
   // Helper to get hash from reconstructed history (or a placeholder for local files)
-  const getDisplayHash = (name: string) => {
+  const getDisplayHash = (name: string): { value: string; verified: boolean } => {
     // Check reconstructed history for real hash
     const recon = reconstructedHistory.find((r) => r.baseName === name);
-    if (recon) return recon.finalHash;
+    if (recon) return { value: recon.finalHash, verified: true };
     // Check chunk hashes within reconstructed history
     for (const r of reconstructedHistory) {
       const chunk = r.chunks.find((c) => c.name === name);
-      if (chunk) return chunk.hash;
+      if (chunk) return { value: chunk.hash, verified: true };
     }
     // For non-reconstructed local files, return a placeholder indicating no hash computed
-    return `sha256:(not yet computed — reconstruct to get real hash)`;
+    return {
+      value: "unverified:(not yet computed — reconstruct to get real hash)",
+      verified: false,
+    };
+  };
+
+  const formatSha256 = async (buffer: ArrayBuffer): Promise<string> => {
+    const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    return `sha256:${hashHex}`;
   };
 
   const getFileFormatLabel = (name: string) => {
@@ -483,7 +493,7 @@ export function InputEnvironmentPanel({
     return "Standard model compilation asset. Subject to parsing, quantization, and layer alignment workflows.";
   };
 
-  const getSimulatedTensors = (name: string, size: number) => {
+  const getSimulatedTensors = (name: string, size: number, checksumVerified = false) => {
     const isChunk = name.match(/\.(\d{3,})$/) !== null;
     if (isChunk) {
       return [
@@ -493,7 +503,10 @@ export function InputEnvironmentPanel({
           key: "memory_footprint",
           val: `${(size / (1024 * 1024)).toFixed(1)} MB`,
         },
-        { key: "segment_checksum", val: "Verified Integrity" },
+        {
+          key: "segment_checksum",
+          val: checksumVerified ? "Verified Integrity" : "Unverified",
+        },
       ];
     }
     if (name.endsWith(".json")) {
@@ -627,19 +640,18 @@ export function InputEnvironmentPanel({
       setDownloadUrl(url);
       setDownloadName(baseName);
 
-      // Compute real SHA-256 hash using Web Crypto API
+      // Compute real SHA-256 hashes for the assembled blob and each chunk
       const combined = await blob.arrayBuffer();
-      const hashBuffer = await crypto.subtle.digest("SHA-256", combined);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-      const finalHash = `sha256:${hashHex}`;
+      const finalHash = await formatSha256(combined);
 
-      // Build chunk metadata with real sizes
-      const generatedChunks = sortedFiles.map((file) => ({
-        name: file.name,
-        size: file.size,
-        hash: `sha256:chunk-${file.name}`,
-      }));
+      // Build chunk metadata with real per-chunk digests (never synthetic filenames)
+      const generatedChunks = await Promise.all(
+        sortedFiles.map(async (file, index) => ({
+          name: file.name,
+          size: file.size,
+          hash: await formatSha256(buffers[index]!),
+        })),
+      );
 
       setReconstructedHistory((prev) => [
         ...prev,
@@ -726,12 +738,17 @@ export function InputEnvironmentPanel({
   };
 
   const selectedFileDetailed = getFileDetailedInfo(activeFileSelectedName);
+  const selectedFileHash = selectedFileDetailed ? getDisplayHash(selectedFileDetailed.name) : null;
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 animate-duration-300">
       {/* SUCCESS TOAST BANNER */}
       {recipeSuccessMsg && (
-        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-4 rounded-xl flex items-start gap-3 animate-in slide-in-from-top-4 duration-300">
+        <div
+          role="status"
+          aria-live="polite"
+          className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-4 rounded-xl flex items-start gap-3 animate-in slide-in-from-top-4 duration-300"
+        >
           <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
           <div className="text-xs sm:text-sm font-medium">{recipeSuccessMsg}</div>
         </div>
@@ -889,7 +906,10 @@ export function InputEnvironmentPanel({
                       </div>
 
                       {syncStatus === "error" && syncError && (
-                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs flex items-start gap-2">
+                        <div
+                          role="alert"
+                          className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs flex items-start gap-2"
+                        >
                           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                           <span>{syncError}</span>
                         </div>
@@ -965,6 +985,7 @@ export function InputEnvironmentPanel({
                           {recipeSearch && (
                             <button
                               type="button"
+                              aria-label="Clear recipe search"
                               onClick={() => setRecipeSearch("")}
                               className="absolute right-3 top-2.5 text-slate-500 hover:text-white cursor-pointer"
                             >
@@ -1097,6 +1118,12 @@ export function InputEnvironmentPanel({
                                           variant="outline"
                                           className="h-7 px-2 text-[10px] border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
                                           disabled={applyingRecipePath === item.repoPath}
+                                          aria-busy={applyingRecipePath === item.repoPath}
+                                          aria-label={
+                                            applyingRecipePath === item.repoPath
+                                              ? "Applying recipe"
+                                              : "Apply anyway"
+                                          }
                                           onClick={() => handleApplyCuratedRecipeAnyway(item)}
                                         >
                                           {applyingRecipePath === item.repoPath ? (
@@ -1112,6 +1139,10 @@ export function InputEnvironmentPanel({
                                           type="button"
                                           className="h-7 px-2.5 text-[10px] bg-electric-blue hover:bg-electric-blue-dark text-slate-950"
                                           disabled={applyingRecipePath === item.repoPath}
+                                          aria-busy={applyingRecipePath === item.repoPath}
+                                          aria-label={
+                                            applyingRecipePath === item.repoPath ? "Applying recipe" : "Apply"
+                                          }
                                           onClick={() => handleApplyCuratedRecipe(item)}
                                         >
                                           {applyingRecipePath === item.repoPath ? (
@@ -1259,7 +1290,10 @@ export function InputEnvironmentPanel({
                         </Button>
 
                         {syncStatus === "error" && (
-                          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs flex items-start gap-2">
+                          <div
+                            role="alert"
+                            className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs flex items-start gap-2"
+                          >
                             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                             <span>{syncError}</span>
                           </div>
@@ -1330,14 +1364,21 @@ export function InputEnvironmentPanel({
                     >
                       <div className="flex flex-col gap-3">
                         {importError && (
-                          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs font-mono leading-relaxed flex items-start gap-1.5 animate-bounce">
+                          <div
+                            role="alert"
+                            className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs font-mono leading-relaxed flex items-start gap-1.5 animate-bounce"
+                          >
                             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                             <span>{importError}</span>
                           </div>
                         )}
 
                         <div className="relative flex flex-col min-h-[180px]">
+                          <label htmlFor="recipe-json-editor" className="sr-only">
+                            Olive recipe JSON
+                          </label>
                           <textarea
+                            id="recipe-json-editor"
                             className="w-full flex-1 bg-slate-950 border border-slate-900 hover:border-slate-800 focus:border-electric-blue rounded-lg p-3 font-mono text-[11px] text-slate-300 focus-visible:outline-none focus:focus-visible:ring-1 focus-visible:ring-electric-blue/40 placeholder:text-slate-700 resize-none h-[180px]"
                             placeholder={`{\n  "input_model": {\n    "type": "PyTorchModel",\n    "config": {\n      "hf_config": {\n        "model_name": "meta-llama/Meta-Llama-3-8B"\n      }\n    }\n  },\n  "passes": {\n    "conversion": { "type": "OnnxConversion" }\n  }\n}`}
                             value={importJson}
@@ -1918,23 +1959,36 @@ export function InputEnvironmentPanel({
                                         </div>
                                         <div>
                                           <span className="text-[10px] font-mono text-slate-500 uppercase block leading-none mb-1">
-                                            Verification Checksum
+                                            {selectedFileHash?.verified
+                                              ? "Verification Checksum"
+                                              : "Checksum (unverified)"}
                                           </span>
                                           <div className="flex items-center gap-1.5 mt-0.5">
                                             <span
-                                              className="text-[11px] font-semibold font-mono text-emerald-400 bg-emerald-500/5 px-1.5 py-0.5 border border-emerald-500/10 rounded truncate max-w-[170px]"
-                                              title={getDisplayHash(selectedFileDetailed.name)}
+                                              className={cn(
+                                                "text-[11px] font-semibold font-mono px-1.5 py-0.5 border rounded truncate max-w-[170px]",
+                                                selectedFileHash?.verified
+                                                  ? "text-emerald-400 bg-emerald-500/5 border-emerald-500/10"
+                                                  : "text-amber-400 bg-amber-500/5 border-amber-500/10",
+                                              )}
+                                              title={selectedFileHash?.value}
                                             >
-                                              {getDisplayHash(selectedFileDetailed.name).substring(0, 24)}...
+                                              {(selectedFileHash?.value ?? "").substring(0, 24)}
+                                              {(selectedFileHash?.value ?? "").length > 24 ? "..." : ""}
                                             </span>
                                             <button
                                               type="button"
-                                              onClick={() =>
-                                                handleCopyHash(getDisplayHash(selectedFileDetailed.name))
+                                              aria-label={
+                                                copiedHash === selectedFileHash?.value
+                                                  ? "Checksum copied"
+                                                  : "Copy checksum"
                                               }
+                                              onClick={() => {
+                                                if (selectedFileHash) handleCopyHash(selectedFileHash.value);
+                                              }}
                                               className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-900 transition-colors cursor-pointer"
                                             >
-                                              {copiedHash === getDisplayHash(selectedFileDetailed.name) ? (
+                                              {copiedHash === selectedFileHash?.value ? (
                                                 <Check className="h-3.5 w-3.5 text-emerald-400" />
                                               ) : (
                                                 <Copy className="h-3.5 w-3.5" />
@@ -1950,6 +2004,7 @@ export function InputEnvironmentPanel({
                                             {getSimulatedTensors(
                                               selectedFileDetailed.name,
                                               selectedFileDetailed.size,
+                                              selectedFileHash?.verified ?? false,
                                             ).map((item, i) => (
                                               <div
                                                 key={i}

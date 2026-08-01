@@ -33,7 +33,7 @@ import {
   isProviderDetectedLocally,
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
-import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
+import { PROVIDER_CATALOG, type ProviderCatalogEntry } from "@/lib/providerCatalog";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import {
   Settings2,
@@ -51,6 +51,7 @@ import {
   RefreshCw,
   HardDrive,
   XCircle,
+  type LucideIcon,
 } from "lucide-react";
 
 export { getProviderConflicts };
@@ -273,6 +274,563 @@ export function getCellCompatibility(
     vram,
     efficiency,
   };
+}
+
+type CellCompatibility = ReturnType<typeof getCellCompatibility>;
+
+const CATEGORY_BADGE_CLASSES: Record<OptimizationPassValidation["category"], string> = {
+  Conversion: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  Quantization: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  Compression: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+  PEFT: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+};
+
+function getCategoryBadgeClasses(category: OptimizationPassValidation["category"]) {
+  return CATEGORY_BADGE_CLASSES[category];
+}
+
+const PROVIDER_CARD_BASE_CLASSES =
+  "relative flex flex-col rounded-xl border p-4.5 transition-all duration-200 cursor-pointer ";
+
+type ProviderCardStyleInput = {
+  isSelected: boolean;
+  cardBlocked: boolean;
+  cardHardwareBlocked: boolean;
+  cardHasWarning: boolean;
+  cardHasCritical: boolean;
+  detectedLocally: boolean;
+  probeLoading: boolean;
+  providerId: IHVProvider;
+  trtRtxNeedsInstall: boolean;
+};
+
+type ProviderCardStyle = {
+  cardClasses: string;
+  badgeText: string;
+  BadgeIcon: LucideIcon | null;
+  badgeColor: string;
+};
+
+function getProviderCardStyle(input: ProviderCardStyleInput): ProviderCardStyle {
+  const {
+    isSelected,
+    cardBlocked,
+    cardHardwareBlocked,
+    cardHasWarning,
+    cardHasCritical,
+    detectedLocally,
+    probeLoading,
+    providerId,
+    trtRtxNeedsInstall,
+  } = input;
+
+  if (isSelected) {
+    if (cardBlocked) {
+      return {
+        cardClasses: PROVIDER_CARD_BASE_CLASSES + "border-rose-500 bg-rose-500/5",
+        badgeText: cardHardwareBlocked ? "Unavailable hardware" : "Critical Conflict",
+        BadgeIcon: XCircle,
+        badgeColor: "bg-rose-500/10 text-rose-400 border-rose-500/25",
+      };
+    }
+    if (cardHasWarning) {
+      return {
+        cardClasses: PROVIDER_CARD_BASE_CLASSES + "border-amber-500 bg-amber-500/5",
+        badgeText: "Warning Conflict",
+        BadgeIcon: AlertTriangle,
+        badgeColor: "bg-amber-500/10 text-amber-400 border-amber-500/25",
+      };
+    }
+    return {
+      cardClasses: PROVIDER_CARD_BASE_CLASSES + "border-electric-blue bg-electric-blue/5",
+      badgeText: !detectedLocally && !probeLoading ? "Active (not local)" : "Active Target",
+      BadgeIcon: CheckCircle,
+      badgeColor: "bg-electric-blue/10 text-electric-blue border-electric-blue/20",
+    };
+  }
+
+  if (cardHardwareBlocked) {
+    return {
+      cardClasses:
+        PROVIDER_CARD_BASE_CLASSES +
+        "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-75 hover:border-slate-700",
+      badgeText: "Not on this system",
+      BadgeIcon: XCircle,
+      badgeColor: "bg-rose-500/5 text-rose-400/80 border-rose-500/15",
+    };
+  }
+
+  if (providerId === "NvTensorRTRTXExecutionProvider" && trtRtxNeedsInstall && detectedLocally) {
+    return {
+      cardClasses:
+        PROVIDER_CARD_BASE_CLASSES +
+        "border-amber-900/40 bg-amber-950/10 opacity-95 hover:border-amber-500/40",
+      badgeText: "Plugin install needed",
+      BadgeIcon: AlertTriangle,
+      badgeColor: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    };
+  }
+
+  if (!detectedLocally && !probeLoading) {
+    return {
+      cardClasses:
+        PROVIDER_CARD_BASE_CLASSES +
+        "border-slate-850/60 bg-zinc-950/30 opacity-80 hover:opacity-100 hover:border-slate-700",
+      badgeText: "Not on this system",
+      BadgeIcon: AlertCircle,
+      badgeColor: "bg-slate-800/80 text-slate-500 border-slate-700/60",
+    };
+  }
+
+  if (cardHasCritical) {
+    return {
+      cardClasses:
+        PROVIDER_CARD_BASE_CLASSES +
+        "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-100 hover:border-rose-500/40",
+      badgeText: "Incompatible",
+      BadgeIcon: XCircle,
+      badgeColor: "bg-rose-500/5 text-rose-400/80 border-rose-500/15",
+    };
+  }
+
+  if (cardHasWarning) {
+    return {
+      cardClasses:
+        PROVIDER_CARD_BASE_CLASSES +
+        "border-amber-950/35 bg-zinc-950/40 opacity-75 hover:opacity-100 hover:border-amber-500/40",
+      badgeText: "Needs Adjust",
+      BadgeIcon: AlertTriangle,
+      badgeColor: "bg-amber-500/5 text-amber-400/80 border-amber-500/15",
+    };
+  }
+
+  return {
+    cardClasses:
+      PROVIDER_CARD_BASE_CLASSES +
+      "border-slate-800/80 bg-slate-900/40 hover:bg-slate-900 hover:border-slate-700",
+    badgeText: "Compatible with active passes",
+    BadgeIcon: CheckCircle,
+    badgeColor: "bg-emerald-500/10 text-emerald-400 border-emerald-500/15",
+  };
+}
+
+function getProviderHardwareDetail(
+  providerId: IHVProvider,
+  hardwareProbe: HardwareProbeResult | null,
+): string | null {
+  switch (providerId) {
+    case "CUDAExecutionProvider":
+    case "NvTensorRTRTXExecutionProvider":
+    case "TensorrtExecutionProvider":
+      return hardwareProbe?.nvidia?.gpus.map((g) => g.name).join(", ") ?? null;
+    case "ROCMExecutionProvider":
+      return hardwareProbe?.rocm?.gpus.map((g) => g.name).join(", ") ?? null;
+    case "OpenVINOExecutionProvider":
+      return hardwareProbe?.openvino?.available
+        ? `OpenVINO ${hardwareProbe.openvino.version ?? ""}`.trim()
+        : null;
+    case "CPUExecutionProvider":
+      return hardwareProbe ? hardwareProbe.platform.cpuModel : null;
+    default:
+      return null;
+  }
+}
+
+function getSelectedAccentClasses(cardHasCritical: boolean, cardHasWarning: boolean) {
+  if (cardHasCritical) {
+    return {
+      icon: "bg-rose-500/20 text-rose-400",
+      ring: "border-rose-500 text-rose-500",
+      dot: "bg-rose-500",
+    };
+  }
+  if (cardHasWarning) {
+    return {
+      icon: "bg-amber-500/20 text-amber-400",
+      ring: "border-amber-500 text-amber-500",
+      dot: "bg-amber-500",
+    };
+  }
+  return {
+    icon: "bg-electric-blue/20 text-electric-blue",
+    ring: "border-electric-blue text-electric-blue",
+    dot: "bg-electric-blue",
+  };
+}
+
+function getValidationPassConfigBlock(passId: string, passes: UIState["passes"], provider: IHVProvider) {
+  if (passId === "awq-quantization") {
+    return getQuantMethodActivationBlock("awq", passes, provider);
+  }
+  if (passId === "qat-quantization") {
+    return getQuantMethodActivationBlock("qat", passes, provider);
+  }
+  return null;
+}
+
+function getCompatibilityStatusBadgeClasses(status: CellCompatibility["status"]) {
+  switch (status) {
+    case "supported":
+      return "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+    case "partial":
+      return "bg-amber-500/10 text-amber-400 border border-amber-500/20";
+    default:
+      return "bg-rose-500/10 text-rose-450 border border-rose-500/20";
+  }
+}
+
+function getValidationDetailCardClasses(
+  isUnsupportedOnCurrent: boolean,
+  isBlockedByConfig: boolean,
+  isActiveState: boolean,
+) {
+  if (isUnsupportedOnCurrent || isBlockedByConfig) {
+    return "bg-slate-950/40 border-slate-900/60 opacity-40 shadow-none hover:border-slate-800/40";
+  }
+  if (isActiveState) {
+    return "bg-electric-blue/5 border-electric-blue/40 shadow-[0_2px_12px_rgba(59,130,246,0.02)] hover:border-electric-blue/60";
+  }
+  return "bg-slate-900/30 border-slate-800/80 hover:bg-slate-900/65 hover:border-slate-700";
+}
+
+function getValidationFooterHint(
+  pass: OptimizationPassValidation,
+  isUnsupportedOnCurrent: boolean,
+  isBlockedByConfig: boolean,
+  providerName: string | undefined,
+) {
+  if (isUnsupportedOnCurrent) {
+    return pass.id === "awq-quantization"
+      ? "Requires CUDA, TensorRT, or ROCm — switch hardware target above"
+      : "Pass locked on current backend";
+  }
+  if (isBlockedByConfig) {
+    return "Resolve the conflict in Optimization passes first";
+  }
+  return `Direct toggle on ${providerName}`;
+}
+
+function MatrixCellIndicator({
+  comp,
+  isCurrentlyActiveInCore,
+}: {
+  comp: CellCompatibility;
+  isCurrentlyActiveInCore: boolean;
+}) {
+  if (comp.status === "supported") {
+    if (isCurrentlyActiveInCore) {
+      return (
+        <div className="flex h-6 items-center gap-1 p-1 px-3 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10.5px] font-mono font-medium">
+          <CheckCircle className="h-3.5 w-3.5 text-emerald-400" /> Active
+        </div>
+      );
+    }
+    return (
+      <div className="h-6 w-6 rounded-full bg-slate-900 border border-slate-800 hover:border-emerald-500/40 hover:bg-emerald-500/10 flex items-center justify-center text-slate-500 hover:text-emerald-400 hover:scale-110 active:scale-90 transition-all">
+        <Check className="h-3.5 w-3.5" />
+      </div>
+    );
+  }
+
+  if (comp.status === "partial") {
+    if (isCurrentlyActiveInCore) {
+      return (
+        <div className="flex h-6 items-center gap-1 p-1 px-3 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10.5px] font-mono font-medium">
+          <AlertCircle className="h-3.5 w-3.5 text-amber-400" /> Fallback
+        </div>
+      );
+    }
+    return (
+      <div className="h-6 w-6 rounded-full bg-slate-900 border border-slate-800 hover:border-amber-500/40 hover:bg-amber-500/10 flex items-center justify-center text-slate-500 hover:text-amber-400 hover:scale-110 active:scale-90 transition-all">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+      </div>
+    );
+  }
+
+  if (comp.status === "blocked") {
+    return (
+      <div className="h-6 w-6 rounded-full bg-amber-950/40 border border-amber-500/25 flex items-center justify-center text-amber-400/80">
+        <AlertTriangle className="h-3 w-3" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-6 w-6 rounded-full bg-slate-950 border border-slate-900/60 flex items-center justify-center text-slate-700/60">
+      <Lock className="h-3 w-3" />
+    </div>
+  );
+}
+
+function MatrixCompatibilityCell({
+  validation,
+  provider,
+  isSelectedProvider,
+  isActiveOnSelected,
+  passes,
+  hardwareProbe,
+  state,
+  setState,
+}: {
+  validation: OptimizationPassValidation;
+  provider: ProviderCatalogEntry;
+  isSelectedProvider: boolean;
+  isActiveOnSelected: boolean;
+  passes: UIState["passes"];
+  hardwareProbe: HardwareProbeResult | null;
+  state: UIState;
+  setState: (s: Partial<UIState>) => void;
+}) {
+  const comp = getCellCompatibility(validation, provider.id, passes);
+  const isCurrentlyActiveInCore = isSelectedProvider && isActiveOnSelected;
+  const isDisabled = comp.status === "unsupported" || comp.status === "blocked";
+
+  const handleCellClick = () => {
+    if (isDisabled) return;
+
+    if (isSelectedProvider) {
+      const updated = validation.toggle(passes, isActiveOnSelected);
+      setState({ passes: { ...passes, ...updated } });
+      return;
+    }
+
+    const patch = prepareProviderChange(state, provider.id, hardwareProbe);
+    if (!patch) return;
+    const basePasses = patch.passes ?? passes;
+    const finalPasses = { ...basePasses, ...validation.toggle(basePasses, false) };
+    setState({ ...patch, passes: finalPasses });
+  };
+
+  const footerHint =
+    comp.status === "unsupported"
+      ? `${validation.name} is completely incompatible with the target instruction architecture.`
+      : isSelectedProvider
+        ? `Click this column cell directly to toggle the ${validation.name} pass ${isCurrentlyActiveInCore ? "OFF" : "ON"}.`
+        : `Click to set acceleration to ${provider.name} and configure this pipeline pass.`;
+
+  return (
+    <td
+      className={`p-2 text-center transition-all ${
+        isSelectedProvider
+          ? "bg-electric-blue/5 border-l border-r border-electric-blue/10"
+          : "hover:bg-slate-900/30"
+      }`}
+    >
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={handleCellClick}
+              disabled={isDisabled}
+              aria-label={`${validation.name} on ${provider.shortName}: ${comp.label}`}
+              className={`inline-flex items-center justify-center p-1 disabled:cursor-not-allowed disabled:opacity-60 ${
+                isDisabled ? "" : "cursor-pointer"
+              }`}
+            >
+              <MatrixCellIndicator comp={comp} isCurrentlyActiveInCore={isCurrentlyActiveInCore} />
+            </button>
+          </TooltipTrigger>
+
+          <TooltipContent
+            side="top"
+            className="max-w-[325px] bg-slate-950 border border-slate-800 text-slate-300 p-4 shadow-2xl leading-relaxed z-50"
+          >
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                <span className="text-[9.5px] font-mono uppercase bg-slate-900 text-slate-400 px-2 py-0.5 rounded border border-slate-800">
+                  {provider.name.replace(" (Snapdragon)", "")}
+                </span>
+                <span
+                  className={`text-[9.5px] font-mono font-extrabold uppercase tracking-wider px-2 py-0.5 rounded leading-none ${getCompatibilityStatusBadgeClasses(comp.status)}`}
+                >
+                  {comp.label}
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-[11.5px] font-mono font-bold text-electric-blue uppercase tracking-wide">
+                  {validation.name}
+                </p>
+                <p className="text-slate-400 text-xs leading-relaxed">{comp.reason}</p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5 border-t border-slate-900 pt-3">
+                <div className="text-[10px] bg-slate-900/65 p-2 rounded-lg border border-slate-900 text-center font-mono">
+                  <span className="text-[8.5px] text-slate-500 block uppercase font-bold tracking-tight mb-1">
+                    Est. speed
+                  </span>
+                  <span
+                    className={`text-xs font-black block ${comp.status === "supported" ? "text-emerald-400" : "text-slate-350"}`}
+                  >
+                    {comp.speedup}
+                  </span>
+                </div>
+                <div className="text-[10px] bg-slate-900/65 p-2 rounded-lg border border-slate-900 text-center font-mono">
+                  <span className="text-[8.5px] text-slate-500 block uppercase font-bold tracking-tight mb-1">
+                    Est. VRAM
+                  </span>
+                  <span
+                    className={`text-xs font-black block ${comp.status === "supported" ? "text-emerald-400" : "text-slate-350"}`}
+                  >
+                    {comp.vram}
+                  </span>
+                </div>
+                <div className="text-[10px] bg-slate-900/65 p-2 rounded-lg border border-slate-900 text-center font-mono">
+                  <span className="text-[8.5px] text-slate-500 block uppercase font-bold tracking-tight mb-1">
+                    Heuristic
+                  </span>
+                  <span
+                    className={`text-xs font-black block ${comp.status === "supported" ? "text-electric-blue" : "text-slate-350"}`}
+                  >
+                    {comp.efficiency}
+                  </span>
+                </div>
+              </div>
+
+              <div className="text-[10px] text-slate-500 font-sans border-t border-slate-900 pt-2.5 leading-snug">
+                {footerHint}
+              </div>
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </td>
+  );
+}
+
+function ValidationPassDetailCard({
+  validation,
+  provider,
+  passes,
+  setState,
+}: {
+  validation: OptimizationPassValidation;
+  provider: IHVProvider;
+  passes: UIState["passes"];
+  setState: (s: Partial<UIState>) => void;
+}) {
+  const isUnsupportedOnCurrent = validation.isUnsupported(provider);
+  const configBlock = getValidationPassConfigBlock(validation.id, passes, provider);
+  const isBlockedByConfig = !isUnsupportedOnCurrent && configBlock !== null;
+  const isActiveState = validation.isActive(passes);
+  const reason = validation.getIncompatibilityReason(provider);
+  const toggleDisabled = isUnsupportedOnCurrent || isBlockedByConfig;
+  const providerName = providers.find((p) => p.id === provider)?.name;
+
+  return (
+    <div
+      className={`flex flex-col justify-between p-4.5 rounded-xl border transition-all relative overflow-hidden ${getValidationDetailCardClasses(
+        isUnsupportedOnCurrent,
+        isBlockedByConfig,
+        isActiveState,
+      )}`}
+    >
+      <div className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-2">
+            <span
+              className={`inline-block text-[9px] uppercase font-mono px-2 py-0.5 rounded border tracking-wider font-bold ${getCategoryBadgeClasses(validation.category)}`}
+            >
+              {validation.category}
+            </span>
+            <h4
+              className={`text-sm font-semibold leading-snug ${
+                isUnsupportedOnCurrent ? "text-slate-500" : "text-slate-100"
+              }`}
+            >
+              {validation.name}
+            </h4>
+          </div>
+
+          {isUnsupportedOnCurrent ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="cursor-help shrink-0 p-1 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 leading-none">
+                  <Lock className="h-3 w-3" /> Incompatible
+                </div>
+              </TooltipTrigger>
+              <TooltipContent
+                side="top"
+                className="max-w-[280px] bg-slate-950 border border-slate-800 text-slate-300 p-3 shadow-xl leading-relaxed"
+              >
+                <div className="space-y-1">
+                  <p className="font-bold text-rose-400 flex items-center gap-1 text-xs">
+                    <AlertCircle className="h-3.5 w-3.5" /> Hardware Incompatibility
+                  </p>
+                  <p className="text-slate-200 font-semibold">{reason}</p>
+                  <p className="text-slate-450 border-t border-slate-900 pt-1 mt-1 text-[11px] font-sans leading-normal">
+                    {validation.requiresExplanation}
+                  </p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          ) : isBlockedByConfig ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="cursor-help shrink-0 p-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-lg flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 leading-none">
+                  <AlertTriangle className="h-3 w-3" /> Blocked
+                </div>
+              </TooltipTrigger>
+              <TooltipContent
+                side="top"
+                className="max-w-[280px] bg-slate-950 border border-slate-800 text-slate-300 p-3 shadow-xl leading-relaxed"
+              >
+                <div className="space-y-1">
+                  <p className="font-bold text-amber-400 flex items-center gap-1 text-xs">
+                    <AlertCircle className="h-3.5 w-3.5" /> Active pipeline conflict
+                  </p>
+                  <p className="text-slate-200 font-semibold">{configBlock?.reason}</p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <span
+              className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-lg border flex items-center gap-1 leading-none shrink-0 ${
+                isActiveState
+                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                  : "bg-slate-850/40 border-slate-800 text-slate-500"
+              }`}
+            >
+              {isActiveState ? (
+                <>
+                  <CheckCircle className="h-3 w-3" /> Enabled
+                </>
+              ) : (
+                "Inactive"
+              )}
+            </span>
+          )}
+        </div>
+
+        <p
+          className={`text-xs text-slate-400 leading-relaxed ${isUnsupportedOnCurrent ? "text-slate-600" : ""}`}
+        >
+          {validation.description}
+        </p>
+        <p className="text-[11px] text-slate-500 leading-relaxed border-l border-slate-800 pl-3">
+          <span className="text-slate-400 font-medium">Note: </span>
+          {validation.requiresExplanation}
+        </p>
+      </div>
+
+      <div className="mt-4 pt-3 border-t border-slate-900/60 flex items-center justify-between">
+        <span className="text-[10px] font-mono text-slate-500 font-medium">
+          {getValidationFooterHint(validation, isUnsupportedOnCurrent, isBlockedByConfig, providerName)}
+        </span>
+        <Switch
+          aria-label={`Toggle ${validation.name} pass`}
+          disabled={toggleDisabled}
+          checked={toggleDisabled ? false : isActiveState}
+          onCheckedChange={(checked) => {
+            if (toggleDisabled) return;
+            const updated = validation.toggle(passes, !checked);
+            setState({ passes: { ...passes, ...updated } });
+          }}
+        />
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -596,82 +1154,22 @@ export function IHVIntegrationPanel({
                   const showSwitchAssist = pConflicts.length > 0 && (isSelected || !cardBlocked);
                   const detectedLocally = isProviderDetectedLocally(p.id, hardwareProbe);
 
-                  let cardClasses =
-                    "relative flex flex-col rounded-xl border p-4.5 transition-all duration-200 cursor-pointer ";
-                  let badgeText = "";
-                  let BadgeIcon: typeof CheckCircle | null = null;
-                  let badgeColor = "";
+                  const { cardClasses, badgeText, BadgeIcon, badgeColor } = getProviderCardStyle({
+                    isSelected,
+                    cardBlocked,
+                    cardHardwareBlocked,
+                    cardHasWarning,
+                    cardHasCritical,
+                    detectedLocally,
+                    probeLoading,
+                    providerId: p.id,
+                    trtRtxNeedsInstall,
+                  });
 
-                  if (isSelected) {
-                    if (cardBlocked) {
-                      cardClasses += "border-rose-500 bg-rose-500/5";
-                      badgeText = cardHardwareBlocked ? "Unavailable hardware" : "Critical Conflict";
-                      BadgeIcon = XCircle;
-                      badgeColor = "bg-rose-500/10 text-rose-400 border-rose-550/25";
-                    } else if (cardHasWarning) {
-                      cardClasses += "border-amber-500 bg-amber-500/5";
-                      badgeText = "Warning Conflict";
-                      BadgeIcon = AlertTriangle;
-                      badgeColor = "bg-amber-500/10 text-amber-400 border-amber-550/25";
-                    } else {
-                      cardClasses += "border-electric-blue bg-electric-blue/5";
-                      badgeText = !detectedLocally && !probeLoading ? "Active (not local)" : "Active Target";
-                      BadgeIcon = CheckCircle;
-                      badgeColor = "bg-electric-blue/10 text-electric-blue border-electric-blue/20";
-                    }
-                  } else if (cardHardwareBlocked) {
-                    cardClasses +=
-                      "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-75 hover:border-slate-700";
-                    badgeText = "Not on this system";
-                    BadgeIcon = XCircle;
-                    badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
-                  } else if (
-                    p.id === "NvTensorRTRTXExecutionProvider" &&
-                    trtRtxNeedsInstall &&
-                    detectedLocally
-                  ) {
-                    cardClasses += "border-amber-900/40 bg-amber-950/10 opacity-95 hover:border-amber-500/40";
-                    badgeText = "Plugin install needed";
-                    BadgeIcon = AlertTriangle;
-                    badgeColor = "bg-amber-500/10 text-amber-400 border-amber-500/20";
-                  } else if (!detectedLocally && !probeLoading) {
-                    cardClasses +=
-                      "border-slate-850/60 bg-zinc-950/30 opacity-80 hover:opacity-100 hover:border-slate-700";
-                    badgeText = "Not on this system";
-                    BadgeIcon = AlertCircle;
-                    badgeColor = "bg-slate-800/80 text-slate-500 border-slate-700/60";
-                  } else if (cardHasCritical) {
-                    cardClasses +=
-                      "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-100 hover:border-rose-500/40";
-                    badgeText = "Incompatible";
-                    BadgeIcon = XCircle;
-                    badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
-                  } else if (cardHasWarning) {
-                    cardClasses +=
-                      "border-amber-950/35 bg-zinc-950/40 opacity-75 hover:opacity-100 hover:border-amber-500/40";
-                    badgeText = "Needs Adjust";
-                    BadgeIcon = AlertTriangle;
-                    badgeColor = "bg-amber-500/5 text-amber-400/80 border-amber-550/15";
-                  } else {
-                    cardClasses +=
-                      "border-slate-800/80 bg-slate-900/40 hover:bg-slate-900 hover:border-slate-700";
-                    badgeText = "Compatible with active passes";
-                    BadgeIcon = CheckCircle;
-                    badgeColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/15";
-                  }
-
-                  const hardwareDetail =
-                    p.id === "CUDAExecutionProvider" ||
-                    p.id === "NvTensorRTRTXExecutionProvider" ||
-                    p.id === "TensorrtExecutionProvider"
-                      ? hardwareProbe?.nvidia?.gpus.map((g) => g.name).join(", ")
-                      : p.id === "ROCMExecutionProvider"
-                        ? hardwareProbe?.rocm?.gpus.map((g) => g.name).join(", ")
-                        : p.id === "OpenVINOExecutionProvider" && hardwareProbe?.openvino?.available
-                          ? `OpenVINO ${hardwareProbe.openvino.version ?? ""}`.trim()
-                          : p.id === "CPUExecutionProvider" && hardwareProbe
-                            ? hardwareProbe.platform.cpuModel
-                            : null;
+                  const hardwareDetail = getProviderHardwareDetail(p.id, hardwareProbe);
+                  const accentClasses = isSelected
+                    ? getSelectedAccentClasses(cardHasCritical, cardHasWarning)
+                    : null;
 
                   return (
                     <div
@@ -698,11 +1196,7 @@ export function IHVIntegrationPanel({
                         <div
                           className={`mt-0.5 shrink-0 rounded-xl p-2.5 transition-all ${
                             isSelected
-                              ? cardHasCritical
-                                ? "bg-rose-500/20 text-rose-400"
-                                : cardHasWarning
-                                  ? "bg-amber-500/20 text-amber-400"
-                                  : "bg-electric-blue/20 text-electric-blue"
+                              ? accentClasses?.icon
                               : "bg-slate-850 text-slate-400 group-hover:text-slate-300"
                           }`}
                         >
@@ -819,25 +1313,11 @@ export function IHVIntegrationPanel({
                         <div className="flex items-center justify-center shrink-0">
                           <div
                             className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                              isSelected
-                                ? cardHasCritical
-                                  ? "border-rose-500 text-rose-500"
-                                  : cardHasWarning
-                                    ? "border-amber-500 text-amber-500"
-                                    : "border-electric-blue text-electric-blue"
-                                : "border-slate-700 hover:border-slate-500"
+                              isSelected ? accentClasses?.ring : "border-slate-700 hover:border-slate-500"
                             }`}
                           >
                             {isSelected && (
-                              <div
-                                className={`h-2.5 w-2.5 rounded-full ${
-                                  cardHasCritical
-                                    ? "bg-rose-500"
-                                    : cardHasWarning
-                                      ? "bg-amber-500"
-                                      : "bg-electric-blue"
-                                }`}
-                              />
+                              <div className={`h-2.5 w-2.5 rounded-full ${accentClasses?.dot}`} />
                             )}
                           </div>
                         </div>
@@ -902,8 +1382,8 @@ export function IHVIntegrationPanel({
                               }}
                               className={`text-[9.5px] uppercase tracking-wider font-extrabold px-3 py-1.5 rounded border transition-all cursor-pointer flex items-center gap-1.5 ${
                                 cardHasCritical
-                                  ? "border-rose-550/30 text-rose-400 bg-rose-950/20 hover:text-white hover:bg-rose-500/20"
-                                  : "border-amber-500/30 text-amber-400 bg-amber-950/20 hover:text-white hover:bg-amber-550/20"
+                                  ? "border-rose-500/30 text-rose-400 bg-rose-950/20 hover:text-white hover:bg-rose-500/20"
+                                  : "border-amber-500/30 text-amber-400 bg-amber-950/20 hover:text-white hover:bg-amber-500/20"
                               }`}
                             >
                               <Wand2 className="h-3.5 w-3.5" />
@@ -1264,15 +1744,7 @@ export function IHVIntegrationPanel({
                             <td className="p-3 px-4 w-[min(100%,280px)] min-w-[220px] align-top">
                               <div className="space-y-2">
                                 <span
-                                  className={`inline-block text-[9px] font-mono uppercase px-2 py-0.5 rounded border tracking-wider font-bold ${
-                                    v.category === "Conversion"
-                                      ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                                      : v.category === "Quantization"
-                                        ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                                        : v.category === "Compression"
-                                          ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                                          : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                  }`}
+                                  className={`inline-block text-[9px] font-mono uppercase px-2 py-0.5 rounded border tracking-wider font-bold ${getCategoryBadgeClasses(v.category)}`}
                                 >
                                   {v.category}
                                 </span>
@@ -1284,165 +1756,19 @@ export function IHVIntegrationPanel({
                             </td>
 
                             {/* Column 2-6: Dynamic hardware cells */}
-                            {selectableProviders.map((p) => {
-                              const isSelectedProvider = p.id === state.ihvProvider;
-                              const comp = getCellCompatibility(v, p.id, state.passes);
-                              const isCurrentlyActiveInCore = isSelectedProvider && isActiveOnSelected;
-
-                              const handleCellClick = () => {
-                                if (comp.status === "unsupported" || comp.status === "blocked") return;
-
-                                if (isSelectedProvider) {
-                                  const updated = v.toggle(state.passes, isActiveOnSelected);
-                                  setState({ passes: { ...state.passes, ...updated } });
-                                  return;
-                                }
-
-                                const patch = prepareProviderChange(state, p.id, hardwareProbe);
-                                if (!patch) return;
-                                const basePasses = patch.passes ?? state.passes;
-                                const finalPasses = { ...basePasses, ...v.toggle(basePasses, false) };
-                                setState({ ...patch, passes: finalPasses });
-                              };
-
-                              return (
-                                <td
-                                  key={p.id}
-                                  className={`p-2 text-center transition-all ${
-                                    isSelectedProvider
-                                      ? "bg-electric-blue/5 border-l border-r border-electric-blue/10"
-                                      : "hover:bg-slate-900/30"
-                                  }`}
-                                >
-                                  <TooltipProvider delayDuration={150}>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <button
-                                          type="button"
-                                          onClick={handleCellClick}
-                                          disabled={
-                                            comp.status === "unsupported" || comp.status === "blocked"
-                                          }
-                                          aria-label={`${v.name} on ${p.shortName}: ${comp.label}`}
-                                          className={`inline-flex items-center justify-center p-1 disabled:cursor-not-allowed disabled:opacity-60 ${
-                                            comp.status === "unsupported" || comp.status === "blocked"
-                                              ? ""
-                                              : "cursor-pointer"
-                                          }`}
-                                        >
-                                          {comp.status === "supported" ? (
-                                            isCurrentlyActiveInCore ? (
-                                              <div className="flex h-6 items-center gap-1 p-1 px-3 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10.5px] font-mono font-medium">
-                                                <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />{" "}
-                                                Active
-                                              </div>
-                                            ) : (
-                                              <div className="h-6 w-6 rounded-full bg-slate-900 border border-slate-800 hover:border-emerald-500/40 hover:bg-emerald-500/10 flex items-center justify-center text-slate-500 hover:text-emerald-400 hover:scale-110 active:scale-90 transition-all">
-                                                <Check className="h-3.5 w-3.5" />
-                                              </div>
-                                            )
-                                          ) : comp.status === "partial" ? (
-                                            isCurrentlyActiveInCore ? (
-                                              <div className="flex h-6 items-center gap-1 p-1 px-3 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10.5px] font-mono font-medium">
-                                                <AlertCircle className="h-3.5 w-3.5 text-amber-400" />{" "}
-                                                Fallback
-                                              </div>
-                                            ) : (
-                                              <div className="h-6 w-6 rounded-full bg-slate-900 border border-slate-800 hover:border-amber-500/40 hover:bg-amber-500/10 flex items-center justify-center text-slate-500 hover:text-amber-400 hover:scale-110 active:scale-90 transition-all">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                                              </div>
-                                            )
-                                          ) : comp.status === "blocked" ? (
-                                            <div className="h-6 w-6 rounded-full bg-amber-950/40 border border-amber-500/25 flex items-center justify-center text-amber-400/80">
-                                              <AlertTriangle className="h-3 w-3" />
-                                            </div>
-                                          ) : (
-                                            <div className="h-6 w-6 rounded-full bg-slate-950 border border-slate-900/60 flex items-center justify-center text-slate-700/60">
-                                              <Lock className="h-3 w-3" />
-                                            </div>
-                                          )}
-                                        </button>
-                                      </TooltipTrigger>
-
-                                      <TooltipContent
-                                        side="top"
-                                        className="max-w-[325px] bg-slate-950 border border-slate-800 text-slate-300 p-4 shadow-2xl leading-relaxed z-50"
-                                      >
-                                        <div className="space-y-3">
-                                          <div className="flex items-center justify-between border-b border-slate-900 pb-2">
-                                            <span className="text-[9.5px] font-mono uppercase bg-slate-900 text-slate-400 px-2 py-0.5 rounded border border-slate-800">
-                                              {p.name.replace(" (Snapdragon)", "")}
-                                            </span>
-                                            <span
-                                              className={`text-[9.5px] font-mono font-extrabold uppercase tracking-wider px-2 py-0.5 rounded leading-none ${
-                                                comp.status === "supported"
-                                                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                                                  : comp.status === "partial"
-                                                    ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                                                    : "bg-rose-500/10 text-rose-450 border border-rose-500/20"
-                                              }`}
-                                            >
-                                              {comp.label}
-                                            </span>
-                                          </div>
-
-                                          <div className="space-y-1">
-                                            <p className="text-[11.5px] font-mono font-bold text-electric-blue uppercase tracking-wide">
-                                              {v.name}
-                                            </p>
-                                            <p className="text-slate-400 text-xs leading-relaxed">
-                                              {comp.reason}
-                                            </p>
-                                          </div>
-
-                                          {/* Estimated heuristics — not measured on this machine */}
-                                          <div className="grid grid-cols-3 gap-1.5 border-t border-slate-900 pt-3">
-                                            <div className="text-[10px] bg-slate-900/65 p-2 rounded-lg border border-slate-900 text-center font-mono">
-                                              <span className="text-[8.5px] text-slate-500 block uppercase font-bold tracking-tight mb-1">
-                                                Est. speed
-                                              </span>
-                                              <span
-                                                className={`text-xs font-black block ${comp.status === "supported" ? "text-emerald-400" : "text-slate-350"}`}
-                                              >
-                                                {comp.speedup}
-                                              </span>
-                                            </div>
-                                            <div className="text-[10px] bg-slate-900/65 p-2 rounded-lg border border-slate-900 text-center font-mono">
-                                              <span className="text-[8.5px] text-slate-500 block uppercase font-bold tracking-tight mb-1">
-                                                Est. VRAM
-                                              </span>
-                                              <span
-                                                className={`text-xs font-black block ${comp.status === "supported" ? "text-emerald-400" : "text-slate-350"}`}
-                                              >
-                                                {comp.vram}
-                                              </span>
-                                            </div>
-                                            <div className="text-[10px] bg-slate-900/65 p-2 rounded-lg border border-slate-900 text-center font-mono">
-                                              <span className="text-[8.5px] text-slate-500 block uppercase font-bold tracking-tight mb-1">
-                                                Heuristic
-                                              </span>
-                                              <span
-                                                className={`text-xs font-black block ${comp.status === "supported" ? "text-electric-blue" : "text-slate-350"}`}
-                                              >
-                                                {comp.efficiency}
-                                              </span>
-                                            </div>
-                                          </div>
-
-                                          <div className="text-[10px] text-slate-500 font-sans border-t border-slate-900 pt-2.5 leading-snug">
-                                            {comp.status === "unsupported"
-                                              ? `${v.name} is completely incompatible with the target instruction architecture.`
-                                              : isSelectedProvider
-                                                ? `Click this column cell directly to toggle the ${v.name} pass ${isCurrentlyActiveInCore ? "OFF" : "ON"}.`
-                                                : `Click to set acceleration to ${p.name} and configure this pipeline pass.`}
-                                          </div>
-                                        </div>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                </td>
-                              );
-                            })}
+                            {selectableProviders.map((p) => (
+                              <MatrixCompatibilityCell
+                                key={p.id}
+                                validation={v}
+                                provider={p}
+                                isSelectedProvider={p.id === state.ihvProvider}
+                                isActiveOnSelected={isActiveOnSelected}
+                                passes={state.passes}
+                                hardwareProbe={hardwareProbe}
+                                state={state}
+                                setState={setState}
+                              />
+                            ))}
                           </tr>
                         );
                       })}
@@ -1480,150 +1806,15 @@ export function IHVIntegrationPanel({
               /* TAB 2: DETAILED INTERACTIVE SHOWN CARDS */
               <TooltipProvider delayDuration={150}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 animate-in fade-in">
-                  {filteredValidations.map((v) => {
-                    const isUnsupportedOnCurrent = v.isUnsupported(state.ihvProvider);
-                    const configBlock =
-                      v.id === "awq-quantization"
-                        ? getQuantMethodActivationBlock("awq", state.passes, state.ihvProvider)
-                        : v.id === "qat-quantization"
-                          ? getQuantMethodActivationBlock("qat", state.passes, state.ihvProvider)
-                          : null;
-                    const isBlockedByConfig = !isUnsupportedOnCurrent && configBlock !== null;
-                    const isActiveState = v.isActive(state.passes);
-                    const reason = v.getIncompatibilityReason(state.ihvProvider);
-                    const toggleDisabled = isUnsupportedOnCurrent || isBlockedByConfig;
-
-                    return (
-                      <div
-                        key={v.id}
-                        className={`flex flex-col justify-between p-4.5 rounded-xl border transition-all relative overflow-hidden ${
-                          isUnsupportedOnCurrent || isBlockedByConfig
-                            ? "bg-slate-950/40 border-slate-900/60 opacity-40 shadow-none hover:border-slate-800/40"
-                            : isActiveState
-                              ? "bg-electric-blue/5 border-electric-blue/40 shadow-[0_2px_12px_rgba(59,130,246,0.02)] hover:border-electric-blue/60"
-                              : "bg-slate-900/30 border-slate-800/80 hover:bg-slate-900/65 hover:border-slate-700"
-                        }`}
-                      >
-                        <div className="space-y-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 space-y-2">
-                              <span
-                                className={`inline-block text-[9px] uppercase font-mono px-2 py-0.5 rounded border tracking-wider font-bold ${
-                                  v.category === "Conversion"
-                                    ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                                    : v.category === "Quantization"
-                                      ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                                      : v.category === "Compression"
-                                        ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                                        : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                }`}
-                              >
-                                {v.category}
-                              </span>
-                              <h4
-                                className={`text-sm font-semibold leading-snug ${
-                                  isUnsupportedOnCurrent ? "text-slate-500" : "text-slate-100"
-                                }`}
-                              >
-                                {v.name}
-                              </h4>
-                            </div>
-
-                            {isUnsupportedOnCurrent ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div className="cursor-help shrink-0 p-1 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 leading-none">
-                                    <Lock className="h-3 w-3" /> Incompatible
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent
-                                  side="top"
-                                  className="max-w-[280px] bg-slate-950 border border-slate-800 text-slate-300 p-3 shadow-xl leading-relaxed"
-                                >
-                                  <div className="space-y-1">
-                                    <p className="font-bold text-rose-400 flex items-center gap-1 text-xs">
-                                      <AlertCircle className="h-3.5 w-3.5" /> Hardware Incompatibility
-                                    </p>
-                                    <p className="text-slate-200 font-semibold">{reason}</p>
-                                    <p className="text-slate-450 border-t border-slate-900 pt-1 mt-1 text-[11px] font-sans leading-normal">
-                                      {v.requiresExplanation}
-                                    </p>
-                                  </div>
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : isBlockedByConfig ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div className="cursor-help shrink-0 p-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-lg flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 leading-none">
-                                    <AlertTriangle className="h-3 w-3" /> Blocked
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent
-                                  side="top"
-                                  className="max-w-[280px] bg-slate-950 border border-slate-800 text-slate-300 p-3 shadow-xl leading-relaxed"
-                                >
-                                  <div className="space-y-1">
-                                    <p className="font-bold text-amber-400 flex items-center gap-1 text-xs">
-                                      <AlertCircle className="h-3.5 w-3.5" /> Active pipeline conflict
-                                    </p>
-                                    <p className="text-slate-200 font-semibold">{configBlock?.reason}</p>
-                                  </div>
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <span
-                                className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-lg border flex items-center gap-1 leading-none shrink-0 ${
-                                  isActiveState
-                                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                                    : "bg-slate-850/40 border-slate-800 text-slate-500"
-                                }`}
-                              >
-                                {isActiveState ? (
-                                  <>
-                                    <CheckCircle className="h-3 w-3" /> Enabled
-                                  </>
-                                ) : (
-                                  "Inactive"
-                                )}
-                              </span>
-                            )}
-                          </div>
-
-                          <p
-                            className={`text-xs text-slate-400 leading-relaxed ${isUnsupportedOnCurrent ? "text-slate-600" : ""}`}
-                          >
-                            {v.description}
-                          </p>
-                          <p className="text-[11px] text-slate-500 leading-relaxed border-l border-slate-800 pl-3">
-                            <span className="text-slate-400 font-medium">Note: </span>
-                            {v.requiresExplanation}
-                          </p>
-                        </div>
-
-                        <div className="mt-4 pt-3 border-t border-slate-900/60 flex items-center justify-between">
-                          <span className="text-[10px] font-mono text-slate-500 font-medium">
-                            {isUnsupportedOnCurrent
-                              ? v.id === "awq-quantization"
-                                ? "Requires CUDA, TensorRT, or ROCm — switch hardware target above"
-                                : "Pass locked on current backend"
-                              : isBlockedByConfig
-                                ? "Resolve the conflict in Optimization passes first"
-                                : `Direct toggle on ${providers.find((p) => p.id === state.ihvProvider)?.name}`}
-                          </span>
-                          <Switch
-                            aria-label={`Toggle ${v.name} pass`}
-                            disabled={toggleDisabled}
-                            checked={toggleDisabled ? false : isActiveState}
-                            onCheckedChange={(checked) => {
-                              if (toggleDisabled) return;
-                              const updated = v.toggle(state.passes, !checked);
-                              setState({ passes: { ...state.passes, ...updated } });
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {filteredValidations.map((v) => (
+                    <ValidationPassDetailCard
+                      key={v.id}
+                      validation={v}
+                      provider={state.ihvProvider}
+                      passes={state.passes}
+                      setState={setState}
+                    />
+                  ))}
                 </div>
               </TooltipProvider>
             )}

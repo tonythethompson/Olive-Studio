@@ -45,6 +45,7 @@ import JSZip from "jszip";
 import { cn } from "@/lib/utils";
 
 import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
+import { buildOwrConfigs } from "@/lib/owrExportConfigs";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { GpuMetricsBar } from "@/components/features/GpuMetricsBar";
@@ -368,169 +369,13 @@ export function ExecutionWorkspace({
   }, []);
 
   // Dynamic generation helper for OWR Config Bundle
-  const getOwrConfigs = () => {
-    const rawModelId = state.hfModelId || (state.localFiles && state.localFiles[0]?.name) || "model";
-    const modelName = rawModelId.split("/").pop() || "model";
-
-    // Deduce architecture
-    let architecture = "DecoderLLM";
-    const nameLower = modelName.toLowerCase();
-    if (nameLower.includes("llama")) architecture = "Llama";
-    else if (nameLower.includes("phi")) architecture = "Phi";
-    else if (nameLower.includes("whisper")) architecture = "Whisper";
-    else if (nameLower.includes("resnet")) architecture = "ResNet";
-    else if (nameLower.includes("mobilenet")) architecture = "MobileNet";
-    else if (nameLower.includes("bert")) architecture = "BERT";
-    else if (nameLower.includes("stable") || nameLower.includes("diffusion"))
-      architecture = "Stable Diffusion";
-
-    const ortConfig = {
-      model_path: owrPlatform === "web" ? "models/optimized/model.onnx" : "models/optimized/model.ort",
-      session_options: {
-        execution_mode: "ORT_SEQUENTIAL",
-        execution_providers:
-          owrPlatform === "web"
-            ? owrVramMode === "performance"
-              ? ["WebGPUExecutionProvider", "WasmExecutionProvider"]
-              : ["WasmExecutionProvider"]
-            : ["XnnpackExecutionProvider", "NnapiExecutionProvider"],
-        graph_optimization_level: "ORT_ENABLE_ALL",
-        intra_op_num_threads: parseInt(owrThreads) || 4,
-        inter_op_num_threads: 1,
-        log_id: owrPlatform === "web" ? "onnxruntime_web" : "onnxruntime_mobile",
-        enable_profiling: false,
-        enable_mem_pattern: true,
-        enable_cpu_mem_arena: true,
-      },
-      run_options: {
-        log_severity_level: 2,
-      },
-    };
-
-    const manifestConfig = {
-      manifest_version: "1.0.0",
-      generator: "Olive OWR Cross-Compiling Exporter",
-      export_date: new Date().toISOString(),
-      model_metadata: {
-        name: modelName,
-        architecture: architecture,
-        quantization: state.passes.quantization ? state.passes.quantPrecision : "none",
-        precision: state.passes.conversionInputTargetTypes || "float32",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        passes_applied: Object.keys(state.passes).filter((k) => (state.passes as any)[k]),
-      },
-      deployment_requirements: {
-        runtime: `onnxruntime-${owrPlatform}`,
-        vram_constraint: owrVramMode,
-        optimal_execution_providers:
-          owrPlatform === "web" ? ["WebGPU", "WASM"] : ["NNAPI (Android)", "CoreML (iOS)", "XNNPACK"],
-      },
-    };
-
-    const webInitCode = `// ONNX Runtime Web (OWR) Service-Worker / App Loader
-// Configured dynamically for: ${modelName} (${architecture})
-// Execute: npm install onnxruntime-web
-
-import * as ort from "onnxruntime-web";
-
-// Configure WASM and WebGPU threads
-ort.env.wasm.numThreads = ${owrThreads};
-ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
-
-export async function initializeOrtSession() {
-  console.log("Loading OWR model pipeline from memory...");
-  
-  const sessionOptions = {
-    executionProviders: ${owrVramMode === "performance" ? '["webgpu", "wasm"]' : '["wasm"]'},
-    graphOptimizationLevel: "all",
-    enableCpuMemArena: true,
-    enableMemPattern: true
-  };
-
-  try {
-    const session = await ort.InferenceSession.create("./models/optimized/model.onnx", sessionOptions);
-    console.log("Session init success! Available Inputs:", session.inputNames);
-    return session;
-  } catch (err) {
-    console.error("Failed to boot ONNX Runtime session:", err);
-    throw err;
-  }
-}
-
-export async function runInference(session, rawFloatBuffer) {
-  // Map dynamic inputs to graph feeds
-  const feeds = {};
-  for (const name of session.inputNames) {
-    // Creating default tensors matched to compiling specifications
-    feeds[name] = new ort.Tensor("float32", new Float32Array(rawFloatBuffer || 1024), [1, 1024]);
-  }
-  
-  const results = await session.run(feeds);
-  return results;
-}
-`;
-
-    const mobileInitCode = `package com.onnxruntime.mobile
-
-import android.content.Context
-import ai.onnxruntime.OnnxTensor
-import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.OrtSession
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
-import java.nio.FloatBuffer
-
-/**
- * High-performance ONNX Runtime Mobile Wrapper Session
- * Generated dynamically for model: ${modelName} (${architecture})
- */
-class OnnxModelExecutor(private val context: Context) : AutoCloseable {
-    private val ortEnv: OrtEnvironment = OrtEnvironment.getEnvironment()
-    private var ortSession: OrtSession? = null
-
-    fun loadModelFromAssets(assetName: String = "model.ort") {
-        val modelBytes = readAsset(assetName)
-        val opts = OrtSession.SessionOptions().apply {
-            setIntraOpNumThreads(${owrThreads})
-            // Establish target execution capabilities
-            addXnnpack()
-            addNnapi()
-        }
-        ortSession = ortEnv.createSession(modelBytes, opts)
-    }
-
-    fun runInference(inputData: FloatArray, shape: LongArray): Map<String, Any> {
-        val session = ortSession ?: throw IllegalStateException("Session not initialized.")
-        val buffer = FloatBuffer.wrap(inputData)
-        val inputName = session.inputNames.first()
-        val tensor = OnnxTensor.createTensor(ortEnv, buffer, shape)
-        
-        tensor.use {
-            val outputs = session.run(mapOf(inputName to tensor))
-            return outputs.associate { it.key to it.value.value }
-        }
-    }
-
-    private fun readAsset(fileName: String): ByteArray {
-        context.assets.open(fileName).use { stream ->
-            val byteBuffer = ByteArrayOutputStream()
-            val buffer = ByteArray(4096)
-            var len: Int
-            while (stream.read(buffer).also { len = it } != -1) {
-                byteBuffer.write(buffer, 0, len)
-            }
-            return byteBuffer.toByteArray()
-        }
-    }
-
-    override fun close() {
-        ortSession?.close()
-    }
-}
-`;
-
-    return { ortConfig, manifestConfig, webInitCode, mobileInitCode };
-  };
+  const getOwrConfigs = () =>
+    buildOwrConfigs({
+      state,
+      platform: owrPlatform,
+      threads: owrThreads,
+      vramMode: owrVramMode,
+    });
 
   const handleDownloadOwrBundle = async () => {
     const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = getOwrConfigs();
@@ -1277,6 +1122,7 @@ ${
               >
                 <button
                   type="button"
+                  aria-pressed={recipeView === "graph"}
                   onClick={() => setRecipeView("graph")}
                   className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${
                     recipeView === "graph"
@@ -1288,6 +1134,7 @@ ${
                 </button>
                 <button
                   type="button"
+                  aria-pressed={recipeView === "json"}
                   onClick={() => setRecipeView("json")}
                   className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${
                     recipeView === "json"

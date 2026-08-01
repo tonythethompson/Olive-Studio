@@ -13,9 +13,13 @@ import { TitleBar } from "@/components/TitleBar";
 import { DesktopMinimumViewport } from "@/components/DesktopMinimumViewport";
 import { cn } from "@/lib/utils";
 import {
-  OLIVE_PIPELINE_NAVIGATE,
+  attemptPipelineNavigate,
+  isPipelineOliveRunning,
   isPipelineViewId,
+  OLIVE_PIPELINE_NAV_BLOCKED,
+  OLIVE_PIPELINE_NAVIGATE,
   setPipelineOliveRunning,
+  type PipelineNavBlockedDetail,
   type PipelineViewId,
 } from "@/lib/pipelineNavigation";
 
@@ -74,6 +78,7 @@ function Dashboard() {
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
   const [triggerAiAudit, setTriggerAiAudit] = useState(false);
   const [licenseOpen, setLicenseOpen] = useState(false);
+  const [navBlockedMessage, setNavBlockedMessage] = useState<string | null>(null);
 
   const handleOpenAiAudit = () => {
     setIsAiSidebarOpen(true);
@@ -90,12 +95,32 @@ function Dashboard() {
     const onNavigate = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail;
       if (!isPipelineViewId(detail)) return;
-      if (isOliveRunning && detail !== "execute") return;
+      // Defensive: events that bypass navigatePipeline still get shared blocked feedback.
+      if (isPipelineOliveRunning() && detail !== "execute") {
+        attemptPipelineNavigate(detail);
+        return;
+      }
       setActiveView(detail);
     };
+    const onNavBlocked = (event: Event) => {
+      const detail = (event as CustomEvent<PipelineNavBlockedDetail>).detail;
+      const message = detail?.message;
+      if (!message) return;
+      setNavBlockedMessage(message);
+    };
     window.addEventListener(OLIVE_PIPELINE_NAVIGATE, onNavigate);
-    return () => window.removeEventListener(OLIVE_PIPELINE_NAVIGATE, onNavigate);
-  }, [isOliveRunning]);
+    window.addEventListener(OLIVE_PIPELINE_NAV_BLOCKED, onNavBlocked);
+    return () => {
+      window.removeEventListener(OLIVE_PIPELINE_NAVIGATE, onNavigate);
+      window.removeEventListener(OLIVE_PIPELINE_NAV_BLOCKED, onNavBlocked);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!navBlockedMessage) return;
+    const timer = window.setTimeout(() => setNavBlockedMessage(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [navBlockedMessage]);
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 });
@@ -105,6 +130,15 @@ function Dashboard() {
     <DesktopMinimumViewport>
       <div className="flex flex-col h-screen bg-slate-950 text-slate-300 overflow-hidden font-sans">
         <TitleBar />
+        {navBlockedMessage ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-200"
+          >
+            {navBlockedMessage}
+          </div>
+        ) : null}
         <div className="flex flex-1 min-h-0 overflow-hidden">
           <a
             href="#main"
@@ -134,25 +168,29 @@ function Dashboard() {
               <div className="space-y-0.5">
                 {SECTIONS.map(({ id, step, label, icon: Icon }) => {
                   const isActive = activeView === id;
+                  const stepBlocked = isOliveRunning && id !== "execute";
                   return (
                     <button
                       key={id}
                       type="button"
-                      title={`${step} ${label}`}
+                      title={
+                        stepBlocked
+                          ? `${step} ${label}: unavailable while Olive is running`
+                          : `${step} ${label}`
+                      }
                       aria-label={`${step} ${label}`}
                       onClick={() => {
-                        if (isOliveRunning && id !== "execute") return;
+                        if (!attemptPipelineNavigate(id)) return;
                         setActiveView(id);
                       }}
                       aria-current={isActive ? "step" : undefined}
-                      disabled={isOliveRunning && id !== "execute"}
+                      disabled={stepBlocked}
                       className={cn(
                         "w-full flex items-center gap-2.5 justify-center wide:justify-start px-2 wide:pl-4 wide:pr-3 py-2.5 wide:py-2 text-sm transition-colors border-l-2 text-left",
                         isActive
                           ? "border-electric-blue text-slate-100 bg-electric-blue/5"
                           : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40",
-                        isOliveRunning &&
-                          id !== "execute" &&
+                        stepBlocked &&
                           "opacity-40 cursor-not-allowed hover:bg-transparent hover:text-slate-400",
                       )}
                     >
