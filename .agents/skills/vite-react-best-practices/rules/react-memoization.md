@@ -42,8 +42,7 @@ useEffect(() => {
 
 ### 2. Expensive Calculations
 
-Heavy synchronous work (e.g., filtering a 5,000 item list).
-
+Heavy synchronous work (e.g., filtering a 5,000-item list).
 ```tsx
 const sortedList = useMemo(() => {
   return largeArray.filter((item) => item.active).sort((a, b) => a.value - b.value);
