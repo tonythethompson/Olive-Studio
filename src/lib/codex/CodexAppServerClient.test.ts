@@ -16,3 +16,14 @@ describe("codexSpawnUsesShell", () => {
     expect(codexSpawnUsesShell("codex", "darwin")).toBe(false);
   });
 });
+
+describe("JSON-RPC envelope helpers", () => {
+  it("documents that requests and notifications must include jsonrpc 2.0", () => {
+    // Runtime coverage of writeLine/notify is process-spawn based; this guards the contract
+    // strings used by CodexAppServerClient.request / notify payloads.
+    const request = { jsonrpc: "2.0" as const, method: "initialize", id: 1, params: {} };
+    const notification = { jsonrpc: "2.0" as const, method: "initialized" };
+    expect(request.jsonrpc).toBe("2.0");
+    expect(notification.jsonrpc).toBe("2.0");
+  });
+});

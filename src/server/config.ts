@@ -16,7 +16,7 @@
 import path from "path";
 import fs from "fs";
 import type { ProviderConfig, StudioConfig } from "./types.ts";
-import { getRuntimeAiProvider, setRuntimeAiProvider } from "./services/ai/state.ts";
+import { getRuntimeAiProvider, setRuntimeAiProvider, clearRuntimeAiProvider } from "./services/ai/state.ts";
 
 export type { StudioConfig };
 
@@ -119,7 +119,7 @@ export const appConfig = {
 
   /** Clear all runtime state (disk config unaffected). */
   resetRuntime(): void {
-    setRuntimeAiProvider(null);
+    clearRuntimeAiProvider();
     _hfToken = null;
   },
 

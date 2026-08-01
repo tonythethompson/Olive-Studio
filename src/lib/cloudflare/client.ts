@@ -138,10 +138,10 @@ export async function syncCloudflareFromWrangler(
     const who = await wranglerWhoAmI();
     email = who.email ?? email;
     const accounts = who.accounts ?? [];
+    const preferredMatch = preferred ? accounts.find((a) => a.id === preferred) : undefined;
     const picked =
-      (preferred ? accounts.find((a) => a.id === preferred) : undefined) ??
-      accounts.find((a) => isValidCloudflareAccountId(a.id)) ??
-      accounts[0];
+      preferredMatch ??
+      (preferred ? undefined : (accounts.find((a) => isValidCloudflareAccountId(a.id)) ?? accounts[0]));
     if (picked && isValidCloudflareAccountId(picked.id)) {
       accountId = picked.id;
       accountName = picked.name;

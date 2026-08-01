@@ -444,14 +444,18 @@ export function deriveUiStateFromOliveRecipe(parsed: any, options?: DeriveUiStat
   if (hfName) {
     incomingState.modelSource = "huggingface";
     incomingState.hfModelId = hfName;
-    if (hfConfig?.dataset) {
-      incomingState.hfDataset = hfConfig.dataset;
+    const dataset =
+      (typeof inputModel?.config?.dataset === "string" && inputModel.config.dataset) ||
+      (typeof hfConfig?.dataset === "string" && hfConfig.dataset) ||
+      "";
+    if (dataset) {
+      incomingState.hfDataset = dataset;
     }
     const task =
       (typeof hfConfig?.task === "string" && hfConfig.task) ||
       (typeof inputModel?.config?.task === "string" && inputModel.config.task) ||
       "";
-    if (task) incomingState.hfTask = task;
+    if (task) incomingState.hfTask = task === "speech-recognition" ? "automatic-speech-recognition" : task;
   }
 
   const localFiles = inputModel?.config?.local_files;

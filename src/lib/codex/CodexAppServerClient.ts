@@ -37,8 +37,15 @@ export type CodexRateLimits = {
 };
 
 type JsonRpcRequest = {
+  jsonrpc: "2.0";
   method: string;
   id: number;
+  params?: unknown;
+};
+
+type JsonRpcNotification = {
+  jsonrpc: "2.0";
+  method: string;
   params?: unknown;
 };
 
@@ -120,6 +127,16 @@ export class CodexAppServerClient extends EventEmitter {
     child.stderr.on("data", (buf: Buffer) => {
       const text = buf.toString().trim();
       if (text) this.emit("stderr", text);
+    });
+
+    // Avoid unhandled 'error' on stdin when the child exits mid-write (EPIPE).
+    child.stdin.on("error", (err) => {
+      this.emit("error", err);
+      for (const [id, p] of this.pending) {
+        clearTimeout(p.timer);
+        this.pending.delete(id);
+        p.reject(err instanceof Error ? err : new Error(String(err)));
+      }
     });
 
     child.on("exit", (code, signal) => {
@@ -225,16 +242,32 @@ export class CodexAppServerClient extends EventEmitter {
     }
   }
 
-  private writeLine(payload: object): void {
+  private writeLine(payload: object): Promise<void> {
     const child = this.child;
     if (!child?.stdin.writable) {
-      throw new Error("Codex app-server is not running");
+      return Promise.reject(new Error("Codex app-server is not running"));
     }
-    child.stdin.write(`${JSON.stringify(payload)}\n`);
+    return new Promise((resolve, reject) => {
+      try {
+        child.stdin.write(`${JSON.stringify(payload)}\n`, (err) => {
+          if (err) {
+            reject(err instanceof Error ? err : new Error(String(err)));
+            return;
+          }
+          resolve();
+        });
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
+    });
   }
 
   private notify(method: string, params?: unknown): void {
-    this.writeLine(params !== undefined ? { method, params } : { method });
+    const payload: JsonRpcNotification =
+      params !== undefined ? { jsonrpc: "2.0", method, params } : { jsonrpc: "2.0", method };
+    void this.writeLine(payload).catch((err) => {
+      this.emit("error", err instanceof Error ? err : new Error(String(err)));
+    });
   }
 
   private async request<T = unknown>(method: string, params?: unknown, timeoutMs = 60_000): Promise<T> {
@@ -248,6 +281,7 @@ export class CodexAppServerClient extends EventEmitter {
 
     const id = this.nextId++;
     const payload: JsonRpcRequest = {
+      jsonrpc: "2.0",
       method,
       id,
       ...(params !== undefined ? { params } : {}),
@@ -263,13 +297,11 @@ export class CodexAppServerClient extends EventEmitter {
         reject,
         timer,
       });
-      try {
-        this.writeLine(payload);
-      } catch (err) {
+      void this.writeLine(payload).catch((err) => {
         clearTimeout(timer);
         this.pending.delete(id);
         reject(err instanceof Error ? err : new Error(String(err)));
-      }
+      });
     });
   }
 

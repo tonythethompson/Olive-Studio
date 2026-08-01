@@ -75,6 +75,17 @@ describe("buildAiWorkspaceContext", () => {
     expect(block).toContain("memory offload: auto");
   });
 
+  it("redacts Azure Blob connection strings from recipe snapshots and cache dir", () => {
+    const secret =
+      "DefaultEndpointsProtocol=https;AccountName=olive;AccountKey=abc123==;EndpointSuffix=core.windows.net";
+    const ctx = buildAiWorkspaceContext(
+      baseState({ distributedCaching: true, azureStr: secret, cacheDir: "" }),
+    );
+    expect(ctx.infrastructure.cacheDir).toBe("[REDACTED]");
+    expect(ctx.recipeSnapshot?.jsonPreview).toContain("[REDACTED]");
+    expect(ctx.recipeSnapshot?.jsonPreview).not.toContain("AccountKey");
+  });
+
   it("summarizes GPU in the compact badge line", () => {
     const ctx = buildAiWorkspaceContext(baseState(), { probe });
     const summary = buildWorkspaceContextSummary(ctx);

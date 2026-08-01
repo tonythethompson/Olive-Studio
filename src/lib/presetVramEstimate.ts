@@ -120,8 +120,9 @@ export function estimateVramForCatalogPreset(
   const estimate = estimateVramRequirement(sketch);
   // Always use the machine's GPU when present so CPU recipes still warn when the
   // model footprint will not fit the card (catalog device does not hide VRAM risk).
-  const availableGb =
-    getPrimaryGpuVramGb(probe ?? null) ?? getSelectedGpuVramGb(probe ?? null, sketch.ihvProvider);
+  const availableGb = estimate.usesGpu
+    ? (getSelectedGpuVramGb(probe ?? null, sketch.ihvProvider) ?? getPrimaryGpuVramGb(probe ?? null))
+    : (getPrimaryGpuVramGb(probe ?? null) ?? getSelectedGpuVramGb(probe ?? null, sketch.ihvProvider));
   const systemRamGb = probe?.platform.systemRamGb ?? null;
 
   const beforeLabel = estimate.usesGpu ? "VRAM" : "RAM";

@@ -69,6 +69,8 @@ export function normalizeChatForScope(raw: string): string {
     .replace(/[5$]/g, "s")
     .replace(/[7]/g, "t")
     .replace(/(.)\1{2,}/g, "$1$1") // fuuuuck → fuuck (still matches f+u+c+k+)
+    // Keep phrase boundaries: kill-myself / how_to_make_a_bomb stay multi-word.
+    .replace(/[-_./\\]+/g, " ")
     .replace(/[^a-z0-9\s]+/g, "") // f.u.c.k / f*ck → fuck
     .replace(/\s+/g, " ")
     .trim();
@@ -100,15 +102,16 @@ export function getChatScopeBlock(message: string): ChatScopeBlock | null {
     return { reason: "abuse", reply: OLIVE_ABUSE_REFUSAL };
   }
 
+  // Explicit off-topic beats a lone Olive keyword (e.g. "recipe for cake").
+  if (matchesAny([OFF_TOPIC], normalized, text)) {
+    return { reason: "off_topic", reply: OLIVE_SCOPE_REFUSAL };
+  }
+
   const oliveRelated = matchesAny([OLIVE_TOPIC], text, normalized);
   if (oliveRelated) return null;
 
   if (matchesAny([PROFANITY], normalized, text)) {
     return { reason: "abuse", reply: OLIVE_ABUSE_REFUSAL };
-  }
-
-  if (matchesAny([OFF_TOPIC], normalized, text)) {
-    return { reason: "off_topic", reply: OLIVE_SCOPE_REFUSAL };
   }
 
   return null;

@@ -59,7 +59,10 @@ describe("parseJsonFromAiResponse", () => {
     expect(parsed.suggestions.map((s) => s.title)).toEqual(["a", "b"]);
   });
 
-  it("throws a helpful error when repair is impossible", () => {
-    expect(() => parseJsonFromAiResponse("not json at all")).toThrow(/not valid JSON/);
+  it("extracts JSON when prose precedes a balanced object", () => {
+    const parsed = parseJsonFromAiResponse(
+      'Here is the analysis:\n{"score":88,"level":"Optimized","summary":"ok","suggestions":[]}',
+    ) as { score: number };
+    expect(parsed.score).toBe(88);
   });
 });

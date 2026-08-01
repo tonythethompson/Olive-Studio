@@ -16,6 +16,11 @@ export function getRuntimeAiProvider(): ProviderConfig | null {
   return runtimeAiProvider;
 }
 
+/** Clear in-memory runtime override without touching persisted aiPreference on disk. */
+export function clearRuntimeAiProvider(): void {
+  runtimeAiProvider = null;
+}
+
 /** Persist non-secret provider/model/baseUrl so restarts keep the last selection. */
 export function persistAiPreference(
   cfg: Pick<ProviderConfig, "provider" | "model" | "baseUrl"> | null,
@@ -52,10 +57,14 @@ export function restoreProviderFromPreference(pref: AiPreference): ProviderConfi
     pref.provider === "openai-compat" ||
     pref.provider === "codex" ||
     pref.provider === "devin" ||
-    pref.provider === "cloudflare" ||
     Boolean(pref.baseUrl && /localhost|127\.0\.0\.1/i.test(pref.baseUrl));
 
-  if (!envKey && !allowEmptyKey) return null;
+  if (pref.provider === "cloudflare") {
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
+    if (!envKey || !accountId) return null;
+  } else if (!envKey && !allowEmptyKey) {
+    return null;
+  }
 
   return {
     provider: pref.provider,

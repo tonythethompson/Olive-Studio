@@ -69,8 +69,9 @@ export function applyDotenvFile(filePath: string, opts?: { overrideUsable?: bool
 export function readWindowsPersistedEnv(
   names: readonly string[],
   exec: typeof execFileSync = execFileSync,
+  platform: NodeJS.Platform = process.platform,
 ): Record<string, string> {
-  if (process.platform !== "win32" || names.length === 0) return {};
+  if (platform !== "win32" || names.length === 0) return {};
 
   const namesJson = JSON.stringify([...names]);
   const script = [
@@ -109,9 +110,9 @@ export function readWindowsPersistedEnv(
 /** Fill process.env gaps from Windows User/Machine persisted environment. */
 export function hydrateProcessEnvFromWindows(
   names: readonly string[] = STUDIO_ENV_KEY_NAMES,
-  opts?: { exec?: typeof execFileSync },
+  opts?: { exec?: typeof execFileSync; platform?: NodeJS.Platform },
 ): string[] {
-  const persisted = readWindowsPersistedEnv(names, opts?.exec ?? execFileSync);
+  const persisted = readWindowsPersistedEnv(names, opts?.exec ?? execFileSync, opts?.platform);
   const filled: string[] = [];
   for (const [name, value] of Object.entries(persisted)) {
     if (isUsableEnvValue(process.env[name])) continue;

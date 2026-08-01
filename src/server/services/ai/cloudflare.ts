@@ -15,12 +15,15 @@ async function call(
   wantJson: boolean,
 ): Promise<string> {
   const extras = cloudflareProviderExtras(cfg.model);
+  const cfgKey = cfg.apiKey?.trim();
+  const cfgBase = cfg.baseUrl?.trim();
+  const useCfgAuth = Boolean(cfgKey && cfgBase);
   return callOpenAICompat(
     {
       provider: "cloudflare",
-      apiKey: cfg.apiKey?.trim() || extras.apiKey,
+      apiKey: useCfgAuth ? cfgKey! : cfgKey || extras.apiKey,
       model: cfg.model || extras.model,
-      baseUrl: cfg.baseUrl?.trim() || extras.baseUrl,
+      baseUrl: useCfgAuth ? cfgBase! : cfgBase || extras.baseUrl,
       timeoutMs: cfg.timeoutMs,
     },
     system,

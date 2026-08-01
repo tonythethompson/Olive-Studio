@@ -2,10 +2,24 @@
 
 Quick fixes for the most frequent issues encountered in Vite + React projects.
 
-## 1. "Module is external" or "Cannot find module"
+## 1. "Module is external" (SSR / bundler)
 
-**Cause:** Deep imports from CommonJS libraries or missing exports in `package.json`.
-**Fix:** Add valid ESM entry point or include in `optimizeDeps`.
+**Cause:** A dependency is treated as external during SSR or library mode, so Vite/Rollup does not bundle it and Node tries to resolve it at runtime.
+**Fix:** Add the package to `ssr.noExternal` (or remove it from `ssr.external`) so Vite pre-bundles it for the server graph.
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  ssr: {
+    noExternal: ["some-cjs-only-lib"],
+  },
+});
+```
+
+## 2. "Cannot find module" (dev / client)
+
+**Cause:** Missing dependency, wrong import path, or a CJS package that Vite has not pre-optimized for the browser graph.
+**Fix:** Install the package, fix the import, or add it to `optimizeDeps.include` so esbuild pre-bundles it on first dev load.
 
 ```ts
 // vite.config.ts
@@ -16,7 +30,7 @@ export default defineConfig({
 });
 ```
 
-## 2. HMR Not Working (Full Reload on Save)
+## 3. HMR Not Working (Full Reload on Save)
 
 **Cause:**
 
@@ -24,12 +38,12 @@ export default defineConfig({
 2. **Export Default vs Named:** React Fast Refresh prefers Named Exports or consistent exports.
 3. **Case Sensitivity:** Importing `File.tsx` as `file.tsx` works on Mac but implies a new module ID.
 
-## 3. Styles Missing in Production
+## 4. Styles Missing in Production
 
 **Cause:** Dynamic imports of CSS files that the bundler cannot trace statically.
 **Fix:** Ensure CSS imports are static or part of the module graph.
 
-## 4. 404 on Refresh
+## 5. 404 on Refresh
 
 **Cause:** Missing client-side routing fallback.
 **Fix:** Configure rewrites on your static host (see `vite-spa-rewrites.md`).

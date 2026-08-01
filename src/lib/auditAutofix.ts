@@ -117,6 +117,22 @@ function normalizeQuantPrecision(value: string): "int4" | "int8" | "fp16" | null
   return null;
 }
 
+const QUANT_METHODS = new Set<UIState["passes"]["quantMethod"]>([
+  "ptq",
+  "awq",
+  "qat",
+  "gptq",
+  "hqq",
+  "rtn",
+  "spinquant",
+  "quarot",
+]);
+
+function normalizeQuantMethod(value: string): UIState["passes"]["quantMethod"] | null {
+  const v = value.trim().toLowerCase().replace(/['"]/g, "") as UIState["passes"]["quantMethod"];
+  return QUANT_METHODS.has(v) ? v : null;
+}
+
 /**
  * Build a UIState patch for an audit autofix, or null if it cannot be applied safely.
  */
@@ -187,9 +203,11 @@ export function resolveAuditAutofix(
       nextPasses.quantPrecision = prec;
     }
   } else if (key === "quantMethod") {
+    const method = normalizeQuantMethod(value);
+    if (!method) return null;
     nextPasses.quantization = true;
-    nextPasses.quantMethod = value as UIState["passes"]["quantMethod"];
-    if (value === "awq") nextPasses.pruning = false;
+    nextPasses.quantMethod = method;
+    if (method === "awq") nextPasses.pruning = false;
   } else {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (nextPasses as any)[key] = parseScalar(value);
@@ -222,13 +240,21 @@ function resolveJsonAutofix(
     } else if (canon === "quantPrecision" && typeof v === "string") {
       const prec = normalizeQuantPrecision(v);
       if (prec) {
-        passPatch.quantization = true;
-        passPatch.quantPrecision = prec;
+        if (prec === "fp16") {
+          passPatch.conversion = true;
+          passPatch.conversionInputTargetTypes = "float16";
+          passPatch.quantPrecision = "fp16";
+        } else {
+          passPatch.quantization = true;
+          passPatch.quantPrecision = prec;
+        }
       }
     } else if (canon === "quantMethod" && typeof v === "string") {
+      const method = normalizeQuantMethod(v);
+      if (!method) continue;
       passPatch.quantization = true;
-      passPatch.quantMethod = v as UIState["passes"]["quantMethod"];
-      if (v === "awq") passPatch.pruning = false;
+      passPatch.quantMethod = method;
+      if (method === "awq") passPatch.pruning = false;
     } else {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (passPatch as any)[canon] = v;

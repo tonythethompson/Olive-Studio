@@ -104,6 +104,59 @@ function docsSearchSufficient(result: unknown): boolean {
   return typeof top?.relevance === "number" ? top.relevance >= 1 : results.length > 0;
 }
 
+/** Map EP / keyword targets to MCP KB canonical hardware profile names. */
+const CANONICAL_HARDWARE: Record<string, string> = {
+  cuda: "NVIDIA RTX 4090",
+  tensorrt: "NVIDIA RTX 4090",
+  "tensorrt-rtx": "NVIDIA RTX 4090",
+  nvtensorrtrtx: "NVIDIA RTX 4090",
+  directml: "NVIDIA RTX 4090",
+  dml: "NVIDIA RTX 4090",
+  openvino: "Intel Core i9 CPU",
+  cpu: "Intel Core i9 CPU",
+  qnn: "Qualcomm Snapdragon NPU",
+  qualcomm: "Qualcomm Snapdragon NPU",
+  rocm: "AMD MI300X / ROCm",
+  "nvidia-gpu": "NVIDIA RTX 4090",
+  "intel-cpu": "Intel Core i9 CPU",
+  "qualcomm-npu": "Qualcomm Snapdragon NPU",
+};
+
+function toCanonicalHardware(target: string): string {
+  const key = lower(target).replace(/\s+/g, "-");
+  return CANONICAL_HARDWARE[key] ?? target;
+}
+
+function inferModelSizeBucket(
+  message: string,
+  workspace: AiWorkspaceContext | null | undefined,
+): "small" | "medium" | "large" | undefined {
+  const text = `${workspace?.model.displayName ?? ""} ${workspace?.model.huggingFaceId ?? ""} ${message}`;
+  const m = text.match(/(\d+(?:\.\d+)?)\s*b\b/i);
+  if (!m) return undefined;
+  const billions = Number.parseFloat(m[1]!);
+  if (!Number.isFinite(billions)) return undefined;
+  if (billions < 3) return "small";
+  if (billions <= 13) return "medium";
+  return "large";
+}
+
+function canonicalPassNamesForChain(workspace: AiWorkspaceContext | null | undefined): string[] {
+  const fromRecipe = workspace?.recipeSnapshot?.passTypes?.filter(Boolean);
+  if (fromRecipe?.length) return fromRecipe.slice(0, 8);
+  return (workspace?.activePassLabels ?? [])
+    .map((label) => {
+      const head = label.split(" ")[0]?.toLowerCase() ?? "";
+      if (head === "conversion") return "OnnxConversion";
+      if (head === "quantization") return "OnnxQuantization";
+      if (head === "pruning") return "OnnxMatMul4Quantizer";
+      if (head === "peft") return "LoRA";
+      if (head === "onnx") return "OnnxModelOptimizer";
+      return label.split(" ")[0] ?? label;
+    })
+    .slice(0, 8);
+}
+
 function inferQuantArgs(message: string, workspace: AiWorkspaceContext | null | undefined) {
   const m = lower(message);
   let modelType = "llm";
@@ -124,19 +177,19 @@ function inferQuantArgs(message: string, workspace: AiWorkspaceContext | null | 
   } else if (/openvino|cpu/.test(m)) targetHardware = "intel-cpu";
   else if (/qnn|qualcomm|npu/.test(m)) targetHardware = "qualcomm-npu";
 
-  return { model_type: modelType, target_hardware: targetHardware };
+  return { model_type: modelType, target_hardware: toCanonicalHardware(targetHardware) };
 }
 
 function inferHardwareTarget(message: string, workspace: AiWorkspaceContext | null | undefined): string {
   const m = lower(message);
-  if (/tensorrt\s*rtx|nvtensorrtrtx/.test(m)) return "tensorrt-rtx";
-  if (/tensorrt/.test(m)) return "tensorrt";
-  if (/openvino/.test(m)) return "openvino";
-  if (/qnn|qualcomm/.test(m)) return "qnn";
-  if (/directml|dml/.test(m)) return "directml";
-  if (/cuda/.test(m)) return "cuda";
+  if (/tensorrt\s*rtx|nvtensorrtrtx/.test(m)) return toCanonicalHardware("tensorrt-rtx");
+  if (/tensorrt/.test(m)) return toCanonicalHardware("tensorrt");
+  if (/openvino/.test(m)) return toCanonicalHardware("openvino");
+  if (/qnn|qualcomm/.test(m)) return toCanonicalHardware("qnn");
+  if (/directml|dml/.test(m)) return toCanonicalHardware("directml");
+  if (/cuda/.test(m)) return toCanonicalHardware("cuda");
   const ep = workspace?.hardware.executionProviderShort;
-  return ep && ep.length > 0 ? ep : "cuda";
+  return ep && ep.length > 0 ? toCanonicalHardware(ep) : toCanonicalHardware("cuda");
 }
 
 /** Select MCP tool calls for a user chat message (+ optional workspace). */
@@ -163,11 +216,12 @@ export function selectOliveMcpToolsForChat(
   }
 
   if (wantsHardware(message)) {
+    const modelSize = inferModelSizeBucket(message, workspace);
     requests.push({
       toolName: "get_hardware_optimization_guide",
       args: {
         target_hardware: inferHardwareTarget(message, workspace),
-        model_size: workspace?.model.displayName || "",
+        ...(modelSize ? { model_size: modelSize } : {}),
       },
     });
   }
@@ -193,12 +247,13 @@ export function selectOliveMcpToolsForChat(
   }
 
   if (wantsChain(message) && workspace?.activePassLabels?.length) {
-    requests.push({
-      toolName: "get_pass_chain",
-      args: {
-        pass_names: workspace.activePassLabels.map((l) => l.split(" ")[0] ?? l).slice(0, 8),
-      },
-    });
+    const passNames = canonicalPassNamesForChain(workspace);
+    if (passNames.length > 0) {
+      requests.push({
+        toolName: "get_pass_chain",
+        args: { pass_names: passNames },
+      });
+    }
   }
 
   return requests;

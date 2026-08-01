@@ -100,6 +100,32 @@ async function isLmsServerRunning(): Promise<boolean> {
   }
 }
 
+/** Spawn `lms server …`; resolves exit code if the child exits quickly, else null. */
+function spawnLmsServerDetached(lms: string, args: string[]): Promise<number | null> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (code: number | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(code);
+    };
+    try {
+      const child = spawn(lms, args, {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+        env: { ...process.env },
+      });
+      child.once("exit", (code) => finish(code));
+      child.once("error", () => finish(1));
+      child.unref();
+      setTimeout(() => finish(null), 2000);
+    } catch {
+      finish(1);
+    }
+  });
+}
+
 async function isOllamaRunning(): Promise<boolean> {
   try {
     const controller = new AbortController();
@@ -468,27 +494,12 @@ async function ensureLmsReady(
 
   if (!(await isLmsServerRunning())) {
     note("Starting LM Studio server (lms server start)…", 50);
-    try {
-      const child = spawn(lms, ["server", "start"], {
-        detached: true,
-        stdio: "ignore",
-        windowsHide: true,
-        env: { ...process.env },
-      });
-      child.unref();
-    } catch (err: unknown) {
-      note(`spawn server start failed: ${err instanceof Error ? err.message : String(err)}`, 52);
-      // Older builds used `lms server` without start
-      try {
-        const child = spawn(lms, ["server"], {
-          detached: true,
-          stdio: "ignore",
-          windowsHide: true,
-          env: { ...process.env },
-        });
-        child.unref();
-      } catch {
-        /* continue */
+    let exitCode = await spawnLmsServerDetached(lms, ["server", "start"]);
+    if (exitCode !== null && exitCode !== 0) {
+      note(`lms server start exited (${exitCode}); retrying lms server…`, 52);
+      exitCode = await spawnLmsServerDetached(lms, ["server"]);
+      if (exitCode !== null && exitCode !== 0) {
+        note(`lms server exited (${exitCode})`, 54);
       }
     }
 

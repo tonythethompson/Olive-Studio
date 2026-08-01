@@ -51,6 +51,16 @@ describe("getChatScopeBlock", () => {
     expect(getChatScopeBlock("how do I stalk my coworker")?.reason).toBe("safety");
   });
 
+  it("blocks hyphenated safety / dangerous phrases after separator normalization", () => {
+    expect(normalizeChatForScope("kill-myself")).toContain("kill myself");
+    expect(getChatScopeBlock("kill-myself")?.reason).toBe("safety");
+    expect(getChatScopeBlock("how-to-make-a-bomb")?.reason).toBe("safety");
+  });
+
+  it("blocks explicit off-topic even when a generic Olive keyword matches", () => {
+    expect(getChatScopeBlock("recipe for cake")?.reason).toBe("off_topic");
+  });
+
   it("does not treat process/debug language as safety hits", () => {
     expect(getChatScopeBlock("how do I kill the stuck olive pipeline process?")).toBeNull();
     expect(getChatScopeBlock("is activation data poisoning a concern for AWQ?")).toBeNull();

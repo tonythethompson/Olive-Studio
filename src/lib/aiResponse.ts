@@ -7,8 +7,9 @@ export function parseJsonFromAiResponse(text: string): unknown {
 
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)```$/i);
   const candidate = fenced ? fenced[1].trim() : trimmed;
-  const attempts = [candidate, extractBalancedJson(candidate), softRepairJson(candidate)].filter(
-    (s): s is string => Boolean(s && s.trim()),
+  const balancedCandidates = collectBalancedJsonCandidates(candidate);
+  const attempts = [candidate, ...balancedCandidates, softRepairJson(candidate)].filter((s): s is string =>
+    Boolean(s && s.trim()),
   );
 
   let lastErr: Error | undefined;
@@ -35,9 +36,9 @@ export function parseJsonFromAiResponse(text: string): unknown {
 }
 
 /** First balanced `{…}` or `[…]` slice, respecting simple string escapes. */
-function extractBalancedJson(text: string): string | null {
-  const startObj = text.indexOf("{");
-  const startArr = text.indexOf("[");
+function extractBalancedJson(text: string, startAt = 0): string | null {
+  const startObj = text.indexOf("{", startAt);
+  const startArr = text.indexOf("[", startAt);
   let start = -1;
   let open = "";
   let close = "";
@@ -81,6 +82,21 @@ function extractBalancedJson(text: string): string | null {
     }
   }
   return text.slice(start);
+}
+
+/** Collect balanced JSON slices from each `{` / `[` root (prose may precede valid JSON). */
+function collectBalancedJsonCandidates(text: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch !== "{" && ch !== "[") continue;
+    const slice = extractBalancedJson(text, i);
+    if (!slice || seen.has(slice)) continue;
+    seen.add(slice);
+    out.push(slice);
+  }
+  return out;
 }
 
 /**
