@@ -1,0 +1,27 @@
+src/components/features/CompatStatus.tsx
+  s_ef617d0cda07e0::t_9b677a99060ee2 32
+src/components/features/InputEnvironmentPanel.test.tsx
+  s_ef617d0cda07e0::t_607f64a3c3743f 58-64
+  s_ef617d0cda07e0::t_c4613e502d3050 118
+  s_ef617d0cda07e0::t_8879c2352495cf 48-57
+  s_ef617d0cda07e0::t_db6221bd8a7361 112-114
+  s_ef617d0cda07e0::t_56b9bce782ddee 2
+  s_ef617d0cda07e0::t_16cdf0108d0295 111
+  s_ef617d0cda07e0::t_46b84ae0f3e57f 116-117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "73d8def0c49223edece598d74782ee97bab7364d",
+  "prompts": {},
+  "sessions": {
+    "s_ef617d0cda07e0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e530e917-b3ef-4f10-ab62-892512a908b2",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
