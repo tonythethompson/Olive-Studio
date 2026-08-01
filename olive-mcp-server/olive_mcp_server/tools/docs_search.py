@@ -188,10 +188,9 @@ def _search_local(query: str, top_k: int) -> list[dict[str, Any]]:
         )
         if results:
             return results
+        return _keyword_search(kb_texts, terms, top_k)
     except Exception:  # noqa: BLE001
-        pass
-
-    return _keyword_search(_load_kb_text(), terms, top_k)
+        return _keyword_search(_load_kb_text(), terms, top_k)
 
 
 def _fetch_live_docs() -> tuple[dict[str, str], float]:
