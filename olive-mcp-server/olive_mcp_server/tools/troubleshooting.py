@@ -249,7 +249,7 @@ def troubleshoot_olive_error(
         error_message: The error message or traceback snippet.
         pass_name: Pass where the error occurred, if known.
         config_context: Additional configuration context.
-        domain: ``auto`` (Olive-first, then Studio), ``olive``, or ``studio``.
+        domain: ``auto`` (score both pools; Olive wins ties), ``olive``, or ``studio``.
 
     Returns:
         Root cause, workaround, updated config snippet, domain, applyable, and frequency metadata.
