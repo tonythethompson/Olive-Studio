@@ -43,7 +43,11 @@ import { useQuery } from "@tanstack/react-query";
 function UserProfile() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["user"],
-    queryFn: () => fetch("/api/user").then((res) => res.json()),
+    queryFn: () =>
+      fetch("/api/user").then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      }),
   });
 
   if (isLoading) return <div>Loading...</div>;

@@ -73,8 +73,7 @@ export function buildOwrManifestConfig(opts: {
       architecture,
       quantization: state.passes.quantization ? state.passes.quantPrecision : "none",
       precision: state.passes.conversionInputTargetTypes || "float32",
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      passes_applied: Object.keys(state.passes).filter((k) => (state.passes as any)[k]),
+      passes_applied: Object.keys(state.passes).filter((k) => (state.passes as Record<string, unknown>)[k]),
     },
     deployment_requirements: {
       runtime: `onnxruntime-${platform}`,

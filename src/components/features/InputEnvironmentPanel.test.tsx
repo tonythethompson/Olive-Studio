@@ -2,11 +2,18 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, act, fireEvent } from "@testing-library/react";
 import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
 
-// Mock the pipeline store
-const mockSetState = vi.fn();
+// Stable store mock: creating a fresh UIState each render churns effect deps
+// (e.g. state.localFiles) and can leave act()/findBy hanging.
+const { mockSetState, mockPipelineState } = vi.hoisted(() => {
+  const mockSetState = vi.fn();
+  // Inline defaults mirror createMockUIState(); resolved after imports via Object.assign below.
+  const mockPipelineState = {} as ReturnType<typeof createMockUIState>;
+  return { mockSetState, mockPipelineState };
+});
+
 vi.mock("@/lib/stores/pipelineStore", () => ({
   usePipelineState: () => ({
-    state: createMockUIState(),
+    state: mockPipelineState,
     setState: mockSetState,
   }),
 }));
@@ -32,6 +39,7 @@ vi.mock("@/lib/oliveRecipeHub", () => ({
   getCatalogDeviceFromRecipe: () => "cpu",
   getRecipesBranch: () => "main",
   setRecipesBranch: vi.fn(),
+  OLIVE_RECIPES_BRANCH: "main",
   OLIVE_RECIPES_BRANCH_DEFAULT: "main",
   OLIVE_RECIPES_REPO: "microsoft/olive-recipes",
 }));
@@ -39,7 +47,7 @@ vi.mock("@/lib/oliveRecipeHub", () => ({
 // Mock recipe model match
 vi.mock("@/lib/recipeModelMatch", () => ({
   buildLocalModelHints: () => [],
-  scoreRecipeMatchForLocal: () => 0,
+  scoreRecipeMatchForLocal: () => ({ tier: "none", score: 0 }),
   summarizeLocalRecipeMatches: () => [],
 }));
 
@@ -76,6 +84,8 @@ vi.mock("@/lib/presetVramEstimate", () => ({
 
 import { InputEnvironmentPanel } from "./InputEnvironmentPanel";
 
+Object.assign(mockPipelineState, createMockUIState());
+
 describe("InputEnvironmentPanel", () => {
   useFetchRoutesMock({
     "hardware-probe": {
@@ -105,16 +115,18 @@ describe("InputEnvironmentPanel", () => {
   });
 
   it("displays the model ID input for HuggingFace source", async () => {
+    // Avoid await act(click) / findBy: expanding this panel leaves async updates
+    // unsettled, so act-based waits hang past the default timeout in CI.
+    const { container } = render(<InputEnvironmentPanel />);
     await act(async () => {
-      render(<InputEnvironmentPanel />);
+      await Promise.resolve();
     });
-    // Presets-first IA keeps source config collapsed until opened
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /configure model source/i }));
+    const configureLabel = screen.getByText(/configure model source/i);
+    act(() => {
+      fireEvent.click(configureLabel.closest("button") ?? configureLabel);
     });
-    // The HF model ID input should be pre-populated with the default model
-    expect((screen.getByLabelText(/hugging face model id/i) as HTMLInputElement).value).toMatch(
-      /meta-llama/i,
-    );
+    const input = container.querySelector("#modelId") as HTMLInputElement | null;
+    expect(input).toBeTruthy();
+    expect(input?.value).toMatch(/meta-llama/i);
   });
 });

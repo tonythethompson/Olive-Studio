@@ -86,10 +86,13 @@ export interface UIState {
   azureModelPath: string;
   hfModelId: string;
   hfDataset: string;
+  /** Explicit HF pipeline task; empty/omitted means infer from model id. */
+  hfTask?: string;
   ihvProvider: IHVProvider;
   /** Hugging Face load_kwargs device_map — GPU + host RAM when auto. */
   memoryOffload: "gpu_only" | "auto";
-  cudaVersion: "auto" | "cpu" | "cu118" | "cu121" | "cu124" | "cu126";
+  /** Only tags with full dep resolution (torch index + ORT 1.26 + cu12 runtime). */
+  cudaVersion: "auto" | "cpu" | "cu118" | "cu121" | "cu124" | "cu126" | "cu128";
   cacheDir: string;
   azureStr: string;
   distributedCaching: boolean;
@@ -153,4 +156,9 @@ export interface McpDiagnostic {
   workaround: string;
   updated_config?: Record<string, unknown>;
   relevant_quirks?: string[];
+  /** olive | studio when matched; null/omitted when no match. */
+  domain?: "olive" | "studio" | null;
+  /** When false, Apply Fix stays disabled even if updated_config is present. */
+  applyable?: boolean;
+  related_olive_entry?: string | null;
 }

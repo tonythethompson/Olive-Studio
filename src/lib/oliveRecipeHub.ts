@@ -427,7 +427,17 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
   return next;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+/**
+ * Derives UI state from an Olive recipe.
+ *
+ * Extracts model source details, dataset and task metadata, execution provider,
+ * memory offload mode, and pass configuration. Speech recognition tasks are
+ * normalized to `automatic-speech-recognition`.
+ *
+ * @param parsed - The parsed Olive recipe.
+ * @param options - Options controlling whether mapped passes replace or merge with existing passes.
+ * @returns The UI state values derived from the recipe.
+ */
 export function deriveUiStateFromOliveRecipe(parsed: any, options?: DeriveUiStateOptions): Partial<UIState> {
   const incomingState: Partial<UIState> = {};
   const inputModel = parsed?.input_model;
@@ -444,9 +454,16 @@ export function deriveUiStateFromOliveRecipe(parsed: any, options?: DeriveUiStat
   if (hfName) {
     incomingState.modelSource = "huggingface";
     incomingState.hfModelId = hfName;
-    if (hfConfig?.dataset) {
-      incomingState.hfDataset = hfConfig.dataset;
-    }
+    const dataset =
+      (typeof inputModel?.config?.dataset === "string" && inputModel.config.dataset) ||
+      (typeof hfConfig?.dataset === "string" && hfConfig.dataset) ||
+      "";
+    incomingState.hfDataset = dataset;
+    const task =
+      (typeof inputModel?.config?.task === "string" && inputModel.config.task) ||
+      (typeof hfConfig?.task === "string" && hfConfig.task) ||
+      "";
+    incomingState.hfTask = task === "speech-recognition" ? "automatic-speech-recognition" : task;
   }
 
   const localFiles = inputModel?.config?.local_files;

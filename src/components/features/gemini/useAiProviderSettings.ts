@@ -16,9 +16,10 @@ interface UseAiProviderSettingsOptions {
 export type AiProviderSettings = ReturnType<typeof useAiProviderSettings>;
 
 /**
- * Owns everything behind the Settings tab: the active provider status, the
- * manual provider form (key / model / base URL), the live model catalog, and
- * the Codex + Devin sign-in flows.
+ * Manages AI provider settings, model catalogs, provider status, and Codex and Devin authentication flows.
+ *
+ * @param options - Hook state and lifecycle callbacks for the settings interface
+ * @returns Provider configuration state, form controls, model refresh operations, authentication handlers, and provider activation controls
  */
 export function useAiProviderSettings({
   isOpen,
@@ -32,6 +33,7 @@ export function useAiProviderSettings({
   const [settingsModel, setSettingsModel] = useState("gemini-2.5-flash");
   const [settingsApiKey, setSettingsApiKey] = useState("");
   const [settingsBaseUrl, setSettingsBaseUrl] = useState("");
+  const [settingsCloudflareAccountId, setSettingsCloudflareAccountId] = useState("");
   const [customModel, setCustomModel] = useState("");
   const [isSavingProvider, setIsSavingProvider] = useState(false);
   const [providerSaveError, setProviderSaveError] = useState("");
@@ -433,8 +435,30 @@ export function useAiProviderSettings({
   /** Validate the manual form, then persist the key/model/base URL server-side. */
   const saveApiKeyProvider = async () => {
     const key = settingsApiKey.trim();
-    const model = isCompatMode ? customModel.trim() : settingsModel;
-    if (!key) {
+    const model = isCompatMode ? customModel.trim() || settingsModel : settingsModel;
+    const resolvedBaseUrl = settingsBaseUrl.trim() || providerOption.baseUrl || undefined;
+    const cloudflareAccountId = settingsCloudflareAccountId.trim();
+    const allowEmptyKey =
+      settingsProvider === "openai-compat" ||
+      (() => {
+        if (!resolvedBaseUrl) return false;
+        try {
+          const host = new URL(resolvedBaseUrl).hostname.replace(/^\[|\]$/g, "").toLowerCase();
+          return host === "localhost" || host === "127.0.0.1" || host === "::1";
+        } catch {
+          return false;
+        }
+      })();
+    if (settingsProvider === "cloudflare") {
+      if (!key) {
+        setProviderSaveError("Enter a Cloudflare API token.");
+        return;
+      }
+      if (!cloudflareAccountId) {
+        setProviderSaveError("Enter a Cloudflare account ID (CLOUDFLARE_ACCOUNT_ID).");
+        return;
+      }
+    } else if (!key && !allowEmptyKey) {
       setProviderSaveError("Enter an API key.");
       return;
     }
@@ -442,21 +466,30 @@ export function useAiProviderSettings({
       setProviderSaveError(isCompatMode ? "Enter a model name." : "Select a model.");
       return;
     }
-    if (isCompatMode && !settingsBaseUrl.trim() && !providerOption.baseUrl) {
+    if (isCompatMode && !resolvedBaseUrl) {
       setProviderSaveError("Base URL is required for OpenAI-compatible providers.");
       return;
     }
     setIsSavingProvider(true);
     setProviderSaveError("");
     try {
+      if (settingsProvider === "cloudflare") {
+        const credRes = await fetch("/api/cloudflare/login/manual", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ apiToken: key, accountId: cloudflareAccountId }),
+        });
+        const credData = (await credRes.json().catch(() => ({}))) as { error?: string };
+        if (!credRes.ok) throw new Error(credData.error || `HTTP ${credRes.status}`);
+      }
       const r = await fetch("/api/ai/provider", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           provider: settingsProvider,
-          apiKey: key,
+          apiKey: key || undefined,
           model,
-          baseUrl: settingsBaseUrl.trim() || providerOption.baseUrl || undefined,
+          baseUrl: resolvedBaseUrl,
         }),
       });
       const contentType = r.headers.get("content-type") ?? "";
@@ -464,9 +497,43 @@ export function useAiProviderSettings({
       if (!r.ok) throw new Error((data as { error?: string }).error || `HTTP ${r.status}`);
       await fetchProviderStatus();
       setSettingsApiKey("");
+      setSettingsCloudflareAccountId("");
       onProviderActivated();
     } catch (err: unknown) {
       setProviderSaveError(err instanceof Error ? err.message : "Failed to save provider.");
+    } finally {
+      setIsSavingProvider(false);
+    }
+  };
+
+  /** Activate LM Studio / Ollama as openai-compat local provider. Returns true on success. */
+  const enableLocalAiProvider = async (source: "lms" | "ollama", modelTag: string): Promise<boolean> => {
+    const baseUrl = source === "ollama" ? "http://127.0.0.1:11434/v1" : "http://127.0.0.1:1234/v1";
+    setIsSavingProvider(true);
+    setProviderSaveError("");
+    try {
+      const r = await fetch("/api/ai/provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "openai-compat",
+          apiKey: "local",
+          model: modelTag,
+          baseUrl,
+        }),
+      });
+      const data = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      setSettingsProvider("openai-compat");
+      setSettingsModel(modelTag);
+      setCustomModel(modelTag);
+      setSettingsBaseUrl(baseUrl);
+      await fetchProviderStatus();
+      onProviderActivated();
+      return true;
+    } catch (err: unknown) {
+      setProviderSaveError(err instanceof Error ? err.message : "Failed to enable local provider.");
+      return false;
     } finally {
       setIsSavingProvider(false);
     }
@@ -502,6 +569,8 @@ export function useAiProviderSettings({
     setSettingsModel,
     settingsApiKey,
     setSettingsApiKey,
+    settingsCloudflareAccountId,
+    setSettingsCloudflareAccountId,
     settingsBaseUrl,
     setSettingsBaseUrl,
     customModel,
@@ -516,6 +585,7 @@ export function useAiProviderSettings({
     isSavingProvider,
     providerSaveError,
     saveProvider,
+    enableLocalAiProvider,
     clearProvider,
     refreshProviderStatus: fetchProviderStatus,
     codexAccount,

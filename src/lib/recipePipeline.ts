@@ -2,6 +2,7 @@ import { BatchJob, UIState } from "@/types";
 import { buildOliveRecipe } from "@/lib/oliveRecipeBuilder";
 import {
   getPipelineValidation,
+  getLocalExecutionIssues,
   getRemainingAdvisories,
   PipelineValidationResult,
   PipelineValidationOptions,
@@ -16,10 +17,18 @@ export interface RecipePipelineResult {
   validation: PipelineValidationResult;
   schema: OliveRecipeSchemaResult;
   advisories: ReturnType<typeof getRemainingAdvisories>;
+  /** Local-only blockers (e.g. WebGPU Execute Live) not covered by graph validation alone. */
+  localExecutionIssues: ReturnType<typeof getLocalExecutionIssues>;
   isRunnable: boolean;
 }
 
-/** Single source of truth: UI state → sanitized recipe artifact. */
+/**
+ * Builds a sanitized Olive recipe artifact and evaluates its validation status.
+ *
+ * @param state - The UI state used to construct the recipe
+ * @param options - Optional settings for pipeline validation
+ * @returns The sanitized state, recipe, serialized JSON, validation results, advisories, schema status, and runnability
+ */
 export function buildRecipeFromState(
   state: UIState,
   options?: PipelineValidationOptions,
@@ -28,6 +37,7 @@ export function buildRecipeFromState(
   const recipe = buildOliveRecipe(sanitized);
   const recipeJson = serializeRecipe(recipe);
   const validation = getPipelineValidation(sanitized, options);
+  const localExecutionIssues = getLocalExecutionIssues(sanitized, true);
   const schema = validateOliveRecipeStructure(recipe);
 
   return {
@@ -37,7 +47,8 @@ export function buildRecipeFromState(
     validation,
     schema,
     advisories: getRemainingAdvisories(sanitized),
-    isRunnable: !validation.isBlocked && schema.valid,
+    localExecutionIssues,
+    isRunnable: !validation.isBlocked && localExecutionIssues.length === 0 && schema.valid,
   };
 }
 

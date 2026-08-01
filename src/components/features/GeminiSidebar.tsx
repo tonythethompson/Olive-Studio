@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useTransition } from "react";
+import { useState, useEffect, useMemo, useTransition, useRef } from "react";
 import { UIState } from "@/types";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { cn } from "@/lib/utils";
@@ -7,6 +7,7 @@ import {
   buildChatPresetQueries,
   buildWorkspaceContextSummary,
 } from "@/lib/aiWorkspaceContext";
+import { chatPatchToUiState, sanitizeChatActionPatch, type ChatAction } from "@/lib/chatActions";
 import { Bot, X, Lightbulb, MessageSquareCode, Settings2 } from "lucide-react";
 import { AuditPanel } from "./AuditPanel";
 import { PROVIDER_OPTIONS } from "./gemini/aiProviderCatalog";
@@ -36,9 +37,12 @@ const TABS = [
 ];
 
 /**
- * Assistant sidebar: pipeline audit, workspace-aware chat, and AI provider
- * settings. State and side effects live in the `./gemini` hooks; this component
- * wires them together and owns the tab chrome.
+ * Renders a sidebar for pipeline auditing, workspace-aware chat, and AI provider configuration.
+ *
+ * @param isOpen - Whether the sidebar is visible
+ * @param onClose - Callback invoked when the sidebar is closed
+ * @param openToAudit - Whether to select the audit tab and restart analysis
+ * @param onAuditOpened - Optional callback invoked after the audit tab is opened
  */
 export function GeminiSidebar({
   state: propState,
@@ -66,6 +70,31 @@ export function GeminiSidebar({
 
   const audit = useAiAudit({ state, setState });
   const chat = useAiChat(workspaceContext);
+  const chatActionAuditTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (chatActionAuditTimerRef.current) clearTimeout(chatActionAuditTimerRef.current);
+    };
+  }, []);
+
+  const handleApplyChatAction = (messageIndex: number, action: ChatAction) => {
+    const patch = sanitizeChatActionPatch(action.patch);
+    if (!patch) return;
+    const partial = chatPatchToUiState(state, patch);
+    const next: UIState = {
+      ...state,
+      ...partial,
+      passes: partial.passes ?? state.passes,
+    };
+    setState(partial);
+    chat.markActionApplied(messageIndex, action.id);
+    if (chatActionAuditTimerRef.current) clearTimeout(chatActionAuditTimerRef.current);
+    chatActionAuditTimerRef.current = setTimeout(() => {
+      chatActionAuditTimerRef.current = null;
+      void audit.runAnalysis({ stateOverride: next });
+    }, 400);
+  };
 
   const providers = useAiProviderSettings({
     isOpen,
@@ -80,8 +109,9 @@ export function GeminiSidebar({
 
   const local = useLocalEngineSetup({
     isOpen,
-    onModelActivated: async () => {
-      await providers.refreshProviderStatus();
+    onModelActivated: async (modelTag, source) => {
+      const ok = await providers.enableLocalAiProvider(source, modelTag);
+      if (!ok) return;
       audit.resetAnalysis();
       setActiveTab("audit");
     },
@@ -145,7 +175,7 @@ export function GeminiSidebar({
           <div className="h-12 flex items-center justify-between px-5 border-b border-slate-800 shrink-0 bg-slate-950/80">
             <div className="flex items-center gap-2 min-w-0">
               <Bot className="h-4 w-4 text-electric-blue shrink-0" />
-              <h2 className="text-sm font-medium text-slate-100">Assistant</h2>
+              <span className="text-sm font-medium text-slate-100">Assistant</span>
               <span className="text-[11px] text-slate-500 truncate hidden sm:inline">· {providerLabel}</span>
             </div>
             <button
@@ -228,6 +258,7 @@ export function GeminiSidebar({
                 onInputChange={chat.setInputQuestion}
                 onSend={(presetText) => void chat.sendChat(presetText)}
                 onGoSettings={() => setActiveTab("settings")}
+                onApplyAction={handleApplyChatAction}
               />
             </div>
 
@@ -246,13 +277,17 @@ export function GeminiSidebar({
           </div>
 
           {/* Footer */}
-          <div className="p-3.5 border-t border-slate-800 shrink-0 bg-slate-950/85">
+          <div className="p-3.5 border-t border-slate-800 shrink-0 bg-slate-950/85 space-y-1.5">
             <div className="flex items-center gap-2 text-[10px] text-slate-500 justify-center">
               <Bot className="h-3 w-3 text-slate-600" />
               <span>
                 Target: <span className="text-slate-400 font-mono">{state.ihvProvider}</span>
               </span>
             </div>
+            <p className="text-[10px] text-slate-600 text-center leading-snug px-1">
+              AI can be wrong. Verify Audit, Chat, and Apply changes against your model, EP, and Olive docs
+              before running jobs.
+            </p>
           </div>
         </div>
       </aside>

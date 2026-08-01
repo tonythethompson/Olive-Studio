@@ -8,10 +8,10 @@ import {
 } from "@/lib/hardwareProbe";
 import { prepareProviderChange } from "@/lib/pipelineValidation";
 import {
-  isPipelineOliveRunning,
   navigatePipeline,
-  PIPELINE_NAV_BLOCKED_MESSAGE,
+  isPipelineOliveRunning,
   subscribePipelineOliveRunning,
+  PIPELINE_NAV_BLOCKED_MESSAGE,
 } from "@/lib/pipelineNavigation";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { UIState } from "@/types";
@@ -19,15 +19,14 @@ import { AlertTriangle, Cpu as TargetIcon, Loader2 } from "lucide-react";
 import type { InspectorProps } from "./types";
 
 /**
- * Provides a hardware execution-provider selector with local availability detection.
+ * Selects the active hardware execution provider and displays its availability.
  *
- * @param state - The current pipeline UI state.
- * @param setState - Applies updates to the pipeline UI state.
+ * @param state - The current interface state.
+ * @param setState - Applies updates to the interface state.
  */
 export function ProviderInspector({ state, setState }: InspectorProps) {
   const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
   const [probeLoading, setProbeLoading] = useState(true);
-  const navBlocked = useSyncExternalStore(subscribePipelineOliveRunning, isPipelineOliveRunning, () => false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: on-mount hardware probe
@@ -52,6 +51,7 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
   }, [selectableProviders, state.ihvProvider]);
 
   const currentHardwareBlock = getProviderAvailabilityBlock(state.ihvProvider, hardwareProbe);
+  const ihvNavBlocked = useSyncExternalStore(subscribePipelineOliveRunning, isPipelineOliveRunning);
 
   const handleProviderChange = (nextProvider: UIState["ihvProvider"]) => {
     if (nextProvider === state.ihvProvider) {
@@ -76,14 +76,15 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
         </p>
         <button
           type="button"
-          aria-disabled={navBlocked}
-          title={navBlocked ? PIPELINE_NAV_BLOCKED_MESSAGE : undefined}
           onClick={() => navigatePipeline("ihv")}
-          className={
-            navBlocked
-              ? "mt-2 text-[10px] text-electric-blue opacity-40 cursor-not-allowed"
-              : "mt-2 text-[10px] text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer"
-          }
+          disabled={ihvNavBlocked}
+          title={ihvNavBlocked ? PIPELINE_NAV_BLOCKED_MESSAGE : undefined}
+          aria-disabled={ihvNavBlocked}
+          className={`mt-2 text-[10px] underline underline-offset-2 ${
+            ihvNavBlocked
+              ? "text-slate-600 cursor-not-allowed no-underline"
+              : "text-electric-blue hover:text-white cursor-pointer"
+          }`}
         >
           Full hardware options in step 02
         </button>

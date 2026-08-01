@@ -21,13 +21,12 @@ import {
   fetchGitHubRecipeJson,
   fetchOliveRecipesCatalogItem,
   getCatalogDeviceFromRecipe,
-  getRecipesBranch,
-  setRecipesBranch,
-  OLIVE_RECIPES_BRANCH_DEFAULT,
+  OLIVE_RECIPES_BRANCH,
   OLIVE_RECIPES_REPO,
   type RecipeCatalogItem,
 } from "@/lib/oliveRecipeHub";
 import { parseRecipeJson } from "@/lib/recipePipeline";
+import { getFileDetailedInfo as resolveFileDetailedInfo } from "@/lib/localFileDetails";
 import { cn } from "@/lib/utils";
 import {
   buildLocalModelHints,
@@ -100,6 +99,8 @@ function presetDisplayName(name: string): { title: string; meta: string } {
   return { title: name, meta: "" };
 }
 
+type RecipeSortMode = "recommended" | "name-asc" | "name-desc" | "size-asc" | "size-desc";
+
 /**
  * Renders the model source configuration and Olive recipe management panel.
  *
@@ -169,8 +170,7 @@ export function InputEnvironmentPanel({
   const [syncStatus, setSyncStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [syncError, setSyncError] = useState("");
   const [repoUrl, setRepoUrl] = useState(`https://github.com/${OLIVE_RECIPES_REPO}`);
-  const [repoBranch, setRepoBranch] = useState(getRecipesBranch());
-  const [branchPinned, setBranchPinned] = useState(() => getRecipesBranch() !== OLIVE_RECIPES_BRANCH_DEFAULT);
+  const [repoBranch, setRepoBranch] = useState(OLIVE_RECIPES_BRANCH);
   const [repoPath, setRepoPath] = useState(
     "Qwen-Qwen2.5-1.5B-Instruct/NvTensorRtRtx/Qwen2.5-1.5B-Instruct_model_builder_fp16.json",
   );
@@ -199,6 +199,7 @@ export function InputEnvironmentPanel({
   const [hideIncompatibleRecipes, setHideIncompatibleRecipes] = useState(true);
   const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
   const [hardwareProbeLoading, setHardwareProbeLoading] = useState(true);
+  const [recipeSort, setRecipeSort] = useState<RecipeSortMode>("recommended");
 
   const recipeRailCollapsed = Boolean(appliedRecipeLabel) && !recipeRailExpanded;
 
@@ -274,13 +275,33 @@ export function InputEnvironmentPanel({
   const handleApplyCuratedRecipeAnyway = (item: RecipeCatalogItem) =>
     applyCuratedRecipe(item, { allowIncompatible: true });
 
-  const handleFetchRemote = async () => {
+  const handleFetchRemote = async (overrides?: { url?: string; branch?: string; path?: string }) => {
+    const url = (overrides?.url ?? repoUrl).trim();
+    const branch = (overrides?.branch ?? repoBranch).trim() || "main";
+    const path = (overrides?.path ?? repoPath).trim();
+
+    if (overrides?.url !== undefined) setRepoUrl(overrides.url);
+    if (overrides?.branch !== undefined) setRepoBranch(overrides.branch);
+    if (overrides?.path !== undefined) setRepoPath(overrides.path);
+
+    if (!url) {
+      setSyncStatus("error");
+      setSyncError("GitHub repository URL is required.");
+      return;
+    }
+    if (!path) {
+      setSyncStatus("error");
+      setSyncError("Recipe path is required.");
+      return;
+    }
+
     setSyncStatus("loading");
     setSyncError("");
 
     try {
-      const { json } = await fetchGitHubRecipeJson(repoUrl, repoBranch, repoPath);
+      const { json } = await fetchGitHubRecipeJson(url, branch, path);
       setImportJson(JSON.stringify(json, null, 2));
+      setImportError(null);
       setSyncStatus("success");
       setRecipeSuccessMsg("Downloaded remote recipe payload! Inspect in Editor tab.");
       setTimeout(() => setRecipeSuccessMsg(null), 4000);
@@ -395,24 +416,48 @@ export function InputEnvironmentPanel({
       );
     }
 
-    return rows
-      .map((item) => ({
-        item,
-        match: localModelHints ? scoreRecipeMatchForLocal(localModelHints, item) : null,
-        hardware: assessCatalogItemHardwareCompatibility(item, hardwareProbe),
-      }))
-      .sort((a, b) => {
-        const hwOrder = { compatible: 0, unknown: 1, unavailable: 2 };
-        const hwDiff = hwOrder[a.hardware.tier] - hwOrder[b.hardware.tier];
-        if (hwDiff !== 0) return hwDiff;
-        return (b.match?.score ?? -1) - (a.match?.score ?? -1);
-      });
-  }, [filteredRecipes, localModelHints, showLocalRecipeMatchesOnly, hideIncompatibleRecipes, hardwareProbe]);
+    const decorated = rows.map((item) => ({
+      item,
+      match: localModelHints ? scoreRecipeMatchForLocal(localModelHints, item) : null,
+      hardware: assessCatalogItemHardwareCompatibility(item, hardwareProbe),
+      modelTitle: presetDisplayName(item.name).title,
+      inferenceGb: estimateVramForCatalogPreset(item, hardwareProbe).inferenceGb,
+    }));
+
+    decorated.sort((a, b) => {
+      if (recipeSort === "name-asc" || recipeSort === "name-desc") {
+        const byTitle = a.modelTitle.localeCompare(b.modelTitle, undefined, { sensitivity: "base" });
+        if (byTitle !== 0) return recipeSort === "name-asc" ? byTitle : -byTitle;
+        const byName = a.item.name.localeCompare(b.item.name, undefined, { sensitivity: "base" });
+        return recipeSort === "name-asc" ? byName : -byName;
+      }
+
+      if (recipeSort === "size-asc" || recipeSort === "size-desc") {
+        const bySize = a.inferenceGb - b.inferenceGb;
+        if (bySize !== 0) return recipeSort === "size-asc" ? bySize : -bySize;
+        return a.modelTitle.localeCompare(b.modelTitle, undefined, { sensitivity: "base" });
+      }
+
+      const hwOrder = { compatible: 0, unknown: 1, unavailable: 2 } as const;
+      const hwDiff = hwOrder[a.hardware.tier] - hwOrder[b.hardware.tier];
+      if (hwDiff !== 0) return hwDiff;
+      return (b.match?.score ?? -1) - (a.match?.score ?? -1);
+    });
+
+    return decorated;
+  }, [
+    filteredRecipes,
+    localModelHints,
+    showLocalRecipeMatchesOnly,
+    hideIncompatibleRecipes,
+    hardwareProbe,
+    recipeSort,
+  ]);
 
   const groupedRecipes = useMemo(() => {
     const groups = new Map<string, { title: string; rows: typeof curatedRecipesWithMatch }>();
     for (const row of curatedRecipesWithMatch) {
-      const { title } = presetDisplayName(row.item.name);
+      const title = row.modelTitle;
       const existing = groups.get(title);
       if (existing) {
         existing.rows.push(row);
@@ -428,28 +473,15 @@ export function InputEnvironmentPanel({
     return item.repoPath.toLowerCase().includes(repoPath.toLowerCase());
   }).slice(0, 40);
 
-  // Helper to get hash from reconstructed history (or a placeholder for local files)
-  const getDisplayHash = (name: string): { value: string; verified: boolean } => {
-    // Check reconstructed history for real hash
+  // Helper to get hash from reconstructed history (null when no digest exists)
+  const getDisplayHash = (name: string): string | null => {
     const recon = reconstructedHistory.find((r) => r.baseName === name);
-    if (recon) return { value: recon.finalHash, verified: true };
-    // Check chunk hashes within reconstructed history
+    if (recon) return recon.finalHash;
     for (const r of reconstructedHistory) {
       const chunk = r.chunks.find((c) => c.name === name);
-      if (chunk) return { value: chunk.hash, verified: true };
+      if (chunk) return chunk.hash;
     }
-    // For non-reconstructed local files, return a placeholder indicating no hash computed
-    return {
-      value: "unverified:(not yet computed — reconstruct to get real hash)",
-      verified: false,
-    };
-  };
-
-  const formatSha256 = async (buffer: ArrayBuffer): Promise<string> => {
-    const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-    return `sha256:${hashHex}`;
+    return null;
   };
 
   const getFileFormatLabel = (name: string) => {
@@ -493,7 +525,7 @@ export function InputEnvironmentPanel({
     return "Standard model compilation asset. Subject to parsing, quantization, and layer alignment workflows.";
   };
 
-  const getSimulatedTensors = (name: string, size: number, checksumVerified = false) => {
+  const getSimulatedTensors = (name: string, size: number) => {
     const isChunk = name.match(/\.(\d{3,})$/) !== null;
     if (isChunk) {
       return [
@@ -505,7 +537,7 @@ export function InputEnvironmentPanel({
         },
         {
           key: "segment_checksum",
-          val: checksumVerified ? "Verified Integrity" : "Unverified",
+          val: getDisplayHash(name) ? "SHA-256 verified" : "Not hashed",
         },
       ];
     }
@@ -622,6 +654,7 @@ export function InputEnvironmentPanel({
       const totalBytes = sortedFiles.reduce((acc, f) => acc + f.size, 0);
       let bytesRead = 0;
       const buffers: ArrayBuffer[] = [];
+      const generatedChunks: { name: string; size: number; hash: string }[] = [];
 
       for (const fileMeta of sortedFiles) {
         const fileObj = chunkFilesRef.current.get(fileMeta.name);
@@ -630,6 +663,15 @@ export function InputEnvironmentPanel({
         }
         const buffer = await fileObj.arrayBuffer();
         buffers.push(buffer);
+        const chunkDigest = await crypto.subtle.digest("SHA-256", buffer);
+        const chunkHex = Array.from(new Uint8Array(chunkDigest))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+        generatedChunks.push({
+          name: fileMeta.name,
+          size: fileMeta.size,
+          hash: `sha256:${chunkHex}`,
+        });
         bytesRead += buffer.byteLength;
         setReconstructProgress(Math.round((bytesRead / totalBytes) * 100));
       }
@@ -640,18 +682,12 @@ export function InputEnvironmentPanel({
       setDownloadUrl(url);
       setDownloadName(baseName);
 
-      // Compute real SHA-256 hashes for the assembled blob and each chunk
+      // Compute real SHA-256 hash using Web Crypto API
       const combined = await blob.arrayBuffer();
-      const finalHash = await formatSha256(combined);
-
-      // Build chunk metadata with real per-chunk digests (never synthetic filenames)
-      const generatedChunks = await Promise.all(
-        sortedFiles.map(async (file, index) => ({
-          name: file.name,
-          size: file.size,
-          hash: await formatSha256(buffers[index]!),
-        })),
-      );
+      const hashBuffer = await crypto.subtle.digest("SHA-256", combined);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+      const finalHash = `sha256:${hashHex}`;
 
       setReconstructedHistory((prev) => [
         ...prev,
@@ -689,66 +725,17 @@ export function InputEnvironmentPanel({
         ? reconstructedHistory[0].baseName
         : null);
 
-  // Find file in local files or in reconstructed history or as part of chunks
-  const getFileDetailedInfo = (name: string | null) => {
-    if (!name) return null;
-
-    // Check in active localFiles
-    const active = state.localFiles.find((f) => f.name === name);
-    if (active) {
-      return {
-        name: active.name,
-        size: active.size,
-        status: "Local Asset",
-        isChunk: getBaseName(active.name) !== null,
-        reconstructed: false,
-        lineage: null,
-      };
-    }
-
-    // Check in reconstructed items
-    const recon = reconstructedHistory.find((r) => r.baseName === name);
-    if (recon) {
-      return {
-        name: recon.baseName,
-        size: recon.totalSize,
-        status: "Reconstructed Binary",
-        isChunk: false,
-        reconstructed: true,
-        lineage: recon,
-      };
-    }
-
-    // Check in chunks of reconstructed history
-    for (const r of reconstructedHistory) {
-      const chunk = r.chunks.find((c) => c.name === name);
-      if (chunk) {
-        return {
-          name: chunk.name,
-          size: chunk.size,
-          status: "Archived Chunk Segment",
-          isChunk: true,
-          reconstructed: false,
-          lineage: { parent: r.baseName, ...r },
-        };
-      }
-    }
-
-    return null;
-  };
+  // Prefer reconstructed history when the same baseName also appears in localFiles.
+  const getFileDetailedInfo = (name: string | null) =>
+    resolveFileDetailedInfo(name, state.localFiles, reconstructedHistory);
 
   const selectedFileDetailed = getFileDetailedInfo(activeFileSelectedName);
-  const selectedFileHash = selectedFileDetailed ? getDisplayHash(selectedFileDetailed.name) : null;
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 animate-duration-300">
       {/* SUCCESS TOAST BANNER */}
       {recipeSuccessMsg && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-4 rounded-xl flex items-start gap-3 animate-in slide-in-from-top-4 duration-300"
-        >
+        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-4 rounded-xl flex items-start gap-3 animate-in slide-in-from-top-4 duration-300">
           <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
           <div className="text-xs sm:text-sm font-medium">{recipeSuccessMsg}</div>
         </div>
@@ -906,10 +893,7 @@ export function InputEnvironmentPanel({
                       </div>
 
                       {syncStatus === "error" && syncError && (
-                        <div
-                          role="alert"
-                          className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs flex items-start gap-2"
-                        >
+                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs flex items-start gap-2">
                           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                           <span>{syncError}</span>
                         </div>
@@ -993,7 +977,7 @@ export function InputEnvironmentPanel({
                             </button>
                           )}
                         </div>
-                        <fieldset className="grid grid-cols-2 gap-2 border-0 p-0 m-0 min-w-0">
+                        <fieldset className="grid grid-cols-1 sm:grid-cols-3 gap-2 border-0 p-0 m-0 min-w-0">
                           <legend className="sr-only">Recipe filters</legend>
                           <Select
                             id="recipe-architecture-filter"
@@ -1029,6 +1013,19 @@ export function InputEnvironmentPanel({
                             <option value="OpenVINO">Intel OpenVINO</option>
                             <option value="CPU">Universal CPU</option>
                           </Select>
+                          <Select
+                            id="recipe-sort"
+                            aria-label="Sort recipes"
+                            value={recipeSort}
+                            onChange={(e) => setRecipeSort(e.target.value as RecipeSortMode)}
+                            className="h-9 text-xs py-1"
+                          >
+                            <option value="recommended">Sort: Recommended</option>
+                            <option value="name-asc">Sort: Name A-Z</option>
+                            <option value="name-desc">Sort: Name Z-A</option>
+                            <option value="size-asc">Sort: Size (smallest)</option>
+                            <option value="size-desc">Sort: Size (largest)</option>
+                          </Select>
                         </fieldset>
                       </div>
 
@@ -1036,7 +1033,7 @@ export function InputEnvironmentPanel({
                         {groupedRecipes.map(({ title: modelTitle, rows }) => (
                           <div key={modelTitle} className="bg-slate-950/20">
                             <div className="sticky top-0 z-[1] flex items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2">
-                              <h4 className="text-sm font-semibold text-slate-100 truncate">{modelTitle}</h4>
+                              <h3 className="text-sm font-semibold text-slate-100 truncate">{modelTitle}</h3>
                               <span className="shrink-0 text-[11px] font-mono text-slate-400">
                                 {rows.length} target{rows.length === 1 ? "" : "s"}
                               </span>
@@ -1118,18 +1115,10 @@ export function InputEnvironmentPanel({
                                           variant="outline"
                                           className="h-7 px-2 text-[10px] border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
                                           disabled={applyingRecipePath === item.repoPath}
-                                          aria-busy={applyingRecipePath === item.repoPath}
-                                          aria-label={
-                                            applyingRecipePath === item.repoPath
-                                              ? "Applying recipe"
-                                              : "Apply anyway"
-                                          }
                                           onClick={() => handleApplyCuratedRecipeAnyway(item)}
                                         >
                                           {applyingRecipePath === item.repoPath ? (
-                                            <span className="animate-spin">
-                                              <Loader2 className="h-3 w-3" />
-                                            </span>
+                                            <Loader2 className="h-3 w-3 animate-spin" />
                                           ) : (
                                             "Apply anyway"
                                           )}
@@ -1139,16 +1128,10 @@ export function InputEnvironmentPanel({
                                           type="button"
                                           className="h-7 px-2.5 text-[10px] bg-electric-blue hover:bg-electric-blue-dark text-slate-950"
                                           disabled={applyingRecipePath === item.repoPath}
-                                          aria-busy={applyingRecipePath === item.repoPath}
-                                          aria-label={
-                                            applyingRecipePath === item.repoPath ? "Applying recipe" : "Apply"
-                                          }
                                           onClick={() => handleApplyCuratedRecipe(item)}
                                         >
                                           {applyingRecipePath === item.repoPath ? (
-                                            <span className="animate-spin">
-                                              <Loader2 className="h-3 w-3" />
-                                            </span>
+                                            <Loader2 className="h-3 w-3 animate-spin" />
                                           ) : (
                                             "Apply"
                                           )}
@@ -1216,38 +1199,11 @@ export function InputEnvironmentPanel({
                               <GitBranch className="h-3.5 w-3.5 text-electric-blue" />
                               Target Branch
                             </Label>
-                            <div className="flex gap-1.5">
-                              <Input
-                                value={repoBranch}
-                                onChange={(e) => setRepoBranch(e.target.value)}
-                                className="font-mono text-xs h-9 flex-1"
-                              />
-                              <button
-                                type="button"
-                                title={
-                                  branchPinned
-                                    ? `Pinned to ${repoBranch} — click to unpin`
-                                    : "Pin this branch for all recipe fetches"
-                                }
-                                className="h-9 px-2 rounded border text-[10px] font-medium transition-colors shrink-0"
-                                style={{
-                                  borderColor: branchPinned ? "#8DA840" : undefined,
-                                  color: branchPinned ? "#8DA840" : undefined,
-                                }}
-                                onClick={() => {
-                                  if (branchPinned) {
-                                    setRecipesBranch(null);
-                                    setRepoBranch(OLIVE_RECIPES_BRANCH_DEFAULT);
-                                    setBranchPinned(false);
-                                  } else {
-                                    setRecipesBranch(repoBranch);
-                                    setBranchPinned(true);
-                                  }
-                                }}
-                              >
-                                {branchPinned ? "Unpin" : "Pin"}
-                              </button>
-                            </div>
+                            <Input
+                              value={repoBranch}
+                              onChange={(e) => setRepoBranch(e.target.value)}
+                              className="font-mono text-xs h-9"
+                            />
                           </div>
                           <div className="space-y-2">
                             <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
@@ -1272,7 +1228,7 @@ export function InputEnvironmentPanel({
 
                         <Button
                           type="button"
-                          onClick={handleFetchRemote}
+                          onClick={() => void handleFetchRemote()}
                           disabled={syncStatus === "loading" || !repoUrl.trim()}
                           className="w-full text-xs h-9 bg-electric-blue hover:bg-electric-blue-dark text-slate-950"
                         >
@@ -1290,10 +1246,7 @@ export function InputEnvironmentPanel({
                         </Button>
 
                         {syncStatus === "error" && (
-                          <div
-                            role="alert"
-                            className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs flex items-start gap-2"
-                          >
+                          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs flex items-start gap-2">
                             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                             <span>{syncError}</span>
                           </div>
@@ -1307,19 +1260,19 @@ export function InputEnvironmentPanel({
                             {
                               label: "Qwen2.5 TRT-RTX FP16",
                               repo: `https://github.com/${OLIVE_RECIPES_REPO}`,
-                              branch: OLIVE_RECIPES_BRANCH_DEFAULT,
+                              branch: OLIVE_RECIPES_BRANCH,
                               path: "Qwen-Qwen2.5-1.5B-Instruct/NvTensorRtRtx/Qwen2.5-1.5B-Instruct_model_builder_fp16.json",
                             },
                             {
                               label: "Whisper Tiny CPU INT8",
                               repo: `https://github.com/${OLIVE_RECIPES_REPO}`,
-                              branch: OLIVE_RECIPES_BRANCH_DEFAULT,
+                              branch: OLIVE_RECIPES_BRANCH,
                               path: "openai-whisper-tiny/cpu/whisper-tiny_cpu_int8.json",
                             },
                             {
                               label: "Phi-3.5 Mini DirectML",
                               repo: `https://github.com/${OLIVE_RECIPES_REPO}`,
-                              branch: OLIVE_RECIPES_BRANCH_DEFAULT,
+                              branch: OLIVE_RECIPES_BRANCH,
                               path: "microsoft-Phi-3.5-mini-instruct/aitk/phi3_5_dml_config.json",
                             },
                             {
@@ -1328,27 +1281,48 @@ export function InputEnvironmentPanel({
                               branch: "main",
                               path: "examples/resnet/resnet_ptq.json",
                             },
-                          ].map((sc, i) => (
-                            <button
-                              key={i}
-                              type="button"
-                              onClick={() => {
-                                setRepoUrl(sc.repo);
-                                setRepoBranch(sc.branch);
-                                setRepoPath(sc.path);
-                                setSyncStatus("idle");
-                                setSyncError("");
-                              }}
-                              className="text-left p-2.5 bg-slate-950/80 hover:bg-slate-950 border border-slate-900 hover:border-electric-blue/20 hover:text-white rounded-lg text-xs text-slate-300 transition-all font-sans cursor-pointer group"
-                            >
-                              <span className="font-semibold block text-slate-200 group-hover:text-electric-blue transition-colors">
-                                {sc.label}
-                              </span>
-                              <span className="text-[10px] text-slate-500 block truncate font-mono mt-0.5">
-                                {sc.path}
-                              </span>
-                            </button>
-                          ))}
+                          ].map((sc) => {
+                            const isActive =
+                              repoPath === sc.path &&
+                              repoBranch === sc.branch &&
+                              (repoUrl.includes("olive-recipes")
+                                ? sc.repo.includes("olive-recipes")
+                                : repoUrl.replace(/\/$/, "") === sc.repo.replace(/\/$/, ""));
+                            return (
+                              <button
+                                key={sc.path}
+                                type="button"
+                                disabled={syncStatus === "loading"}
+                                aria-label={`Pull ${sc.label} into JSON editor`}
+                                onClick={() => {
+                                  void handleFetchRemote({
+                                    url: sc.repo,
+                                    branch: sc.branch,
+                                    path: sc.path,
+                                  });
+                                }}
+                                className={`text-left p-2.5 rounded-lg text-xs transition-all font-sans cursor-pointer group disabled:opacity-50 disabled:cursor-wait border ${
+                                  isActive
+                                    ? "bg-electric-blue/10 border-electric-blue/40 text-slate-100"
+                                    : "bg-slate-950/80 hover:bg-slate-950 border-slate-900 hover:border-electric-blue/20 text-slate-300"
+                                }`}
+                              >
+                                <span
+                                  className={`font-semibold block transition-colors ${
+                                    isActive
+                                      ? "text-electric-blue"
+                                      : "text-slate-200 group-hover:text-electric-blue"
+                                  }`}
+                                >
+                                  {sc.label}
+                                  {syncStatus === "loading" && repoPath === sc.path ? " · pulling…" : ""}
+                                </span>
+                                <span className="text-[10px] text-slate-500 block truncate font-mono mt-0.5">
+                                  {sc.path}
+                                </span>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     </TabsContent>
@@ -1364,21 +1338,14 @@ export function InputEnvironmentPanel({
                     >
                       <div className="flex flex-col gap-3">
                         {importError && (
-                          <div
-                            role="alert"
-                            className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs font-mono leading-relaxed flex items-start gap-1.5 animate-bounce"
-                          >
+                          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs font-mono leading-relaxed flex items-start gap-1.5 animate-bounce">
                             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                             <span>{importError}</span>
                           </div>
                         )}
 
                         <div className="relative flex flex-col min-h-[180px]">
-                          <label htmlFor="recipe-json-editor" className="sr-only">
-                            Olive recipe JSON
-                          </label>
                           <textarea
-                            id="recipe-json-editor"
                             className="w-full flex-1 bg-slate-950 border border-slate-900 hover:border-slate-800 focus:border-electric-blue rounded-lg p-3 font-mono text-[11px] text-slate-300 focus-visible:outline-none focus:focus-visible:ring-1 focus-visible:ring-electric-blue/40 placeholder:text-slate-700 resize-none h-[180px]"
                             placeholder={`{\n  "input_model": {\n    "type": "PyTorchModel",\n    "config": {\n      "hf_config": {\n        "model_name": "meta-llama/Meta-Llama-3-8B"\n      }\n    }\n  },\n  "passes": {\n    "conversion": { "type": "OnnxConversion" }\n  }\n}`}
                             value={importJson}
@@ -1639,13 +1606,29 @@ export function InputEnvironmentPanel({
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-3">
                           <Label htmlFor="hf-task-type">Task Type</Label>
-                          <Select id="hf-task-type">
+                          <Select
+                            id="hf-task-type"
+                            aria-label="Hugging Face task type"
+                            value={state.hfTask || ""}
+                            onChange={(e) => setState({ hfTask: e.target.value })}
+                          >
+                            <option value="">Auto (from model id)</option>
                             <option value="text-generation">Text Generation</option>
+                            <option value="feature-extraction">Feature Extraction</option>
                             <option value="text-classification">Text Classification</option>
+                            <option value="fill-mask">Fill Mask</option>
+                            <option value="text2text-generation">Text2Text Generation</option>
+                            <option value="automatic-speech-recognition">Automatic Speech Recognition</option>
                             <option value="image-classification">Image Classification</option>
                             <option value="object-detection">Object Detection</option>
+                            <option value="sentence-similarity">Sentence Similarity</option>
                             <option value="conversational">Conversational</option>
                           </Select>
+                          <p className="text-[10px] text-slate-500 leading-relaxed">
+                            Written into Olive{" "}
+                            <code className="font-mono text-slate-400">input_model.config.task</code>.
+                            Embedding models (GTE, BGE, E5) should use Feature Extraction.
+                          </p>
                         </div>
                         <div className="grid gap-3">
                           <Label htmlFor="dataset">Calibration Dataset (Optional)</Label>
@@ -1713,14 +1696,16 @@ export function InputEnvironmentPanel({
                                     isCurSelected
                                       ? "bg-electric-blue/10 border-electric-blue/60 shadow-sm ring-1 ring-electric-blue/25"
                                       : isChunk
-                                        ? "bg-slate-900 border-electric-blue/25 hover:border-slate-705 hover:bg-slate-900/80"
+                                        ? "bg-slate-900 border-electric-blue/25 hover:border-slate-700 hover:bg-slate-900/80"
                                         : "bg-slate-950 border-slate-800 hover:border-slate-700 hover:bg-slate-950/80"
                                   }`}
                                 >
                                   <button
                                     type="button"
                                     onClick={() => setSelectedFileName(file.name)}
-                                    className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden text-left cursor-pointer"
+                                    aria-label={`Select ${file.name}`}
+                                    aria-pressed={isCurSelected}
+                                    className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden text-left cursor-pointer bg-transparent border-0 p-0"
                                   >
                                     <FileIcon
                                       className={`h-4 w-4 shrink-0 transition-colors ${isCurSelected ? "text-electric-blue" : isChunk ? "text-blue-400" : "text-slate-500"}`}
@@ -1739,7 +1724,10 @@ export function InputEnvironmentPanel({
                                   <button
                                     type="button"
                                     aria-label={`Remove ${file.name}`}
-                                    onClick={() => removeFile(file.name)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeFile(file.name);
+                                    }}
                                     className="text-slate-600 hover:text-red-400 p-1 rounded hover:bg-slate-900 transition-colors shrink-0 cursor-pointer"
                                   >
                                     <X className="h-4 w-4" />
@@ -1848,6 +1836,8 @@ export function InputEnvironmentPanel({
                                           type="button"
                                           key={file.name}
                                           onClick={() => setSelectedFileName(file.name)}
+                                          aria-label={`Select ${file.name}`}
+                                          aria-pressed={isCurSelected}
                                           className={`flex w-full items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
                                             isCurSelected
                                               ? "bg-electric-blue/10 border-electric-blue/60 text-white shadow-sm"
@@ -1894,6 +1884,8 @@ export function InputEnvironmentPanel({
                                             type="button"
                                             key={item.baseName}
                                             onClick={() => setSelectedFileName(item.baseName)}
+                                            aria-label={`Select reconstructed ${item.baseName}`}
+                                            aria-pressed={isCurSelected}
                                             className={`flex w-full items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
                                               isCurSelected
                                                 ? "bg-amber-500/10 border-amber-500/50 text-white"
@@ -1959,41 +1951,41 @@ export function InputEnvironmentPanel({
                                         </div>
                                         <div>
                                           <span className="text-[10px] font-mono text-slate-500 uppercase block leading-none mb-1">
-                                            {selectedFileHash?.verified
-                                              ? "Verification Checksum"
-                                              : "Checksum (unverified)"}
+                                            Verification Checksum
                                           </span>
                                           <div className="flex items-center gap-1.5 mt-0.5">
-                                            <span
-                                              className={cn(
-                                                "text-[11px] font-semibold font-mono px-1.5 py-0.5 border rounded truncate max-w-[170px]",
-                                                selectedFileHash?.verified
-                                                  ? "text-emerald-400 bg-emerald-500/5 border-emerald-500/10"
-                                                  : "text-amber-400 bg-amber-500/5 border-amber-500/10",
-                                              )}
-                                              title={selectedFileHash?.value}
-                                            >
-                                              {(selectedFileHash?.value ?? "").substring(0, 24)}
-                                              {(selectedFileHash?.value ?? "").length > 24 ? "..." : ""}
-                                            </span>
-                                            <button
-                                              type="button"
-                                              aria-label={
-                                                copiedHash === selectedFileHash?.value
-                                                  ? "Checksum copied"
-                                                  : "Copy checksum"
+                                            {(() => {
+                                              const displayHash = getDisplayHash(selectedFileDetailed.name);
+                                              if (!displayHash) {
+                                                return (
+                                                  <span className="text-[11px] font-mono text-slate-500 px-1.5 py-0.5 border border-slate-800 rounded">
+                                                    not hashed
+                                                  </span>
+                                                );
                                               }
-                                              onClick={() => {
-                                                if (selectedFileHash) handleCopyHash(selectedFileHash.value);
-                                              }}
-                                              className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-900 transition-colors cursor-pointer"
-                                            >
-                                              {copiedHash === selectedFileHash?.value ? (
-                                                <Check className="h-3.5 w-3.5 text-emerald-400" />
-                                              ) : (
-                                                <Copy className="h-3.5 w-3.5" />
-                                              )}
-                                            </button>
+                                              return (
+                                                <>
+                                                  <span
+                                                    className="text-[11px] font-semibold font-mono text-emerald-400 bg-emerald-500/5 px-1.5 py-0.5 border border-emerald-500/10 rounded truncate max-w-[170px]"
+                                                    title={displayHash}
+                                                  >
+                                                    {displayHash.substring(0, 24)}...
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    aria-label="Copy verification checksum"
+                                                    onClick={() => handleCopyHash(displayHash)}
+                                                    className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-900 transition-colors cursor-pointer"
+                                                  >
+                                                    {copiedHash === displayHash ? (
+                                                      <Check className="h-3.5 w-3.5 text-emerald-400" />
+                                                    ) : (
+                                                      <Copy className="h-3.5 w-3.5" />
+                                                    )}
+                                                  </button>
+                                                </>
+                                              );
+                                            })()}
                                           </div>
                                         </div>
                                         <div className="col-span-1 sm:col-span-2 border-t border-slate-900/60 pt-2.5 mt-1">
@@ -2004,7 +1996,6 @@ export function InputEnvironmentPanel({
                                             {getSimulatedTensors(
                                               selectedFileDetailed.name,
                                               selectedFileDetailed.size,
-                                              selectedFileHash?.verified ?? false,
                                             ).map((item, i) => (
                                               <div
                                                 key={i}
@@ -2034,61 +2025,62 @@ export function InputEnvironmentPanel({
                                               This model file was compiled locally at{" "}
                                               <code className="text-white bg-slate-900 px-1 py-0.5 rounded font-mono text-[10px]">
                                                 {new Date(
-                                                  (selectedFileDetailed.lineage as ReconstructedItem)
-                                                    .reconstructedAt,
+                                                  selectedFileDetailed.lineage.reconstructedAt,
                                                 ).toLocaleTimeString()}
                                               </code>{" "}
                                               from the following byte segments:
                                             </p>
                                             <div className="space-y-1.5">
-                                              {(selectedFileDetailed.lineage as ReconstructedItem).chunks.map(
-                                                (ch) => (
-                                                  <button
-                                                    type="button"
-                                                    key={ch.name}
-                                                    onClick={() => setSelectedFileName(ch.name)}
-                                                    className="flex w-full items-center justify-between text-[10px] font-mono p-1.5 bg-slate-950 rounded border border-slate-900 hover:border-slate-800 cursor-pointer transition-colors text-left"
-                                                  >
-                                                    <div className="flex items-center gap-1.5 truncate">
-                                                      <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse shrink-0" />
-                                                      <span className="text-slate-300 font-medium truncate">
-                                                        {ch.name}
-                                                      </span>
-                                                    </div>
-                                                    <div className="text-slate-500 flex items-center gap-2">
-                                                      <span>{formatSize(ch.size)}</span>
-                                                      <span className="text-slate-600">
-                                                        ({ch.hash.substring(7, 15)})
-                                                      </span>
-                                                    </div>
-                                                  </button>
-                                                ),
-                                              )}
+                                              {selectedFileDetailed.lineage.chunks.map((ch) => (
+                                                <button
+                                                  type="button"
+                                                  key={ch.name}
+                                                  onClick={() => setSelectedFileName(ch.name)}
+                                                  aria-label={`Select chunk ${ch.name}`}
+                                                  className="flex w-full items-center justify-between text-[10px] font-mono p-1.5 bg-slate-950 rounded border border-slate-900 hover:border-slate-800 cursor-pointer transition-colors text-left"
+                                                >
+                                                  <div className="flex items-center gap-1.5 truncate">
+                                                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse shrink-0" />
+                                                    <span className="text-slate-300 font-medium truncate">
+                                                      {ch.name}
+                                                    </span>
+                                                  </div>
+                                                  <div className="text-slate-500 flex items-center gap-2">
+                                                    <span>{formatSize(ch.size)}</span>
+                                                    <span className="text-slate-600">
+                                                      ({ch.hash.substring(7, 15)})
+                                                    </span>
+                                                  </div>
+                                                </button>
+                                              ))}
                                             </div>
                                           </div>
                                         </div>
                                       )}
 
                                       {/* If selected file is an archived/historical chunk segment, render back-link */}
-                                      {selectedFileDetailed.status === "Archived Chunk Segment" && (
-                                        <div className="p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between text-xs text-slate-400">
-                                          <span className="flex items-center gap-1.5">
-                                            <Info className="h-3.5 w-3.5 text-emerald-400" />
-                                            Component part of reconstructed model
-                                          </span>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              const lineage = selectedFileDetailed.lineage as
-                                                (ReconstructedItem & { parent?: string }) | null;
-                                              if (lineage?.parent) setSelectedFileName(lineage.parent);
-                                            }}
-                                            className="text-[10px] font-mono text-emerald-400 hover:underline hover:text-emerald-300 font-semibold cursor-pointer"
-                                          >
-                                            Go to assembled model →
-                                          </button>
-                                        </div>
-                                      )}
+                                      {selectedFileDetailed.status === "Archived Chunk Segment" &&
+                                        selectedFileDetailed.lineage &&
+                                        "parent" in selectedFileDetailed.lineage && (
+                                          <div className="p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between text-xs text-slate-400">
+                                            <span className="flex items-center gap-1.5">
+                                              <Info className="h-3.5 w-3.5 text-emerald-400" />
+                                              Component part of reconstructed model
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const lineage = selectedFileDetailed.lineage;
+                                                if (lineage && "parent" in lineage) {
+                                                  setSelectedFileName(lineage.parent);
+                                                }
+                                              }}
+                                              className="text-[10px] font-mono text-emerald-400 hover:underline hover:text-emerald-300 font-semibold cursor-pointer"
+                                            >
+                                              Go to assembled model →
+                                            </button>
+                                          </div>
+                                        )}
                                     </div>
                                   </div>
                                 ) : (

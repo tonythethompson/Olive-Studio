@@ -4,6 +4,7 @@ import {
   inferModelType,
   providerToAccelerator,
   buildOliveRecipe,
+  resolveHfTask,
 } from "@/lib/oliveRecipeBuilder";
 import { deriveUiStateFromOliveRecipe } from "@/lib/oliveRecipeHub";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
@@ -36,9 +37,9 @@ function baseState(overrides?: Partial<UIState>): UIState {
 // ─── inferHfTask ───────────────────────────────────────────────
 
 describe("inferHfTask", () => {
-  it("returns 'speech-recognition' for whisper models", () => {
-    expect(inferHfTask("openai/whisper-large-v3")).toBe("speech-recognition");
-    expect(inferHfTask("openai/whisper-tiny.en")).toBe("speech-recognition");
+  it("returns 'automatic-speech-recognition' for whisper models", () => {
+    expect(inferHfTask("openai/whisper-large-v3")).toBe("automatic-speech-recognition");
+    expect(inferHfTask("openai/whisper-tiny.en")).toBe("automatic-speech-recognition");
   });
 
   it("returns 'fill-mask' for BERT-family models", () => {
@@ -66,6 +67,29 @@ describe("inferHfTask", () => {
     expect(inferHfTask("mistralai/Mistral-7B-v0.1")).toBe("text-generation");
     expect(inferHfTask("unknown-model-name")).toBe("text-generation");
     expect(inferHfTask("")).toBe("text-generation");
+  });
+});
+
+describe("resolveHfTask", () => {
+  it("maps legacy speech-recognition to automatic-speech-recognition", () => {
+    expect(resolveHfTask({ hfTask: "speech-recognition", hfModelId: "" })).toBe(
+      "automatic-speech-recognition",
+    );
+  });
+
+  it("preserves other explicit tasks", () => {
+    expect(resolveHfTask({ hfTask: "text-generation", hfModelId: "" })).toBe("text-generation");
+  });
+
+  it("prefers an explicit hfTask over id inference in the built recipe", () => {
+    const state = baseState({
+      modelSource: "huggingface",
+      hfModelId: "openai/whisper-large-v3",
+      hfTask: "audio-classification",
+    });
+    const recipe = buildOliveRecipe(state);
+    const config = (recipe.input_model as Record<string, unknown>).config as Record<string, unknown>;
+    expect(config.task).toBe("audio-classification");
   });
 });
 
@@ -174,11 +198,11 @@ describe("buildOliveRecipe", () => {
     expect(recipe).toHaveProperty("engine");
   });
 
-  it("creates a PyTorchModel input_model by default", () => {
+  it("creates an HfModel input_model for Hugging Face sources", () => {
     const state = baseState({ modelSource: "huggingface" });
     const recipe = buildOliveRecipe(state);
     const inputModel = recipe.input_model as Record<string, unknown>;
-    expect(inputModel.type).toBe("PyTorchModel");
+    expect(inputModel.type).toBe("HfModel");
   });
 
   it("creates HfModel type when memory offload is active", () => {
@@ -206,19 +230,20 @@ describe("buildOliveRecipe", () => {
     expect(inputConfig.dataset).toBe("wikitext");
   });
 
-  it("includes hf_config for Hugging Face models without offload", () => {
+  it("uses HfModel for Hugging Face models (Olive 0.13 rejects hf_config on PyTorchModel)", () => {
     const state = baseState({
       modelSource: "huggingface",
       hfModelId: "bert-base-uncased",
       hfDataset: "wikitext",
     });
     const recipe = buildOliveRecipe(state);
-    const config = (recipe.input_model as Record<string, unknown>).config as Record<string, unknown>;
-    expect(config.hf_config).toBeDefined();
-    const hf = config.hf_config as Record<string, unknown>;
-    expect(hf.model_name).toBe("bert-base-uncased");
-    expect(hf.task).toBe("fill-mask");
-    expect(hf.dataset).toBe("wikitext");
+    const inputModel = recipe.input_model as Record<string, unknown>;
+    const config = inputModel.config as Record<string, unknown>;
+    expect(inputModel.type).toBe("HfModel");
+    expect(config.model_path).toBe("bert-base-uncased");
+    expect(config.task).toBe("fill-mask");
+    expect(config.dataset).toBe("wikitext");
+    expect(config.hf_config).toBeUndefined();
   });
 
   it("sets local model config for local model source", () => {

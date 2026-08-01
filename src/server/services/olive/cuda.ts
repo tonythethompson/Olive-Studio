@@ -4,6 +4,7 @@
  * parseCudaVersionFromNvidiaSmi and pickCudaTag are the canonical implementations.
  * routes/system.ts was duplicating them — it should import from here instead.
  */
+import { isResolvableCudaTag } from "../../../lib/oliveGpuRuntime.ts";
 import { execFileAsync } from "../shared/exec.ts";
 import { getVenvPython } from "../venv/paths.ts";
 
@@ -19,20 +20,23 @@ export function parseCudaVersionFromNvidiaSmi(
 }
 
 /**
- * Map a CUDA major.minor version to the closest PyTorch wheel tag.
- * Tiers ordered from newest to oldest — matches the first tier where
- * the detected version is >= the tier's version.
+ * Selects the newest resolvable PyTorch wheel tag for a CUDA version.
+ * CUDA 13+ maps to cu128 (highest tag with ORT 1.26 + nvidia-*-cu12 pins).
  *
- * Versions below the lowest supported tier (CUDA 11.8) return `"cpu"` rather
- * than forcing an incompatible `cu118` wheel onto e.g. CUDA 11.7 or older.
+ * @param major - The CUDA major version
+ * @param minor - The CUDA minor version
+ * @returns The compatible CUDA wheel tag, or `"cpu"` when the version is below CUDA 11.8
  */
 export function pickCudaTag(major: number, minor: number): string {
   const tiers = [
+    { major: 12, minor: 8, tag: "cu128" },
     { major: 12, minor: 6, tag: "cu126" },
     { major: 12, minor: 4, tag: "cu124" },
     { major: 12, minor: 1, tag: "cu121" },
     { major: 11, minor: 8, tag: "cu118" },
   ];
+  // Driver CUDA 13.x can run cu128 wheels; cu130/cu132 are not resolvable yet.
+  if (major >= 13) return "cu128";
   for (const t of tiers) {
     if (major > t.major || (major === t.major && minor >= t.minor)) return t.tag;
   }
@@ -50,8 +54,13 @@ export function pickCudaTag(major: number, minor: number): string {
  */
 export async function detectCudaTag(preferred: string, onLine: (line: string) => void): Promise<string> {
   if (preferred && preferred !== "auto") {
-    onLine(`[deps] CUDA version override: ${preferred}`);
-    return preferred;
+    if (preferred === "cpu" || isResolvableCudaTag(preferred)) {
+      onLine(`[deps] CUDA version override: ${preferred}`);
+      return preferred;
+    }
+    onLine(
+      `[deps] Unsupported CUDA tag "${preferred}" (no ORT/cu12 resolution); falling back to auto-detect`,
+    );
   }
 
   // Check existing torch in venv first — avoids reinstall when already correct

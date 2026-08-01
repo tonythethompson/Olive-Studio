@@ -1,5 +1,7 @@
 import type { ProviderConfig, AIChatMessage } from "../../types.ts";
-import { readEnvApiKey } from "../../../lib/aiResponse.ts";
+import { matchedEnvApiKeyName, readEnvApiKey } from "../../../lib/aiResponse.ts";
+import { resolveCloudflareAuth } from "../../../lib/cloudflare/client.ts";
+import { cloudflareAiBaseUrl } from "../../../lib/cloudflare/credentials.ts";
 
 // ─── Plugin Interface ─────────────────────────────────────────────────────────
 
@@ -43,6 +45,15 @@ export interface AiProviderPlugin {
   supportsJsonResponseFormat?: boolean;
 }
 
+export type EnvCredentialStatus = {
+  /** Non-placeholder key present in process.env (Windows user/system + dotenv). */
+  present: boolean;
+  /** Env var name that matched (never the secret value). */
+  envVar: string | null;
+  /** Enough env/file state to activate without pasting a key in the UI. */
+  usable: boolean;
+};
+
 // ─── Registry ─────────────────────────────────────────────────────────────────
 
 const providers = new Map<ProviderConfig["provider"], AiProviderPlugin>();
@@ -70,15 +81,49 @@ export function registeredProviderNames(): Set<ProviderConfig["provider"]> {
   return new Set(providers.keys());
 }
 
+/**
+ * Reports credential presence and usability for each registered provider without exposing secret values.
+ *
+ * @param extraUsable - Optional provider-specific usability overrides.
+ * @returns A map of provider names to credential status details.
+ */
+export function listEnvCredentialStatus(
+  extraUsable?: Partial<Record<ProviderConfig["provider"], boolean>>,
+): Record<string, EnvCredentialStatus> {
+  const out: Record<string, EnvCredentialStatus> = {};
+  for (const plugin of providers.values()) {
+    const envVar = matchedEnvApiKeyName(...plugin.envVarNames) ?? null;
+    const present = Boolean(envVar);
+    const usable = extraUsable?.[plugin.name] ?? present;
+    out[plugin.name] = { present, envVar, usable };
+  }
+  return out;
+}
+
 // ─── Detection ────────────────────────────────────────────────────────────────
 
 /**
- * Scan environment variables across all registered providers.
- * Returns a ProviderConfig for the first one that has a valid key set.
- * Providers are checked in registration order.
+ * Detects the first registered provider with available credentials.
+ *
+ * Providers are checked in registration order. Cloudflare credentials may be
+ * resolved from Wrangler or file-based authentication when its environment
+ * token is unavailable.
+ *
+ * @returns The configuration for the first detected provider, or `null` when no provider credentials are available.
  */
 export function detectEnvProvider(): ProviderConfig | null {
   for (const plugin of providers.values()) {
+    if (plugin.name === "cloudflare") {
+      const auth = resolveCloudflareAuth();
+      if (auth) {
+        return {
+          provider: "cloudflare",
+          apiKey: auth.apiToken,
+          model: plugin.defaultModel,
+          baseUrl: cloudflareAiBaseUrl(auth.accountId),
+        };
+      }
+    }
     const key = readEnvApiKey(...plugin.envVarNames);
     if (key) {
       return plugin.buildConfig(key);

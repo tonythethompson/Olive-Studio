@@ -6,7 +6,8 @@
  * plugins so they register before any calls.
  *
  * OpenAI-compatible backends (mistral, xai, openrouter, groq, together,
- * kilocode, copilot, openai-compat, chatgpt-sub) register inside `openai.ts`.
+ * kilocode, opencode, fireworks, nvidia, huggingface, copilot, openai-compat,
+ * chatgpt-sub) register inside `openai.ts`. Cloudflare registers in `cloudflare.ts`.
  *
  * Adding a new provider = create a file (or extend openai.ts), call
  * `registerProvider(...)`, and import the module below if it is a new file.
@@ -19,15 +20,41 @@ import "./openai.ts"; // Also registers mistral, xai, openrouter, groq, together
 import "./anthropic.ts";
 import "./devin.ts";
 import "./codex.ts";
+import "./cloudflare.ts";
 
 // Registry-based API
-import { getRuntimeAiProvider } from "./state.ts";
+import { getRuntimeAiProvider, readAiPreference, restoreProviderFromPreference } from "./state.ts";
 import { detectEnvProvider, callProvider, registeredProviderNames, getProvider } from "./registry.ts";
 import type { ProviderConfig, AIChatMessage } from "../../types.ts";
 
-/** Get the currently active AI provider (runtime override > env detection). */
+/**
+ * Gets the active AI provider using runtime overrides, saved preferences, or environment detection.
+ *
+ * @returns The active provider configuration, or `null` when no provider is available
+ */
 export function getAiProvider(): ProviderConfig | null {
-  return getRuntimeAiProvider() ?? detectEnvProvider();
+  const runtime = getRuntimeAiProvider();
+  if (runtime) return runtime;
+
+  const pref = readAiPreference();
+  const env = detectEnvProvider();
+  if (pref) {
+    const restored = restoreProviderFromPreference(pref);
+    if (restored && !(restored.provider === "openai-compat" && !restored.baseUrl?.trim())) {
+      return restored;
+    }
+
+    // Preference matches the env-detected provider: keep the user's model/baseUrl.
+    if (env && env.provider === pref.provider) {
+      return {
+        ...env,
+        model: pref.model || env.model,
+        baseUrl: pref.baseUrl ?? env.baseUrl,
+      };
+    }
+  }
+
+  return env;
 }
 
 /** Set of all registered provider identifiers (for UI allowlists, validation). */

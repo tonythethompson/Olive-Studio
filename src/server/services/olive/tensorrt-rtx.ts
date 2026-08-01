@@ -10,9 +10,23 @@ import { spawn } from "child_process";
 import fs from "fs";
 
 import { execFileAsync } from "../shared/exec.ts";
+import { ensureVenv } from "../venv/index.ts";
 import { getVenvPython, getVenvPip } from "../venv/paths.ts";
 import { tensorrtRtxInstallArgs, tensorrtRtxLabel } from "../../../lib/tensorrtRtxDeps.ts";
+import {
+  ORT_GPU_PROBE_SCRIPT,
+  parseOrtGpuProbe,
+  pinnedOrtGpuInstallArgs,
+  pinnedOrtGpuLabel,
+  PINNED_ORT_GPU_VERSION,
+} from "../../../lib/oliveGpuRuntime.ts";
 
+/**
+ * Retrieves the installed TensorRT RTX package version.
+ *
+ * @param python - Path to the Python executable used to query the package
+ * @returns The installed TensorRT RTX version, or `null` if it cannot be retrieved
+ */
 export async function getInstalledTensorRtRtxVersion(python: string): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync(python, [
@@ -39,40 +53,142 @@ export async function getTensorRtRtxLibsDir(python: string): Promise<string | nu
 }
 
 /**
- * Verify that TensorRT RTX (tensorrt_rtx) is importable and a
- * runtime DLL/SO can be loaded in the target Python environment.
+ * Checks whether TensorRT RTX loads successfully and provides the required ONNX Runtime execution provider.
+ *
+ * @param python - Path to the Python interpreter to probe
+ * @returns The load status, with the detected version when successful or an error detail when unsuccessful
  */
 export async function probeTensorRtRtxLoadable(
   python: string,
 ): Promise<{ loadable: boolean; detail?: string; version?: string }> {
+  const probeScript = `
+import tensorrt_rtx
+import onnxruntime as ort
+if "NvTensorRTRTXExecutionProvider" not in ort.get_available_providers():
+    print("fail:NvTensorRTRTXExecutionProvider missing from onnxruntime-gpu")
+else:
+    print("ok:" + tensorrt_rtx.__version__)
+`.trim();
   try {
-    const { stdout } = await execFileAsync(python, [
-      "-c",
-      "import tensorrt_rtx; import onnxruntime; print('ok:' + tensorrt_rtx.__version__)",
-    ]);
+    const { stdout } = await execFileAsync(python, ["-c", probeScript]);
     const out = stdout.trim();
-    if (out.includes("ok:")) {
+    if (/(?:^|\n)ok:/.test(out)) {
       return {
         loadable: true,
         version: out.split("ok:").pop()?.trim() || undefined,
       };
     }
+    const failDetail = out.includes("fail:")
+      ? out.split("fail:").pop()?.trim()
+      : out || "TensorRT RTX load check failed";
     return {
       loadable: false,
-      detail: out || "TensorRT RTX load check failed",
+      detail: failDetail || "TensorRT RTX load check failed",
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    return { loadable: false, detail: msg };
+    if (/No module named ['"]tensorrt_rtx['"]/i.test(msg)) {
+      return { loadable: false, detail: "tensorrt_rtx is not installed in .venv" };
+    }
+    if (/No module named ['"]onnxruntime['"]/i.test(msg)) {
+      return {
+        loadable: false,
+        detail: "onnxruntime is not installed in .venv (required for TensorRT RTX detection)",
+      };
+    }
+    // Avoid dumping the full `python -c "..."` command line into the UI (blows out layout).
+    const short = msg
+      .replace(/^Command failed:[^\n]*/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const detail =
+      short.length > 0
+        ? short.length > 220
+          ? `${short.slice(0, 220)}…`
+          : short
+        : "TensorRT RTX is not loadable in .venv";
+    return { loadable: false, detail };
   }
 }
 
-/** Install TensorRT RTX runtime into the project venv. */
+/**
+ * Installs Python packages with pip and reports process output line by line.
+ *
+ * @param pip - Path to the pip executable
+ * @param args - Arguments specifying the packages and installation options
+ * @param onLine - Callback for each captured output line
+ * @throws If pip cannot be launched or the installation exits unsuccessfully
+ */
+async function pipInstall(pip: string, args: string[], onLine: (line: string) => void): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn(pip, ["install", ...args], { stdio: "pipe" });
+    proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
+    proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
+    proc.on("error", (err: Error) =>
+      reject(
+        new Error(
+          `Failed to launch ${pip}: ${err.message}. Create the project .venv via Setup runtime first.`,
+        ),
+      ),
+    );
+    proc.on("close", (code: number | null) =>
+      code === 0 ? resolve() : reject(new Error(`pip install ${args.join(" ")} failed (exit ${code})`)),
+    );
+  });
+}
+
+async function ensureOnnxRuntimeGpu(
+  python: string,
+  pip: string,
+  onLine: (line: string) => void,
+): Promise<void> {
+  try {
+    const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT]);
+    const probe = parseOrtGpuProbe(stdout);
+    if (probe.ok) {
+      onLine("[deps] onnxruntime-gpu already installed ✓");
+      return;
+    }
+    if (probe.distVersion || probe.ortVersion) {
+      onLine(
+        `[deps] onnxruntime-gpu ${probe.distVersion ?? probe.ortVersion} installed — need ${PINNED_ORT_GPU_VERSION}, reinstalling...`,
+      );
+    }
+  } catch {
+    /* install below */
+  }
+  onLine(`[deps] Installing ${pinnedOrtGpuLabel()} (required to detect TensorRT RTX)...`);
+  await pipInstall(pip, pinnedOrtGpuInstallArgs(), onLine);
+  onLine(`[deps] ${pinnedOrtGpuLabel()} installed ✓`);
+}
+
+/**
+ * Ensures the project virtual environment contains a loadable TensorRT RTX runtime.
+ *
+ * @param onLine - Receives progress messages during environment preparation and installation.
+ * @returns An object indicating success, with the TensorRT RTX libraries directory when available, or an error description.
+ */
 export async function ensureTensorRtRtx(
   onLine: (line: string) => void,
 ): Promise<{ ok: boolean; error?: string; libsDir?: string | null }> {
+  const venvResult = await ensureVenv(onLine);
+  if (!venvResult.ok) {
+    return {
+      ok: false,
+      error: venvResult.error ?? "Failed to create or prepare the project .venv",
+    };
+  }
+
   const venvPython = getVenvPython();
   const pip = getVenvPip();
+  if (!fs.existsSync(venvPython) || !fs.existsSync(pip)) {
+    return {
+      ok: false,
+      error: `Project .venv is incomplete (missing ${!fs.existsSync(pip) ? "pip" : "python"}). Use Setup runtime, then retry.`,
+    };
+  }
+
+  await ensureOnnxRuntimeGpu(venvPython, pip, onLine);
 
   const probe = await probeTensorRtRtxLoadable(venvPython);
   if (probe.loadable) {
@@ -90,17 +206,7 @@ export async function ensureTensorRtRtx(
     onLine(`[deps] ${tensorrtRtxLabel()} present but runtime not loadable — reinstalling...`);
   }
 
-  await new Promise<void>((resolve, reject) => {
-    const proc = spawn(pip, ["install", ...tensorrtRtxInstallArgs()], {
-      stdio: "pipe",
-    });
-    proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-    proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-    proc.on("error", (err: Error) => reject(new Error(`Failed to launch ${pip}: ${err.message}`)));
-    proc.on("close", (code: number | null) =>
-      code === 0 ? resolve() : reject(new Error(`pip install ${tensorrtRtxLabel()} failed (exit ${code})`)),
-    );
-  });
+  await pipInstall(pip, tensorrtRtxInstallArgs(), onLine);
   onLine(`[deps] ${tensorrtRtxLabel()} installed ✓`);
 
   const retry = await probeTensorRtRtxLoadable(venvPython);

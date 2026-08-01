@@ -42,7 +42,7 @@ useEffect(() => {
 
 ### 2. Expensive Calculations
 
-Heavy synchronous work (e.g., filtering a 5,000 item list).
+Heavy synchronous work (e.g., filtering a 5,000-item list).
 
 ```tsx
 const sortedList = useMemo(() => {
@@ -55,10 +55,10 @@ const sortedList = useMemo(() => {
 If a child component is wrapped in `React.memo`, passing a new function reference every render will break the optimization.
 
 ```tsx
-const HandleChange = useCallback((val) => {
+const handleChange = useCallback((val) => {
   setValue(val);
 }, []);
 
 // HeavyComponent is wrapped in React.memo, so it needs stable props
-return <HeavyComponent onParamChange={HandleChange} />;
+return <HeavyComponent onParamChange={handleChange} />;
 ```

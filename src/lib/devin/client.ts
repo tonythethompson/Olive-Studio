@@ -64,30 +64,52 @@ export function logoutDevin(): void {
   clearDevinCredentials();
 }
 
-export async function listDevinModels(): Promise<Array<{ id: string; name: string; disabled?: boolean }>> {
+/**
+ * Loads the available Devin models for the signed-in account.
+ *
+ * @returns The model list, its source (`live` or `fallback`), and an error message when the live catalog is unavailable.
+ */
+export async function listDevinModels(): Promise<{
+  models: Array<{ id: string; name: string; disabled?: boolean }>;
+  source: "live" | "fallback";
+  error?: string;
+}> {
   const creds = loadDevinCredentials();
   if (!creds) {
-    return DEVIN_FALLBACK_MODELS.map((m) => ({ ...m }));
+    return {
+      models: [],
+      source: "fallback",
+      error: "Sign in to Devin to load models for your plan.",
+    };
   }
   try {
     const catalog = await getCachedCatalog(creds.apiKey, creds.apiServerUrl || "https://server.codeium.com");
     const entries: ModelCatalogEntry[] = catalog ? [...catalog.byUid.values()] : [];
     if (entries.length === 0) {
-      return DEVIN_FALLBACK_MODELS.map((m) => ({ ...m }));
+      return {
+        models: [],
+        source: "fallback",
+        error: "Devin returned an empty model catalog.",
+      };
     }
     // Prefer enabled models; keep a reasonable list for the dropdown
     const enabled = entries.filter((e) => !e.disabled);
     const source = enabled.length > 0 ? enabled : entries;
-    return source
-      .slice(0, 80)
+    const models = source
       .map((e) => ({
         id: e.modelUid,
         name: e.label || e.modelUid,
         disabled: e.disabled,
       }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  } catch {
-    return DEVIN_FALLBACK_MODELS.map((m) => ({ ...m }));
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 80);
+    return { models, source: "live" };
+  } catch (err: unknown) {
+    return {
+      models: [],
+      source: "fallback",
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 

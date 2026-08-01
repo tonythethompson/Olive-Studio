@@ -146,17 +146,22 @@ The desktop shell still requires **Node** and **Python** on `PATH` (Olive runs a
 
 Create `.env` or `.env.local` in the project root:
 
-| Variable                                                      | Required | Purpose                                 |
-| ------------------------------------------------------------- | -------- | --------------------------------------- |
-| `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `GOOGLE_GENAI_API_KEY` | No       | Gemini for AI Copilot / AI Review       |
-| `HF_TOKEN`                                                    | No       | Hugging Face token passed to Olive runs |
-| `OPENAI_API_KEY`                                              | No       | OpenAI / OpenAI-compatible providers    |
-| `ANTHROPIC_API_KEY`                                           | No       | Anthropic Claude                        |
-| `MISTRAL_API_KEY`                                             | No       | Mistral                                 |
-| `XAI_API_KEY`                                                 | No       | xAI Grok                                |
-| `OPENROUTER_API_KEY`                                          | No       | OpenRouter                              |
-| `GROQ_API_KEY`                                                | No       | Groq                                    |
-| `TOGETHER_API_KEY`                                            | No       | Together AI                             |
+| Variable                                                      | Required | Purpose                                   |
+| ------------------------------------------------------------- | -------- | ----------------------------------------- |
+| `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `GOOGLE_GENAI_API_KEY` | No       | Gemini for AI Copilot / AI Review         |
+| `HF_TOKEN`                                                    | No       | Hugging Face token passed to Olive runs   |
+| `OPENAI_API_KEY`                                              | No       | OpenAI / OpenAI-compatible providers      |
+| `ANTHROPIC_API_KEY`                                           | No       | Anthropic Claude                          |
+| `MISTRAL_API_KEY`                                             | No       | Mistral                                   |
+| `XAI_API_KEY`                                                 | No       | xAI Grok                                  |
+| `OPENROUTER_API_KEY`                                          | No       | OpenRouter                                |
+| `GROQ_API_KEY`                                                | No       | Groq                                      |
+| `TOGETHER_API_KEY`                                            | No       | Together AI                               |
+| `OPENCODE_API_KEY`                                            | No       | OpenCode Zen / OpenCode Go gateway        |
+| `FIREWORKS_API_KEY`                                           | No       | Fireworks AI                              |
+| `NVIDIA_API_KEY`                                              | No       | NVIDIA NIM                                |
+| `HUGGINGFACE_API_KEY` or `HF_TOKEN`                           | No       | Hugging Face chat (router) / Olive HF     |
+| `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`              | No       | Cloudflare Workers AI (or Wrangler login) |
 
 You can also set AI credentials in-app under **AI Copilot → Settings**.
 
@@ -216,6 +221,7 @@ The repository includes `olive-mcp-server/`, a Python MCP server that exposes Ol
 
 - `.mcp.json` wires the server to Claude via `olive-mcp-server/run.py`.
 - `server.ts` exposes `POST /api/mcp/tool` so the web UI can proxy tool calls.
+- **Assistant chat** (`POST /api/ai/chat`) queries Olive MCP first (docs search + targeted tools) and injects those excerpts as the primary system knowledge. Optional external web search runs only when MCP coverage is thin and `OLIVE_STUDIO_WEB_SEARCH_URL` is set.
 - `MCPDiagnosticCard` renders MCP troubleshooting results inside the recipe workspace.
 
 See [olive-mcp-server/README.md](olive-mcp-server/README.md) for setup and tool details.

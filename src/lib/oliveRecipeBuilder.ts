@@ -10,9 +10,25 @@ const GPU_PROVIDERS: IHVProvider[] = [
 ];
 const NPU_PROVIDERS: IHVProvider[] = ["QNNExecutionProvider"];
 
+/**
+ * Infers the Hugging Face task associated with a model identifier.
+ *
+ * @param modelId - The Hugging Face model identifier to classify
+ * @returns The corresponding Hugging Face task name
+ */
 export function inferHfTask(modelId: string): string {
   const id = modelId.toLowerCase();
-  if (id.includes("whisper")) return "speech-recognition";
+  // Transformers pipeline / Olive HfModel expect this exact task id (not "speech-recognition").
+  if (id.includes("whisper")) return "automatic-speech-recognition";
+  if (
+    id.includes("gte-") ||
+    id.includes("bge-") ||
+    id.includes("e5-") ||
+    id.includes("embedding") ||
+    id.includes("sentence-transformers")
+  ) {
+    return "feature-extraction";
+  }
   if (id.includes("bert") || id.includes("roberta") || id.includes("deberta")) return "fill-mask";
   if (id.includes("t5") || id.includes("bart")) return "text2text-generation";
   if (id.includes("vit") || id.includes("clip") || id.includes("resnet") || id.includes("mobilenet")) {
@@ -21,6 +37,26 @@ export function inferHfTask(modelId: string): string {
   return "text-generation";
 }
 
+/**
+ * Resolves the Hugging Face task from the configured task or model ID.
+ *
+ * @param state - UI state containing the optional explicit task and model ID
+ * @returns The configured task, normalized speech-recognition task, or inferred task
+ */
+export function resolveHfTask(state: Pick<UIState, "hfTask" | "hfModelId">): string {
+  const explicit = (state.hfTask || "").trim();
+  if (explicit) {
+    if (explicit === "speech-recognition") return "automatic-speech-recognition";
+    return explicit;
+  }
+  return inferHfTask(state.hfModelId || "");
+}
+
+/**
+ * Infers the model type from a model identifier.
+ *
+ * @returns The recognized model type, or `gpt2` when no supported type is identified.
+ */
 export function inferModelType(modelId: string): string {
   const id = modelId.toLowerCase();
   if (id.includes("llama")) return "llama";
@@ -118,6 +154,12 @@ function finalizePasses(
   return out;
 }
 
+/**
+ * Builds an Olive optimization recipe from the configured model, execution provider, passes, and evaluation settings.
+ *
+ * @param state - The UI configuration used to construct the recipe
+ * @returns The configured Olive recipe
+ */
 export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   const recipe: Record<string, unknown> = {
     input_model: {
@@ -148,20 +190,15 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   const useMemoryOffload = isMemoryOffloadActive(state);
 
   if (state.modelSource === "huggingface") {
+    // Olive 0.13+ PyTorchModelHandler rejects hf_config; always use HfModel.
+    (recipe.input_model as { type: string }).type = "HfModel";
+    inputConfig.model_path = state.hfModelId || "unspecified";
+    inputConfig.task = resolveHfTask(state);
+    if (state.hfDataset) {
+      inputConfig.dataset = state.hfDataset;
+    }
     if (useMemoryOffload) {
-      (recipe.input_model as { type: string }).type = "HfModel";
-      inputConfig.model_path = state.hfModelId || "unspecified";
-      inputConfig.task = inferHfTask(state.hfModelId || "");
-      if (state.hfDataset) {
-        inputConfig.dataset = state.hfDataset;
-      }
       inputConfig.load_kwargs = buildHfLoadKwargs(state.ihvProvider, null);
-    } else {
-      inputConfig.hf_config = {
-        model_name: state.hfModelId || "unspecified",
-        task: inferHfTask(state.hfModelId || ""),
-        ...(state.hfDataset ? { dataset: state.hfDataset } : {}),
-      };
     }
   } else if (state.modelSource === "local") {
     inputConfig.model_path = "./local_models";

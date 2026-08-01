@@ -1,26 +1,36 @@
 /**
- * TensorRT classic probe, install, and dependency helpers.
+ * Classic TensorRT (full SDK) probe, install, and dependency helpers.
  *
- * probeTensorRtLoadable and ensureTensorRt cover the classic (datacenter) path.
- * ensureDeps handles batch install of all inferred packages.
- *
- * For TensorRT RTX (consumer GeForce), see `routes/tensorrt.ts`.
+ * Full TensorRT SDK works on GeForce Turing+ as well as datacenter GPUs;
+ * install-on-demand via ensureTensorRt matches the TensorRT RTX flow.
+ * RTX-specific path is in tensorrt-rtx.ts.
  */
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 
 import { execFileAsync } from "../shared/exec.ts";
+import { ensureVenv } from "../venv/index.ts";
 import { getVenvPython, getVenvPip } from "../venv/paths.ts";
-import { envWithPrependedPaths } from "../../../lib/tensorrtDeps.ts";
+import { getNativeGpuLibPaths } from "../venv/gpu.ts";
 import {
+  envWithPrependedPaths,
   isCompatibleTensorRtVersion,
   pinnedTensorRtInstallArgs,
   pinnedTensorRtLabel,
   PINNED_TENSORRT_VERSION,
 } from "../../../lib/tensorrtDeps.ts";
-import { pinnedOrtGpuInstallArgs } from "../../../lib/oliveGpuRuntime.ts";
-import { getNativeGpuLibPaths } from "../venv/gpu.ts";
+import {
+  ORT_GPU_PROBE_SCRIPT,
+  parseOrtGpuProbe,
+  pinnedOrtGpuInstallArgs,
+  pinnedOrtGpuLabel,
+  PINNED_ORT_GPU_VERSION,
+} from "../../../lib/oliveGpuRuntime.ts";
+import { probeTensorRtRtxLoadable } from "./tensorrt-rtx.ts";
+import type { PkgDef } from "./recipe.ts";
+
+const TRT_FAIL_MARK = "OLIVE_TRT_FAIL:";
 
 // ─── Version / directory queries ─────────────────────────────────────────
 
@@ -34,6 +44,12 @@ export async function getInstalledTensorRtVersion(python: string): Promise<strin
   }
 }
 
+/**
+ * Locates the installed TensorRT native libraries directory for a Python environment.
+ *
+ * @param python - Path to the Python executable to inspect
+ * @returns The existing `tensorrt_libs` directory path, or `null` if it cannot be located
+ */
 export async function getTensorRtLibsDir(python: string): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync(python, [
@@ -47,13 +63,81 @@ export async function getTensorRtLibsDir(python: string): Promise<string | null>
   }
 }
 
+/**
+ * Extracts the diagnostic detail following the TensorRT failure marker.
+ *
+ * @param text - Text that may contain a TensorRT failure marker
+ * @returns The trimmed diagnostic detail, or `undefined` when the marker or detail is absent
+ */
+function extractTrtFailDetail(text: string): string | undefined {
+  const idx = text.indexOf(TRT_FAIL_MARK);
+  if (idx < 0) return undefined;
+  return text.slice(idx + TRT_FAIL_MARK.length).trim() || undefined;
+}
+
+/**
+ * Installs packages with pip and reports output through the provided callback.
+ *
+ * @param pip - The pip executable to run
+ * @param args - Arguments passed to `pip install`
+ * @param onLine - Callback invoked for each output chunk
+ */
+async function pipInstall(pip: string, args: string[], onLine: (line: string) => void): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn(pip, ["install", ...args], { stdio: "pipe" });
+    proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
+    proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
+    proc.on("error", (err: Error) =>
+      reject(
+        new Error(
+          `Failed to launch ${pip}: ${err.message}. Create the project .venv via Setup runtime first.`,
+        ),
+      ),
+    );
+    proc.on("close", (code: number | null) =>
+      code === 0 ? resolve() : reject(new Error(`pip install ${args.join(" ")} failed (exit ${code})`)),
+    );
+  });
+}
+
+/**
+ * Ensures the pinned ONNX Runtime GPU package is installed for TensorRT execution.
+ *
+ * @param onLine - Receives installation and status messages.
+ */
+async function ensureOnnxRuntimeGpu(
+  python: string,
+  pip: string,
+  onLine: (line: string) => void,
+): Promise<void> {
+  try {
+    const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT]);
+    const probe = parseOrtGpuProbe(stdout);
+    if (probe.ok) {
+      onLine("[deps] onnxruntime-gpu already installed ✓");
+      return;
+    }
+    if (probe.distVersion || probe.ortVersion) {
+      onLine(
+        `[deps] onnxruntime-gpu ${probe.distVersion ?? probe.ortVersion} installed — need ${PINNED_ORT_GPU_VERSION}, reinstalling...`,
+      );
+    }
+  } catch {
+    /* install below */
+  }
+  onLine(`[deps] Installing ${pinnedOrtGpuLabel()} (required for TensorRT EP)...`);
+  await pipInstall(pip, pinnedOrtGpuInstallArgs(), onLine);
+  onLine(`[deps] ${pinnedOrtGpuLabel()} installed ✓`);
+}
+
 // ─── TensorRT load probe ──────────────────────────────────────────────────
 
 /**
- * Verify that TensorRT 10.x (nvinfer_10) is loadable inside the venv Python.
+ * Determines whether TensorRT 10.x and its ONNX Runtime execution provider can load in a Python environment.
  *
- * Tests: tensorrt import → version check → DLL load → ORT provider availability.
- * The `env` parameter allows injecting PATH modifications for GPU library dirs.
+ * @param python - Path to the Python interpreter to probe
+ * @param env - Environment variables used during the probe
+ * @returns An object indicating whether TensorRT is loadable and, on failure, describing the cause
  */
 export async function probeTensorRtLoadable(
   python: string,
@@ -67,7 +151,8 @@ import os
 import sys
 
 def fail(msg):
-    print("fail:" + msg)
+    # Split marker so it never appears contiguous in this -c source dump.
+    print("OLIVE" + "_TRT_FAIL:" + msg)
     sys.exit(1)
 
 try:
@@ -85,7 +170,7 @@ try:
     import onnxruntime as ort
     if "TensorrtExecutionProvider" not in ort.get_available_providers():
         fail("TensorrtExecutionProvider missing from onnxruntime")
-    print("ok")
+    print("olive_trt_ok")
 except Exception as exc:
     fail(str(exc).replace(chr(10), " ")[:500])
 `.trim();
@@ -95,28 +180,84 @@ except Exception as exc:
       env: probeEnv,
     });
     const out = `${stdout}\n${stderr}`.trim();
-    if (out.includes("ok")) {
+    if (/(?:^|\n)olive_trt_ok(?:\n|$)/.test(out)) {
       return { loadable: true };
     }
-    const detail = out.replace(/^fail:/, "").trim() || "TensorRT provider library failed to load";
+    const detail = extractTrtFailDetail(out) || out.trim() || "TensorRT provider library failed to load";
     return { loadable: false, detail };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    const detail = message.includes("fail:") ? message.split("fail:").pop()?.trim() : message;
+    const stdout =
+      err && typeof err === "object" && "stdout" in err
+        ? String((err as { stdout?: unknown }).stdout ?? "")
+        : "";
+    const stderr =
+      err && typeof err === "object" && "stderr" in err
+        ? String((err as { stderr?: unknown }).stderr ?? "")
+        : "";
+    // Prefer real probe streams; never scan the Command-failed -c dump for the marker
+    // (the dump can contain fragments of this script).
+    const marked = extractTrtFailDetail(`${stdout}\n${stderr}`);
+    if (marked) {
+      if (/No module named ['"]tensorrt['"]/i.test(marked)) {
+        return { loadable: false, detail: "tensorrt is not installed in .venv" };
+      }
+      if (/No module named ['"]onnxruntime['"]/i.test(marked)) {
+        return {
+          loadable: false,
+          detail: "onnxruntime is not installed in .venv (required for TensorRT EP detection)",
+        };
+      }
+      return { loadable: false, detail: marked };
+    }
+
+    const combined = `${stdout}\n${stderr}\n${message}`;
+    if (/No module named ['"]tensorrt['"]/i.test(combined)) {
+      return { loadable: false, detail: "tensorrt is not installed in .venv" };
+    }
+    if (/No module named ['"]onnxruntime['"]/i.test(combined)) {
+      return {
+        loadable: false,
+        detail: "onnxruntime is not installed in .venv (required for TensorRT EP detection)",
+      };
+    }
+    const lines = message.split(/\r?\n/).filter(Boolean);
+    const short = lines[lines.length - 1] ?? message;
     return {
       loadable: false,
-      detail: detail || "TensorRT provider library failed to load",
+      detail: short.length > 400 ? `${short.slice(0, 400)}…` : short,
     };
   }
 }
 
-// ─── TensorRT install / repair ────────────────────────────────────────────
+/**
+ * Ensures the project environment has a compatible, loadable TensorRT execution provider.
+ *
+ * @param onLine - Callback for installation and verification progress messages
+ * @returns An object indicating success, with native library paths when available, or an error message
+ */
 
 export async function ensureTensorRt(
   onLine: (line: string) => void,
 ): Promise<{ ok: boolean; error?: string; libsDir?: string | null }> {
+  const venvResult = await ensureVenv(onLine);
+  if (!venvResult.ok) {
+    return {
+      ok: false,
+      error: venvResult.error ?? "Failed to create or prepare the project .venv",
+    };
+  }
+
   const venvPython = getVenvPython();
   const pip = getVenvPip();
+  if (!fs.existsSync(venvPython) || !fs.existsSync(pip)) {
+    return {
+      ok: false,
+      error: `Project .venv is incomplete (missing ${!fs.existsSync(pip) ? "pip" : "python"}). Use Setup runtime, then retry.`,
+    };
+  }
+
+  await ensureOnnxRuntimeGpu(venvPython, pip, onLine);
 
   const probe = await probeTensorRtLoadable(venvPython);
   if (probe.loadable) {
@@ -140,19 +281,7 @@ export async function ensureTensorRt(
     onLine(`[deps] TensorRT ${installed} present but EP not loadable — reinstalling pinned runtime...`);
   }
 
-  await new Promise<void>((resolve, reject) => {
-    const proc = spawn(pip, ["install", ...pinnedTensorRtInstallArgs()], {
-      stdio: "pipe",
-    });
-    proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-    proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-    proc.on("error", (err: Error) => reject(new Error(`Failed to launch ${pip}: ${err.message}`)));
-    proc.on("close", (code: number | null) =>
-      code === 0
-        ? resolve()
-        : reject(new Error(`pip install ${pinnedTensorRtLabel()} failed (exit ${code})`)),
-    );
-  });
+  await pipInstall(pip, pinnedTensorRtInstallArgs(), onLine);
   onLine(`[deps] ${pinnedTensorRtLabel()} installed ✓`);
 
   const retry = await probeTensorRtLoadable(venvPython);
@@ -171,9 +300,6 @@ export async function ensureTensorRt(
 }
 
 // ─── Batch dependency installer ───────────────────────────────────────────
-
-import { probeTensorRtRtxLoadable } from "./tensorrt-rtx.ts";
-import type { PkgDef } from "./recipe.ts";
 
 /**
  * Install all required packages into the project venv.

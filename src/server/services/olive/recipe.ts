@@ -4,10 +4,8 @@
  */
 import type { IHVProvider } from "../../../types.ts";
 import { recipeUsesMemoryOffload } from "../../../lib/memoryOffload.ts";
-import { CUDA12_RUNTIME_PACKAGES } from "../../../lib/oliveGpuRuntime.ts";
-import { pinnedOrtGpuInstallArgs, pinnedOrtGpuLabel } from "../../../lib/oliveGpuRuntime.ts";
+import { resolveCudaTag, RESOLVABLE_CUDA_TAGS } from "../../../lib/oliveGpuRuntime.ts";
 import { tensorrtRtxInstallArgs, tensorrtRtxLabel } from "../../../lib/tensorrtRtxDeps.ts";
-import { pinnedTensorRtInstallArgs, pinnedTensorRtLabel } from "../../../lib/tensorrtDeps.ts";
 
 /** Olive recipe shape (subset needed for inference). */
 export interface OliveRecipe {
@@ -52,7 +50,14 @@ export function inferRequiredPackages(recipe: OliveRecipe, cudaTag: string): Pkg
   const pkgs: PkgDef[] = [];
   const passes = Object.values(recipe.passes ?? {}) as Array<Record<string, unknown>>;
   const passTypes = passes.map((p) => String(p?.type ?? ""));
-  const isGpu = cudaTag !== "cpu";
+  const isCpu = cudaTag === "cpu";
+  const resolved = isCpu ? null : resolveCudaTag(cudaTag);
+  if (!isCpu && !resolved) {
+    throw new Error(
+      `Unsupported CUDA tag "${cudaTag}". Supported: ${RESOLVABLE_CUDA_TAGS.join(", ")} (ORT 1.26 + CUDA 12 pins).`,
+    );
+  }
+  const isGpu = resolved !== null;
   const inputType = String(recipe.input_model?.type ?? "");
   const inputConfig = (recipe.input_model?.config ?? {}) as Record<string, unknown>;
 
@@ -78,13 +83,13 @@ export function inferRequiredPackages(recipe: OliveRecipe, cudaTag: string): Pkg
     });
   }
 
-  // PyTorch — CPU wheel or CUDA-specific wheel
+  // PyTorch — CPU wheel or resolved CUDA wheel index
   pkgs.push(
-    isGpu
+    isGpu && resolved
       ? {
           importName: "torch",
-          installArgs: ["torch", "--index-url", `https://download.pytorch.org/whl/${cudaTag}`],
-          label: `torch (${cudaTag})`,
+          installArgs: ["torch", "--index-url", resolved.torchIndexUrl],
+          label: `torch (${resolved.tag})`,
         }
       : {
           importName: "torch",
@@ -93,14 +98,14 @@ export function inferRequiredPackages(recipe: OliveRecipe, cudaTag: string): Pkg
         },
   );
 
-  // ONNX Runtime — pin CUDA 12 build (1.27+ needs cu13 wheels not yet on PyPI)
+  // ONNX Runtime — pin CUDA 12 build via resolveCudaTag
   if (passTypes.some((t) => t.includes("Onnx") || t.includes("ORT") || t.includes("Transformers"))) {
     pkgs.push(
-      isGpu
+      isGpu && resolved
         ? {
             importName: "onnxruntime",
-            installArgs: pinnedOrtGpuInstallArgs(),
-            label: pinnedOrtGpuLabel(),
+            installArgs: resolved.ortInstallArgs,
+            label: resolved.ortLabel,
           }
         : {
             importName: "onnxruntime",
@@ -110,8 +115,8 @@ export function inferRequiredPackages(recipe: OliveRecipe, cudaTag: string): Pkg
     );
   }
 
-  if (isGpu) {
-    for (const pkg of CUDA12_RUNTIME_PACKAGES) {
+  if (isGpu && resolved) {
+    for (const pkg of resolved.runtimePackages) {
       pkgs.push(pkg);
     }
   }
@@ -149,12 +154,12 @@ export function inferRequiredPackages(recipe: OliveRecipe, cudaTag: string): Pkg
     });
   }
 
-  // Classic TensorRT SDK (nvinfer_10)
-  if (isGpu && getRecipeIhvProvider(recipe) === "TensorrtExecutionProvider") {
+  // Classic TensorRT SDK — pin from CUDA tag resolution when EP requests it
+  if (isGpu && resolved && getRecipeIhvProvider(recipe) === "TensorrtExecutionProvider") {
     pkgs.push({
       importName: "tensorrt",
-      installArgs: pinnedTensorRtInstallArgs(),
-      label: pinnedTensorRtLabel(),
+      installArgs: resolved.tensorRtInstallArgs,
+      label: resolved.tensorRtLabel,
     });
   }
 

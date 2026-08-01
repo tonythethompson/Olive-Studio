@@ -1,8 +1,11 @@
-import { CheckCircle2, CircleHelp, XCircle, type LucideIcon } from "lucide-react";
+import { CheckCircle2, CircleHelp, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RecipeHardwareCompatTier } from "@/lib/recipeHardwareCompatibility";
 
-const TIER_UI: Record<RecipeHardwareCompatTier, { label: string; Icon: LucideIcon; className: string }> = {
+const TIER_UI: Record<
+  RecipeHardwareCompatTier,
+  { label: string; Icon: typeof CheckCircle2; className: string }
+> = {
   compatible: {
     label: "Compatible",
     Icon: CheckCircle2,
@@ -28,14 +31,13 @@ interface CompatStatusPillProps {
 }
 
 /**
- * Displays a hardware compatibility status pill with an icon and label.
+ * Renders a hardware compatibility status badge with an icon and label.
  *
- * @param tier - Compatibility tier to display.
- * @param size - Controls the pill's compact or regular presentation.
- * @returns A styled status pill for the selected compatibility tier.
+ * @param tier - The compatibility tier to display
+ * @param size - The badge size
  */
 export function CompatStatusPill({ tier, className, size = "sm" }: CompatStatusPillProps) {
-  const { label, Icon, className: tierClass } = TIER_UI[tier] ?? TIER_UI.unknown;
+  const { label, Icon, className: tierClass } = TIER_UI[tier];
   return (
     <span
       className={cn(
@@ -58,11 +60,11 @@ interface CompatCountProps {
 }
 
 /**
- * Displays compatible and incompatible hardware counts with corresponding icons.
+ * Displays compatible and incompatible item counts with status icons.
  *
  * @param compatible - The number of compatible items
  * @param incompatible - The number of incompatible items
- * @param className - An optional CSS class name
+ * @param className - Optional classes applied to the summary
  */
 export function CompatCountSummary({ compatible, incompatible, className }: CompatCountProps) {
   return (

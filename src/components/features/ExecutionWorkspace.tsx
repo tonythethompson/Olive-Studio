@@ -3,16 +3,26 @@ import {
   useRef,
   useEffect,
   useLayoutEffect,
+  useMemo,
+  useCallback,
   useTransition,
   Suspense,
   lazy,
+  type Dispatch,
   type MouseEvent as ReactMouseEvent,
+  type SetStateAction,
 } from "react";
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";
 import { applyMcpDiagnosticToUiState, canApplyMcpDiagnostic } from "@/lib/mcpConfigMapping";
+import {
+  expandLogSelection,
+  isFailureLine,
+  isStudioHfTaskSpeechFix,
+  logsIndicateFailure,
+} from "@/lib/logFailurePatterns";
 import { DiagnosisHistory, type DiagnosisEntry } from "./DiagnosisHistory";
 import { MCPDiagnosticCard } from "./MCPDiagnosticCard";
 import {
@@ -40,6 +50,7 @@ import {
   Square,
   Wrench,
   MoreHorizontal,
+  FileText,
 } from "lucide-react";
 import JSZip from "jszip";
 import { cn } from "@/lib/utils";
@@ -50,9 +61,9 @@ import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProb
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { GpuMetricsBar } from "@/components/features/GpuMetricsBar";
 import { parseGpuMetrics, type GpuMetrics } from "@/lib/gpuMetrics";
-import { saveJobHistory, getJobHistory } from "@/lib/jobHistoryStore";
-import { JobHistoryModal } from "@/components/features/JobHistoryModal";
+import { getJobHistory, saveJobHistory } from "@/lib/jobHistoryStore";
 import { downloadMarkdownReport } from "@/lib/reportGenerator";
+import { JobHistoryModal } from "@/components/features/JobHistoryModal";
 
 const RecipeGraphView = lazy(() => import("./RecipeGraphView").then((m) => ({ default: m.RecipeGraphView })));
 
@@ -82,10 +93,10 @@ function LoadingFallback({ label, minH }: { label: string; minH?: string }) {
 }
 
 /**
- * Renders the Olive recipe workspace for reviewing, validating, exporting, queuing, executing, and diagnosing pipeline runs.
+ * Renders the Olive recipe workspace for reviewing, exporting, queuing, and executing a pipeline.
  *
- * @param state - Optional controlled pipeline state; store state is used when omitted.
- * @param setState - Optional controlled state updater; the store updater is used when omitted.
+ * @param state - Optional pipeline state override; the store state is used when omitted.
+ * @param setState - Optional state update function; the store updater is used when omitted.
  * @param onOpenAiAudit - Callback invoked when the AI audit review is opened.
  * @param onRunStateChange - Callback invoked when live execution starts or stops.
  */
@@ -121,7 +132,17 @@ export function ExecutionWorkspace({
   // Live execution state
   const [liveJobId, setLiveJobId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [executionLogs, setExecutionLogs] = useState<string[]>([]);
+  const [executionLogs, setExecutionLogsState] = useState<string[]>([]);
+  const executionLogsRef = useRef<string[]>([]);
+  // Keep the ref in sync inside the state updater so the SSE "done" handler
+  // can read the latest lines before effects flush.
+  const setExecutionLogs: Dispatch<SetStateAction<string[]>> = useCallback((update) => {
+    setExecutionLogsState((prev) => {
+      const next = typeof update === "function" ? update(prev) : update;
+      executionLogsRef.current = next;
+      return next;
+    });
+  }, []);
   const [executionStatus, setExecutionStatus] = useState<
     "idle" | "running" | "completed" | "failed" | "cancelled"
   >("idle");
@@ -133,26 +154,9 @@ export function ExecutionWorkspace({
   const [recipeView, setRecipeViewRaw] = useState<"graph" | "json" | "browser-test" | "benchmark">("graph");
   const [visitedRecipeViews, setVisitedRecipeViews] = useState<Set<string>>(new Set(["graph"]));
   const [moreToolsOpen, setMoreToolsOpen] = useState(false);
-  const moreToolsRef = useRef<HTMLDivElement>(null);
+  const moreToolsContainerRef = useRef<HTMLDivElement | null>(null);
+  const moreToolsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [, startRecipeTransition] = useTransition();
-
-  useEffect(() => {
-    if (!moreToolsOpen) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!moreToolsRef.current?.contains(event.target as Node)) {
-        setMoreToolsOpen(false);
-      }
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMoreToolsOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [moreToolsOpen]);
   const setRecipeView = (view: "graph" | "json" | "browser-test" | "benchmark") => {
     startRecipeTransition(() => {
       setRecipeViewRaw(view);
@@ -168,9 +172,15 @@ export function ExecutionWorkspace({
   const [isExportCopied, setIsExportCopied] = useState(false);
   const [justQueued, setJustQueued] = useState(false);
 
-  const { fetchKeyedDiagnostic, diagnostics: keyedDiagnostics, diagnosingKeys } = useMcpDiagnosticKeyed();
+  const {
+    fetchKeyedDiagnostic,
+    diagnostics: keyedDiagnostics,
+    diagnosingKeys,
+    errors: diagnoseErrors,
+  } = useMcpDiagnosticKeyed();
   const mcpDiagnostic = keyedDiagnostics["current"] ?? null;
-  const isDiagnosing = diagnosingKeys["current"] ?? false;
+  const isDiagnosing = diagnosingKeys?.["current"] ?? false;
+  const diagnoseError = diagnoseErrors?.["current"] ?? null;
   const [mcpFixApplied, setMcpFixApplied] = useAutoClearError(3000);
   // Diagnosis history for comparing across runs
   const [diagnosisHistory, setDiagnosisHistory] = useState<DiagnosisEntry[]>([]);
@@ -186,6 +196,16 @@ export function ExecutionWorkspace({
         ...prev,
         "[MCP FIX] Nothing auto-applyable — follow Recommended Fix / Known Quirks manually.",
       ]);
+      return;
+    }
+
+    if (isStudioHfTaskSpeechFix(mcpDiagnostic)) {
+      setState({ hfTask: "automatic-speech-recognition" });
+      setExecutionLogs((prev) => [
+        ...prev,
+        "[FIX] Hugging Face task corrected to `automatic-speech-recognition` for Whisper. Rebuild/refresh the recipe, then run Execute Live again.",
+      ]);
+      setMcpFixApplied("applied");
       return;
     }
 
@@ -241,8 +261,7 @@ export function ExecutionWorkspace({
     lastClickedIndexRef.current = null;
   }, [executionLogs.length]);
 
-  // Auto-select error lines when a job fails so users can immediately
-  // click "Diagnose Selected" without manual selection.
+  // Auto-select error lines when a job fails so Diagnose can focus on them.
   const prevStatusRef = useRef<string | null>(null);
 
   useLayoutEffect(() => {
@@ -251,14 +270,7 @@ export function ExecutionWorkspace({
       if (executionLogs.length > 0) {
         const errorIndices = new Set<number>();
         for (let i = 0; i < executionLogs.length; i++) {
-          const line = executionLogs[i];
-          if (
-            line.includes("[ERROR]") ||
-            line.includes("Traceback") ||
-            line.includes("Exception") ||
-            line.includes("Error:") ||
-            line.includes("error:")
-          ) {
+          if (isFailureLine(executionLogs[i]!)) {
             errorIndices.add(i);
           }
         }
@@ -293,20 +305,36 @@ export function ExecutionWorkspace({
     lastClickedIndexRef.current = index;
   };
 
-  const handleDiagnoseSelected = () => {
-    if (selectedLogIndices.size === 0) return;
-    setMcpFixApplied("");
-    const selectedLogs = Array.from(selectedLogIndices)
-      .sort((a: number, b: number) => a - b)
-      .map((i: number) => executionLogs[i]);
-    fetchKeyedDiagnostic("current", selectedLogs);
-  };
-
-  const handleDiagnoseAll = () => {
+  /** Prefer selected lines when present; expand traceback context; else full log. */
+  const handleDiagnose = () => {
     if (executionLogs.length === 0) return;
     setMcpFixApplied("");
-    fetchKeyedDiagnostic("current", executionLogs);
+    const logs =
+      selectedLogIndices.size > 0
+        ? expandLogSelection(executionLogs, Array.from(selectedLogIndices))
+        : executionLogs;
+    void fetchKeyedDiagnostic("current", logs);
   };
+
+  // Auto-diagnose once when a run fails (same pattern as BatchProcessingPanel).
+  const autoDiagnoseRef = useRef(false);
+  useEffect(() => {
+    if (executionStatus === "failed" && executionLogs.length > 0 && !autoDiagnoseRef.current) {
+      autoDiagnoseRef.current = true;
+      // Derive failure-line indices here (do not wait for the selection layout effect).
+      const errorIndices: number[] = [];
+      for (let i = 0; i < executionLogs.length; i++) {
+        if (isFailureLine(executionLogs[i]!)) {
+          errorIndices.push(i);
+        }
+      }
+      const logs = errorIndices.length > 0 ? expandLogSelection(executionLogs, errorIndices) : executionLogs;
+      void fetchKeyedDiagnostic("current", logs);
+    }
+    if (executionStatus !== "failed") {
+      autoDiagnoseRef.current = false;
+    }
+  }, [executionStatus, executionLogs, fetchKeyedDiagnostic]);
 
   // Auto-save completed diagnoses to history
   const prevDiagnosticRef = useRef(mcpDiagnostic);
@@ -368,17 +396,39 @@ export function ExecutionWorkspace({
       .catch(() => setHardwareProbe(null));
   }, []);
 
-  // Dynamic generation helper for OWR Config Bundle
-  const getOwrConfigs = () =>
-    buildOwrConfigs({
-      state,
-      platform: owrPlatform,
-      threads: owrThreads,
-      vramMode: owrVramMode,
-    });
+  useEffect(() => {
+    if (!moreToolsOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && moreToolsContainerRef.current?.contains(target)) return;
+      setMoreToolsOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMoreToolsOpen(false);
+      moreToolsTriggerRef.current?.focus();
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [moreToolsOpen]);
+
+  const owrConfigs = useMemo(
+    () =>
+      buildOwrConfigs({
+        state,
+        platform: owrPlatform,
+        threads: owrThreads,
+        vramMode: owrVramMode,
+      }),
+    [state, owrPlatform, owrThreads, owrVramMode],
+  );
 
   const handleDownloadOwrBundle = async () => {
-    const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = getOwrConfigs();
+    const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = owrConfigs;
     const zip = new JSZip();
 
     zip.file("ort_config.json", JSON.stringify(ortConfig, null, 2));
@@ -407,8 +457,8 @@ Contents of this bundle:
 Deployment Steps:
 ${
   owrPlatform === "web"
-    ? "- Place the optimized model file (model.onnx) in your public asset folder.\n- Install 'onnxruntime-web' dependency using npm.\n- Import and invoke your customized initializeOrtSession() function. "
-    : "- Place the compiled ORT flatbuffer file (model.ort) under your Android App's 'src/main/assets' directory.\n- Implement 'ai.onnxruntime:onnxruntime-android' via gradle.\n- Wire up your OnnxModelExecutor wrapper inside Activities/Handlers."
+    ? "- Place the optimized model file (model.onnx) in your public asset folder.\\n- Install 'onnxruntime-web' dependency using npm.\\n- Import and invoke your customized initializeOrtSession() function. "
+    : "- Place the compiled ORT flatbuffer file (model.ort) under your Android App's 'src/main/assets' directory.\\n- Implement 'ai.onnxruntime:onnxruntime-android' via gradle.\\n- Wire up your OnnxModelExecutor wrapper inside Activities/Handlers."
 }
 `;
     zip.file("README.txt", readme);
@@ -430,18 +480,37 @@ ${
   };
 
   const pipeline = buildRecipeFromState(state, { hardwareProbe });
-  const { recipe, recipeJson, validation, schema, advisories, isRunnable } = pipeline;
-  const validationLabel = !schema.valid
-    ? `Schema invalid (${schema.errors.length} issue${schema.errors.length === 1 ? "" : "s"})`
+  const { recipe, recipeJson, validation, schema, advisories, localExecutionIssues, isRunnable } = pipeline;
+  const schemaErrors = schema.errors ?? [];
+  const localBlockLines = localExecutionIssues.map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`);
+  // Local structure/compat checks only. A green badge must not imply Execute Live succeeded.
+  const localValidationLabel = !schema.valid
+    ? `Schema invalid (${schemaErrors.length} issue${schemaErrors.length === 1 ? "" : "s"})`
     : validation.statusLabel;
-  const validationTone = !schema.valid ? "error" : validation.statusTone;
+  const localValidationTone = !schema.valid ? "error" : validation.statusTone;
+  const runFailed = executionStatus === "failed";
+  const validationLabel = runFailed
+    ? `Run failed (exit ${executionExitCode ?? "?"}) · ${
+        localValidationTone === "success" ? "local checks still OK" : localValidationLabel
+      }`
+    : localValidationLabel;
+  const validationTone = runFailed ? "error" : localValidationTone;
 
   const handleQueueJob = () => {
     if (!isRunnable) {
+      const blockingCount = validation.criticalCount + localExecutionIssues.length;
       setExecutionLogs([
         schema.valid
-          ? `[ERROR] Cannot queue batch job: ${validation.criticalCount} blocking compatibility issue(s). Resolve in the graph or passes panel.`
-          : `[ERROR] Cannot queue batch job: recipe schema invalid.\n${schema.errors.map((e) => `[SCHEMA] ${e}`).join("\n")}`,
+          ? `[ERROR] Cannot queue batch job: ${blockingCount} blocking issue(s). Resolve in the graph or passes panel.`
+          : `[ERROR] Cannot queue batch job: recipe schema invalid.\n${schemaErrors.map((e) => `[SCHEMA] ${e}`).join("\n")}`,
+        ...(schema.valid
+          ? [
+              ...validation.issues
+                .filter((issue) => issue.severity === "critical")
+                .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
+              ...localBlockLines,
+            ]
+          : []),
       ]);
       return;
     }
@@ -554,15 +623,19 @@ ${
     if (isRunning) return;
 
     if (!isRunnable) {
+      const blockingCount = validation.criticalCount + localExecutionIssues.length;
       setExecutionLogs([
         schema.valid
-          ? `[ERROR] Cannot execute: ${validation.criticalCount} blocking compatibility issue(s).`
+          ? `[ERROR] Cannot execute: ${blockingCount} blocking issue(s).`
           : `[ERROR] Cannot execute: recipe schema invalid.`,
         ...(schema.valid
-          ? validation.issues
-              .filter((issue) => issue.severity === "critical")
-              .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`)
-          : schema.errors.map((e) => `[SCHEMA] ${e}`)),
+          ? [
+              ...validation.issues
+                .filter((issue) => issue.severity === "critical")
+                .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
+              ...localBlockLines,
+            ]
+          : schemaErrors.map((e) => `[SCHEMA] ${e}`)),
       ]);
       setExecutionStatus("failed");
       return;
@@ -645,22 +718,22 @@ ${
           } catch {
             exitCode = 0;
           }
-          const finalStatus = exitCode === 0 ? "completed" : "failed";
+          // Olive sometimes exits 0 after a pass traceback (e.g. HF task KeyError).
+          // Read the mirrored log ref so this updater stays pure (StrictMode-safe).
+          const currentLogs = executionLogsRef.current;
+          const failed = exitCode !== 0 || logsIndicateFailure(currentLogs);
+          const finalStatus = failed ? "failed" : "completed";
+          const reportedExit = failed && exitCode === 0 ? 1 : exitCode;
           setExecutionStatus(finalStatus);
-          setExecutionExitCode(exitCode);
+          setExecutionExitCode(reportedExit);
           setIsRunning(false);
           setGpuMetrics(null);
           onRunStateChange?.(false);
+          recordJobCompletion(targetJobId, finalStatus, reportedExit);
+          // Auto-diagnose is owned by the executionStatus==="failed" effect below.
+          if (failed) setMcpFixApplied("");
           evtSource.close();
           liveSourceRef.current = null;
-          recordJobCompletion(targetJobId, finalStatus, exitCode);
-          if (finalStatus === "failed") {
-            setMcpFixApplied("");
-            setExecutionLogs((currentLogs) => {
-              fetchKeyedDiagnostic("current", currentLogs);
-              return currentLogs;
-            });
-          }
         });
 
         evtSource.onerror = async () => {
@@ -688,13 +761,8 @@ ${
                 setIsRunning(false);
                 onRunStateChange?.(false);
                 recordJobCompletion(targetJobId, finalStatus, statusData.exitCode);
-                if (finalStatus === "failed") {
-                  setMcpFixApplied("");
-                  setExecutionLogs((currentLogs) => {
-                    fetchKeyedDiagnostic("current", currentLogs);
-                    return currentLogs;
-                  });
-                }
+                // Auto-diagnose is owned by the executionStatus==="failed" effect.
+                if (finalStatus === "failed") setMcpFixApplied("");
                 return;
               } else if (statusData.status === "running" || statusData.status === "setting_up") {
                 serverSaysRunning = true;
@@ -846,7 +914,7 @@ ${
       {/* OWR Export Bundle Overlay */}
       {isOwrExportOpen &&
         (() => {
-          const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = getOwrConfigs();
+          const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = owrConfigs;
 
           let fileTitle = "";
           let fileContent = "";
@@ -1167,24 +1235,25 @@ ${
               >
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Export Recipe
               </Button>
-              <div className="relative" ref={moreToolsRef}>
+              <div className="relative" ref={moreToolsContainerRef}>
                 <Button
+                  ref={moreToolsTriggerRef}
                   variant="outline"
                   className="h-8 px-2.5 text-xs border-slate-700 text-slate-300 hover:border-slate-500"
                   aria-expanded={moreToolsOpen}
-                  aria-haspopup="true"
-                  aria-controls="execution-more-tools"
+                  aria-haspopup="menu"
                   onClick={() => setMoreToolsOpen((open) => !open)}
                 >
                   <MoreHorizontal className="h-3.5 w-3.5 mr-1" /> More
                 </Button>
                 {moreToolsOpen && (
                   <div
-                    id="execution-more-tools"
+                    role="menu"
                     className="absolute right-0 z-20 mt-1 min-w-[180px] rounded-lg border border-slate-800 bg-slate-950 p-1 shadow-xl"
                   >
                     <button
                       type="button"
+                      role="menuitem"
                       className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] cursor-pointer ${
                         recipeView === "browser-test"
                           ? "bg-electric-blue/15 text-electric-blue"
@@ -1199,6 +1268,7 @@ ${
                     </button>
                     <button
                       type="button"
+                      role="menuitem"
                       className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] cursor-pointer ${
                         recipeView === "benchmark"
                           ? "bg-electric-blue/15 text-electric-blue"
@@ -1213,6 +1283,7 @@ ${
                     </button>
                     <button
                       type="button"
+                      role="menuitem"
                       className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer"
                       onClick={() => {
                         setIsHistoryOpen(true);
@@ -1223,19 +1294,25 @@ ${
                     </button>
                     <button
                       type="button"
+                      role="menuitem"
                       className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer"
                       onClick={() => {
-                        void (async () => {
-                          const history = await getJobHistory();
-                          if (history.length > 0) downloadMarkdownReport(history.slice(0, 6));
-                        })();
+                        void getJobHistory()
+                          .then((records) => downloadMarkdownReport(records))
+                          .catch((err: unknown) => {
+                            console.error(
+                              "Failed to export Markdown report:",
+                              err instanceof Error ? err.message : err,
+                            );
+                          });
                         setMoreToolsOpen(false);
                       }}
                     >
-                      <Download className="h-3 w-3" /> Export Report
+                      <FileText className="h-3 w-3" /> Export Report
                     </button>
                     <button
                       type="button"
+                      role="menuitem"
                       className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer"
                       onClick={() => {
                         setIsOwrExportOpen(true);
@@ -1329,9 +1406,9 @@ ${
         />
         <CardContent className="flex flex-col gap-4 p-4">
           <VramEstimateBanner state={state} compact />
-          {schema.errors.length > 0 && (
+          {schemaErrors.length > 0 && (
             <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3 space-y-2">
-              {schema.errors.map((error) => (
+              {schemaErrors.map((error) => (
                 <div key={error} className="flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
                   <p className="text-[11px] text-rose-200 leading-relaxed">{error}</p>
@@ -1431,23 +1508,19 @@ ${
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    {selectedLogIndices.size > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleDiagnoseSelected}
-                        disabled={isDiagnosing}
-                        className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded border border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50 transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        <Wrench className="h-3 w-3" /> Diagnose Selected
-                      </button>
-                    )}
                     <button
                       type="button"
-                      onClick={handleDiagnoseAll}
+                      onClick={handleDiagnose}
                       disabled={isDiagnosing || executionLogs.length === 0}
-                      className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded border border-slate-700 text-slate-300 hover:text-slate-100 hover:border-slate-600 transition-all cursor-pointer disabled:opacity-50"
+                      title={
+                        selectedLogIndices.size > 0
+                          ? `Diagnose ${selectedLogIndices.size} selected line(s)`
+                          : "Diagnose full log (error lines are auto-selected on failure)"
+                      }
+                      className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded border border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50 transition-all cursor-pointer disabled:opacity-50"
                     >
-                      <Wrench className="h-3 w-3" /> Diagnose All
+                      <Wrench className="h-3 w-3" />{" "}
+                      {selectedLogIndices.size > 0 ? `Diagnose (${selectedLogIndices.size})` : "Diagnose"}
                     </button>
                   </div>
                 </div>
@@ -1506,6 +1579,8 @@ ${
               isDiagnosing={isDiagnosing}
               fixApplied={mcpFixApplied}
               onApplyFix={handleApplyMcpFix}
+              onRunDiagnosis={handleDiagnose}
+              error={diagnoseError}
             />
           )}
         </CardContent>

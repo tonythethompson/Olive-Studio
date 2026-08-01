@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { McpDiagnostic } from "@/types";
+import { matchLocalLogDiagnostic } from "@/lib/logFailurePatterns";
 
 /**
  * Auto-clearing error state hook.
@@ -56,6 +57,8 @@ interface UseMcpDiagnosticReturn {
   diagnostic: McpDiagnostic | null;
   /** True while a fetch is in flight. */
   isDiagnosing: boolean;
+  /** Last fetch error message, if any. Cleared on the next successful fetch. */
+  error: string | null;
   /**
    * Fetch a diagnostic for the given logs. Returns the McpDiagnostic
    * result (or null on failure) so callers can store it in any shape
@@ -65,27 +68,136 @@ interface UseMcpDiagnosticReturn {
 }
 
 /**
- * Fetch an MCP diagnostic for error logs via the troubleshoot_olive_error tool.
+ * Retrieves a troubleshooting diagnostic for the provided logs.
  *
- * Encapsulates the POST to /api/mcp/tool, loading state, and result storage.
- * Use this instead of duplicating the fetch logic in ExecutionWorkspace and
- * BatchProcessingPanel.
+ * @param logs - Log lines to analyze.
+ * @param signal - Optional signal used to cancel the request.
+ * @returns An object containing the diagnostic, or an error message when retrieval fails.
+ */
+export async function requestMcpDiagnostic(
+  logs: string[],
+  signal?: AbortSignal,
+): Promise<{ diagnostic: McpDiagnostic | null; error: string | null }> {
+  if (logs.length === 0) return { diagnostic: null, error: null };
+
+  // Prefer deterministic Studio matchers (Whisper HF task, etc.) over a vague MCP hit.
+  const local = matchLocalLogDiagnostic(logs);
+  if (local) return { diagnostic: local, error: null };
+
+  try {
+    const errorSnippet = logs.slice(-80).join("\n");
+    const resp = await fetch("/api/mcp/tool", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        toolName: "troubleshoot_olive_error",
+        args: { error_message: errorSnippet, domain: "auto" },
+      }),
+      signal,
+    });
+    const data: unknown = await resp.json().catch(() => null);
+    if (signal?.aborted) return { diagnostic: null, error: null };
+
+    const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+    // Prefer unwrapped tool payload when a legacy `{ result }` envelope is present.
+    const payload =
+      record && record.result && typeof record.result === "object" && !Array.isArray(record.result)
+        ? (record.result as Record<string, unknown>)
+        : record;
+
+    if (!resp.ok) {
+      const msg =
+        (payload && typeof payload.error === "string" && payload.error) ||
+        (record && typeof record.error === "string" && record.error) ||
+        `Diagnosis failed (HTTP ${resp.status})`;
+      return { diagnostic: null, error: msg };
+    }
+
+    if (payload && typeof payload.error === "string" && payload.error) {
+      return { diagnostic: null, error: payload.error };
+    }
+
+    if (
+      payload &&
+      typeof payload.title === "string" &&
+      payload.title &&
+      typeof payload.root_cause === "string" &&
+      payload.root_cause &&
+      typeof payload.workaround === "string" &&
+      payload.workaround
+    ) {
+      const optionalUpdated =
+        payload.updated_config === undefined ||
+        (payload.updated_config !== null &&
+          typeof payload.updated_config === "object" &&
+          !Array.isArray(payload.updated_config));
+      const optionalQuirks =
+        payload.relevant_quirks === undefined ||
+        (Array.isArray(payload.relevant_quirks) &&
+          payload.relevant_quirks.every((q) => typeof q === "string"));
+      const optionalDomain =
+        payload.domain === undefined ||
+        payload.domain === null ||
+        payload.domain === "olive" ||
+        payload.domain === "studio";
+      const optionalApplyable = payload.applyable === undefined || typeof payload.applyable === "boolean";
+      const optionalMatched =
+        payload.matched_entry === undefined ||
+        payload.matched_entry === null ||
+        typeof payload.matched_entry === "string";
+      const optionalRelated =
+        payload.related_olive_entry === undefined ||
+        payload.related_olive_entry === null ||
+        typeof payload.related_olive_entry === "string";
+      if (
+        optionalUpdated &&
+        optionalQuirks &&
+        optionalDomain &&
+        optionalApplyable &&
+        optionalMatched &&
+        optionalRelated
+      ) {
+        return {
+          diagnostic: {
+            ...(payload as unknown as McpDiagnostic),
+            matched_entry: typeof payload.matched_entry === "string" ? payload.matched_entry : null,
+          },
+          error: null,
+        };
+      }
+    }
+
+    if (payload && typeof payload.title === "string" && payload.title) {
+      return {
+        diagnostic: null,
+        error: "Diagnosis returned an incomplete or malformed payload.",
+      };
+    }
+
+    return { diagnostic: null, error: "Diagnosis returned an unexpected response." };
+  } catch (err: unknown) {
+    if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) {
+      return { diagnostic: null, error: null };
+    }
+    return {
+      diagnostic: null,
+      error: err instanceof Error ? err.message : "Diagnosis request failed",
+    };
+  }
+}
+
+/**
+ * Manages fetching and storing a single MCP diagnostic for error logs.
  *
- * For single-diagnostic use (ExecutionWorkspace):
- * ```ts
- * const { diagnostic, isDiagnosing, fetchDiagnostic } = useMcpDiagnostic();
- * ```
+ * Cancels any in-flight request when a new fetch starts or the component unmounts,
+ * and exposes loading and error state alongside the diagnostic result.
  *
- * For keyed-by-ID use (BatchProcessingPanel), manage the Record externally:
- * ```ts
- * const [diagnostics, setDiagnostics] = useState<Record<string, McpDiagnostic>>({});
- * const { fetchDiagnostic, isDiagnosing } = useMcpDiagnostic();
- * // In callback: fetchDiagnostic(logs).then(() => setDiagnostics(...))
- * ```
+ * @returns The current diagnostic, loading state, error message, and diagnostic fetcher.
  */
 export function useMcpDiagnostic(): UseMcpDiagnosticReturn {
   const [diagnostic, setDiagnostic] = useState<McpDiagnostic | null>(null);
   const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   // Cancel in-flight request on unmount
@@ -103,80 +215,89 @@ export function useMcpDiagnostic(): UseMcpDiagnosticReturn {
     abortRef.current = controller;
 
     setIsDiagnosing(true);
+    setError(null);
     try {
-      const errorSnippet = logs.slice(-20).join("\n");
-      const resp = await fetch("/api/mcp/tool", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          toolName: "troubleshoot_olive_error",
-          args: { error_message: errorSnippet },
-        }),
-        signal: controller.signal,
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data && !data.error) {
-          setDiagnostic(data);
-          return data;
-        }
+      const { diagnostic: result, error: fetchError } = await requestMcpDiagnostic(logs, controller.signal);
+      if (controller.signal.aborted) return null;
+      if (result) {
+        setDiagnostic(result);
+        setError(null);
+        return result;
       }
-    } catch {
-      // Ignore abort and network errors
+      setError(fetchError);
+      return null;
     } finally {
       // Only clear loading if this request wasn't superseded by a newer one
       if (!controller.signal.aborted) setIsDiagnosing(false);
     }
-    return null;
   }, []);
 
-  return { diagnostic, isDiagnosing, fetchDiagnostic };
+  return { diagnostic, isDiagnosing, error, fetchDiagnostic };
 }
 
 // ─── MCP Diagnostic (Keyed by ID) ─────────────────────────────
 
 /**
- * Per-key MCP diagnostic tracking.
+ * Manages MCP diagnostics, loading states, and errors independently for each key.
  *
- * Wraps useMcpDiagnostic to provide keyed-by-ID loading and result storage.
- * Eliminates the duplicated pattern in ExecutionWorkspace (single key) and
- * BatchProcessingPanel (per-job keys).
+ * Starting a request for a key cancels any previous request for that key and clears
+ * its previous diagnostic. Aborted requests do not update the returned state.
  *
- * Usage:
- * ```ts
- * const { fetchKeyedDiagnostic, diagnostics, diagnosingKeys } = useMcpDiagnosticKeyed();
- * // Fetch for a specific key:
- * await fetchKeyedDiagnostic("job-123", logs);
- * // diagnostics["job-123"] now has the McpDiagnostic
- * // diagnosingKeys["job-123"] is false
- * ```
+ * @returns Functions and keyed state for fetching and tracking diagnostics.
  */
 export function useMcpDiagnosticKeyed(): {
   fetchKeyedDiagnostic: (key: string, logs: string[]) => Promise<McpDiagnostic | null>;
   diagnostics: Record<string, McpDiagnostic>;
   diagnosingKeys: Record<string, boolean>;
+  errors: Record<string, string | null>;
 } {
   const [diagnostics, setDiagnostics] = useState<Record<string, McpDiagnostic>>({});
   const [diagnosingKeys, setDiagnosingKeys] = useState<Record<string, boolean>>({});
-  const { fetchDiagnostic } = useMcpDiagnostic();
+  const [errors, setErrors] = useState<Record<string, string | null>>({});
+  const abortMapRef = useRef<Map<string, AbortController>>(new Map());
 
-  const fetchKeyedDiagnostic = useCallback(
-    async (key: string, logs: string[]): Promise<McpDiagnostic | null> => {
-      setDiagnosingKeys((prev) => ({ ...prev, [key]: true }));
-      try {
-        const result = await fetchDiagnostic(logs);
-        if (result) {
-          setDiagnostics((prev) => ({ ...prev, [key]: result }));
-        }
+  useEffect(() => {
+    const aborts = abortMapRef.current;
+    return () => {
+      for (const controller of aborts.values()) controller.abort();
+      aborts.clear();
+    };
+  }, []);
+
+  const fetchKeyedDiagnostic = useCallback(async (key: string, logs: string[]) => {
+    if (logs.length === 0) return null;
+    abortMapRef.current.get(key)?.abort();
+    const controller = new AbortController();
+    abortMapRef.current.set(key, controller);
+
+    setDiagnosingKeys((prev) => ({ ...prev, [key]: true }));
+    setDiagnostics((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setErrors((prev) => ({ ...prev, [key]: null }));
+    try {
+      const { diagnostic: result, error: fetchError } = await requestMcpDiagnostic(logs, controller.signal);
+      if (controller.signal.aborted) return null;
+      if (result) {
+        setDiagnostics((prev) => ({ ...prev, [key]: result }));
+        setErrors((prev) => ({ ...prev, [key]: null }));
         return result;
-      } finally {
+      }
+      setErrors((prev) => ({ ...prev, [key]: fetchError }));
+      return null;
+    } finally {
+      if (!controller.signal.aborted) {
         setDiagnosingKeys((prev) => ({ ...prev, [key]: false }));
       }
-    },
-    [fetchDiagnostic],
-  );
+      if (abortMapRef.current.get(key) === controller) {
+        abortMapRef.current.delete(key);
+      }
+    }
+  }, []);
 
-  return { fetchKeyedDiagnostic, diagnostics, diagnosingKeys };
+  return { fetchKeyedDiagnostic, diagnostics, diagnosingKeys, errors };
 }
 
 // ─── Import Presets ─────────────────────────────────────────────

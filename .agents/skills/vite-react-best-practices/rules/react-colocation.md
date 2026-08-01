@@ -11,7 +11,7 @@ Organize code by **Feature**, not by **Technology**. Avoid monolithic `component
 
 Grouping by file type.
 
-```
+```text
 src/
   components/
     Header.tsx
@@ -29,7 +29,7 @@ src/
 
 Group by Feature (Domain). Shared UI goes in `components/`.
 
-```
+```text
 src/
   features/
     Auth/

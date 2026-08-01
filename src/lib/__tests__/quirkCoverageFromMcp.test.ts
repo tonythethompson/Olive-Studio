@@ -41,6 +41,10 @@ const EXPECTED_ADVISORY = new Set([
   "lora-rank",
   "ep-fallback",
   "qnn-whitelist",
+  "studio-hfmodel-required",
+  "studio-parse-apply",
+  "studio-applyable-flag",
+  "studio-mcp-version-pin",
 ]);
 
 describe("MCP quirks.json coverage vs Apply Fix matchers", () => {

@@ -11,7 +11,16 @@ import { fetchWithTimeout } from "../shared/http.ts";
 
 // ─── Shared OpenAI-compatible call helper ─────────────────────────────────────
 
-/** Call any OpenAI-compatible chat completions API. */
+/**
+ * Sends a chat completion request to an OpenAI-compatible API.
+ *
+ * @param cfg - Provider configuration, including the model, credentials, endpoint, and timeout.
+ * @param system - System instruction for the model.
+ * @param messages - Conversation messages to include in the request.
+ * @param wantJson - Whether to request a JSON-only response.
+ * @returns The assistant's response text.
+ * @throws If the API request fails or returns an empty response.
+ */
 export async function callOpenAICompat(
   cfg: ProviderConfig,
   system: string,
@@ -19,10 +28,9 @@ export async function callOpenAICompat(
   wantJson: boolean,
 ): Promise<string> {
   const base = resolveOpenAiCompatBase(cfg);
-  const sysText =
-    wantJson && !supportsJsonResponseFormat(cfg)
-      ? `${system}\n\nIMPORTANT: Respond with valid JSON only. No markdown fences, no text outside the JSON object.`
-      : system;
+  const sysText = wantJson
+    ? `${system}\n\nIMPORTANT: Respond with valid JSON only. No markdown fences, no text outside the JSON object.`
+    : system;
   const body: OpenAIChatRequestBody = {
     model: cfg.model,
     messages: [
@@ -32,6 +40,10 @@ export async function callOpenAICompat(
   };
   if (wantJson && supportsJsonResponseFormat(cfg)) {
     body.response_format = { type: "json_object" };
+  }
+  // Small Cloudflare / local models often truncate mid-JSON without an explicit cap.
+  if (wantJson) {
+    body.max_tokens = 2048;
   }
 
   const headers: Record<string, string> = {
@@ -54,7 +66,13 @@ export async function callOpenAICompat(
   );
   if (!resp.ok) {
     const err = (await resp.json().catch(() => ({}))) as ApiErrorResponse;
-    throw new Error(`${cfg.provider} ${resp.status}: ${err.error?.message ?? resp.statusText}`);
+    const detail = err.error?.message ?? resp.statusText;
+    if (resp.status === 404) {
+      throw new Error(
+        `${cfg.provider} 404: model "${cfg.model}" was not found on this endpoint. Pick another model from the provider list (NVIDIA catalogs change; some IDs are unavailable for a given API key).${detail ? ` Upstream: ${detail}` : ""}`,
+      );
+    }
+    throw new Error(`${cfg.provider} ${resp.status}: ${detail}`);
   }
   const data = (await resp.json()) as OpenAIChatResponse;
   const text = data.choices?.[0]?.message?.content ?? "";
@@ -269,6 +287,92 @@ registerProvider({
     baseUrl: "https://api.kilo.ai/api/gateway",
   }),
   call: callOpenAICompat,
+});
+
+// OpenCode Zen (pay-per-use gateway).
+// Defaults to a /chat/completions model: Claude uses /messages and GPT uses /responses.
+registerProvider({
+  name: "opencode",
+  label: "OpenCode Zen",
+  defaultModel: "kimi-k2.7-code",
+  defaultBaseUrl: "https://opencode.ai/zen/v1",
+  envVarNames: ["OPENCODE_API_KEY"],
+  buildConfig: (apiKey) => ({
+    provider: "opencode",
+    apiKey,
+    model: "kimi-k2.7-code",
+    baseUrl: "https://opencode.ai/zen/v1",
+  }),
+  call: callOpenAICompat,
+  supportsJsonResponseFormat: true,
+});
+
+// OpenCode Go (subscription gateway for curated open models)
+registerProvider({
+  name: "opencode-go",
+  label: "OpenCode Go",
+  defaultModel: "kimi-k2.7-code",
+  defaultBaseUrl: "https://opencode.ai/zen/go/v1",
+  envVarNames: ["OPENCODE_API_KEY"],
+  buildConfig: (apiKey) => ({
+    provider: "opencode-go",
+    apiKey,
+    model: "kimi-k2.7-code",
+    baseUrl: "https://opencode.ai/zen/go/v1",
+  }),
+  call: callOpenAICompat,
+  supportsJsonResponseFormat: true,
+});
+
+// Fireworks AI
+registerProvider({
+  name: "fireworks",
+  label: "Fireworks AI",
+  defaultModel: "accounts/fireworks/models/llama-v3p3-70b-instruct",
+  defaultBaseUrl: "https://api.fireworks.ai/inference/v1",
+  envVarNames: ["FIREWORKS_API_KEY"],
+  buildConfig: (apiKey) => ({
+    provider: "fireworks",
+    apiKey,
+    model: "accounts/fireworks/models/llama-v3p3-70b-instruct",
+    baseUrl: "https://api.fireworks.ai/inference/v1",
+  }),
+  call: callOpenAICompat,
+  supportsJsonResponseFormat: true,
+});
+
+// NVIDIA NIM (build.nvidia.com / integrate.api.nvidia.com)
+registerProvider({
+  name: "nvidia",
+  label: "NVIDIA NIM",
+  defaultModel: "meta/llama-3.1-8b-instruct",
+  defaultBaseUrl: "https://integrate.api.nvidia.com/v1",
+  envVarNames: ["NVIDIA_API_KEY"],
+  buildConfig: (apiKey) => ({
+    provider: "nvidia",
+    apiKey,
+    model: "meta/llama-3.1-8b-instruct",
+    baseUrl: "https://integrate.api.nvidia.com/v1",
+  }),
+  call: callOpenAICompat,
+  supportsJsonResponseFormat: true,
+});
+
+// Hugging Face Inference Providers (OpenAI-compatible router)
+registerProvider({
+  name: "huggingface",
+  label: "Hugging Face",
+  defaultModel: "moonshotai/Kimi-K2.5",
+  defaultBaseUrl: "https://router.huggingface.co/v1",
+  envVarNames: ["HF_TOKEN", "HUGGINGFACE_API_KEY"],
+  buildConfig: (apiKey) => ({
+    provider: "huggingface",
+    apiKey,
+    model: "moonshotai/Kimi-K2.5",
+    baseUrl: "https://router.huggingface.co/v1",
+  }),
+  call: callOpenAICompat,
+  supportsJsonResponseFormat: true,
 });
 
 // GitHub Copilot

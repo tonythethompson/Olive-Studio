@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import { Bot, Send } from "lucide-react";
+import { summarizeChatPatch, type ChatAction } from "@/lib/chatActions";
 import { ProviderErrorBlock } from "../ProviderErrorBlock";
 import { renderMessageContent } from "./MessageContent";
 import type { ChatMessage } from "./useAiChat";
@@ -15,9 +16,14 @@ interface ChatPanelProps {
   onInputChange: (value: string) => void;
   onSend: (presetText?: string) => void;
   onGoSettings: () => void;
+  onApplyAction?: (messageIndex: number, action: ChatAction) => void;
 }
 
-/** Chat tab: live workspace summary, transcript, quick queries and composer. */
+/**
+ * Renders the chat interface with workspace context, transcript messages, quick queries, and message composition.
+ *
+ * Displays assistant actions when available and reports selected actions through the provided callback.
+ */
 export function ChatPanel({
   workspaceSummary,
   chatMessages,
@@ -29,6 +35,7 @@ export function ChatPanel({
   onInputChange,
   onSend,
   onGoSettings,
+  onApplyAction,
 }: ChatPanelProps) {
   return (
     <div className="flex flex-col h-full space-y-3">
@@ -48,6 +55,25 @@ export function ChatPanel({
               {msg.sender === "user" ? "You" : "Assistant"}
             </span>
             <div>{renderMessageContent(msg.text)}</div>
+            {msg.actions && msg.actions.length > 0 && onApplyAction && (
+              <div className="mt-2 flex flex-col gap-1.5">
+                {msg.actions.map((action) => {
+                  const applied = msg.appliedActionIds?.includes(action.id);
+                  return (
+                    <button
+                      key={action.id}
+                      type="button"
+                      disabled={applied}
+                      title={summarizeChatPatch(action.patch)}
+                      onClick={() => onApplyAction(i, action)}
+                      className="text-left text-[10px] px-2 py-1.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50 disabled:cursor-default cursor-pointer"
+                    >
+                      {applied ? "Applied" : action.title}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         ))}
         {isChatting && (

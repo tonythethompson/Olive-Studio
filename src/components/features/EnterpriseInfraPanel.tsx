@@ -3,11 +3,10 @@ import { UIState } from "@/types";
 import { KeyRound, Database, Network } from "lucide-react";
 
 /**
- * Renders controls for configuring enterprise caching and remote storage.
+ * Renders controls for configuring local cache paths, Azure Blob storage, and distributed caching.
  *
- * @param state - Current cache directory, Azure connection string, and distributed caching settings
- * @param setState - Updates one or more infrastructure settings
- * @returns The enterprise infrastructure configuration panel
+ * @param state - Current infrastructure and caching settings.
+ * @param setState - Updates one or more infrastructure and caching settings.
  */
 export function EnterpriseInfraPanel({
   state,
@@ -65,14 +64,14 @@ export function EnterpriseInfraPanel({
           <div className="mt-4 pt-6 border-t border-slate-800">
             <div className="flex items-center justify-between">
               <div>
-                <Label htmlFor="enterprise-distributed-caching">Enable Distributed Caching</Label>
+                <Label>Enable Distributed Caching</Label>
                 <p className="text-xs text-slate-500">
                   When enabled, the Olive recipe will use Azure Blob storage as cache if a connection string
                   is provided; otherwise falls back to local cache.
                 </p>
               </div>
               <Switch
-                id="enterprise-distributed-caching"
+                aria-label="Enable Distributed Caching"
                 checked={state.distributedCaching}
                 onCheckedChange={(checked) => setState({ distributedCaching: checked })}
               />

@@ -1,21 +1,20 @@
 import express, { Router } from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import dotenv from "dotenv";
 import fs from "fs";
-
+import { loadStudioEnv } from "./src/server/loadStudioEnv.ts";
 import { mountSystemRoutes, type SystemProbeOptions } from "./src/server/routes/system.ts";
 import { mountGithubRoutes } from "./src/server/routes/github.ts";
 import { mountAiRoutes } from "./src/server/routes/ai.ts";
-import { mountMcpRoutes } from "./src/server/routes/mcp.ts";
+import { mountMcpRoutes, performKbSync } from "./src/server/routes/mcp.ts";
 import { mountEnvRoutes } from "./src/server/routes/env.ts";
 import { mountOliveRoutes } from "./src/server/routes/olive.ts";
 import { probeTensorRtLoadable } from "./src/server/services/olive/tensorrt.ts";
 import { probeTensorRtRtxLoadable } from "./src/server/services/olive/tensorrt-rtx.ts";
 import { staticServeRateLimit } from "./src/server/middleware/rateLimit.ts";
 
-dotenv.config();
-dotenv.config({ path: ".env.local", override: true });
+// After imports: hydrate .env / .env.local / Windows User+Machine API keys into process.env.
+loadStudioEnv();
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -137,6 +136,9 @@ function shouldServeProductionStatic(): boolean {
   );
 }
 
+/**
+ * Starts the server with development middleware or production static assets, then listens for incoming connections.
+ */
 async function startServer() {
   if (!shouldServeProductionStatic()) {
     const vite = await createViteServer({
@@ -186,8 +188,19 @@ async function startServer() {
       markServerReady();
       // eslint-disable-next-line no-console -- intentional server startup message
       console.log(`Server running on http://localhost:${PORT}`);
-      // eslint-disable-next-line no-console -- intentional server startup message
-      console.log(`Open http://localhost:${PORT} in your browser`);
+      // Soft KB sync on boot: reload passes.json and persist freshness so the
+      // header does not start "stale" after every server restart.
+      try {
+        const result = performKbSync();
+        if (result.ok) {
+          // eslint-disable-next-line no-console -- intentional server startup message
+          console.log(`[kb] synced at startup (${result.status.passCount ?? "?"} passes)`);
+        } else {
+          console.warn("[kb] startup sync skipped:", result.body.error ?? "unavailable");
+        }
+      } catch (err: unknown) {
+        console.warn("[kb] startup sync failed:", err instanceof Error ? err.message : err);
+      }
       resolve();
     });
   });

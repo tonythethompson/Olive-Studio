@@ -56,10 +56,10 @@ function getHardwareTargetFromProvider(provider: IHVProvider): string {
 }
 
 /**
- * Displays recipe validation status, issues, compatibility details, and available fixes.
+ * Renders validation results and compatibility diagnostics for a recipe.
  *
  * @param state - The current recipe configuration to validate
- * @param setState - Updates the recipe configuration after applying a fix
+ * @param setState - Updates the recipe configuration when an issue autofix is applied
  */
 export function RecipeValidationPanel({ state, setState }: RecipeValidationPanelProps) {
   const [compatResult, setCompatResult] = useState<CompatibilityResult | null>(null);
@@ -292,7 +292,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
       >
         <div className="flex items-center gap-2 text-emerald-400">
           <CheckCircle className="h-4 w-4 shrink-0" />
-          <span className="text-xs font-medium">Recipe validated. No issues found.</span>
+          <span className="text-xs font-medium">Local checks passed. No issues found.</span>
         </div>
       </div>
     );
@@ -307,9 +307,9 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
       <div className="w-full flex items-center justify-between p-3 hover:bg-slate-800/50 transition-colors">
         <button
           type="button"
+          onClick={() => setExpanded(!expanded)}
           aria-expanded={expanded}
           aria-controls="recipe-validation-issue-list"
-          onClick={() => setExpanded(!expanded)}
           className="flex items-center gap-2 flex-1 min-w-0 text-left cursor-pointer"
         >
           {criticalCount > 0 ? (
@@ -359,6 +359,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
           id="recipe-validation-issue-list"
           className="border-t border-slate-800 divide-y divide-slate-800/50"
         >
+          {" "}
           {allIssues.map((issue) => (
             <div
               key={issue.id}
@@ -396,7 +397,6 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
               </div>
             </div>
           ))}
-
           {/* Compatibility details toggle */}
           {compatResult && (
             <div className="px-3 py-2">
@@ -447,7 +447,6 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
               )}
             </div>
           )}
-
           {/* Compatibility errors */}
           {compatError && (
             <div className="px-3 py-2 text-[10px] text-slate-500">

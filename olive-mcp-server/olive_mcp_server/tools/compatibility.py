@@ -2,26 +2,8 @@
 
 from typing import Any
 
-from . import load_compatibility_matrix, load_json, load_passes
+from . import load_compatibility_matrix, load_passes
 from .normalization import normalize_framework, normalize_hardware, normalize_model
-
-# Dict-indexed cache for O(1) model lookup (keyed by normalized model name).
-_model_index: dict[str, dict[str, Any]] | None = None
-
-
-def _get_model_index() -> dict[str, dict[str, Any]]:
-    """Build and cache a dict index of the compatibility matrix."""
-    global _model_index
-    if _model_index is None:
-        models = load_compatibility_matrix()
-        _model_index = {normalize_model(m["model"]): m for m in models}
-    return _model_index
-
-
-def _get_version_support() -> dict[str, str]:
-    """Return the tested Olive version range from KB metadata."""
-    data = load_json("compatibility_matrix.json")
-    return data.get("olive_version_support", {})
 
 
 def get_model_compatibility(
@@ -30,24 +12,26 @@ def get_model_compatibility(
     olive_version: str = "",
     hardware_target: str = "",
 ) -> dict[str, Any]:
-    """Check Olive support for a model/framework combo.
-
-    Args:
-        model_name: Model name or path, e.g. "mistralai/Mistral-7B-v0.1".
-        framework: Source framework, e.g. "PyTorch", "ONNX", "HuggingFace".
-        olive_version: Optional Olive version string.
-        hardware_target: Optional hardware target to filter to, e.g. "NVIDIA RTX 4090".
-
-    Returns:
-        Compatibility matrix for supported passes, known issues, and expected performance.
     """
-    index = _get_model_index()
+    Evaluate compatibility for a model and framework, optionally targeting specific hardware.
+    
+    Args:
+        model_name (str): Model name or path, such as "mistralai/Mistral-7B-v0.1".
+        framework (str): Source framework, such as "PyTorch", "ONNX", or "HuggingFace".
+        olive_version (str): Optional Olive version to include in the result.
+        hardware_target (str): Optional hardware target for selecting compatibility details.
+    
+    Returns:
+        dict[str, Any]: Compatibility details, supported passes and workflow suggestions for
+            unknown models, or hardware-specific compatibility and warnings when requested.
+    """
+    models = load_compatibility_matrix()
     key = normalize_model(model_name)
     fw = normalize_framework(framework)
     passes = {p["name"]: p for p in load_passes()}
 
-    model = index.get(key)
-    if not model:
+    matched = [m for m in models if normalize_model(m["model"]) == key]
+    if not matched:
         return {
             "note": f"'{model_name}' is not in the local compatibility matrix. Use get_quantization_strategy and get_pass_chain to design a custom workflow.",
             "framework": fw,
@@ -59,6 +43,7 @@ def get_model_compatibility(
             ],
         }
 
+    model = matched[0]
     framework_supported = fw in model.get("frameworks", [])
     hardware_matrix = model.get("hardware", {})
 
@@ -70,24 +55,6 @@ def get_model_compatibility(
         "hardware_profiles": hardware_matrix,
         "general_notes": model.get("notes", ""),
     }
-
-    # Version compatibility warning
-    if olive_version:
-        version_support = _get_version_support()
-        v_min = version_support.get("min", "")
-        v_max = version_support.get("max", "")
-        if v_min and v_max:
-            from packaging.version import Version, InvalidVersion
-    
-            try:
-                ov = Version(olive_version)
-                if ov < Version(v_min) or ov > Version(v_max):
-                    result["version_warning"] = (
-                        f"Olive {olive_version} is outside the tested range "
-                        f"({v_min} \u2013 {v_max}). Pass configurations may differ."
-                    )
-            except InvalidVersion:
-                pass  # non-semver string; skip comparison
 
     if hardware_target:
         target = normalize_hardware(hardware_target)

@@ -6,6 +6,8 @@ import { isKnownPass, getPassSchema } from "@/lib/schemaEngine";
 
 export type PipelineValidationOptions = {
   hardwareProbe?: HardwareProbeResult | null;
+  /** Block browser-only EPs from local Olive runs (Execute Live / batch queue). */
+  forLocalExecution?: boolean;
 };
 
 export type IssueSeverity = "critical" | "warning" | "info";
@@ -518,6 +520,12 @@ function getPassChainIssues(state: UIState, recipe: OliveRecipe): PipelineIssue[
   return issues;
 }
 
+/**
+ * Identifies advisory issues for the selected pipeline configuration.
+ *
+ * @param state - The current pipeline UI state
+ * @returns Advisory pipeline issues
+ */
 function getAdvisoryIssues(state: UIState): PipelineIssue[] {
   const issues: PipelineIssue[] = [];
   const { passes } = state;
@@ -534,6 +542,51 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
       description:
         "INT4 precision is generally not hardware-accelerated on standard CPUs (may fallback to FP32 math).",
       affectedPasses: ["quantization", "provider"],
+    });
+  }
+
+  return issues;
+}
+
+/**
+ * Detects recipe task configurations that can fail during Olive or Transformers runtime.
+ *
+ * @param state - The current UI state used to identify the model source and model path
+ * @param recipe - The Olive recipe to inspect
+ * @returns Critical issues for invalid task names or Whisper task mismatches
+ */
+function getRecipeRuntimeIssues(state: UIState, recipe: OliveRecipe): PipelineIssue[] {
+  const issues: PipelineIssue[] = [];
+  const input = recipe.input_model as { type?: string; config?: Record<string, unknown> } | undefined;
+  const task = typeof input?.config?.task === "string" ? input.config.task : "";
+  const modelPath =
+    typeof input?.config?.model_path === "string" ? input.config.model_path : state.hfModelId || "";
+
+  if (task === "speech-recognition") {
+    issues.push({
+      id: "hf-task-speech-recognition-invalid",
+      severity: "critical",
+      title: "Invalid Hugging Face task",
+      description:
+        "Recipe uses task `speech-recognition`, which Transformers rejects. Whisper/ASR must use `automatic-speech-recognition` or Olive exits with no output model.",
+      affectedTabs: ["input"],
+      affectedPasses: ["input_model"],
+    });
+  }
+
+  if (
+    state.modelSource === "huggingface" &&
+    /whisper/i.test(modelPath) &&
+    task &&
+    task !== "automatic-speech-recognition"
+  ) {
+    issues.push({
+      id: "hf-task-whisper-mismatch",
+      severity: "critical",
+      title: "Whisper task mismatch",
+      description: `Whisper model "${modelPath}" has task \`${task}\`. Use \`automatic-speech-recognition\`.`,
+      affectedTabs: ["input"],
+      affectedPasses: ["input_model"],
     });
   }
 
@@ -567,6 +620,35 @@ function getPassCatalogIssues(state: UIState, recipe: OliveRecipe): PipelineIssu
   return issues;
 }
 
+/**
+ * Identifies issues that prevent local Olive execution with the selected provider.
+ *
+ * @param state - The current pipeline configuration.
+ * @param forLocalExecution - Whether the pipeline is being prepared for local execution.
+ * @returns Critical issues affecting local execution.
+ */
+export function getLocalExecutionIssues(state: UIState, forLocalExecution?: boolean): PipelineIssue[] {
+  if (!forLocalExecution || state.ihvProvider !== "WebGpuExecutionProvider") {
+    return [];
+  }
+  return [
+    {
+      id: "webgpu-local-execution-unsupported",
+      severity: "critical",
+      title: "WebGPU cannot run via local Olive Python",
+      description:
+        "WebGpuExecutionProvider is a browser deploy target (ONNX Runtime Web), not a local Python EP. Export the recipe and use Browser Test / WebGPU benchmark instead of Execute Live.",
+      affectedPasses: ["provider"],
+    },
+  ];
+}
+
+/**
+ * Removes duplicate pipeline issues, retaining the critical issue when duplicate severities differ.
+ *
+ * @param issues - The pipeline issues to deduplicate
+ * @returns The deduplicated pipeline issues
+ */
 function dedupeIssues(issues: PipelineIssue[]): PipelineIssue[] {
   const byId = new Map<string, PipelineIssue>();
   for (const issue of issues) {
@@ -578,6 +660,13 @@ function dedupeIssues(issues: PipelineIssue[]): PipelineIssue[] {
   return Array.from(byId.values());
 }
 
+/**
+ * Validates the pipeline state and builds its Olive recipe.
+ *
+ * @param state - The pipeline UI state to validate
+ * @param options - Optional hardware and local-execution validation settings
+ * @returns Validation issues, status information, and the generated Olive recipe
+ */
 export function getPipelineValidation(
   state: UIState,
   options?: PipelineValidationOptions,
@@ -589,7 +678,9 @@ export function getPipelineValidation(
     ...getCrossPassIssues(state),
     ...getProviderIssues(state),
     ...getProviderHardwareIssues(state, options?.hardwareProbe),
+    ...getLocalExecutionIssues(state, options?.forLocalExecution),
     ...getAdvisoryIssues(state),
+    ...getRecipeRuntimeIssues(state, recipe),
     ...getPassCatalogIssues(state, recipe),
     ...getPassChainIssues(state, recipe),
   ]);
@@ -597,7 +688,8 @@ export function getPipelineValidation(
   const criticalCount = issues.filter((i) => i.severity === "critical").length;
   const warningCount = issues.filter((i) => i.severity === "warning").length;
 
-  let statusLabel = "Recipe validated";
+  // Local heuristics / schema only — not "Olive run succeeded" and not Assistant audit.
+  let statusLabel = "Local checks passed";
   let statusTone: PipelineValidationResult["statusTone"] = "success";
 
   if (criticalCount > 0) {

@@ -47,4 +47,5 @@ bun.lock
 /.cursor/hooks/state/continual-learning-index.json
 /.dirac-cache
 /.qoder
-.review-threads.json
+/dogfood-output
+.serena/project.yml

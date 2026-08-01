@@ -14,8 +14,8 @@
       {
         "label": "main",
         "title": "Olive Studio",
-        "width": 1400,
-        "height": 900,
+        "width": 1280,
+        "height": 840,
         "minWidth": 900,
         "minHeight": 600,
         "resizable": true,

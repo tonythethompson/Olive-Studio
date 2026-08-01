@@ -5,19 +5,42 @@
  * Codex, Devin, pipeline validation, and analysis.
  */
 import { Router } from "express";
-import { spawn, execFile, execSync } from "child_process";
+import { spawn, execFile, execSync, type ChildProcess } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import path from "path";
 import os from "os";
 import rateLimit from "express-rate-limit";
 
-import { callAI, getAiProvider, detectEnvProvider, setRuntimeAiProvider } from "../services/ai/index.ts";
+import { callAI, detectEnvProvider, setRuntimeAiProvider, getProvider } from "../services/ai/index.ts";
+import {
+  getRuntimeAiProvider,
+  readAiPreference,
+  restoreProviderFromPreference,
+} from "../services/ai/state.ts";
+import { listEnvCredentialStatus } from "../services/ai/registry.ts";
+import {
+  buildOliveAssistantSystemPrompt,
+  gatherOliveMcpKnowledge,
+} from "../services/ai/oliveMcpKnowledge.ts";
 import type { ProviderConfig } from "../types.ts";
-import { sanitizeProviderBaseUrl, stripTrailingSlashes } from "../services/ai/security.ts";
+import {
+  sanitizeProviderBaseUrl,
+  stripTrailingSlashes,
+  isLoopbackHostname,
+} from "../services/ai/security.ts";
+import { fetchWithTimeout } from "../services/shared/http.ts";
 import { ALLOWED_AI_PROVIDERS } from "../services/ai/detect.ts";
-import { parseJsonFromAiResponse } from "../../lib/aiResponse.ts";
-import { buildAiWorkspaceContext, formatAiWorkspaceContextForPrompt } from "../../lib/aiWorkspaceContext.ts";
+import { parseJsonFromAiResponse, readEnvApiKey } from "../../lib/aiResponse.ts";
+import { parseAuditAnalysisReply } from "../../lib/auditAnalysis.ts";
+import { filterAuditAnalysis } from "../../lib/auditSuggestionFilter.ts";
+import {
+  buildAiWorkspaceContext,
+  formatAiWorkspaceContextForPrompt,
+  type AiWorkspaceContext,
+} from "../../lib/aiWorkspaceContext.ts";
+import { CHAT_JSON_RESPONSE_CONTRACT, parseChatStructuredReply } from "../../lib/chatActions.ts";
+import { getChatScopeBlock } from "../../lib/chatScope.ts";
 import { validateOliveRecipeStructure } from "../../lib/oliveRecipeSchema.ts";
 import { getCodexAppServer } from "../../lib/codex/CodexAppServerClient.ts";
 import { codexAsk } from "../../lib/codex/codexAgent.ts";
@@ -28,6 +51,21 @@ import {
   listDevinModels,
   logoutDevin,
 } from "../../lib/devin/client.ts";
+import {
+  getCloudflareAccountStatus,
+  listCloudflareModels,
+  logoutCloudflare,
+  resolveCloudflareAuth,
+  saveManualCloudflareCredentials,
+  startCloudflareLogin,
+  syncCloudflareFromWrangler,
+} from "../../lib/cloudflare/client.ts";
+import { cloudflareAiBaseUrl, isValidCloudflareAccountId } from "../../lib/cloudflare/credentials.ts";
+import {
+  catalogModelsFromOpenAiCompatRows,
+  normalizeCatalogModels,
+  type OpenAiCompatModelRow,
+} from "../../lib/modelCatalog.ts";
 import { authActionRateLimit, heavyCommandRateLimit } from "../middleware/rateLimit.ts";
 
 const execFileAsync = promisify(execFile);
@@ -70,6 +108,32 @@ async function isLmsServerRunning(): Promise<boolean> {
   }
 }
 
+/** Spawn `lms server …`; resolves exit code if the child exits quickly, else null. */
+function spawnLmsServerDetached(lms: string, args: string[]): Promise<number | null> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (code: number | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(code);
+    };
+    try {
+      const child = spawn(lms, args, {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+        env: { ...process.env },
+      });
+      child.once("exit", (code) => finish(code));
+      child.once("error", () => finish(1));
+      child.unref();
+      setTimeout(() => finish(null), 2000);
+    } catch {
+      finish(1);
+    }
+  });
+}
+
 async function isOllamaRunning(): Promise<boolean> {
   try {
     const controller = new AbortController();
@@ -84,9 +148,21 @@ async function isOllamaRunning(): Promise<boolean> {
 
 /** Module-level LMS CLI path cache (avoids re-probing disk/PATH on every request). */
 let cachedLmsCli: string | null | undefined;
+let lmsCliMissAt = 0;
+const LMS_CLI_MISS_TTL_MS = 5000;
+
+function resetLmsCliCache(): void {
+  cachedLmsCli = undefined;
+  lmsCliMissAt = 0;
+}
 
 function findLmsCli(): string | null {
-  if (cachedLmsCli !== undefined) return cachedLmsCli;
+  // Reuse a positive cache hit immediately
+  if (cachedLmsCli) return cachedLmsCli;
+  // Reuse a cached miss within TTL to avoid repeated expensive probes
+  if (cachedLmsCli === null && lmsCliMissAt > 0 && Date.now() - lmsCliMissAt < LMS_CLI_MISS_TTL_MS) {
+    return null;
+  }
   const home = os.homedir();
   const candidates =
     process.platform === "win32"
@@ -100,6 +176,7 @@ function findLmsCli(): string | null {
   for (const c of candidates) {
     if (c && fs.existsSync(c)) {
       cachedLmsCli = c;
+      lmsCliMissAt = 0;
       return cachedLmsCli;
     }
   }
@@ -115,12 +192,15 @@ function findLmsCli(): string | null {
       ?.trim();
     if (result && fs.existsSync(result)) {
       cachedLmsCli = result;
+      lmsCliMissAt = 0;
       return cachedLmsCli;
     }
   } catch {
     /* not on PATH */
   }
+  // Cache the miss with timestamp
   cachedLmsCli = null;
+  lmsCliMissAt = Date.now();
   return null;
 }
 
@@ -154,6 +234,25 @@ function findOllamaCli(): string | null {
   return null;
 }
 
+/** Windows/macOS tray app that owns the local server lifecycle (do not also spawn `ollama serve`). */
+function findOllamaApp(): string | null {
+  if (process.platform === "win32") {
+    const candidates = [
+      path.join(process.env.LOCALAPPDATA || "", "Programs", "Ollama", "ollama app.exe"),
+      path.join(process.env.ProgramFiles || "C:\\Program Files", "Ollama", "ollama app.exe"),
+      path.join(os.homedir(), "AppData", "Local", "Programs", "Ollama", "ollama app.exe"),
+    ];
+    for (const c of candidates) {
+      if (c && fs.existsSync(c)) return c;
+    }
+    return null;
+  }
+  if (process.platform === "darwin") {
+    return "/Applications/Ollama.app";
+  }
+  return null;
+}
+
 function sleepMs(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -161,7 +260,7 @@ function sleepMs(ms: number): Promise<void> {
 async function tryWingetInstall(packageIds: string[]): Promise<boolean> {
   if (process.platform !== "win32") return false;
   try {
-    await execFileAsync("winget", ["--version"], { timeout: 5000 });
+    await execFileAsync("winget", ["--version"], { timeout: 5000, windowsHide: true });
   } catch {
     return false;
   }
@@ -177,6 +276,7 @@ async function tryWingetInstall(packageIds: string[]): Promise<boolean> {
           "--accept-package-agreements",
           "--accept-source-agreements",
           "--disable-interactivity",
+          "--silent",
         ],
         { timeout: 600_000, windowsHide: true },
       );
@@ -188,9 +288,110 @@ async function tryWingetInstall(packageIds: string[]): Promise<boolean> {
   return false;
 }
 
-async function ensureOllamaReady(
+/**
+ * Start Ollama without opening a console flood.
+ * On Windows/macOS the tray app owns `serve`; spawning `ollama serve` beside it
+ * fights the app (reap/respawn) and can flash endless terminal windows.
+ * Observes async ChildProcess `error` so launch failures propagate to callers.
+ */
+function startOllamaOnce(cliPath: string): Promise<{ mode: "app" | "serve"; detail: string }> {
+  return new Promise((resolve, reject) => {
+    let mode: "app" | "serve" = "serve";
+    let detail = `${cliPath} serve`;
+    let child: ChildProcess | null = null;
+
+    if (process.platform === "win32") {
+      const app = findOllamaApp();
+      if (app) {
+        child = spawn(app, [], {
+          detached: true,
+          stdio: "ignore",
+          windowsHide: true,
+          env: { ...process.env },
+        });
+        mode = "app";
+        detail = app;
+      }
+    } else if (process.platform === "darwin") {
+      const app = findOllamaApp();
+      if (app && fs.existsSync(app)) {
+        child = spawn("open", ["-a", "Ollama"], {
+          detached: true,
+          stdio: "ignore",
+          env: { ...process.env },
+        });
+        mode = "app";
+        detail = app;
+      }
+    }
+
+    if (!child) {
+      child = spawn(cliPath, ["serve"], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+        env: { ...process.env },
+      });
+      mode = "serve";
+      detail = `${cliPath} serve`;
+    }
+
+    // Attach listeners in the same turn as spawn so async failures are never unhandled.
+    let settled = false;
+    const settleOk = () => {
+      if (settled) return;
+      settled = true;
+      child!.unref();
+      resolve({ mode, detail });
+    };
+    child.once("error", (err) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    });
+    child.once("spawn", settleOk);
+  });
+}
+
+type OllamaEnsureResult = { ok: boolean; error?: string; steps: string[] };
+type EnsureProgressEvt = { type: string; message: string; percent?: number };
+
+/** Single-flight: concurrent Setup / pull calls must not spawn multiple Ollama processes. */
+let ollamaEnsureInFlight: Promise<OllamaEnsureResult> | null = null;
+const ollamaProgressSubscribers = new Set<(evt: EnsureProgressEvt) => void>();
+let lastOllamaStartAt = 0;
+const OLLAMA_START_COOLDOWN_MS = 45_000;
+
+async function ensureOllamaReady(onProgress?: (evt: EnsureProgressEvt) => void): Promise<OllamaEnsureResult> {
+  if (onProgress) {
+    ollamaProgressSubscribers.add(onProgress);
+    if (ollamaEnsureInFlight) {
+      onProgress({ type: "step", message: "Ollama setup already in progress…", percent: 5 });
+    }
+  }
+  if (!ollamaEnsureInFlight) {
+    ollamaEnsureInFlight = ensureOllamaReadyImpl((evt) => {
+      for (const sub of ollamaProgressSubscribers) {
+        try {
+          sub(evt);
+        } catch (err) {
+          console.error("[ensureOllamaReady] Progress subscriber threw:", err);
+        }
+      }
+    }).finally(() => {
+      ollamaEnsureInFlight = null;
+    });
+  }
+  try {
+    return await ollamaEnsureInFlight;
+  } finally {
+    if (onProgress) ollamaProgressSubscribers.delete(onProgress);
+  }
+}
+
+async function ensureOllamaReadyImpl(
   onProgress?: (evt: { type: string; message: string; percent?: number }) => void,
-): Promise<{ ok: boolean; error?: string; steps: string[] }> {
+): Promise<OllamaEnsureResult> {
   const steps: string[] = [];
   const note = (message: string, percent?: number) => {
     steps.push(message);
@@ -202,9 +403,9 @@ async function ensureOllamaReady(
   }
   let ollama = findOllamaCli();
   if (!ollama) {
-    note("Ollama CLI not found — installing…", 5);
+    note("Ollama CLI not found. Installing…", 5);
     if (process.platform === "win32") {
-      note("Running winget install Ollama.Ollama…", 8);
+      note("Running winget install Ollama.Ollama (silent)…", 8);
       await tryWingetInstall(["Ollama.Ollama"]);
     } else if (process.platform === "darwin") {
       note("Running brew install ollama…", 8);
@@ -214,10 +415,18 @@ async function ensureOllamaReady(
         note("brew install failed", 12);
       }
     }
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 20; i++) {
       ollama = findOllamaCli();
       if (ollama) break;
       await sleepMs(2000);
+    }
+    // Installer often auto-starts the tray app; give it a moment before we launch anything.
+    for (let i = 0; i < 15; i++) {
+      if (await isOllamaRunning()) {
+        note("Ollama started after install", 28);
+        return { ok: true, steps };
+      }
+      await sleepMs(1000);
     }
   }
   if (!ollama)
@@ -226,20 +435,26 @@ async function ensureOllamaReady(
       steps,
       error: "Could not install or find Ollama. Install from https://ollama.com, then retry.",
     };
+
   if (!(await isOllamaRunning())) {
-    note("Starting ollama serve…", 22);
-    try {
-      const child = spawn(ollama, ["serve"], {
-        detached: true,
-        stdio: "ignore",
-        windowsHide: true,
-        env: { ...process.env },
-      });
-      child.unref();
-    } catch (err: unknown) {
-      note(`spawn serve failed: ${err instanceof Error ? err.message : String(err)}`, 22);
+    const now = Date.now();
+    if (now - lastOllamaStartAt < OLLAMA_START_COOLDOWN_MS) {
+      note("Waiting for a recent Ollama start attempt…", 22);
+    } else {
+      try {
+        const started = await startOllamaOnce(ollama);
+        lastOllamaStartAt = now;
+        note(
+          started.mode === "app"
+            ? `Launching Ollama app (${started.detail})…`
+            : `Starting headless ollama serve (${started.detail})…`,
+          22,
+        );
+      } catch (err: unknown) {
+        note(`Failed to start Ollama: ${err instanceof Error ? err.message : String(err)}`, 22);
+      }
     }
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 40; i++) {
       await sleepMs(1000);
       if (await isOllamaRunning()) {
         note("Ollama HTTP server ready on :11434", 30);
@@ -249,9 +464,123 @@ async function ensureOllamaReady(
     return {
       ok: false,
       steps,
-      error: "Ollama serve did not start. Run `ollama serve` manually, then retry.",
+      error:
+        process.platform === "win32" || process.platform === "darwin"
+          ? "Ollama did not become ready. Open the Ollama app from the Start menu / Applications, wait until the tray icon appears, then retry."
+          : "Ollama serve did not start. Run `ollama serve` manually, then retry.",
     };
   }
+  return { ok: true, steps };
+}
+
+type LmsEnsureResult = { ok: boolean; error?: string; openedUrl?: string; steps: string[] };
+
+let lmsEnsureInFlight: Promise<LmsEnsureResult> | null = null;
+const lmsProgressSubscribers = new Set<(evt: EnsureProgressEvt) => void>();
+
+async function ensureLmsReady(onProgress?: (evt: EnsureProgressEvt) => void): Promise<LmsEnsureResult> {
+  if (onProgress) {
+    lmsProgressSubscribers.add(onProgress);
+    if (lmsEnsureInFlight) {
+      onProgress({ type: "step", message: "LM Studio setup already in progress…", percent: 5 });
+    }
+  }
+  if (!lmsEnsureInFlight) {
+    lmsEnsureInFlight = ensureLmsReadyImpl((evt) => {
+      for (const sub of lmsProgressSubscribers) {
+        try {
+          sub(evt);
+        } catch (err) {
+          console.error("[ensureLmsReady] Progress subscriber threw:", err);
+        }
+      }
+    }).finally(() => {
+      lmsEnsureInFlight = null;
+    });
+  }
+  try {
+    return await lmsEnsureInFlight;
+  } finally {
+    if (onProgress) lmsProgressSubscribers.delete(onProgress);
+  }
+}
+
+async function ensureLmsReadyImpl(onProgress?: (evt: EnsureProgressEvt) => void): Promise<LmsEnsureResult> {
+  const steps: string[] = [];
+  const note = (message: string, percent?: number) => {
+    steps.push(message);
+    onProgress?.({ type: "step", message, percent });
+  };
+
+  if (await isLmsServerRunning()) {
+    note("LM Studio server already running", 15);
+    return { ok: true, steps };
+  }
+
+  let lms = findLmsCli();
+  if (!lms) {
+    note("LM Studio CLI (lms) not found. Installing…", 5);
+    if (process.platform === "win32") {
+      note("Running winget install ElementLabs.LMStudio…", 8);
+      await tryWingetInstall(["ElementLabs.LMStudio"]);
+    } else if (process.platform === "darwin") {
+      note("Running brew install --cask lm-studio…", 8);
+      try {
+        await execFileAsync("brew", ["install", "--cask", "lm-studio"], { timeout: 600_000 });
+      } catch {
+        note("brew cask install failed. Continuing discovery…", 10);
+      }
+    } else {
+      note("No package-manager install path for this Linux host. Install LM Studio manually if needed.", 8);
+    }
+
+    for (let i = 0; i < 20; i++) {
+      resetLmsCliCache();
+      lms = findLmsCli();
+      if (lms) break;
+      await sleepMs(2000);
+    }
+  }
+
+  if (!lms) {
+    return {
+      ok: false,
+      steps,
+      openedUrl: "https://lmstudio.ai",
+      error:
+        "Could not install or find the LM Studio CLI (lms). Install LM Studio from https://lmstudio.ai, open it once, then retry Setup.",
+    };
+  }
+
+  note(`Found LM Studio CLI at ${lms}`, 35);
+
+  if (!(await isLmsServerRunning())) {
+    note("Starting LM Studio server (lms server start)…", 50);
+    let exitCode = await spawnLmsServerDetached(lms, ["server", "start"]);
+    if (exitCode !== null && exitCode !== 0) {
+      note(`lms server start exited (${exitCode}); retrying lms server…`, 52);
+      exitCode = await spawnLmsServerDetached(lms, ["server"]);
+      if (exitCode !== null && exitCode !== 0) {
+        note(`lms server exited (${exitCode})`, 54);
+      }
+    }
+
+    for (let i = 0; i < 30; i++) {
+      await sleepMs(1000);
+      if (await isLmsServerRunning()) {
+        note("LM Studio HTTP server ready", 90);
+        return { ok: true, steps };
+      }
+    }
+    return {
+      ok: false,
+      steps,
+      openedUrl: "https://lmstudio.ai",
+      error:
+        "LM Studio CLI is installed but the local server did not start. Open LM Studio once (or run `lms server start`), then retry.",
+    };
+  }
+
   return { ok: true, steps };
 }
 
@@ -274,18 +603,76 @@ function endNdjson(res: import("express").Response, final: Record<string, unknow
   }
 }
 
-/** Begin SSE stream for local model pull progress. */
-function beginPullSse(res: import("express").Response) {
-  res.status(200);
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache, no-transform");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-  if (typeof res.flushHeaders === "function") res.flushHeaders();
-  const send = (data: Record<string, unknown>) => {
-    if (!res.writableEnded) res.write(`data: ${JSON.stringify(data)}\n\n`);
+/** Local openai-compat endpoints may omit API keys for model listing. */
+function isLocalOpenaiCompat(provider: string, normalizedBaseUrl?: string): boolean {
+  if (provider !== "openai-compat" || !normalizedBaseUrl) return false;
+  try {
+    return isLoopbackHostname(new URL(normalizedBaseUrl).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** Whether this provider may activate without an API key (local / OAuth / CF flows). */
+function allowsEmptyApiKey(provider: string, normalizedBaseUrl?: string): boolean {
+  if (
+    provider === "openai-compat" ||
+    provider === "codex" ||
+    provider === "devin" ||
+    provider === "cloudflare"
+  ) {
+    return true;
+  }
+  if (!normalizedBaseUrl) return false;
+  try {
+    return isLoopbackHostname(new URL(normalizedBaseUrl).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Track client disconnect for long-running NDJSON streams.
+ * Does not cancel shared ensure* single-flight work used by other requests.
+ */
+function trackStreamClient(
+  req: import("express").Request,
+  res: import("express").Response,
+): {
+  disconnected: () => boolean;
+  signal: AbortSignal;
+  endOnce: () => void;
+} {
+  const ac = new AbortController();
+  let ended = false;
+  const onGone = () => {
+    if (!ac.signal.aborted) ac.abort();
   };
-  return send;
+  req.on("close", onGone);
+  req.on("aborted", onGone);
+  return {
+    disconnected: () => ac.signal.aborted || res.writableEnded,
+    signal: ac.signal,
+    endOnce: () => {
+      if (ended || res.writableEnded) return;
+      ended = true;
+      if (!res.writableEnded) res.end();
+    },
+  };
+}
+
+/** Begin NDJSON stream for local model pull progress (client parses line-delimited JSON). */
+function beginPullSse(res: import("express").Response) {
+  return beginNdjsonStream(res);
+}
+
+function envCredentialsPayload() {
+  const cfAccount = process.env.CLOUDFLARE_ACCOUNT_ID?.trim() ?? "";
+  const cfAuth = resolveCloudflareAuth();
+  const cloudflareUsable =
+    Boolean(cfAuth) ||
+    (Boolean(readEnvApiKey("CLOUDFLARE_API_TOKEN")) && isValidCloudflareAccountId(cfAccount));
+  return listEnvCredentialStatus({ cloudflare: cloudflareUsable });
 }
 
 // ─── Mount all AI routes ────────────────────────────────────────────────────
@@ -294,12 +681,62 @@ export function mountAiRoutes(router: Router): void {
   // ─── AI Provider ──────────────────────────────────────────────────────────
 
   router.get("/ai/provider", (_req, res) => {
-    const cfg = getAiProvider();
-    if (!cfg) return res.json({ provider: null, model: null, source: "none" });
-    return res.json({ provider: cfg.provider, model: cfg.model });
+    const envCredentials = envCredentialsPayload();
+    const runtime = getRuntimeAiProvider();
+    if (runtime) {
+      return res.json({
+        provider: runtime.provider,
+        model: runtime.model,
+        baseUrl: runtime.baseUrl ?? null,
+        source: "runtime",
+        envCredentials,
+      });
+    }
+
+    const pref = readAiPreference();
+    if (pref) {
+      const restored = restoreProviderFromPreference(pref);
+      if (restored) {
+        return res.json({
+          provider: restored.provider,
+          model: restored.model,
+          baseUrl: restored.baseUrl ?? null,
+          source: "saved",
+          envCredentials,
+        });
+      }
+      // Still surface the last UI selection even if the env key is missing.
+      let savedBaseUrl = pref.baseUrl ?? null;
+      if (savedBaseUrl) {
+        try {
+          savedBaseUrl = sanitizeProviderBaseUrl(pref.provider, savedBaseUrl) ?? null;
+        } catch {
+          savedBaseUrl = null;
+        }
+      }
+      return res.json({
+        provider: pref.provider,
+        model: pref.model,
+        baseUrl: savedBaseUrl,
+        source: "saved",
+        envCredentials,
+      });
+    }
+
+    const cfg = detectEnvProvider();
+    if (!cfg) {
+      return res.json({ provider: null, model: null, baseUrl: null, source: "none", envCredentials });
+    }
+    return res.json({
+      provider: cfg.provider,
+      model: cfg.model,
+      baseUrl: cfg.baseUrl ?? null,
+      source: "env",
+      envCredentials,
+    });
   });
 
-  router.post("/ai/provider", (req, res) => {
+  router.post("/ai/provider", authActionRateLimit, (req, res) => {
     const { provider, apiKey, model, baseUrl } = req.body ?? {};
     if (!provider) return res.status(400).json({ error: "Missing provider" });
     if (!ALLOWED_AI_PROVIDERS.has(provider))
@@ -310,8 +747,37 @@ export function mountAiRoutes(router: Router): void {
     } catch (err: unknown) {
       return res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
     }
-    setRuntimeAiProvider({ provider, apiKey, model, baseUrl: normalizedBaseUrl });
-    return res.json({ ok: true, provider, model });
+    const plugin = getProvider(provider);
+    const envKey = plugin ? readEnvApiKey(...plugin.envVarNames) : undefined;
+    const resolvedKey = typeof apiKey === "string" && apiKey.trim() ? apiKey.trim() : (envKey ?? "");
+    const allowEmptyKey = allowsEmptyApiKey(provider, normalizedBaseUrl);
+    if (!resolvedKey && !allowEmptyKey) {
+      return res.status(400).json({
+        error: `No API key provided and no env key found for ${provider}.`,
+      });
+    }
+    let finalKey = resolvedKey;
+    let finalBaseUrl = normalizedBaseUrl;
+    if (provider === "cloudflare") {
+      const auth = resolveCloudflareAuth();
+      if (auth) {
+        finalKey = finalKey || auth.apiToken;
+        finalBaseUrl = finalBaseUrl || cloudflareAiBaseUrl(auth.accountId);
+      }
+      if (!finalKey || !finalBaseUrl) {
+        return res.status(400).json({
+          error:
+            "Cloudflare is not signed in. Use Sign in + Sync credentials, or set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.",
+        });
+      }
+    }
+    setRuntimeAiProvider({
+      provider,
+      apiKey: finalKey,
+      model: model || plugin?.defaultModel || "default",
+      baseUrl: finalBaseUrl,
+    });
+    return res.json({ ok: true, provider, model: model || plugin?.defaultModel || "default" });
   });
 
   router.delete("/ai/provider", (_req, res) => {
@@ -322,18 +788,8 @@ export function mountAiRoutes(router: Router): void {
   // ─── AI Models ───────────────────────────────────────────────────────────
 
   router.get("/ai/models", (_req, res) => {
-    return res.json({
-      models: [
-        { id: "gemini-2.5-flash", provider: "gemini" },
-        { id: "gemini-2.5-pro", provider: "gemini" },
-        { id: "gpt-4o-mini", provider: "openai" },
-        { id: "gpt-4o", provider: "openai" },
-        { id: "claude-haiku-4-5-20251001", provider: "anthropic" },
-        { id: "claude-sonnet-4-20250514", provider: "anthropic" },
-        { id: "mistral-large-latest", provider: "mistral" },
-        { id: "grok-3", provider: "xai" },
-      ],
-    });
+    // Legacy static endpoint. Prefer POST /ai/models for live catalogs.
+    return res.json({ models: [], source: "fallback" });
   });
 
   router.post("/ai/models", async (req, res) => {
@@ -342,17 +798,78 @@ export function mountAiRoutes(router: Router): void {
     if (!ALLOWED_AI_PROVIDERS.has(provider))
       return res.status(400).json({ error: `Unsupported provider: ${provider}` });
     try {
-      const envCfg = detectEnvProvider();
-      const key = apiKey?.trim() || envCfg?.apiKey;
-      if (!key)
-        return res.json({
-          models: [],
-          source: "fallback",
-          error: "No API key available. Set an env var or provider in Settings.",
-        });
+      if (provider === "codex") {
+        try {
+          const server = getCodexAppServer();
+          await server.start();
+          const models = await server.listModels();
+          if (models.length > 0) {
+            return res.json({ models, source: "live" });
+          }
+          return res.json({
+            models: [],
+            source: "fallback",
+            error: "Codex returned an empty model catalog. Sign in, then Refresh.",
+          });
+        } catch (err: unknown) {
+          return res.json({
+            models: [],
+            source: "fallback",
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+      if (provider === "devin") {
+        try {
+          const catalog = await listDevinModels();
+          return res.json({
+            models: catalog.models.map((m) => ({ id: m.id, label: m.name || m.id })),
+            source: catalog.source,
+            ...(catalog.error ? { error: catalog.error } : {}),
+          });
+        } catch (err: unknown) {
+          return res.json({
+            models: [],
+            source: "fallback",
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+      if (provider === "cloudflare") {
+        try {
+          const catalog = await listCloudflareModels();
+          return res.json({
+            models: catalog.models.map((m) => ({ id: m.id, label: m.name || m.id })),
+            source: catalog.source,
+            ...(catalog.error ? { error: catalog.error } : {}),
+          });
+        } catch (err: unknown) {
+          return res.json({
+            models: [],
+            source: "fallback",
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      const plugin = getProvider(provider);
+      const runtime = getRuntimeAiProvider();
+      const runtimeKey =
+        runtime && runtime.provider === provider && runtime.apiKey?.trim()
+          ? runtime.apiKey.trim()
+          : undefined;
+      const envKey = plugin ? readEnvApiKey(...plugin.envVarNames) : undefined;
+      const key =
+        (typeof apiKey === "string" && apiKey.trim() ? apiKey.trim() : "") || runtimeKey || envKey || "";
+
       let safeBaseUrl: string | undefined;
       try {
-        safeBaseUrl = sanitizeProviderBaseUrl(provider, baseUrl);
+        // Prefer explicit body, then runtime saved base for openai-compat / local.
+        const candidate =
+          baseUrl ||
+          (runtime && runtime.provider === provider ? runtime.baseUrl : undefined) ||
+          plugin?.defaultBaseUrl;
+        safeBaseUrl = sanitizeProviderBaseUrl(provider, candidate);
       } catch (err: unknown) {
         return res.status(400).json({
           models: [],
@@ -360,9 +877,19 @@ export function mountAiRoutes(router: Router): void {
           error: err instanceof Error ? err.message : String(err),
         });
       }
+
+      const allowEmptyKey = isLocalOpenaiCompat(provider, safeBaseUrl);
+      if (!key && !allowEmptyKey) {
+        return res.json({
+          models: [],
+          source: "fallback",
+          error: "No API key available. Enter a key or set the provider env var, then Refresh.",
+        });
+      }
+
       const modelCatalog = await fetchLiveModelCatalog(
         provider as ProviderConfig["provider"],
-        key,
+        key || "local",
         safeBaseUrl,
       );
       return res.json(modelCatalog);
@@ -376,13 +903,57 @@ export function mountAiRoutes(router: Router): void {
   // ─── AI Chat ──────────────────────────────────────────────────────────────
 
   router.post("/ai/chat", async (req, res) => {
-    const { message, chatHistory } = req.body;
+    const { message, chatHistory, workspaceContext, state } = req.body ?? {};
     if (!message || typeof message !== "string") return res.status(400).json({ error: "Missing message" });
     try {
-      const system = "You are an Olive model optimization assistant.";
-      const messages = (chatHistory ?? []).concat([{ role: "user", content: message }]);
-      const reply = await callAI(system, messages);
-      return res.json({ reply });
+      const scopeBlock = getChatScopeBlock(message);
+      if (scopeBlock) {
+        return res.json({
+          reply: scopeBlock.reply,
+          text: scopeBlock.reply,
+          actions: [],
+          mcp: { toolsUsed: [], sufficient: true, usedWebFallback: false },
+        });
+      }
+
+      let workspace: AiWorkspaceContext | null = null;
+      let workspaceBlock: string | null = null;
+      try {
+        if (workspaceContext && typeof workspaceContext === "object") {
+          workspace = workspaceContext as AiWorkspaceContext;
+        } else if (state && typeof state === "object") {
+          workspace = buildAiWorkspaceContext(state);
+        }
+        workspaceBlock = workspace ? formatAiWorkspaceContextForPrompt(workspace) : null;
+      } catch {
+        // Workspace context is optional; ignore malformed client payloads.
+        workspace = null;
+        workspaceBlock = null;
+      }
+
+      // Olive MCP is the primary knowledge source for assistant chat.
+      const mcpKnowledge = await gatherOliveMcpKnowledge(message, workspace);
+      const system = buildOliveAssistantSystemPrompt({
+        mcpBlock: mcpKnowledge.promptBlock,
+        workspaceBlock,
+        responseContract: CHAT_JSON_RESPONSE_CONTRACT,
+      });
+
+      const history = Array.isArray(chatHistory) ? chatHistory : [];
+      const messages = history.concat([{ role: "user", content: message }]);
+      const rawReply = await callAI(system, messages, true);
+      const structured = parseChatStructuredReply(rawReply);
+      // `reply` is canonical; `text` kept for older clients that read that field.
+      return res.json({
+        reply: structured.reply,
+        text: structured.reply,
+        actions: structured.actions,
+        mcp: {
+          toolsUsed: mcpKnowledge.toolsUsed,
+          sufficient: mcpKnowledge.sufficient,
+          usedWebFallback: mcpKnowledge.usedWebFallback,
+        },
+      });
     } catch (err: unknown) {
       return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -418,17 +989,40 @@ export function mountAiRoutes(router: Router): void {
     if (!state) return res.status(400).json({ error: "Missing state" });
     try {
       const ctx = buildAiWorkspaceContext(state);
-      const ctxSummary = formatAiWorkspaceContextForPrompt(ctx);
-      const system = `You analyze Olive optimization pipelines. Return JSON: { score: number 0-100, level: "Optimized"|"Suboptimal"|"Critical", summary: string, suggestions: Array<{ title: string, description: string, impact: "High"|"Medium"|"Low", type: "warning"|"success"|"suggestion"|"info", autofix: { pass: string, value: string } }> }`;
-      const reply = await callAI(system, [{ role: "user", content: ctxSummary }], true);
-      const parsed = parseJsonFromAiResponse(reply);
-      return res.json(
-        typeof parsed === "object" && parsed
-          ? parsed
-          : { score: 50, level: "Suboptimal", summary: "Could not analyze.", suggestions: [] },
-      );
+      // Cap context so small models still have room for full-sentence JSON.
+      const ctxSummary = formatAiWorkspaceContextForPrompt(ctx).slice(0, 3500);
+      const system =
+        "You analyze Olive optimization pipelines for ONNX Runtime / TensorRT / quantization. " +
+        "Reply with ONE JSON object only (no markdown, no prose outside JSON). Schema: " +
+        '{"score":0-100,"level":"Optimized"|"Suboptimal"|"Critical","summary":string,"suggestions":[{"title":string,"description":string,"impact":"High"|"Medium"|"Low","type":"warning"|"success"|"suggestion"|"info","autofix":{"pass":string,"value":string}}]}. ' +
+        "Writing rules: summary must be 1-2 complete sentences. Each title must be a short readable phrase (not a bare field name like opset/dtype/cache). " +
+        "Each description must be 1-2 complete sentences explaining why and what to change. Keep JSON valid with commas between elements. " +
+        "Suggestion count (hard): Return 0 to 3 suggestions. Prefer fewer. Only include a suggestion if it is concrete, applyable, and would materially improve THIS workspace. " +
+        "Never invent filler to reach 3. If the pipeline is already solid, return suggestions:[]. If only one real improvement exists, return exactly one. " +
+        "Relevance rules (hard): Only suggest changes for the Model and execution provider in the workspace. " +
+        "Never mention speech recognition / ASR / Whisper unless the model is an ASR model. " +
+        "If execution provider is NvTensorRTRTXExecutionProvider, do NOT suggest TensorRTExecutionProvider, TensorRTPass, tensor_rt, TRT engine build/caching, or adding TensorRT after CUDA. That EP already is the consumer RTX path. " +
+        "autofix.pass must be a UI field (e.g. quantMethod, quantPrecision, conversionInputTargetTypes, conversionOpset, ihvProvider), never a nested Olive JSON path like passes.conversion.config.input_model_dtype or systems.local_system.config.accelerators.";
+      let reply = await callAI(system, [{ role: "user", content: ctxSummary }], true);
+      let parsed = parseAuditAnalysisReply(reply);
+      let analysis = filterAuditAnalysis(parsed, ctx);
+      // Retry once only when parse fell back to unstructured text (empty suggestions).
+      const looksSoft = !parsed.structured && parsed.suggestions.length === 0;
+      if (looksSoft) {
+        reply = await callAI(
+          `${system}\nRetry with valid JSON only. Example with ONE suggestion (0 is also fine; do not pad to 3): ` +
+            '{"score":60,"level":"Suboptimal","summary":"The pipeline can better match TensorRT RTX with AWQ int4 quantization.",' +
+            '"suggestions":[{"title":"Enable AWQ quantization","description":"Switch the quant method to AWQ so weights fit TensorRT RTX more efficiently.","impact":"High","type":"suggestion","autofix":{"pass":"quantMethod","value":"awq"}}]}',
+          [{ role: "user", content: ctxSummary }],
+          true,
+        );
+        parsed = parseAuditAnalysisReply(reply);
+        analysis = filterAuditAnalysis(parsed, ctx);
+      }
+      return res.json(analysis);
     } catch (err: unknown) {
-      return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+      const msg = err instanceof Error ? err.message : String(err);
+      return res.status(500).json({ error: msg });
     }
   });
 
@@ -519,43 +1113,89 @@ export function mountAiRoutes(router: Router): void {
   router.post("/ai/local-pull", heavyCommandRateLimit, async (req, res) => {
     const { modelTag } = req.body ?? {};
     if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
-    const send = beginPullSse(res);
-    const lmsCli = findLmsCli();
-    if (!lmsCli) {
-      send({
-        type: "error",
-        error: "LM Studio CLI (lms) not found. Install LM Studio from https://lmstudio.ai",
-      });
-      res.end();
-      return;
-    }
+    const guard = trackStreamClient(req, res);
+    const rawSend = beginPullSse(res);
+    const send = (evt: Record<string, unknown>) => {
+      if (guard.disconnected()) return;
+      rawSend(evt);
+    };
     try {
-      send({ type: "step", message: `Pulling ${modelTag} via LM Studio…`, percent: 5 });
-      const proc = spawn(lmsCli, ["pull", String(modelTag)], { stdio: "pipe" });
-      proc.stdout.on("data", (d: Buffer) => {
+      const ready = await ensureLmsReady((evt) => send(evt));
+      if (guard.disconnected()) {
+        guard.endOnce();
+        return;
+      }
+      if (!ready.ok) {
+        send({
+          type: "error",
+          error: ready.error || "LM Studio is not ready",
+          openedUrl: ready.openedUrl ?? "https://lmstudio.ai",
+        });
+        guard.endOnce();
+        return;
+      }
+      const lmsCli = findLmsCli();
+      if (!lmsCli) {
+        send({
+          type: "error",
+          error: "LM Studio CLI (lms) not found. Install LM Studio from https://lmstudio.ai",
+          openedUrl: "https://lmstudio.ai",
+        });
+        guard.endOnce();
+        return;
+      }
+      send({ type: "step", message: `Downloading ${modelTag} via LM Studio (lms get)…`, percent: 5 });
+      // LM Studio CLI downloads with `lms get`, not Ollama-style `pull`. `-y` skips prompts.
+      const tag = String(modelTag);
+      if (tag.startsWith("-") || !/^[\w./:@-]+$/.test(tag)) {
+        send({ type: "error", error: "Invalid modelTag." });
+        guard.endOnce();
+        return;
+      }
+      const proc = spawn(lmsCli, ["get", tag, "-y"], { stdio: "pipe" });
+      const killProc = () => {
+        try {
+          proc.kill();
+        } catch {
+          /* already exited */
+        }
+      };
+      guard.signal.addEventListener("abort", killProc, { once: true });
+      proc.stdout?.on("data", (d: Buffer) => {
         d.toString()
           .split(/\r?\n/)
           .filter(Boolean)
           .forEach((l) => send({ type: "log", message: l }));
       });
-      proc.stderr.on("data", (d: Buffer) => {
+      proc.stderr?.on("data", (d: Buffer) => {
         d.toString()
           .split(/\r?\n/)
           .filter(Boolean)
           .forEach((l) => send({ type: "log", message: l }));
       });
       proc.on("close", (code) => {
-        if (code === 0) send({ type: "done", message: "Model pulled successfully.", ok: true });
-        else send({ type: "error", error: `LM Studio pull exited with code ${code}` });
-        res.end();
+        if (!guard.disconnected()) {
+          if (code === 0) {
+            send({ type: "done", message: "Model downloaded successfully.", ok: true, percent: 100 });
+          } else {
+            send({
+              type: "error",
+              error: `LM Studio download exited with code ${code}`,
+              hint: "Official CLI is `lms get <model> -y` (not `pull`). Open LM Studio once if get fails to resolve the model.",
+            });
+          }
+        }
+        guard.endOnce();
       });
       proc.on("error", (err) => {
-        send({ type: "error", error: err.message });
-        res.end();
+        if (!guard.disconnected()) send({ type: "error", error: err.message });
+        guard.endOnce();
       });
     } catch (err: unknown) {
-      send({ type: "error", error: err instanceof Error ? err.message : String(err) });
-      res.end();
+      if (!guard.disconnected()) {
+        send({ type: "error", error: err instanceof Error ? err.message : String(err) });
+      }
+      guard.endOnce();
     }
   });
 
@@ -601,14 +1241,24 @@ export function mountAiRoutes(router: Router): void {
     return res.json({ healthy });
   });
 
-  router.post("/ai/ollama-pull", async (req, res) => {
+  router.post("/ai/ollama-pull", heavyCommandRateLimit, async (req, res) => {
     const { modelTag } = req.body ?? {};
     if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
-    const send = beginPullSse(res);
+    const guard = trackStreamClient(req, res);
+    const rawSend = beginPullSse(res);
+    const send = (evt: Record<string, unknown>) => {
+      if (guard.disconnected()) return;
+      rawSend(evt);
+    };
+    // Shared ensure continues for other clients; this request just stops consuming progress.
     const ready = await ensureOllamaReady((evt) => send(evt));
+    if (guard.disconnected()) {
+      guard.endOnce();
+      return;
+    }
     if (!ready.ok) {
       send({ type: "error", error: ready.error });
-      res.end();
+      guard.endOnce();
       return;
     }
     try {
@@ -617,16 +1267,30 @@ export function mountAiRoutes(router: Router): void {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: modelTag, stream: true }),
+        signal: guard.signal,
       });
+      if (guard.disconnected()) {
+        guard.endOnce();
+        return;
+      }
       if (!r.ok || !r.body) {
         send({ type: "error", error: `Ollama pull failed (HTTP ${r.status})` });
-        res.end();
+        guard.endOnce();
         return;
       }
       const reader = r.body.getReader();
       const decoder = new TextDecoder();
       let buf = "";
       while (true) {
+        if (guard.disconnected()) {
+          try {
+            await reader.cancel();
+          } catch {
+            /* ignore */
+          }
+          guard.endOnce();
+          return;
+        }
         const { done, value } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
@@ -643,16 +1307,19 @@ export function mountAiRoutes(router: Router): void {
             };
             if (evt.error) {
               send({ type: "error", error: evt.error });
-              res.end();
+              guard.endOnce();
               return;
             }
-            if (evt.completed && evt.total) {
+            if (typeof evt.completed === "number" && typeof evt.total === "number" && evt.total > 0) {
               send({
                 type: "progress",
                 message: evt.status || "Downloading…",
                 percent: Math.round((evt.completed / evt.total) * 60) + 30,
               });
-            } else send({ type: "log", message: evt.status || line });
+            } else if (evt.status) {
+              // Already-cached pulls often only emit status strings (no byte totals).
+              send({ type: "log", message: evt.status, percent: evt.status === "success" ? 95 : undefined });
+            }
           } catch {
             /* non-JSON line */
           }
@@ -660,9 +1327,11 @@ export function mountAiRoutes(router: Router): void {
       }
       send({ type: "done", message: "Model pulled successfully.", ok: true, percent: 100 });
     } catch (err: unknown) {
-      send({ type: "error", error: err instanceof Error ? err.message : String(err) });
+      if (!guard.disconnected()) {
+        send({ type: "error", error: err instanceof Error ? err.message : String(err) });
+      }
     }
-    res.end();
+    guard.endOnce();
   });
 
   router.post("/ai/ollama-load", async (req, res) => {
@@ -709,50 +1378,49 @@ export function mountAiRoutes(router: Router): void {
     const { engine } = req.body ?? {};
     if (engine !== "lms" && engine !== "ollama")
       return res.status(400).json({ error: "engine must be 'lms' or 'ollama'" });
-    const send = beginNdjsonStream(res);
+    const guard = trackStreamClient(req, res);
+    const rawSend = beginNdjsonStream(res);
+    const send = (evt: Record<string, unknown>) => {
+      if (guard.disconnected()) return;
+      rawSend(evt);
+    };
     try {
       if (engine === "ollama") {
         send({ type: "step", message: "Ensuring Ollama is installed…", percent: 0 });
+        // Shared ensure continues for other clients; stop writing if this client disconnects.
         const result = await ensureOllamaReady((evt) => send(evt));
+        if (guard.disconnected()) {
+          guard.endOnce();
+          return;
+        }
         if (!result.ok) {
           endNdjson(res, { type: "error", error: result.error });
           return;
         }
         endNdjson(res, { type: "done", ok: true, message: "Ollama is ready.", percent: 100 });
       } else {
-        const lmsCli = findLmsCli();
-        if (!lmsCli) {
-          endNdjson(res, {
-            type: "done",
-            ok: false,
-            error: "LM Studio CLI (lms) not found. Install LM Studio from https://lmstudio.ai",
-            openedUrl: "https://lmstudio.ai",
-          });
+        send({ type: "step", message: "Ensuring LM Studio is installed…", percent: 0 });
+        const result = await ensureLmsReady((evt) => send(evt));
+        if (guard.disconnected()) {
+          guard.endOnce();
           return;
         }
-        const healthy = await isLmsServerRunning();
-        if (!healthy) {
-          send({ type: "step", message: "Starting LM Studio server…", percent: 50 });
-          try {
-            const child = spawn(lmsCli, ["server"], {
-              detached: true,
-              stdio: "ignore",
-              windowsHide: true,
-              env: { ...process.env },
-            });
-            child.unref();
-            for (let i = 0; i < 15; i++) {
-              await sleepMs(1000);
-              if (await isLmsServerRunning()) break;
-            }
-          } catch {
-            /* continue */
-          }
+        if (!result.ok) {
+          endNdjson(res, {
+            type: "error",
+            error: result.error,
+            openedUrl: result.openedUrl ?? "https://lmstudio.ai",
+          });
+          return;
         }
         endNdjson(res, { type: "done", ok: true, message: "LM Studio is ready.", percent: 100 });
       }
     } catch (err: unknown) {
-      endNdjson(res, { type: "error", error: err instanceof Error ? err.message : String(err) });
+      if (!guard.disconnected()) {
+        endNdjson(res, { type: "error", error: err instanceof Error ? err.message : String(err) });
+      } else {
+        guard.endOnce();
+      }
     }
   });
 
@@ -761,7 +1429,8 @@ export function mountAiRoutes(router: Router): void {
   router.get("/codex/account", async (_req, res) => {
     try {
       const server = getCodexAppServer();
-      if (!server.isReady) return res.json({ ready: false, error: "Codex app-server not running" });
+      // Olive Studio owns the app-server child process; start it on demand.
+      await server.start();
       const account = await server.readAccount();
       return res.json({ ok: true, ready: true, account: account?.account ?? null });
     } catch (err: unknown) {
@@ -772,7 +1441,7 @@ export function mountAiRoutes(router: Router): void {
   router.post("/codex/login", authActionRateLimit, async (_req, res) => {
     try {
       const server = getCodexAppServer();
-      if (!server.isReady) return res.status(400).json({ ok: false, error: "Codex app-server not running" });
+      await server.start();
       const login = await server.startChatGptLogin();
       return res.json({
         ok: true,
@@ -859,8 +1528,70 @@ export function mountAiRoutes(router: Router): void {
 
   router.get("/devin/models", async (_req, res) => {
     try {
-      const models = await listDevinModels();
-      return res.json({ models });
+      const catalog = await listDevinModels();
+      return res.json({ models: catalog.models, source: catalog.source, error: catalog.error });
+    } catch (err: unknown) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  // ─── Cloudflare Workers AI ───────────────────────────────────────────────
+
+  router.get("/cloudflare/account", (_req, res) => {
+    return res.json(getCloudflareAccountStatus());
+  });
+
+  router.post("/cloudflare/login", authActionRateLimit, async (_req, res) => {
+    const result = await startCloudflareLogin();
+    if (!result.ok) return res.status(500).json(result);
+    return res.json(result);
+  });
+
+  router.post("/cloudflare/sync", authActionRateLimit, async (req, res) => {
+    try {
+      const preferredAccountId =
+        typeof req.body?.accountId === "string" ? req.body.accountId.trim() : undefined;
+      const creds = await syncCloudflareFromWrangler(preferredAccountId);
+      return res.json({
+        ok: true,
+        accountId: creds.accountId,
+        accountName: creds.accountName,
+        email: creds.email,
+        authType: creds.authType,
+      });
+    } catch (err: unknown) {
+      return res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  router.post("/cloudflare/login/manual", authActionRateLimit, (req, res) => {
+    try {
+      const apiToken = typeof req.body?.apiToken === "string" ? req.body.apiToken.trim() : "";
+      const accountId = typeof req.body?.accountId === "string" ? req.body.accountId.trim() : "";
+      if (!apiToken || !accountId) {
+        return res.status(400).json({ ok: false, error: "apiToken and accountId are required." });
+      }
+      if (!isValidCloudflareAccountId(accountId)) {
+        return res
+          .status(400)
+          .json({ ok: false, error: "accountId must be a 32-character hex Cloudflare account id." });
+      }
+      const creds = saveManualCloudflareCredentials({ apiToken, accountId });
+      return res.json({ ok: true, accountId: creds.accountId });
+    } catch (err: unknown) {
+      return res.status(400).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  router.post("/cloudflare/logout", (_req, res) => {
+    logoutCloudflare();
+    return res.json({ ok: true });
+  });
+
+  router.get("/cloudflare/models", async (_req, res) => {
+    try {
+      const catalog = await listCloudflareModels();
+      return res.json({ models: catalog.models, source: catalog.source, error: catalog.error });
     } catch (err: unknown) {
       return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -869,28 +1600,191 @@ export function mountAiRoutes(router: Router): void {
 
 /** Fetch live model catalog from a provider's API. `baseUrl` must already be sanitized. */
 async function fetchLiveModelCatalog(provider: string, apiKey: string, baseUrl?: string) {
-  const base = stripTrailingSlashes(baseUrl || defaultBaseUrl(provider));
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${apiKey}`,
-    "Content-Type": "application/json",
-  };
   try {
-    const modelsUrl = new URL("models", base.endsWith("/") ? base : `${base}/`);
-    const r = await fetch(modelsUrl, { headers });
-    if (!r.ok) return { models: [], source: "fallback", error: `HTTP ${r.status}` };
-    const data = (await r.json()) as { data?: Array<{ id: string }> };
-    const models = (data.data ?? []).map((m) => ({ id: m.id, label: m.id }));
-    return {
-      models: models.length > 0 ? models : await fallbackModels(provider),
-      source: models.length > 0 ? "live" : "fallback",
+    if (provider === "gemini") {
+      return await fetchGeminiModelCatalog(apiKey);
+    }
+    if (provider === "anthropic") {
+      return await fetchAnthropicModelCatalog(apiKey);
+    }
+    if (provider === "copilot") {
+      return await fetchCopilotModelCatalog(apiKey, baseUrl);
+    }
+
+    const base = stripTrailingSlashes(baseUrl || defaultBaseUrl(provider));
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
     };
-  } catch {
-    return { models: await fallbackModels(provider), source: "fallback" };
+    if (provider === "openrouter") {
+      headers["HTTP-Referer"] = "https://github.com/tonythethompson/Olive-Studio";
+      headers["X-Title"] = "Olive Studio";
+    }
+
+    const rows: OpenAiCompatModelRow[] = [];
+    let nextUrl: string | null = new URL("models", base.endsWith("/") ? base : `${base}/`).toString();
+    let pages = 0;
+    while (nextUrl && pages < 10) {
+      pages += 1;
+      const r = await fetchWithTimeout(nextUrl, { headers });
+      if (!r.ok) {
+        if (pages === 1) {
+          return { models: [], source: "fallback" as const, error: `HTTP ${r.status}` };
+        }
+        break;
+      }
+      const data = (await r.json()) as {
+        data?: OpenAiCompatModelRow[];
+        has_more?: boolean;
+        next?: string | null;
+      };
+      rows.push(...(data.data ?? []));
+      if (data.has_more && typeof data.next === "string" && data.next.trim()) {
+        try {
+          const baseOrigin = new URL(`${base}/`).origin;
+          const candidate = new URL(data.next, `${base}/`);
+          // API key travels with this request; never follow pagination off-origin.
+          nextUrl = candidate.origin === baseOrigin ? candidate.toString() : null;
+        } catch {
+          nextUrl = null;
+        }
+      } else {
+        nextUrl = null;
+      }
+    }
+
+    const models = catalogModelsFromOpenAiCompatRows(rows);
+    return {
+      models,
+      source: models.length > 0 ? ("live" as const) : ("fallback" as const),
+      ...(models.length === 0 ? { error: "Provider returned no chat-capable models." } : {}),
+    };
+  } catch (err: unknown) {
+    return {
+      models: [],
+      source: "fallback" as const,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
+}
+
+async function fetchGeminiModelCatalog(apiKey: string) {
+  const models: Array<{ id: string; label: string }> = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < 10; page += 1) {
+    const url = new URL("https://generativelanguage.googleapis.com/v1beta/models");
+    url.searchParams.set("key", apiKey);
+    url.searchParams.set("pageSize", "100");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+    const r = await fetchWithTimeout(url);
+    if (!r.ok) {
+      if (page === 0) {
+        return { models: [], source: "fallback" as const, error: `Gemini HTTP ${r.status}` };
+      }
+      break;
+    }
+    const data = (await r.json()) as {
+      models?: Array<{ name?: string; displayName?: string; supportedGenerationMethods?: string[] }>;
+      nextPageToken?: string;
+    };
+    for (const m of data.models ?? []) {
+      if (!(m.supportedGenerationMethods ?? []).includes("generateContent")) continue;
+      const raw = (m.name || "").replace(/^models\//, "").trim();
+      if (!raw) continue;
+      models.push({ id: raw, label: m.displayName || raw });
+    }
+    pageToken = data.nextPageToken?.trim() || undefined;
+    if (!pageToken) break;
+  }
+  const normalized = normalizeCatalogModels(models);
+  return {
+    models: normalized,
+    source: normalized.length > 0 ? ("live" as const) : ("fallback" as const),
+    ...(normalized.length === 0 ? { error: "No Gemini generateContent models returned." } : {}),
+  };
+}
+
+async function fetchAnthropicModelCatalog(apiKey: string) {
+  const models: Array<{ id: string; label: string }> = [];
+  let afterId: string | undefined;
+  for (let page = 0; page < 10; page += 1) {
+    const url = new URL("https://api.anthropic.com/v1/models");
+    url.searchParams.set("limit", "100");
+    if (afterId) url.searchParams.set("after_id", afterId);
+    const r = await fetchWithTimeout(url, {
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+    });
+    if (!r.ok) {
+      if (page === 0) {
+        return { models: [], source: "fallback" as const, error: `Anthropic HTTP ${r.status}` };
+      }
+      break;
+    }
+    const data = (await r.json()) as {
+      data?: Array<{ id?: string; display_name?: string }>;
+      has_more?: boolean;
+      last_id?: string;
+    };
+    for (const m of data.data ?? []) {
+      const id = (m.id || "").trim();
+      if (!id) continue;
+      models.push({ id, label: m.display_name || id });
+    }
+    if (!data.has_more || !data.last_id) break;
+    afterId = data.last_id;
+  }
+  const normalized = normalizeCatalogModels(models);
+  return {
+    models: normalized,
+    source: normalized.length > 0 ? ("live" as const) : ("fallback" as const),
+    ...(normalized.length === 0 ? { error: "No Anthropic models returned." } : {}),
+  };
+}
+
+async function fetchCopilotModelCatalog(apiKey: string, baseUrl?: string) {
+  // Validate optional override against the Copilot allowlist, then fetch only the
+  // constant allowlisted endpoint (breaks CodeQL SSRF taint from user baseUrl).
+  sanitizeProviderBaseUrl("copilot", baseUrl);
+  const modelsUrl = "https://api.githubcopilot.com/models";
+  const r = await fetchWithTimeout(modelsUrl, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      Accept: "application/json",
+      "Copilot-Integration-Id": "vscode-chat",
+      "Editor-Version": "vscode/1.98.2",
+      "Editor-Plugin-Version": "copilot-chat/0.26.7",
+      "User-Agent": "GitHubCopilotChat/0.26.7",
+      "X-GitHub-Api-Version": "2025-10-01",
+    },
+  });
+  if (!r.ok) return { models: [], source: "fallback" as const, error: `Copilot HTTP ${r.status}` };
+  const data = (await r.json()) as {
+    data?: Array<{ id?: string; name?: string; model_picker_enabled?: boolean }>;
+  };
+  const models = normalizeCatalogModels(
+    (data.data ?? [])
+      .filter((m) => m.model_picker_enabled !== false)
+      .map((m) => {
+        const id = m.id || m.name || "";
+        return { id, label: m.name || id };
+      }),
+  );
+  return {
+    models,
+    source: models.length > 0 ? ("live" as const) : ("fallback" as const),
+    ...(models.length === 0 ? { error: "No Copilot models returned for this token." } : {}),
+  };
 }
 
 function defaultBaseUrl(provider: string): string {
   switch (provider) {
+    case "openai":
+    case "chatgpt-sub":
+      return "https://api.openai.com/v1";
     case "mistral":
       return "https://api.mistral.ai/v1";
     case "xai":
@@ -903,20 +1797,21 @@ function defaultBaseUrl(provider: string): string {
       return "https://api.together.xyz/v1";
     case "kilocode":
       return "https://api.kilo.ai/api/gateway";
+    case "opencode":
+      return "https://opencode.ai/zen/v1";
+    case "opencode-go":
+      return "https://opencode.ai/zen/go/v1";
+    case "fireworks":
+      return "https://api.fireworks.ai/inference/v1";
+    case "nvidia":
+      return "https://integrate.api.nvidia.com/v1";
+    case "huggingface":
+      return "https://router.huggingface.co/v1";
+    case "copilot":
+      return "https://api.githubcopilot.com";
     default:
       return "https://api.openai.com/v1";
   }
-}
-
-async function fallbackModels(provider: string): Promise<Array<{ id: string; label: string }>> {
-  const map: Record<string, string[]> = {
-    openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
-    gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
-    anthropic: ["claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"],
-    mistral: ["mistral-large-latest", "mistral-medium-latest"],
-    xai: ["grok-3", "grok-3-mini"],
-  };
-  return (map[provider] ?? ["default"]).map((id) => ({ id, label: id }));
 }
 
 export function registerAiRoutes(app: import("express").Express): void {

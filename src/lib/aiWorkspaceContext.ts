@@ -1,11 +1,36 @@
 import { UIState } from "@/types";
 import { getPipelineValidation, getProviderConflicts } from "@/lib/pipelineValidation";
+import { resolveHfTask } from "@/lib/oliveRecipeBuilder";
+import type { HardwareProbeResult } from "@/lib/hardwareProbe";
+
+export interface AiWorkspaceProbeSummary {
+  recommendedProvider: string;
+  detectedProviders: string[];
+  gpus: Array<{ name: string; vramMb?: number }>;
+  cudaVersion?: string;
+  cudaTag?: string;
+  systemRamGb?: number;
+  onnxRuntimeProviders?: string[];
+  notes: string[];
+}
+
+export interface AiWorkspaceRecipeSnapshot {
+  inputModelType: string;
+  passTypes: string[];
+  accelerator: unknown;
+  /** Clipped JSON of the current built Olive recipe for the model. */
+  jsonPreview: string;
+}
 
 export interface AiWorkspaceContext {
   modelSource: UIState["modelSource"];
   model: {
     huggingFaceId: string;
     huggingFaceDataset: string;
+    /** Resolved Olive/HF task written into recipes (explicit or inferred). */
+    hfTask: string;
+    /** True when hfTask came from inference, not an explicit UI override. */
+    hfTaskInferred: boolean;
     localFileNames: string[];
     azurePath: string;
     displayName: string;
@@ -14,7 +39,12 @@ export interface AiWorkspaceContext {
     executionProvider: UIState["ihvProvider"];
     executionProviderShort: string;
     cudaVersion: UIState["cudaVersion"];
+    memoryOffload: UIState["memoryOffload"];
   };
+  /** Live hardware probe when available (GPU/VRAM/detected EPs). */
+  detectedHardware?: AiWorkspaceProbeSummary;
+  /** Snapshot of the Olive recipe the UI would emit right now. */
+  recipeSnapshot?: AiWorkspaceRecipeSnapshot;
   passes: UIState["passes"];
   activePassLabels: string[];
   validation: {
@@ -31,8 +61,16 @@ export interface AiWorkspaceContext {
     batchJobCount: number;
     batchQueued: number;
     batchRunning: number;
+    activeJobId?: string | null;
+    recentLogTail?: string[];
   };
 }
+
+export type BuildAiWorkspaceContextOptions = {
+  probe?: HardwareProbeResult | null;
+  /** Max chars of recipe JSON in the prompt (default 3500). */
+  recipePreviewChars?: number;
+};
 
 function shortProvider(provider: UIState["ihvProvider"]): string {
   return provider.replace("ExecutionProvider", "");
@@ -89,17 +127,111 @@ function collectActivePassLabels(passes: UIState["passes"]): string[] {
   return labels;
 }
 
-export function buildAiWorkspaceContext(state: UIState): AiWorkspaceContext {
+function summarizeProbe(probe: HardwareProbeResult): AiWorkspaceProbeSummary {
+  const gpus = [
+    ...(probe.nvidia?.gpus ?? []).map((g) => ({ name: g.name, vramMb: g.vramMb })),
+    ...(probe.rocm?.gpus ?? []).map((g) => ({ name: g.name, vramMb: g.vramMb })),
+  ].slice(0, 4);
+  return {
+    recommendedProvider: probe.recommendedProvider,
+    detectedProviders: probe.detectedProviders,
+    gpus,
+    cudaVersion: probe.nvidia?.cudaVersion,
+    cudaTag: probe.nvidia?.cudaTag,
+    systemRamGb: probe.platform.systemRamGb,
+    onnxRuntimeProviders: probe.onnxRuntimeProviders?.slice(0, 12),
+    notes: probe.notes.slice(0, 6),
+  };
+}
+
+/** True when a cache path looks like an Azure (or similar) connection string. */
+export function isCredentialBearingCacheUrl(value: string): boolean {
+  const v = value.trim();
+  if (!v) return false;
+  return (
+    /DefaultEndpointsProtocol\s*=/i.test(v) ||
+    /AccountKey\s*=/i.test(v) ||
+    /SharedAccessSignature\s*=/i.test(v) ||
+    /BlobEndpoint\s*=/i.test(v) ||
+    /^https?:\/\/[^\s]+[?&]sig=/i.test(v)
+  );
+}
+
+/** Redact credential-bearing strings nested in a recipe JSON tree. */
+export function redactRecipeSecretsForAi(value: unknown): unknown {
+  if (typeof value === "string") {
+    return isCredentialBearingCacheUrl(value) ? "[REDACTED]" : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactRecipeSecretsForAi(item));
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = redactRecipeSecretsForAi(v);
+    }
+    return out;
+  }
+  return value;
+}
+
+function buildRecipeSnapshot(
+  recipe: Record<string, unknown>,
+  maxChars: number,
+): AiWorkspaceRecipeSnapshot | undefined {
+  try {
+    const safeRecipe = redactRecipeSecretsForAi(recipe) as Record<string, unknown>;
+    const input = safeRecipe.input_model as { type?: string } | undefined;
+    const passes = (safeRecipe.passes ?? {}) as Record<string, { type?: string }>;
+    const passTypes = Object.values(passes)
+      .map((p) => p?.type)
+      .filter((t): t is string => typeof t === "string");
+    const systems = safeRecipe.systems as
+      { local_system?: { config?: { accelerators?: unknown } } } | undefined;
+    const json = JSON.stringify(safeRecipe, null, 2);
+    return {
+      inputModelType: input?.type ?? "unknown",
+      passTypes,
+      accelerator: systems?.local_system?.config?.accelerators ?? null,
+      jsonPreview: json.length > maxChars ? `${json.slice(0, maxChars)}\n…(recipe truncated)` : json,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function recentLogTail(state: UIState): string[] | undefined {
+  const jobs = state.batchJobs ?? [];
+  const active =
+    (state.activeJobId &&
+      jobs.find((j) => j.oliveJobId === state.activeJobId || j.id === state.activeJobId)) ||
+    jobs.find((j) => j.status === "failed") ||
+    jobs.find((j) => j.status === "running") ||
+    jobs[jobs.length - 1];
+  if (!active?.logs?.length) return undefined;
+  return active.logs.slice(-25);
+}
+
+export function buildAiWorkspaceContext(
+  state: UIState,
+  opts?: BuildAiWorkspaceContextOptions,
+): AiWorkspaceContext {
   const validation = getPipelineValidation(state);
   const conflicts = getProviderConflicts(state.ihvProvider, state.passes);
   const batchJobs = state.batchJobs ?? [];
   const displayName = resolveModelDisplayName(state);
+  const recipePreviewChars = opts?.recipePreviewChars ?? 3500;
+  const logTail = recentLogTail(state);
+  const explicitTask = state.hfTask?.trim() ?? "";
+  const hfTask = resolveHfTask(state);
 
   return {
     modelSource: state.modelSource,
     model: {
       huggingFaceId: state.hfModelId,
       huggingFaceDataset: state.hfDataset,
+      hfTask,
+      hfTaskInferred: !explicitTask,
       localFileNames: state.localFiles.map((f) => f.name),
       azurePath: state.azureModelPath,
       displayName,
@@ -108,7 +240,13 @@ export function buildAiWorkspaceContext(state: UIState): AiWorkspaceContext {
       executionProvider: state.ihvProvider,
       executionProviderShort: shortProvider(state.ihvProvider),
       cudaVersion: state.cudaVersion,
+      memoryOffload: state.memoryOffload,
     },
+    detectedHardware: opts?.probe ? summarizeProbe(opts.probe) : undefined,
+    recipeSnapshot: buildRecipeSnapshot(
+      validation.recipe as unknown as Record<string, unknown>,
+      recipePreviewChars,
+    ),
     passes: state.passes,
     activePassLabels: collectActivePassLabels(state.passes),
     validation: {
@@ -128,11 +266,16 @@ export function buildAiWorkspaceContext(state: UIState): AiWorkspaceContext {
       severity: c.severity,
     })),
     infrastructure: {
-      cacheDir: state.cacheDir,
+      cacheDir: (() => {
+        const effective = state.distributedCaching && state.azureStr ? state.azureStr : state.cacheDir;
+        return isCredentialBearingCacheUrl(effective) ? "[REDACTED]" : effective;
+      })(),
       distributedCaching: state.distributedCaching,
       batchJobCount: batchJobs.length,
       batchQueued: batchJobs.filter((j) => j.status === "queued").length,
       batchRunning: batchJobs.filter((j) => j.status === "running").length,
+      activeJobId: state.activeJobId ?? null,
+      recentLogTail: logTail,
     },
   };
 }
@@ -142,6 +285,7 @@ export function formatAiWorkspaceContextForPrompt(ctx: AiWorkspaceContext): stri
     "Current Olive Studio workspace (live UI selections):",
     `- Model source: ${ctx.modelSource}`,
     `- Model: ${ctx.model.displayName}`,
+    `- HF / Olive task: ${ctx.model.hfTask}${ctx.model.hfTaskInferred ? " (inferred from model id)" : " (set in UI)"}`,
   ];
 
   if (ctx.model.huggingFaceDataset) {
@@ -155,7 +299,37 @@ export function formatAiWorkspaceContextForPrompt(ctx: AiWorkspaceContext): stri
   }
 
   lines.push(
-    `- Execution provider: ${ctx.hardware.executionProvider} (CUDA tag: ${ctx.hardware.cudaVersion})`,
+    `- Selected execution provider: ${ctx.hardware.executionProvider} (CUDA tag: ${ctx.hardware.cudaVersion}, memory offload: ${ctx.hardware.memoryOffload})`,
+  );
+
+  if (ctx.detectedHardware) {
+    const hw = ctx.detectedHardware;
+    lines.push(
+      `- Detected hardware: recommended=${hw.recommendedProvider}; providers=${hw.detectedProviders.join(", ") || "CPU"}`,
+    );
+    if (hw.gpus.length > 0) {
+      lines.push(
+        `- GPUs: ${hw.gpus.map((g) => `${g.name}${g.vramMb ? ` (${Math.round(g.vramMb / 1024)} GB)` : ""}`).join("; ")}`,
+      );
+    }
+    if (hw.cudaVersion || hw.cudaTag) {
+      lines.push(`- Host CUDA: ${hw.cudaVersion ?? "unknown"}${hw.cudaTag ? ` (tag ${hw.cudaTag})` : ""}`);
+    }
+    if (hw.systemRamGb != null) {
+      lines.push(`- System RAM: ${hw.systemRamGb} GB`);
+    }
+    if (hw.onnxRuntimeProviders?.length) {
+      lines.push(`- ORT providers in venv: ${hw.onnxRuntimeProviders.join(", ")}`);
+    }
+    if (hw.notes.length > 0) {
+      lines.push("- Probe notes:");
+      for (const note of hw.notes.slice(0, 4)) {
+        lines.push(`  • ${note}`);
+      }
+    }
+  }
+
+  lines.push(
     `- Active passes: ${ctx.activePassLabels.length ? ctx.activePassLabels.join("; ") : "none"}`,
     `- Pipeline validation: ${ctx.validation.statusLabel} (${ctx.validation.criticalCount} critical, ${ctx.validation.warningCount} warnings)`,
   );
@@ -174,7 +348,6 @@ export function formatAiWorkspaceContextForPrompt(ctx: AiWorkspaceContext): stri
     }
   }
 
-  // Quantization preset & advanced parameters
   if (ctx.passes.quantization) {
     const preset = ctx.passes.quantPreset || "(custom/manual)";
     lines.push(`- Quantization preset: ${preset}`);
@@ -194,10 +367,31 @@ export function formatAiWorkspaceContextForPrompt(ctx: AiWorkspaceContext): stri
     }
   }
 
+  if (ctx.recipeSnapshot) {
+    lines.push(
+      `- Built recipe: input=${ctx.recipeSnapshot.inputModelType}; passes=${ctx.recipeSnapshot.passTypes.join(", ") || "none"}`,
+    );
+    lines.push("- Recipe JSON snapshot:");
+    lines.push("```json");
+    lines.push(ctx.recipeSnapshot.jsonPreview);
+    lines.push("```");
+  }
+
   if (ctx.infrastructure.batchJobCount > 0) {
     lines.push(
       `- Batch queue: ${ctx.infrastructure.batchJobCount} total (${ctx.infrastructure.batchQueued} queued, ${ctx.infrastructure.batchRunning} running)`,
     );
+  }
+
+  if (ctx.infrastructure.activeJobId) {
+    lines.push(`- Active job id: ${ctx.infrastructure.activeJobId}`);
+  }
+
+  if (ctx.infrastructure.recentLogTail?.length) {
+    lines.push("- Recent job log tail:");
+    for (const line of ctx.infrastructure.recentLogTail) {
+      lines.push(`  ${line}`);
+    }
   }
 
   if (ctx.infrastructure.cacheDir) {
@@ -207,6 +401,7 @@ export function formatAiWorkspaceContextForPrompt(ctx: AiWorkspaceContext): stri
   lines.push(
     "",
     "Answer using these selections as ground truth. If the user asks about their setup, reference the values above explicitly.",
+    "When you recommend a concrete UI change, include an Apply action patch the user can click.",
   );
 
   return lines.join("\n");
@@ -222,7 +417,10 @@ export function buildWorkspaceContextSummary(ctx: AiWorkspaceContext): string {
       : ctx.validation.warningCount > 0
         ? `${ctx.validation.warningCount} warnings`
         : "valid";
-  return `${model} · ${ctx.hardware.executionProviderShort} · ${passes} · ${val}`;
+  const gpu = ctx.detectedHardware?.gpus[0]?.name
+    ? ` · ${shortModelName(ctx.detectedHardware.gpus[0].name)}`
+    : "";
+  return `${model} · ${ctx.hardware.executionProviderShort}${gpu} · ${passes} · ${val}`;
 }
 
 export function buildChatPresetQueries(state: UIState): string[] {
@@ -256,7 +454,7 @@ export function buildChatPresetQueries(state: UIState): string[] {
 
   if (ctx.passes.pruning) {
     queries.push(
-      `${ctx.passes.pruningMethod} pruning at ${Math.round(ctx.passes.pruningSparsity * 100)}% — accuracy vs latency?`,
+      `${ctx.passes.pruningMethod} pruning at ${Math.round(ctx.passes.pruningSparsity * 100)}%: accuracy vs latency?`,
     );
   }
 

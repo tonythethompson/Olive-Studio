@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { FolderOpen, Route, RefreshCw, CheckCircle2, AlertTriangle, Terminal } from "lucide-react";
 
 export interface RuntimeEnvStatus {
@@ -25,6 +25,8 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -43,14 +45,44 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
     void refresh();
   }, [refresh]);
 
+  const updateMenuPos = useCallback(() => {
+    if (!rootRef.current) return;
+    const rect = rootRef.current.getBoundingClientRect();
+    const menuWidth = Math.min(window.innerWidth - 32, 22 * 16);
+    const left = Math.min(Math.max(16, rect.left), window.innerWidth - menuWidth - 16);
+    setMenuPos({ top: rect.bottom + 8, left });
+  }, []);
+
   useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
+    if (!open) {
+      setMenuPos(null);
+      return;
+    }
+
+    updateMenuPos();
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        const menu = document.getElementById("runtime-env-menu");
+        if (menu?.contains(event.target as Node)) return;
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open]);
+
+    window.addEventListener("resize", updateMenuPos);
+    window.addEventListener("scroll", updateMenuPos, { capture: true, passive: true });
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("resize", updateMenuPos);
+      window.removeEventListener("scroll", updateMenuPos, true);
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, updateMenuPos]);
 
   const savePython = async () => {
     setBusy(true);
@@ -60,7 +92,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
       const res = await fetch("/api/env/python-path", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: pythonPath }),
+        body: JSON.stringify({ pythonPath }),
       });
       const data = (await res.json()) as RuntimeEnvStatus & { ok?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
@@ -96,7 +128,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
     setMessage(null);
     setError(null);
     try {
-      const res = await fetch("/api/env/add-venv-to-path", { method: "POST" });
+      const res = await fetch("/api/env/venv-path", { method: "POST" });
       const data = (await res.json()) as RuntimeEnvStatus & {
         ok?: boolean;
         error?: string;
@@ -116,17 +148,92 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
     setBusy(true);
     setMessage(null);
     setError(null);
+    setMessage("Installing Olive venv…");
     try {
-      const res = await fetch("/api/env/ensure-venv", { method: "POST" });
-      const data = (await res.json()) as RuntimeEnvStatus & {
-        ok?: boolean;
-        error?: string;
-        message?: string;
-      };
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      setStatus(data);
-      setMessage(data.message ?? "Olive venv ready.");
+      // Canonical route is NDJSON `/api/env/venv-install` (ensure-venv is a JSON alias).
+      const res = await fetch("/api/env/venv-install", {
+        method: "POST",
+        headers: { Accept: "application/x-ndjson, application/json" },
+      });
+      if (!res.ok && !res.body) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+      if (!res.body) {
+        throw new Error(res.status === 404 ? "API route not found." : `HTTP ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let finalOk: boolean | null = null;
+      let finalError: string | undefined;
+      let lastLog = "Installing Olive venv…";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let evt: { type?: string; message?: string; ok?: boolean; error?: string };
+          try {
+            evt = JSON.parse(line) as typeof evt;
+          } catch {
+            continue;
+          }
+          if (evt.type === "log" && evt.message) {
+            lastLog = evt.message;
+            setMessage(evt.message);
+          }
+          if (evt.type === "done") {
+            finalOk = evt.ok !== false;
+            finalError = evt.error;
+            if (evt.message) lastLog = evt.message;
+          }
+        }
+      }
+
+      buf += decoder.decode();
+      if (buf.trim()) {
+        try {
+          const evt = JSON.parse(buf) as {
+            type?: string;
+            message?: string;
+            ok?: boolean;
+            error?: string;
+          };
+          if (evt.type === "log" && evt.message) {
+            lastLog = evt.message;
+            setMessage(evt.message);
+          }
+          if (evt.type === "done") {
+            finalOk = evt.ok !== false;
+            finalError = evt.error;
+            if (evt.message) lastLog = evt.message;
+          }
+        } catch {
+          /* ignore trailing non-JSON */
+        }
+      }
+
+      if (finalOk === false) {
+        throw new Error(finalError || lastLog || "Venv install failed");
+      }
+      if (finalOk === null) {
+        throw new Error(finalError || lastLog || "Install stream ended without a done event");
+      }
+      if (!res.ok) {
+        throw new Error(finalError || `HTTP ${res.status}`);
+      }
+
+      await refresh();
+      setMessage("Olive venv ready.");
+      setError(null);
     } catch (err: unknown) {
+      setMessage(null);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
@@ -148,52 +255,50 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
       ? "Setup runtime"
       : "Runtime";
 
-  const pathWarning = Boolean(status && !pathOk && status.venvExists);
-  const accessibleName = pathWarning ? `${runtimeTitle}. Project .venv is not on PATH` : runtimeTitle;
-
   return (
-    <div className="relative text-[11px] font-mono">
+    <div ref={rootRef} className="relative text-[11px] font-mono overflow-visible">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 transition-colors"
+        className="flex items-center gap-2 text-slate-400 hover:text-slate-200 transition-colors px-1.5 py-1 rounded border border-transparent hover:border-slate-700/80"
         title={runtimeTitle}
         aria-expanded={open}
-        aria-haspopup="true"
-        aria-controls="runtime-env-popover"
+        aria-haspopup="dialog"
+        aria-label={runtimeTitle}
       >
         <Terminal className="h-3 w-3 text-slate-500" aria-hidden />
         {status?.oliveInstalled ? (
-          <span className="text-emerald-500 flex items-center gap-0.5">
+          <span className="text-emerald-600/90 flex items-center gap-0.5">
             <CheckCircle2 className="h-3 w-3" aria-hidden />
             {runtimeLabel}
           </span>
         ) : needsAttention ? (
-          <span className="text-amber-500 flex items-center gap-0.5">
-            <AlertTriangle className="h-3 w-3" aria-hidden />
+          <span className="text-slate-400 flex items-center gap-0.5">
+            <AlertTriangle className="h-3 w-3 text-amber-600/75" aria-hidden />
             {runtimeLabel}
           </span>
         ) : (
-          <span className="text-slate-500">{runtimeLabel}</span>
+          <span className="text-slate-400">{runtimeLabel}</span>
         )}
         {status && !pathOk && status.venvExists && (
-          <span className="text-amber-600/90" title="Project .venv Scripts/bin is not on your user PATH">
+          <span className="text-slate-500" title="Project .venv Scripts/bin is not on your user PATH">
             · add PATH
           </span>
         )}
       </button>
 
-      {open && (
+      {open && menuPos && (
         <div
-          id="runtime-env-popover"
-          role="region"
-          aria-label={accessibleName}
-          className="absolute right-0 top-full mt-2 z-40 w-[min(100vw-2rem,22rem)] rounded border border-slate-700 bg-slate-900 shadow-xl p-3 space-y-3 text-left"
+          id="runtime-env-menu"
+          role="dialog"
+          aria-label="Runtime and PATH setup"
+          style={{ top: menuPos.top, left: menuPos.left }}
+          className="fixed z-50 w-[min(100vw-2rem,22rem)] rounded border border-slate-700 bg-slate-900 shadow-xl p-3 space-y-3 text-left"
         >
           <div className="flex items-start justify-between gap-2">
             <div>
               <div className="text-xs font-semibold text-slate-200 font-sans">Runtime &amp; PATH</div>
-              <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed font-sans">
+              <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed font-sans">
                 {status?.hint ?? "Checking…"}
               </p>
             </div>
@@ -202,28 +307,29 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
               onClick={() => void refresh()}
               className="text-slate-500 hover:text-electric-blue p-0.5"
               title="Refresh"
+              aria-label="Refresh runtime status"
             >
               <RefreshCw className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
             </button>
           </div>
 
           <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[10px]">
-            <dt className="text-slate-600">System Python</dt>
+            <dt className="text-slate-500">System Python</dt>
             <dd className="text-slate-300 truncate" title={status?.systemPython ?? undefined}>
               {status?.systemPython ?? "not found"}
             </dd>
-            <dt className="text-slate-600">Project .venv</dt>
+            <dt className="text-slate-500">Project .venv</dt>
             <dd className="text-slate-300">{status?.venvExists ? "present" : "missing"}</dd>
-            <dt className="text-slate-600">olive-ai</dt>
+            <dt className="text-slate-500">olive-ai</dt>
             <dd className="text-slate-300">
               {status?.oliveInstalled ? (status.oliveVersion ?? "installed") : "not installed"}
             </dd>
-            <dt className="text-slate-600">User PATH</dt>
+            <dt className="text-slate-500">User PATH</dt>
             <dd className="text-slate-300">{status?.venvOnUserPath ? "includes .venv" : "no .venv"}</dd>
           </dl>
 
           <div className="space-y-1.5">
-            <label className="block text-[10px] text-slate-500 font-sans" htmlFor="studio-python-path">
+            <label className="block text-[10px] text-slate-400 font-sans" htmlFor="studio-python-path">
               Python 3.10–3.13 (3.12 recommended)
             </label>
             <div className="flex gap-1">
@@ -285,9 +391,9 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
             {status?.venvOnUserPath ? "Already on user PATH" : "Add project .venv to user PATH"}
           </button>
 
-          <p className="text-[10px] text-slate-600 leading-relaxed font-sans">
-            Install the Olive venv while you build the recipe — no need to wait for Execute Live. The app
-            always uses the project <code className="text-slate-500">.venv</code> for runs.
+          <p className="text-[10px] text-slate-500 leading-relaxed font-sans">
+            Install the Olive venv while you build the recipe. No need to wait for Execute Live. The app
+            always uses the project <code className="text-slate-400">.venv</code> for runs.
           </p>
 
           {message && <p className="text-[10px] text-emerald-500 font-sans">{message}</p>}

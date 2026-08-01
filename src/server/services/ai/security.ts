@@ -1,4 +1,5 @@
 import type { ProviderConfig } from "../../types.ts";
+import { isValidCloudflareAccountId } from "../../../lib/cloudflare/credentials.ts";
 
 /** Allowed base URL prefixes per provider (SSRF protection). */
 export const ALLOWED_BASE_URL_PREFIX_BY_PROVIDER: Partial<Record<ProviderConfig["provider"], string[]>> = {
@@ -11,6 +12,13 @@ export const ALLOWED_BASE_URL_PREFIX_BY_PROVIDER: Partial<Record<ProviderConfig[
   openrouter: ["https://openrouter.ai/api/v1"],
   groq: ["https://api.groq.com/openai/v1"],
   together: ["https://api.together.xyz/v1"],
+  opencode: ["https://opencode.ai/zen/v1"],
+  "opencode-go": ["https://opencode.ai/zen/go/v1"],
+  fireworks: ["https://api.fireworks.ai/inference/v1"],
+  nvidia: ["https://integrate.api.nvidia.com/v1"],
+  huggingface: ["https://router.huggingface.co/v1"],
+  // Account id is path segment: …/accounts/{32hex}/ai/v1
+  cloudflare: ["https://api.cloudflare.com/client/v4/accounts"],
 };
 
 /** Strip trailing `/` without a regex (avoids ReDoS on long slash runs). */
@@ -26,8 +34,23 @@ export function isIpLiteralHost(hostname: string): boolean {
   return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname);
 }
 
+/** Normalize hostname and detect loopback (IPv4, IPv6, bracketed IPv6). */
+export function isLoopbackHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
+/** Ollama / LM Studio loopback endpoints used by the built-in Local AI flow. */
+export function isKnownLocalOpenAiCompatUrl(parsed: URL): boolean {
+  const isLoopback = isLoopbackHostname(parsed.hostname);
+  if (!isLoopback || parsed.protocol !== "http:") return false;
+  const port = parsed.port ? Number(parsed.port) : 80;
+  return port === 11434 || port === 1234;
+}
+
 export function isPrivateOrLocalHostname(hostname: string): boolean {
-  const h = hostname.toLowerCase();
+  // Normalize bracketed IPv6 hostnames consistently with isLoopbackHostname
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (
     h === "localhost" ||
     h.endsWith(".localhost") ||
@@ -61,19 +84,33 @@ export function sanitizeProviderBaseUrl(provider: string, rawBaseUrl?: string): 
   } catch {
     throw new Error("Invalid baseUrl");
   }
-  if (parsed.protocol !== "https:") {
-    throw new Error("baseUrl must use https");
-  }
   if (parsed.username || parsed.password) {
     throw new Error("baseUrl must not include credentials");
   }
-  if (isIpLiteralHost(parsed.hostname) || isPrivateOrLocalHostname(parsed.hostname)) {
+
+  const isLoopback = isLoopbackHostname(parsed.hostname);
+  // Local engines (Ollama / LM Studio) are openai-compat over plain HTTP on loopback only.
+  const allowLocalEngine =
+    provider === "openai-compat" &&
+    isLoopback &&
+    (process.env.OLIVE_ALLOW_LOOPBACK_HTTP === "1" || isKnownLocalOpenAiCompatUrl(parsed));
+
+  if (parsed.protocol !== "https:" && !(allowLocalEngine && parsed.protocol === "http:")) {
+    throw new Error("baseUrl must use https");
+  }
+  if (!allowLocalEngine && (isIpLiteralHost(parsed.hostname) || isPrivateOrLocalHostname(parsed.hostname))) {
     throw new Error("baseUrl host is not allowed");
   }
   const normalized = stripTrailingSlashes(parsed.toString());
   const allowed = ALLOWED_BASE_URL_PREFIX_BY_PROVIDER[provider as ProviderConfig["provider"]];
   if (allowed && !allowed.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`))) {
     throw new Error(`baseUrl is not allowed for provider: ${provider}`);
+  }
+  if (provider === "cloudflare") {
+    const accountMatch = normalized.match(/\/accounts\/([^/]+)\/ai\/v1\/?$/i);
+    if (!accountMatch || !isValidCloudflareAccountId(accountMatch[1]!)) {
+      throw new Error("Cloudflare baseUrl must include a valid 32-hex account ID");
+    }
   }
   return normalized;
 }

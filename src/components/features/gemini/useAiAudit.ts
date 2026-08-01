@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { resolveAuditAutofix } from "@/lib/auditAutofix";
 import type { UIState } from "@/types";
 import type { AnalysisResult, Suggestion } from "./types";
 
@@ -6,81 +7,6 @@ interface UseAiAuditOptions {
   state: UIState;
   setState: (partial: Partial<UIState>) => void;
 }
-
-const scheduleReaudit = (runAnalysis: () => void | Promise<void>) => {
-  setTimeout(() => void runAnalysis(), 400);
-};
-
-const parseScalarValue = (value: string): string | number | boolean => {
-  if (value === "true") return true;
-  if (value === "false") return false;
-  if (isNaN(Number(value))) return value;
-  return Number(value);
-};
-
-const applyJsonPassPatch = (
-  pass: string,
-  obj: Record<string, unknown>,
-  state: UIState,
-  setState: (partial: Partial<UIState>) => void,
-) => {
-  if (pass === "ihvProvider" || pass === "cudaVersion") {
-    setState({ [pass]: obj[pass] } as Partial<UIState>);
-    return;
-  }
-
-  const passKey = pass.startsWith("passes.") ? pass.slice(7) : pass;
-  // If the object has multiple pass keys, merge all; else set single key
-  const looksLikePasses = Object.keys(obj).some((k) => k in state.passes || k === passKey);
-  if (looksLikePasses && !("ihvProvider" in obj)) {
-    setState({
-      passes: {
-        ...state.passes,
-        ...(obj as Partial<UIState["passes"]>),
-        // TRT RTX / AWQ suggestions should not leave structured pruning on
-        ...(obj.quantMethod === "awq" ? { pruning: false } : {}),
-      },
-    });
-    return;
-  }
-
-  setState(obj as Partial<UIState>);
-};
-
-const applyScalarPassPatch = (
-  pass: string,
-  value: string,
-  state: UIState,
-  setState: (partial: Partial<UIState>) => void,
-) => {
-  if (pass === "ihvProvider") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setState({ ihvProvider: value as any });
-    return;
-  }
-  if (pass === "cudaVersion") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setState({ cudaVersion: value as any });
-    return;
-  }
-
-  const passKey = pass.startsWith("passes.") ? pass.slice(7) : pass;
-  const parsed = parseScalarValue(value);
-  const nextPasses: UIState["passes"] = {
-    ...state.passes,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    [passKey]: parsed as any,
-  };
-  // Enabling structured pruning on TensorRT RTX: leave quant as-is; validation will suggest AWQ
-  if (passKey === "quantMethod" && value === "awq") {
-    nextPasses.pruning = false;
-    nextPasses.quantization = true;
-  }
-  if (passKey === "quantPrecision" && (value === "int4" || value === "int8")) {
-    nextPasses.quantization = true;
-  }
-  setState({ passes: nextPasses });
-};
 
 /**
  * Owns the pipeline audit: running `/api/ai/analyze-state` and applying the
@@ -90,30 +16,51 @@ export function useAiAudit({ state, setState }: UseAiAuditOptions) {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
+  /** When true, the next analyze call includes previousScore for continuity. */
+  const continuityScoreRef = useRef<number | null>(null);
+  const stateRef = useRef(state);
+  const analysisRequestIdRef = useRef(0);
+  const autofixTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
-  const runAnalysis = async () => {
+  useEffect(() => {
+    return () => {
+      if (autofixTimerRef.current) clearTimeout(autofixTimerRef.current);
+    };
+  }, []);
+
+  const runAnalysis = async (opts?: { previousScore?: number | null; stateOverride?: UIState }) => {
+    const requestId = ++analysisRequestIdRef.current;
     setIsAnalyzing(true);
     setAnalysisError("");
+    const previousScore = opts?.previousScore !== undefined ? opts.previousScore : continuityScoreRef.current;
+    continuityScoreRef.current = null;
+    const snapshot = opts?.stateOverride ?? stateRef.current;
     try {
       const r = await fetch("/api/ai/analyze-state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ state }),
+        body: JSON.stringify({
+          state: snapshot,
+          ...(typeof previousScore === "number" ? { previousScore } : {}),
+        }),
       });
       const contentType = r.headers.get("content-type") ?? "";
       const data = contentType.includes("application/json") ? await r.json().catch(() => ({})) : {};
       if (!r.ok) throw new Error((data as { error?: string }).error || `HTTP ${r.status}`);
       if (!contentType.includes("application/json")) {
-        throw new Error(
-          "Server returned non-JSON. Restart with npm run dev (Express + API), not vite alone.",
-        );
+        throw new Error("Server returned non-JSON. Restart with pnpm dev (Express + API), not vite alone.");
       }
+      if (requestId !== analysisRequestIdRef.current) return;
       setAnalysis(data as AnalysisResult);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
+      if (requestId !== analysisRequestIdRef.current) return;
       setAnalysisError(err.message || "Analysis failed.");
     } finally {
-      setIsAnalyzing(false);
+      if (requestId === analysisRequestIdRef.current) setIsAnalyzing(false);
     }
   };
 
@@ -124,27 +71,28 @@ export function useAiAudit({ state, setState }: UseAiAuditOptions) {
   const restartAnalysis = () => {
     setAnalysis(null);
     setAnalysisError("");
+    continuityScoreRef.current = null;
     void runAnalysis();
   };
 
   const applyAutofix = (autofix: Suggestion["autofix"]) => {
     if (!autofix?.pass) return;
-    const { pass, value } = autofix;
-
-    // Multi-field JSON patches from the assistant: {"quantMethod":"awq","quantPrecision":"int4"}
-    if (value.trim().startsWith("{")) {
-      try {
-        const obj = JSON.parse(value) as Record<string, unknown>;
-        applyJsonPassPatch(pass, obj, state, setState);
-        scheduleReaudit(runAnalysis);
-        return;
-      } catch {
-        /* fall through to scalar apply */
-      }
-    }
-
-    applyScalarPassPatch(pass, value, state, setState);
-    scheduleReaudit(runAnalysis);
+    const current = stateRef.current;
+    const patch = resolveAuditAutofix(autofix, current);
+    if (!patch) return;
+    const prior = analysis?.score ?? null;
+    const next: UIState = {
+      ...current,
+      ...patch,
+      passes: { ...current.passes, ...patch.passes },
+    };
+    setState(patch);
+    continuityScoreRef.current = prior;
+    if (autofixTimerRef.current) clearTimeout(autofixTimerRef.current);
+    autofixTimerRef.current = setTimeout(() => {
+      autofixTimerRef.current = null;
+      void runAnalysis({ previousScore: prior, stateOverride: next });
+    }, 400);
   };
 
   return {

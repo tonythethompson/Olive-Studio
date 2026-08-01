@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import { pickCudaTag, parseCudaVersionFromNvidiaSmi } from "./cuda.ts";
 
 describe("pickCudaTag", () => {
-  it("maps modern CUDA versions to the matching wheel tier", () => {
-    expect(pickCudaTag(12, 8)).toBe("cu126");
+  it("maps modern CUDA versions to the matching resolvable wheel tier", () => {
+    expect(pickCudaTag(13, 3)).toBe("cu128");
+    expect(pickCudaTag(13, 0)).toBe("cu128");
+    expect(pickCudaTag(12, 8)).toBe("cu128");
     expect(pickCudaTag(12, 6)).toBe("cu126");
     expect(pickCudaTag(12, 4)).toBe("cu124");
     expect(pickCudaTag(12, 1)).toBe("cu121");
@@ -21,6 +23,11 @@ describe("parseCudaVersionFromNvidiaSmi", () => {
   it("extracts version and tag from nvidia-smi output", () => {
     const out = "NVIDIA-SMI 550.00   Driver Version: 550.00   CUDA Version: 12.4";
     expect(parseCudaVersionFromNvidiaSmi(out)).toEqual({ cudaVersion: "12.4", cudaTag: "cu124" });
+  });
+
+  it("maps driver CUDA 13.x to resolvable cu128 wheels", () => {
+    const out = "CUDA Version: 13.3";
+    expect(parseCudaVersionFromNvidiaSmi(out)).toEqual({ cudaVersion: "13.3", cudaTag: "cu128" });
   });
 
   it("returns cpu tag for an old CUDA version", () => {

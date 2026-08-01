@@ -64,6 +64,12 @@ export function mapOrtProvidersToIhv(providers: string[]): IHVProvider[] {
   return Array.from(found);
 }
 
+/**
+ * Combines ONNX Runtime providers and hardware probe results into the locally detected provider list.
+ *
+ * @param input - Provider and hardware detection results, including runtime loadability for TensorRT variants
+ * @returns A deduplicated list of detected providers that always includes CPU
+ */
 export function mergeDetectedProviders(input: {
   onnxRuntimeProviders?: string[];
   hasNvidiaGpu: boolean;
@@ -91,8 +97,6 @@ export function mergeDetectedProviders(input: {
   // nvidia-smi / rocm-smi / openvino fill gaps when the installed ORT wheel lacks GPU EPs.
   if (input.hasNvidiaGpu) {
     detected.add("CUDAExecutionProvider");
-    // TensorRT RTX is GPU-compatible on consumer NVIDIA cards even before the
-    // tensorrt-rtx pip package is installed — the app can install it on demand.
     detected.add("NvTensorRTRTXExecutionProvider");
     if (tensorRtOk) {
       detected.add("TensorrtExecutionProvider");
@@ -108,17 +112,24 @@ export function mergeDetectedProviders(input: {
   return Array.from(detected);
 }
 
+/**
+ * Selects the preferred execution provider from the detected providers.
+ *
+ * @param detected - Providers detected on the current system
+ * @param opts - Runtime loadability flags for TensorRT providers
+ * @returns The highest-priority detected provider, or `CPUExecutionProvider` when none match
+ */
 export function pickRecommendedProvider(
   detected: IHVProvider[],
-  opts?: { tensorRtRtxLoadable?: boolean },
+  opts?: { tensorRtRtxLoadable?: boolean; tensorRtLoadable?: boolean },
 ): IHVProvider {
-  // Prefer TensorRT RTX only when the runtime package is already loadable;
-  // otherwise CUDA is the better default (TRT RTX can be installed on demand).
+  // Prefer installed acceleration stacks; otherwise CUDA is the safe NVIDIA default.
   const priority: IHVProvider[] = [
     ...(opts?.tensorRtRtxLoadable ? (["NvTensorRTRTXExecutionProvider"] as const) : []),
-    "TensorrtExecutionProvider",
+    ...(opts?.tensorRtLoadable ? (["TensorrtExecutionProvider"] as const) : []),
     "CUDAExecutionProvider",
     "NvTensorRTRTXExecutionProvider",
+    "TensorrtExecutionProvider",
     "ROCMExecutionProvider",
     "OpenVINOExecutionProvider",
     "WebGpuExecutionProvider",
@@ -130,6 +141,12 @@ export function pickRecommendedProvider(
   return "CPUExecutionProvider";
 }
 
+/**
+ * Provides the user-facing reason an execution provider is unavailable.
+ *
+ * @param provider - The execution provider to describe
+ * @returns An availability message, or an empty string for the CPU provider
+ */
 function undetectedProviderReason(provider: IHVProvider): string {
   switch (provider) {
     case "QNNExecutionProvider":
@@ -141,11 +158,11 @@ function undetectedProviderReason(provider: IHVProvider): string {
     case "CUDAExecutionProvider":
       return "NVIDIA CUDA was not detected (no NVIDIA GPU or CUDA execution provider on this machine).";
     case "TensorrtExecutionProvider":
-      return "Full TensorRT (nvinfer_10 / datacenter SDK) is not loadable. Consumer GeForce GPUs should use TensorRT RTX (NvTensorRTRTX) or CUDA instead — that is separate from full TensorRT.";
+      return "Full TensorRT needs an NVIDIA GPU (Turing / GeForce RTX 20xx or newer). Install the TensorRT SDK into .venv from Hardware, or it installs on first TensorRT run.";
     case "NvTensorRTRTXExecutionProvider":
       return "TensorRT RTX needs an NVIDIA GPU. On GeForce RTX, install tensorrt-rtx from Hardware (or it installs on first run). This is not the same as full TensorRT.";
     case "WebGpuExecutionProvider":
-      return "WebGPU requires a browser environment with the WebGPU API (Chrome 113+ / Edge 113+ / Firefox Nightly). Not available in node-based probing contexts.";
+      return "WebGPU is a browser deploy target (ONNX Runtime Web), not a local Python EP. Select it to build web-oriented recipes, then run Browser Test / WebGPU benchmark in Recipe & run (Chrome 113+ / Edge 113+).";
     case "CPUExecutionProvider":
       return "";
     default: {
@@ -168,6 +185,10 @@ export function getProviderAvailabilityBlock(
   provider: IHVProvider,
   probe: HardwareProbeResult | null | undefined,
 ): { reason: string } | null {
+  // WebGPU is a browser deploy target (ORT Web), not a local Python EP to probe.
+  if (provider === "WebGpuExecutionProvider") {
+    return null;
+  }
   if (provider === "CPUExecutionProvider") {
     return null;
   }

@@ -127,6 +127,12 @@ export interface SystemProbeOptions {
   ) => Promise<{ loadable: boolean; detail?: string; version?: string }>;
 }
 
+/**
+ * Probes the host system for hardware capabilities and available inference runtimes.
+ *
+ * @param opts - Probes used to determine whether TensorRT and TensorRT RTX can load
+ * @returns A timestamped report containing platform details, detected hardware, runtime capabilities, provider recommendations, and diagnostic notes
+ */
 async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwareProbeResult> {
   const notes: string[] = [];
   const cpus = os.cpus();
@@ -144,6 +150,8 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   let onnxRuntimeProviders: string[] | undefined;
   let tensorrt: HardwareProbeResult["tensorrt"];
   let tensorRtRtx: HardwareProbeResult["tensorRtRtx"];
+  let tensorRtVenvLoadable = false;
+  let tensorRtRtxVenvLoadable = false;
 
   const venvPython = getVenvPython();
   const pythonCandidates: string[] = [];
@@ -164,20 +172,26 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     }
     if (!tensorrt?.loadable) {
       const trt = await opts.probeTensorRtLoadable(python);
+      if (python === venvPython && trt.loadable) {
+        tensorRtVenvLoadable = true;
+      }
       if (trt.loadable || !tensorrt) {
         tensorrt = trt;
       }
     }
     if (!tensorRtRtx?.loadable) {
       const rtx = await opts.probeTensorRtRtxLoadable(python);
+      if (python === venvPython && rtx.loadable) {
+        tensorRtRtxVenvLoadable = true;
+      }
       if (rtx.loadable || !tensorRtRtx) {
         tensorRtRtx = rtx;
       }
     }
   }
 
-  if (tensorRtRtx?.loadable) {
-    notes.push(`TensorRT RTX runtime verified${tensorRtRtx.version ? ` (${tensorRtRtx.version})` : ""}.`);
+  if (tensorRtRtxVenvLoadable) {
+    notes.push(`TensorRT RTX runtime verified${tensorRtRtx?.version ? ` (${tensorRtRtx.version})` : ""}.`);
   } else if (nvidia?.gpus.length) {
     notes.push(
       tensorRtRtx?.detail
@@ -186,13 +200,13 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     );
   }
 
-  if (tensorrt?.loadable) {
+  if (tensorRtVenvLoadable) {
     notes.push("TensorRT execution provider load verified.");
   } else if (nvidia?.gpus.length) {
     notes.push(
       tensorrt?.detail
-        ? `TensorRT listed by ORT but not loadable: ${tensorrt.detail}`
-        : "TensorRT not loadable — Olive will auto-install tensorrt on run when TensorRT is the hardware target.",
+        ? `Full TensorRT SDK not ready (${tensorrt.detail}). GPU is compatible — install tensorrt from Hardware or on first TensorRT run.`
+        : "Full TensorRT SDK (nvinfer_10) not in .venv yet. GPU is compatible — use Install in Hardware, or Olive installs it on first TensorRT run.",
     );
   }
 
@@ -217,8 +231,8 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     hasNvidiaGpu: Boolean(nvidia?.gpus.length),
     hasRocmGpu: Boolean(rocm?.gpus.length),
     hasOpenVino: Boolean(openvino?.available),
-    tensorRtLoadable: tensorrt?.loadable === true,
-    tensorRtRtxLoadable: tensorRtRtx?.loadable === true,
+    tensorRtLoadable: tensorRtVenvLoadable,
+    tensorRtRtxLoadable: tensorRtRtxVenvLoadable,
   });
 
   return {
@@ -227,12 +241,14 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     nvidia,
     rocm,
     openvino,
-    tensorrt,
-    tensorRtRtx,
+    // UI consumers (IHV panel) read `.loadable`; keep it aligned with .venv readiness.
+    tensorrt: tensorrt ? { ...tensorrt, loadable: tensorRtVenvLoadable } : tensorrt,
+    tensorRtRtx: tensorRtRtx ? { ...tensorRtRtx, loadable: tensorRtRtxVenvLoadable } : tensorRtRtx,
     onnxRuntimeProviders,
     detectedProviders,
     recommendedProvider: pickRecommendedProvider(detectedProviders, {
-      tensorRtRtxLoadable: tensorRtRtx?.loadable === true,
+      tensorRtRtxLoadable: tensorRtRtxVenvLoadable,
+      tensorRtLoadable: tensorRtVenvLoadable,
     }),
     notes,
   };
