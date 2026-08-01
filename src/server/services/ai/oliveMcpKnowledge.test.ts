@@ -69,6 +69,22 @@ describe("gatherOliveMcpKnowledge", () => {
     expect(out.promptBlock).toContain("INT8");
   });
 
+  it("treats a normalized sub-1 relevance score as sufficient", async () => {
+    mockedBatch.mockResolvedValue([
+      {
+        result: {
+          query: "quantization",
+          count: 1,
+          results: [{ source: "passes.OnnxQuantization", snippet: "INT8", relevance: 0.2 }],
+        },
+      },
+    ]);
+
+    const out = await gatherOliveMcpKnowledge("Tell me about quantization");
+    expect(out.sufficient).toBe(true);
+    expect(out.usedWebFallback).toBe(false);
+  });
+
   it("marks coverage insufficient when MCP returns nothing", async () => {
     mockedBatch.mockResolvedValue([{ error: "boom" }]);
     const out = await gatherOliveMcpKnowledge("random question");

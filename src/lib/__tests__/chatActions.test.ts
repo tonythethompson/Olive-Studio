@@ -125,6 +125,26 @@ describe("parseChatStructuredReply", () => {
     expect(quantOnly?.passes?.quantMethod).toBe("ptq");
   });
 
+  it("does not salvage passes from free-form prose fields like note", () => {
+    const noteOnly = salvageChatActionPatchFromLooseJson({
+      note: "do not quantize this model",
+    });
+    expect(noteOnly?.passes?.quantization).toBeUndefined();
+
+    const noteOnly2 = salvageChatActionPatchFromLooseJson({
+      note: "conversion is unavailable right now",
+    });
+    expect(noteOnly2?.passes?.conversion).toBeUndefined();
+  });
+
+  it("does not salvage negated step/action prose", () => {
+    const negatedQuant = salvageChatActionPatchFromLooseJson({ step: "do not apply quantization" });
+    expect(negatedQuant?.passes?.quantization).toBeUndefined();
+
+    const negatedConvert = salvageChatActionPatchFromLooseJson({ step: "skip onnx conversion" });
+    expect(negatedConvert?.passes?.conversion).toBeUndefined();
+  });
+
   it("strips misleading Apply instructions when no patch exists", () => {
     const out = parseChatStructuredReply(
       JSON.stringify({

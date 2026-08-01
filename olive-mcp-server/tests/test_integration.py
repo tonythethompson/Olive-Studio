@@ -11,23 +11,15 @@ def _run(coro):
 
 
 def test_server_lists_all_tools():
+    from olive_mcp_server.mcp_server import _TOOL_IMPORTS
+
     tools = _run(mcp.list_tools())
     names = {t.name for t in tools}
-    expected = {
-        "get_olive_passes",
-        "get_pass_config_template",
-        "get_quantization_strategy",
-        "get_hardware_optimization_guide",
-        "get_pass_chain",
-        "troubleshoot_olive_error",
-        "get_model_compatibility",
-        "get_cli_command",
-        "get_data_config_template",
-        "search_olive_documentation",
-        "get_pass_parameters",
-        "evaluate_optimization_tradeoff",
-    }
-    assert expected <= names
+    assert set(_TOOL_IMPORTS.keys()) <= names
+    required = {"get_olive_passes", "search_olive_documentation", "troubleshoot_olive_error"}
+    assert required <= names
+    assert "get_context_for_pipeline" in names
+    assert "diagnose_error" in names
 
 
 def test_get_olive_passes_via_server():

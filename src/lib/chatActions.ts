@@ -17,7 +17,7 @@ const IHV_PROVIDERS = new Set<string>([
   "WebGpuExecutionProvider",
 ]);
 
-const CUDA_VERSIONS = new Set(["auto", "cpu", "cu118", "cu121", "cu124", "cu126", "cu128", "cu130", "cu132"]);
+const CUDA_VERSIONS = new Set(["auto", "cpu", "cu118", "cu121", "cu124", "cu126", "cu128"]);
 const MODEL_SOURCES = new Set(["huggingface", "local", "azure"]);
 const MEMORY_OFFLOAD = new Set(["gpu_only", "auto"]);
 
@@ -221,10 +221,15 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
         }
       }
 
+      const isActionField = key === "step" || key === "action" || key === "task";
+      const isNegated =
+        typeof value === "string" && /\b(no|not|never|disable|skip|without|unavailable)\b/i.test(value);
+
       if (
-        /quant/i.test(key) &&
+        !isNegated &&
+        (/quant/i.test(key) || (isActionField && typeof value === "string" && /quant/i.test(value))) &&
         (value === true ||
-          (typeof value === "string" && /apply|enable|true|int[48]|awq|gptq|ptq/i.test(value)))
+          (typeof value === "string" && /apply|enable|true|int[48]|awq|gptq|ptq|quant/i.test(value)))
       ) {
         passes.quantization = true;
         if (typeof value === "string") {
@@ -240,7 +245,11 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
       }
 
       if (
-        (/convert/.test(key) || key === "onnx" || /onnx/.test(key)) &&
+        !isNegated &&
+        (/convert/.test(key) ||
+          key === "onnx" ||
+          /onnx/.test(key) ||
+          (isActionField && typeof value === "string" && (/convert/i.test(value) || /onnx/i.test(value)))) &&
         (value === true || typeof value === "string" || typeof value === "number" || isRecord(value))
       ) {
         passes.conversion = true;

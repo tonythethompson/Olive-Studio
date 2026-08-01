@@ -160,14 +160,21 @@ def test_search_olive_documentation():
 
 
 def test_search_olive_documentation_with_live_source(monkeypatch: pytest.MonkeyPatch):
-    """Live search should merge cached fetched docs with local results."""
+    """Live search should merge cached fetched docs with local results.
+
+    Ranking is deterministic here (local/live search functions are mocked
+    directly) rather than relying on real embedding scores, since a live
+    result is only surfaced when it is genuinely competitive with local KB
+    hits — the old "always force one live result in" behavior was a bug.
+    """
     from olive_mcp_server.tools import docs_search
 
-    monkeypatch.setattr(
-        docs_search,
-        "_fetch_live_docs",
-        lambda: {"index": "Live docs mention calibration data and quantization."},
-    )
+    local_results = [{"source": "passes.foo", "snippet": "local hit", "relevance": 0.5}]
+    live_results = [{"source": "live:index", "snippet": "live hit", "relevance": 0.9}]
+
+    monkeypatch.setattr(docs_search, "_search_local", lambda query, top_k: local_results[:top_k])
+    monkeypatch.setattr(docs_search, "_search_live", lambda query, top_k: live_results[:top_k])
+
     result = search_olive_documentation(query="calibration data", top_k=3, live=True)
     assert result["count"] > 0
     assert any("live:" in r["source"] for r in result["results"])

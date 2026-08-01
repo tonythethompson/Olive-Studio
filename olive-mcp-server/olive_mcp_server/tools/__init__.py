@@ -31,6 +31,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "troubleshoot_olive_error": (".troubleshooting", "troubleshoot_olive_error"),
     "diagnose_error": (".troubleshooting", "diagnose_error"),
     "get_error_frequency_summary": (".troubleshooting", "get_error_frequency_summary"),
+    "get_context_for_pipeline": (".passive_context", "get_context_for_pipeline"),
 }
 
 
@@ -174,6 +175,7 @@ __all__ = [
     "troubleshoot_olive_error",
     "diagnose_error",
     "get_error_frequency_summary",
+    "get_context_for_pipeline",
     "KB_DIR",
     "load_json",
     "load_passes",

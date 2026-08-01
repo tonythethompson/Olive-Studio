@@ -137,7 +137,11 @@ function docsSearchSufficient(result: unknown): boolean {
   if (count <= 0) return false;
   const results = Array.isArray(r.results) ? r.results : [];
   const top = results[0] as { relevance?: number } | undefined;
-  return typeof top?.relevance === "number" ? top.relevance >= 1 : results.length > 0;
+  // `relevance` is normalized to roughly [0, 1] (semantic cosine or keyword
+  // ratio) and already passed the MCP server's own match threshold before
+  // being returned — any positive score here means a real hit, not a >=1
+  // "many keyword hits" bar from the pre-semantic-search scale.
+  return typeof top?.relevance === "number" ? top.relevance > 0 : results.length > 0;
 }
 
 /** Map EP / keyword targets to MCP KB canonical hardware profile names. */
