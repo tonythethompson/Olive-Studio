@@ -221,8 +221,13 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
         }
       }
 
+      const isActionField = key === "step" || key === "action" || key === "task";
+      const isNegated =
+        typeof value === "string" && /\b(no|not|never|disable|skip|without|unavailable)\b/i.test(value);
+
       if (
-        (/quant/i.test(key) || (typeof value === "string" && /quant/i.test(value))) &&
+        !isNegated &&
+        (/quant/i.test(key) || (isActionField && typeof value === "string" && /quant/i.test(value))) &&
         (value === true ||
           (typeof value === "string" && /apply|enable|true|int[48]|awq|gptq|ptq|quant/i.test(value)))
       ) {
@@ -240,10 +245,11 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
       }
 
       if (
+        !isNegated &&
         (/convert/.test(key) ||
           key === "onnx" ||
           /onnx/.test(key) ||
-          (typeof value === "string" && (/convert/i.test(value) || /onnx/i.test(value)))) &&
+          (isActionField && typeof value === "string" && (/convert/i.test(value) || /onnx/i.test(value)))) &&
         (value === true || typeof value === "string" || typeof value === "number" || isRecord(value))
       ) {
         passes.conversion = true;
