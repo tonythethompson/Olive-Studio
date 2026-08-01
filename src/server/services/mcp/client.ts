@@ -1,13 +1,24 @@
 /**
  * Olive MCP tool client used by HTTP routes and the AI chat knowledge path.
- * Spawns the project venv Python with olive-mcp-server on PYTHONPATH.
+ * Prefers olive-mcp-server/.venv, then the repo-root .venv.
  */
 import { execFile } from "child_process";
+import { existsSync } from "fs";
 import { promisify } from "util";
 import path from "path";
 import { getVenvPython } from "../venv/paths.ts";
 
 const execFileAsync = promisify(execFile);
+
+/** Resolve Python for MCP: olive-mcp-server/.venv first, then root .venv. */
+export function getMcpPython(): string {
+  const mcpVenvPython =
+    process.platform === "win32"
+      ? path.join(process.cwd(), "olive-mcp-server", ".venv", "Scripts", "python.exe")
+      : path.join(process.cwd(), "olive-mcp-server", ".venv", "bin", "python");
+  if (existsSync(mcpVenvPython)) return mcpVenvPython;
+  return getVenvPython();
+}
 
 export type McpToolCallResult = { result?: unknown; error?: string };
 
@@ -68,7 +79,7 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
   ].join("\n");
 
   try {
-    const { stdout, stderr } = await execFileAsync(getVenvPython(), ["-c", script, argsJson], {
+    const { stdout, stderr } = await execFileAsync(getMcpPython(), ["-c", script, argsJson], {
       timeout: 45_000,
       cwd: mcpServerDir(),
       env: buildPythonEnv(),

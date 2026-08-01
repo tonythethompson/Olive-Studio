@@ -30,8 +30,15 @@ export function deriveAssistantSettingsMode(
 }
 
 export function preferredEngineFromBaseUrl(baseUrl?: string | null): "lms" | "ollama" | null {
-  if (!baseUrl) return null;
-  if (baseUrl.includes("11434")) return "ollama";
-  if (baseUrl.includes("1234")) return "lms";
+  if (!isLocalEngineBaseUrl(baseUrl)) return null;
+  try {
+    const raw = baseUrl!.trim();
+    const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(raw) ? raw : `http://${raw}`;
+    const port = new URL(withScheme).port || "80";
+    if (port === "11434") return "ollama";
+    if (port === "1234") return "lms";
+  } catch {
+    /* fall through */
+  }
   return null;
 }

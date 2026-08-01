@@ -20,7 +20,13 @@ import {
   pinnedTensorRtLabel,
   PINNED_TENSORRT_VERSION,
 } from "../../../lib/tensorrtDeps.ts";
-import { pinnedOrtGpuInstallArgs, pinnedOrtGpuLabel } from "../../../lib/oliveGpuRuntime.ts";
+import {
+  ORT_GPU_PROBE_SCRIPT,
+  parseOrtGpuProbe,
+  pinnedOrtGpuInstallArgs,
+  pinnedOrtGpuLabel,
+  PINNED_ORT_GPU_VERSION,
+} from "../../../lib/oliveGpuRuntime.ts";
 import { probeTensorRtRtxLoadable } from "./tensorrt-rtx.ts";
 import type { PkgDef } from "./recipe.ts";
 
@@ -81,9 +87,17 @@ async function ensureOnnxRuntimeGpu(
   onLine: (line: string) => void,
 ): Promise<void> {
   try {
-    await execFileAsync(python, ["-c", "import onnxruntime"]);
-    onLine("[deps] onnxruntime already installed ✓");
-    return;
+    const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT]);
+    const probe = parseOrtGpuProbe(stdout);
+    if (probe.ok) {
+      onLine("[deps] onnxruntime-gpu already installed ✓");
+      return;
+    }
+    if (probe.distVersion || probe.ortVersion) {
+      onLine(
+        `[deps] onnxruntime-gpu ${probe.distVersion ?? probe.ortVersion} installed — need ${PINNED_ORT_GPU_VERSION}, reinstalling...`,
+      );
+    }
   } catch {
     /* install below */
   }

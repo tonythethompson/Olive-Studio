@@ -144,16 +144,57 @@ function summarizeProbe(probe: HardwareProbeResult): AiWorkspaceProbeSummary {
   };
 }
 
+/** True when a cache path looks like an Azure (or similar) connection string. */
+export function isCredentialBearingCacheUrl(value: string): boolean {
+  const v = value.trim();
+  if (!v) return false;
+  return (
+    /DefaultEndpointsProtocol\s*=/i.test(v) ||
+    /AccountKey\s*=/i.test(v) ||
+    /SharedAccessSignature\s*=/i.test(v) ||
+    /BlobEndpoint\s*=/i.test(v) ||
+    /^https?:\/\/[^\s]+[?&]sig=/i.test(v)
+  );
+}
+
+/** Redact credential-bearing strings nested in a recipe JSON tree. */
+export function redactRecipeSecretsForAi(value: unknown): unknown {
+  if (typeof value === "string") {
+    return isCredentialBearingCacheUrl(value) ? "[REDACTED]" : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactRecipeSecretsForAi(item));
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (
+        (k === "cache_dir" || k === "cacheDir" || k === "connection_string" || k === "azureStr") &&
+        typeof v === "string" &&
+        isCredentialBearingCacheUrl(v)
+      ) {
+        out[k] = "[REDACTED]";
+      } else {
+        out[k] = redactRecipeSecretsForAi(v);
+      }
+    }
+    return out;
+  }
+  return value;
+}
+
 function buildRecipeSnapshot(state: UIState, maxChars: number): AiWorkspaceRecipeSnapshot | undefined {
   try {
     const recipe = buildOliveRecipe(state);
-    const input = recipe.input_model as { type?: string } | undefined;
-    const passes = (recipe.passes ?? {}) as Record<string, { type?: string }>;
+    const safeRecipe = redactRecipeSecretsForAi(recipe) as Record<string, unknown>;
+    const input = safeRecipe.input_model as { type?: string } | undefined;
+    const passes = (safeRecipe.passes ?? {}) as Record<string, { type?: string }>;
     const passTypes = Object.values(passes)
       .map((p) => p?.type)
       .filter((t): t is string => typeof t === "string");
-    const systems = recipe.systems as { local_system?: { config?: { accelerators?: unknown } } } | undefined;
-    const json = JSON.stringify(recipe, null, 2);
+    const systems = safeRecipe.systems as
+      { local_system?: { config?: { accelerators?: unknown } } } | undefined;
+    const json = JSON.stringify(safeRecipe, null, 2);
     return {
       inputModelType: input?.type ?? "unknown",
       passTypes,
@@ -228,7 +269,12 @@ export function buildAiWorkspaceContext(
       severity: c.severity,
     })),
     infrastructure: {
-      cacheDir: state.cacheDir,
+      cacheDir:
+        state.distributedCaching && state.azureStr && isCredentialBearingCacheUrl(state.azureStr)
+          ? "[REDACTED]"
+          : isCredentialBearingCacheUrl(state.cacheDir)
+            ? "[REDACTED]"
+            : state.cacheDir,
       distributedCaching: state.distributedCaching,
       batchJobCount: batchJobs.length,
       batchQueued: batchJobs.filter((j) => j.status === "queued").length,

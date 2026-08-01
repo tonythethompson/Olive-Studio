@@ -91,13 +91,12 @@ function normalizeSuggestion(raw: unknown, index: number): AuditSuggestion | nul
       : rawTitle;
   const autofixRaw = isRecord(raw.autofix) ? raw.autofix : {};
   const pass =
-    typeof autofixRaw.pass === "string" && autofixRaw.pass.trim()
-      ? autofixRaw.pass.trim().slice(0, 64)
-      : "quantMethod";
+    typeof autofixRaw.pass === "string" && autofixRaw.pass.trim() ? autofixRaw.pass.trim().slice(0, 64) : "";
   const value =
     typeof autofixRaw.value === "string" || typeof autofixRaw.value === "number"
       ? String(autofixRaw.value).slice(0, 128)
       : "";
+  if (!pass || !value) return null;
   const expanded = expandTerseSuggestion(rawTitle, rawDescription, { pass, value });
   return {
     title: expanded.title,

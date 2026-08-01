@@ -157,8 +157,8 @@ export function ExecutionWorkspace({
     errors: diagnoseErrors,
   } = useMcpDiagnosticKeyed();
   const mcpDiagnostic = keyedDiagnostics["current"] ?? null;
-  const isDiagnosing = diagnosingKeys["current"] ?? false;
-  const diagnoseError = diagnoseErrors["current"] ?? null;
+  const isDiagnosing = diagnosingKeys?.["current"] ?? false;
+  const diagnoseError = diagnoseErrors?.["current"] ?? null;
   const [mcpFixApplied, setMcpFixApplied] = useAutoClearError(3000);
   // Diagnosis history for comparing across runs
   const [diagnosisHistory, setDiagnosisHistory] = useState<DiagnosisEntry[]>([]);
@@ -178,6 +178,7 @@ export function ExecutionWorkspace({
     }
 
     if (isStudioHfTaskSpeechFix(mcpDiagnostic)) {
+      setState({ hfTask: "automatic-speech-recognition" });
       setExecutionLogs((prev) => [
         ...prev,
         "[FIX] Hugging Face task corrected to `automatic-speech-recognition` for Whisper. Rebuild/refresh the recipe, then run Execute Live again.",
@@ -594,9 +595,10 @@ ${
 
   const pipeline = buildRecipeFromState(state, { hardwareProbe });
   const { recipe, recipeJson, validation, schema, advisories, isRunnable } = pipeline;
+  const schemaErrors = schema.errors ?? [];
   // Local structure/compat checks only. A green badge must not imply Execute Live succeeded.
   const localValidationLabel = !schema.valid
-    ? `Schema invalid (${schema.errors.length} issue${schema.errors.length === 1 ? "" : "s"})`
+    ? `Schema invalid (${schemaErrors.length} issue${schemaErrors.length === 1 ? "" : "s"})`
     : validation.statusLabel;
   const localValidationTone = !schema.valid ? "error" : validation.statusTone;
   const runFailed = executionStatus === "failed";
@@ -612,7 +614,7 @@ ${
       setExecutionLogs([
         schema.valid
           ? `[ERROR] Cannot queue batch job: ${validation.criticalCount} blocking compatibility issue(s). Resolve in the graph or passes panel.`
-          : `[ERROR] Cannot queue batch job: recipe schema invalid.\n${schema.errors.map((e) => `[SCHEMA] ${e}`).join("\n")}`,
+          : `[ERROR] Cannot queue batch job: recipe schema invalid.\n${schemaErrors.map((e) => `[SCHEMA] ${e}`).join("\n")}`,
       ]);
       return;
     }
@@ -733,7 +735,7 @@ ${
           ? validation.issues
               .filter((issue) => issue.severity === "critical")
               .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`)
-          : schema.errors.map((e) => `[SCHEMA] ${e}`)),
+          : schemaErrors.map((e) => `[SCHEMA] ${e}`)),
       ]);
       setExecutionStatus("failed");
       return;
@@ -1508,9 +1510,9 @@ ${
         />
         <CardContent className="flex flex-col gap-4 p-4">
           <VramEstimateBanner state={state} compact />
-          {schema.errors.length > 0 && (
+          {schemaErrors.length > 0 && (
             <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3 space-y-2">
-              {schema.errors.map((error) => (
+              {schemaErrors.map((error) => (
                 <div key={error} className="flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
                   <p className="text-[11px] text-rose-200 leading-relaxed">{error}</p>

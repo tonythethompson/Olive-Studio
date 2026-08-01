@@ -127,7 +127,9 @@ function kbFailureResponse(kb: { reason: KbFailureReason; message: string }): {
 }
 
 function readPersistedKbLastSync(): string | null {
-  const value = readStudioConfig().kbLastSync;
+  const config = readStudioConfig();
+  if (!config) return null;
+  const value = config.kbLastSync;
   if (typeof value !== "string" || !value.trim()) return null;
   const ms = Date.parse(value);
   return Number.isFinite(ms) ? value.trim() : null;

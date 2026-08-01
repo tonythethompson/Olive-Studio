@@ -13,7 +13,13 @@ import { execFileAsync } from "../shared/exec.ts";
 import { ensureVenv } from "../venv/index.ts";
 import { getVenvPython, getVenvPip } from "../venv/paths.ts";
 import { tensorrtRtxInstallArgs, tensorrtRtxLabel } from "../../../lib/tensorrtRtxDeps.ts";
-import { pinnedOrtGpuInstallArgs, pinnedOrtGpuLabel } from "../../../lib/oliveGpuRuntime.ts";
+import {
+  ORT_GPU_PROBE_SCRIPT,
+  parseOrtGpuProbe,
+  pinnedOrtGpuInstallArgs,
+  pinnedOrtGpuLabel,
+  PINNED_ORT_GPU_VERSION,
+} from "../../../lib/oliveGpuRuntime.ts";
 
 export async function getInstalledTensorRtRtxVersion(python: string): Promise<string | null> {
   try {
@@ -47,21 +53,29 @@ export async function getTensorRtRtxLibsDir(python: string): Promise<string | nu
 export async function probeTensorRtRtxLoadable(
   python: string,
 ): Promise<{ loadable: boolean; detail?: string; version?: string }> {
+  const probeScript = `
+import tensorrt_rtx
+import onnxruntime as ort
+if "NvTensorRTRTXExecutionProvider" not in ort.get_available_providers():
+    print("fail:NvTensorRTRTXExecutionProvider missing from onnxruntime-gpu")
+else:
+    print("ok:" + tensorrt_rtx.__version__)
+`.trim();
   try {
-    const { stdout } = await execFileAsync(python, [
-      "-c",
-      "import tensorrt_rtx; import onnxruntime; print('ok:' + tensorrt_rtx.__version__)",
-    ]);
+    const { stdout } = await execFileAsync(python, ["-c", probeScript]);
     const out = stdout.trim();
-    if (out.includes("ok:")) {
+    if (/(?:^|\\n)ok:/.test(out)) {
       return {
         loadable: true,
         version: out.split("ok:").pop()?.trim() || undefined,
       };
     }
+    const failDetail = out.includes("fail:")
+      ? out.split("fail:").pop()?.trim()
+      : out || "TensorRT RTX load check failed";
     return {
       loadable: false,
-      detail: out || "TensorRT RTX load check failed",
+      detail: failDetail || "TensorRT RTX load check failed",
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -113,9 +127,17 @@ async function ensureOnnxRuntimeGpu(
   onLine: (line: string) => void,
 ): Promise<void> {
   try {
-    await execFileAsync(python, ["-c", "import onnxruntime"]);
-    onLine("[deps] onnxruntime already installed ✓");
-    return;
+    const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT]);
+    const probe = parseOrtGpuProbe(stdout);
+    if (probe.ok) {
+      onLine("[deps] onnxruntime-gpu already installed ✓");
+      return;
+    }
+    if (probe.distVersion || probe.ortVersion) {
+      onLine(
+        `[deps] onnxruntime-gpu ${probe.distVersion ?? probe.ortVersion} installed — need ${PINNED_ORT_GPU_VERSION}, reinstalling...`,
+      );
+    }
   } catch {
     /* install below */
   }

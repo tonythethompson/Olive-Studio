@@ -60,7 +60,25 @@ export function MCPDiagnosticCard({
         )}
       </div>
 
-      {diagnostic ? (
+      {isDiagnosing ? (
+        <p className="text-[11px] text-slate-400 italic">
+          Querying Olive MCP Knowledge Base for matching error patterns...
+        </p>
+      ) : error ? (
+        <div className="space-y-2">
+          <p className="text-[11px] text-rose-300/90">{error}</p>
+          {onRunDiagnosis && (
+            <button
+              type="button"
+              onClick={onRunDiagnosis}
+              disabled={isDiagnosing}
+              className="text-[11px] text-slate-300 hover:text-rose-300 transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <Wrench className="h-3 w-3" /> Retry diagnosis
+            </button>
+          )}
+        </div>
+      ) : diagnostic ? (
         <div className="space-y-1.5 text-xs font-sans">
           <div>
             <span className="font-semibold text-rose-300">Issue: </span>
@@ -186,24 +204,6 @@ export function MCPDiagnosticCard({
             )}
           </div>
         </div>
-      ) : error ? (
-        <div className="space-y-2">
-          <p className="text-[11px] text-rose-300/90">{error}</p>
-          {onRunDiagnosis && (
-            <button
-              type="button"
-              onClick={onRunDiagnosis}
-              disabled={isDiagnosing}
-              className="text-[11px] text-slate-300 hover:text-rose-300 transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-            >
-              <Wrench className="h-3 w-3" /> Retry diagnosis
-            </button>
-          )}
-        </div>
-      ) : isDiagnosing ? (
-        <p className="text-[11px] text-slate-400 italic">
-          Querying Olive MCP Knowledge Base for matching error patterns...
-        </p>
       ) : onRunDiagnosis ? (
         <button
           type="button"

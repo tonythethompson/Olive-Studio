@@ -4,6 +4,7 @@ import {
   inferModelType,
   providerToAccelerator,
   buildOliveRecipe,
+  resolveHfTask,
 } from "@/lib/oliveRecipeBuilder";
 import { deriveUiStateFromOliveRecipe } from "@/lib/oliveRecipeHub";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
@@ -66,6 +67,18 @@ describe("inferHfTask", () => {
     expect(inferHfTask("mistralai/Mistral-7B-v0.1")).toBe("text-generation");
     expect(inferHfTask("unknown-model-name")).toBe("text-generation");
     expect(inferHfTask("")).toBe("text-generation");
+  });
+});
+
+describe("resolveHfTask", () => {
+  it("maps legacy speech-recognition to automatic-speech-recognition", () => {
+    expect(resolveHfTask({ hfTask: "speech-recognition", hfModelId: "" })).toBe(
+      "automatic-speech-recognition",
+    );
+  });
+
+  it("preserves other explicit tasks", () => {
+    expect(resolveHfTask({ hfTask: "text-generation", hfModelId: "" })).toBe("text-generation");
   });
 });
 

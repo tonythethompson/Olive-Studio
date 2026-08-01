@@ -61,6 +61,11 @@ export function saveCloudflareCredentials(
     issuedAt: input.issuedAt ?? new Date().toISOString(),
   };
   fs.writeFileSync(CRED_PATH, JSON.stringify(payload, null, 2), { encoding: "utf-8", mode: 0o600 });
+  try {
+    fs.chmodSync(CRED_PATH, 0o600);
+  } catch {
+    /* ignore on platforms without chmod support */
+  }
   return payload;
 }
 

@@ -199,7 +199,10 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
       if (finalOk === false) {
         throw new Error(finalError || lastLog || "Venv install failed");
       }
-      if (finalOk === null && !res.ok) {
+      if (finalOk === null) {
+        throw new Error(finalError || lastLog || "Install stream ended without a done event");
+      }
+      if (!res.ok) {
         throw new Error(finalError || `HTTP ${res.status}`);
       }
 

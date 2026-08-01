@@ -16,6 +16,18 @@ import { ensureTensorRtRtx, ensureTensorRt } from "./tensorrt.ts";
 import { fsWriteRateLimit } from "../middleware/rateLimit.ts";
 import { resolveAllowedPythonFile } from "../services/venv/pythonGuard.ts";
 
+/** Serialize TensorRT + TensorRT RTX installs (shared venv / pip). */
+let tensorrtInstallChain: Promise<unknown> = Promise.resolve();
+
+function withTensorrtInstallMutex<T>(fn: () => Promise<T>): Promise<T> {
+  const run = tensorrtInstallChain.then(fn, fn);
+  tensorrtInstallChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 function streamNdjsonInstall(
   res: Response,
   run: (onLine: (line: string) => void) => Promise<{ ok: boolean; error?: string; libsDir?: string | null }>,
@@ -69,11 +81,11 @@ export function mountEnvRoutes(router: Router): void {
 
   // ─── TensorRT installs (NDJSON stream; creates .venv if needed) ────────
   router.post("/env/install-tensorrt-rtx", async (_req, res) => {
-    await streamNdjsonInstall(res, ensureTensorRtRtx);
+    await withTensorrtInstallMutex(() => streamNdjsonInstall(res, ensureTensorRtRtx));
   });
 
   router.post("/env/install-tensorrt", async (_req, res) => {
-    await streamNdjsonInstall(res, ensureTensorRt);
+    await withTensorrtInstallMutex(() => streamNdjsonInstall(res, ensureTensorRt));
   });
 
   // ─── Runtime Status ───────────────────────────────────────────────────

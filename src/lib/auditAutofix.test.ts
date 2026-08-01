@@ -88,6 +88,17 @@ describe("resolveAuditAutofix", () => {
     );
     expect(patch?.passes).not.toHaveProperty("conversion.config.input_model_dtype");
   });
+
+  it("returns null for unknown quantMethod", () => {
+    expect(resolveAuditAutofix({ pass: "quantMethod", value: "not-a-method" }, state)).toBeNull();
+  });
+
+  it("maps JSON fp16 quantPrecision through conversion dtype", () => {
+    const patch = resolveAuditAutofix({ pass: "passes", value: '{"quantPrecision":"fp16"}' }, state);
+    expect(patch?.passes?.conversion).toBe(true);
+    expect(patch?.passes?.conversionInputTargetTypes).toBe("float16");
+    expect(patch?.passes?.quantPrecision).toBe("fp16");
+  });
 });
 
 describe("isAuditAutofixApplyable", () => {

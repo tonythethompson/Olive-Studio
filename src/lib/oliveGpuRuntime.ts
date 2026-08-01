@@ -38,6 +38,29 @@ export function pinnedOrtGpuLabel(): string {
   return `onnxruntime-gpu (${PINNED_ORT_GPU_VERSION})`;
 }
 
+/** Python probe: verifies onnxruntime-gpu distribution + module version (not CPU onnxruntime). */
+export const ORT_GPU_PROBE_SCRIPT = `
+import importlib.metadata as m
+import onnxruntime as ort
+try:
+    dist = m.distribution("onnxruntime-gpu")
+    print(f"ok:{dist.version}:{ort.__version__}")
+except Exception as exc:
+    print(f"fail:{exc}")
+`.trim();
+
+export function parseOrtGpuProbe(stdout: string): { ok: boolean; distVersion?: string; ortVersion?: string } {
+  const line = stdout.trim().split(/\r?\n/).pop()?.trim() ?? "";
+  if (!line.startsWith("ok:")) return { ok: false };
+  const [, distVersion, ortVersion] = line.split(":");
+  if (!distVersion || !ortVersion) return { ok: false };
+  return {
+    ok: distVersion === PINNED_ORT_GPU_VERSION && ortVersion === PINNED_ORT_GPU_VERSION,
+    distVersion,
+    ortVersion,
+  };
+}
+
 export function isGpuExecutionProvider(provider: string): boolean {
   return (
     provider === "CUDAExecutionProvider" ||

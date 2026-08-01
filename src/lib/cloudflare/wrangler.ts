@@ -98,6 +98,40 @@ export async function resolveWranglerCmd(): Promise<{ cmd: string; prefixArgs: s
   };
 }
 
+/** Wrangler may print logs before JSON; parse the first valid top-level JSON value. */
+export function parseWranglerStdoutJson<T>(text: string, commandLabel = "wrangler"): T {
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error(`${commandLabel} returned empty output.`);
+
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    /* fall through */
+  }
+
+  for (const line of trimmed.split(/\r?\n/)) {
+    const candidate = line.trim();
+    if (!candidate.startsWith("{") && !candidate.startsWith("[")) continue;
+    try {
+      return JSON.parse(candidate) as T;
+    } catch {
+      continue;
+    }
+  }
+
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (ch !== "{" && ch !== "[") continue;
+    try {
+      return JSON.parse(trimmed.slice(i)) as T;
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error(`${commandLabel} did not return JSON.`);
+}
+
 async function runWranglerJson<T>(args: string[], timeoutMs = 30_000): Promise<T> {
   const { cmd, prefixArgs } = await resolveWranglerCmd();
   try {
@@ -108,12 +142,7 @@ async function runWranglerJson<T>(args: string[], timeoutMs = 30_000): Promise<T
     });
     const text = stdout.trim();
     if (!text) throw new Error(`wrangler ${args.join(" ")} returned empty output.`);
-    // Wrangler sometimes prints logs before JSON; take the last JSON object/array.
-    const startObj = text.lastIndexOf("{");
-    const startArr = text.lastIndexOf("[");
-    const start = Math.max(startObj, startArr);
-    if (start < 0) throw new Error(`wrangler ${args.join(" ")} did not return JSON.`);
-    return JSON.parse(text.slice(start)) as T;
+    return parseWranglerStdoutJson<T>(text, args.join(" "));
   } catch (err: unknown) {
     const raw = err instanceof Error ? err.message : String(err);
     // Wrangler paints stderr with ANSI; keep UI messages readable.

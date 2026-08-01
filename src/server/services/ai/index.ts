@@ -35,7 +35,9 @@ export function getAiProvider(): ProviderConfig | null {
   const pref = readAiPreference();
   if (pref) {
     const restored = restoreProviderFromPreference(pref);
-    if (restored) return restored;
+    if (restored && !(restored.provider === "openai-compat" && !restored.baseUrl?.trim())) {
+      return restored;
+    }
 
     // Preference matches the env-detected provider: keep the user's model/baseUrl.
     const env = detectEnvProvider();

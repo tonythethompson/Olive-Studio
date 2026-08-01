@@ -34,7 +34,10 @@ export function inferHfTask(modelId: string): string {
 /** Prefer explicit UI task; otherwise infer from the HF model id. */
 export function resolveHfTask(state: Pick<UIState, "hfTask" | "hfModelId">): string {
   const explicit = (state.hfTask || "").trim();
-  if (explicit) return explicit;
+  if (explicit) {
+    if (explicit === "speech-recognition") return "automatic-speech-recognition";
+    return explicit;
+  }
   return inferHfTask(state.hfModelId || "");
 }
 
