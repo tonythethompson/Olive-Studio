@@ -1,0 +1,100 @@
+src/components/features/GeminiSidebar.tsx
+  s_d35b29515e08d0::t_cf91559e26ecdf 1
+  s_d35b29515e08d0::t_c6650f8a1187bf 70-76,89-93
+olive-mcp-server/pyproject.toml
+  s_d35b29515e08d0::t_35003218b2468d 11
+src/lib/aiWorkspaceContext.ts
+  s_d35b29515e08d0::t_b36b656e4d1fc0 171
+  s_d35b29515e08d0::t_8b1303f0909063 264-267
+src/components/features/ExecutionWorkspace.tsx
+  s_d35b29515e08d0::t_1437cc2a635dcd 312-316,321
+  s_d35b29515e08d0::t_8d7474c9395b4d 1406-1413
+src/lib/pipelineValidation.ts
+  s_d35b29515e08d0::t_e0fd7f8751abff 611
+src/components/features/InputEnvironmentPanel.tsx
+  s_d35b29515e08d0::t_b972d870a22bba 1338,1347
+  s_d35b29515e08d0::t_bbe2cb2273fd14 1885,1889-1891,1893-1895,1916
+  s_d35b29515e08d0::t_df35f9580ee258 739,772,779
+  s_d35b29515e08d0::t_ebcaefb354ef55 84-97
+  s_d35b29515e08d0::t_b394b193076fac 2070,2076-2088,2090-2097,2104-2119
+  s_d35b29515e08d0::t_4e51478b94a9cb 1934,1937-1939,1941-1943,1966
+  s_d35b29515e08d0::t_76bb1310f426c1 2019
+  s_d35b29515e08d0::t_4ebea00d2ded4f 1743,1748-1749,1757-1763,1777,1779-1780
+  s_d35b29515e08d0::t_3c37b758689616 473
+src/components/features/gemini/useAiAudit.ts
+  s_d35b29515e08d0::t_711fcd80ac50c4 22-23,28-33,35,58,62,65,93-97
+src/lib/auditAutofix.ts
+  s_d35b29515e08d0::t_42155054125d44 297-308
+src/lib/codex/CodexAppServerClient.ts
+  s_d35b29515e08d0::t_f3c43befdde3f6 320
+  s_d35b29515e08d0::t_f8bf4d12e8a304 265,268-271
+src/lib/recipePipeline.ts
+  s_d35b29515e08d0::t_bc5c4aa95cea76 5
+  s_d35b29515e08d0::t_484f1ebd51c622 32,42
+src/lib/auditAutofix.test.ts
+  s_d35b29515e08d0::t_d29298e441656f 116-129,131
+src/lib/auditAnalysis.ts
+  s_d35b29515e08d0::t_867642d36dfd90 173,182,187,193,200
+src/lib/hooks.ts
+  s_d35b29515e08d0::t_fc883e61909d58 114-162
+src/lib/cloudflare/client.ts
+  s_d35b29515e08d0::t_3ec6cf15dc9cca 111-145,166,168,175,180-186,192-194,197-199
+src/components/features/gemini/useAiProviderSettings.ts
+  s_d35b29515e08d0::t_a9557dc9ee0cb1 564-565
+  s_d35b29515e08d0::t_752254208fd989 35
+  s_d35b29515e08d0::t_c4ee562f3b6933 439,443-452,467-475,484,492
+src/server/config.ts
+  s_d35b29515e08d0::t_99ee7106caf2f4 42-44
+src/lib/__tests__/hooks.test.ts
+  s_d35b29515e08d0::t_f51eee33ecd212 353,355,361,365,367,370,372
+  s_d35b29515e08d0::t_075a19f1c675bd 352,354,356-360,362-363,374
+  s_d35b29515e08d0::t_4e79d00c840e39 4
+  s_d35b29515e08d0::t_68af423d190f37 301-351,364,366,368-369,371,373,375-387
+src/components/features/gemini/ManualProviderSetup.tsx
+  s_d35b29515e08d0::t_bea21dc4f4f943 165-173,216-235
+server.ts
+  s_d35b29515e08d0::t_3ca22e3300cec1 195-196
+.agents/skills/vite-react-best-practices/rules/vite-troubleshooting.md
+  s_d35b29515e08d0::t_89fc2f2b531021 39
+olive-mcp-server/olive_mcp_server/mcp_server.py
+  s_d35b29515e08d0::t_368297de85af66 122-125
+src/lib/oliveGpuRuntime.ts
+  s_d35b29515e08d0::t_3ade44ee1365ec 41,47-57,62-67,70-73,75,77,80
+src/server/routes/system.ts
+  s_d35b29515e08d0::t_5edfa9295fd2d2 228-229
+src/lib/codex/CodexAppServerClient.test.ts
+  s_d35b29515e08d0::t_2c66c804ec38ca 2,20,40,52,56,59-62,72-73
+  s_d35b29515e08d0::t_4abd2b392e8529 1,21-39,41-51,53-55,57-58,63-65,67-71
+src/server/routes/ai.ts
+  s_d35b29515e08d0::t_d4e8af14c65a48 582-598,605-606
+  s_d35b29515e08d0::t_e5d6200283fc17 835-836
+  s_d35b29515e08d0::t_9da479c3d5b874 854
+  s_d35b29515e08d0::t_df97d23fb43ade 409
+  s_d35b29515e08d0::t_b43077d22019e8 1086-1091,1094-1097,1104,1114,1120-1128,1134,1141-1150,1152,1155-1156,1159-1162
+  s_d35b29515e08d0::t_728a94d969ce45 281-283,288,294-295,297,300,305-306,310-322,327,330,335
+  s_d35b29515e08d0::t_4b89ba37edb5e0 1211-1217,1219-1222,1225,1234,1236-1239,1242,1249-1257,1274,1294-1296,1298
+  s_d35b29515e08d0::t_cf458cebddfe75 278,280,284,309,323-326,328-329,331-334
+  s_d35b29515e08d0::t_3671f8788b2159 726
+  s_d35b29515e08d0::t_c79adcd88ddd52 1345-1350,1354,1356-1359,1368-1371,1383-1387
+  s_d35b29515e08d0::t_7f10cb7ed84c34 977-980,989-990
+  s_d35b29515e08d0::t_73b6b4c5c2ef30 8
+  s_d35b29515e08d0::t_7ccaefa0aa2550 570-578,607-636
+  s_d35b29515e08d0::t_d0813b1bddd6a4 32-36
+  s_d35b29515e08d0::t_1e66bbb559d53c 599-604
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "5bbbdd219829b3f117a92f8fda97fcd465b54d51",
+  "prompts": {},
+  "sessions": {
+    "s_d35b29515e08d0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f88350b3-eb33-4d77-8be0-90da0daad3f7",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
