@@ -8,6 +8,7 @@ with a module-level store.
 from __future__ import annotations
 
 import hashlib
+import logging
 import threading
 import time
 from typing import Any, Literal
@@ -22,6 +23,8 @@ from .embeddings import (
     cosine_similarity_scores,
     encode_query,
 )
+
+logger = logging.getLogger(__name__)
 
 DomainName = Literal["auto", "olive", "studio"]
 
@@ -368,7 +371,8 @@ def _best_match(
         semantic_scores = cosine_similarity_scores(query_vec, embeddings)
         # Prefer the index pair for position-aligned scoring.
         score_entries = index_entries
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.warning("Semantic scoring failed; falling back to keyword-only matching", exc_info=True)
         score_entries = list(entries)
         semantic_scores = np.zeros((len(score_entries),), dtype=np.float32)
 

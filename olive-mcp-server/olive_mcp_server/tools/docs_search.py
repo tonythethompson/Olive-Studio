@@ -36,6 +36,11 @@ _LIVE_FETCH_LOCK = threading.Lock()
 # Monotonic generation so out-of-order HTTP completions cannot overwrite a
 # fresher cache entry started later.
 _LIVE_FETCH_GENERATION = 0
+# Generation number of the fetch that last actually published to _LIVE_CACHE.
+# Tracking this (rather than comparing against _LIVE_FETCH_GENERATION, the
+# highest *started* generation) means an older fetch that succeeds is not
+# discarded just because a newer generation started and then failed.
+_LIVE_FETCH_PUBLISHED_GENERATION = 0
 
 # Live snippet embedding cache (tied to _LAST_FETCH_TIME).
 _LIVE_SNIPPETS: list[tuple[str, str]] = []
@@ -207,7 +212,7 @@ def _fetch_live_docs() -> tuple[dict[str, str], float]:
     Concurrent fetches take a generation token; only the latest generation may
     publish, so a slow older response cannot overwrite a fresher one.
     """
-    global _LIVE_CACHE, _LAST_FETCH_TIME, _LIVE_FETCH_GENERATION
+    global _LIVE_CACHE, _LAST_FETCH_TIME, _LIVE_FETCH_GENERATION, _LIVE_FETCH_PUBLISHED_GENERATION
 
     with _LIVE_FETCH_LOCK:
         now = time.monotonic()
@@ -226,14 +231,16 @@ def _fetch_live_docs() -> tuple[dict[str, str], float]:
             fetched = {k: v for k, v in pages.items() if isinstance(v, str)}
             if fetched:
                 with _LIVE_FETCH_LOCK:
-                    # Publish unless a newer generation has already succeeded
-                    # (empty cache means no generation has published yet, so
-                    # an older completion racing behind a newer *failure* is
-                    # still the only good data available and must not be
-                    # discarded).
-                    if my_generation == _LIVE_FETCH_GENERATION or not _LIVE_CACHE:
+                    # Publish unless a generation newer than this one has
+                    # already published. Comparing against the last
+                    # *published* generation (not the highest *started* one)
+                    # means an older fetch that succeeds still gets to
+                    # publish when a newer sibling generation started but
+                    # never actually completed successfully.
+                    if my_generation >= _LIVE_FETCH_PUBLISHED_GENERATION:
                         _LIVE_CACHE = fetched
                         _LAST_FETCH_TIME = time.monotonic()
+                        _LIVE_FETCH_PUBLISHED_GENERATION = my_generation
     except Exception:
         logger.debug("Live docs fetch failed; keeping stale cache", exc_info=True)
 
@@ -281,7 +288,7 @@ def _get_live_index() -> tuple[list[tuple[str, str]], np.ndarray]:
         if _LIVE_EMBEDDINGS is not None and fetch_time < _LIVE_EMBED_CACHE_TIME:
             # A newer generation already published while this one was
             # encoding; discard this stale build rather than clobber it.
-            return snippets, embeddings
+            return _LIVE_SNIPPETS, _LIVE_EMBEDDINGS
 
         _LIVE_SNIPPETS = snippets
         _LIVE_EMBEDDINGS = embeddings
@@ -336,6 +343,8 @@ def search_olive_documentation(query: str, top_k: int = 5, live: bool = True) ->
     terms = [t.lower() for t in query.split() if t]
     if not terms:
         return {"query": query, "count": 0, "results": [], "note": "Empty query."}
+    if top_k == 0:
+        return {"query": query, "count": 0, "results": [], "note": "No results requested."}
 
     per_source = max(top_k * 2, 10)
     local_results = _search_local(query, per_source)
@@ -346,23 +355,12 @@ def search_olive_documentation(query: str, top_k: int = 5, live: bool = True) ->
         key=lambda x: (-x["relevance"], 0 if x["source"].startswith("live:") else 1)
     )
 
+    # `combined` is already sorted with live sources preferred on relevance
+    # ties, so the top-k slice already surfaces a live result whenever one is
+    # genuinely competitive with the kept local results — no separate
+    # "reserve a freshness slot" step is needed (an earlier version of that
+    # step was unreachable dead code given this tie-break).
     results = combined[:top_k]
-    if (
-        live_results
-        and top_k > 0
-        and results
-        and not any(r["source"].startswith("live:") for r in results)
-    ):
-        best_live = max(live_results, key=lambda x: x["relevance"])
-        weakest_kept = min(r["relevance"] for r in results)
-        # Only reserve a slot for freshness when the live hit is actually
-        # competitive with what it would displace — never displace the sole
-        # top result outright (top_k == 1) with a strictly worse live hit.
-        if best_live["relevance"] >= weakest_kept:
-            results = results[: top_k - 1] + [best_live]
-            results.sort(
-                key=lambda x: (-x["relevance"], 0 if x["source"].startswith("live:") else 1)
-            )
 
     return {
         "query": query,

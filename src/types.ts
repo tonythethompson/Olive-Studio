@@ -91,8 +91,14 @@ export interface UIState {
   ihvProvider: IHVProvider;
   /** Hugging Face load_kwargs device_map — GPU + host RAM when auto. */
   memoryOffload: "gpu_only" | "auto";
-  /** Only tags with full dep resolution (torch index + ORT 1.26 + cu12 runtime). */
-  cudaVersion: "auto" | "cpu" | "cu118" | "cu121" | "cu124" | "cu126" | "cu128";
+  /**
+   * Includes driver-identification tags (cu130/cu132) alongside fully
+   * resolvable ones. Package resolution (torch index + ORT 1.26 + cu12
+   * runtime) must check `RESOLVABLE_CUDA_TAGS` / `isResolvableCudaTag` in
+   * `lib/oliveGpuRuntime.ts` — cu130/cu132 have no pins yet and surface an
+   * "unsupported CUDA tag" error at recipe-build time.
+   */
+  cudaVersion: "auto" | "cpu" | "cu118" | "cu121" | "cu124" | "cu126" | "cu128" | "cu130" | "cu132";
   cacheDir: string;
   azureStr: string;
   distributedCaching: boolean;

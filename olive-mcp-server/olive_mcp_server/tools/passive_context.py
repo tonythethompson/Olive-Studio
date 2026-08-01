@@ -94,8 +94,10 @@ def get_context_for_pipeline(
             "pipeline_summary": pipeline_summary,
             "confidence": 0.0,
             "snippet_count": 0,
+            "status": "ok",
         }
 
+    status = "ok"
     try:
         kb_texts, embeddings = get_or_build_kb_index()
         results = semantic_search(
@@ -108,6 +110,7 @@ def get_context_for_pipeline(
     except Exception:
         logger.warning("KB retrieval failed for pipeline context", exc_info=True)
         results = []
+        status = "retrieval_failed"
 
     confidences = [float(r.get("relevance", 0.0)) for r in results]
     confidence = sum(confidences) / len(confidences) if confidences else 0.0
@@ -119,4 +122,8 @@ def get_context_for_pipeline(
         "pipeline_summary": pipeline_summary,
         "confidence": confidence,
         "snippet_count": len(results),
+        # Distinguishes "genuinely no relevant KB entries" (ok, empty
+        # results) from "the retrieval subsystem errored" (retrieval_failed)
+        # — both would otherwise look identical to a caller.
+        "status": status,
     }

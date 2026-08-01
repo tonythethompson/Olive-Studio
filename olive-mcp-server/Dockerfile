@@ -17,7 +17,7 @@ COPY olive_mcp_server/ ./olive_mcp_server/
 # "already satisfied" to the next install so it isn't pulled again from PyPI.
 RUN pip install --no-cache-dir --prefix=/install \
     --index-url https://download.pytorch.org/whl/cpu \
-    torch \
+    "torch==2.5.1" \
  && PYTHONPATH="$(echo /install/lib/python*/site-packages)" \
     pip install --no-cache-dir --prefix=/install \
     . "mcp<2"
@@ -25,7 +25,11 @@ RUN pip install --no-cache-dir --prefix=/install \
 # Pre-cache the embedding model so the runtime image does not need network
 # access on first semantic search. Cache lands under /root/.cache/huggingface.
 RUN PYTHONPATH="$(echo /install/lib/python*/site-packages)" \
-    python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+    python -c "\
+from sentence_transformers import SentenceTransformer; \
+m = SentenceTransformer('all-MiniLM-L6-v2', device='cpu'); \
+v = m.encode(['warmup'], convert_to_numpy=True, normalize_embeddings=True); \
+assert v.shape == (1, 384), v.shape"
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
 FROM python:3.12-slim AS runtime

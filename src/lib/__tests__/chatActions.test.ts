@@ -143,6 +143,49 @@ describe("parseChatStructuredReply", () => {
 
     const negatedConvert = salvageChatActionPatchFromLooseJson({ step: "skip onnx conversion" });
     expect(negatedConvert?.passes?.conversion).toBeUndefined();
+
+    const contractedQuant = salvageChatActionPatchFromLooseJson({ step: "can't quantize" });
+    expect(contractedQuant?.passes?.quantization).toBeUndefined();
+
+    const cannotConvert = salvageChatActionPatchFromLooseJson({ action: "cannot convert to onnx" });
+    expect(cannotConvert?.passes?.conversion).toBeUndefined();
+
+    const dontQuantize = salvageChatActionPatchFromLooseJson({ task: "don't apply quantization" });
+    expect(dontQuantize?.passes?.quantization).toBeUndefined();
+
+    // Informational/off-topic mentions of "quant" must not enable it either
+    // (not negated, but not an affirmative instruction).
+    const infoTask = salvageChatActionPatchFromLooseJson({
+      task: "check quantization compatibility",
+    });
+    expect(infoTask?.passes?.quantization).toBeUndefined();
+  });
+
+  it("salvages quant method tokens from multi-word action values", () => {
+    // Bare method names ("gptq") don't contain the substring "quant", and
+    // combined phrases ("apply awq") don't exact-match a single token —
+    // both must still be recognized via per-token matching.
+    const applyAwq = salvageChatActionPatchFromLooseJson({ step: "apply awq" });
+    expect(applyAwq?.passes?.quantization).toBe(true);
+    expect(applyAwq?.passes?.quantMethod).toBe("awq");
+
+    const bareGptq = salvageChatActionPatchFromLooseJson({ task: "gptq" });
+    expect(bareGptq?.passes?.quantization).toBe(true);
+    expect(bareGptq?.passes?.quantMethod).toBe("gptq");
+
+    const applyInt8 = salvageChatActionPatchFromLooseJson({ step: "apply int8 quantization" });
+    expect(applyInt8?.passes?.quantization).toBe(true);
+    expect(applyInt8?.passes?.quantPrecision).toBe("int8");
+  });
+
+  it("scopes negation to the specific instruction it modifies", () => {
+    // Only quantization is negated here; conversion is a separate,
+    // non-negated instruction in the same value and must still salvage.
+    const mixed = salvageChatActionPatchFromLooseJson({
+      step: "convert to onnx without quantization",
+    });
+    expect(mixed?.passes?.conversion).toBe(true);
+    expect(mixed?.passes?.quantization).toBeUndefined();
   });
 
   it("strips misleading Apply instructions when no patch exists", () => {

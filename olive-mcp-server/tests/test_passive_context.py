@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from olive_mcp_server.tools import docs_search
+from olive_mcp_server.tools import docs_search, passive_context
 from olive_mcp_server.tools.passive_context import get_context_for_pipeline
 
 
@@ -13,11 +13,11 @@ from olive_mcp_server.tools.passive_context import get_context_for_pipeline
 def _reset_kb_cache():
     docs_search._KB_TEXTS = []
     docs_search._KB_EMBEDDINGS = None
-    docs_search._KB_INDEX_MTIME = -1.0
+    docs_search._KB_INDEX_MTIME = (-1.0, -1)
     yield
     docs_search._KB_TEXTS = []
     docs_search._KB_EMBEDDINGS = None
-    docs_search._KB_INDEX_MTIME = -1.0
+    docs_search._KB_INDEX_MTIME = (-1.0, -1)
 
 
 def test_empty_pipeline():
@@ -142,4 +142,20 @@ def test_return_shape():
         "pipeline_summary",
         "confidence",
         "snippet_count",
+        "status",
     }
+    assert result["status"] == "ok"
+
+
+def test_status_reports_retrieval_failure(monkeypatch: pytest.MonkeyPatch):
+    """A KB/embedding failure must be distinguishable from a genuine empty result."""
+
+    def boom():
+        raise RuntimeError("model unavailable")
+
+    monkeypatch.setattr(passive_context, "get_or_build_kb_index", boom)
+
+    result = get_context_for_pipeline(pipeline_passes=["OnnxQuantization"], top_k=3)
+    assert result["status"] == "retrieval_failed"
+    assert result["context_snippets"] == []
+    assert result["snippet_count"] == 0

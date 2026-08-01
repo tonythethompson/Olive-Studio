@@ -2,8 +2,15 @@ import { pinnedTensorRtInstallArgs, pinnedTensorRtLabel } from "./tensorrtDeps.t
 
 /**
  * Stable onnxruntime-gpu on PyPI is CUDA 12.x through 1.26.x.
- * 1.27+ wheels are CUDA 13 builds but cu13 pip runtime packages are not fully published yet.
- * Do not enable cu130/cu132 until ORT + nvidia-*-cu13 pins resolve on PyPI.
+ * 1.27+ wheels are CUDA 13 builds. torch now publishes cu130/cu132 wheels, but
+ * the CUDA-13 nvidia-* runtime package set doesn't map cleanly onto the
+ * existing per-CUDA-version pinning scheme (cublas/cuda-runtime dropped the
+ * -cu13 suffix in favor of unsuffixed packages; only cudnn kept it). cu130/
+ * cu132 are exposed as selectable driver-identification tags (UIState,
+ * chat actions, audit autofix) but intentionally excluded from
+ * RESOLVABLE_CUDA_TAGS until the full package pin set is verified — selecting
+ * them surfaces the "Unsupported CUDA tag" error from inferRequiredPackages
+ * rather than silently resolving wrong/mismatched runtime libraries.
  */
 export const PINNED_ORT_GPU_VERSION = "1.26.0";
 
