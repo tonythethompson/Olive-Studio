@@ -190,8 +190,8 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     }
   }
 
-  if (tensorRtRtx?.loadable) {
-    notes.push(`TensorRT RTX runtime verified${tensorRtRtx.version ? ` (${tensorRtRtx.version})` : ""}.`);
+  if (tensorRtRtxVenvLoadable) {
+    notes.push(`TensorRT RTX runtime verified${tensorRtRtx?.version ? ` (${tensorRtRtx.version})` : ""}.`);
   } else if (nvidia?.gpus.length) {
     notes.push(
       tensorRtRtx?.detail
@@ -200,7 +200,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     );
   }
 
-  if (tensorrt?.loadable) {
+  if (tensorRtVenvLoadable) {
     notes.push("TensorRT execution provider load verified.");
   } else if (nvidia?.gpus.length) {
     notes.push(
@@ -241,8 +241,9 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     nvidia,
     rocm,
     openvino,
-    tensorrt,
-    tensorRtRtx,
+    // UI consumers (IHV panel) read `.loadable`; keep it aligned with .venv readiness.
+    tensorrt: tensorrt ? { ...tensorrt, loadable: tensorRtVenvLoadable } : tensorrt,
+    tensorRtRtx: tensorRtRtx ? { ...tensorRtRtx, loadable: tensorRtRtxVenvLoadable } : tensorRtRtx,
     onnxRuntimeProviders,
     detectedProviders,
     recommendedProvider: pickRecommendedProvider(detectedProviders, {

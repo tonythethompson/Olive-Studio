@@ -68,7 +68,18 @@ describe("estimateVramForCatalogPreset fitHint", () => {
     expect(estimate.fitHint).toBeNull();
   });
 
-  it("warns CPU recipes when the model footprint exceeds GPU VRAM", () => {
+  it("warns CPU recipes when the model footprint exceeds system RAM", () => {
+    const probe = probeWithGpu(12 * 1024, 2);
+    const estimate = estimateVramForCatalogPreset(
+      catalogItem("google-gemma/olive/gemma-3-1b-it_model_builder_cpu_fp32.json", "CPU"),
+      probe,
+    );
+    expect(estimate.usesGpu).toBe(false);
+    expect(estimate.inferenceGb).toBeGreaterThan(2);
+    expect(estimate.fitHint).toBe("Deployed model may exceed system RAM");
+  });
+
+  it("stays quiet for CPU recipes when system RAM is ample", () => {
     const probe = probeWithGpu(12 * 1024, 64);
     const estimate = estimateVramForCatalogPreset(
       catalogItem("google-gemma/olive/gemma-3-1b-it_model_builder_cpu_fp32.json", "CPU"),
@@ -76,6 +87,6 @@ describe("estimateVramForCatalogPreset fitHint", () => {
     );
     expect(estimate.usesGpu).toBe(false);
     expect(estimate.inferenceGb).toBeGreaterThan(12);
-    expect(estimate.fitHint).toBe("Deployed model may exceed GPU VRAM");
+    expect(estimate.fitHint).toBeNull();
   });
 });

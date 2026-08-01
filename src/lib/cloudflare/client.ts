@@ -158,7 +158,6 @@ export function resolveAccountId(
   return null;
 }
 
-
 /**
  * Synchronizes Wrangler authentication with a Cloudflare account and saves the resulting credentials.
  *
@@ -187,7 +186,6 @@ export async function syncCloudflareFromWrangler(
   const preferred = preferredAccountId?.trim();
   let whoAmIAccounts: Array<{ id: string; name?: string }> = [];
   let email = tokenInfo.email;
-  let accountNameFromWhoAmI: string | undefined;
 
   // Limited dashboard tokens often break `wrangler whoami` account listing even though
   // `wrangler auth token` works. Fall back to preferred / env / previously saved id.
@@ -212,12 +210,12 @@ export async function syncCloudflareFromWrangler(
   }
 
   const whoMatch = whoAmIAccounts.find((a) => a.id === resolved.accountId);
-  accountNameFromWhoAmI = whoMatch?.name;
+  const accountName = whoMatch?.name ?? resolved.accountName;
 
   return saveCloudflareCredentials({
     apiToken,
     accountId: resolved.accountId,
-    accountName: accountNameFromWhoAmI ?? resolved.accountName,
+    accountName,
     email: email ?? existing?.email,
     authType,
   });
@@ -291,8 +289,8 @@ export async function listCloudflareModels(): Promise<{
       })
       .filter((m): m is { id: string; name: string } => Boolean(m))
       .filter((m) => !/embed|whisper|tts|asr|diffusion|image/i.test(m.id))
-      .slice(0, 120)
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 80);
     if (models.length === 0) {
       return {
         models: [],

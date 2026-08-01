@@ -311,6 +311,44 @@ describe("useMcpDiagnosticKeyed", () => {
     });
     expect(result.current.diagnostics["job-err"]).toBeUndefined();
     expect(result.current.errors["job-err"]).toBe("KB unavailable");
+    expect(result.current.diagnosingKeys["job-err"]).toBe(false);
+  });
+
+  it("maps HTTP failures without a body error into errors[key]", async () => {
+    const { result } = renderHook(() => useMcpDiagnosticKeyed());
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(null, { status: 503 }));
+    await act(async () => {
+      await result.current.fetchKeyedDiagnostic("job-http", emptyLogs);
+    });
+    expect(result.current.diagnostics["job-http"]).toBeUndefined();
+    expect(result.current.errors["job-http"]).toMatch(/Diagnosis failed \(HTTP 503\)/);
+  });
+
+  it("stays silent in errors[key] when a keyed request is aborted", async () => {
+    const { result } = renderHook(() => useMcpDiagnosticKeyed());
+    let call = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation((_url, opts) => {
+      call += 1;
+      const signal = (opts as RequestInit | undefined)?.signal;
+      if (call === 1) {
+        return new Promise((_resolve, reject) => {
+          signal?.addEventListener("abort", () => {
+            reject(new DOMException("Aborted", "AbortError"));
+          });
+        });
+      }
+      return Promise.resolve(new Response(JSON.stringify(mockDiagnostic), { status: 200 }));
+    });
+
+    act(() => {
+      void result.current.fetchKeyedDiagnostic("job-abort", emptyLogs);
+    });
+    await act(async () => {
+      await result.current.fetchKeyedDiagnostic("job-abort", emptyLogs);
+    });
+
+    expect(result.current.errors["job-abort"]).toBeFalsy();
+    expect(result.current.diagnostics["job-abort"]).toEqual(mockDiagnostic);
   });
 
   it("treats title-only payloads as malformed errors", async () => {
@@ -323,6 +361,26 @@ describe("useMcpDiagnosticKeyed", () => {
     });
     expect(result.current.diagnostics["job-partial"]).toBeUndefined();
     expect(result.current.errors["job-partial"]).toMatch(/incomplete|malformed/i);
+  });
+
+  it("rejects payloads with invalid optional field shapes", async () => {
+    const { result } = renderHook(() => useMcpDiagnosticKeyed());
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          title: "T",
+          root_cause: "R",
+          workaround: "W",
+          relevant_quirks: "not-an-array",
+        }),
+        { status: 200 },
+      ),
+    );
+    await act(async () => {
+      await result.current.fetchKeyedDiagnostic("job-shape", emptyLogs);
+    });
+    expect(result.current.diagnostics["job-shape"]).toBeUndefined();
+    expect(result.current.errors["job-shape"]).toMatch(/incomplete|malformed|unexpected/i);
   });
 });
 
@@ -347,6 +405,7 @@ describe("useMcpDiagnostic", () => {
     });
     expect(result.current.diagnostic).toBeNull();
     expect(result.current.error).toBe("tool failed");
+    expect(result.current.isDiagnosing).toBe(false);
   });
 
   it("stays silent when the request is aborted", async () => {
@@ -386,5 +445,17 @@ describe("useMcpDiagnostic", () => {
     });
     expect(result.current.diagnostic).toBeNull();
     expect(result.current.error).toMatch(/incomplete|malformed/i);
+  });
+
+  it("rejects missing root_cause or workaround as malformed", async () => {
+    const { result } = renderHook(() => useMcpDiagnostic());
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ title: "T", root_cause: "R" }), { status: 200 }),
+    );
+    await act(async () => {
+      await result.current.fetchDiagnostic(emptyLogs);
+    });
+    expect(result.current.diagnostic).toBeNull();
+    expect(result.current.error).toMatch(/incomplete|malformed|unexpected/i);
   });
 });

@@ -71,6 +71,14 @@ describe("parseAuditAnalysisReply", () => {
     expect(parsed.summary).toMatch(/Partial audit|unstructured/i);
   });
 
+  it("does not treat unrelated JSON as a structured audit", () => {
+    const parsed = parseAuditAnalysisReply(
+      JSON.stringify({ email: "dev@example.com", accounts: [{ id: "abc" }] }),
+    );
+    expect(parsed.structured).toBe(false);
+    expect(parsed.summary).toMatch(/Partial audit|unstructured/i);
+  });
+
   it("expands terse field-name suggestions into readable sentences", () => {
     const expanded = expandTerseSuggestion("opset", "update to 21", {
       pass: "conversionOpset",

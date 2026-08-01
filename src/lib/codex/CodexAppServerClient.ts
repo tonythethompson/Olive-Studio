@@ -84,6 +84,8 @@ export class CodexAppServerClient extends EventEmitter {
   /** Path to the `codex` binary; default resolves via PATH. */
   constructor(private readonly codexPath = "codex") {
     super();
+    // EventEmitter throws if emit("error") has no listener; keep propagation optional.
+    this.on("error", () => {});
   }
 
   get isReady(): boolean {

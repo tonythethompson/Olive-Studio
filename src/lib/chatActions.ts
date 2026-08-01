@@ -4,6 +4,7 @@
  */
 import type { IHVProvider, ModelSource, UIState } from "@/types";
 import { parseJsonFromAiResponse } from "@/lib/aiResponse";
+import { coercePassValue } from "@/lib/auditAutofix";
 
 const IHV_PROVIDERS = new Set<string>([
   "CPUExecutionProvider",
@@ -16,21 +17,9 @@ const IHV_PROVIDERS = new Set<string>([
   "WebGpuExecutionProvider",
 ]);
 
-const CUDA_VERSIONS = new Set(["auto", "cpu", "cu118", "cu121", "cu124", "cu126", "cu128"]);
+const CUDA_VERSIONS = new Set(["auto", "cpu", "cu118", "cu121", "cu124", "cu126", "cu128", "cu130", "cu132"]);
 const MODEL_SOURCES = new Set(["huggingface", "local", "azure"]);
 const MEMORY_OFFLOAD = new Set(["gpu_only", "auto"]);
-
-const PASS_BOOL_KEYS = new Set([
-  "conversion",
-  "quantization",
-  "pruning",
-  "splitting",
-  "onnxTransforms",
-  "peft",
-  "diffusionLora",
-  "gptqDescAct",
-  "awqSym",
-]);
 
 const PASS_STRING_ENUMS: Record<string, Set<string>> = {
   conversionSourceFormat: new Set(["pytorch", "tensorflow", "jax"]),
@@ -46,16 +35,6 @@ const PASS_STRING_ENUMS: Record<string, Set<string>> = {
   qatQuantPrecision: new Set(["int4", "int8"]),
   qatCalibrateMethod: new Set(["minmax", "percentile", "entropy"]),
 };
-
-const PASS_NUMBER_KEYS = new Set([
-  "conversionOpset",
-  "gptqBlockSize",
-  "gptqGroupSize",
-  "awqGroupSize",
-  "awqDampPercent",
-  "qatCalibrateSteps",
-  "pruningSparsity",
-]);
 
 export type ChatActionPatch = {
   ihvProvider?: IHVProvider;
@@ -80,75 +59,22 @@ export type ChatStructuredReply = {
   actions: ChatAction[];
 };
 
-/**
- * Determines whether a value is a non-null object with string keys.
- *
- * @param v - The value to inspect
- * @returns `true` if `v` is a non-null, non-array object, `false` otherwise.
- */
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-const PASS_NUMBER_RANGES: Record<string, { min: number; max: number }> = {
-  conversionOpset: { min: 13, max: 21 },
-  gptqBlockSize: { min: 32, max: 4096 },
-  gptqGroupSize: { min: 32, max: 4096 },
-  awqGroupSize: { min: 32, max: 4096 },
-  awqDampPercent: { min: 0, max: 1 },
-  qatCalibrateSteps: { min: 1, max: 10_000 },
-  pruningSparsity: { min: 0.01, max: 0.99 },
-};
-
-/**
- * Determines whether a numeric pass value falls within its configured range.
- *
- * @param key - The pass field whose range should be checked
- * @param value - The numeric pass value to validate
- * @returns `true` if the pass field is recognized and the value is within its allowed range, `false` otherwise
- */
-function isAllowedPassNumber(key: string, value: number): boolean {
-  const range = PASS_NUMBER_RANGES[key];
-  if (!range) return false;
-  return value >= range.min && value <= range.max;
-}
-
-/**
- * Filters pass settings to supported fields and allowed values.
- *
- * @param raw - The untrusted pass settings to sanitize
- * @returns The valid pass settings, or `undefined` when none are valid
- */
 function sanitizePasses(raw: unknown): Partial<UIState["passes"]> | undefined {
   if (!isRecord(raw)) return undefined;
   const out: Partial<UIState["passes"]> = {};
   for (const [key, value] of Object.entries(raw)) {
-    if (PASS_BOOL_KEYS.has(key) && typeof value === "boolean") {
-      (out as Record<string, unknown>)[key] = value;
-      continue;
-    }
-    if (PASS_NUMBER_KEYS.has(key) && typeof value === "number" && Number.isFinite(value)) {
-      if (isAllowedPassNumber(key, value)) {
-        (out as Record<string, unknown>)[key] = value;
-      }
-      continue;
-    }
-    if (key in PASS_STRING_ENUMS && typeof value === "string") {
-      const allowed = PASS_STRING_ENUMS[key]!;
-      if (allowed.size === 0 || allowed.has(value)) {
-        (out as Record<string, unknown>)[key] = value;
-      }
-    }
+    const coerced = coercePassValue(key, value);
+    if (coerced === null) continue;
+    (out as Record<string, unknown>)[key] = coerced;
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-/**
- * Sanitizes a proposed chat action patch by retaining only recognized and valid fields.
- *
- * @param raw - The untrusted patch value to sanitize
- * @returns A sanitized patch, or `null` when no valid fields are present
- */
+/** Strip unknown keys so Apply never writes garbage into the store. */
 export function sanitizeChatActionPatch(raw: unknown): ChatActionPatch | null {
   if (!isRecord(raw)) return null;
   const patch: ChatActionPatch = {};
@@ -180,13 +106,7 @@ export function sanitizeChatActionPatch(raw: unknown): ChatActionPatch | null {
   return Object.keys(patch).length > 0 ? patch : null;
 }
 
-/**
- * Converts a sanitized chat patch into a partial UI state, preserving related toggle consistency.
- *
- * @param state - The current UI state used to merge pass updates
- * @param patch - The sanitized patch to apply
- * @returns A partial UI state containing the patch updates
- */
+/** Merge a sanitized chat patch into a Partial<UIState> ready for setState. */
 export function chatPatchToUiState(state: UIState, patch: ChatActionPatch): Partial<UIState> {
   const next: Partial<UIState> = {};
   if (patch.ihvProvider) next.ihvProvider = patch.ihvProvider;
@@ -216,11 +136,6 @@ export function chatPatchToUiState(state: UIState, patch: ChatActionPatch): Part
   return next;
 }
 
-/**
- * Creates a concise textual summary of the configured chat action patch.
- *
- * @returns A comma-separated description of the patch values.
- */
 export function summarizeChatPatch(patch: ChatActionPatch): string {
   const bits: string[] = [];
   if (patch.ihvProvider) bits.push(`EP=${patch.ihvProvider}`);
@@ -235,12 +150,6 @@ export function summarizeChatPatch(patch: ChatActionPatch): string {
   return bits.join(", ");
 }
 
-/**
- * Normalizes a quantization precision label to a supported precision value.
- *
- * @param value - The precision label to normalize
- * @returns The normalized precision, or `null` when the label is unsupported
- */
 function normalizeLooseQuantPrecision(value: string): "int4" | "int8" | "fp16" | null {
   const v = value.trim().toLowerCase().replace(/['"]/g, "");
   if (v === "int4" || v === "4bit" || v === "4-bit") return "int4";
@@ -249,12 +158,6 @@ function normalizeLooseQuantPrecision(value: string): "int4" | "int8" | "fp16" |
   return null;
 }
 
-/**
- * Normalizes a quantization method string to a supported value.
- *
- * @param value - The quantization method to normalize
- * @returns The supported quantization method, or `null` when the value is unsupported
- */
 function normalizeLooseQuantMethod(value: string): UIState["passes"]["quantMethod"] | null {
   const v = value.trim().toLowerCase();
   const allowed = PASS_STRING_ENUMS.quantMethod!;
@@ -262,10 +165,8 @@ function normalizeLooseQuantMethod(value: string): UIState["passes"]["quantMetho
 }
 
 /**
- * Recovers an allowlisted chat action patch from loosely structured JSON.
- *
- * @param parsed - JSON value containing possible execution provider, conversion, or quantization settings
- * @returns The sanitized recovered patch, or `null` when no recognized settings are found
+ * Small local models often invent custom step schemas instead of `actions[].patch`.
+ * Walk loose JSON and map known fields onto an allowlisted ChatActionPatch.
  */
 export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatActionPatch | null {
   const passes: Partial<UIState["passes"]> = {};
@@ -306,18 +207,6 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
             passes.quantization = true;
             passes.quantMethod = method;
           }
-        }
-      }
-
-      // Loose schemas often put the action name in `step` / `action` values.
-      if ((key === "step" || key === "action") && typeof value === "string") {
-        const step = value.trim().toLowerCase();
-        if (/quant|awq|gptq|ptq|hqq|rtn|int[48]/.test(step)) {
-          passes.quantization = true;
-          passes.quantMethod = passes.quantMethod ?? "ptq";
-        }
-        if (/convert|onnx/.test(step)) {
-          passes.conversion = true;
         }
       }
 
@@ -375,21 +264,10 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
   return Object.keys(patch).length > 0 ? sanitizeChatActionPatch(patch) : null;
 }
 
-/**
- * Determines whether an object contains fields associated with a structured chat response.
- *
- * @returns `true` if the object has a string `reply` or `text` field, or an array `actions` field, `false` otherwise.
- */
 function looksLikeStructuredChatEnvelope(parsed: Record<string, unknown>): boolean {
   return typeof parsed.reply === "string" || typeof parsed.text === "string" || Array.isArray(parsed.actions);
 }
 
-/**
- * Removes Apply-button instructions from chat text.
- *
- * @param text - The chat text to clean
- * @returns The text without misleading Apply-button instructions
- */
 function stripMisleadingApplyInstructions(text: string): string {
   return text
     .replace(/\n*To make these changes:[^\n]*Apply[^\n]*\n*/gi, "\n")
@@ -398,12 +276,6 @@ function stripMisleadingApplyInstructions(text: string): string {
     .trim();
 }
 
-/**
- * Parses an assistant response into display text and applyable Olive Studio actions.
- *
- * @param rawText - The raw assistant response, which may contain structured JSON or plain text
- * @returns The normalized reply text and up to five sanitized actions recovered from the response
- */
 export function parseChatStructuredReply(rawText: string): ChatStructuredReply {
   let parsed: unknown;
   try {

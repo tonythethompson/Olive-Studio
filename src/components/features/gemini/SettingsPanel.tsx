@@ -68,15 +68,11 @@ interface SettingsModeTabsProps {
  */
 function SettingsModeTabs({ mode, onChange }: SettingsModeTabsProps) {
   return (
-    <div
-      className="flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-950 p-0.5"
-      role="tablist"
-      aria-label="Settings mode"
-    >
+    <div className="flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-950 p-0.5">
       <button
         type="button"
-        role="tab"
-        aria-selected={mode === "local"}
+        aria-label="Local settings"
+        aria-pressed={mode === "local"}
         onClick={() => onChange("local")}
         className={`flex-1 cursor-pointer rounded-md px-3 py-2 text-xs font-bold transition-all ${
           mode === "local"
@@ -88,8 +84,8 @@ function SettingsModeTabs({ mode, onChange }: SettingsModeTabsProps) {
       </button>
       <button
         type="button"
-        role="tab"
-        aria-selected={mode === "cloud"}
+        aria-label="Cloud settings"
+        aria-pressed={mode === "cloud"}
         onClick={() => onChange("cloud")}
         className={`flex-1 cursor-pointer rounded-md px-3 py-2 text-xs font-bold transition-all ${
           mode === "cloud"

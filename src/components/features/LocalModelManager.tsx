@@ -30,7 +30,7 @@ export function LocalModelManager({
   emptyHint?: string;
 }) {
   const [models, setModels] = useState<Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }>>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -183,9 +183,15 @@ export function LocalModelManager({
         throw new Error(d.error || `HTTP ${r.status}`);
       }
       await refresh();
-      if (onActivate) await onActivate(modelTag, source);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Load failed");
+      setBusy(null);
+      return;
+    }
+    try {
+      if (onActivate) await onActivate(modelTag, source);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Activation failed");
     } finally {
       setBusy(null);
     }

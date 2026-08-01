@@ -55,6 +55,27 @@ describe("ProviderErrorBlock", () => {
 
     // Shows the message
     expect(screen.getByText("Something went wrong during optimization")).toBeDefined();
+    expect(screen.getByText(/verify the configured endpoint/i)).toBeDefined();
+  });
+
+  it("does not treat Unexpected token text as a model JSON classification", () => {
+    render(<ProviderErrorBlock msg="Unexpected token < in JSON at position 0" onGoSettings={vi.fn()} />);
+    expect(screen.queryByText("Model returned invalid JSON")).toBeNull();
+    expect(screen.queryByText(/connection is fine/i)).toBeNull();
+    expect(screen.getByText("Error")).toBeDefined();
+    expect(screen.getByText(/verify the configured endpoint/i)).toBeDefined();
+  });
+
+  it("shows model JSON guidance only when kind is structured", () => {
+    render(
+      <ProviderErrorBlock
+        msg="AI response was not valid JSON"
+        kind="invalid_model_json"
+        onGoSettings={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Model returned invalid JSON")).toBeDefined();
+    expect(screen.queryByText(/connection is fine/i)).toBeNull();
   });
 
   it("shows env var hints for provider errors", () => {

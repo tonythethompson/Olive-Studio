@@ -509,19 +509,8 @@
       "title": "Disk full during Olive export or cache write",
       "root_cause": "ONNX external data, cache_dir, or Hugging Face downloads filled the volume.",
       "solution": "Free disk space; point cache_dir to a larger volume; enable use_external_data_format only when needed and clean old experiment caches.",
-      "updated_config": {
-        "engine": {
-          "cache_dir": "~/.cache/olive/cleanup_me"
-        },
-        "passes": {
-          "OnnxConversion": {
-            "params": {
-              "use_external_data_format": true
-            }
-          }
-        }
-      },
-      "applyable": true
+      "updated_config": {},
+      "applyable": false
     },
     {
       "id": "olive-cudnn-cuda-mismatch",
@@ -564,16 +553,8 @@
       "title": "bitsandbytes CUDA setup failed",
       "root_cause": "QLoRA / 4-bit load paths need a working bitsandbytes build matching the GPU toolchain.",
       "solution": "Install a CUDA-capable bitsandbytes wheel for your platform, or disable QLoRA and use full-precision LoRA / GPTQ-AWQ paths that do not need BNB.",
-      "updated_config": {
-        "passes": {
-          "LoRA": {
-            "params": {
-              "lora_rank": 16
-            }
-          }
-        }
-      },
-      "applyable": true
+      "updated_config": {},
+      "applyable": false
     },
     {
       "id": "olive-triton-missing",
@@ -633,16 +614,8 @@
       "title": "GPU device busy or unavailable to Olive",
       "root_cause": "Another process holds the GPU, or CUDA_VISIBLE_DEVICES hides all devices.",
       "solution": "Stop competing GPU jobs; check CUDA_VISIBLE_DEVICES; retry with a smaller calibration batch or CPU fallback for conversion-only steps.",
-      "updated_config": {
-        "passes": {
-          "OnnxQuantization": {
-            "params": {
-              "calibration_sampling_size": 16
-            }
-          }
-        }
-      },
-      "applyable": true
+      "updated_config": {},
+      "applyable": false
     }
   ]
 }

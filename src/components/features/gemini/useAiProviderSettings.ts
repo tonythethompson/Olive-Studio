@@ -440,7 +440,15 @@ export function useAiProviderSettings({
     const cloudflareAccountId = settingsCloudflareAccountId.trim();
     const allowEmptyKey =
       settingsProvider === "openai-compat" ||
-      Boolean(resolvedBaseUrl && /localhost|127\.0\.0\.1/i.test(resolvedBaseUrl));
+      (() => {
+        if (!resolvedBaseUrl) return false;
+        try {
+          const host = new URL(resolvedBaseUrl).hostname.replace(/^\[|\]$/g, "").toLowerCase();
+          return host === "localhost" || host === "127.0.0.1" || host === "::1";
+        } catch {
+          return false;
+        }
+      })();
     if (settingsProvider === "cloudflare") {
       if (!key) {
         setProviderSaveError("Enter a Cloudflare API token.");
@@ -482,7 +490,6 @@ export function useAiProviderSettings({
           apiKey: key || undefined,
           model,
           baseUrl: resolvedBaseUrl,
-          ...(settingsProvider === "cloudflare" ? { accountId: cloudflareAccountId } : {}),
         }),
       });
       const contentType = r.headers.get("content-type") ?? "";

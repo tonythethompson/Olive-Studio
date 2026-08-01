@@ -45,6 +45,7 @@ describe("buildRecipeFromState", () => {
     expect(result).toHaveProperty("validation");
     expect(result).toHaveProperty("schema");
     expect(result).toHaveProperty("advisories");
+    expect(result).toHaveProperty("localExecutionIssues");
     expect(result).toHaveProperty("isRunnable");
   });
 

@@ -84,6 +84,8 @@ describe("buildAiWorkspaceContext", () => {
     expect(ctx.infrastructure.cacheDir).toBe("[REDACTED]");
     expect(ctx.recipeSnapshot?.jsonPreview).toContain("[REDACTED]");
     expect(ctx.recipeSnapshot?.jsonPreview).not.toContain("AccountKey");
+    expect(ctx.recipeSnapshot?.jsonPreview).not.toContain(secret);
+    expect(ctx.recipeSnapshot?.jsonPreview).not.toContain("abc123==");
   });
 
   it("summarizes GPU in the compact badge line", () => {

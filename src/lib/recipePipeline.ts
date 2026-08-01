@@ -17,6 +17,8 @@ export interface RecipePipelineResult {
   validation: PipelineValidationResult;
   schema: OliveRecipeSchemaResult;
   advisories: ReturnType<typeof getRemainingAdvisories>;
+  /** Local-only blockers (e.g. WebGPU Execute Live) not covered by graph validation alone. */
+  localExecutionIssues: ReturnType<typeof getLocalExecutionIssues>;
   isRunnable: boolean;
 }
 
@@ -45,6 +47,7 @@ export function buildRecipeFromState(
     validation,
     schema,
     advisories: getRemainingAdvisories(sanitized),
+    localExecutionIssues,
     isRunnable: !validation.isBlocked && localExecutionIssues.length === 0 && schema.valid,
   };
 }

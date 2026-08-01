@@ -196,6 +196,29 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
         }
       }
 
+      buf += decoder.decode();
+      if (buf.trim()) {
+        try {
+          const evt = JSON.parse(buf) as {
+            type?: string;
+            message?: string;
+            ok?: boolean;
+            error?: string;
+          };
+          if (evt.type === "log" && evt.message) {
+            lastLog = evt.message;
+            setMessage(evt.message);
+          }
+          if (evt.type === "done") {
+            finalOk = evt.ok !== false;
+            finalError = evt.error;
+            if (evt.message) lastLog = evt.message;
+          }
+        } catch {
+          /* ignore trailing non-JSON */
+        }
+      }
+
       if (finalOk === false) {
         throw new Error(finalError || lastLog || "Venv install failed");
       }

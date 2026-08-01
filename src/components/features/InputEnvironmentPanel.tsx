@@ -26,6 +26,7 @@ import {
   type RecipeCatalogItem,
 } from "@/lib/oliveRecipeHub";
 import { parseRecipeJson } from "@/lib/recipePipeline";
+import { getFileDetailedInfo as resolveFileDetailedInfo } from "@/lib/localFileDetails";
 import { cn } from "@/lib/utils";
 import {
   buildLocalModelHints,
@@ -79,20 +80,6 @@ interface ReconstructedItem {
   finalHash: string;
   chunks: { name: string; size: number; hash: string }[];
   reconstructedAt: string;
-}
-
-/** Lineage for an archived chunk points back at the assembled model. */
-type ArchivedChunkLineage = ReconstructedItem & { parent: string };
-
-type FileDetailLineage = ReconstructedItem | ArchivedChunkLineage;
-
-interface FileDetailedInfo {
-  name: string;
-  size: number;
-  status: string;
-  isChunk: boolean;
-  reconstructed: boolean;
-  lineage: FileDetailLineage | null;
 }
 
 /**
@@ -486,18 +473,15 @@ export function InputEnvironmentPanel({
     return item.repoPath.toLowerCase().includes(repoPath.toLowerCase());
   }).slice(0, 40);
 
-  // Helper to get hash from reconstructed history (or a placeholder for local files)
-  const getDisplayHash = (name: string) => {
-    // Check reconstructed history for real hash
+  // Helper to get hash from reconstructed history (null when no digest exists)
+  const getDisplayHash = (name: string): string | null => {
     const recon = reconstructedHistory.find((r) => r.baseName === name);
     if (recon) return recon.finalHash;
-    // Check chunk hashes within reconstructed history
     for (const r of reconstructedHistory) {
       const chunk = r.chunks.find((c) => c.name === name);
       if (chunk) return chunk.hash;
     }
-    // For non-reconstructed local files, return a placeholder indicating no hash computed
-    return `sha256:(not yet computed — reconstruct to get real hash)`;
+    return null;
   };
 
   const getFileFormatLabel = (name: string) => {
@@ -551,7 +535,10 @@ export function InputEnvironmentPanel({
           key: "memory_footprint",
           val: `${(size / (1024 * 1024)).toFixed(1)} MB`,
         },
-        { key: "segment_checksum", val: "Verified Integrity" },
+        {
+          key: "segment_checksum",
+          val: getDisplayHash(name) ? "SHA-256 verified" : "Not hashed",
+        },
       ];
     }
     if (name.endsWith(".json")) {
@@ -667,6 +654,7 @@ export function InputEnvironmentPanel({
       const totalBytes = sortedFiles.reduce((acc, f) => acc + f.size, 0);
       let bytesRead = 0;
       const buffers: ArrayBuffer[] = [];
+      const generatedChunks: { name: string; size: number; hash: string }[] = [];
 
       for (const fileMeta of sortedFiles) {
         const fileObj = chunkFilesRef.current.get(fileMeta.name);
@@ -675,6 +663,15 @@ export function InputEnvironmentPanel({
         }
         const buffer = await fileObj.arrayBuffer();
         buffers.push(buffer);
+        const chunkDigest = await crypto.subtle.digest("SHA-256", buffer);
+        const chunkHex = Array.from(new Uint8Array(chunkDigest))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+        generatedChunks.push({
+          name: fileMeta.name,
+          size: fileMeta.size,
+          hash: `sha256:${chunkHex}`,
+        });
         bytesRead += buffer.byteLength;
         setReconstructProgress(Math.round((bytesRead / totalBytes) * 100));
       }
@@ -691,13 +688,6 @@ export function InputEnvironmentPanel({
       const hashArray = Array.from(new Uint8Array(hashBuffer));
       const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
       const finalHash = `sha256:${hashHex}`;
-
-      // Build chunk metadata with real sizes
-      const generatedChunks = sortedFiles.map((file) => ({
-        name: file.name,
-        size: file.size,
-        hash: `sha256:chunk-${file.name}`,
-      }));
 
       setReconstructedHistory((prev) => [
         ...prev,
@@ -735,54 +725,9 @@ export function InputEnvironmentPanel({
         ? reconstructedHistory[0].baseName
         : null);
 
-  // Find file in local files or in reconstructed history or as part of chunks
-  const getFileDetailedInfo = (name: string | null): FileDetailedInfo | null => {
-    if (!name) return null;
-
-    // Check in active localFiles
-    const active = state.localFiles.find((f) => f.name === name);
-    if (active) {
-      return {
-        name: active.name,
-        size: active.size,
-        status: "Local Asset",
-        isChunk: getBaseName(active.name) !== null,
-        reconstructed: false,
-        lineage: null,
-      };
-    }
-
-    // Check in reconstructed items
-    const recon = reconstructedHistory.find((r) => r.baseName === name);
-    if (recon) {
-      return {
-        name: recon.baseName,
-        size: recon.totalSize,
-        status: "Reconstructed Binary",
-        isChunk: false,
-        reconstructed: true,
-        lineage: recon,
-      };
-    }
-
-    // Check in chunks of reconstructed history
-    for (const r of reconstructedHistory) {
-      const chunk = r.chunks.find((c) => c.name === name);
-      if (chunk) {
-        const lineage: ArchivedChunkLineage = { parent: r.baseName, ...r };
-        return {
-          name: chunk.name,
-          size: chunk.size,
-          status: "Archived Chunk Segment",
-          isChunk: true,
-          reconstructed: false,
-          lineage,
-        };
-      }
-    }
-
-    return null;
-  };
+  // Prefer reconstructed history when the same baseName also appears in localFiles.
+  const getFileDetailedInfo = (name: string | null) =>
+    resolveFileDetailedInfo(name, state.localFiles, reconstructedHistory);
 
   const selectedFileDetailed = getFileDetailedInfo(activeFileSelectedName);
 
@@ -1024,6 +969,7 @@ export function InputEnvironmentPanel({
                           {recipeSearch && (
                             <button
                               type="button"
+                              aria-label="Clear recipe search"
                               onClick={() => setRecipeSearch("")}
                               className="absolute right-3 top-2.5 text-slate-500 hover:text-white cursor-pointer"
                             >
@@ -1750,7 +1696,7 @@ export function InputEnvironmentPanel({
                                     isCurSelected
                                       ? "bg-electric-blue/10 border-electric-blue/60 shadow-sm ring-1 ring-electric-blue/25"
                                       : isChunk
-                                        ? "bg-slate-900 border-electric-blue/25 hover:border-slate-705 hover:bg-slate-900/80"
+                                        ? "bg-slate-900 border-electric-blue/25 hover:border-slate-700 hover:bg-slate-900/80"
                                         : "bg-slate-950 border-slate-800 hover:border-slate-700 hover:bg-slate-950/80"
                                   }`}
                                 >
@@ -2008,26 +1954,38 @@ export function InputEnvironmentPanel({
                                             Verification Checksum
                                           </span>
                                           <div className="flex items-center gap-1.5 mt-0.5">
-                                            <span
-                                              className="text-[11px] font-semibold font-mono text-emerald-400 bg-emerald-500/5 px-1.5 py-0.5 border border-emerald-500/10 rounded truncate max-w-[170px]"
-                                              title={getDisplayHash(selectedFileDetailed.name)}
-                                            >
-                                              {getDisplayHash(selectedFileDetailed.name).substring(0, 24)}...
-                                            </span>
-                                            <button
-                                              type="button"
-                                              aria-label="Copy verification checksum"
-                                              onClick={() =>
-                                                handleCopyHash(getDisplayHash(selectedFileDetailed.name))
+                                            {(() => {
+                                              const displayHash = getDisplayHash(selectedFileDetailed.name);
+                                              if (!displayHash) {
+                                                return (
+                                                  <span className="text-[11px] font-mono text-slate-500 px-1.5 py-0.5 border border-slate-800 rounded">
+                                                    not hashed
+                                                  </span>
+                                                );
                                               }
-                                              className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-900 transition-colors cursor-pointer"
-                                            >
-                                              {copiedHash === getDisplayHash(selectedFileDetailed.name) ? (
-                                                <Check className="h-3.5 w-3.5 text-emerald-400" />
-                                              ) : (
-                                                <Copy className="h-3.5 w-3.5" />
-                                              )}
-                                            </button>
+                                              return (
+                                                <>
+                                                  <span
+                                                    className="text-[11px] font-semibold font-mono text-emerald-400 bg-emerald-500/5 px-1.5 py-0.5 border border-emerald-500/10 rounded truncate max-w-[170px]"
+                                                    title={displayHash}
+                                                  >
+                                                    {displayHash.substring(0, 24)}...
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    aria-label="Copy verification checksum"
+                                                    onClick={() => handleCopyHash(displayHash)}
+                                                    className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-900 transition-colors cursor-pointer"
+                                                  >
+                                                    {copiedHash === displayHash ? (
+                                                      <Check className="h-3.5 w-3.5 text-emerald-400" />
+                                                    ) : (
+                                                      <Copy className="h-3.5 w-3.5" />
+                                                    )}
+                                                  </button>
+                                                </>
+                                              );
+                                            })()}
                                           </div>
                                         </div>
                                         <div className="col-span-1 sm:col-span-2 border-t border-slate-900/60 pt-2.5 mt-1">

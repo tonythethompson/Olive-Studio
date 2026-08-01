@@ -62,12 +62,6 @@ const PASS_ALIASES: Array<{ pattern: RegExp; key: string }> = [
   { pattern: /^ihvProvider$/i, key: "ihvProvider" },
 ];
 
-/**
- * Removes navigation and `passes.` prefixes from an audit pass path.
- *
- * @param pass - The pass path to normalize
- * @returns The pass path without recognized prefixes
- */
 function stripPassPrefix(pass: string): string {
   return pass
     .trim()
@@ -76,12 +70,6 @@ function stripPassPrefix(pass: string): string {
     .replace(/^passes\./i, "");
 }
 
-/**
- * Resolves an audit autofix path to its recognized UI state key.
- *
- * @param pass - The audit autofix path or field name to resolve
- * @returns The corresponding UI state key, or `null` when the path is unrecognized
- */
 export function canonicalizeAutofixPass(pass: string): string | null {
   const raw = pass.trim();
   if (!raw) return null;
@@ -104,12 +92,6 @@ export function canonicalizeAutofixPass(pass: string): string | null {
   return null;
 }
 
-/**
- * Converts a scalar string to a boolean or number when it matches a supported literal; otherwise preserves the string.
- *
- * @param value - The scalar text to convert
- * @returns The corresponding boolean, number, or original string value
- */
 function parseScalar(value: string): string | number | boolean {
   if (value === "true") return true;
   if (value === "false") return false;
@@ -119,12 +101,79 @@ function parseScalar(value: string): string | number | boolean {
   return value;
 }
 
-/**
- * Normalizes common floating-point data type names to their canonical forms.
- *
- * @param value - The data type name to normalize
- * @returns The canonical data type name, or the trimmed input when it is not recognized
- */
+const PASS_BOOL_COERCE = new Set([
+  "conversion",
+  "quantization",
+  "pruning",
+  "splitting",
+  "onnxTransforms",
+  "peft",
+  "diffusionLora",
+  "gptqDescAct",
+  "awqSym",
+]);
+
+const PASS_STRING_COERCE: Record<string, Set<string>> = {
+  conversionSourceFormat: new Set(["pytorch", "tensorflow", "jax"]),
+  conversionFormat: new Set(["onnx", "openvino", "qnn", "tensorrt"]),
+  conversionInputTargetTypes: new Set(),
+  quantMethod: new Set(["ptq", "awq", "qat", "gptq", "hqq", "rtn", "spinquant", "quarot"]),
+  quantPrecision: new Set(["int4", "int8", "fp16"]),
+  quantPreset: new Set(),
+  pruningType: new Set(["structured", "unstructured"]),
+  pruningMethod: new Set(["magnitude", "sparsegpt", "wanda"]),
+  pruningCriteria: new Set(["l1_norm", "l2_norm"]),
+  peftMethod: new Set(["lora", "qlora"]),
+  qatQuantPrecision: new Set(["int4", "int8"]),
+  qatCalibrateMethod: new Set(["minmax", "percentile", "entropy"]),
+};
+
+const PASS_NUMBER_COERCE: Record<string, { min: number; max: number }> = {
+  conversionOpset: { min: 13, max: 21 },
+  gptqBlockSize: { min: 32, max: 4096 },
+  gptqGroupSize: { min: 32, max: 4096 },
+  awqGroupSize: { min: 32, max: 4096 },
+  awqDampPercent: { min: 0, max: 1 },
+  qatCalibrateSteps: { min: 1, max: 10_000 },
+  pruningSparsity: { min: 0.01, max: 0.99 },
+};
+
+const FREE_PASS_STRING_RE = /^[\w.\-/:+=,\s]+$/i;
+
+/** Coerce a pass field to a safe UI value, or null when the value cannot be applied. */
+export function coercePassValue(key: string, raw: unknown): string | number | boolean | null {
+  if (PASS_BOOL_COERCE.has(key)) {
+    if (typeof raw === "boolean") return raw;
+    if (raw === "true" || raw === "false") return raw === "true";
+    return null;
+  }
+  if (key in PASS_NUMBER_COERCE) {
+    const n =
+      typeof raw === "number"
+        ? raw
+        : typeof raw === "string" && raw.trim() !== "" && /^-?\d+(\.\d+)?$/.test(raw.trim())
+          ? Number(raw.trim())
+          : NaN;
+    if (!Number.isFinite(n)) return null;
+    const range = PASS_NUMBER_COERCE[key]!;
+    if (n < range.min || n > range.max) return null;
+    return n;
+  }
+  if (key in PASS_STRING_COERCE) {
+    if (typeof raw !== "string" && typeof raw !== "number") return null;
+    const trimmed = String(raw).trim();
+    if (!trimmed) return null;
+    const allowed = PASS_STRING_COERCE[key]!;
+    if (allowed.size === 0) {
+      if (trimmed.length > 128 || !FREE_PASS_STRING_RE.test(trimmed)) return null;
+      return trimmed.slice(0, 128);
+    }
+    if (trimmed.length > 256) return null;
+    return allowed.has(trimmed) ? trimmed : null;
+  }
+  return null;
+}
+
 function normalizeDtype(value: string): string {
   const v = value.trim().toLowerCase().replace(/['"]/g, "");
   if (v === "fp16" || v === "float16" || v === "half") return "float16";
@@ -133,12 +182,6 @@ function normalizeDtype(value: string): string {
   return value.trim();
 }
 
-/**
- * Normalizes a quantization precision value to a supported representation.
- *
- * @param value - The precision value to normalize
- * @returns The normalized precision, or `null` when the value is unsupported
- */
 function normalizeQuantPrecision(value: string): "int4" | "int8" | "fp16" | null {
   const v = value.trim().toLowerCase().replace(/['"]/g, "");
   if (v === "int4" || v === "4bit") return "int4";
@@ -158,12 +201,6 @@ const QUANT_METHODS = new Set<UIState["passes"]["quantMethod"]>([
   "quarot",
 ]);
 
-/**
- * Normalizes a quantization method value.
- *
- * @param value - The quantization method to normalize
- * @returns The normalized quantization method, or `null` for an unsupported value
- */
 function normalizeQuantMethod(value: string): UIState["passes"]["quantMethod"] | null {
   const v = value.trim().toLowerCase().replace(/['"]/g, "") as UIState["passes"]["quantMethod"];
   return QUANT_METHODS.has(v) ? v : null;
@@ -188,16 +225,12 @@ const CUDA_VERSIONS = new Set<UIState["cudaVersion"]>([
   "cu124",
   "cu126",
   "cu128",
+  "cu130",
+  "cu132",
 ]);
 const MEMORY_OFFLOADS = new Set<UIState["memoryOffload"]>(["gpu_only", "auto"]);
 const MODEL_SOURCES = new Set<UIState["modelSource"]>(["huggingface", "local", "azure"]);
 
-/**
- * Normalizes an execution provider name to a supported IHV provider identifier.
- *
- * @param value - The provider name or recognized alias
- * @returns The canonical provider identifier, or `null` for an unrecognized value
- */
 function normalizeIhvProvider(value: string): IHVProvider | null {
   const raw = value.trim();
   if (IHV_PROVIDERS.has(raw as IHVProvider)) return raw as IHVProvider;
@@ -225,11 +258,7 @@ function normalizeIhvProvider(value: string): IHVProvider | null {
 }
 
 /**
- * Builds a validated `UIState` patch from an audit autofix suggestion.
- *
- * @param autofix - The audit pass and proposed value to apply
- * @param state - The current pass and IHV provider state
- * @returns A partial `UIState` patch, or `null` when the suggestion is unsupported or invalid
+ * Build a UIState patch for an audit autofix, or null if it cannot be applied safely.
  */
 export function resolveAuditAutofix(
   autofix: AuditAutofixInput,
@@ -314,21 +343,15 @@ export function resolveAuditAutofix(
     nextPasses.quantMethod = method;
     if (method === "awq") nextPasses.pruning = false;
   } else {
+    const coerced = coercePassValue(key, parseScalar(value));
+    if (coerced === null) return null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (nextPasses as any)[key] = parseScalar(value);
+    (nextPasses as any)[key] = coerced;
   }
 
   return { passes: nextPasses };
 }
 
-/**
- * Resolves a JSON autofix object into a partial UI state patch.
- *
- * @param pass - The top-level state field targeted by the autofix
- * @param obj - The JSON fields and values to apply
- * @param state - The current pass configuration used to build the updated patch
- * @returns A partial UI state patch, or `null` when the values are invalid or contain no recognized fields
- */
 function resolveJsonAutofix(
   pass: string,
   obj: Record<string, unknown>,
@@ -360,12 +383,10 @@ function resolveJsonAutofix(
   }
 
   const passPatch: Partial<UIState["passes"]> = {};
-  let touched = false;
   for (const [k, v] of Object.entries(obj)) {
     const canon = canonicalizeAutofixPass(k) ?? (PASS_KEYS.has(k) ? k : null);
     if (!canon || canon.startsWith("__") || TOP_LEVEL.has(canon)) continue;
     if (!PASS_KEYS.has(canon)) continue;
-    touched = true;
     if (canon === "conversionInputTargetTypes" && typeof v === "string") {
       passPatch.conversion = true;
       passPatch.conversionInputTargetTypes = normalizeDtype(v);
@@ -388,21 +409,18 @@ function resolveJsonAutofix(
       passPatch.quantMethod = method;
       if (method === "awq") passPatch.pruning = false;
     } else {
+      const coerced = coercePassValue(canon, v);
+      if (coerced === null) continue;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (passPatch as any)[canon] = v;
+      (passPatch as any)[canon] = coerced;
     }
   }
 
-  if (!touched) return null;
+  if (Object.keys(passPatch).length === 0) return null;
   return { passes: { ...state.passes, ...passPatch } };
 }
 
-/**
- * Determines whether an audit autofix suggestion can be applied to the UI state.
- *
- * @param autofix - The audit autofix suggestion to validate
- * @returns `true` if the suggestion has a recognized, non-rejected pass and a valid value, `false` otherwise
- */
+/** True when Apply can write a real UI field for this suggestion. */
 export function isAuditAutofixApplyable(autofix: AuditAutofixInput | undefined | null): boolean {
   if (!autofix?.pass) return false;
   const key = canonicalizeAutofixPass(autofix.pass);

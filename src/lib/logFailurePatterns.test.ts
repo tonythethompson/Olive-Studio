@@ -23,10 +23,9 @@ describe("matchLocalLogDiagnostic", () => {
     expect(d!.evidence.some((e) => /KeyError|Unknown task/i.test(e))).toBe(true);
   });
 
-  it("does not treat non-speech unknown tasks as the speech fix", () => {
+  it("does not treat non-speech unknown tasks as the speech studio fix", () => {
     const logs = [
-      "Traceback (most recent call last):",
-      "KeyError: \"Unknown task text-classificationX, available tasks are ['automatic-speech-recognition', ...]\"",
+      "KeyError: \"Unknown task image-classification, available tasks are ['automatic-speech-recognition', ...]\"",
     ];
     const d = matchLocalLogDiagnostic(logs);
     expect(d).not.toBeNull();

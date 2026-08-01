@@ -3,17 +3,26 @@ import {
   useRef,
   useEffect,
   useLayoutEffect,
+  useMemo,
+  useCallback,
   useTransition,
   Suspense,
   lazy,
+  type Dispatch,
   type MouseEvent as ReactMouseEvent,
+  type SetStateAction,
 } from "react";
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
 import { UIState } from "@/types";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";
 import { applyMcpDiagnosticToUiState, canApplyMcpDiagnostic } from "@/lib/mcpConfigMapping";
-import { expandLogSelection, isStudioHfTaskSpeechFix, logsIndicateFailure } from "@/lib/logFailurePatterns";
+import {
+  expandLogSelection,
+  isFailureLine,
+  isStudioHfTaskSpeechFix,
+  logsIndicateFailure,
+} from "@/lib/logFailurePatterns";
 import { DiagnosisHistory, type DiagnosisEntry } from "./DiagnosisHistory";
 import { MCPDiagnosticCard } from "./MCPDiagnosticCard";
 import {
@@ -47,6 +56,7 @@ import JSZip from "jszip";
 import { cn } from "@/lib/utils";
 
 import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
+import { buildOwrConfigs } from "@/lib/owrExportConfigs";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { GpuMetricsBar } from "@/components/features/GpuMetricsBar";
@@ -122,7 +132,17 @@ export function ExecutionWorkspace({
   // Live execution state
   const [liveJobId, setLiveJobId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [executionLogs, setExecutionLogs] = useState<string[]>([]);
+  const [executionLogs, setExecutionLogsState] = useState<string[]>([]);
+  const executionLogsRef = useRef<string[]>([]);
+  // Keep the ref in sync inside the state updater so the SSE "done" handler
+  // can read the latest lines before effects flush.
+  const setExecutionLogs: Dispatch<SetStateAction<string[]>> = useCallback((update) => {
+    setExecutionLogsState((prev) => {
+      const next = typeof update === "function" ? update(prev) : update;
+      executionLogsRef.current = next;
+      return next;
+    });
+  }, []);
   const [executionStatus, setExecutionStatus] = useState<
     "idle" | "running" | "completed" | "failed" | "cancelled"
   >("idle");
@@ -134,6 +154,8 @@ export function ExecutionWorkspace({
   const [recipeView, setRecipeViewRaw] = useState<"graph" | "json" | "browser-test" | "benchmark">("graph");
   const [visitedRecipeViews, setVisitedRecipeViews] = useState<Set<string>>(new Set(["graph"]));
   const [moreToolsOpen, setMoreToolsOpen] = useState(false);
+  const moreToolsContainerRef = useRef<HTMLDivElement | null>(null);
+  const moreToolsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [, startRecipeTransition] = useTransition();
   const setRecipeView = (view: "graph" | "json" | "browser-test" | "benchmark") => {
     startRecipeTransition(() => {
@@ -248,17 +270,7 @@ export function ExecutionWorkspace({
       if (executionLogs.length > 0) {
         const errorIndices = new Set<number>();
         for (let i = 0; i < executionLogs.length; i++) {
-          const line = executionLogs[i];
-          if (
-            line.includes("[ERROR]") ||
-            line.includes("Traceback") ||
-            line.includes("Exception") ||
-            line.includes("Error:") ||
-            line.includes("error:") ||
-            line.includes("KeyError") ||
-            line.includes("Unknown task") ||
-            line.includes("FAILED")
-          ) {
+          if (isFailureLine(executionLogs[i]!)) {
             errorIndices.add(i);
           }
         }
@@ -309,16 +321,20 @@ export function ExecutionWorkspace({
   useEffect(() => {
     if (executionStatus === "failed" && executionLogs.length > 0 && !autoDiagnoseRef.current) {
       autoDiagnoseRef.current = true;
-      const logs =
-        selectedLogIndices.size > 0
-          ? expandLogSelection(executionLogs, Array.from(selectedLogIndices))
-          : executionLogs;
+      // Derive failure-line indices here (do not wait for the selection layout effect).
+      const errorIndices: number[] = [];
+      for (let i = 0; i < executionLogs.length; i++) {
+        if (isFailureLine(executionLogs[i]!)) {
+          errorIndices.push(i);
+        }
+      }
+      const logs = errorIndices.length > 0 ? expandLogSelection(executionLogs, errorIndices) : executionLogs;
       void fetchKeyedDiagnostic("current", logs);
     }
     if (executionStatus !== "failed") {
       autoDiagnoseRef.current = false;
     }
-  }, [executionStatus, executionLogs, selectedLogIndices, fetchKeyedDiagnostic]);
+  }, [executionStatus, executionLogs, fetchKeyedDiagnostic]);
 
   // Auto-save completed diagnoses to history
   const prevDiagnosticRef = useRef(mcpDiagnostic);
@@ -380,173 +396,39 @@ export function ExecutionWorkspace({
       .catch(() => setHardwareProbe(null));
   }, []);
 
-  // Dynamic generation helper for OWR Config Bundle
-  const getOwrConfigs = () => {
-    const rawModelId = state.hfModelId || (state.localFiles && state.localFiles[0]?.name) || "model";
-    const modelName = rawModelId.split("/").pop() || "model";
-
-    // Deduce architecture
-    let architecture = "DecoderLLM";
-    const nameLower = modelName.toLowerCase();
-    if (nameLower.includes("llama")) architecture = "Llama";
-    else if (nameLower.includes("phi")) architecture = "Phi";
-    else if (nameLower.includes("whisper")) architecture = "Whisper";
-    else if (nameLower.includes("resnet")) architecture = "ResNet";
-    else if (nameLower.includes("mobilenet")) architecture = "MobileNet";
-    else if (nameLower.includes("bert")) architecture = "BERT";
-    else if (nameLower.includes("stable") || nameLower.includes("diffusion"))
-      architecture = "Stable Diffusion";
-
-    const ortConfig = {
-      model_path: owrPlatform === "web" ? "models/optimized/model.onnx" : "models/optimized/model.ort",
-      session_options: {
-        execution_mode: "ORT_SEQUENTIAL",
-        execution_providers:
-          owrPlatform === "web"
-            ? owrVramMode === "performance"
-              ? ["WebGPUExecutionProvider", "WasmExecutionProvider"]
-              : ["WasmExecutionProvider"]
-            : ["XnnpackExecutionProvider", "NnapiExecutionProvider"],
-        graph_optimization_level: "ORT_ENABLE_ALL",
-        intra_op_num_threads: parseInt(owrThreads) || 4,
-        inter_op_num_threads: 1,
-        log_id: owrPlatform === "web" ? "onnxruntime_web" : "onnxruntime_mobile",
-        enable_profiling: false,
-        enable_mem_pattern: true,
-        enable_cpu_mem_arena: true,
-      },
-      run_options: {
-        log_severity_level: 2,
-      },
+  useEffect(() => {
+    if (!moreToolsOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && moreToolsContainerRef.current?.contains(target)) return;
+      setMoreToolsOpen(false);
     };
-
-    const manifestConfig = {
-      manifest_version: "1.0.0",
-      generator: "Olive OWR Cross-Compiling Exporter",
-      export_date: new Date().toISOString(),
-      model_metadata: {
-        name: modelName,
-        architecture: architecture,
-        quantization: state.passes.quantization ? state.passes.quantPrecision : "none",
-        precision: state.passes.conversionInputTargetTypes || "float32",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        passes_applied: Object.keys(state.passes).filter((k) => (state.passes as any)[k]),
-      },
-      deployment_requirements: {
-        runtime: `onnxruntime-${owrPlatform}`,
-        vram_constraint: owrVramMode,
-        optimal_execution_providers:
-          owrPlatform === "web" ? ["WebGPU", "WASM"] : ["NNAPI (Android)", "CoreML (iOS)", "XNNPACK"],
-      },
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMoreToolsOpen(false);
+      moreToolsTriggerRef.current?.focus();
     };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [moreToolsOpen]);
 
-    const webInitCode = `// ONNX Runtime Web (OWR) Service-Worker / App Loader
-// Configured dynamically for: ${modelName} (${architecture})
-// Execute: npm install onnxruntime-web
-
-import * as ort from "onnxruntime-web";
-
-// Configure WASM and WebGPU threads
-ort.env.wasm.numThreads = ${owrThreads};
-ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
-
-export async function initializeOrtSession() {
-  console.log("Loading OWR model pipeline from memory...");
-  
-  const sessionOptions = {
-    executionProviders: ${owrVramMode === "performance" ? '["webgpu", "wasm"]' : '["wasm"]'},
-    graphOptimizationLevel: "all",
-    enableCpuMemArena: true,
-    enableMemPattern: true
-  };
-
-  try {
-    const session = await ort.InferenceSession.create("./models/optimized/model.onnx", sessionOptions);
-    console.log("Session init success! Available Inputs:", session.inputNames);
-    return session;
-  } catch (err) {
-    console.error("Failed to boot ONNX Runtime session:", err);
-    throw err;
-  }
-}
-
-export async function runInference(session, rawFloatBuffer) {
-  // Map dynamic inputs to graph feeds
-  const feeds = {};
-  for (const name of session.inputNames) {
-    // Creating default tensors matched to compiling specifications
-    feeds[name] = new ort.Tensor("float32", new Float32Array(rawFloatBuffer || 1024), [1, 1024]);
-  }
-  
-  const results = await session.run(feeds);
-  return results;
-}
-`;
-
-    const mobileInitCode = `package com.onnxruntime.mobile
-
-import android.content.Context
-import ai.onnxruntime.OnnxTensor
-import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.OrtSession
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
-import java.nio.FloatBuffer
-
-/**
- * High-performance ONNX Runtime Mobile Wrapper Session
- * Generated dynamically for model: ${modelName} (${architecture})
- */
-class OnnxModelExecutor(private val context: Context) : AutoCloseable {
-    private val ortEnv: OrtEnvironment = OrtEnvironment.getEnvironment()
-    private var ortSession: OrtSession? = null
-
-    fun loadModelFromAssets(assetName: String = "model.ort") {
-        val modelBytes = readAsset(assetName)
-        val opts = OrtSession.SessionOptions().apply {
-            setIntraOpNumThreads(${owrThreads})
-            // Establish target execution capabilities
-            addXnnpack()
-            addNnapi()
-        }
-        ortSession = ortEnv.createSession(modelBytes, opts)
-    }
-
-    fun runInference(inputData: FloatArray, shape: LongArray): Map<String, Any> {
-        val session = ortSession ?: throw IllegalStateException("Session not initialized.")
-        val buffer = FloatBuffer.wrap(inputData)
-        val inputName = session.inputNames.first()
-        val tensor = OnnxTensor.createTensor(ortEnv, buffer, shape)
-        
-        tensor.use {
-            val outputs = session.run(mapOf(inputName to tensor))
-            return outputs.associate { it.key to it.value.value }
-        }
-    }
-
-    private fun readAsset(fileName: String): ByteArray {
-        context.assets.open(fileName).use { stream ->
-            val byteBuffer = ByteArrayOutputStream()
-            val buffer = ByteArray(4096)
-            var len: Int
-            while (stream.read(buffer).also { len = it } != -1) {
-                byteBuffer.write(buffer, 0, len)
-            }
-            return byteBuffer.toByteArray()
-        }
-    }
-
-    override fun close() {
-        ortSession?.close()
-    }
-}
-`;
-
-    return { ortConfig, manifestConfig, webInitCode, mobileInitCode };
-  };
+  const owrConfigs = useMemo(
+    () =>
+      buildOwrConfigs({
+        state,
+        platform: owrPlatform,
+        threads: owrThreads,
+        vramMode: owrVramMode,
+      }),
+    [state, owrPlatform, owrThreads, owrVramMode],
+  );
 
   const handleDownloadOwrBundle = async () => {
-    const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = getOwrConfigs();
+    const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = owrConfigs;
     const zip = new JSZip();
 
     zip.file("ort_config.json", JSON.stringify(ortConfig, null, 2));
@@ -575,8 +457,8 @@ Contents of this bundle:
 Deployment Steps:
 ${
   owrPlatform === "web"
-    ? "- Place the optimized model file (model.onnx) in your public asset folder.\n- Install 'onnxruntime-web' dependency using npm.\n- Import and invoke your customized initializeOrtSession() function. "
-    : "- Place the compiled ORT flatbuffer file (model.ort) under your Android App's 'src/main/assets' directory.\n- Implement 'ai.onnxruntime:onnxruntime-android' via gradle.\n- Wire up your OnnxModelExecutor wrapper inside Activities/Handlers."
+    ? "- Place the optimized model file (model.onnx) in your public asset folder.\\n- Install 'onnxruntime-web' dependency using npm.\\n- Import and invoke your customized initializeOrtSession() function. "
+    : "- Place the compiled ORT flatbuffer file (model.ort) under your Android App's 'src/main/assets' directory.\\n- Implement 'ai.onnxruntime:onnxruntime-android' via gradle.\\n- Wire up your OnnxModelExecutor wrapper inside Activities/Handlers."
 }
 `;
     zip.file("README.txt", readme);
@@ -598,8 +480,9 @@ ${
   };
 
   const pipeline = buildRecipeFromState(state, { hardwareProbe });
-  const { recipe, recipeJson, validation, schema, advisories, isRunnable } = pipeline;
+  const { recipe, recipeJson, validation, schema, advisories, localExecutionIssues, isRunnable } = pipeline;
   const schemaErrors = schema.errors ?? [];
+  const localBlockLines = localExecutionIssues.map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`);
   // Local structure/compat checks only. A green badge must not imply Execute Live succeeded.
   const localValidationLabel = !schema.valid
     ? `Schema invalid (${schemaErrors.length} issue${schemaErrors.length === 1 ? "" : "s"})`
@@ -615,10 +498,19 @@ ${
 
   const handleQueueJob = () => {
     if (!isRunnable) {
+      const blockingCount = validation.criticalCount + localExecutionIssues.length;
       setExecutionLogs([
         schema.valid
-          ? `[ERROR] Cannot queue batch job: ${validation.criticalCount} blocking compatibility issue(s). Resolve in the graph or passes panel.`
+          ? `[ERROR] Cannot queue batch job: ${blockingCount} blocking issue(s). Resolve in the graph or passes panel.`
           : `[ERROR] Cannot queue batch job: recipe schema invalid.\n${schemaErrors.map((e) => `[SCHEMA] ${e}`).join("\n")}`,
+        ...(schema.valid
+          ? [
+              ...validation.issues
+                .filter((issue) => issue.severity === "critical")
+                .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
+              ...localBlockLines,
+            ]
+          : []),
       ]);
       return;
     }
@@ -731,14 +623,18 @@ ${
     if (isRunning) return;
 
     if (!isRunnable) {
+      const blockingCount = validation.criticalCount + localExecutionIssues.length;
       setExecutionLogs([
         schema.valid
-          ? `[ERROR] Cannot execute: ${validation.criticalCount} blocking compatibility issue(s).`
+          ? `[ERROR] Cannot execute: ${blockingCount} blocking issue(s).`
           : `[ERROR] Cannot execute: recipe schema invalid.`,
         ...(schema.valid
-          ? validation.issues
-              .filter((issue) => issue.severity === "critical")
-              .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`)
+          ? [
+              ...validation.issues
+                .filter((issue) => issue.severity === "critical")
+                .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
+              ...localBlockLines,
+            ]
           : schemaErrors.map((e) => `[SCHEMA] ${e}`)),
       ]);
       setExecutionStatus("failed");
@@ -823,24 +719,19 @@ ${
             exitCode = 0;
           }
           // Olive sometimes exits 0 after a pass traceback (e.g. HF task KeyError).
-          // Snapshot logs, then update status outside the state updater.
-          setExecutionLogs((currentLogs) => {
-            queueMicrotask(() => {
-              if (isUnmountedRef.current) return;
-              const failed = exitCode !== 0 || logsIndicateFailure(currentLogs);
-              const finalStatus = failed ? "failed" : "completed";
-              const reportedExit = failed && exitCode === 0 ? 1 : exitCode;
-              setExecutionStatus(finalStatus);
-              setExecutionExitCode(reportedExit);
-              setIsRunning(false);
-              setGpuMetrics(null);
-              onRunStateChange?.(false);
-              recordJobCompletion(targetJobId, finalStatus, reportedExit);
-              // Auto-diagnose is owned by the executionStatus==="failed" effect below.
-              if (failed) setMcpFixApplied("");
-            });
-            return currentLogs;
-          });
+          // Read the mirrored log ref so this updater stays pure (StrictMode-safe).
+          const currentLogs = executionLogsRef.current;
+          const failed = exitCode !== 0 || logsIndicateFailure(currentLogs);
+          const finalStatus = failed ? "failed" : "completed";
+          const reportedExit = failed && exitCode === 0 ? 1 : exitCode;
+          setExecutionStatus(finalStatus);
+          setExecutionExitCode(reportedExit);
+          setIsRunning(false);
+          setGpuMetrics(null);
+          onRunStateChange?.(false);
+          recordJobCompletion(targetJobId, finalStatus, reportedExit);
+          // Auto-diagnose is owned by the executionStatus==="failed" effect below.
+          if (failed) setMcpFixApplied("");
           evtSource.close();
           liveSourceRef.current = null;
         });
@@ -1023,7 +914,7 @@ ${
       {/* OWR Export Bundle Overlay */}
       {isOwrExportOpen &&
         (() => {
-          const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = getOwrConfigs();
+          const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = owrConfigs;
 
           let fileTitle = "";
           let fileContent = "";
@@ -1299,6 +1190,7 @@ ${
               >
                 <button
                   type="button"
+                  aria-pressed={recipeView === "graph"}
                   onClick={() => setRecipeView("graph")}
                   className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${
                     recipeView === "graph"
@@ -1310,6 +1202,7 @@ ${
                 </button>
                 <button
                   type="button"
+                  aria-pressed={recipeView === "json"}
                   onClick={() => setRecipeView("json")}
                   className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${
                     recipeView === "json"
@@ -1342,8 +1235,9 @@ ${
               >
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Export Recipe
               </Button>
-              <div className="relative">
+              <div className="relative" ref={moreToolsContainerRef}>
                 <Button
+                  ref={moreToolsTriggerRef}
                   variant="outline"
                   className="h-8 px-2.5 text-xs border-slate-700 text-slate-300 hover:border-slate-500"
                   aria-expanded={moreToolsOpen}

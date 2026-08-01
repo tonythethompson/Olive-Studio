@@ -136,11 +136,11 @@ export function estimateVramForCatalogPreset(
   const peakLabel = estimate.usesGpu ? "peak VRAM" : "peak RAM";
 
   let fitHint: string | null = null;
-  if (availableGb != null) {
+  if (estimate.usesGpu && availableGb != null) {
     const inferenceFit = compareVramFit(estimate.inferenceGb, availableGb);
     if (inferenceFit === "insufficient") {
       fitHint = "Deployed model may exceed GPU VRAM";
-    } else if (estimate.usesGpu) {
+    } else {
       // Peak must be judged against GPU VRAM first. Comparing only to the hybrid
       // GPU+RAM pool hid warnings when Olive peak exceeded the card but fit in RAM.
       const peakOnGpuFit = compareVramFit(estimate.peakRunGb, availableGb);
@@ -157,18 +157,27 @@ export function estimateVramForCatalogPreset(
       } else if (peakOnPoolFit === "insufficient") {
         fitHint = "Peak run may need hybrid offload";
       }
-    } else if (inferenceFit === "tight") {
-      fitHint = "Tight on this GPU";
     }
   }
 
-  // CPU recipes: also surface host-RAM pressure when peak exceeds system memory.
-  if (!fitHint && !estimate.usesGpu && systemRamGb != null) {
+  // CPU recipes: prioritize host RAM; do not lead with GPU VRAM messaging.
+  if (!estimate.usesGpu && systemRamGb != null) {
+    const inferenceRamFit = compareVramFit(estimate.inferenceGb, systemRamGb);
     const peakRamFit = compareVramFit(estimate.peakRunGb, systemRamGb);
-    if (peakRamFit === "insufficient") {
+    if (inferenceRamFit === "insufficient") {
+      fitHint = "Deployed model may exceed system RAM";
+    } else if (peakRamFit === "insufficient") {
       fitHint = "Peak run may exceed system RAM";
-    } else if (peakRamFit === "tight") {
+    } else if (inferenceRamFit === "tight" || peakRamFit === "tight") {
       fitHint = "Tight on system RAM";
+    }
+  } else if (!estimate.usesGpu && availableGb != null && !fitHint) {
+    // No system RAM reading: fall back to comparing the footprint against GPU VRAM.
+    const inferenceFit = compareVramFit(estimate.inferenceGb, availableGb);
+    if (inferenceFit === "insufficient") {
+      fitHint = "Deployed model may exceed GPU VRAM";
+    } else if (inferenceFit === "tight") {
+      fitHint = "Tight on this GPU";
     }
   }
 

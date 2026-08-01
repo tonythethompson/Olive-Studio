@@ -96,17 +96,25 @@ function extractBalancedJson(text: string, startAt = 0): string | null {
   return text.slice(start);
 }
 
-/** Collect balanced JSON slices from each `{` / `[` root (prose may precede valid JSON). */
-function collectBalancedJsonCandidates(text: string): string[] {
+/** Collect top-level balanced JSON roots only (skip nested braces; cap attempts). */
+function collectBalancedJsonCandidates(text: string, maxCandidates = 8): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (ch !== "{" && ch !== "[") continue;
-    const slice = extractBalancedJson(text, i);
-    if (!slice || seen.has(slice)) continue;
-    seen.add(slice);
-    out.push(slice);
+  let from = 0;
+  while (from < text.length && out.length < maxCandidates) {
+    const slice = extractBalancedJson(text, from);
+    if (!slice) break;
+    if (!seen.has(slice)) {
+      seen.add(slice);
+      out.push(slice);
+    }
+    const startObj = text.indexOf("{", from);
+    const startArr = text.indexOf("[", from);
+    let start = -1;
+    if (startObj >= 0 && (startArr < 0 || startObj < startArr)) start = startObj;
+    else if (startArr >= 0) start = startArr;
+    if (start < 0) break;
+    from = start + Math.max(slice.length, 1);
   }
   return out;
 }

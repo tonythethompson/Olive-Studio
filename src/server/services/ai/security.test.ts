@@ -96,6 +96,9 @@ describe("AI provider security", () => {
         expect(sanitizeProviderBaseUrl("openai-compat", "http://127.0.0.1:1234/v1")).toBe(
           "http://127.0.0.1:1234/v1",
         );
+        expect(sanitizeProviderBaseUrl("openai-compat", "http://[::1]:11434/v1")).toBe(
+          "http://[::1]:11434/v1",
+        );
       } finally {
         if (prev === undefined) delete process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
         else process.env.OLIVE_ALLOW_LOOPBACK_HTTP = prev;
@@ -136,26 +139,13 @@ describe("AI provider security", () => {
       ).toThrow(/not allowed/);
     });
 
-    it("rejects Cloudflare URLs with a non-32hex account id", () => {
+    it("rejects Cloudflare URLs with invalid account IDs under the allowed prefix", () => {
       expect(() =>
         sanitizeProviderBaseUrl(
           "cloudflare",
-          "https://api.cloudflare.com/client/v4/accounts/not-a-valid-account-id/ai/v1",
+          "https://api.cloudflare.com/client/v4/accounts/not-a-valid-id/ai/v1",
         ),
-      ).toThrow(/not allowed/);
-    });
-
-    it("treats bracketed IPv6 loopback as local for openai-compat", () => {
-      const prev = process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
-      process.env.OLIVE_ALLOW_LOOPBACK_HTTP = "1";
-      try {
-        expect(sanitizeProviderBaseUrl("openai-compat", "http://[::1]:11434/v1")).toBe(
-          "http://[::1]:11434/v1",
-        );
-      } finally {
-        if (prev === undefined) delete process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
-        else process.env.OLIVE_ALLOW_LOOPBACK_HTTP = prev;
-      }
+      ).toThrow(/valid 32-hex account ID/);
     });
 
     it("allows Fireworks, NVIDIA, and Hugging Face prefixes", () => {

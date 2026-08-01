@@ -10,10 +10,9 @@ export type LocalLogDiagnostic = McpDiagnostic & {
 const STUDIO_HF_TASK_SPEECH = "studio-hf-task-speech-recognition";
 
 /**
- * Matches recognized Hugging Face and Olive failure patterns in run logs for offline diagnostics.
- *
- * @param logs - The run log lines to analyze
- * @returns A diagnostic with relevant evidence when a known failure is found, or `null` otherwise
+ * Match well-known Olive Studio / Transformers failures in run logs.
+ * Runs before (or instead of) MCP KB lookup so Diagnose is useful offline
+ * and for bugs the KB has not indexed.
  */
 export function matchLocalLogDiagnostic(logs: string[]): LocalLogDiagnostic | null {
   if (logs.length === 0) return null;
@@ -42,8 +41,6 @@ export function matchLocalLogDiagnostic(logs: string[]): LocalLogDiagnostic | nu
       evidence.push(unknownTask[0]!.slice(0, 240));
     }
 
-    // Match the captured bad task only. Do not scan `joined` for
-    // `\bspeech-recognition\b` — it matches inside `automatic-speech-recognition`.
     if (badTask === "speech-recognition") {
       return {
         matched_entry: STUDIO_HF_TASK_SPEECH,
@@ -94,21 +91,25 @@ export function matchLocalLogDiagnostic(logs: string[]): LocalLogDiagnostic | nu
   return null;
 }
 
-/**
- * Determines whether a diagnostic identifies the Studio Hugging Face speech-task fix.
- *
- * @param diagnostic - The diagnostic to inspect.
- * @returns `true` if the diagnostic identifies the speech-task fix, `false` otherwise.
- */
 export function isStudioHfTaskSpeechFix(diagnostic: { matched_entry?: string | null } | null): boolean {
   return diagnostic?.matched_entry === STUDIO_HF_TASK_SPEECH;
 }
 
-/**
- * Determines whether logs contain indicators of a hard failure.
- *
- * @returns `true` if the logs contain a recognized failure marker, `false` otherwise.
- */
+/** True when a single log line looks like a failure anchor for selection / diagnose. */
+export function isFailureLine(line: string): boolean {
+  return (
+    line.includes("[ERROR]") ||
+    line.includes("Traceback") ||
+    line.includes("Exception") ||
+    line.includes("Error:") ||
+    line.includes("error:") ||
+    line.includes("KeyError") ||
+    line.includes("Unknown task") ||
+    line.includes("FAILED")
+  );
+}
+
+/** True when logs look like a hard failure even if the process exited 0. */
 export function logsIndicateFailure(logs: string[]): boolean {
   return logs.some(
     (line) =>
@@ -122,12 +123,8 @@ export function logsIndicateFailure(logs: string[]): boolean {
 }
 
 /**
- * Expands selected log lines with nearby context and relevant failure indicators.
- *
- * @param logs - The complete log lines.
- * @param selectedIndices - Indices of the initially selected log lines.
- * @param radius - Number of surrounding lines to include for each selected line.
- * @returns The selected log context in its original order.
+ * Expand a sparse line selection (e.g. one traceback frame) to nearby context
+ * so Diagnose sees the KeyError / summary lines.
  */
 export function expandLogSelection(logs: string[], selectedIndices: number[], radius = 6): string[] {
   if (selectedIndices.length === 0) return logs;

@@ -17,7 +17,7 @@ export const ALLOWED_BASE_URL_PREFIX_BY_PROVIDER: Partial<Record<ProviderConfig[
   fireworks: ["https://api.fireworks.ai/inference/v1"],
   nvidia: ["https://integrate.api.nvidia.com/v1"],
   huggingface: ["https://router.huggingface.co/v1"],
-  // Account id is path segment: …/accounts/{32hex}/ai/v1 (validated in sanitizeProviderBaseUrl)
+  // Account id is path segment: …/accounts/{32hex}/ai/v1
   cloudflare: ["https://api.cloudflare.com/client/v4/accounts"],
 };
 
@@ -28,48 +28,29 @@ export function stripTrailingSlashes(value: string): string {
   return value.slice(0, end);
 }
 
-/** WHATWG URL.hostname keeps brackets on IPv6 literals; strip before comparisons. */
-export function normalizeHostname(hostname: string): string {
-  return hostname
-    .trim()
-    .toLowerCase()
-    .replace(/^\[|\]$/g, "");
-}
-
-/**
- * Determines whether a hostname has the shape of an IP address literal.
- *
- * @param hostname - The hostname to inspect
- * @returns `true` if the hostname contains an IPv6 separator or matches an IPv4-shaped format, `false` otherwise.
- */
 export function isIpLiteralHost(hostname: string): boolean {
   if (!hostname) return false;
   if (hostname.includes(":")) return true; // IPv6 literal
   return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname);
 }
 
-/**
- * Identifies HTTP loopback URLs that use the Ollama or LM Studio ports.
- *
- * @param parsed - The URL to inspect
- * @returns `true` if the URL targets a loopback host on port 11434 or 1234, `false` otherwise.
- */
+/** Normalize hostname and detect loopback (IPv4, IPv6, bracketed IPv6). */
+export function isLoopbackHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
+/** Ollama / LM Studio loopback endpoints used by the built-in Local AI flow. */
 export function isKnownLocalOpenAiCompatUrl(parsed: URL): boolean {
-  const host = normalizeHostname(parsed.hostname);
-  const isLoopback = host === "localhost" || host === "127.0.0.1" || host === "::1";
+  const isLoopback = isLoopbackHostname(parsed.hostname);
   if (!isLoopback || parsed.protocol !== "http:") return false;
   const port = parsed.port ? Number(parsed.port) : 80;
   return port === 11434 || port === 1234;
 }
 
-/**
- * Determines whether a hostname identifies a local or private network address.
- *
- * @param hostname - The hostname to evaluate
- * @returns `true` for localhost variants, local domains, loopback or unspecified addresses, private IPv4 ranges, or invalid IPv4-shaped values; `false` otherwise.
- */
 export function isPrivateOrLocalHostname(hostname: string): boolean {
-  const h = normalizeHostname(hostname);
+  // Normalize bracketed IPv6 hostnames consistently with isLoopbackHostname
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (
     h === "localhost" ||
     h.endsWith(".localhost") ||
@@ -94,14 +75,6 @@ export function isPrivateOrLocalHostname(hostname: string): boolean {
   );
 }
 
-/**
- * Validates and normalizes a provider base URL.
- *
- * @param provider - The provider associated with the base URL
- * @param rawBaseUrl - The untrusted base URL to validate
- * @returns The normalized base URL, or `undefined` when no URL is provided
- * @throws If the URL is invalid, contains credentials, violates protocol or host restrictions, or is not allowed for the provider
- */
 export function sanitizeProviderBaseUrl(provider: string, rawBaseUrl?: string): string | undefined {
   const trimmed = rawBaseUrl?.trim();
   if (!trimmed) return undefined;
@@ -115,8 +88,7 @@ export function sanitizeProviderBaseUrl(provider: string, rawBaseUrl?: string): 
     throw new Error("baseUrl must not include credentials");
   }
 
-  const host = normalizeHostname(parsed.hostname);
-  const isLoopback = host === "localhost" || host === "127.0.0.1" || host === "::1";
+  const isLoopback = isLoopbackHostname(parsed.hostname);
   // Local engines (Ollama / LM Studio) are openai-compat over plain HTTP on loopback only.
   const allowLocalEngine =
     provider === "openai-compat" &&
@@ -126,7 +98,7 @@ export function sanitizeProviderBaseUrl(provider: string, rawBaseUrl?: string): 
   if (parsed.protocol !== "https:" && !(allowLocalEngine && parsed.protocol === "http:")) {
     throw new Error("baseUrl must use https");
   }
-  if (!allowLocalEngine && (isIpLiteralHost(host) || isPrivateOrLocalHostname(host))) {
+  if (!allowLocalEngine && (isIpLiteralHost(parsed.hostname) || isPrivateOrLocalHostname(parsed.hostname))) {
     throw new Error("baseUrl host is not allowed");
   }
   const normalized = stripTrailingSlashes(parsed.toString());
@@ -135,11 +107,9 @@ export function sanitizeProviderBaseUrl(provider: string, rawBaseUrl?: string): 
     throw new Error(`baseUrl is not allowed for provider: ${provider}`);
   }
   if (provider === "cloudflare") {
-    const parts = parsed.pathname.split("/").filter(Boolean);
-    const accountsIdx = parts.indexOf("accounts");
-    const accountId = accountsIdx >= 0 ? parts[accountsIdx + 1] : undefined;
-    if (!accountId || !isValidCloudflareAccountId(accountId)) {
-      throw new Error("baseUrl is not allowed for provider: cloudflare");
+    const accountMatch = normalized.match(/\/accounts\/([^/]+)\/ai\/v1\/?$/i);
+    if (!accountMatch || !isValidCloudflareAccountId(accountMatch[1]!)) {
+      throw new Error("Cloudflare baseUrl must include a valid 32-hex account ID");
     }
   }
   return normalized;

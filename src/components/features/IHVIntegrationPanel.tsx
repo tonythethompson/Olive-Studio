@@ -350,7 +350,7 @@ export function IHVIntegrationPanel({
           if (evt.type === "log" && evt.message) {
             setLog((prev) => [...prev, evt.message!]);
           } else if (evt.type === "done") {
-            ok = evt.ok === true;
+            ok = res.ok && evt.ok === true;
             error = evt.error;
           }
         }
@@ -1318,8 +1318,25 @@ export function IHVIntegrationPanel({
                           return (
                             <th
                               key={p.id}
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`Select provider ${p.shortName}`}
+                              aria-pressed={isSelectedProvider}
                               onClick={() => {
                                 // Allow selecting undetected providers for cross-compile / remote targets
+                                const detected = detectedProviders.includes(p.id);
+                                if (!detected) {
+                                  setState({ ihvProvider: p.id });
+                                  return;
+                                }
+                                const patch = prepareProviderChange(state, p.id, hardwareProbe);
+                                if (patch) {
+                                  setState(patch);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key !== "Enter" && e.key !== " ") return;
+                                e.preventDefault();
                                 const detected = detectedProviders.includes(p.id);
                                 if (!detected) {
                                   setState({ ihvProvider: p.id });
@@ -1769,20 +1786,31 @@ export function IHVIntegrationPanel({
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="flag-use-fp16">Use fp16</Label>
-                      <p className="text-xs text-slate-500">Enable Tensor Core math.</p>
+                      <p className="text-xs text-slate-500">
+                        Enable Tensor Core math. Always on for this target.
+                      </p>
                     </div>
-                    <Switch id="flag-use-fp16" aria-label="Use fp16" defaultChecked />
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-slate-500">Always on</span>
+                      <Switch id="flag-use-fp16" aria-label="Use fp16 (always on)" checked disabled />
+                    </div>
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="flag-trt-graph-opts">Enable TensorRT Graph Optimizations</Label>
-                      <p className="text-xs text-slate-500">Build TensorRT engines dynamically.</p>
+                      <p className="text-xs text-slate-500">
+                        Build TensorRT engines dynamically. Always on for this target.
+                      </p>
                     </div>
-                    <Switch
-                      id="flag-trt-graph-opts"
-                      aria-label="Enable TensorRT Graph Optimizations"
-                      defaultChecked
-                    />
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-slate-500">Always on</span>
+                      <Switch
+                        id="flag-trt-graph-opts"
+                        aria-label="Enable TensorRT Graph Optimizations (always on)"
+                        checked
+                        disabled
+                      />
+                    </div>
                   </div>
                 </>
               ) : state.ihvProvider === "OpenVINOExecutionProvider" ? (

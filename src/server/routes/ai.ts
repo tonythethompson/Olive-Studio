@@ -24,7 +24,12 @@ import {
   gatherOliveMcpKnowledge,
 } from "../services/ai/oliveMcpKnowledge.ts";
 import type { ProviderConfig } from "../types.ts";
-import { sanitizeProviderBaseUrl, stripTrailingSlashes } from "../services/ai/security.ts";
+import {
+  sanitizeProviderBaseUrl,
+  stripTrailingSlashes,
+  isLoopbackHostname,
+} from "../services/ai/security.ts";
+import { fetchWithTimeout } from "../services/shared/http.ts";
 import { ALLOWED_AI_PROVIDERS } from "../services/ai/detect.ts";
 import { parseJsonFromAiResponse, readEnvApiKey } from "../../lib/aiResponse.ts";
 import { parseAuditAnalysisReply } from "../../lib/auditAnalysis.ts";
@@ -88,11 +93,6 @@ function lmStudioFetchInit(signal?: AbortSignal): RequestInit {
   };
 }
 
-/**
- * Checks whether the LM Studio server is responding.
- *
- * @returns `true` if the server responds with a status greater than zero, `false` otherwise.
- */
 async function isLmsServerRunning(): Promise<boolean> {
   try {
     const controller = new AbortController();
@@ -108,13 +108,7 @@ async function isLmsServerRunning(): Promise<boolean> {
   }
 }
 
-/**
- * Starts the LM Studio server as a detached process.
- *
- * @param lms - Path to the LM Studio CLI executable
- * @param args - Arguments passed to the executable
- * @returns The process exit code if it exits within two seconds, `1` if startup fails, or `null` if it remains running
- */
+/** Spawn `lms server …`; resolves exit code if the child exits quickly, else null. */
 function spawnLmsServerDetached(lms: string, args: string[]): Promise<number | null> {
   return new Promise((resolve) => {
     let settled = false;
@@ -140,11 +134,6 @@ function spawnLmsServerDetached(lms: string, args: string[]): Promise<number | n
   });
 }
 
-/**
- * Determines whether the local Ollama server is responding.
- *
- * @returns `true` if Ollama responds successfully, `false` otherwise.
- */
 async function isOllamaRunning(): Promise<boolean> {
   try {
     const controller = new AbortController();
@@ -159,21 +148,21 @@ async function isOllamaRunning(): Promise<boolean> {
 
 /** Module-level LMS CLI path cache (avoids re-probing disk/PATH on every request). */
 let cachedLmsCli: string | null | undefined;
+let lmsCliMissAt = 0;
+const LMS_CLI_MISS_TTL_MS = 5000;
 
-/**
- * Clears the cached LM Studio CLI path.
- */
 function resetLmsCliCache(): void {
   cachedLmsCli = undefined;
+  lmsCliMissAt = 0;
 }
 
-/**
- * Locates the LM Studio command-line executable.
- *
- * @returns The executable path, or `null` when LM Studio is unavailable.
- */
 function findLmsCli(): string | null {
-  if (cachedLmsCli !== undefined) return cachedLmsCli;
+  // Reuse a positive cache hit immediately
+  if (cachedLmsCli) return cachedLmsCli;
+  // Reuse a cached miss within TTL to avoid repeated expensive probes
+  if (cachedLmsCli === null && lmsCliMissAt > 0 && Date.now() - lmsCliMissAt < LMS_CLI_MISS_TTL_MS) {
+    return null;
+  }
   const home = os.homedir();
   const candidates =
     process.platform === "win32"
@@ -187,6 +176,7 @@ function findLmsCli(): string | null {
   for (const c of candidates) {
     if (c && fs.existsSync(c)) {
       cachedLmsCli = c;
+      lmsCliMissAt = 0;
       return cachedLmsCli;
     }
   }
@@ -202,20 +192,18 @@ function findLmsCli(): string | null {
       ?.trim();
     if (result && fs.existsSync(result)) {
       cachedLmsCli = result;
+      lmsCliMissAt = 0;
       return cachedLmsCli;
     }
   } catch {
     /* not on PATH */
   }
+  // Cache the miss with timestamp
   cachedLmsCli = null;
+  lmsCliMissAt = Date.now();
   return null;
 }
 
-/**
- * Locates the Ollama executable using platform-specific installation paths and the system `PATH`.
- *
- * @returns The executable path, or `null` when Ollama is not found.
- */
 function findOllamaCli(): string | null {
   const home = os.homedir();
   const candidates =
@@ -246,11 +234,7 @@ function findOllamaCli(): string | null {
   return null;
 }
 
-/**
- * Locates the platform-specific Ollama application.
- *
- * @returns The Ollama application path on Windows or macOS, or `null` when unavailable.
- */
+/** Windows/macOS tray app that owns the local server lifecycle (do not also spawn `ollama serve`). */
 function findOllamaApp(): string | null {
   if (process.platform === "win32") {
     const candidates = [
@@ -269,21 +253,10 @@ function findOllamaApp(): string | null {
   return null;
 }
 
-/**
- * Waits for the specified duration.
- *
- * @param ms - The duration to wait in milliseconds
- */
 function sleepMs(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/**
- * Attempts to install a package using Windows Package Manager.
- *
- * @param packageIds - Package identifiers to try in order
- * @returns `true` if a package is installed successfully, `false` otherwise
- */
 async function tryWingetInstall(packageIds: string[]): Promise<boolean> {
   if (process.platform !== "win32") return false;
   try {
@@ -320,98 +293,102 @@ async function tryWingetInstall(packageIds: string[]): Promise<boolean> {
  * On Windows/macOS the tray app owns `serve`; spawning `ollama serve` beside it
  * fights the app (reap/respawn) and can flash endless terminal windows.
  * Observes async ChildProcess `error` so launch failures propagate to callers.
- *
- * @param cliPath - Path to the Ollama CLI used for headless startup
- * @returns The startup mode and command or application path used
  */
 function startOllamaOnce(cliPath: string): Promise<{ mode: "app" | "serve"; detail: string }> {
-  let mode: "app" | "serve" = "serve";
-  let detail = `${cliPath} serve`;
-  let child: ChildProcess | null = null;
+  return new Promise((resolve, reject) => {
+    let mode: "app" | "serve" = "serve";
+    let detail = `${cliPath} serve`;
+    let child: ChildProcess | null = null;
 
-  if (process.platform === "win32") {
-    const app = findOllamaApp();
-    if (app) {
-      child = spawn(app, [], {
+    if (process.platform === "win32") {
+      const app = findOllamaApp();
+      if (app) {
+        child = spawn(app, [], {
+          detached: true,
+          stdio: "ignore",
+          windowsHide: true,
+          env: { ...process.env },
+        });
+        mode = "app";
+        detail = app;
+      }
+    } else if (process.platform === "darwin") {
+      const app = findOllamaApp();
+      if (app && fs.existsSync(app)) {
+        child = spawn("open", ["-a", "Ollama"], {
+          detached: true,
+          stdio: "ignore",
+          env: { ...process.env },
+        });
+        mode = "app";
+        detail = app;
+      }
+    }
+
+    if (!child) {
+      child = spawn(cliPath, ["serve"], {
         detached: true,
         stdio: "ignore",
         windowsHide: true,
         env: { ...process.env },
       });
-      mode = "app";
-      detail = app;
+      mode = "serve";
+      detail = `${cliPath} serve`;
     }
-  } else if (process.platform === "darwin") {
-    const app = findOllamaApp();
-    if (app && fs.existsSync(app)) {
-      child = spawn("open", ["-a", "Ollama"], {
-        detached: true,
-        stdio: "ignore",
-        env: { ...process.env },
-      });
-      mode = "app";
-      detail = app;
-    }
-  }
 
-  if (!child) {
-    child = spawn(cliPath, ["serve"], {
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true,
-      env: { ...process.env },
-    });
-    mode = "serve";
-    detail = `${cliPath} serve`;
-  }
-
-  const launched = child;
-  return new Promise((resolve, reject) => {
+    // Attach listeners in the same turn as spawn so async failures are never unhandled.
     let settled = false;
     const settleOk = () => {
       if (settled) return;
       settled = true;
-      launched.unref();
+      child!.unref();
       resolve({ mode, detail });
     };
-    launched.once("error", (err) => {
+    child.once("error", (err) => {
       if (settled) return;
       settled = true;
       reject(err);
     });
-    launched.once("spawn", settleOk);
+    child.once("spawn", settleOk);
   });
 }
 
 type OllamaEnsureResult = { ok: boolean; error?: string; steps: string[] };
+type EnsureProgressEvt = { type: string; message: string; percent?: number };
 
 /** Single-flight: concurrent Setup / pull calls must not spawn multiple Ollama processes. */
 let ollamaEnsureInFlight: Promise<OllamaEnsureResult> | null = null;
+const ollamaProgressSubscribers = new Set<(evt: EnsureProgressEvt) => void>();
 let lastOllamaStartAt = 0;
 const OLLAMA_START_COOLDOWN_MS = 45_000;
 
-/**
- * Ensures that the Ollama service is ready for use.
- *
- * @param onProgress - Optional callback for setup progress events.
- * @returns The Ollama readiness result.
- */
-async function ensureOllamaReady(
-  onProgress?: (evt: { type: string; message: string; percent?: number }) => void,
-): Promise<OllamaEnsureResult> {
-  if (ollamaEnsureInFlight) return ollamaEnsureInFlight;
-  ollamaEnsureInFlight = ensureOllamaReadyImpl(onProgress).finally(() => {
-    ollamaEnsureInFlight = null;
-  });
-  return ollamaEnsureInFlight;
+async function ensureOllamaReady(onProgress?: (evt: EnsureProgressEvt) => void): Promise<OllamaEnsureResult> {
+  if (onProgress) {
+    ollamaProgressSubscribers.add(onProgress);
+    if (ollamaEnsureInFlight) {
+      onProgress({ type: "step", message: "Ollama setup already in progress…", percent: 5 });
+    }
+  }
+  if (!ollamaEnsureInFlight) {
+    ollamaEnsureInFlight = ensureOllamaReadyImpl((evt) => {
+      for (const sub of ollamaProgressSubscribers) {
+        try {
+          sub(evt);
+        } catch (err) {
+          console.error("[ensureOllamaReady] Progress subscriber threw:", err);
+        }
+      }
+    }).finally(() => {
+      ollamaEnsureInFlight = null;
+    });
+  }
+  try {
+    return await ollamaEnsureInFlight;
+  } finally {
+    if (onProgress) ollamaProgressSubscribers.delete(onProgress);
+  }
 }
 
-/**
- * Ensures that the Ollama service is installed, started, and ready to accept requests.
- *
- * @param onProgress - Optional callback for setup progress updates.
- * @returns The readiness status and progress steps, including an error message when setup fails.
- */
 async function ensureOllamaReadyImpl(
   onProgress?: (evt: { type: string; message: string; percent?: number }) => void,
 ): Promise<OllamaEnsureResult> {
@@ -496,15 +473,39 @@ async function ensureOllamaReadyImpl(
   return { ok: true, steps };
 }
 
-/**
- * Ensures that the LM Studio CLI and local server are available.
- *
- * @param onProgress - Optional callback invoked with setup progress updates
- * @returns The setup result, including progress steps and an error or guidance URL when setup fails
- */
-async function ensureLmsReady(
-  onProgress?: (evt: { type: string; message: string; percent?: number }) => void,
-): Promise<{ ok: boolean; error?: string; openedUrl?: string; steps: string[] }> {
+type LmsEnsureResult = { ok: boolean; error?: string; openedUrl?: string; steps: string[] };
+
+let lmsEnsureInFlight: Promise<LmsEnsureResult> | null = null;
+const lmsProgressSubscribers = new Set<(evt: EnsureProgressEvt) => void>();
+
+async function ensureLmsReady(onProgress?: (evt: EnsureProgressEvt) => void): Promise<LmsEnsureResult> {
+  if (onProgress) {
+    lmsProgressSubscribers.add(onProgress);
+    if (lmsEnsureInFlight) {
+      onProgress({ type: "step", message: "LM Studio setup already in progress…", percent: 5 });
+    }
+  }
+  if (!lmsEnsureInFlight) {
+    lmsEnsureInFlight = ensureLmsReadyImpl((evt) => {
+      for (const sub of lmsProgressSubscribers) {
+        try {
+          sub(evt);
+        } catch (err) {
+          console.error("[ensureLmsReady] Progress subscriber threw:", err);
+        }
+      }
+    }).finally(() => {
+      lmsEnsureInFlight = null;
+    });
+  }
+  try {
+    return await lmsEnsureInFlight;
+  } finally {
+    if (onProgress) lmsProgressSubscribers.delete(onProgress);
+  }
+}
+
+async function ensureLmsReadyImpl(onProgress?: (evt: EnsureProgressEvt) => void): Promise<LmsEnsureResult> {
   const steps: string[] = [];
   const note = (message: string, percent?: number) => {
     steps.push(message);
@@ -522,45 +523,15 @@ async function ensureLmsReady(
     if (process.platform === "win32") {
       note("Running winget install ElementLabs.LMStudio…", 8);
       await tryWingetInstall(["ElementLabs.LMStudio"]);
-      note("Bootstrapping LM Studio CLI (install.ps1 / llmster)…", 12);
-      try {
-        await execFileAsync(
-          "powershell.exe",
-          [
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            "irm https://lmstudio.ai/install.ps1 | iex",
-          ],
-          { timeout: 600_000, windowsHide: true },
-        );
-      } catch {
-        note("install.ps1 failed or skipped. Will keep looking for lms", 14);
-      }
     } else if (process.platform === "darwin") {
       note("Running brew install --cask lm-studio…", 8);
       try {
         await execFileAsync("brew", ["install", "--cask", "lm-studio"], { timeout: 600_000 });
       } catch {
-        note("brew cask install failed. Trying install.sh", 10);
-      }
-      try {
-        await execFileAsync("bash", ["-lc", "curl -fsSL https://lmstudio.ai/install.sh | bash"], {
-          timeout: 600_000,
-        });
-      } catch {
-        note("install.sh failed or skipped", 14);
+        note("brew cask install failed. Continuing discovery…", 10);
       }
     } else {
-      note("Running LM Studio install.sh…", 8);
-      try {
-        await execFileAsync("bash", ["-lc", "curl -fsSL https://lmstudio.ai/install.sh | bash"], {
-          timeout: 600_000,
-        });
-      } catch {
-        note("install.sh failed or skipped", 14);
-      }
+      note("No package-manager install path for this Linux host. Install LM Studio manually if needed.", 8);
     }
 
     for (let i = 0; i < 20; i++) {
@@ -625,26 +596,11 @@ function beginNdjsonStream(res: import("express").Response): (evt: Record<string
   };
 }
 
-/**
- * Completes an NDJSON response with a final record when the response is still writable.
- *
- * @param res - The Express response to complete
- * @param final - The final record to serialize and write
- */
 function endNdjson(res: import("express").Response, final: Record<string, unknown>): void {
   if (!res.writableEnded) {
     res.write(`${JSON.stringify(final)}\n`);
     res.end();
   }
-}
-
-/** True for localhost / loopback IPv4 / IPv6 (with or without brackets). */
-function isLoopbackHostname(hostname: string): boolean {
-  const host = hostname
-    .trim()
-    .toLowerCase()
-    .replace(/^\[|\]$/g, "");
-  return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
 /** Local openai-compat endpoints may omit API keys for model listing. */
@@ -705,22 +661,11 @@ function trackStreamClient(
   };
 }
 
-
-/**
- * Initializes an NDJSON response stream for local model pull progress.
- *
- * @param res - The Express response used for the stream
- * @returns The initialized NDJSON stream
- */
+/** Begin NDJSON stream for local model pull progress (client parses line-delimited JSON). */
 function beginPullSse(res: import("express").Response) {
   return beginNdjsonStream(res);
 }
 
-/**
- * Builds credential availability information from environment variables.
- *
- * @returns The credential status for supported environment-based providers.
- */
 function envCredentialsPayload() {
   const cfAccount = process.env.CLOUDFLARE_ACCOUNT_ID?.trim() ?? "";
   const cfAuth = resolveCloudflareAuth();
@@ -730,11 +675,7 @@ function envCredentialsPayload() {
   return listEnvCredentialStatus({ cloudflare: cloudflareUsable });
 }
 
-/**
- * Mounts AI provider, model catalog, chat, analysis, local engine, authentication, and account management routes on the router.
- *
- * @param router - The router on which to register the routes
- */
+// ─── Mount all AI routes ────────────────────────────────────────────────────
 
 export function mountAiRoutes(router: Router): void {
   // ─── AI Provider ──────────────────────────────────────────────────────────
@@ -976,19 +917,22 @@ export function mountAiRoutes(router: Router): void {
       }
 
       let workspace: AiWorkspaceContext | null = null;
+      let workspaceBlock: string | null = null;
       try {
         if (workspaceContext && typeof workspaceContext === "object") {
           workspace = workspaceContext as AiWorkspaceContext;
         } else if (state && typeof state === "object") {
           workspace = buildAiWorkspaceContext(state);
         }
+        workspaceBlock = workspace ? formatAiWorkspaceContextForPrompt(workspace) : null;
       } catch {
         // Workspace context is optional; ignore malformed client payloads.
+        workspace = null;
+        workspaceBlock = null;
       }
 
       // Olive MCP is the primary knowledge source for assistant chat.
       const mcpKnowledge = await gatherOliveMcpKnowledge(message, workspace);
-      const workspaceBlock = workspace ? formatAiWorkspaceContextForPrompt(workspace) : null;
       const system = buildOliveAssistantSystemPrompt({
         mcpBlock: mcpKnowledge.promptBlock,
         workspaceBlock,
@@ -1202,7 +1146,13 @@ export function mountAiRoutes(router: Router): void {
       }
       send({ type: "step", message: `Downloading ${modelTag} via LM Studio (lms get)…`, percent: 5 });
       // LM Studio CLI downloads with `lms get`, not Ollama-style `pull`. `-y` skips prompts.
-      const proc = spawn(lmsCli, ["get", String(modelTag), "-y"], { stdio: "pipe" });
+      const tag = String(modelTag);
+      if (tag.startsWith("-") || !/^[\w./:@-]+$/.test(tag)) {
+        send({ type: "error", error: "Invalid modelTag." });
+        guard.endOnce();
+        return;
+      }
+      const proc = spawn(lmsCli, ["get", tag, "-y"], { stdio: "pipe" });
       const killProc = () => {
         try {
           proc.kill();
@@ -1621,6 +1571,11 @@ export function mountAiRoutes(router: Router): void {
       if (!apiToken || !accountId) {
         return res.status(400).json({ ok: false, error: "apiToken and accountId are required." });
       }
+      if (!isValidCloudflareAccountId(accountId)) {
+        return res
+          .status(400)
+          .json({ ok: false, error: "accountId must be a 32-character hex Cloudflare account id." });
+      }
       const creds = saveManualCloudflareCredentials({ apiToken, accountId });
       return res.json({ ok: true, accountId: creds.accountId });
     } catch (err: unknown) {
@@ -1643,14 +1598,7 @@ export function mountAiRoutes(router: Router): void {
   });
 }
 
-/**
- * Fetches a provider's live model catalog, using a fallback result when retrieval fails or yields no chat-capable models.
- *
- * @param provider - The provider whose models should be retrieved
- * @param apiKey - The provider API key
- * @param baseUrl - The sanitized provider API base URL
- * @returns The model catalog, its source, and an optional error message
- */
+/** Fetch live model catalog from a provider's API. `baseUrl` must already be sanitized. */
 async function fetchLiveModelCatalog(provider: string, apiKey: string, baseUrl?: string) {
   try {
     if (provider === "gemini") {
@@ -1679,7 +1627,7 @@ async function fetchLiveModelCatalog(provider: string, apiKey: string, baseUrl?:
     let pages = 0;
     while (nextUrl && pages < 10) {
       pages += 1;
-      const r = await fetch(nextUrl, { headers });
+      const r = await fetchWithTimeout(nextUrl, { headers });
       if (!r.ok) {
         if (pages === 1) {
           return { models: [], source: "fallback" as const, error: `HTTP ${r.status}` };
@@ -1693,7 +1641,14 @@ async function fetchLiveModelCatalog(provider: string, apiKey: string, baseUrl?:
       };
       rows.push(...(data.data ?? []));
       if (data.has_more && typeof data.next === "string" && data.next.trim()) {
-        nextUrl = data.next.startsWith("http") ? data.next : new URL(data.next, `${base}/`).toString();
+        try {
+          const baseOrigin = new URL(`${base}/`).origin;
+          const candidate = new URL(data.next, `${base}/`);
+          // API key travels with this request; never follow pagination off-origin.
+          nextUrl = candidate.origin === baseOrigin ? candidate.toString() : null;
+        } catch {
+          nextUrl = null;
+        }
       } else {
         nextUrl = null;
       }
@@ -1714,12 +1669,6 @@ async function fetchLiveModelCatalog(provider: string, apiKey: string, baseUrl?:
   }
 }
 
-/**
- * Retrieves the available Gemini models that support content generation.
- *
- * @param apiKey - The Gemini API key used to authenticate the catalog request
- * @returns The normalized model catalog, its source, and an error message when live models are unavailable
- */
 async function fetchGeminiModelCatalog(apiKey: string) {
   const models: Array<{ id: string; label: string }> = [];
   let pageToken: string | undefined;
@@ -1728,7 +1677,7 @@ async function fetchGeminiModelCatalog(apiKey: string) {
     url.searchParams.set("key", apiKey);
     url.searchParams.set("pageSize", "100");
     if (pageToken) url.searchParams.set("pageToken", pageToken);
-    const r = await fetch(url);
+    const r = await fetchWithTimeout(url);
     if (!r.ok) {
       if (page === 0) {
         return { models: [], source: "fallback" as const, error: `Gemini HTTP ${r.status}` };
@@ -1756,12 +1705,6 @@ async function fetchGeminiModelCatalog(apiKey: string) {
   };
 }
 
-/**
- * Retrieves and normalizes the available Anthropic models.
- *
- * @param apiKey - Anthropic API key used to authenticate the request
- * @returns The normalized model catalog, its source, and an error when the catalog is unavailable
- */
 async function fetchAnthropicModelCatalog(apiKey: string) {
   const models: Array<{ id: string; label: string }> = [];
   let afterId: string | undefined;
@@ -1769,7 +1712,7 @@ async function fetchAnthropicModelCatalog(apiKey: string) {
     const url = new URL("https://api.anthropic.com/v1/models");
     url.searchParams.set("limit", "100");
     if (afterId) url.searchParams.set("after_id", afterId);
-    const r = await fetch(url, {
+    const r = await fetchWithTimeout(url, {
       headers: {
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
@@ -1802,19 +1745,12 @@ async function fetchAnthropicModelCatalog(apiKey: string) {
   };
 }
 
-/**
- * Fetches the available GitHub Copilot models for an API token.
- *
- * @param apiKey - GitHub Copilot API token
- * @param baseUrl - Optional Copilot base URL override to validate
- * @returns The normalized model catalog and its source, with an error when retrieval fails or no models are available
- */
 async function fetchCopilotModelCatalog(apiKey: string, baseUrl?: string) {
   // Validate optional override against the Copilot allowlist, then fetch only the
   // constant allowlisted endpoint (breaks CodeQL SSRF taint from user baseUrl).
   sanitizeProviderBaseUrl("copilot", baseUrl);
   const modelsUrl = "https://api.githubcopilot.com/models";
-  const r = await fetch(modelsUrl, {
+  const r = await fetchWithTimeout(modelsUrl, {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       Accept: "application/json",
@@ -1844,12 +1780,6 @@ async function fetchCopilotModelCatalog(apiKey: string, baseUrl?: string) {
   };
 }
 
-/**
- * Determines the default API base URL for an AI provider.
- *
- * @param provider - The provider identifier
- * @returns The provider's default API base URL, or the OpenAI-compatible URL for unknown providers
- */
 function defaultBaseUrl(provider: string): string {
   switch (provider) {
     case "openai":
@@ -1884,11 +1814,6 @@ function defaultBaseUrl(provider: string): string {
   }
 }
 
-/**
- * Registers AI-related routes under the `/api` path.
- *
- * @param app - The Express application to configure
- */
 export function registerAiRoutes(app: import("express").Express): void {
   const router = Router();
   mountAiRoutes(router);

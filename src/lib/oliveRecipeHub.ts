@@ -458,14 +458,12 @@ export function deriveUiStateFromOliveRecipe(parsed: any, options?: DeriveUiStat
       (typeof inputModel?.config?.dataset === "string" && inputModel.config.dataset) ||
       (typeof hfConfig?.dataset === "string" && hfConfig.dataset) ||
       "";
-    if (dataset) {
-      incomingState.hfDataset = dataset;
-    }
+    incomingState.hfDataset = dataset;
     const task =
-      (typeof hfConfig?.task === "string" && hfConfig.task) ||
       (typeof inputModel?.config?.task === "string" && inputModel.config.task) ||
+      (typeof hfConfig?.task === "string" && hfConfig.task) ||
       "";
-    if (task) incomingState.hfTask = task === "speech-recognition" ? "automatic-speech-recognition" : task;
+    incomingState.hfTask = task === "speech-recognition" ? "automatic-speech-recognition" : task;
   }
 
   const localFiles = inputModel?.config?.local_files;

@@ -134,116 +134,163 @@ export function GeminiSidebar({
     onAuditOpened?.();
   }, [openToAudit]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, onClose]);
+
   const providerLabel =
     providerSource !== "none"
       ? `${PROVIDER_OPTIONS.find((p) => p.id === providers.providerStatus.provider)?.name ?? providers.providerStatus.provider} / ${providers.providerStatus.model}`
       : "No provider set";
 
   return (
-    <div
-      className={cn(
-        "h-full shrink-0 overflow-hidden border-l border-slate-800 bg-slate-900 transition-[width] duration-300 ease-in-out",
-        isOpen ? "w-[420px]" : "w-0 border-l-0",
-      )}
-      aria-hidden={!isOpen}
-    >
-      <div className="w-[420px] h-full flex flex-col shadow-[-4px_0_24px_rgba(3,7,18,0.25)]">
-        {/* Header */}
-        <div className="h-12 flex items-center justify-between px-5 border-b border-slate-800 shrink-0 bg-slate-950/80">
-          <div className="flex items-center gap-2 min-w-0">
-            <Bot className="h-4 w-4 text-electric-blue shrink-0" />
-            <span className="text-sm font-medium text-slate-100">Assistant</span>
-            <span className="text-[11px] text-slate-500 truncate hidden sm:inline">· {providerLabel}</span>
+    <>
+      {isOpen ? (
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label="Dismiss assistant"
+          className="fixed inset-0 z-40 bg-slate-950/60 wide:hidden cursor-pointer"
+          onClick={onClose}
+        />
+      ) : null}
+      <aside
+        id="assistant-panel"
+        aria-label="Assistant"
+        className={cn(
+          "h-full shrink-0 overflow-hidden border-l border-slate-800 bg-slate-900 transition-[width] duration-300 ease-in-out",
+          isOpen ? "w-[min(100vw,420px)] wide:w-[420px]" : "w-0 border-l-0",
+          "max-wide:fixed max-wide:inset-y-0 max-wide:right-0 max-wide:z-50 max-wide:shadow-2xl",
+        )}
+        aria-hidden={!isOpen}
+        {...(!isOpen ? { inert: true } : {})}
+      >
+        <div className="w-[min(100vw,420px)] wide:w-[420px] h-full flex flex-col shadow-[-4px_0_24px_rgba(3,7,18,0.25)]">
+          {/* Header */}
+          <div className="h-12 flex items-center justify-between px-5 border-b border-slate-800 shrink-0 bg-slate-950/80">
+            <div className="flex items-center gap-2 min-w-0">
+              <Bot className="h-4 w-4 text-electric-blue shrink-0" />
+              <span className="text-sm font-medium text-slate-100">Assistant</span>
+              <span className="text-[11px] text-slate-500 truncate hidden sm:inline">· {providerLabel}</span>
+            </div>
+            <button
+              type="button"
+              aria-label="Close sidebar"
+              onClick={onClose}
+              className="h-8 w-8 rounded-lg hover:bg-slate-800 border border-slate-800/55 flex items-center justify-center text-slate-400 hover:text-slate-100 transition-colors cursor-pointer shrink-0"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            type="button"
-            aria-label="Close sidebar"
-            onClick={onClose}
-            className="h-8 w-8 rounded-lg hover:bg-slate-800 border border-slate-800/55 flex items-center justify-center text-slate-400 hover:text-slate-100 transition-colors cursor-pointer shrink-0"
-          >
-            <X className="h-4 w-4" />
-          </button>
+
+          {/* Tabs */}
+          <div className="p-4 border-b border-slate-800/60 bg-slate-950/20 shrink-0">
+            <div
+              role="tablist"
+              aria-label="Assistant panels"
+              className="grid grid-cols-3 bg-slate-950/90 p-1 border border-slate-850 rounded-lg transform-gpu"
+            >
+              {TABS.map(({ id, label, Icon }) => (
+                <button
+                  type="button"
+                  role="tab"
+                  id={`assistant-tab-${id}`}
+                  aria-selected={activeTab === id}
+                  aria-controls={`assistant-panel-${id}`}
+                  key={id}
+                  onClick={() => handleTabChange(id)}
+                  className={`py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer border ${activeTab === id ? "bg-slate-900 text-electric-blue shadow-sm border-slate-800/40" : "text-slate-400 hover:text-slate-200 border-transparent"}`}
+                >
+                  <Icon
+                    className={`h-3.5 w-3.5 ${activeTab === id ? "text-electric-blue" : "text-slate-500"}`}
+                  />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-hidden relative transform-gpu">
+            {/* ── Audit ── */}
+            <div
+              role="tabpanel"
+              id="assistant-panel-audit"
+              aria-labelledby="assistant-tab-audit"
+              className={cn(
+                "absolute inset-0 p-4 overflow-y-auto",
+                activeTab === "audit" ? "block" : "hidden",
+              )}
+            >
+              <AuditPanel
+                analysis={audit.analysis}
+                isAnalyzing={audit.isAnalyzing}
+                analysisError={audit.analysisError}
+                onApplyAutofix={audit.applyAutofix}
+                onRunAnalysis={() => void audit.runAnalysis()}
+                onGoSettings={() => setActiveTab("settings")}
+              />
+            </div>
+
+            {/* ── Chat ── */}
+            <div
+              role="tabpanel"
+              id="assistant-panel-chat"
+              aria-labelledby="assistant-tab-chat"
+              className={cn(
+                "absolute inset-0 p-4 overflow-y-auto",
+                activeTab === "chat" ? "block" : "hidden",
+              )}
+            >
+              <ChatPanel
+                workspaceSummary={workspaceSummary}
+                chatMessages={chat.chatMessages}
+                isChatting={chat.isChatting}
+                chatError={chat.chatError}
+                chatEndRef={chat.chatEndRef}
+                presetQueries={presetQueries}
+                inputQuestion={chat.inputQuestion}
+                onInputChange={chat.setInputQuestion}
+                onSend={(presetText) => void chat.sendChat(presetText)}
+                onGoSettings={() => setActiveTab("settings")}
+                onApplyAction={handleApplyChatAction}
+              />
+            </div>
+
+            {/* ── Settings ── */}
+            <div
+              role="tabpanel"
+              id="assistant-panel-settings"
+              aria-labelledby="assistant-tab-settings"
+              className={cn(
+                "absolute inset-0 p-4 overflow-y-auto",
+                activeTab === "settings" ? "block" : "hidden",
+              )}
+            >
+              <SettingsPanel providers={providers} local={local} isOpen={isOpen} />
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="p-3.5 border-t border-slate-800 shrink-0 bg-slate-950/85 space-y-1.5">
+            <div className="flex items-center gap-2 text-[10px] text-slate-500 justify-center">
+              <Bot className="h-3 w-3 text-slate-600" />
+              <span>
+                Target: <span className="text-slate-400 font-mono">{state.ihvProvider}</span>
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-600 text-center leading-snug px-1">
+              AI can be wrong. Verify Audit, Chat, and Apply changes against your model, EP, and Olive docs
+              before running jobs.
+            </p>
+          </div>
         </div>
-
-        {/* Tabs */}
-        <div className="p-4 border-b border-slate-800/60 bg-slate-950/20 shrink-0">
-          <div className="grid grid-cols-3 bg-slate-950/90 p-1 border border-slate-850 rounded-lg transform-gpu">
-            {TABS.map(({ id, label, Icon }) => (
-              <button
-                type="button"
-                key={id}
-                onClick={() => handleTabChange(id)}
-                className={`py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer border ${activeTab === id ? "bg-slate-900 text-electric-blue shadow-sm border-slate-800/40" : "text-slate-400 hover:text-slate-200 border-transparent"}`}
-              >
-                <Icon
-                  className={`h-3.5 w-3.5 ${activeTab === id ? "text-electric-blue" : "text-slate-500"}`}
-                />
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-hidden relative transform-gpu">
-          {/* ── Audit ── */}
-          <div
-            className={cn("absolute inset-0 p-4 overflow-y-auto", activeTab === "audit" ? "block" : "hidden")}
-          >
-            <AuditPanel
-              analysis={audit.analysis}
-              isAnalyzing={audit.isAnalyzing}
-              analysisError={audit.analysisError}
-              onApplyAutofix={audit.applyAutofix}
-              onRunAnalysis={() => void audit.runAnalysis()}
-              onGoSettings={() => setActiveTab("settings")}
-            />
-          </div>
-
-          {/* ── Chat ── */}
-          <div
-            className={cn("absolute inset-0 p-4 overflow-y-auto", activeTab === "chat" ? "block" : "hidden")}
-          >
-            <ChatPanel
-              workspaceSummary={workspaceSummary}
-              chatMessages={chat.chatMessages}
-              isChatting={chat.isChatting}
-              chatError={chat.chatError}
-              chatEndRef={chat.chatEndRef}
-              presetQueries={presetQueries}
-              inputQuestion={chat.inputQuestion}
-              onInputChange={chat.setInputQuestion}
-              onSend={(presetText) => void chat.sendChat(presetText)}
-              onGoSettings={() => setActiveTab("settings")}
-              onApplyAction={handleApplyChatAction}
-            />
-          </div>
-
-          {/* ── Settings ── */}
-          <div
-            className={cn(
-              "absolute inset-0 p-4 overflow-y-auto",
-              activeTab === "settings" ? "block" : "hidden",
-            )}
-          >
-            <SettingsPanel providers={providers} local={local} isOpen={isOpen} />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-3.5 border-t border-slate-800 shrink-0 bg-slate-950/85 space-y-1.5">
-          <div className="flex items-center gap-2 text-[10px] text-slate-500 justify-center">
-            <Bot className="h-3 w-3 text-slate-600" />
-            <span>
-              Target: <span className="text-slate-400 font-mono">{state.ihvProvider}</span>
-            </span>
-          </div>
-          <p className="text-[10px] text-slate-600 text-center leading-snug px-1">
-            AI can be wrong. Verify Audit, Chat, and Apply changes against your model, EP, and Olive docs
-            before running jobs.
-          </p>
-        </div>
-      </div>
-    </div>
+      </aside>
+    </>
   );
 }

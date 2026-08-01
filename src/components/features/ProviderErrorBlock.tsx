@@ -1,5 +1,8 @@
 import { AlertTriangle } from "lucide-react";
 
+/** Structured error kinds from the response parser (not inferred from message text). */
+export type ProviderErrorKind = "invalid_model_json";
+
 /**
  * Renders an error block with tailored guidance for invalid model output, provider configuration issues, and other errors.
  *
@@ -7,8 +10,17 @@ import { AlertTriangle } from "lucide-react";
  * @param onGoSettings - Called when the user selects the Settings link for provider configuration.
  * @returns The rendered error block.
  */
-export function ProviderErrorBlock({ msg, onGoSettings }: { msg: string; onGoSettings: () => void }) {
-  const isJsonModelErr = /not valid JSON|Expected ','|Unexpected token|JSON at position/i.test(msg);
+export function ProviderErrorBlock({
+  msg,
+  onGoSettings,
+  kind,
+}: {
+  msg: string;
+  onGoSettings: () => void;
+  kind?: ProviderErrorKind;
+}) {
+  // Model-specific copy only when the parser supplies a structured kind.
+  const isJsonModelErr = kind === "invalid_model_json";
   const isProviderErr =
     !isJsonModelErr &&
     (msg.includes("not configured") ||
@@ -25,8 +37,8 @@ export function ProviderErrorBlock({ msg, onGoSettings }: { msg: string; onGoSet
         <div>
           <span className="font-bold block text-amber-100">Model returned invalid JSON</span>
           <p className="mt-1 leading-relaxed text-slate-400">
-            Your account/provider connection is fine. This model struggled to format the audit response. Try
-            Analyze again, or pick a larger model in Settings.
+            This model struggled to format the audit response. Try Analyze again, or pick a larger model in
+            Settings.
           </p>
           <p className="mt-2 text-[10px] text-slate-500 font-mono break-words">{msg}</p>
         </div>
@@ -58,7 +70,9 @@ export function ProviderErrorBlock({ msg, onGoSettings }: { msg: string; onGoSet
         <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">OPENCODE_API_KEY</code>,{" "}
         <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">FIREWORKS_API_KEY</code>,{" "}
         <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">NVIDIA_API_KEY</code>,{" "}
-        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">HF_TOKEN</code>) in{" "}
+        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">HF_TOKEN</code>,{" "}
+        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">CLOUDFLARE_API_TOKEN</code>,{" "}
+        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">CLOUDFLARE_ACCOUNT_ID</code>) in{" "}
         <code className="font-mono">.env</code> or <code className="font-mono">.env.local</code>, then restart{" "}
         <code className="font-mono">pnpm dev</code>.
       </p>
@@ -68,7 +82,10 @@ export function ProviderErrorBlock({ msg, onGoSettings }: { msg: string; onGoSet
       <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-500" />
       <div>
         <span className="font-bold block text-rose-200">Error</span>
-        {msg}
+        <p className="mt-1 leading-relaxed">{msg}</p>
+        <p className="mt-2 text-[10px] text-slate-500 leading-relaxed">
+          If retrying fails, verify the configured endpoint in Settings.
+        </p>
       </div>
     </div>
   );
