@@ -1249,6 +1249,7 @@ export function GeminiSidebar({
       {isOpen ? (
         <button
           type="button"
+          tabIndex={-1}
           aria-label="Dismiss assistant"
           className="fixed inset-0 z-40 bg-slate-950/60 wide:hidden cursor-pointer"
           onClick={onClose}
