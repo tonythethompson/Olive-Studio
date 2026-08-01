@@ -13,6 +13,7 @@ import { UIState } from "@/types";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";
 import { applyMcpDiagnosticToUiState, canApplyMcpDiagnostic } from "@/lib/mcpConfigMapping";
+import { expandLogSelection, isStudioHfTaskSpeechFix, logsIndicateFailure } from "@/lib/logFailurePatterns";
 import { DiagnosisHistory, type DiagnosisEntry } from "./DiagnosisHistory";
 import { MCPDiagnosticCard } from "./MCPDiagnosticCard";
 import {
@@ -45,14 +46,12 @@ import JSZip from "jszip";
 import { cn } from "@/lib/utils";
 
 import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
-import { buildOwrConfigs } from "@/lib/owrExportConfigs";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { GpuMetricsBar } from "@/components/features/GpuMetricsBar";
 import { parseGpuMetrics, type GpuMetrics } from "@/lib/gpuMetrics";
-import { saveJobHistory, getJobHistory } from "@/lib/jobHistoryStore";
+import { saveJobHistory } from "@/lib/jobHistoryStore";
 import { JobHistoryModal } from "@/components/features/JobHistoryModal";
-import { downloadMarkdownReport } from "@/lib/reportGenerator";
 
 const RecipeGraphView = lazy(() => import("./RecipeGraphView").then((m) => ({ default: m.RecipeGraphView })));
 
@@ -82,10 +81,10 @@ function LoadingFallback({ label, minH }: { label: string; minH?: string }) {
 }
 
 /**
- * Renders the Olive recipe workspace for reviewing, validating, exporting, queuing, executing, and diagnosing pipeline runs.
+ * Renders the Olive recipe workspace for reviewing, exporting, queuing, and executing a pipeline.
  *
- * @param state - Optional controlled pipeline state; store state is used when omitted.
- * @param setState - Optional controlled state updater; the store updater is used when omitted.
+ * @param state - Optional pipeline state override; the store state is used when omitted.
+ * @param setState - Optional state update function; the store updater is used when omitted.
  * @param onOpenAiAudit - Callback invoked when the AI audit review is opened.
  * @param onRunStateChange - Callback invoked when live execution starts or stops.
  */
@@ -133,26 +132,7 @@ export function ExecutionWorkspace({
   const [recipeView, setRecipeViewRaw] = useState<"graph" | "json" | "browser-test" | "benchmark">("graph");
   const [visitedRecipeViews, setVisitedRecipeViews] = useState<Set<string>>(new Set(["graph"]));
   const [moreToolsOpen, setMoreToolsOpen] = useState(false);
-  const moreToolsRef = useRef<HTMLDivElement>(null);
   const [, startRecipeTransition] = useTransition();
-
-  useEffect(() => {
-    if (!moreToolsOpen) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!moreToolsRef.current?.contains(event.target as Node)) {
-        setMoreToolsOpen(false);
-      }
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMoreToolsOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [moreToolsOpen]);
   const setRecipeView = (view: "graph" | "json" | "browser-test" | "benchmark") => {
     startRecipeTransition(() => {
       setRecipeViewRaw(view);
@@ -168,9 +148,15 @@ export function ExecutionWorkspace({
   const [isExportCopied, setIsExportCopied] = useState(false);
   const [justQueued, setJustQueued] = useState(false);
 
-  const { fetchKeyedDiagnostic, diagnostics: keyedDiagnostics, diagnosingKeys } = useMcpDiagnosticKeyed();
+  const {
+    fetchKeyedDiagnostic,
+    diagnostics: keyedDiagnostics,
+    diagnosingKeys,
+    errors: diagnoseErrors,
+  } = useMcpDiagnosticKeyed();
   const mcpDiagnostic = keyedDiagnostics["current"] ?? null;
   const isDiagnosing = diagnosingKeys["current"] ?? false;
+  const diagnoseError = diagnoseErrors["current"] ?? null;
   const [mcpFixApplied, setMcpFixApplied] = useAutoClearError(3000);
   // Diagnosis history for comparing across runs
   const [diagnosisHistory, setDiagnosisHistory] = useState<DiagnosisEntry[]>([]);
@@ -186,6 +172,15 @@ export function ExecutionWorkspace({
         ...prev,
         "[MCP FIX] Nothing auto-applyable — follow Recommended Fix / Known Quirks manually.",
       ]);
+      return;
+    }
+
+    if (isStudioHfTaskSpeechFix(mcpDiagnostic)) {
+      setExecutionLogs((prev) => [
+        ...prev,
+        "[FIX] Hugging Face task corrected to `automatic-speech-recognition` for Whisper. Rebuild/refresh the recipe, then run Execute Live again.",
+      ]);
+      setMcpFixApplied("applied");
       return;
     }
 
@@ -241,8 +236,7 @@ export function ExecutionWorkspace({
     lastClickedIndexRef.current = null;
   }, [executionLogs.length]);
 
-  // Auto-select error lines when a job fails so users can immediately
-  // click "Diagnose Selected" without manual selection.
+  // Auto-select error lines when a job fails so Diagnose can focus on them.
   const prevStatusRef = useRef<string | null>(null);
 
   useLayoutEffect(() => {
@@ -257,7 +251,10 @@ export function ExecutionWorkspace({
             line.includes("Traceback") ||
             line.includes("Exception") ||
             line.includes("Error:") ||
-            line.includes("error:")
+            line.includes("error:") ||
+            line.includes("KeyError") ||
+            line.includes("Unknown task") ||
+            line.includes("FAILED")
           ) {
             errorIndices.add(i);
           }
@@ -293,20 +290,28 @@ export function ExecutionWorkspace({
     lastClickedIndexRef.current = index;
   };
 
-  const handleDiagnoseSelected = () => {
-    if (selectedLogIndices.size === 0) return;
-    setMcpFixApplied("");
-    const selectedLogs = Array.from(selectedLogIndices)
-      .sort((a: number, b: number) => a - b)
-      .map((i: number) => executionLogs[i]);
-    fetchKeyedDiagnostic("current", selectedLogs);
-  };
-
-  const handleDiagnoseAll = () => {
+  /** Prefer selected lines when present; expand traceback context; else full log. */
+  const handleDiagnose = () => {
     if (executionLogs.length === 0) return;
     setMcpFixApplied("");
-    fetchKeyedDiagnostic("current", executionLogs);
+    const logs =
+      selectedLogIndices.size > 0
+        ? expandLogSelection(executionLogs, Array.from(selectedLogIndices))
+        : executionLogs;
+    void fetchKeyedDiagnostic("current", logs);
   };
+
+  // Auto-diagnose once when a run fails (same pattern as BatchProcessingPanel).
+  const autoDiagnoseRef = useRef(false);
+  useEffect(() => {
+    if (executionStatus === "failed" && executionLogs.length > 0 && !autoDiagnoseRef.current) {
+      autoDiagnoseRef.current = true;
+      void fetchKeyedDiagnostic("current", executionLogs);
+    }
+    if (executionStatus !== "failed") {
+      autoDiagnoseRef.current = false;
+    }
+  }, [executionStatus, executionLogs, fetchKeyedDiagnostic]);
 
   // Auto-save completed diagnoses to history
   const prevDiagnosticRef = useRef(mcpDiagnostic);
@@ -369,13 +374,169 @@ export function ExecutionWorkspace({
   }, []);
 
   // Dynamic generation helper for OWR Config Bundle
-  const getOwrConfigs = () =>
-    buildOwrConfigs({
-      state,
-      platform: owrPlatform,
-      threads: owrThreads,
-      vramMode: owrVramMode,
-    });
+  const getOwrConfigs = () => {
+    const rawModelId = state.hfModelId || (state.localFiles && state.localFiles[0]?.name) || "model";
+    const modelName = rawModelId.split("/").pop() || "model";
+
+    // Deduce architecture
+    let architecture = "DecoderLLM";
+    const nameLower = modelName.toLowerCase();
+    if (nameLower.includes("llama")) architecture = "Llama";
+    else if (nameLower.includes("phi")) architecture = "Phi";
+    else if (nameLower.includes("whisper")) architecture = "Whisper";
+    else if (nameLower.includes("resnet")) architecture = "ResNet";
+    else if (nameLower.includes("mobilenet")) architecture = "MobileNet";
+    else if (nameLower.includes("bert")) architecture = "BERT";
+    else if (nameLower.includes("stable") || nameLower.includes("diffusion"))
+      architecture = "Stable Diffusion";
+
+    const ortConfig = {
+      model_path: owrPlatform === "web" ? "models/optimized/model.onnx" : "models/optimized/model.ort",
+      session_options: {
+        execution_mode: "ORT_SEQUENTIAL",
+        execution_providers:
+          owrPlatform === "web"
+            ? owrVramMode === "performance"
+              ? ["WebGPUExecutionProvider", "WasmExecutionProvider"]
+              : ["WasmExecutionProvider"]
+            : ["XnnpackExecutionProvider", "NnapiExecutionProvider"],
+        graph_optimization_level: "ORT_ENABLE_ALL",
+        intra_op_num_threads: parseInt(owrThreads) || 4,
+        inter_op_num_threads: 1,
+        log_id: owrPlatform === "web" ? "onnxruntime_web" : "onnxruntime_mobile",
+        enable_profiling: false,
+        enable_mem_pattern: true,
+        enable_cpu_mem_arena: true,
+      },
+      run_options: {
+        log_severity_level: 2,
+      },
+    };
+
+    const manifestConfig = {
+      manifest_version: "1.0.0",
+      generator: "Olive OWR Cross-Compiling Exporter",
+      export_date: new Date().toISOString(),
+      model_metadata: {
+        name: modelName,
+        architecture: architecture,
+        quantization: state.passes.quantization ? state.passes.quantPrecision : "none",
+        precision: state.passes.conversionInputTargetTypes || "float32",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        passes_applied: Object.keys(state.passes).filter((k) => (state.passes as any)[k]),
+      },
+      deployment_requirements: {
+        runtime: `onnxruntime-${owrPlatform}`,
+        vram_constraint: owrVramMode,
+        optimal_execution_providers:
+          owrPlatform === "web" ? ["WebGPU", "WASM"] : ["NNAPI (Android)", "CoreML (iOS)", "XNNPACK"],
+      },
+    };
+
+    const webInitCode = `// ONNX Runtime Web (OWR) Service-Worker / App Loader
+// Configured dynamically for: ${modelName} (${architecture})
+// Execute: npm install onnxruntime-web
+
+import * as ort from "onnxruntime-web";
+
+// Configure WASM and WebGPU threads
+ort.env.wasm.numThreads = ${owrThreads};
+ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
+
+export async function initializeOrtSession() {
+  console.log("Loading OWR model pipeline from memory...");
+  
+  const sessionOptions = {
+    executionProviders: ${owrVramMode === "performance" ? '["webgpu", "wasm"]' : '["wasm"]'},
+    graphOptimizationLevel: "all",
+    enableCpuMemArena: true,
+    enableMemPattern: true
+  };
+
+  try {
+    const session = await ort.InferenceSession.create("./models/optimized/model.onnx", sessionOptions);
+    console.log("Session init success! Available Inputs:", session.inputNames);
+    return session;
+  } catch (err) {
+    console.error("Failed to boot ONNX Runtime session:", err);
+    throw err;
+  }
+}
+
+export async function runInference(session, rawFloatBuffer) {
+  // Map dynamic inputs to graph feeds
+  const feeds = {};
+  for (const name of session.inputNames) {
+    // Creating default tensors matched to compiling specifications
+    feeds[name] = new ort.Tensor("float32", new Float32Array(rawFloatBuffer || 1024), [1, 1024]);
+  }
+  
+  const results = await session.run(feeds);
+  return results;
+}
+`;
+
+    const mobileInitCode = `package com.onnxruntime.mobile
+
+import android.content.Context
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.nio.FloatBuffer
+
+/**
+ * High-performance ONNX Runtime Mobile Wrapper Session
+ * Generated dynamically for model: ${modelName} (${architecture})
+ */
+class OnnxModelExecutor(private val context: Context) : AutoCloseable {
+    private val ortEnv: OrtEnvironment = OrtEnvironment.getEnvironment()
+    private var ortSession: OrtSession? = null
+
+    fun loadModelFromAssets(assetName: String = "model.ort") {
+        val modelBytes = readAsset(assetName)
+        val opts = OrtSession.SessionOptions().apply {
+            setIntraOpNumThreads(${owrThreads})
+            // Establish target execution capabilities
+            addXnnpack()
+            addNnapi()
+        }
+        ortSession = ortEnv.createSession(modelBytes, opts)
+    }
+
+    fun runInference(inputData: FloatArray, shape: LongArray): Map<String, Any> {
+        val session = ortSession ?: throw IllegalStateException("Session not initialized.")
+        val buffer = FloatBuffer.wrap(inputData)
+        val inputName = session.inputNames.first()
+        val tensor = OnnxTensor.createTensor(ortEnv, buffer, shape)
+        
+        tensor.use {
+            val outputs = session.run(mapOf(inputName to tensor))
+            return outputs.associate { it.key to it.value.value }
+        }
+    }
+
+    private fun readAsset(fileName: String): ByteArray {
+        context.assets.open(fileName).use { stream ->
+            val byteBuffer = ByteArrayOutputStream()
+            val buffer = ByteArray(4096)
+            var len: Int
+            while (stream.read(buffer).also { len = it } != -1) {
+                byteBuffer.write(buffer, 0, len)
+            }
+            return byteBuffer.toByteArray()
+        }
+    }
+
+    override fun close() {
+        ortSession?.close()
+    }
+}
+`;
+
+    return { ortConfig, manifestConfig, webInitCode, mobileInitCode };
+  };
 
   const handleDownloadOwrBundle = async () => {
     const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = getOwrConfigs();
@@ -431,10 +592,18 @@ ${
 
   const pipeline = buildRecipeFromState(state, { hardwareProbe });
   const { recipe, recipeJson, validation, schema, advisories, isRunnable } = pipeline;
-  const validationLabel = !schema.valid
+  // Local structure/compat checks only. A green badge must not imply Execute Live succeeded.
+  const localValidationLabel = !schema.valid
     ? `Schema invalid (${schema.errors.length} issue${schema.errors.length === 1 ? "" : "s"})`
     : validation.statusLabel;
-  const validationTone = !schema.valid ? "error" : validation.statusTone;
+  const localValidationTone = !schema.valid ? "error" : validation.statusTone;
+  const runFailed = executionStatus === "failed";
+  const validationLabel = runFailed
+    ? `Run failed (exit ${executionExitCode ?? "?"}) · ${
+        localValidationTone === "success" ? "local checks still OK" : localValidationLabel
+      }`
+    : localValidationLabel;
+  const validationTone = runFailed ? "error" : localValidationTone;
 
   const handleQueueJob = () => {
     if (!isRunnable) {
@@ -645,22 +814,29 @@ ${
           } catch {
             exitCode = 0;
           }
-          const finalStatus = exitCode === 0 ? "completed" : "failed";
-          setExecutionStatus(finalStatus);
-          setExecutionExitCode(exitCode);
-          setIsRunning(false);
-          setGpuMetrics(null);
-          onRunStateChange?.(false);
+          // Olive sometimes exits 0 after a pass traceback (e.g. HF task KeyError).
+          // Snapshot logs, then update status outside the state updater.
+          setExecutionLogs((currentLogs) => {
+            queueMicrotask(() => {
+              if (isUnmountedRef.current) return;
+              const failed = exitCode !== 0 || logsIndicateFailure(currentLogs);
+              const finalStatus = failed ? "failed" : "completed";
+              const reportedExit = failed && exitCode === 0 ? 1 : exitCode;
+              setExecutionStatus(finalStatus);
+              setExecutionExitCode(reportedExit);
+              setIsRunning(false);
+              setGpuMetrics(null);
+              onRunStateChange?.(false);
+              recordJobCompletion(targetJobId, finalStatus, reportedExit);
+              if (failed) {
+                setMcpFixApplied("");
+                void fetchKeyedDiagnostic("current", currentLogs);
+              }
+            });
+            return currentLogs;
+          });
           evtSource.close();
           liveSourceRef.current = null;
-          recordJobCompletion(targetJobId, finalStatus, exitCode);
-          if (finalStatus === "failed") {
-            setMcpFixApplied("");
-            setExecutionLogs((currentLogs) => {
-              fetchKeyedDiagnostic("current", currentLogs);
-              return currentLogs;
-            });
-          }
         });
 
         evtSource.onerror = async () => {
@@ -1122,7 +1298,6 @@ ${
               >
                 <button
                   type="button"
-                  aria-pressed={recipeView === "graph"}
                   onClick={() => setRecipeView("graph")}
                   className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${
                     recipeView === "graph"
@@ -1134,7 +1309,6 @@ ${
                 </button>
                 <button
                   type="button"
-                  aria-pressed={recipeView === "json"}
                   onClick={() => setRecipeView("json")}
                   className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${
                     recipeView === "json"
@@ -1167,24 +1341,24 @@ ${
               >
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Export Recipe
               </Button>
-              <div className="relative" ref={moreToolsRef}>
+              <div className="relative">
                 <Button
                   variant="outline"
                   className="h-8 px-2.5 text-xs border-slate-700 text-slate-300 hover:border-slate-500"
                   aria-expanded={moreToolsOpen}
-                  aria-haspopup="true"
-                  aria-controls="execution-more-tools"
+                  aria-haspopup="menu"
                   onClick={() => setMoreToolsOpen((open) => !open)}
                 >
                   <MoreHorizontal className="h-3.5 w-3.5 mr-1" /> More
                 </Button>
                 {moreToolsOpen && (
                   <div
-                    id="execution-more-tools"
+                    role="menu"
                     className="absolute right-0 z-20 mt-1 min-w-[180px] rounded-lg border border-slate-800 bg-slate-950 p-1 shadow-xl"
                   >
                     <button
                       type="button"
+                      role="menuitem"
                       className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] cursor-pointer ${
                         recipeView === "browser-test"
                           ? "bg-electric-blue/15 text-electric-blue"
@@ -1199,6 +1373,7 @@ ${
                     </button>
                     <button
                       type="button"
+                      role="menuitem"
                       className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] cursor-pointer ${
                         recipeView === "benchmark"
                           ? "bg-electric-blue/15 text-electric-blue"
@@ -1213,6 +1388,7 @@ ${
                     </button>
                     <button
                       type="button"
+                      role="menuitem"
                       className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer"
                       onClick={() => {
                         setIsHistoryOpen(true);
@@ -1223,19 +1399,7 @@ ${
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer"
-                      onClick={() => {
-                        void (async () => {
-                          const history = await getJobHistory();
-                          if (history.length > 0) downloadMarkdownReport(history.slice(0, 6));
-                        })();
-                        setMoreToolsOpen(false);
-                      }}
-                    >
-                      <Download className="h-3 w-3" /> Export Report
-                    </button>
-                    <button
-                      type="button"
+                      role="menuitem"
                       className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer"
                       onClick={() => {
                         setIsOwrExportOpen(true);
@@ -1431,23 +1595,19 @@ ${
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    {selectedLogIndices.size > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleDiagnoseSelected}
-                        disabled={isDiagnosing}
-                        className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded border border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50 transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        <Wrench className="h-3 w-3" /> Diagnose Selected
-                      </button>
-                    )}
                     <button
                       type="button"
-                      onClick={handleDiagnoseAll}
+                      onClick={handleDiagnose}
                       disabled={isDiagnosing || executionLogs.length === 0}
-                      className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded border border-slate-700 text-slate-300 hover:text-slate-100 hover:border-slate-600 transition-all cursor-pointer disabled:opacity-50"
+                      title={
+                        selectedLogIndices.size > 0
+                          ? `Diagnose ${selectedLogIndices.size} selected line(s)`
+                          : "Diagnose full log (error lines are auto-selected on failure)"
+                      }
+                      className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded border border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50 transition-all cursor-pointer disabled:opacity-50"
                     >
-                      <Wrench className="h-3 w-3" /> Diagnose All
+                      <Wrench className="h-3 w-3" />{" "}
+                      {selectedLogIndices.size > 0 ? `Diagnose (${selectedLogIndices.size})` : "Diagnose"}
                     </button>
                   </div>
                 </div>
@@ -1506,6 +1666,8 @@ ${
               isDiagnosing={isDiagnosing}
               fixApplied={mcpFixApplied}
               onApplyFix={handleApplyMcpFix}
+              onRunDiagnosis={handleDiagnose}
+              error={diagnoseError}
             />
           )}
         </CardContent>
