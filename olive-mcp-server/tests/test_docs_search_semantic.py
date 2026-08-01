@@ -87,8 +87,15 @@ def test_fuzzy_query_finds_quantization_related(monkeypatch: pytest.MonkeyPatch)
     assert "quant" in sources or "quant" in snippets or "calibration" in snippets
 
 
+_FIXED_KB_TEXTS = [
+    ("passes.foo", "quantization calibration data"),
+    ("passes.bar", "onnx conversion"),
+]
+
+
 def test_keyword_fallback_when_semantic_empty(monkeypatch: pytest.MonkeyPatch):
     """When semantic returns nothing above threshold, keyword fallback runs."""
+    monkeypatch.setattr(docs_search, "_load_kb_text", lambda: list(_FIXED_KB_TEXTS))
     _install_fake_semantic(monkeypatch, default_results=[])
 
     result = search_olive_documentation(
@@ -104,6 +111,8 @@ def test_keyword_fallback_when_semantic_empty(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_keyword_fallback_when_semantic_raises(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(docs_search, "_load_kb_text", lambda: list(_FIXED_KB_TEXTS))
+
     def boom(*_a, **_k):
         raise RuntimeError("model unavailable")
 
@@ -198,16 +207,13 @@ def test_kb_stale_build_does_not_poison_cache(monkeypatch: pytest.MonkeyPatch):
     sample_old = [("old.path", "old calibration text")]
     sample_new = [("new.path", "new calibration text")]
     mtime_box = {"v": 100.0}
-    load_calls: list[str] = []
 
     def fake_mtime():
         return (mtime_box["v"], 1)
 
     def fake_load():
         if mtime_box["v"] >= 200.0:
-            load_calls.append("new")
             return list(sample_new)
-        load_calls.append("old")
         return list(sample_old)
 
     def fake_build(texts):
@@ -223,7 +229,10 @@ def test_kb_stale_build_does_not_poison_cache(monkeypatch: pytest.MonkeyPatch):
     texts1, _emb1 = docs_search.get_or_build_kb_index()
     # Stale build returned locally but must not poison global cache at mtime 200.
     assert texts1[0][0] == "old.path"
-    assert docs_search._KB_INDEX_MTIME != (200.0, 1) or docs_search._KB_TEXTS[0][0] != "old.path"
+    # Cache must remain unpublished (still the pre-test sentinel) rather than
+    # stamped with the newer mtime for stale content.
+    assert docs_search._KB_INDEX_MTIME == (-1.0, -1)
+    assert docs_search._KB_TEXTS == []
 
     # Next call with mtime 200 should load fresh content and cache it.
     texts2, _emb2 = docs_search.get_or_build_kb_index()

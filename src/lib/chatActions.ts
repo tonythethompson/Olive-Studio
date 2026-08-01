@@ -164,6 +164,70 @@ function normalizeLooseQuantMethod(value: string): UIState["passes"]["quantMetho
   return allowed.has(v) ? (v as UIState["passes"]["quantMethod"]) : null;
 }
 
+const QUANT_AFFIRMATIVE_TOKENS = new Set([
+  "true",
+  "apply",
+  "apply_quantization",
+  "enable",
+  "enabled",
+  "int4",
+  "int8",
+  ...PASS_STRING_ENUMS.quantMethod!,
+]);
+
+function tokenizeLooseValue(value: string): string[] {
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+/** True if any whitespace-separated token in `value` is an affirmative quantization instruction. */
+function hasAffirmativeQuantToken(value: string): boolean {
+  return tokenizeLooseValue(value).some((t) => QUANT_AFFIRMATIVE_TOKENS.has(t));
+}
+
+/** Extract a quant method from any token in a multi-word value like "apply awq". */
+function extractLooseQuantMethodFromValue(value: string): UIState["passes"]["quantMethod"] | null {
+  const allowed = PASS_STRING_ENUMS.quantMethod!;
+  for (const token of tokenizeLooseValue(value)) {
+    if (allowed.has(token)) return token as UIState["passes"]["quantMethod"];
+  }
+  return null;
+}
+
+/** Extract a quant precision from any token in a multi-word value like "apply int8". */
+function extractLooseQuantPrecisionFromValue(value: string): "int4" | "int8" | "fp16" | null {
+  for (const token of tokenizeLooseValue(value)) {
+    const prec = normalizeLooseQuantPrecision(token);
+    if (prec) return prec;
+  }
+  return null;
+}
+
+const NEGATION_WORDS_RE =
+  /\b(no|not|never|disable[ds]?|skip|without|unavailable|cannot|can't|don't|won't|avoid)\b/gi;
+
+/**
+ * Scoped negation: a negation word only suppresses a target (quant/convert)
+ * mentioned shortly *after* it in the same value string — "convert to onnx
+ * without quantization" negates quantization only, not the conversion
+ * instruction that precedes the negation word.
+ */
+function negatedTargets(value: string): { quant: boolean; convert: boolean } {
+  const lower = value.toLowerCase();
+  let quant = false;
+  let convert = false;
+  let match: RegExpExecArray | null;
+  NEGATION_WORDS_RE.lastIndex = 0;
+  while ((match = NEGATION_WORDS_RE.exec(lower))) {
+    const after = lower.slice(match.index, match.index + 40);
+    if (/quant/.test(after)) quant = true;
+    if (/convert|onnx/.test(after)) convert = true;
+  }
+  return { quant, convert };
+}
+
 /**
  * Small local models often invent custom step schemas instead of `actions[].patch`.
  * Walk loose JSON and map known fields onto an allowlisted ChatActionPatch.
@@ -222,26 +286,24 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
       }
 
       const isActionField = key === "step" || key === "action" || key === "task";
-      const isNegated =
-        typeof value === "string" &&
-        /\b(no|not|never|disable|skip|without|unavailable|cannot|can't|don't|won't|unable\s+to|avoid)\b/i.test(
-          value,
-        );
+      // Negation must be scoped near the specific instruction it modifies —
+      // a single flag gating every detector on a multi-clause value (e.g.
+      // "convert to onnx without quantization") would wrongly suppress the
+      // unrelated, non-negated conversion instruction too.
+      const negated = typeof value === "string" ? negatedTargets(value) : { quant: false, convert: false };
+      const isQuantMentioned =
+        /quant/i.test(key) || (isActionField && typeof value === "string" && hasAffirmativeQuantToken(value));
 
       if (
-        !isNegated &&
-        (/quant/i.test(key) || (isActionField && typeof value === "string" && /quant/i.test(value))) &&
-        (value === true ||
-          (typeof value === "string" &&
-            /^(true|apply|apply_quantization|enable|enabled|int4|int8|awq|gptq|ptq|hqq|rtn|spinquant|quarot)$/i.test(
-              value.trim(),
-            )))
+        isQuantMentioned &&
+        !negated.quant &&
+        (value === true || (typeof value === "string" && hasAffirmativeQuantToken(value)))
       ) {
         passes.quantization = true;
         if (typeof value === "string") {
-          const prec = normalizeLooseQuantPrecision(value);
+          const prec = normalizeLooseQuantPrecision(value) ?? extractLooseQuantPrecisionFromValue(value);
           if (prec) passes.quantPrecision = prec;
-          const method = normalizeLooseQuantMethod(value);
+          const method = normalizeLooseQuantMethod(value) ?? extractLooseQuantMethodFromValue(value);
           if (method) passes.quantMethod = method;
         }
         if (!passes.quantMethod && !passes.quantPrecision) {
@@ -251,7 +313,7 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
       }
 
       if (
-        !isNegated &&
+        !negated.convert &&
         (/convert/.test(key) ||
           key === "onnx" ||
           /onnx/.test(key) ||

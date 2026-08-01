@@ -355,23 +355,12 @@ def search_olive_documentation(query: str, top_k: int = 5, live: bool = True) ->
         key=lambda x: (-x["relevance"], 0 if x["source"].startswith("live:") else 1)
     )
 
+    # `combined` is already sorted with live sources preferred on relevance
+    # ties, so the top-k slice already surfaces a live result whenever one is
+    # genuinely competitive with the kept local results — no separate
+    # "reserve a freshness slot" step is needed (an earlier version of that
+    # step was unreachable dead code given this tie-break).
     results = combined[:top_k]
-    if (
-        live_results
-        and top_k > 0
-        and results
-        and not any(r["source"].startswith("live:") for r in results)
-    ):
-        best_live = max(live_results, key=lambda x: x["relevance"])
-        weakest_kept = min(r["relevance"] for r in results)
-        # Only reserve a slot for freshness when the live hit is actually
-        # competitive with what it would displace — never displace the sole
-        # top result outright (top_k == 1) with a strictly worse live hit.
-        if best_live["relevance"] >= weakest_kept:
-            results = results[: top_k - 1] + [best_live]
-            results.sort(
-                key=lambda x: (-x["relevance"], 0 if x["source"].startswith("live:") else 1)
-            )
 
     return {
         "query": query,
