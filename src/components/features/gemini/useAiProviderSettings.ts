@@ -32,6 +32,7 @@ export function useAiProviderSettings({
   const [settingsModel, setSettingsModel] = useState("gemini-2.5-flash");
   const [settingsApiKey, setSettingsApiKey] = useState("");
   const [settingsBaseUrl, setSettingsBaseUrl] = useState("");
+  const [settingsCloudflareAccountId, setSettingsCloudflareAccountId] = useState("");
   const [customModel, setCustomModel] = useState("");
   const [isSavingProvider, setIsSavingProvider] = useState(false);
   const [providerSaveError, setProviderSaveError] = useState("");
@@ -435,11 +436,20 @@ export function useAiProviderSettings({
     const key = settingsApiKey.trim();
     const model = isCompatMode ? customModel.trim() || settingsModel : settingsModel;
     const resolvedBaseUrl = settingsBaseUrl.trim() || providerOption.baseUrl || undefined;
+    const cloudflareAccountId = settingsCloudflareAccountId.trim();
     const allowEmptyKey =
       settingsProvider === "openai-compat" ||
-      settingsProvider === "cloudflare" ||
       Boolean(resolvedBaseUrl && /localhost|127\.0\.0\.1/i.test(resolvedBaseUrl));
-    if (!key && !allowEmptyKey) {
+    if (settingsProvider === "cloudflare") {
+      if (!key) {
+        setProviderSaveError("Enter a Cloudflare API token.");
+        return;
+      }
+      if (!cloudflareAccountId) {
+        setProviderSaveError("Enter a Cloudflare account ID (CLOUDFLARE_ACCOUNT_ID).");
+        return;
+      }
+    } else if (!key && !allowEmptyKey) {
       setProviderSaveError("Enter an API key.");
       return;
     }
@@ -454,6 +464,15 @@ export function useAiProviderSettings({
     setIsSavingProvider(true);
     setProviderSaveError("");
     try {
+      if (settingsProvider === "cloudflare") {
+        const credRes = await fetch("/api/cloudflare/login/manual", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ apiToken: key, accountId: cloudflareAccountId }),
+        });
+        const credData = (await credRes.json().catch(() => ({}))) as { error?: string };
+        if (!credRes.ok) throw new Error(credData.error || `HTTP ${credRes.status}`);
+      }
       const r = await fetch("/api/ai/provider", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -462,6 +481,7 @@ export function useAiProviderSettings({
           apiKey: key || undefined,
           model,
           baseUrl: resolvedBaseUrl,
+          ...(settingsProvider === "cloudflare" ? { accountId: cloudflareAccountId } : {}),
         }),
       });
       const contentType = r.headers.get("content-type") ?? "";
@@ -469,6 +489,7 @@ export function useAiProviderSettings({
       if (!r.ok) throw new Error((data as { error?: string }).error || `HTTP ${r.status}`);
       await fetchProviderStatus();
       setSettingsApiKey("");
+      setSettingsCloudflareAccountId("");
       onProviderActivated();
     } catch (err: unknown) {
       setProviderSaveError(err instanceof Error ? err.message : "Failed to save provider.");
@@ -540,6 +561,8 @@ export function useAiProviderSettings({
     setSettingsModel,
     settingsApiKey,
     setSettingsApiKey,
+    settingsCloudflareAccountId,
+    setSettingsCloudflareAccountId,
     settingsBaseUrl,
     setSettingsBaseUrl,
     customModel,

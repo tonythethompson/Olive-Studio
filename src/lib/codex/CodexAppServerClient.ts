@@ -262,11 +262,13 @@ export class CodexAppServerClient extends EventEmitter {
     });
   }
 
-  private notify(method: string, params?: unknown): void {
+  private notify(method: string, params?: unknown): Promise<void> {
     const payload: JsonRpcNotification =
       params !== undefined ? { jsonrpc: "2.0", method, params } : { jsonrpc: "2.0", method };
-    void this.writeLine(payload).catch((err) => {
-      this.emit("error", err instanceof Error ? err : new Error(String(err)));
+    return this.writeLine(payload).catch((err) => {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.emit("error", error);
+      throw error;
     });
   }
 
@@ -315,7 +317,7 @@ export class CodexAppServerClient extends EventEmitter {
       capabilities: null,
     });
     // Protocol expects an initialized notification after a successful initialize.
-    this.notify("initialized");
+    await this.notify("initialized");
     this.initialized = true;
   }
 

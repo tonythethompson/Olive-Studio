@@ -111,8 +111,55 @@ export async function requestMcpDiagnostic(
       return { diagnostic: null, error: payload.error };
     }
 
-    if (payload && typeof payload.title === "string") {
-      return { diagnostic: payload as unknown as McpDiagnostic, error: null };
+    if (
+      payload &&
+      typeof payload.title === "string" &&
+      payload.title &&
+      typeof payload.root_cause === "string" &&
+      payload.root_cause &&
+      typeof payload.workaround === "string" &&
+      payload.workaround
+    ) {
+      const optionalUpdated =
+        payload.updated_config === undefined ||
+        (payload.updated_config !== null &&
+          typeof payload.updated_config === "object" &&
+          !Array.isArray(payload.updated_config));
+      const optionalQuirks =
+        payload.relevant_quirks === undefined ||
+        (Array.isArray(payload.relevant_quirks) &&
+          payload.relevant_quirks.every((q) => typeof q === "string"));
+      const optionalDomain =
+        payload.domain === undefined ||
+        payload.domain === null ||
+        payload.domain === "olive" ||
+        payload.domain === "studio";
+      const optionalApplyable = payload.applyable === undefined || typeof payload.applyable === "boolean";
+      const optionalMatched =
+        payload.matched_entry === undefined ||
+        payload.matched_entry === null ||
+        typeof payload.matched_entry === "string";
+      const optionalRelated =
+        payload.related_olive_entry === undefined ||
+        payload.related_olive_entry === null ||
+        typeof payload.related_olive_entry === "string";
+      if (
+        optionalUpdated &&
+        optionalQuirks &&
+        optionalDomain &&
+        optionalApplyable &&
+        optionalMatched &&
+        optionalRelated
+      ) {
+        return { diagnostic: payload as unknown as McpDiagnostic, error: null };
+      }
+    }
+
+    if (payload && typeof payload.title === "string" && payload.title) {
+      return {
+        diagnostic: null,
+        error: "Diagnosis returned an incomplete or malformed payload.",
+      };
     }
 
     return { diagnostic: null, error: "Diagnosis returned an unexpected response." };

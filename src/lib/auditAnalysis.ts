@@ -170,7 +170,7 @@ export function closeTruncatedJson(text: string): string {
   return softRepairJson(s);
 }
 
-function fallbackFromText(rawText: string): AuditAnalysis {
+function fallbackFromText(rawText: string): AuditAnalysis & { structured: false } {
   const trimmed = rawText.trim().replace(/\s+/g, " ").slice(0, 800);
   return {
     score: 50,
@@ -179,24 +179,25 @@ function fallbackFromText(rawText: string): AuditAnalysis {
       ? `Partial audit (model returned unstructured text): ${trimmed}`
       : "Could not parse a structured audit. Try Analyze again or pick a larger model in Settings.",
     suggestions: [],
+    structured: false,
   };
 }
 
 /** Chat-style graceful parse for Audit: never throws for malformed model JSON. */
-export function parseAuditAnalysisReply(rawText: string): AuditAnalysis {
+export function parseAuditAnalysisReply(rawText: string): AuditAnalysis & { structured: boolean } {
   const attempts = [rawText, closeTruncatedJson(rawText)];
   for (const attempt of attempts) {
     try {
       const parsed = parseJsonFromAiResponse(attempt);
       const normalized = normalizeAuditAnalysis(parsed);
-      if (normalized) return normalized;
+      if (normalized) return { ...normalized, structured: true };
     } catch {
       /* try next */
     }
     try {
       const closed = closeTruncatedJson(attempt);
       const normalized = normalizeAuditAnalysis(JSON.parse(closed));
-      if (normalized) return normalized;
+      if (normalized) return { ...normalized, structured: true };
     } catch {
       /* try next */
     }

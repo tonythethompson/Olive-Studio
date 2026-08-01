@@ -5,7 +5,7 @@
  * Codex, Devin, pipeline validation, and analysis.
  */
 import { Router } from "express";
-import { spawn, execFile, execSync } from "child_process";
+import { spawn, execFile, execSync, type ChildProcess } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import path from "path";
@@ -29,8 +29,11 @@ import { ALLOWED_AI_PROVIDERS } from "../services/ai/detect.ts";
 import { parseJsonFromAiResponse, readEnvApiKey } from "../../lib/aiResponse.ts";
 import { parseAuditAnalysisReply } from "../../lib/auditAnalysis.ts";
 import { filterAuditAnalysis } from "../../lib/auditSuggestionFilter.ts";
-import { buildAiWorkspaceContext, formatAiWorkspaceContextForPrompt } from "../../lib/aiWorkspaceContext.ts";
-import type { AiWorkspaceContext } from "../../lib/aiWorkspaceContext.ts";
+import {
+  buildAiWorkspaceContext,
+  formatAiWorkspaceContextForPrompt,
+  type AiWorkspaceContext,
+} from "../../lib/aiWorkspaceContext.ts";
 import { CHAT_JSON_RESPONSE_CONTRACT, parseChatStructuredReply } from "../../lib/chatActions.ts";
 import { getChatScopeBlock } from "../../lib/chatScope.ts";
 import { validateOliveRecipeStructure } from "../../lib/oliveRecipeSchema.ts";
@@ -272,42 +275,65 @@ async function tryWingetInstall(packageIds: string[]): Promise<boolean> {
  * Start Ollama without opening a console flood.
  * On Windows/macOS the tray app owns `serve`; spawning `ollama serve` beside it
  * fights the app (reap/respawn) and can flash endless terminal windows.
+ * Observes async ChildProcess `error` so launch failures propagate to callers.
  */
-function startOllamaOnce(cliPath: string): { mode: "app" | "serve"; detail: string } {
+function startOllamaOnce(cliPath: string): Promise<{ mode: "app" | "serve"; detail: string }> {
+  let mode: "app" | "serve" = "serve";
+  let detail = `${cliPath} serve`;
+  let child: ChildProcess | null = null;
+
   if (process.platform === "win32") {
     const app = findOllamaApp();
     if (app) {
-      const child = spawn(app, [], {
+      child = spawn(app, [], {
         detached: true,
         stdio: "ignore",
         windowsHide: true,
         env: { ...process.env },
       });
-      child.unref();
-      return { mode: "app", detail: app };
+      mode = "app";
+      detail = app;
     }
-  }
-  if (process.platform === "darwin") {
+  } else if (process.platform === "darwin") {
     const app = findOllamaApp();
     if (app && fs.existsSync(app)) {
-      const child = spawn("open", ["-a", "Ollama"], {
+      child = spawn("open", ["-a", "Ollama"], {
         detached: true,
         stdio: "ignore",
         env: { ...process.env },
       });
-      child.unref();
-      return { mode: "app", detail: app };
+      mode = "app";
+      detail = app;
     }
   }
-  // Linux / headless fallback only
-  const child = spawn(cliPath, ["serve"], {
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true,
-    env: { ...process.env },
+
+  if (!child) {
+    child = spawn(cliPath, ["serve"], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+      env: { ...process.env },
+    });
+    mode = "serve";
+    detail = `${cliPath} serve`;
+  }
+
+  const launched = child;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const settleOk = () => {
+      if (settled) return;
+      settled = true;
+      launched.unref();
+      resolve({ mode, detail });
+    };
+    launched.once("error", (err) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    });
+    launched.once("spawn", settleOk);
   });
-  child.unref();
-  return { mode: "serve", detail: `${cliPath} serve` };
 }
 
 type OllamaEnsureResult = { ok: boolean; error?: string; steps: string[] };
@@ -380,7 +406,7 @@ async function ensureOllamaReadyImpl(
       note("Waiting for a recent Ollama start attempt…", 22);
     } else {
       try {
-        const started = startOllamaOnce(ollama);
+        const started = await startOllamaOnce(ollama);
         lastOllamaStartAt = now;
         note(
           started.mode === "app"
@@ -541,6 +567,73 @@ function endNdjson(res: import("express").Response, final: Record<string, unknow
   }
 }
 
+/** True for localhost / loopback IPv4 / IPv6 (with or without brackets). */
+function isLoopbackHostname(hostname: string): boolean {
+  const host = hostname
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
+/** Local openai-compat endpoints may omit API keys for model listing. */
+function isLocalOpenaiCompat(provider: string, normalizedBaseUrl?: string): boolean {
+  if (provider !== "openai-compat" || !normalizedBaseUrl) return false;
+  try {
+    return isLoopbackHostname(new URL(normalizedBaseUrl).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** Whether this provider may activate without an API key (local / OAuth / CF flows). */
+function allowsEmptyApiKey(provider: string, normalizedBaseUrl?: string): boolean {
+  if (
+    provider === "openai-compat" ||
+    provider === "codex" ||
+    provider === "devin" ||
+    provider === "cloudflare"
+  ) {
+    return true;
+  }
+  if (!normalizedBaseUrl) return false;
+  try {
+    return isLoopbackHostname(new URL(normalizedBaseUrl).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Track client disconnect for long-running NDJSON streams.
+ * Does not cancel shared ensure* single-flight work used by other requests.
+ */
+function trackStreamClient(
+  req: import("express").Request,
+  res: import("express").Response,
+): {
+  disconnected: () => boolean;
+  signal: AbortSignal;
+  endOnce: () => void;
+} {
+  const ac = new AbortController();
+  let ended = false;
+  const onGone = () => {
+    if (!ac.signal.aborted) ac.abort();
+  };
+  req.on("close", onGone);
+  req.on("aborted", onGone);
+  return {
+    disconnected: () => ac.signal.aborted || res.writableEnded,
+    signal: ac.signal,
+    endOnce: () => {
+      if (ended || res.writableEnded) return;
+      ended = true;
+      if (!res.writableEnded) res.end();
+    },
+  };
+}
+
 /** Begin NDJSON stream for local model pull progress (client parses line-delimited JSON). */
 function beginPullSse(res: import("express").Response) {
   return beginNdjsonStream(res);
@@ -630,22 +723,7 @@ export function mountAiRoutes(router: Router): void {
     const plugin = getProvider(provider);
     const envKey = plugin ? readEnvApiKey(...plugin.envVarNames) : undefined;
     const resolvedKey = typeof apiKey === "string" && apiKey.trim() ? apiKey.trim() : (envKey ?? "");
-    const allowEmptyKey =
-      provider === "openai-compat" ||
-      provider === "codex" ||
-      provider === "devin" ||
-      provider === "cloudflare" ||
-      Boolean(
-        normalizedBaseUrl &&
-        (() => {
-          try {
-            const hostname = new URL(normalizedBaseUrl).hostname.toLowerCase();
-            return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-          } catch {
-            return false;
-          }
-        })(),
-      );
+    const allowEmptyKey = allowsEmptyApiKey(provider, normalizedBaseUrl);
     if (!resolvedKey && !allowEmptyKey) {
       return res.status(400).json({
         error: `No API key provided and no env key found for ${provider}.`,
@@ -754,7 +832,8 @@ export function mountAiRoutes(router: Router): void {
           ? runtime.apiKey.trim()
           : undefined;
       const envKey = plugin ? readEnvApiKey(...plugin.envVarNames) : undefined;
-      const key = apiKey?.trim() || runtimeKey || envKey || "";
+      const key =
+        (typeof apiKey === "string" && apiKey.trim() ? apiKey.trim() : "") || runtimeKey || envKey || "";
 
       let safeBaseUrl: string | undefined;
       try {
@@ -772,19 +851,7 @@ export function mountAiRoutes(router: Router): void {
         });
       }
 
-      const allowEmptyKey =
-        provider === "openai-compat" &&
-        Boolean(
-          safeBaseUrl &&
-          (() => {
-            try {
-              const hostname = new URL(safeBaseUrl).hostname.toLowerCase();
-              return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-            } catch {
-              return false;
-            }
-          })(),
-        );
+      const allowEmptyKey = isLocalOpenaiCompat(provider, safeBaseUrl);
       if (!key && !allowEmptyKey) {
         return res.json({
           models: [],
@@ -907,11 +974,10 @@ export function mountAiRoutes(router: Router): void {
         "If execution provider is NvTensorRTRTXExecutionProvider, do NOT suggest TensorRTExecutionProvider, TensorRTPass, tensor_rt, TRT engine build/caching, or adding TensorRT after CUDA. That EP already is the consumer RTX path. " +
         "autofix.pass must be a UI field (e.g. quantMethod, quantPrecision, conversionInputTargetTypes, conversionOpset, ihvProvider), never a nested Olive JSON path like passes.conversion.config.input_model_dtype or systems.local_system.config.accelerators.";
       let reply = await callAI(system, [{ role: "user", content: ctxSummary }], true);
-      let analysis = filterAuditAnalysis(parseAuditAnalysisReply(reply), ctx);
-      // Retry once only when we got the soft unstructured fallback (empty suggestions + partial summary).
-      const looksSoft =
-        analysis.suggestions.length === 0 &&
-        analysis.summary.startsWith("Partial audit (model returned unstructured text)");
+      let parsed = parseAuditAnalysisReply(reply);
+      let analysis = filterAuditAnalysis(parsed, ctx);
+      // Retry once only when parse fell back to unstructured text (empty suggestions).
+      const looksSoft = !parsed.structured && parsed.suggestions.length === 0;
       if (looksSoft) {
         reply = await callAI(
           `${system}\nRetry with valid JSON only. Example with ONE suggestion (0 is also fine; do not pad to 3): ` +
@@ -920,7 +986,8 @@ export function mountAiRoutes(router: Router): void {
           [{ role: "user", content: ctxSummary }],
           true,
         );
-        analysis = filterAuditAnalysis(parseAuditAnalysisReply(reply), ctx);
+        parsed = parseAuditAnalysisReply(reply);
+        analysis = filterAuditAnalysis(parsed, ctx);
       }
       return res.json(analysis);
     } catch (err: unknown) {
@@ -1016,16 +1083,25 @@ export function mountAiRoutes(router: Router): void {
   router.post("/ai/local-pull", heavyCommandRateLimit, async (req, res) => {
     const { modelTag } = req.body ?? {};
     if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
-    const send = beginPullSse(res);
+    const guard = trackStreamClient(req, res);
+    const rawSend = beginPullSse(res);
+    const send = (evt: Record<string, unknown>) => {
+      if (guard.disconnected()) return;
+      rawSend(evt);
+    };
     try {
       const ready = await ensureLmsReady((evt) => send(evt));
+      if (guard.disconnected()) {
+        guard.endOnce();
+        return;
+      }
       if (!ready.ok) {
         send({
           type: "error",
           error: ready.error || "LM Studio is not ready",
           openedUrl: ready.openedUrl ?? "https://lmstudio.ai",
         });
-        res.end();
+        guard.endOnce();
         return;
       }
       const lmsCli = findLmsCli();
@@ -1035,43 +1111,55 @@ export function mountAiRoutes(router: Router): void {
           error: "LM Studio CLI (lms) not found. Install LM Studio from https://lmstudio.ai",
           openedUrl: "https://lmstudio.ai",
         });
-        res.end();
+        guard.endOnce();
         return;
       }
       send({ type: "step", message: `Downloading ${modelTag} via LM Studio (lms get)…`, percent: 5 });
       // LM Studio CLI downloads with `lms get`, not Ollama-style `pull`. `-y` skips prompts.
       const proc = spawn(lmsCli, ["get", String(modelTag), "-y"], { stdio: "pipe" });
-      proc.stdout.on("data", (d: Buffer) => {
+      const killProc = () => {
+        try {
+          proc.kill();
+        } catch {
+          /* already exited */
+        }
+      };
+      guard.signal.addEventListener("abort", killProc, { once: true });
+      proc.stdout?.on("data", (d: Buffer) => {
         d.toString()
           .split(/\r?\n/)
           .filter(Boolean)
           .forEach((l) => send({ type: "log", message: l }));
       });
-      proc.stderr.on("data", (d: Buffer) => {
+      proc.stderr?.on("data", (d: Buffer) => {
         d.toString()
           .split(/\r?\n/)
           .filter(Boolean)
           .forEach((l) => send({ type: "log", message: l }));
       });
       proc.on("close", (code) => {
-        if (code === 0) {
-          send({ type: "done", message: "Model downloaded successfully.", ok: true, percent: 100 });
-        } else {
-          send({
-            type: "error",
-            error: `LM Studio download exited with code ${code}`,
-            hint: "Official CLI is `lms get <model> -y` (not `pull`). Open LM Studio once if get fails to resolve the model.",
-          });
+        if (!guard.disconnected()) {
+          if (code === 0) {
+            send({ type: "done", message: "Model downloaded successfully.", ok: true, percent: 100 });
+          } else {
+            send({
+              type: "error",
+              error: `LM Studio download exited with code ${code}`,
+              hint: "Official CLI is `lms get <model> -y` (not `pull`). Open LM Studio once if get fails to resolve the model.",
+            });
+          }
         }
-        res.end();
+        guard.endOnce();
       });
       proc.on("error", (err) => {
-        send({ type: "error", error: err.message });
-        res.end();
+        if (!guard.disconnected()) send({ type: "error", error: err.message });
+        guard.endOnce();
       });
     } catch (err: unknown) {
-      send({ type: "error", error: err instanceof Error ? err.message : String(err) });
-      res.end();
+      if (!guard.disconnected()) {
+        send({ type: "error", error: err instanceof Error ? err.message : String(err) });
+      }
+      guard.endOnce();
     }
   });
 
@@ -1120,11 +1208,21 @@ export function mountAiRoutes(router: Router): void {
   router.post("/ai/ollama-pull", heavyCommandRateLimit, async (req, res) => {
     const { modelTag } = req.body ?? {};
     if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
-    const send = beginPullSse(res);
+    const guard = trackStreamClient(req, res);
+    const rawSend = beginPullSse(res);
+    const send = (evt: Record<string, unknown>) => {
+      if (guard.disconnected()) return;
+      rawSend(evt);
+    };
+    // Shared ensure continues for other clients; this request just stops consuming progress.
     const ready = await ensureOllamaReady((evt) => send(evt));
+    if (guard.disconnected()) {
+      guard.endOnce();
+      return;
+    }
     if (!ready.ok) {
       send({ type: "error", error: ready.error });
-      res.end();
+      guard.endOnce();
       return;
     }
     try {
@@ -1133,16 +1231,30 @@ export function mountAiRoutes(router: Router): void {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: modelTag, stream: true }),
+        signal: guard.signal,
       });
+      if (guard.disconnected()) {
+        guard.endOnce();
+        return;
+      }
       if (!r.ok || !r.body) {
         send({ type: "error", error: `Ollama pull failed (HTTP ${r.status})` });
-        res.end();
+        guard.endOnce();
         return;
       }
       const reader = r.body.getReader();
       const decoder = new TextDecoder();
       let buf = "";
       while (true) {
+        if (guard.disconnected()) {
+          try {
+            await reader.cancel();
+          } catch {
+            /* ignore */
+          }
+          guard.endOnce();
+          return;
+        }
         const { done, value } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
@@ -1159,7 +1271,7 @@ export function mountAiRoutes(router: Router): void {
             };
             if (evt.error) {
               send({ type: "error", error: evt.error });
-              res.end();
+              guard.endOnce();
               return;
             }
             if (typeof evt.completed === "number" && typeof evt.total === "number" && evt.total > 0) {
@@ -1179,9 +1291,11 @@ export function mountAiRoutes(router: Router): void {
       }
       send({ type: "done", message: "Model pulled successfully.", ok: true, percent: 100 });
     } catch (err: unknown) {
-      send({ type: "error", error: err instanceof Error ? err.message : String(err) });
+      if (!guard.disconnected()) {
+        send({ type: "error", error: err instanceof Error ? err.message : String(err) });
+      }
     }
-    res.end();
+    guard.endOnce();
   });
 
   router.post("/ai/ollama-load", async (req, res) => {
@@ -1228,11 +1342,21 @@ export function mountAiRoutes(router: Router): void {
     const { engine } = req.body ?? {};
     if (engine !== "lms" && engine !== "ollama")
       return res.status(400).json({ error: "engine must be 'lms' or 'ollama'" });
-    const send = beginNdjsonStream(res);
+    const guard = trackStreamClient(req, res);
+    const rawSend = beginNdjsonStream(res);
+    const send = (evt: Record<string, unknown>) => {
+      if (guard.disconnected()) return;
+      rawSend(evt);
+    };
     try {
       if (engine === "ollama") {
         send({ type: "step", message: "Ensuring Ollama is installed…", percent: 0 });
+        // Shared ensure continues for other clients; stop writing if this client disconnects.
         const result = await ensureOllamaReady((evt) => send(evt));
+        if (guard.disconnected()) {
+          guard.endOnce();
+          return;
+        }
         if (!result.ok) {
           endNdjson(res, { type: "error", error: result.error });
           return;
@@ -1241,6 +1365,10 @@ export function mountAiRoutes(router: Router): void {
       } else {
         send({ type: "step", message: "Ensuring LM Studio is installed…", percent: 0 });
         const result = await ensureLmsReady((evt) => send(evt));
+        if (guard.disconnected()) {
+          guard.endOnce();
+          return;
+        }
         if (!result.ok) {
           endNdjson(res, {
             type: "error",
@@ -1252,7 +1380,11 @@ export function mountAiRoutes(router: Router): void {
         endNdjson(res, { type: "done", ok: true, message: "LM Studio is ready.", percent: 100 });
       }
     } catch (err: unknown) {
-      endNdjson(res, { type: "error", error: err instanceof Error ? err.message : String(err) });
+      if (!guard.disconnected()) {
+        endNdjson(res, { type: "error", error: err instanceof Error ? err.message : String(err) });
+      } else {
+        guard.endOnce();
+      }
     }
   });
 

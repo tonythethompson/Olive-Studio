@@ -108,6 +108,41 @@ export async function startCloudflareLogin(): Promise<{ ok: boolean; message: st
   }
 }
 
+/** Prefer preferred / whoami / env / saved account id with validation. */
+export function resolveAccountId(
+  preferred: string | undefined,
+  whoAmIAccounts: Array<{ id: string; name?: string }>,
+  fallbacks: {
+    envAccountId?: string;
+    savedAccountId?: string;
+    savedAccountName?: string;
+  },
+): { accountId: string; accountName?: string } | null {
+  const preferredTrimmed = preferred?.trim();
+  const preferredMatch = preferredTrimmed ? whoAmIAccounts.find((a) => a.id === preferredTrimmed) : undefined;
+  const picked =
+    preferredMatch ??
+    (preferredTrimmed
+      ? undefined
+      : (whoAmIAccounts.find((a) => isValidCloudflareAccountId(a.id)) ?? whoAmIAccounts[0]));
+  if (picked && isValidCloudflareAccountId(picked.id)) {
+    return { accountId: picked.id, accountName: picked.name };
+  }
+  if (preferredTrimmed && isValidCloudflareAccountId(preferredTrimmed)) {
+    return { accountId: preferredTrimmed };
+  }
+  if (fallbacks.envAccountId && isValidCloudflareAccountId(fallbacks.envAccountId)) {
+    return { accountId: fallbacks.envAccountId };
+  }
+  if (fallbacks.savedAccountId && isValidCloudflareAccountId(fallbacks.savedAccountId)) {
+    return {
+      accountId: fallbacks.savedAccountId,
+      accountName: fallbacks.savedAccountName,
+    };
+  }
+  return null;
+}
+
 /** Pull OAuth/API token from Wrangler and persist with an account id. */
 export async function syncCloudflareFromWrangler(
   preferredAccountId?: string,
@@ -128,53 +163,40 @@ export async function syncCloudflareFromWrangler(
   }
 
   const preferred = preferredAccountId?.trim();
-  let accountId: string | undefined;
-  let accountName: string | undefined;
+  let whoAmIAccounts: Array<{ id: string; name?: string }> = [];
   let email = tokenInfo.email;
+  let accountNameFromWhoAmI: string | undefined;
 
   // Limited dashboard tokens often break `wrangler whoami` account listing even though
   // `wrangler auth token` works. Fall back to preferred / env / previously saved id.
   try {
     const who = await wranglerWhoAmI();
     email = who.email ?? email;
-    const accounts = who.accounts ?? [];
-    const preferredMatch = preferred ? accounts.find((a) => a.id === preferred) : undefined;
-    const picked =
-      preferredMatch ??
-      (preferred ? undefined : (accounts.find((a) => isValidCloudflareAccountId(a.id)) ?? accounts[0]));
-    if (picked && isValidCloudflareAccountId(picked.id)) {
-      accountId = picked.id;
-      accountName = picked.name;
-    }
+    whoAmIAccounts = who.accounts ?? [];
   } catch {
     /* whoami optional when we already know the account id */
   }
 
-  if (!accountId && preferred && isValidCloudflareAccountId(preferred)) {
-    accountId = preferred;
-  }
-  if (!accountId) {
-    accountId = envAccountId();
-  }
-  if (!accountId) {
-    const existing = loadCloudflareCredentials();
-    if (existing && isValidCloudflareAccountId(existing.accountId)) {
-      accountId = existing.accountId;
-      accountName = accountName ?? existing.accountName;
-      email = email ?? existing.email;
-    }
-  }
-  if (!accountId || !isValidCloudflareAccountId(accountId)) {
+  const existing = loadCloudflareCredentials();
+  const resolved = resolveAccountId(preferred, whoAmIAccounts, {
+    envAccountId: envAccountId(),
+    savedAccountId: existing?.accountId,
+    savedAccountName: existing?.accountName,
+  });
+  if (!resolved) {
     throw new Error(
       "Could not resolve a Cloudflare account id. Set CLOUDFLARE_ACCOUNT_ID, paste it with your API token, or re-run wrangler login with an account that can list accounts.",
     );
   }
 
+  const whoMatch = whoAmIAccounts.find((a) => a.id === resolved.accountId);
+  accountNameFromWhoAmI = whoMatch?.name;
+
   return saveCloudflareCredentials({
     apiToken,
-    accountId,
-    accountName,
-    email,
+    accountId: resolved.accountId,
+    accountName: accountNameFromWhoAmI ?? resolved.accountName,
+    email: email ?? existing?.email,
     authType,
   });
 }

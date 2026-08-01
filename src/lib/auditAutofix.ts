@@ -294,6 +294,18 @@ function resolveJsonAutofix(
     const tag = v.trim().toLowerCase() as UIState["cudaVersion"];
     return CUDA_VERSIONS.has(tag) ? { cudaVersion: tag } : null;
   }
+  if (pass === "memoryOffload") {
+    const v = obj.memoryOffload;
+    if (typeof v !== "string") return null;
+    const tag = v.trim().toLowerCase() as UIState["memoryOffload"];
+    return MEMORY_OFFLOADS.has(tag) ? { memoryOffload: tag } : null;
+  }
+  if (pass === "modelSource") {
+    const v = obj.modelSource;
+    if (typeof v !== "string") return null;
+    const tag = v.trim().toLowerCase() as UIState["modelSource"];
+    return MODEL_SOURCES.has(tag) ? { modelSource: tag } : null;
+  }
 
   const passPatch: Partial<UIState["passes"]> = {};
   let touched = false;

@@ -2,6 +2,7 @@ import { BatchJob, UIState } from "@/types";
 import { buildOliveRecipe } from "@/lib/oliveRecipeBuilder";
 import {
   getPipelineValidation,
+  getLocalExecutionIssues,
   getRemainingAdvisories,
   PipelineValidationResult,
   PipelineValidationOptions,
@@ -28,10 +29,7 @@ export function buildRecipeFromState(
   const recipe = buildOliveRecipe(sanitized);
   const recipeJson = serializeRecipe(recipe);
   const validation = getPipelineValidation(sanitized, options);
-  const executionValidation = getPipelineValidation(sanitized, {
-    ...options,
-    forLocalExecution: true,
-  });
+  const localExecutionIssues = getLocalExecutionIssues(sanitized, true);
   const schema = validateOliveRecipeStructure(recipe);
 
   return {
@@ -41,7 +39,7 @@ export function buildRecipeFromState(
     validation,
     schema,
     advisories: getRemainingAdvisories(sanitized),
-    isRunnable: !executionValidation.isBlocked && schema.valid,
+    isRunnable: !validation.isBlocked && localExecutionIssues.length === 0 && schema.valid,
   };
 }
 

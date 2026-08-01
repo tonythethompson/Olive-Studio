@@ -119,11 +119,10 @@ def main() -> None:
         transport = "stdio"
 
     if transport == "sse":
-        mcp.run(
-            transport="sse",
-            host=os.environ.get("MCP_HOST", "127.0.0.1"),
-            port=int(os.environ.get("MCP_PORT", "8000")),
-        )
+        # Prefer settings API: mcp.run() kwargs for host/port vary by mcp version.
+        mcp.settings.host = os.environ.get("MCP_HOST", "127.0.0.1")
+        mcp.settings.port = int(os.environ.get("MCP_PORT", "8000"))
+        mcp.run(transport="sse")
     else:
         mcp.run()
 

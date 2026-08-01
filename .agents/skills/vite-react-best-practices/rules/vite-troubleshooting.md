@@ -36,7 +36,7 @@ export default defineConfig({
 
 1. **Circular Dependency:** A imports B, B imports A. Check console warnings.
 2. **Export Default vs Named:** React Fast Refresh prefers Named Exports or consistent exports.
-3. **Case Sensitivity:** Importing `File.tsx` as `file.tsx` works on Mac but implies a new module ID.
+3. **Case Sensitivity:** Vite cannot resolve imports whose casing differs from the actual filename on Linux (and in CI), even when a case-insensitive filesystem (macOS/Windows) hides the mismatch. Import paths must match the exact filename casing to prevent production or CI build failures.
 
 ## 4. Styles Missing in Production
 

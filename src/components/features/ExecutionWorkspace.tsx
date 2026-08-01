@@ -309,12 +309,16 @@ export function ExecutionWorkspace({
   useEffect(() => {
     if (executionStatus === "failed" && executionLogs.length > 0 && !autoDiagnoseRef.current) {
       autoDiagnoseRef.current = true;
-      void fetchKeyedDiagnostic("current", executionLogs);
+      const logs =
+        selectedLogIndices.size > 0
+          ? expandLogSelection(executionLogs, Array.from(selectedLogIndices))
+          : executionLogs;
+      void fetchKeyedDiagnostic("current", logs);
     }
     if (executionStatus !== "failed") {
       autoDiagnoseRef.current = false;
     }
-  }, [executionStatus, executionLogs, fetchKeyedDiagnostic]);
+  }, [executionStatus, executionLogs, selectedLogIndices, fetchKeyedDiagnostic]);
 
   // Auto-save completed diagnoses to history
   const prevDiagnosticRef = useRef(mcpDiagnostic);
@@ -1399,9 +1403,14 @@ ${
                       role="menuitem"
                       className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer"
                       onClick={() => {
-                        void getJobHistory().then((records) => {
-                          downloadMarkdownReport(records);
-                        });
+                        void getJobHistory()
+                          .then((records) => downloadMarkdownReport(records))
+                          .catch((err: unknown) => {
+                            console.error(
+                              "Failed to export Markdown report:",
+                              err instanceof Error ? err.message : err,
+                            );
+                          });
                         setMoreToolsOpen(false);
                       }}
                     >
