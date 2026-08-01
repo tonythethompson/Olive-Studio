@@ -622,7 +622,17 @@ export function mountAiRoutes(router: Router): void {
       provider === "codex" ||
       provider === "devin" ||
       provider === "cloudflare" ||
-      Boolean(normalizedBaseUrl && /localhost|127\.0\.0\.1/i.test(normalizedBaseUrl));
+      Boolean(
+        normalizedBaseUrl &&
+          (() => {
+            try {
+              const hostname = new URL(normalizedBaseUrl).hostname.toLowerCase();
+              return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+            } catch {
+              return false;
+            }
+          })(),
+      );
     if (!resolvedKey && !allowEmptyKey) {
       return res.status(400).json({
         error: `No API key provided and no env key found for ${provider}.`,
@@ -750,7 +760,18 @@ export function mountAiRoutes(router: Router): void {
       }
 
       const allowEmptyKey =
-        provider === "openai-compat" && Boolean(safeBaseUrl && /localhost|127\.0\.0\.1/i.test(safeBaseUrl));
+        provider === "openai-compat" &&
+        Boolean(
+          safeBaseUrl &&
+            (() => {
+              try {
+                const hostname = new URL(safeBaseUrl).hostname.toLowerCase();
+                return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+              } catch {
+                return false;
+              }
+            })(),
+        );
       if (!key && !allowEmptyKey) {
         return res.json({
           models: [],
