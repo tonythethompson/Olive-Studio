@@ -1116,7 +1116,13 @@ export function mountAiRoutes(router: Router): void {
       }
       send({ type: "step", message: `Downloading ${modelTag} via LM Studio (lms get)…`, percent: 5 });
       // LM Studio CLI downloads with `lms get`, not Ollama-style `pull`. `-y` skips prompts.
-      const proc = spawn(lmsCli, ["get", String(modelTag), "-y"], { stdio: "pipe" });
+      const tag = String(modelTag);
+      if (tag.startsWith("-") || !/^[\w./:@-]+$/.test(tag)) {
+        send({ type: "error", error: "Invalid modelTag." });
+        guard.endOnce();
+        return;
+      }
+      const proc = spawn(lmsCli, ["get", tag, "-y"], { stdio: "pipe" });
       const killProc = () => {
         try {
           proc.kill();
@@ -1535,6 +1541,11 @@ export function mountAiRoutes(router: Router): void {
       if (!apiToken || !accountId) {
         return res.status(400).json({ ok: false, error: "apiToken and accountId are required." });
       }
+      if (!isValidCloudflareAccountId(accountId)) {
+        return res
+          .status(400)
+          .json({ ok: false, error: "accountId must be a 32-character hex Cloudflare account id." });
+      }
       const creds = saveManualCloudflareCredentials({ apiToken, accountId });
       return res.json({ ok: true, accountId: creds.accountId });
     } catch (err: unknown) {
@@ -1600,7 +1611,14 @@ async function fetchLiveModelCatalog(provider: string, apiKey: string, baseUrl?:
       };
       rows.push(...(data.data ?? []));
       if (data.has_more && typeof data.next === "string" && data.next.trim()) {
-        nextUrl = data.next.startsWith("http") ? data.next : new URL(data.next, `${base}/`).toString();
+        try {
+          const baseOrigin = new URL(`${base}/`).origin;
+          const candidate = new URL(data.next, `${base}/`);
+          // API key travels with this request; never follow pagination off-origin.
+          nextUrl = candidate.origin === baseOrigin ? candidate.toString() : null;
+        } catch {
+          nextUrl = null;
+        }
       } else {
         nextUrl = null;
       }

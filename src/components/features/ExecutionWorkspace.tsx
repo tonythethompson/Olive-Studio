@@ -123,6 +123,10 @@ export function ExecutionWorkspace({
   const [liveJobId, setLiveJobId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
+  const executionLogsRef = useRef<string[]>([]);
+  useEffect(() => {
+    executionLogsRef.current = executionLogs;
+  }, [executionLogs]);
   const [executionStatus, setExecutionStatus] = useState<
     "idle" | "running" | "completed" | "failed" | "cancelled"
   >("idle");
@@ -309,16 +313,30 @@ export function ExecutionWorkspace({
   useEffect(() => {
     if (executionStatus === "failed" && executionLogs.length > 0 && !autoDiagnoseRef.current) {
       autoDiagnoseRef.current = true;
-      const logs =
-        selectedLogIndices.size > 0
-          ? expandLogSelection(executionLogs, Array.from(selectedLogIndices))
-          : executionLogs;
+      // Derive failure-line indices here (do not wait for the selection layout effect).
+      const errorIndices: number[] = [];
+      for (let i = 0; i < executionLogs.length; i++) {
+        const line = executionLogs[i]!;
+        if (
+          line.includes("[ERROR]") ||
+          line.includes("Traceback") ||
+          line.includes("Exception") ||
+          line.includes("Error:") ||
+          line.includes("error:") ||
+          line.includes("KeyError") ||
+          line.includes("Unknown task") ||
+          line.includes("FAILED")
+        ) {
+          errorIndices.push(i);
+        }
+      }
+      const logs = errorIndices.length > 0 ? expandLogSelection(executionLogs, errorIndices) : executionLogs;
       void fetchKeyedDiagnostic("current", logs);
     }
     if (executionStatus !== "failed") {
       autoDiagnoseRef.current = false;
     }
-  }, [executionStatus, executionLogs, selectedLogIndices, fetchKeyedDiagnostic]);
+  }, [executionStatus, executionLogs, fetchKeyedDiagnostic]);
 
   // Auto-save completed diagnoses to history
   const prevDiagnosticRef = useRef(mcpDiagnostic);
@@ -823,24 +841,19 @@ ${
             exitCode = 0;
           }
           // Olive sometimes exits 0 after a pass traceback (e.g. HF task KeyError).
-          // Snapshot logs, then update status outside the state updater.
-          setExecutionLogs((currentLogs) => {
-            queueMicrotask(() => {
-              if (isUnmountedRef.current) return;
-              const failed = exitCode !== 0 || logsIndicateFailure(currentLogs);
-              const finalStatus = failed ? "failed" : "completed";
-              const reportedExit = failed && exitCode === 0 ? 1 : exitCode;
-              setExecutionStatus(finalStatus);
-              setExecutionExitCode(reportedExit);
-              setIsRunning(false);
-              setGpuMetrics(null);
-              onRunStateChange?.(false);
-              recordJobCompletion(targetJobId, finalStatus, reportedExit);
-              // Auto-diagnose is owned by the executionStatus==="failed" effect below.
-              if (failed) setMcpFixApplied("");
-            });
-            return currentLogs;
-          });
+          // Read the mirrored log ref so this updater stays pure (StrictMode-safe).
+          const currentLogs = executionLogsRef.current;
+          const failed = exitCode !== 0 || logsIndicateFailure(currentLogs);
+          const finalStatus = failed ? "failed" : "completed";
+          const reportedExit = failed && exitCode === 0 ? 1 : exitCode;
+          setExecutionStatus(finalStatus);
+          setExecutionExitCode(reportedExit);
+          setIsRunning(false);
+          setGpuMetrics(null);
+          onRunStateChange?.(false);
+          recordJobCompletion(targetJobId, finalStatus, reportedExit);
+          // Auto-diagnose is owned by the executionStatus==="failed" effect below.
+          if (failed) setMcpFixApplied("");
           evtSource.close();
           liveSourceRef.current = null;
         });

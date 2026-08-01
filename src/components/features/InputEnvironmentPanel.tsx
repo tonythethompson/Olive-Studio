@@ -1750,7 +1750,7 @@ export function InputEnvironmentPanel({
                                     isCurSelected
                                       ? "bg-electric-blue/10 border-electric-blue/60 shadow-sm ring-1 ring-electric-blue/25"
                                       : isChunk
-                                        ? "bg-slate-900 border-electric-blue/25 hover:border-slate-705 hover:bg-slate-900/80"
+                                        ? "bg-slate-900 border-electric-blue/25 hover:border-slate-700 hover:bg-slate-900/80"
                                         : "bg-slate-950 border-slate-800 hover:border-slate-700 hover:bg-slate-950/80"
                                   }`}
                                 >

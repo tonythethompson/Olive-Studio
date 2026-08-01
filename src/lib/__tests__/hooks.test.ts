@@ -208,6 +208,8 @@ describe("useMcpDiagnosticKeyed", () => {
     const callBody = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1]?.body as string);
     expect(callBody.args.error_message).toContain("[INFO] Line 20");
     expect(callBody.args.error_message).toContain("[INFO] Line 99");
+    // Boundary: line 19 is the first line outside the last-80 window.
+    expect(callBody.args.error_message).not.toContain("[INFO] Line 19");
     // Should NOT contain line 0 (outside the last 80)
     expect(callBody.args.error_message).not.toContain("[INFO] Line 0");
   });

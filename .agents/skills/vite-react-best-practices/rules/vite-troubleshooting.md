@@ -2,9 +2,9 @@
 
 Quick fixes for the most frequent issues encountered in Vite + React projects.
 
-## 1. "Module is external" (SSR / bundler)
+## 1. "Module is external" (SSR)
 
-**Cause:** A dependency is treated as external during SSR or library mode, so Vite/Rollup does not bundle it and Node tries to resolve it at runtime.
+**Cause:** A dependency is treated as external during SSR, so Vite does not bundle it and Node tries to resolve it at runtime.
 **Fix:** Add the package to `ssr.noExternal` (or remove it from `ssr.external`) so Vite pre-bundles it for the server graph.
 
 ```ts
@@ -12,6 +12,23 @@ Quick fixes for the most frequent issues encountered in Vite + React projects.
 export default defineConfig({
   ssr: {
     noExternal: ["some-cjs-only-lib"],
+  },
+});
+```
+
+## 1b. External modules in library-mode builds
+
+**Cause:** Library builds leave dependencies out of the bundle when they are listed as externals.
+**Fix:** Configure `build.rollupOptions.external` (and matching `output.globals` when needed). Do not use `ssr.noExternal` for library-mode packaging.
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  build: {
+    lib: { entry: "src/index.ts", formats: ["es"] },
+    rollupOptions: {
+      external: ["react", "react-dom"],
+    },
   },
 });
 ```

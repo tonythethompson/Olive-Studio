@@ -151,7 +151,13 @@ export async function requestMcpDiagnostic(
         optionalMatched &&
         optionalRelated
       ) {
-        return { diagnostic: payload as unknown as McpDiagnostic, error: null };
+        return {
+          diagnostic: {
+            ...(payload as unknown as McpDiagnostic),
+            matched_entry: payload.matched_entry ?? null,
+          },
+          error: null,
+        };
       }
     }
 
