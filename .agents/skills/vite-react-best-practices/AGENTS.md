@@ -4,10 +4,10 @@ Comprehensive guide for building production-ready React SPAs with Vite.
 
 ## Table of Contents
 
-1. [Vite SPA Requirements](#vite-spa-requirements)
-2. [React Core Best Practices](#react-core-best-practices)
-3. [Anti-Patterns](#anti-patterns)
-4. [Troubleshooting](#troubleshooting)
+1. [Vite SPA Requirements](`#vite-spa-requirements`)
+2. [React Core Best Practices](`#react-core-best-practices`)
+3. [Anti-Patterns](`#anti-patterns`)
+4. [Troubleshooting](`#troubleshooting-vite`)
 
 ---
 
