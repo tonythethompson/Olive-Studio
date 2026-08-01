@@ -19,10 +19,23 @@ const CRED_PATH = path.join(process.cwd(), ".olive-studio", "cloudflare-credenti
 
 const ACCOUNT_ID_RE = /^[a-f0-9]{32}$/i;
 
+/**
+ * Determines whether a value is a valid Cloudflare account ID.
+ *
+ * @param accountId - The account ID to validate
+ * @returns `true` if the trimmed account ID contains 32 hexadecimal characters, `false` otherwise.
+ */
 export function isValidCloudflareAccountId(accountId: string): boolean {
   return ACCOUNT_ID_RE.test(accountId.trim());
 }
 
+/**
+ * Builds the Cloudflare Workers AI API base URL for an account.
+ *
+ * @param accountId - The 32-character hexadecimal Cloudflare account ID
+ * @returns The Cloudflare Workers AI API base URL
+ * @throws If `accountId` is not a valid 32-character hexadecimal account ID
+ */
 export function cloudflareAiBaseUrl(accountId: string): string {
   const id = accountId.trim();
   if (!isValidCloudflareAccountId(id)) {
@@ -31,6 +44,11 @@ export function cloudflareAiBaseUrl(accountId: string): string {
   return `https://api.cloudflare.com/client/v4/accounts/${id}/ai/v1`;
 }
 
+/**
+ * Loads and validates stored Cloudflare credentials.
+ *
+ * @returns The stored credentials, or `null` if the credentials file is missing, malformed, incomplete, or invalid.
+ */
 export function loadCloudflareCredentials(): CloudflareCredentials | null {
   try {
     if (!fs.existsSync(CRED_PATH)) return null;
@@ -43,6 +61,13 @@ export function loadCloudflareCredentials(): CloudflareCredentials | null {
   }
 }
 
+/**
+ * Persists Cloudflare credentials for later use.
+ *
+ * @param input - Credential values to save, with an optional issuance timestamp
+ * @returns The normalized credentials written to storage
+ * @throws If the API token is empty or the account ID is invalid
+ */
 export function saveCloudflareCredentials(
   input: Omit<CloudflareCredentials, "issuedAt"> & { issuedAt?: string },
 ): CloudflareCredentials {
@@ -69,6 +94,9 @@ export function saveCloudflareCredentials(
   return payload;
 }
 
+/**
+ * Removes the stored Cloudflare credentials file when present.
+ */
 export function clearCloudflareCredentials(): void {
   try {
     if (fs.existsSync(CRED_PATH)) fs.unlinkSync(CRED_PATH);
@@ -77,6 +105,11 @@ export function clearCloudflareCredentials(): void {
   }
 }
 
+/**
+ * Gets the path to the stored Cloudflare credentials file.
+ *
+ * @returns The credentials file path
+ */
 export function getCloudflareCredPath(): string {
   return CRED_PATH;
 }

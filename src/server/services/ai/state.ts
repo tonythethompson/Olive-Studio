@@ -13,6 +13,11 @@ export type AiPreference = {
   baseUrl?: string;
 };
 
+/**
+ * Retrieves the current in-memory AI provider configuration.
+ *
+ * @returns The runtime provider configuration, or `null` when no override is set.
+ */
 export function getRuntimeAiProvider(): ProviderConfig | null {
   return runtimeAiProvider;
 }
@@ -22,7 +27,11 @@ export function clearRuntimeAiProvider(): void {
   runtimeAiProvider = null;
 }
 
-/** Persist non-secret provider/model/baseUrl so restarts keep the last selection. */
+/**
+ * Persists the selected AI provider, model, and optional base URL for restoration after restart.
+ *
+ * @param cfg - The provider configuration to persist, or `null` to remove the saved preference
+ */
 export function persistAiPreference(
   cfg: Pick<ProviderConfig, "provider" | "model" | "baseUrl"> | null,
 ): void {
@@ -38,6 +47,11 @@ export function persistAiPreference(
   writeStudioConfig({ aiPreference: pref });
 }
 
+/**
+ * Reads the persisted AI provider preference.
+ *
+ * @returns The preference when both the provider and model are configured, or `null` otherwise.
+ */
 export function readAiPreference(): AiPreference | null {
   const pref = readStudioConfig().aiPreference;
   if (!pref?.provider || !pref.model) return null;
@@ -45,9 +59,10 @@ export function readAiPreference(): AiPreference | null {
 }
 
 /**
- * Rebuild a usable ProviderConfig from a saved preference + env key for that provider.
- * Does not invent keys for cloud providers; returns null if the preferred provider
- * cannot be called yet (except openai-compat / local-style empty-key cases).
+ * Reconstructs a usable provider configuration from a saved preference and available environment credentials.
+ *
+ * @param pref - The saved provider, model, and optional base URL preference
+ * @returns A provider configuration, or `null` when the provider is unavailable or has invalid configuration
  */
 export function restoreProviderFromPreference(pref: AiPreference): ProviderConfig | null {
   const plugin = getProvider(pref.provider);
@@ -87,6 +102,13 @@ export function restoreProviderFromPreference(pref: AiPreference): ProviderConfi
   };
 }
 
+/**
+ * Sets the in-memory AI provider override and persists its preference.
+ *
+ * Clearing the provider also removes the persisted preference.
+ *
+ * @param cfg - The provider configuration to use, or `null` to clear it
+ */
 export function setRuntimeAiProvider(cfg: ProviderConfig | null): void {
   runtimeAiProvider = cfg;
   if (cfg) {

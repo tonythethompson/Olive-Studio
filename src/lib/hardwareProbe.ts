@@ -64,6 +64,12 @@ export function mapOrtProvidersToIhv(providers: string[]): IHVProvider[] {
   return Array.from(found);
 }
 
+/**
+ * Combines ONNX Runtime providers and hardware probe results into the locally detected provider list.
+ *
+ * @param input - Provider and hardware detection results, including runtime loadability for TensorRT variants
+ * @returns A deduplicated list of detected providers that always includes CPU
+ */
 export function mergeDetectedProviders(input: {
   onnxRuntimeProviders?: string[];
   hasNvidiaGpu: boolean;
@@ -106,6 +112,13 @@ export function mergeDetectedProviders(input: {
   return Array.from(detected);
 }
 
+/**
+ * Selects the preferred execution provider from the detected providers.
+ *
+ * @param detected - Providers detected on the current system
+ * @param opts - Runtime loadability flags for TensorRT providers
+ * @returns The highest-priority detected provider, or `CPUExecutionProvider` when none match
+ */
 export function pickRecommendedProvider(
   detected: IHVProvider[],
   opts?: { tensorRtRtxLoadable?: boolean; tensorRtLoadable?: boolean },
@@ -128,6 +141,12 @@ export function pickRecommendedProvider(
   return "CPUExecutionProvider";
 }
 
+/**
+ * Provides the user-facing reason an execution provider is unavailable.
+ *
+ * @param provider - The execution provider to describe
+ * @returns An availability message, or an empty string for the CPU provider
+ */
 function undetectedProviderReason(provider: IHVProvider): string {
   switch (provider) {
     case "QNNExecutionProvider":

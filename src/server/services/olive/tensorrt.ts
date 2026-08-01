@@ -44,6 +44,12 @@ export async function getInstalledTensorRtVersion(python: string): Promise<strin
   }
 }
 
+/**
+ * Locates the installed TensorRT native libraries directory for a Python environment.
+ *
+ * @param python - Path to the Python executable to inspect
+ * @returns The existing `tensorrt_libs` directory path, or `null` if it cannot be located
+ */
 export async function getTensorRtLibsDir(python: string): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync(python, [
@@ -57,12 +63,25 @@ export async function getTensorRtLibsDir(python: string): Promise<string | null>
   }
 }
 
+/**
+ * Extracts the diagnostic detail following the TensorRT failure marker.
+ *
+ * @param text - Text that may contain a TensorRT failure marker
+ * @returns The trimmed diagnostic detail, or `undefined` when the marker or detail is absent
+ */
 function extractTrtFailDetail(text: string): string | undefined {
   const idx = text.indexOf(TRT_FAIL_MARK);
   if (idx < 0) return undefined;
   return text.slice(idx + TRT_FAIL_MARK.length).trim() || undefined;
 }
 
+/**
+ * Installs packages with pip and reports output through the provided callback.
+ *
+ * @param pip - The pip executable to run
+ * @param args - Arguments passed to `pip install`
+ * @param onLine - Callback invoked for each output chunk
+ */
 async function pipInstall(pip: string, args: string[], onLine: (line: string) => void): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(pip, ["install", ...args], { stdio: "pipe" });
@@ -81,6 +100,11 @@ async function pipInstall(pip: string, args: string[], onLine: (line: string) =>
   });
 }
 
+/**
+ * Ensures the pinned ONNX Runtime GPU package is installed for TensorRT execution.
+ *
+ * @param onLine - Receives installation and status messages.
+ */
 async function ensureOnnxRuntimeGpu(
   python: string,
   pip: string,
@@ -109,10 +133,11 @@ async function ensureOnnxRuntimeGpu(
 // ─── TensorRT load probe ──────────────────────────────────────────────────
 
 /**
- * Verify that TensorRT 10.x (nvinfer_10) is loadable inside the venv Python.
+ * Determines whether TensorRT 10.x and its ONNX Runtime execution provider can load in a Python environment.
  *
- * Tests: tensorrt import → version check → DLL load → ORT provider availability.
- * The `env` parameter allows injecting PATH modifications for GPU library dirs.
+ * @param python - Path to the Python interpreter to probe
+ * @param env - Environment variables used during the probe
+ * @returns An object indicating whether TensorRT is loadable and, on failure, describing the cause
  */
 export async function probeTensorRtLoadable(
   python: string,
@@ -205,7 +230,12 @@ except Exception as exc:
   }
 }
 
-// ─── TensorRT install / repair ────────────────────────────────────────────
+/**
+ * Ensures the project environment has a compatible, loadable TensorRT execution provider.
+ *
+ * @param onLine - Callback for installation and verification progress messages
+ * @returns An object indicating success, with native library paths when available, or an error message
+ */
 
 export async function ensureTensorRt(
   onLine: (line: string) => void,

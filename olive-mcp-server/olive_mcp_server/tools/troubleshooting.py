@@ -70,6 +70,17 @@ def _format_ts(ts: float) -> str:
 
 
 def _score(entry: dict[str, Any], error_message: str, pass_name: str, config_context: str) -> int:
+    """Calculate how many configured entry patterns appear in the error context.
+    
+    Parameters:
+    	entry (dict[str, Any]): Knowledge-base entry containing optional matching patterns.
+    	error_message (str): Error message to search.
+    	pass_name (str): Pass name to search.
+    	config_context (str): Configuration context to search.
+    
+    Returns:
+    	int: Number of configured patterns found in the combined error context.
+    """
     text = f"{error_message} {pass_name or ''} {config_context or ''}".lower()
     return sum(1 for p in entry.get("patterns", []) if p.lower() in text)
 
@@ -132,7 +143,17 @@ _QUIRK_CATEGORY_ORDER: tuple[str, ...] = (
 
 
 def _infer_quirk_categories(entry_id: str | None, pass_name: str, domain: str | None) -> set[str]:
-    """Combine entry-specific and pass-name heuristics to pick relevant quirk categories."""
+    """
+    Infer relevant quirk categories from the matched entry, domain, and pass name.
+    
+    Parameters:
+        entry_id (str | None): Identifier of the matched knowledge-base entry.
+        pass_name (str): Name of the processing pass associated with the error.
+        domain (str | None): Troubleshooting domain used to select domain-specific categories.
+    
+    Returns:
+        set[str]: Inferred quirk categories, including applicable default categories when no specific categories match.
+    """
     categories: set[str] = set()
 
     if entry_id:
@@ -167,7 +188,17 @@ def _build_relevant_quirks(
     pass_name: str,
     domain: str | None = None,
 ) -> list[str]:
-    """Return quirk titles from every inferred relevant category."""
+    """
+    Builds a deduplicated list of relevant quirk titles for an error context.
+    
+    Parameters:
+    	entry_id (str | None): Knowledge-base entry identifier associated with the error.
+    	pass_name (str): Name of the processing pass associated with the error.
+    	domain (str | None): Troubleshooting domain used to infer relevant quirk categories.
+    
+    Returns:
+    	list[str]: Relevant quirk titles, limited to the configured maximum.
+    """
     categories = _infer_quirk_categories(entry_id, pass_name, domain)
     quirks_db = load_quirks()
     titles: list[str] = []
@@ -189,6 +220,7 @@ def _build_relevant_quirks(
 
 
 def _pool_for_domain(domain: DomainName) -> list[dict[str, Any]]:
+    """Load troubleshooting entries for the requested domain, preserving Olive-first ordering for automatic matching."""
     olive = load_troubleshooting()
     studio = load_studio_troubleshooting()
     if domain == "olive":
@@ -205,6 +237,17 @@ def _best_match(
     pass_name: str,
     config_context: str,
 ) -> tuple[dict[str, Any] | None, int]:
+    """Selects the highest-scoring troubleshooting entry for the provided error context.
+    
+    Parameters:
+    	entries (list[dict[str, Any]]): Candidate troubleshooting entries.
+    	error_message (str): Error message to match.
+    	pass_name (str): Pass associated with the error.
+    	config_context (str): Configuration context associated with the error.
+    
+    Returns:
+    	tuple[dict[str, Any] | None, int]: The best matching entry and its score, or `(None, 0)` when no entry matches.
+    """
     if not entries:
         return None, 0
     scored = [(entry, _score(entry, error_message, pass_name, config_context)) for entry in entries]
@@ -216,12 +259,21 @@ def _best_match(
 
 
 def _resolve_domain(domain: str | None) -> DomainName:
+    """Resolve a requested troubleshooting domain to a supported domain.
+    
+    Parameters:
+    	domain (str | None): The requested domain name.
+    
+    Returns:
+    	DomainName: The requested domain when supported; otherwise, ``"auto"``.
+    """
     if domain in ("olive", "studio", "auto"):
         return domain  # type: ignore[return-value]
     return "auto"
 
 
 def _no_match_payload() -> dict[str, Any]:
+    """Provide generic troubleshooting guidance when no knowledge-base entry matches."""
     return {
         "matched_entry": None,
         "domain": None,
@@ -243,16 +295,21 @@ def troubleshoot_olive_error(
     config_context: str = "",
     domain: str = "auto",
 ) -> dict[str, Any]:
-    """Diagnose a common Olive or Olive Studio error.
-
+    """
+    Diagnose an Olive or Olive Studio error using the selected knowledge base.
+    
     Args:
-        error_message: The error message or traceback snippet.
-        pass_name: Pass where the error occurred, if known.
-        config_context: Additional configuration context.
-        domain: ``auto`` (score both pools; Olive wins ties), ``olive``, or ``studio``.
-
+        error_message: Error message or traceback snippet to diagnose.
+        pass_name: Name of the pass where the error occurred, if known.
+        config_context: Additional configuration context used for matching.
+        domain: Knowledge-base domain to search: ``"auto"``, ``"olive"``, or
+            ``"studio"``. Invalid values default to ``"auto"``.
+    
     Returns:
-        Root cause, workaround, updated config snippet, domain, applyable, and frequency metadata.
+        A diagnosis containing the matched entry, domain, title, root cause,
+        workaround, updated configuration, applicability, related entry,
+        relevant quirks, and occurrence frequency metadata. If no entry matches,
+        the response contains generic guidance and is marked non-applicable.
     """
     resolved = _resolve_domain(domain)
 
@@ -331,7 +388,18 @@ def diagnose_error(
     config_context: str = "",
     domain: str = "auto",
 ) -> dict[str, Any]:
-    """Alias for ``troubleshoot_olive_error`` (clearer name for agents)."""
+    """
+    Diagnose an Olive or Olive Studio error using the configured knowledge base.
+    
+    Parameters:
+    	error_message (str): The error message to diagnose
+    	pass_name (str): The processing pass associated with the error
+    	config_context (str): Configuration context relevant to the error
+    	domain (str): The domain to search: "auto", "olive", or "studio"
+    
+    Returns:
+    	dict[str, Any]: Diagnosis details, including the root cause, workaround, applicability, relevant quirks, and frequency metadata
+    """
     return troubleshoot_olive_error(
         error_message=error_message,
         pass_name=pass_name,
@@ -347,7 +415,18 @@ def reset_frequency_store() -> None:
 
 
 def get_error_frequency_summary(limit: int = 10) -> dict[str, Any]:
-    """Return a summary of the most frequently occurring tracked errors."""
+    """
+    Summarize tracked errors by occurrence frequency.
+    
+    Parameters:
+        limit (int): Maximum number of error entries to include. Must be greater than or equal to zero.
+    
+    Returns:
+        dict[str, Any]: A summary containing the total tracked count, requested limit, and error entries with occurrence counts, timestamps, frequency labels, and identifiers.
+    
+    Raises:
+        ValueError: If `limit` is negative.
+    """
     if limit < 0:
         raise ValueError("limit must be non-negative")
 

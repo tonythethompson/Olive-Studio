@@ -21,16 +21,35 @@ export type AuditAnalysis = {
   suggestions: AuditSuggestion[];
 };
 
+/**
+ * Determines whether a value is a non-null object with string keys.
+ *
+ * @param v - The value to check
+ * @returns `true` if the value is a record, `false` otherwise.
+ */
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+/**
+ * Normalizes an input value to an integer score between 0 and 100.
+ *
+ * @param n - The value to convert into a score
+ * @returns The rounded score clamped between 0 and 100, or `50` for invalid values
+ */
 function clampScore(n: unknown): number {
   const v = typeof n === "number" ? n : typeof n === "string" ? Number(n) : NaN;
   if (!Number.isFinite(v)) return 50;
   return Math.max(0, Math.min(100, Math.round(v)));
 }
 
+/**
+ * Determines the audit level from a valid level value or a numeric score.
+ *
+ * @param raw - The candidate audit level
+ * @param score - The score used to derive a level when `raw` is invalid
+ * @returns The normalized audit level
+ */
 function normalizeLevel(raw: unknown, score: number): AuditAnalysis["level"] {
   if (raw === "Optimized" || raw === "Suboptimal" || raw === "Critical") return raw;
   if (score >= 80) return "Optimized";
@@ -38,21 +57,46 @@ function normalizeLevel(raw: unknown, score: number): AuditAnalysis["level"] {
   return "Critical";
 }
 
+/**
+ * Normalizes an audit suggestion's impact level.
+ *
+ * @param raw - The value to validate as an impact level
+ * @returns The validated impact level, or `"Medium"` when the value is invalid
+ */
 function normalizeImpact(raw: unknown): AuditSuggestion["impact"] {
   if (raw === "High" || raw === "Medium" || raw === "Low") return raw;
   return "Medium";
 }
 
+/**
+ * Normalizes a suggestion type to a supported value.
+ *
+ * @param raw - The value to normalize
+ * @returns The input type when supported; otherwise, `"suggestion"`
+ */
 function normalizeType(raw: unknown): AuditSuggestion["type"] {
   if (raw === "warning" || raw === "success" || raw === "suggestion" || raw === "info") return raw;
   return "suggestion";
 }
 
+/**
+ * Counts the non-empty whitespace-separated words in a string.
+ *
+ * @param s - The string to count
+ * @returns The number of words in `s`
+ */
 function wordCount(s: string): number {
   return s.trim().split(/\s+/).filter(Boolean).length;
 }
 
-/** Expand telegram-style titles/descriptions into readable copy when the model is too terse. */
+/**
+ * Expands terse audit suggestion text into readable title and description copy.
+ *
+ * @param title - The original suggestion title
+ * @param description - The original suggestion description
+ * @param autofix - The autofix field and value used to provide additional context
+ * @returns The expanded title and description, truncated to their maximum lengths
+ */
 export function expandTerseSuggestion(
   title: string,
   description: string,
@@ -79,6 +123,13 @@ export function expandTerseSuggestion(
   return { title: nextTitle.slice(0, 120), description: nextDesc.slice(0, 600) };
 }
 
+/**
+ * Normalizes a raw audit suggestion into a structured suggestion.
+ *
+ * @param raw - The unvalidated suggestion data
+ * @param index - The suggestion's position, used for fallback titles
+ * @returns The normalized suggestion, or `null` when required autofix data is missing or the input is invalid
+ */
 function normalizeSuggestion(raw: unknown, index: number): AuditSuggestion | null {
   if (!isRecord(raw)) return null;
   const rawTitle =
@@ -107,6 +158,12 @@ function normalizeSuggestion(raw: unknown, index: number): AuditSuggestion | nul
   };
 }
 
+/**
+ * Normalizes parsed audit data into a structured analysis result.
+ *
+ * @param parsed - The value to validate and normalize as audit analysis data
+ * @returns A normalized audit analysis, or `null` when the input is not an object
+ */
 export function normalizeAuditAnalysis(parsed: unknown): AuditAnalysis | null {
   if (!isRecord(parsed)) return null;
   const score = clampScore(parsed.score);
@@ -170,6 +227,12 @@ export function closeTruncatedJson(text: string): string {
   return softRepairJson(s);
 }
 
+/**
+ * Creates a default suboptimal audit analysis from unstructured model output.
+ *
+ * @param rawText - The model response to include in the audit summary
+ * @returns An audit analysis with a score of 50, no suggestions, and a fallback summary
+ */
 function fallbackFromText(rawText: string): AuditAnalysis & { structured: false } {
   const trimmed = rawText.trim().replace(/\s+/g, " ").slice(0, 800);
   return {

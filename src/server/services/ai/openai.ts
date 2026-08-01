@@ -11,7 +11,16 @@ import { fetchWithTimeout } from "../shared/http.ts";
 
 // ─── Shared OpenAI-compatible call helper ─────────────────────────────────────
 
-/** Call any OpenAI-compatible chat completions API. */
+/**
+ * Sends a chat completion request to an OpenAI-compatible API.
+ *
+ * @param cfg - Provider configuration, including the model, credentials, endpoint, and timeout.
+ * @param system - System instruction for the model.
+ * @param messages - Conversation messages to include in the request.
+ * @param wantJson - Whether to request a JSON-only response.
+ * @returns The assistant's response text.
+ * @throws If the API request fails or returns an empty response.
+ */
 export async function callOpenAICompat(
   cfg: ProviderConfig,
   system: string,

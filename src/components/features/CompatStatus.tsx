@@ -30,7 +30,12 @@ interface CompatStatusPillProps {
   size?: "sm" | "md";
 }
 
-/** Color plus icon so hardware status is not color-only. */
+/**
+ * Renders a hardware compatibility status badge with an icon and label.
+ *
+ * @param tier - The compatibility tier to display
+ * @param size - The badge size
+ */
 export function CompatStatusPill({ tier, className, size = "sm" }: CompatStatusPillProps) {
   const { label, Icon, className: tierClass } = TIER_UI[tier];
   return (
@@ -54,7 +59,13 @@ interface CompatCountProps {
   className?: string;
 }
 
-/** Summary counts with icons (not color alone). */
+/**
+ * Displays compatible and incompatible item counts with status icons.
+ *
+ * @param compatible - The number of compatible items
+ * @param incompatible - The number of incompatible items
+ * @param className - Optional classes applied to the summary
+ */
 export function CompatCountSummary({ compatible, incompatible, className }: CompatCountProps) {
   return (
     <p

@@ -34,6 +34,15 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
 
 
 def load_json(name: str) -> dict[str, Any]:
+    """
+    Load and parse a UTF-8 JSON file from the knowledge base.
+    
+    Parameters:
+    	name (str): Name of the JSON file within the knowledge base directory.
+    
+    Returns:
+    	dict[str, Any]: Parsed JSON object.
+    """
     path = KB_DIR / name
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -52,11 +61,22 @@ def load_quirks() -> dict[str, Any]:
 
 
 def load_troubleshooting() -> list[dict[str, Any]]:
+    """Load and normalize Olive troubleshooting entries.
+    
+    Returns:
+    	list[dict[str, Any]]: Troubleshooting entries with normalized domains and applyability values.
+    """
     entries = load_json("troubleshooting.json").get("entries", [])
     return [_normalize_entry(e, default_domain="olive") for e in entries]
 
 
 def load_studio_troubleshooting() -> list[dict[str, Any]]:
+    """
+    Load and normalize studio troubleshooting entries.
+    
+    Returns:
+    	list[dict[str, Any]]: The normalized troubleshooting entries, or an empty list when the data file is unavailable.
+    """
     try:
         entries = load_json("studio_troubleshooting.json").get("entries", [])
     except FileNotFoundError:
@@ -65,7 +85,16 @@ def load_studio_troubleshooting() -> list[dict[str, Any]]:
 
 
 def _normalize_entry(entry: dict[str, Any], default_domain: str) -> dict[str, Any]:
-    """Copy entry with domain / applyable defaults for diagnose routing."""
+    """
+    Normalize a troubleshooting entry for diagnostic routing.
+    
+    Parameters:
+        entry (dict[str, Any]): Entry to copy and normalize.
+        default_domain (str): Domain used when the entry's domain is missing or invalid.
+    
+    Returns:
+        dict[str, Any]: A copied entry with a valid domain and boolean ``applyable`` value.
+    """
     out = dict(entry)
     domain = out.get("domain") or default_domain
     out["domain"] = domain if domain in ("olive", "studio") else default_domain
@@ -78,14 +107,36 @@ def _normalize_entry(entry: dict[str, Any], default_domain: str) -> dict[str, An
 
 
 def load_compatibility_matrix() -> list[dict[str, Any]]:
+    """Load model compatibility entries from the compatibility matrix.
+    
+    Returns:
+    	list[dict[str, Any]]: The model compatibility entries.
+    """
     return load_json("compatibility_matrix.json").get("models", [])
 
 
 def load_integration_recipes() -> list[dict[str, Any]]:
+    """Load the integration recipes from the knowledge base.
+    
+    Returns:
+    	list[dict[str, Any]]: The available integration recipes.
+    """
     return load_json("integration_recipes.json").get("recipes", [])
 
 
 def __getattr__(name: str) -> Any:
+    """
+    Resolve a lazily exported tool or raise an attribute error for unknown names.
+    
+    Parameters:
+    	name (str): Name of the exported attribute to resolve.
+    
+    Returns:
+    	Any: The imported attribute associated with the requested name.
+    
+    Raises:
+    	AttributeError: If the name is not a lazily exported attribute.
+    """
     target = _LAZY_EXPORTS.get(name)
     if target is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

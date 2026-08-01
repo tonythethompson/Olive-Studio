@@ -64,6 +64,11 @@ export function logoutDevin(): void {
   clearDevinCredentials();
 }
 
+/**
+ * Loads the available Devin models for the signed-in account.
+ *
+ * @returns The model list, its source (`live` or `fallback`), and an error message when the live catalog is unavailable.
+ */
 export async function listDevinModels(): Promise<{
   models: Array<{ id: string; name: string; disabled?: boolean }>;
   source: "live" | "fallback";

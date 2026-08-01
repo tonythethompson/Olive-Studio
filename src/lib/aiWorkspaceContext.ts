@@ -72,6 +72,12 @@ export type BuildAiWorkspaceContextOptions = {
   recipePreviewChars?: number;
 };
 
+/**
+ * Removes the `ExecutionProvider` suffix from a provider name.
+ *
+ * @param provider - The execution provider name to shorten
+ * @returns The provider name without the `ExecutionProvider` suffix
+ */
 function shortProvider(provider: UIState["ihvProvider"]): string {
   return provider.replace("ExecutionProvider", "");
 }
@@ -98,6 +104,12 @@ function shortModelName(displayName: string): string {
   return first.length > 36 ? `${first.slice(0, 33)}…` : first;
 }
 
+/**
+ * Builds descriptive labels for the enabled model-processing passes.
+ *
+ * @param passes - The configured conversion, quantization, pruning, transformation, splitting, PEFT, and diffusion LoRA passes
+ * @returns Labels describing each enabled pass and its relevant configuration
+ */
 function collectActivePassLabels(passes: UIState["passes"]): string[] {
   const labels: string[] = [];
   if (passes.conversion) {
@@ -127,6 +139,12 @@ function collectActivePassLabels(passes: UIState["passes"]): string[] {
   return labels;
 }
 
+/**
+ * Creates a concise hardware summary for inclusion in the AI workspace context.
+ *
+ * @param probe - Hardware and runtime provider information to summarize
+ * @returns A summary containing detected providers, GPU details, CUDA information, system memory, runtime providers, and probe notes
+ */
 function summarizeProbe(probe: HardwareProbeResult): AiWorkspaceProbeSummary {
   const gpus = [
     ...(probe.nvidia?.gpus ?? []).map((g) => ({ name: g.name, vramMb: g.vramMb })),
@@ -144,7 +162,12 @@ function summarizeProbe(probe: HardwareProbeResult): AiWorkspaceProbeSummary {
   };
 }
 
-/** True when a cache path looks like an Azure (or similar) connection string. */
+/**
+ * Determines whether a cache path contains an Azure-style connection string or access credential.
+ *
+ * @param value - The cache path or URL to inspect
+ * @returns `true` if the value appears to contain credential-bearing connection details, `false` otherwise
+ */
 export function isCredentialBearingCacheUrl(value: string): boolean {
   const v = value.trim();
   if (!v) return false;
@@ -157,7 +180,12 @@ export function isCredentialBearingCacheUrl(value: string): boolean {
   );
 }
 
-/** Redact credential-bearing strings nested in a recipe JSON tree. */
+/**
+ * Redacts credential-bearing values throughout a recipe data structure.
+ *
+ * @param value - The recipe value to sanitize
+ * @returns A copy with detected credentials replaced by `[REDACTED]`
+ */
 export function redactRecipeSecretsForAi(value: unknown): unknown {
   if (typeof value === "string") {
     return isCredentialBearingCacheUrl(value) ? "[REDACTED]" : value;
@@ -175,6 +203,13 @@ export function redactRecipeSecretsForAi(value: unknown): unknown {
   return value;
 }
 
+/**
+ * Builds a redacted snapshot of the current Olive recipe for AI workspace context.
+ *
+ * @param state - The current workspace UI state
+ * @param maxChars - Maximum number of characters to include in the recipe JSON preview
+ * @returns The recipe's input model type, pass types, accelerator configuration, and truncated JSON preview, or `undefined` if the snapshot cannot be built
+ */
 function buildRecipeSnapshot(state: UIState, maxChars: number): AiWorkspaceRecipeSnapshot | undefined {
   try {
     const recipe = buildOliveRecipe(state);
@@ -198,6 +233,11 @@ function buildRecipeSnapshot(state: UIState, maxChars: number): AiWorkspaceRecip
   }
 }
 
+/**
+ * Retrieves the last 25 log lines from the active batch job or the most relevant available job.
+ *
+ * @returns The selected job's recent log lines, or `undefined` when no logs are available.
+ */
 function recentLogTail(state: UIState): string[] | undefined {
   const jobs = state.batchJobs ?? [];
   const active =
@@ -210,6 +250,13 @@ function recentLogTail(state: UIState): string[] | undefined {
   return active.logs.slice(-25);
 }
 
+/**
+ * Builds an AI-ready snapshot of the workspace state, including model, hardware, recipe, validation, and job information.
+ *
+ * @param state - The current workspace UI state
+ * @param opts - Optional hardware probe data and recipe preview length
+ * @returns The assembled workspace context with credential-bearing values redacted
+ */
 export function buildAiWorkspaceContext(
   state: UIState,
   opts?: BuildAiWorkspaceContextOptions,
@@ -275,6 +322,12 @@ export function buildAiWorkspaceContext(
   };
 }
 
+/**
+ * Formats the current workspace context as a structured prompt for AI assistance.
+ *
+ * @param ctx - The workspace state and configuration to include in the prompt
+ * @returns A formatted prompt containing the workspace selections, diagnostics, job information, and actionable guidance
+ */
 export function formatAiWorkspaceContextForPrompt(ctx: AiWorkspaceContext): string {
   const lines = [
     "Current Olive Studio workspace (live UI selections):",
@@ -402,6 +455,12 @@ export function formatAiWorkspaceContextForPrompt(ctx: AiWorkspaceContext): stri
   return lines.join("\n");
 }
 
+/**
+ * Creates a compact summary of the workspace model, execution provider, GPU, enabled passes, and validation status.
+ *
+ * @param ctx - The workspace context to summarize
+ * @returns A formatted workspace summary string
+ */
 export function buildWorkspaceContextSummary(ctx: AiWorkspaceContext): string {
   const model = shortModelName(ctx.model.displayName);
   const passes =
@@ -418,6 +477,11 @@ export function buildWorkspaceContextSummary(ctx: AiWorkspaceContext): string {
   return `${model} · ${ctx.hardware.executionProviderShort}${gpu} · ${passes} · ${val}`;
 }
 
+/**
+ * Generates up to four contextual questions for the workspace chat.
+ *
+ * @returns A list of questions covering relevant validation issues, provider conflicts, enabled passes, model settings, and batch jobs
+ */
 export function buildChatPresetQueries(state: UIState): string[] {
   const ctx = buildAiWorkspaceContext(state);
   const queries: string[] = [];

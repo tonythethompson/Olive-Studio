@@ -112,6 +112,13 @@ export interface PresetVramEstimate {
   fitHint: string | null;
 }
 
+/**
+ * Estimates deployed-model and peak-run memory requirements for a catalog preset.
+ *
+ * @param item - The catalog item whose preset memory usage should be estimated
+ * @param probe - Optional hardware information used to assess memory fit
+ * @returns Memory estimates, GPU usage, a formatted summary, and an optional fit warning
+ */
 export function estimateVramForCatalogPreset(
   item: RecipeCatalogItem,
   probe?: HardwareProbeResult | null,

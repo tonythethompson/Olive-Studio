@@ -21,6 +21,12 @@ import {
   PINNED_ORT_GPU_VERSION,
 } from "../../../lib/oliveGpuRuntime.ts";
 
+/**
+ * Retrieves the installed TensorRT RTX package version.
+ *
+ * @param python - Path to the Python executable used to query the package
+ * @returns The installed TensorRT RTX version, or `null` if it cannot be retrieved
+ */
 export async function getInstalledTensorRtRtxVersion(python: string): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync(python, [
@@ -47,8 +53,10 @@ export async function getTensorRtRtxLibsDir(python: string): Promise<string | nu
 }
 
 /**
- * Verify that TensorRT RTX (tensorrt_rtx) is importable and a
- * runtime DLL/SO can be loaded in the target Python environment.
+ * Checks whether TensorRT RTX loads successfully and provides the required ONNX Runtime execution provider.
+ *
+ * @param python - Path to the Python interpreter to probe
+ * @returns The load status, with the detected version when successful or an error detail when unsuccessful
  */
 export async function probeTensorRtRtxLoadable(
   python: string,
@@ -103,6 +111,14 @@ else:
   }
 }
 
+/**
+ * Installs Python packages with pip and reports process output line by line.
+ *
+ * @param pip - Path to the pip executable
+ * @param args - Arguments specifying the packages and installation options
+ * @param onLine - Callback for each captured output line
+ * @throws If pip cannot be launched or the installation exits unsuccessfully
+ */
 async function pipInstall(pip: string, args: string[], onLine: (line: string) => void): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(pip, ["install", ...args], { stdio: "pipe" });
@@ -146,7 +162,12 @@ async function ensureOnnxRuntimeGpu(
   onLine(`[deps] ${pinnedOrtGpuLabel()} installed ✓`);
 }
 
-/** Install TensorRT RTX runtime into the project venv (creates .venv if needed). */
+/**
+ * Ensures the project virtual environment contains a loadable TensorRT RTX runtime.
+ *
+ * @param onLine - Receives progress messages during environment preparation and installation.
+ * @returns An object indicating success, with the TensorRT RTX libraries directory when available, or an error description.
+ */
 export async function ensureTensorRtRtx(
   onLine: (line: string) => void,
 ): Promise<{ ok: boolean; error?: string; libsDir?: string | null }> {

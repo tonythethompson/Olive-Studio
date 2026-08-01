@@ -2,6 +2,12 @@ import { Card, CardContent, CardHeader, Input, Label, Switch } from "@/component
 import { UIState } from "@/types";
 import { KeyRound, Database, Network } from "lucide-react";
 
+/**
+ * Renders controls for configuring local cache paths, Azure Blob storage, and distributed caching.
+ *
+ * @param state - Current infrastructure and caching settings.
+ * @param setState - Updates one or more infrastructure and caching settings.
+ */
 export function EnterpriseInfraPanel({
   state,
   setState,

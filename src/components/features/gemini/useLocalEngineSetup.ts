@@ -80,8 +80,10 @@ function describePullFetchError(err: unknown): string {
 }
 
 /**
- * Owns the "1-Click Local AI Setup" flows: engine preference, engine health,
- * installing LM Studio / Ollama, and streaming model pulls.
+ * Manages local AI engine selection, availability checks, installation, and model downloads.
+ *
+ * @param isOpen - Whether the local engine setup interface is open and should refresh engine status.
+ * @param onModelActivated - Callback invoked with the model tag and engine source after a successful model download.
  */
 export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngineSetupOptions) {
   const [pullingModel, setPullingModel] = useState<string | null>(null);

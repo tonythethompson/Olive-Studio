@@ -67,6 +67,14 @@ interface EngineMissingBannerProps {
   onInstall: () => void;
 }
 
+/**
+ * Displays setup guidance and installation actions for an unavailable local AI engine.
+ *
+ * @param isLms - Whether the banner is for LM Studio rather than Ollama
+ * @param installing - Whether engine installation is in progress
+ * @param disabled - Whether the setup action is disabled
+ * @param onInstall - Called when the setup action is selected
+ */
 function EngineMissingBanner({
   isLms,
   accentBg,
@@ -113,6 +121,14 @@ interface StarterModelCardProps {
   onPull: () => void;
 }
 
+/**
+ * Renders a starter model card with its details and download action.
+ *
+ * @param model - The starter model to display
+ * @param displaySize - The formatted model size
+ * @param isPulling - Whether the model is currently being downloaded and activated
+ * @param onPull - Called when the download action is selected
+ */
 function StarterModelCard({ model, displaySize, accentBg, isPulling, onPull }: StarterModelCardProps) {
   return (
     <div className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60 flex flex-col gap-1.5">
@@ -203,7 +219,12 @@ interface LocalAiSetupCardProps {
 }
 
 /**
- * Local Settings: engine choice, installed models first, starters demoted.
+ * Displays local AI engine controls, health status, installed models, and starter downloads.
+ *
+ * @param local - Local AI engine state and actions
+ * @param activeModel - The currently active local model
+ * @param isOpen - Whether the local model manager is expanded
+ * @param onActivate - Called when a model is activated
  */
 export function LocalAiSetupCard({ local, activeModel, isOpen, onActivate }: LocalAiSetupCardProps) {
   const isLms = local.preferredEngine === "lms";

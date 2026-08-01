@@ -27,7 +27,11 @@ import { getRuntimeAiProvider, readAiPreference, restoreProviderFromPreference }
 import { detectEnvProvider, callProvider, registeredProviderNames, getProvider } from "./registry.ts";
 import type { ProviderConfig, AIChatMessage } from "../../types.ts";
 
-/** Get the currently active AI provider (runtime override > saved preference > env detection). */
+/**
+ * Gets the active AI provider using runtime overrides, saved preferences, or environment detection.
+ *
+ * @returns The active provider configuration, or `null` when no provider is available
+ */
 export function getAiProvider(): ProviderConfig | null {
   const runtime = getRuntimeAiProvider();
   if (runtime) return runtime;

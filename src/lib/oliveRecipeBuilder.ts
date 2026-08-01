@@ -10,6 +10,12 @@ const GPU_PROVIDERS: IHVProvider[] = [
 ];
 const NPU_PROVIDERS: IHVProvider[] = ["QNNExecutionProvider"];
 
+/**
+ * Infers the Hugging Face task associated with a model identifier.
+ *
+ * @param modelId - The Hugging Face model identifier to classify
+ * @returns The corresponding Hugging Face task name
+ */
 export function inferHfTask(modelId: string): string {
   const id = modelId.toLowerCase();
   // Transformers pipeline / Olive HfModel expect this exact task id (not "speech-recognition").
@@ -31,7 +37,12 @@ export function inferHfTask(modelId: string): string {
   return "text-generation";
 }
 
-/** Prefer explicit UI task; otherwise infer from the HF model id. */
+/**
+ * Resolves the Hugging Face task from the configured task or model ID.
+ *
+ * @param state - UI state containing the optional explicit task and model ID
+ * @returns The configured task, normalized speech-recognition task, or inferred task
+ */
 export function resolveHfTask(state: Pick<UIState, "hfTask" | "hfModelId">): string {
   const explicit = (state.hfTask || "").trim();
   if (explicit) {
@@ -41,6 +52,11 @@ export function resolveHfTask(state: Pick<UIState, "hfTask" | "hfModelId">): str
   return inferHfTask(state.hfModelId || "");
 }
 
+/**
+ * Infers the model type from a model identifier.
+ *
+ * @returns The recognized model type, or `gpt2` when no supported type is identified.
+ */
 export function inferModelType(modelId: string): string {
   const id = modelId.toLowerCase();
   if (id.includes("llama")) return "llama";
@@ -138,6 +154,12 @@ function finalizePasses(
   return out;
 }
 
+/**
+ * Builds an Olive optimization recipe from the configured model, execution provider, passes, and evaluation settings.
+ *
+ * @param state - The UI configuration used to construct the recipe
+ * @returns The configured Olive recipe
+ */
 export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   const recipe: Record<string, unknown> = {
     input_model: {

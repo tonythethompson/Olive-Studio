@@ -35,6 +35,12 @@ export function wranglerSpawnUsesShell(command: string, platform = process.platf
   return true;
 }
 
+/**
+ * Selects an existing Windows command shim for a candidate executable path.
+ *
+ * @param candidate - The executable path to inspect
+ * @returns The candidate path or an existing `.CMD` or `.cmd` sibling on Windows
+ */
 function preferWindowsCmdShim(candidate: string): string {
   if (process.platform !== "win32") return candidate;
   if (/\.(cmd|bat|exe)$/i.test(candidate)) return candidate;
@@ -45,6 +51,11 @@ function preferWindowsCmdShim(candidate: string): string {
   return candidate;
 }
 
+/**
+ * Builds the ordered list of Wrangler executable candidates.
+ *
+ * @returns Candidate executable paths and commands, including the configured `WRANGLER_PATH`, platform-specific installation paths, and `npx`.
+ */
 function wranglerCandidates(): string[] {
   const fromEnv = process.env.WRANGLER_PATH?.trim();
   const home = os.homedir();
@@ -59,6 +70,12 @@ function wranglerCandidates(): string[] {
   ];
 }
 
+/**
+ * Creates child-process options for running a Wrangler command.
+ *
+ * @param cmd - The Wrangler command whose platform-specific execution options are determined
+ * @param extra - Additional options that override the defaults
+ */
 function execOpts(cmd: string, extra: Record<string, unknown> = {}) {
   return {
     windowsHide: true,
@@ -68,7 +85,11 @@ function execOpts(cmd: string, extra: Record<string, unknown> = {}) {
   };
 }
 
-/** Resolve a runnable wrangler argv prefix (`wrangler` or `npx wrangler`). */
+/**
+ * Resolves an executable command and argument prefix for running Wrangler.
+ *
+ * @returns The runnable command and any arguments required before Wrangler arguments
+ */
 export async function resolveWranglerCmd(): Promise<{ cmd: string; prefixArgs: string[] }> {
   for (const raw of wranglerCandidates()) {
     if (raw === "npx") {
@@ -98,7 +119,14 @@ export async function resolveWranglerCmd(): Promise<{ cmd: string; prefixArgs: s
   };
 }
 
-/** Wrangler may print logs before JSON; parse the first valid top-level JSON value. */
+/**
+ * Parses the first valid top-level JSON value from Wrangler output.
+ *
+ * @param text - The command output, which may contain log messages before the JSON value
+ * @param commandLabel - The command name used in empty or invalid output errors
+ * @returns The parsed JSON value
+ * @throws If the output is empty or contains no valid JSON value
+ */
 export function parseWranglerStdoutJson<T>(text: string, commandLabel = "wrangler"): T {
   const trimmed = text.trim();
   if (!trimmed) throw new Error(`${commandLabel} returned empty output.`);
@@ -132,6 +160,14 @@ export function parseWranglerStdoutJson<T>(text: string, commandLabel = "wrangle
   throw new Error(`${commandLabel} did not return JSON.`);
 }
 
+/**
+ * Executes a Wrangler command and parses its JSON output.
+ *
+ * @param args - Arguments to pass to Wrangler
+ * @param timeoutMs - Maximum execution time in milliseconds
+ * @returns The parsed Wrangler response
+ * @throws An error when Wrangler fails, produces empty or invalid output, or exceeds the timeout
+ */
 async function runWranglerJson<T>(args: string[], timeoutMs = 30_000): Promise<T> {
   const { cmd, prefixArgs } = await resolveWranglerCmd();
   try {
@@ -157,17 +193,28 @@ async function runWranglerJson<T>(args: string[], timeoutMs = 30_000): Promise<T
   }
 }
 
+/**
+ * Retrieves the authenticated Wrangler API token.
+ *
+ * @returns The authenticated Wrangler API token data
+ */
 export async function wranglerAuthToken(): Promise<WranglerAuthToken> {
   return runWranglerJson<WranglerAuthToken>(["auth", "token", "--json"]);
 }
 
+/**
+ * Retrieves the authenticated Wrangler account identity.
+ *
+ * @returns The authenticated account identity.
+ */
 export async function wranglerWhoAmI(): Promise<WranglerWhoAmI> {
   return runWranglerJson<WranglerWhoAmI>(["whoami", "--json"]);
 }
 
 /**
- * Start interactive `wrangler login` in the background (opens the browser).
- * Caller should poll / sync after the user finishes OAuth.
+ * Starts an interactive Wrangler login process in the background.
+ *
+ * @returns An object indicating whether login started and the command used to start it
  */
 export async function startWranglerLogin(): Promise<{ started: boolean; detail: string }> {
   if (loginChild && !loginChild.killed) {
@@ -219,6 +266,11 @@ export async function startWranglerLogin(): Promise<{ started: boolean; detail: 
   };
 }
 
+/**
+ * Determines whether a Wrangler login process is currently active.
+ *
+ * @returns `true` if a login process is active, `false` otherwise.
+ */
 export function isWranglerLoginInProgress(): boolean {
   return Boolean(loginChild && !loginChild.killed);
 }

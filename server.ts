@@ -136,6 +136,9 @@ function shouldServeProductionStatic(): boolean {
   );
 }
 
+/**
+ * Starts the server with development middleware or production static assets, then listens for incoming connections.
+ */
 async function startServer() {
   if (!shouldServeProductionStatic()) {
     const vite = await createViteServer({

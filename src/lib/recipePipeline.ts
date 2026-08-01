@@ -20,7 +20,13 @@ export interface RecipePipelineResult {
   isRunnable: boolean;
 }
 
-/** Single source of truth: UI state → sanitized recipe artifact. */
+/**
+ * Builds a sanitized Olive recipe artifact and evaluates its validation status.
+ *
+ * @param state - The UI state used to construct the recipe
+ * @param options - Optional settings for pipeline validation
+ * @returns The sanitized state, recipe, serialized JSON, validation results, advisories, schema status, and runnability
+ */
 export function buildRecipeFromState(
   state: UIState,
   options?: PipelineValidationOptions,

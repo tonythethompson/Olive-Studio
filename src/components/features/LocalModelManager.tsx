@@ -2,11 +2,14 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 /**
- * Displays installed local models and provides controls to search, load, and unload them.
+ * Displays installed local models with search, grouping, loading, and unloading controls.
  *
- * @param activeModel - The currently active model to highlight.
- * @param isOpen - Whether the sidebar is open and keyboard shortcuts should be enabled.
- * @param engine - Restrict list/errors to one local engine so LMS tab never shows Ollama errors.
+ * @param activeModel - The active model identifier to highlight.
+ * @param isOpen - Whether the sidebar is open and keyboard shortcuts are enabled.
+ * @param engine - The engine whose models and errors are displayed.
+ * @param onActivate - Called after a model is loaded with its identifier and engine source.
+ * @param showTitle - Whether to display the section heading.
+ * @param emptyHint - Message shown when no models are installed.
  */
 export function LocalModelManager({
   activeModel,

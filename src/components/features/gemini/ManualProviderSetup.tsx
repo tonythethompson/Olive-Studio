@@ -10,7 +10,11 @@ interface ProvidersProp {
   providers: AiProviderSettings;
 }
 
-/** Provider dropdown with category separators. */
+/**
+ * Renders a provider selection dropdown grouped by category.
+ *
+ * @param providers - Provider settings and selection handler used to control the dropdown
+ */
 function ProviderSelect({ providers }: ProvidersProp) {
   return (
     <div>
@@ -271,7 +275,11 @@ function ApiKeyForm({ providers }: ProvidersProp) {
   );
 }
 
-/** Cloud provider setup: pick provider + model, then sign in or save a key. */
+/**
+ * Configures a cloud provider, model, and provider authentication details.
+ *
+ * @param providers - Provider options and state used by the setup controls
+ */
 export function ManualProviderSetup({ providers }: ProvidersProp) {
   const { settingsProvider, providerOption, providerSaveError } = providers;
   return (

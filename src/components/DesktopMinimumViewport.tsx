@@ -13,9 +13,11 @@ interface DesktopMinimumViewportProps {
 }
 
 /**
- * Shows a desktop-only empty state when the viewport is narrower than the
- * supported layout. Between minWidth and the wide shell breakpoint, the app
- * rearranges (icon rail, stacked graph, assistant overlay).
+ * Displays child content at supported viewport widths and a desktop-required message on narrower screens.
+ *
+ * @param children - Content to display when the viewport meets the minimum width
+ * @param minWidthPx - Minimum viewport width required to display the content
+ * @returns The child content or a desktop-required empty state
  */
 export function DesktopMinimumViewport({
   children,

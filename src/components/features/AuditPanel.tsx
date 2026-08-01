@@ -12,8 +12,14 @@ interface AuditPanelProps {
 }
 
 /**
- * Renders the pipeline audit analysis: score ring, suggestions list with
- * Apply buttons, and the Analyze CTA.
+ * Displays pipeline audit results, including the efficiency score, summary, suggestions, and analysis controls.
+ *
+ * @param analysis - The available pipeline audit results.
+ * @param isAnalyzing - Whether an audit is currently running.
+ * @param analysisError - An error message from the audit provider, if available.
+ * @param onApplyAutofix - Applies a suggested autofix.
+ * @param onRunAnalysis - Starts or refreshes the pipeline audit.
+ * @param onGoSettings - Opens provider settings.
  */
 export function AuditPanel({
   analysis,

@@ -42,12 +42,25 @@ export const STUDIO_ENV_KEY_NAMES = [
   "OLIVE_STUDIO_WEB_SEARCH_URL",
 ] as const;
 
+/**
+ * Determines whether an environment variable contains a usable value.
+ *
+ * @param value - The environment variable value to evaluate
+ * @returns `true` if the value is non-empty and not a placeholder, `false` otherwise.
+ */
 function isUsableEnvValue(value: string | undefined): boolean {
   if (!value?.trim()) return false;
   return !isPlaceholderEnvValue(value);
 }
 
-/** Apply dotenv file entries; only overwrite when the file value is non-empty and non-placeholder. */
+/**
+ * Loads usable values from a dotenv file into `process.env`.
+ *
+ * Existing usable environment values are preserved unless `overrideUsable` is enabled.
+ *
+ * @param filePath - Path to the dotenv file
+ * @param opts - Controls whether usable existing values may be overwritten
+ */
 export function applyDotenvFile(filePath: string, opts?: { overrideUsable?: boolean }): void {
   const resolved = path.resolve(filePath);
   if (!fs.existsSync(resolved)) return;
@@ -63,8 +76,13 @@ export function applyDotenvFile(filePath: string, opts?: { overrideUsable?: bool
 }
 
 /**
- * Read persisted Windows User then Machine env for the given names.
- * Returns a map of name → value (no secrets logged by callers).
+ * Reads usable persisted environment values from Windows User and Machine settings.
+ *
+ * User-level values take precedence over Machine-level values. Returns an empty
+ * map on unsupported platforms or when the values cannot be read or parsed.
+ *
+ * @param names - The environment variable names to retrieve
+ * @returns A map of variable names to usable persisted values
  */
 export function readWindowsPersistedEnv(
   names: readonly string[],
@@ -107,7 +125,12 @@ export function readWindowsPersistedEnv(
   }
 }
 
-/** Fill process.env gaps from Windows User/Machine persisted environment. */
+/**
+ * Fills missing or unusable process environment variables from persisted Windows settings.
+ *
+ * @param names - The environment variable names to hydrate
+ * @returns The names of the environment variables populated
+ */
 export function hydrateProcessEnvFromWindows(
   names: readonly string[] = STUDIO_ENV_KEY_NAMES,
   opts?: { exec?: typeof execFileSync; platform?: NodeJS.Platform },
@@ -122,7 +145,11 @@ export function hydrateProcessEnvFromWindows(
   return filled;
 }
 
-/** Full bootstrap used by server.ts. */
+/**
+ * Loads Studio environment variables from dotenv files and persisted Windows settings.
+ *
+ * @param cwd - The working directory containing the dotenv files
+ */
 export function loadStudioEnv(cwd: string = process.cwd()): void {
   applyDotenvFile(path.join(cwd, ".env"));
   applyDotenvFile(path.join(cwd, ".env.local"), { overrideUsable: true });

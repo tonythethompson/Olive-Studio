@@ -66,7 +66,11 @@ def _search_local(terms: list[str], top_k: int) -> list[dict[str, Any]]:
 
 
 def _fetch_live_docs() -> dict[str, str]:
-    """Fetch (and cache) the live Olive docs landing page."""
+    """Fetch and cache the Olive documentation landing page.
+    
+    Returns:
+    	dict[str, str]: The cached documentation pages, or an empty dictionary if none are available.
+    """
     global _LIVE_CACHE, _LAST_FETCH_TIME  # noqa: PLW0603
 
     now = time.monotonic()

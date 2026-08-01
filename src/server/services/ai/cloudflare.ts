@@ -8,6 +8,15 @@ import {
 } from "../../../lib/cloudflare/client.ts";
 import { cloudflareAiBaseUrl, isValidCloudflareAccountId } from "../../../lib/cloudflare/credentials.ts";
 
+/**
+ * Sends a chat completion request through the Cloudflare Workers AI provider.
+ *
+ * @param cfg - Provider configuration, including optional credentials, model, base URL, and timeout
+ * @param system - System prompt for the request
+ * @param messages - Chat messages to send
+ * @param wantJson - Whether to request a JSON-formatted response
+ * @returns The generated response text
+ */
 async function call(
   cfg: ProviderConfig,
   system: string,

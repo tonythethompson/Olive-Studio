@@ -10,9 +10,10 @@ export type LocalLogDiagnostic = McpDiagnostic & {
 const STUDIO_HF_TASK_SPEECH = "studio-hf-task-speech-recognition";
 
 /**
- * Match well-known Olive Studio / Transformers failures in run logs.
- * Runs before (or instead of) MCP KB lookup so Diagnose is useful offline
- * and for bugs the KB has not indexed.
+ * Matches recognized Hugging Face and Olive failure patterns in run logs for offline diagnostics.
+ *
+ * @param logs - The run log lines to analyze
+ * @returns A diagnostic with relevant evidence when a known failure is found, or `null` otherwise
  */
 export function matchLocalLogDiagnostic(logs: string[]): LocalLogDiagnostic | null {
   if (logs.length === 0) return null;
@@ -91,11 +92,21 @@ export function matchLocalLogDiagnostic(logs: string[]): LocalLogDiagnostic | nu
   return null;
 }
 
+/**
+ * Determines whether a diagnostic identifies the Studio Hugging Face speech-task fix.
+ *
+ * @param diagnostic - The diagnostic to inspect.
+ * @returns `true` if the diagnostic identifies the speech-task fix, `false` otherwise.
+ */
 export function isStudioHfTaskSpeechFix(diagnostic: { matched_entry?: string | null } | null): boolean {
   return diagnostic?.matched_entry === STUDIO_HF_TASK_SPEECH;
 }
 
-/** True when logs look like a hard failure even if the process exited 0. */
+/**
+ * Determines whether logs contain indicators of a hard failure.
+ *
+ * @returns `true` if the logs contain a recognized failure marker, `false` otherwise.
+ */
 export function logsIndicateFailure(logs: string[]): boolean {
   return logs.some(
     (line) =>
@@ -109,8 +120,12 @@ export function logsIndicateFailure(logs: string[]): boolean {
 }
 
 /**
- * Expand a sparse line selection (e.g. one traceback frame) to nearby context
- * so Diagnose sees the KeyError / summary lines.
+ * Expands selected log lines with nearby context and relevant failure indicators.
+ *
+ * @param logs - The complete log lines.
+ * @param selectedIndices - Indices of the initially selected log lines.
+ * @param radius - Number of surrounding lines to include for each selected line.
+ * @returns The selected log context in its original order.
  */
 export function expandLogSelection(logs: string[], selectedIndices: number[], radius = 6): string[] {
   if (selectedIndices.length === 0) return logs;

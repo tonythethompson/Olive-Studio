@@ -58,8 +58,11 @@ type JsonRpcResponse = {
 };
 
 /**
- * On Windows, bare `codex` / `.cmd` Volta shims need `shell: true`.
- * A direct `.exe` path can spawn without a shell.
+ * Determines whether Codex should be spawned through a shell on the specified platform.
+ *
+ * @param command - The Codex command or executable path.
+ * @param platform - The platform used to determine shell requirements.
+ * @returns `true` on Windows for commands that do not end with `.exe`, `false` otherwise.
  */
 export function codexSpawnUsesShell(command: string, platform = process.platform): boolean {
   if (platform !== "win32") return false;
@@ -401,6 +404,11 @@ export class CodexAppServerClient extends EventEmitter {
 /** Process-wide singleton (lazy). */
 let singleton: CodexAppServerClient | null = null;
 
+/**
+ * Gets the process-wide Codex app-server client, creating it when necessary.
+ *
+ * @returns The shared Codex app-server client
+ */
 export function getCodexAppServer(): CodexAppServerClient {
   if (!singleton) {
     singleton = new CodexAppServerClient(process.env.CODEX_PATH || "codex");

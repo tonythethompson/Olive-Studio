@@ -520,6 +520,12 @@ function getPassChainIssues(state: UIState, recipe: OliveRecipe): PipelineIssue[
   return issues;
 }
 
+/**
+ * Identifies advisory issues for the selected pipeline configuration.
+ *
+ * @param state - The current pipeline UI state
+ * @returns Advisory pipeline issues
+ */
 function getAdvisoryIssues(state: UIState): PipelineIssue[] {
   const issues: PipelineIssue[] = [];
   const { passes } = state;
@@ -542,7 +548,13 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
   return issues;
 }
 
-/** Catch recipe config that will fail at Olive/Transformers runtime. */
+/**
+ * Detects recipe task configurations that can fail during Olive or Transformers runtime.
+ *
+ * @param state - The current UI state used to identify the model source and model path
+ * @param recipe - The Olive recipe to inspect
+ * @returns Critical issues for invalid task names or Whisper task mismatches
+ */
 function getRecipeRuntimeIssues(state: UIState, recipe: OliveRecipe): PipelineIssue[] {
   const issues: PipelineIssue[] = [];
   const input = recipe.input_model as { type?: string; config?: Record<string, unknown> } | undefined;
@@ -608,6 +620,13 @@ function getPassCatalogIssues(state: UIState, recipe: OliveRecipe): PipelineIssu
   return issues;
 }
 
+/**
+ * Identifies issues that prevent local Olive execution with the selected provider.
+ *
+ * @param state - The current pipeline configuration.
+ * @param forLocalExecution - Whether the pipeline is being prepared for local execution.
+ * @returns Critical issues affecting local execution.
+ */
 export function getLocalExecutionIssues(state: UIState, forLocalExecution?: boolean): PipelineIssue[] {
   if (!forLocalExecution || state.ihvProvider !== "WebGpuExecutionProvider") {
     return [];
@@ -624,6 +643,12 @@ export function getLocalExecutionIssues(state: UIState, forLocalExecution?: bool
   ];
 }
 
+/**
+ * Removes duplicate pipeline issues, retaining the critical issue when duplicate severities differ.
+ *
+ * @param issues - The pipeline issues to deduplicate
+ * @returns The deduplicated pipeline issues
+ */
 function dedupeIssues(issues: PipelineIssue[]): PipelineIssue[] {
   const byId = new Map<string, PipelineIssue>();
   for (const issue of issues) {
@@ -635,6 +660,13 @@ function dedupeIssues(issues: PipelineIssue[]): PipelineIssue[] {
   return Array.from(byId.values());
 }
 
+/**
+ * Validates the pipeline state and builds its Olive recipe.
+ *
+ * @param state - The pipeline UI state to validate
+ * @param options - Optional hardware and local-execution validation settings
+ * @returns Validation issues, status information, and the generated Olive recipe
+ */
 export function getPipelineValidation(
   state: UIState,
   options?: PipelineValidationOptions,

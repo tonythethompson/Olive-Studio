@@ -82,9 +82,10 @@ export function registeredProviderNames(): Set<ProviderConfig["provider"]> {
 }
 
 /**
- * Per-provider env credential presence for Settings UI.
- * Does not return secret values. Callers may pass extra usable checks
- * (e.g. Cloudflare account id) via `extraUsable`.
+ * Reports credential presence and usability for each registered provider without exposing secret values.
+ *
+ * @param extraUsable - Optional provider-specific usability overrides.
+ * @returns A map of provider names to credential status details.
  */
 export function listEnvCredentialStatus(
   extraUsable?: Partial<Record<ProviderConfig["provider"], boolean>>,
@@ -102,11 +103,13 @@ export function listEnvCredentialStatus(
 // ─── Detection ────────────────────────────────────────────────────────────────
 
 /**
- * Scan environment variables across all registered providers.
- * Returns a ProviderConfig for the first one that has a valid key set.
- * Providers are checked in registration order.
+ * Detects the first registered provider with available credentials.
  *
- * Cloudflare Wrangler/file credentials count even without CLOUDFLARE_API_TOKEN in env.
+ * Providers are checked in registration order. Cloudflare credentials may be
+ * resolved from Wrangler or file-based authentication when its environment
+ * token is unavailable.
+ *
+ * @returns The configuration for the first detected provider, or `null` when no provider credentials are available.
  */
 export function detectEnvProvider(): ProviderConfig | null {
   for (const plugin of providers.values()) {

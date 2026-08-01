@@ -55,6 +55,12 @@ function getHardwareTargetFromProvider(provider: IHVProvider): string {
   }
 }
 
+/**
+ * Renders validation results and compatibility diagnostics for a recipe.
+ *
+ * @param state - The current recipe configuration to validate
+ * @param setState - Updates the recipe configuration when an issue autofix is applied
+ */
 export function RecipeValidationPanel({ state, setState }: RecipeValidationPanelProps) {
   const [compatResult, setCompatResult] = useState<CompatibilityResult | null>(null);
   const [compatLoading, setCompatLoading] = useState(false);

@@ -19,14 +19,15 @@ export interface MCPDiagnosticCardProps {
 }
 
 /**
- * Displays an MCP diagnostic result for a failed Olive run.
+ * Displays MCP-based diagnostics and available fixes for a failed Olive run.
  *
- * States:
- * - **Loading**: `isDiagnosing` is true → pulsing "Diagnosing..." message
- * - **Error**: `error` is set → shows the failure reason + retry
- * - **Result**: `diagnostic` is non-null → shows title, root cause, workaround, config changes, quirks
- * - **Idle**: no diagnostic yet → prompt to run diagnosis
- * - **Applied**: `fixApplied` is non-empty → button shows "Fix Applied" with checkmark
+ * Shows loading, error, idle, or diagnostic-result content, including optional
+ * log evidence, recommended guidance, automatic fix controls, and diagnosis
+ * retry actions.
+ *
+ * @param diagnostic - The diagnostic result to display, or `null` when no result is available
+ * @param error - An error message to display when diagnosis fails
+ * @param fixApplied - Indicates that the recommended fix has been applied
  */
 export function MCPDiagnosticCard({
   diagnostic,

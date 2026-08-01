@@ -49,6 +49,14 @@ _resolved_tools: dict[str, Any] = {}
 
 
 def _resolve_tool(name: str):
+    """Resolve and cache a registered tool by name.
+    
+    Parameters:
+    	name (str): Name of the tool to resolve.
+    
+    Returns:
+    	Callable or None: The resolved tool, or `None` if the name is not registered.
+    """
     if name in _resolved_tools:
         return _resolved_tools[name]
     target = _TOOL_IMPORTS.get(name)
@@ -62,11 +70,15 @@ def _resolve_tool(name: str):
 
 
 def call_tool(name: str, args: dict | None = None):
-    """Invoke a registered tool by function name.
-
-    Used by Olive Studio's HTTP proxy (`POST /api/mcp/tool`), which cannot speak
-    the MCP stdio protocol. Tools are imported lazily so optional deps (bs4,
-    requests, mcp) are only required when that specific tool runs.
+    """
+    Invoke a registered tool with the supplied arguments.
+    
+    Parameters:
+        name (str): Name of the registered tool.
+        args (dict | None): Keyword arguments to pass to the tool.
+    
+    Returns:
+        The tool's result, or an error dictionary when the tool is unknown.
     """
     payload = args if isinstance(args, dict) else {}
     tool = _resolve_tool(name)
@@ -79,6 +91,7 @@ def call_tool(name: str, args: dict | None = None):
 
 
 def _iter_tools():
+    """Lazily resolve and yield all registered tool functions."""
     for name in _TOOL_IMPORTS:
         fn = _resolve_tool(name)
         if fn is not None:
@@ -96,7 +109,18 @@ def _build_mcp():
 
 
 def __getattr__(name: str):
-    """Lazy ``mcp`` / ``TOOLS`` exports so optional deps stay optional."""
+    """
+    Lazily provides the module's `mcp` and `TOOLS` attributes.
+    
+    Parameters:
+        name (str): Attribute name to resolve.
+    
+    Returns:
+        The MCP server instance for `mcp`, or the resolved tool list for `TOOLS`.
+    
+    Raises:
+        AttributeError: If `name` is not a supported module attribute.
+    """
     global _mcp_instance
     if name == "mcp":
         if _mcp_instance is None:

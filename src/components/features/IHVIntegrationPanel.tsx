@@ -277,9 +277,10 @@ export function getCellCompatibility(
 }
 
 /**
- * Configures hardware acceleration providers and optimization passes for the pipeline.
+ * Configures the pipeline's hardware execution provider and optimization passes.
  *
- * Uses the provided pipeline state and updater when available, or the pipeline store otherwise.
+ * Displays local hardware capabilities, provider compatibility, installation options, and
+ * provider-specific settings while allowing supported optimization passes to be enabled or disabled.
  *
  * @param state - Optional pipeline state to display and modify.
  * @param setState - Optional updater for applying pipeline state changes.

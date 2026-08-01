@@ -41,6 +41,12 @@ function looksLikeError(message: string): boolean {
   );
 }
 
+/**
+ * Determines whether a message describes an Olive Studio issue.
+ *
+ * @param message - The message to classify
+ * @returns `true` if the message appears to describe an Olive Studio issue, `false` otherwise.
+ */
 function looksLikeStudioIssue(message: string): boolean {
   const m = lower(message);
   return (
@@ -59,11 +65,23 @@ function looksLikeStudioIssue(message: string): boolean {
   );
 }
 
+/**
+ * Determines whether a message concerns model quantization.
+ *
+ * @param message - The message to classify
+ * @returns `true` if the message contains quantization-related terms, `false` otherwise.
+ */
 function wantsQuant(message: string): boolean {
   const m = lower(message);
   return /quant|awq|gptq|hqq|int4|int8|ptq|qat|calibration/.test(m);
 }
 
+/**
+ * Determines whether a message mentions hardware or an execution provider.
+ *
+ * @param message - The message to inspect
+ * @returns `true` if the message mentions hardware or an execution provider, `false` otherwise.
+ */
 function wantsHardware(message: string): boolean {
   const m = lower(message);
   return /hardware|tensorrt|openvino|qnn|directml|cuda|execution provider|ep\b|npu|gpu|cpu/.test(m);
@@ -79,11 +97,23 @@ function wantsCompatibility(message: string): boolean {
   return /compatib|support(ed)?|does olive|can olive|model type|huggingface|pytorch/.test(m);
 }
 
+/**
+ * Determines whether a message asks about pass ordering or sequencing.
+ *
+ * @returns `true` if the message concerns pass order or sequence, `false` otherwise.
+ */
 function wantsChain(message: string): boolean {
   const m = lower(message);
   return /order|chain|sequence|before quant|after convert|pipeline order/.test(m);
 }
 
+/**
+ * Serializes a value as formatted JSON within a maximum character limit.
+ *
+ * @param value - The value to serialize
+ * @param max - The maximum number of characters to include
+ * @returns The serialized value, truncated when it exceeds `max`
+ */
 function clipJson(value: unknown, max = 3500): string {
   try {
     const text = JSON.stringify(value, null, 2);
@@ -94,6 +124,12 @@ function clipJson(value: unknown, max = 3500): string {
   }
 }
 
+/**
+ * Determines whether documentation search results provide sufficient coverage.
+ *
+ * @param result - The documentation search result to evaluate
+ * @returns `true` if the result contains entries and meets the relevance threshold, `false` otherwise.
+ */
 function docsSearchSufficient(result: unknown): boolean {
   if (!result || typeof result !== "object") return false;
   const r = result as Record<string, unknown>;
@@ -122,11 +158,24 @@ const CANONICAL_HARDWARE: Record<string, string> = {
   "qualcomm-npu": "Qualcomm Snapdragon NPU",
 };
 
+/**
+ * Converts a hardware target to its canonical hardware profile name.
+ *
+ * @param target - The hardware target to normalize
+ * @returns The canonical hardware name, or the original target when no mapping exists
+ */
 function toCanonicalHardware(target: string): string {
   const key = lower(target).replace(/\s+/g, "-");
   return CANONICAL_HARDWARE[key] ?? target;
 }
 
+/**
+ * Classifies a model as small, medium, or large based on its parameter count in billions.
+ *
+ * @param message - The message to inspect for a model parameter count
+ * @param workspace - Optional workspace context containing model identifiers
+ * @returns The model size bucket, or `undefined` when no valid parameter count is found
+ */
 function inferModelSizeBucket(
   message: string,
   workspace: AiWorkspaceContext | null | undefined,
@@ -147,6 +196,12 @@ function inferModelSizeBucket(
   return "large";
 }
 
+/**
+ * Derives up to eight canonical pass names from the workspace recipe or active pass labels.
+ *
+ * @param workspace - Workspace context containing recipe pass types or active pass labels
+ * @returns An array of canonical pass names
+ */
 function canonicalPassNamesForChain(workspace: AiWorkspaceContext | null | undefined): string[] {
   const fromRecipe = workspace?.recipeSnapshot?.passTypes?.filter(Boolean);
   if (fromRecipe?.length) return fromRecipe.slice(0, 8);
@@ -163,6 +218,13 @@ function canonicalPassNamesForChain(workspace: AiWorkspaceContext | null | undef
     .slice(0, 8);
 }
 
+/**
+ * Infers the model type and target hardware for a quantization request.
+ *
+ * @param message - The user's request, used to identify model and hardware hints
+ * @param workspace - Optional workspace context providing model and execution-provider information
+ * @returns The inferred model type and canonical target hardware
+ */
 function inferQuantArgs(message: string, workspace: AiWorkspaceContext | null | undefined) {
   const m = lower(message);
   let modelType = "llm";
@@ -186,6 +248,13 @@ function inferQuantArgs(message: string, workspace: AiWorkspaceContext | null | 
   return { model_type: modelType, target_hardware: toCanonicalHardware(targetHardware) };
 }
 
+/**
+ * Determines the canonical hardware target from a message or workspace execution provider.
+ *
+ * @param message - The user message containing hardware references
+ * @param workspace - Optional workspace context used when the message does not specify hardware
+ * @returns The canonical hardware target
+ */
 function inferHardwareTarget(message: string, workspace: AiWorkspaceContext | null | undefined): string {
   const m = lower(message);
   if (/tensorrt\s*rtx|nvtensorrtrtx/.test(m)) return toCanonicalHardware("tensorrt-rtx");
@@ -198,7 +267,13 @@ function inferHardwareTarget(message: string, workspace: AiWorkspaceContext | nu
   return ep && ep.length > 0 ? toCanonicalHardware(ep) : toCanonicalHardware("cuda");
 }
 
-/** Select MCP tool calls for a user chat message (+ optional workspace). */
+/**
+ * Selects Olive MCP tools relevant to a chat message and optional workspace context.
+ *
+ * @param message - The user's chat message
+ * @param workspace - Optional workspace context used to refine tool arguments
+ * @returns MCP tool requests for documentation and message-specific guidance
+ */
 export function selectOliveMcpToolsForChat(
   message: string,
   workspace?: AiWorkspaceContext | null,
@@ -266,9 +341,10 @@ export function selectOliveMcpToolsForChat(
 }
 
 /**
- * Optional external web search. Only runs when:
- * - MCP coverage is insufficient, and
- * - OLIVE_STUDIO_WEB_SEARCH_URL is set (POST JSON `{ query }` → `{ results: [{ title, url, snippet }] }`).
+ * Retrieves supplemental web search results from the configured Olive Studio endpoint.
+ *
+ * @param query - Search query, limited to 400 characters
+ * @returns Formatted search results, or `null` when search is unavailable, fails, or produces no results
  */
 export async function optionalWebSearchFallback(query: string): Promise<string | null> {
   const endpoint = process.env.OLIVE_STUDIO_WEB_SEARCH_URL?.trim();
@@ -301,6 +377,13 @@ export async function optionalWebSearchFallback(query: string): Promise<string |
   }
 }
 
+/**
+ * Gathers relevant Olive MCP knowledge and formats it for use in an assistant prompt.
+ *
+ * @param message - The user's Olive Studio question or request
+ * @param workspace - Optional workspace context used to select relevant knowledge
+ * @returns The formatted knowledge block, tools used, coverage status, and web-fallback status
+ */
 export async function gatherOliveMcpKnowledge(
   message: string,
   workspace?: AiWorkspaceContext | null,
@@ -366,7 +449,12 @@ export async function gatherOliveMcpKnowledge(
   return { promptBlock, toolsUsed, sufficient, usedWebFallback };
 }
 
-/** System prompt preamble for Olive Studio chat. */
+/**
+ * Builds the system prompt for the Olive Studio assistant.
+ *
+ * @param opts - Prompt content, including MCP knowledge and optional workspace context and response contract
+ * @returns The assembled Olive Studio assistant system prompt
+ */
 export function buildOliveAssistantSystemPrompt(opts: {
   mcpBlock: string;
   workspaceBlock?: string | null;

@@ -27,13 +27,24 @@ export function stripTrailingSlashes(value: string): string {
   return value.slice(0, end);
 }
 
+/**
+ * Determines whether a hostname has the shape of an IP address literal.
+ *
+ * @param hostname - The hostname to inspect
+ * @returns `true` if the hostname contains an IPv6 separator or matches an IPv4-shaped format, `false` otherwise.
+ */
 export function isIpLiteralHost(hostname: string): boolean {
   if (!hostname) return false;
   if (hostname.includes(":")) return true; // IPv6 literal
   return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname);
 }
 
-/** Ollama / LM Studio loopback endpoints used by the built-in Local AI flow. */
+/**
+ * Identifies HTTP loopback URLs that use the Ollama or LM Studio ports.
+ *
+ * @param parsed - The URL to inspect
+ * @returns `true` if the URL targets a loopback host on port 11434 or 1234, `false` otherwise.
+ */
 export function isKnownLocalOpenAiCompatUrl(parsed: URL): boolean {
   const host = parsed.hostname.toLowerCase();
   const isLoopback = host === "localhost" || host === "127.0.0.1" || host === "::1";
@@ -42,6 +53,12 @@ export function isKnownLocalOpenAiCompatUrl(parsed: URL): boolean {
   return port === 11434 || port === 1234;
 }
 
+/**
+ * Determines whether a hostname identifies a local or private network address.
+ *
+ * @param hostname - The hostname to evaluate
+ * @returns `true` for localhost variants, local domains, loopback or unspecified addresses, private IPv4 ranges, or invalid IPv4-shaped values; `false` otherwise.
+ */
 export function isPrivateOrLocalHostname(hostname: string): boolean {
   const h = hostname.toLowerCase();
   if (
@@ -68,6 +85,14 @@ export function isPrivateOrLocalHostname(hostname: string): boolean {
   );
 }
 
+/**
+ * Validates and normalizes a provider base URL.
+ *
+ * @param provider - The provider associated with the base URL
+ * @param rawBaseUrl - The untrusted base URL to validate
+ * @returns The normalized base URL, or `undefined` when no URL is provided
+ * @throws If the URL is invalid, contains credentials, violates protocol or host restrictions, or is not allowed for the provider
+ */
 export function sanitizeProviderBaseUrl(provider: string, rawBaseUrl?: string): string | undefined {
   const trimmed = rawBaseUrl?.trim();
   if (!trimmed) return undefined;

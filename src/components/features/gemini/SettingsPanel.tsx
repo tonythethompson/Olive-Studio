@@ -14,6 +14,11 @@ interface ActiveProviderCardProps {
   providers: AiProviderSettings;
 }
 
+/**
+ * Displays the active AI provider, model, configuration source, and available actions.
+ *
+ * @param providers - Provider status and management actions used to populate the card
+ */
 function ActiveProviderCard({ providers }: ActiveProviderCardProps) {
   const { providerStatus } = providers;
   return (
@@ -54,6 +59,13 @@ interface SettingsModeTabsProps {
   onChange: (mode: AssistantSettingsMode) => void;
 }
 
+/**
+ * Renders tabs for switching between local and cloud settings.
+ *
+ * @param mode - The currently selected settings mode.
+ * @param onChange - Called with the selected mode when a tab is activated.
+ * @returns The settings mode tab controls.
+ */
 function SettingsModeTabs({ mode, onChange }: SettingsModeTabsProps) {
   return (
     <div
@@ -97,7 +109,13 @@ interface SettingsPanelProps {
   isOpen: boolean;
 }
 
-/** Settings tab: active provider, Local | Cloud subtabs. */
+/**
+ * Displays the active provider and configuration controls for Local and Cloud settings modes.
+ *
+ * @param providers - Provider state and configuration actions
+ * @param local - Local provider state and engine selection actions
+ * @param isOpen - Whether the settings panel is open
+ */
 export function SettingsPanel({ providers, local, isOpen }: SettingsPanelProps) {
   const [settingsMode, setSettingsMode] = useState<AssistantSettingsMode>(() =>
     deriveAssistantSettingsMode(providers.providerStatus.provider, providers.settingsBaseUrl),

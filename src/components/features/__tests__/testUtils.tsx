@@ -7,7 +7,12 @@
 import { vi, beforeEach, afterEach } from "vitest";
 import type { UIState } from "@/types";
 
-/** Minimal valid UIState for rendering components in isolation. */
+/**
+ * Creates a complete default UI state for isolated component tests.
+ *
+ * @param partial - Optional UI state fields that override the defaults
+ * @returns A complete UI state
+ */
 export function createMockUIState(partial?: Partial<UIState>): UIState {
   return {
     modelSource: "huggingface",

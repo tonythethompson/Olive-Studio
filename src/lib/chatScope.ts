@@ -57,7 +57,12 @@ export type ChatScopeBlock = {
   reply: string;
 };
 
-/** Normalize leetspeak / spacing tricks so simple misspellings still match. */
+/**
+ * Normalizes chat text for consistent scope and safety pattern matching.
+ *
+ * @param raw - The unnormalized chat message
+ * @returns The normalized message with obfuscating character substitutions and spacing simplified
+ */
 export function normalizeChatForScope(raw: string): string {
   let text = raw
     .toLowerCase()
@@ -84,9 +89,10 @@ const matchesAny = (patterns: RegExp[], ...samples: string[]): boolean =>
   samples.some((sample) => patterns.some((pattern) => pattern.test(sample)));
 
 /**
- * Returns a block when the user message should not reach the model.
- * Safety and hard abuse always block. Casual swearing is ignored when Olive-scoped.
- * Off-topic blocks unless the message also looks Olive-related.
+ * Evaluates a chat message for safety, abuse, and Olive Studio scope violations.
+ *
+ * @param message - The chat message to evaluate
+ * @returns A block reason and refusal reply when the message is blocked, or `null` when it is allowed.
  */
 export function getChatScopeBlock(message: string): ChatScopeBlock | null {
   const text = message.trim();

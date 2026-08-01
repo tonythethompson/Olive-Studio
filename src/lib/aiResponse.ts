@@ -1,4 +1,10 @@
-/** Extract JSON from LLM responses that may include markdown fences or preamble text. */
+/**
+ * Parses JSON content from an AI response that may include Markdown fences or surrounding text.
+ *
+ * @param text - The AI response containing JSON content
+ * @returns The parsed JSON value
+ * @throws Error if the response is empty or does not contain valid JSON
+ */
 export function parseJsonFromAiResponse(text: string): unknown {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -35,7 +41,13 @@ export function parseJsonFromAiResponse(text: string): unknown {
   );
 }
 
-/** First balanced `{…}` or `[…]` slice, respecting simple string escapes. */
+/**
+ * Extracts the first balanced JSON object or array from the text.
+ *
+ * @param text - The text to search
+ * @param startAt - The position at which to begin searching
+ * @returns The balanced JSON slice, the remaining text when the slice is unclosed, or `null` if no object or array begins at or after `startAt`
+ */
 function extractBalancedJson(text: string, startAt = 0): string | null {
   const startObj = text.indexOf("{", startAt);
   const startArr = text.indexOf("[", startAt);
@@ -100,8 +112,10 @@ function collectBalancedJsonCandidates(text: string): string[] {
 }
 
 /**
- * Light repairs for common LLM JSON mistakes (trailing commas, missing commas
- * between objects/arrays). Not a full JSON5 parser.
+ * Applies best-effort repairs for common formatting errors in JSON-like text.
+ *
+ * @param text - The JSON-like text to repair
+ * @returns The repaired text
  */
 export function softRepairJson(text: string): string {
   let s = text.trim();
@@ -123,6 +137,12 @@ export function softRepairJson(text: string): string {
   return s;
 }
 
+/**
+ * Determines whether an environment value is empty or appears to be a placeholder.
+ *
+ * @param value - The environment value to inspect
+ * @returns `true` if the value is empty or matches a recognized placeholder pattern, `false` otherwise
+ */
 export function isPlaceholderEnvValue(value: string): boolean {
   const normalized = value.trim().toLowerCase();
   if (!normalized) return true;
@@ -138,6 +158,12 @@ export function isPlaceholderEnvValue(value: string): boolean {
   );
 }
 
+/**
+ * Finds the first configured environment variable containing a usable API key.
+ *
+ * @param names - Environment variable names to check in priority order
+ * @returns The first trimmed, non-placeholder API key, or `undefined` if none is usable
+ */
 export function readEnvApiKey(...names: string[]): string | undefined {
   for (const name of names) {
     const value = process.env[name]?.trim();
@@ -148,7 +174,12 @@ export function readEnvApiKey(...names: string[]): string | undefined {
   return undefined;
 }
 
-/** Which env var name supplied a non-placeholder key (never returns the secret). */
+/**
+ * Identifies the first environment variable containing a usable API key.
+ *
+ * @param names - Environment variable names to check in priority order
+ * @returns The name of the first environment variable with a non-placeholder value, or `undefined` if none qualifies
+ */
 export function matchedEnvApiKeyName(...names: string[]): string | undefined {
   for (const name of names) {
     const value = process.env[name]?.trim();

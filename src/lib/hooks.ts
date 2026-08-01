@@ -67,7 +67,13 @@ interface UseMcpDiagnosticReturn {
   fetchDiagnostic: (logs: string[]) => Promise<McpDiagnostic | null>;
 }
 
-/** Shared POST /api/mcp/tool troubleshoot call (used by single + keyed hooks). */
+/**
+ * Retrieves a troubleshooting diagnostic for the provided logs.
+ *
+ * @param logs - Log lines to analyze.
+ * @param signal - Optional signal used to cancel the request.
+ * @returns An object containing the diagnostic, or an error message when retrieval fails.
+ */
 export async function requestMcpDiagnostic(
   logs: string[],
   signal?: AbortSignal,
@@ -175,18 +181,12 @@ export async function requestMcpDiagnostic(
 }
 
 /**
- * Fetch an MCP diagnostic for error logs via the troubleshoot_olive_error tool.
+ * Manages fetching and storing a single MCP diagnostic for error logs.
  *
- * Encapsulates the POST to /api/mcp/tool, loading state, and result storage.
- * Use this instead of duplicating the fetch logic in ExecutionWorkspace and
- * BatchProcessingPanel.
+ * Cancels any in-flight request when a new fetch starts or the component unmounts,
+ * and exposes loading and error state alongside the diagnostic result.
  *
- * For single-diagnostic use (ExecutionWorkspace):
- * ```ts
- * const { diagnostic, isDiagnosing, error, fetchDiagnostic } = useMcpDiagnostic();
- * ```
- *
- * For keyed-by-ID use (BatchProcessingPanel), use useMcpDiagnosticKeyed().
+ * @returns The current diagnostic, loading state, error message, and diagnostic fetcher.
  */
 export function useMcpDiagnostic(): UseMcpDiagnosticReturn {
   const [diagnostic, setDiagnostic] = useState<McpDiagnostic | null>(null);
@@ -232,16 +232,12 @@ export function useMcpDiagnostic(): UseMcpDiagnosticReturn {
 // ─── MCP Diagnostic (Keyed by ID) ─────────────────────────────
 
 /**
- * Per-key MCP diagnostic tracking.
+ * Manages MCP diagnostics, loading states, and errors independently for each key.
  *
- * Provides keyed-by-ID loading and result storage for BatchProcessingPanel
- * (per-job keys) and similar multi-diagnostic UIs.
+ * Starting a request for a key cancels any previous request for that key and clears
+ * its previous diagnostic. Aborted requests do not update the returned state.
  *
- * Usage:
- * ```ts
- * const { fetchKeyedDiagnostic, diagnostics, diagnosingKeys, errors } = useMcpDiagnosticKeyed();
- * await fetchKeyedDiagnostic("job-123", logs);
- * ```
+ * @returns Functions and keyed state for fetching and tracking diagnostics.
  */
 export function useMcpDiagnosticKeyed(): {
   fetchKeyedDiagnostic: (key: string, logs: string[]) => Promise<McpDiagnostic | null>;

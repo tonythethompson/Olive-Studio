@@ -30,10 +30,22 @@ const ADD_TRT_PASS =
 const OPEN_VINO_ON_NVIDIA = /\b(OpenVINOExecutionProvider|openvino)\b/i;
 const QNN_ON_NVIDIA = /\b(QNNExecutionProvider|\bqnn\b)\b/i;
 
+/**
+ * Determines whether a model name identifies an automatic speech recognition model.
+ *
+ * @param displayName - The model name to classify
+ * @returns `true` if the model name matches an ASR model pattern, `false` otherwise
+ */
 export function modelLooksLikeAsr(displayName: string): boolean {
   return ASR_MODEL.test(displayName);
 }
 
+/**
+ * Determines whether a model name matches a known large language model pattern.
+ *
+ * @param displayName - The model's display name
+ * @returns `true` if the display name matches a known large language model pattern, `false` otherwise.
+ */
 export function modelLooksLikeLlm(displayName: string): boolean {
   return LLM_MODEL.test(displayName);
 }
@@ -42,12 +54,22 @@ function suggestionText(s: AuditSuggestion): string {
   return `${s.title}\n${s.description}\n${s.autofix.pass}\n${s.autofix.value}`;
 }
 
+/**
+ * Determines whether an execution provider belongs to the NVIDIA provider family.
+ *
+ * @param ep - The execution provider name
+ * @returns `true` if the provider is CUDA or TensorRT-based, `false` otherwise.
+ */
 function isNvidiaFamilyEp(ep: string): boolean {
   return /CUDAExecutionProvider|NvTensorRTRTXExecutionProvider|TensorrtExecutionProvider/.test(ep);
 }
 
 /**
- * Returns false when the suggestion is clearly irrelevant to this workspace.
+ * Determines whether an audit suggestion is relevant to the active model and execution provider.
+ *
+ * @param suggestion - The audit suggestion to evaluate
+ * @param ctx - The active model and hardware context
+ * @returns `true` if the suggestion applies to the workspace and has a valid autofix target, `false` otherwise
  */
 export function isAuditSuggestionRelevant(suggestion: AuditSuggestion, ctx: AuditFilterContext): boolean {
   const text = suggestionText(suggestion);
@@ -107,7 +129,13 @@ export function normalizeAuditSuggestion(suggestion: AuditSuggestion): AuditSugg
   };
 }
 
-/** Filter suggestions; annotate summary when items were removed. */
+/**
+ * Filters audit suggestions for the active model and execution provider, normalizes applicable autofix fields, and limits the results to three suggestions.
+ *
+ * @param analysis - The audit analysis containing suggestions and summary text
+ * @param ctx - The active model and execution-provider context
+ * @returns The filtered and normalized audit analysis
+ */
 export function filterAuditAnalysis(analysis: AuditAnalysis, ctx: AuditFilterContext): AuditAnalysis {
   const kept = analysis.suggestions
     .filter((s) => isAuditSuggestionRelevant(s, ctx))

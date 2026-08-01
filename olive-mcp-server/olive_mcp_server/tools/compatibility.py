@@ -12,16 +12,18 @@ def get_model_compatibility(
     olive_version: str = "",
     hardware_target: str = "",
 ) -> dict[str, Any]:
-    """Check Olive support for a model/framework combo.
-
+    """
+    Evaluate compatibility for a model and framework, optionally targeting specific hardware.
+    
     Args:
-        model_name: Model name or path, e.g. "mistralai/Mistral-7B-v0.1".
-        framework: Source framework, e.g. "PyTorch", "ONNX", "HuggingFace".
-        olive_version: Optional Olive version string.
-        hardware_target: Optional hardware target to filter to, e.g. "NVIDIA RTX 4090".
-
+        model_name (str): Model name or path, such as "mistralai/Mistral-7B-v0.1".
+        framework (str): Source framework, such as "PyTorch", "ONNX", or "HuggingFace".
+        olive_version (str): Optional Olive version to include in the result.
+        hardware_target (str): Optional hardware target for selecting compatibility details.
+    
     Returns:
-        Compatibility matrix for supported passes, known issues, and expected performance.
+        dict[str, Any]: Compatibility details, supported passes and workflow suggestions for
+            unknown models, or hardware-specific compatibility and warnings when requested.
     """
     models = load_compatibility_matrix()
     key = normalize_model(model_name)

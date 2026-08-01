@@ -19,7 +19,11 @@ interface ChatPanelProps {
   onApplyAction?: (messageIndex: number, action: ChatAction) => void;
 }
 
-/** Chat tab: live workspace summary, transcript, quick queries and composer. */
+/**
+ * Renders the chat interface with workspace context, transcript messages, quick queries, and message composition.
+ *
+ * Displays assistant actions when available and reports selected actions through the provided callback.
+ */
 export function ChatPanel({
   workspaceSummary,
   chatMessages,

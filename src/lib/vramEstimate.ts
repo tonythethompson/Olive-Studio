@@ -265,6 +265,13 @@ export function estimateVramRequirement(state: UIState): VramEstimate {
   };
 }
 
+/**
+ * Determines the available VRAM for the selected execution provider.
+ *
+ * @param probe - Hardware information containing GPU details
+ * @param provider - Execution provider whose GPUs should be evaluated
+ * @returns The largest reported GPU VRAM in GiB, or `null` when no valid matching GPU data is available
+ */
 export function getSelectedGpuVramGb(
   probe: HardwareProbeResult | null | undefined,
   provider: IHVProvider,
@@ -286,7 +293,12 @@ export function getSelectedGpuVramGb(
   return Math.max(...vramMb) / 1024;
 }
 
-/** Largest discrete GPU VRAM on this machine, regardless of catalog recipe device. */
+/**
+ * Determines the largest discrete GPU memory capacity reported by the hardware probe.
+ *
+ * @param probe - Hardware information used to identify available GPU memory
+ * @returns The largest GPU VRAM capacity in GiB, or `null` when no valid GPU data is available
+ */
 export function getPrimaryGpuVramGb(probe: HardwareProbeResult | null | undefined): number | null {
   if (!probe) return null;
   const vramMb = [...(probe.nvidia?.gpus ?? []), ...(probe.rocm?.gpus ?? [])]
@@ -296,6 +308,13 @@ export function getPrimaryGpuVramGb(probe: HardwareProbeResult | null | undefine
   return Math.max(...vramMb) / 1024;
 }
 
+/**
+ * Classifies whether available memory can accommodate a VRAM requirement.
+ *
+ * @param neededGb - Required memory in GiB
+ * @param availableGb - Available memory in GiB
+ * @returns `"fits"` when usage is at most 85%, `"tight"` when usage is above 85% and at most 105%, or `"insufficient"` when usage exceeds 105%
+ */
 export function compareVramFit(neededGb: number, availableGb: number): VramFit {
   if (neededGb <= availableGb * 0.85) return "fits";
   if (neededGb <= availableGb * 1.05) return "tight";

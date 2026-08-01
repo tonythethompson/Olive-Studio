@@ -32,6 +32,11 @@ export const CLOUDFLARE_FALLBACK_MODELS: Array<{ id: string; name: string }> = [
 
 export const DEFAULT_CLOUDFLARE_MODEL = CLOUDFLARE_FALLBACK_MODELS[0]!.id;
 
+/**
+ * Reads the configured Cloudflare account ID from the environment.
+ *
+ * @returns The trimmed account ID if it is valid, or `undefined` when no valid account ID is configured.
+ */
 function envAccountId(): string | undefined {
   const id = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
   return id && isValidCloudflareAccountId(id) ? id : undefined;
@@ -63,6 +68,11 @@ export function resolveCloudflareAuth(): {
   return null;
 }
 
+/**
+ * Reports the current Cloudflare authentication status and account details.
+ *
+ * @returns Authentication state, account metadata when available, login progress, and the credential file path
+ */
 export function getCloudflareAccountStatus(): {
   signedIn: boolean;
   accountId?: string;
@@ -92,6 +102,11 @@ export function getCloudflareAccountStatus(): {
   };
 }
 
+/**
+ * Starts Cloudflare browser authentication through Wrangler.
+ *
+ * @returns The login result, including a completion message when started successfully or an error message when it fails.
+ */
 export async function startCloudflareLogin(): Promise<{ ok: boolean; message: string; detail?: string }> {
   try {
     const started = await startWranglerLogin();
@@ -143,7 +158,14 @@ export function resolveAccountId(
   return null;
 }
 
-/** Pull OAuth/API token from Wrangler and persist with an account id. */
+
+/**
+ * Synchronizes Wrangler authentication with a Cloudflare account and saves the resulting credentials.
+ *
+ * @param preferredAccountId - Optional account ID to use when resolving the Cloudflare account.
+ * @returns The saved Cloudflare credentials.
+ * @throws If Wrangler does not provide a usable bearer token or no valid Cloudflare account ID can be resolved.
+ */
 export async function syncCloudflareFromWrangler(
   preferredAccountId?: string,
 ): Promise<CloudflareCredentials> {
@@ -201,6 +223,12 @@ export async function syncCloudflareFromWrangler(
   });
 }
 
+/**
+ * Saves manually supplied Cloudflare API credentials.
+ *
+ * @param input - The API token and Cloudflare account ID to save
+ * @returns The saved Cloudflare credentials
+ */
 export function saveManualCloudflareCredentials(input: {
   apiToken: string;
   accountId: string;
@@ -212,10 +240,18 @@ export function saveManualCloudflareCredentials(input: {
   });
 }
 
+/**
+ * Removes the saved Cloudflare credentials.
+ */
 export function logoutCloudflare(): void {
   clearCloudflareCredentials();
 }
 
+/**
+ * Loads the available Cloudflare Workers AI chat models.
+ *
+ * @returns The chat models and their source, with an error message when fallback data is used.
+ */
 export async function listCloudflareModels(): Promise<{
   models: Array<{ id: string; name: string }>;
   source: "live" | "fallback";
@@ -274,7 +310,12 @@ export async function listCloudflareModels(): Promise<{
   }
 }
 
-/** Build ProviderConfig fields for runtime / OpenAI-compat calls. */
+/**
+ * Builds authenticated provider settings for Cloudflare Workers AI calls.
+ *
+ * @param model - The model to use; defaults to the configured Cloudflare model when omitted or blank.
+ * @returns The API key, account-specific base URL, and selected model.
+ */
 export function cloudflareProviderExtras(model?: string): {
   apiKey: string;
   baseUrl: string;

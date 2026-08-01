@@ -9,6 +9,12 @@ const SOURCE_LABELS = {
   local: "Local Directory Framework Weights",
 } as const;
 
+/**
+ * Displays the selected model source and current model summary for the input pipeline step.
+ *
+ * @param state - Current recipe state used to determine the source label and model summary
+ * @returns The rendered input inspector panel
+ */
 export function InputInspector({ state }: InspectorProps) {
   const sourceLabel = SOURCE_LABELS[state.modelSource] ?? state.modelSource;
 

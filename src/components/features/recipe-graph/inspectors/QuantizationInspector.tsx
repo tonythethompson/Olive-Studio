@@ -54,6 +54,16 @@ interface SwitchRowProps {
   labelOff: string;
 }
 
+/**
+ * Renders a labeled switch with text indicating its current state.
+ *
+ * @param id - The identifier associated with the switch and its label
+ * @param label - The label displayed for the switch
+ * @param checked - Whether the switch is enabled
+ * @param onCheckedChange - Callback invoked when the switch state changes
+ * @param labelOn - Text displayed when the switch is enabled
+ * @param labelOff - Text displayed when the switch is disabled
+ */
 function SwitchRow({ id, label, checked, onCheckedChange, labelOn, labelOff }: SwitchRowProps) {
   return (
     <div className="space-y-1.5">

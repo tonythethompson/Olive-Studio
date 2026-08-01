@@ -6,11 +6,21 @@
  */
 export const PINNED_TENSORRT_VERSION = "10.9.0.34";
 
+/**
+ * Provides the pinned TensorRT package requirement for installation.
+ *
+ * @returns An array containing the pinned TensorRT package requirement
+ */
 export function pinnedTensorRtInstallArgs(): string[] {
   // Single requirement token so pip does not treat "==version" as a second package.
   return [`tensorrt==${PINNED_TENSORRT_VERSION}`];
 }
 
+/**
+ * Creates the display label for the pinned TensorRT version.
+ *
+ * @returns The TensorRT label with its pinned version
+ */
 export function pinnedTensorRtLabel(): string {
   return `tensorrt (${PINNED_TENSORRT_VERSION})`;
 }

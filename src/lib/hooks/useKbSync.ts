@@ -21,7 +21,12 @@ const SYNC_TIMEOUT_MS = 130_000;
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 export const KB_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** Prefer last sync stamp; fall back to catalog last_updated. */
+/**
+ * Converts the knowledge-base freshness timestamp to milliseconds since the Unix epoch.
+ *
+ * @param status - Knowledge-base status containing synchronization or catalog update timestamps
+ * @returns The parsed timestamp in milliseconds, or `null` when no valid timestamp is available
+ */
 export function kbFreshnessMs(
   status: Pick<KbStatus, "lastSync" | "lastUpdated"> | null | undefined,
 ): number | null {
@@ -34,6 +39,13 @@ export function kbFreshnessMs(
   return Number.isFinite(ms) ? ms : null;
 }
 
+/**
+ * Determines whether a knowledge-base status requires synchronization.
+ *
+ * @param status - The status containing the most recent synchronization or update timestamp
+ * @param now - The reference time in milliseconds since the Unix epoch
+ * @returns `true` if the status has no valid timestamp or is older than seven days, `false` otherwise
+ */
 export function isKbStatusStale(
   status: Pick<KbStatus, "lastSync" | "lastUpdated"> | null | undefined,
   now = Date.now(),

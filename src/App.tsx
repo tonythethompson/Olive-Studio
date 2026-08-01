@@ -61,8 +61,7 @@ const SECTIONS: { id: ActiveView; step: string; label: string; desc: string; ico
 ];
 
 /**
- * Renders the Olive Studio recipe builder dashboard.
- * Pipeline steps share one scrollable page; the sidebar tracks the in-view section.
+ * Renders the Olive Studio recipe builder dashboard with navigable model, hardware, and execution sections.
  */
 function Dashboard() {
   const [activeView, setActiveView] = useState<ActiveView>("input");

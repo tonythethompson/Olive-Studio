@@ -127,6 +127,12 @@ export interface SystemProbeOptions {
   ) => Promise<{ loadable: boolean; detail?: string; version?: string }>;
 }
 
+/**
+ * Probes the host system for hardware capabilities and available inference runtimes.
+ *
+ * @param opts - Probes used to determine whether TensorRT and TensorRT RTX can load
+ * @returns A timestamped report containing platform details, detected hardware, runtime capabilities, provider recommendations, and diagnostic notes
+ */
 async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwareProbeResult> {
   const notes: string[] = [];
   const cpus = os.cpus();

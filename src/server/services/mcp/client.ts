@@ -10,7 +10,10 @@ import { getVenvPython } from "../venv/paths.ts";
 
 const execFileAsync = promisify(execFile);
 
-/** Resolve Python for MCP: olive-mcp-server/.venv first, then root .venv. */
+/** Resolves the Python executable used to run MCP tools.
+
+ * @returns The path to the `olive-mcp-server` virtual environment's Python executable, or the repository virtual environment's executable when the former is unavailable.
+ */
 export function getMcpPython(): string {
   const mcpVenvPython =
     process.platform === "win32"
@@ -22,25 +25,53 @@ export function getMcpPython(): string {
 
 export type McpToolCallResult = { result?: unknown; error?: string };
 
+/**
+ * Removes characters that are not supported in an MCP tool name.
+ *
+ * @param name - The tool name to sanitize
+ * @returns The name containing only letters, digits, underscores, and hyphens
+ */
 function sanitizeToolName(name: string): string {
   return name.replace(/[^a-zA-Z0-9_-]/g, "");
 }
 
+/**
+ * Determines whether a value is a non-null, non-array object record.
+ *
+ * @param value - The value to classify
+ * @returns `true` if the value is a record of string keys, `false` otherwise.
+ */
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Builds the environment variables used to run the Olive MCP server.
+ *
+ * @returns The current process environment with `olive-mcp-server` prepended to `PYTHONPATH`
+ */
 function buildPythonEnv(): NodeJS.ProcessEnv {
   const serverDir = path.join(process.cwd(), "olive-mcp-server");
   const pythonPath = [serverDir, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter);
   return { ...process.env, PYTHONPATH: pythonPath };
 }
 
+/**
+ * Resolves the path to the Olive MCP server directory.
+ *
+ * @returns The absolute path to `olive-mcp-server` under the current working directory.
+ */
 function mcpServerDir(): string {
   return path.join(process.cwd(), "olive-mcp-server");
 }
 
-/** Invokes a single olive_mcp_server tool and returns its result. */
+/**
+ * Invokes a single Olive MCP tool.
+ *
+ * @param toolName - The name of the tool to invoke
+ * @param args - Arguments to pass to the tool
+ * @returns The tool result or an error describing why the invocation failed
+ */
 export async function callOliveMcpTool(
   toolName: string,
   args: Record<string, unknown> = {},
@@ -52,8 +83,10 @@ export async function callOliveMcpTool(
 export type McpToolRequest = { toolName: string; args?: Record<string, unknown> };
 
 /**
- * Invoke several MCP tools in one Python process (avoids N interpreter startups).
- * Results are aligned 1:1 with `requests`.
+ * Invokes multiple MCP tools in a single Python process and preserves result order.
+ *
+ * @param requests - The MCP tool calls to execute.
+ * @returns One result or error entry for each request, in the same order.
  */
 export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<McpToolCallResult[]> {
   if (requests.length === 0) return [];

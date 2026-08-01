@@ -16,9 +16,10 @@ interface UseAiProviderSettingsOptions {
 export type AiProviderSettings = ReturnType<typeof useAiProviderSettings>;
 
 /**
- * Owns everything behind the Settings tab: the active provider status, the
- * manual provider form (key / model / base URL), the live model catalog, and
- * the Codex + Devin sign-in flows.
+ * Manages AI provider settings, model catalogs, provider status, and Codex and Devin authentication flows.
+ *
+ * @param options - Hook state and lifecycle callbacks for the settings interface
+ * @returns Provider configuration state, form controls, model refresh operations, authentication handlers, and provider activation controls
  */
 export function useAiProviderSettings({
   isOpen,

@@ -480,6 +480,7 @@ def expand_hardware_profiles():
 
 
 def expand_troubleshooting():
+    """Add predefined troubleshooting entries to the knowledge base and report the resulting entry count."""
     data = load("troubleshooting.json")
     entries = {e["id"]: e for e in data.get("entries", [])}
 
@@ -671,6 +672,7 @@ def expand_troubleshooting():
 
 
 def main():
+    """Expand the knowledge base with pass, hardware profile, and troubleshooting entries."""
     expand_passes()
     expand_hardware_profiles()
     expand_troubleshooting()

@@ -62,6 +62,12 @@ const PASS_ALIASES: Array<{ pattern: RegExp; key: string }> = [
   { pattern: /^ihvProvider$/i, key: "ihvProvider" },
 ];
 
+/**
+ * Removes navigation and `passes.` prefixes from an audit pass path.
+ *
+ * @param pass - The pass path to normalize
+ * @returns The pass path without recognized prefixes
+ */
 function stripPassPrefix(pass: string): string {
   return pass
     .trim()
@@ -70,6 +76,12 @@ function stripPassPrefix(pass: string): string {
     .replace(/^passes\./i, "");
 }
 
+/**
+ * Resolves an audit autofix path to its recognized UI state key.
+ *
+ * @param pass - The audit autofix path or field name to resolve
+ * @returns The corresponding UI state key, or `null` when the path is unrecognized
+ */
 export function canonicalizeAutofixPass(pass: string): string | null {
   const raw = pass.trim();
   if (!raw) return null;
@@ -92,6 +104,12 @@ export function canonicalizeAutofixPass(pass: string): string | null {
   return null;
 }
 
+/**
+ * Converts a scalar string to a boolean or number when it matches a supported literal; otherwise preserves the string.
+ *
+ * @param value - The scalar text to convert
+ * @returns The corresponding boolean, number, or original string value
+ */
 function parseScalar(value: string): string | number | boolean {
   if (value === "true") return true;
   if (value === "false") return false;
@@ -101,6 +119,12 @@ function parseScalar(value: string): string | number | boolean {
   return value;
 }
 
+/**
+ * Normalizes common floating-point data type names to their canonical forms.
+ *
+ * @param value - The data type name to normalize
+ * @returns The canonical data type name, or the trimmed input when it is not recognized
+ */
 function normalizeDtype(value: string): string {
   const v = value.trim().toLowerCase().replace(/['"]/g, "");
   if (v === "fp16" || v === "float16" || v === "half") return "float16";
@@ -109,6 +133,12 @@ function normalizeDtype(value: string): string {
   return value.trim();
 }
 
+/**
+ * Normalizes a quantization precision value to a supported representation.
+ *
+ * @param value - The precision value to normalize
+ * @returns The normalized precision, or `null` when the value is unsupported
+ */
 function normalizeQuantPrecision(value: string): "int4" | "int8" | "fp16" | null {
   const v = value.trim().toLowerCase().replace(/['"]/g, "");
   if (v === "int4" || v === "4bit") return "int4";
@@ -128,6 +158,12 @@ const QUANT_METHODS = new Set<UIState["passes"]["quantMethod"]>([
   "quarot",
 ]);
 
+/**
+ * Normalizes a quantization method value.
+ *
+ * @param value - The quantization method to normalize
+ * @returns The normalized quantization method, or `null` for an unsupported value
+ */
 function normalizeQuantMethod(value: string): UIState["passes"]["quantMethod"] | null {
   const v = value.trim().toLowerCase().replace(/['"]/g, "") as UIState["passes"]["quantMethod"];
   return QUANT_METHODS.has(v) ? v : null;
@@ -158,6 +194,12 @@ const CUDA_VERSIONS = new Set<UIState["cudaVersion"]>([
 const MEMORY_OFFLOADS = new Set<UIState["memoryOffload"]>(["gpu_only", "auto"]);
 const MODEL_SOURCES = new Set<UIState["modelSource"]>(["huggingface", "local", "azure"]);
 
+/**
+ * Normalizes an execution provider name to a supported IHV provider identifier.
+ *
+ * @param value - The provider name or recognized alias
+ * @returns The canonical provider identifier, or `null` for an unrecognized value
+ */
 function normalizeIhvProvider(value: string): IHVProvider | null {
   const raw = value.trim();
   if (IHV_PROVIDERS.has(raw as IHVProvider)) return raw as IHVProvider;
@@ -185,7 +227,11 @@ function normalizeIhvProvider(value: string): IHVProvider | null {
 }
 
 /**
- * Build a UIState patch for an audit autofix, or null if it cannot be applied safely.
+ * Builds a validated `UIState` patch from an audit autofix suggestion.
+ *
+ * @param autofix - The audit pass and proposed value to apply
+ * @param state - The current pass and IHV provider state
+ * @returns A partial `UIState` patch, or `null` when the suggestion is unsupported or invalid
  */
 export function resolveAuditAutofix(
   autofix: AuditAutofixInput,
@@ -277,6 +323,14 @@ export function resolveAuditAutofix(
   return { passes: nextPasses };
 }
 
+/**
+ * Resolves a JSON autofix object into a partial UI state patch.
+ *
+ * @param pass - The top-level state field targeted by the autofix
+ * @param obj - The JSON fields and values to apply
+ * @param state - The current pass configuration used to build the updated patch
+ * @returns A partial UI state patch, or `null` when the values are invalid or contain no recognized fields
+ */
 function resolveJsonAutofix(
   pass: string,
   obj: Record<string, unknown>,
@@ -345,7 +399,12 @@ function resolveJsonAutofix(
   return { passes: { ...state.passes, ...passPatch } };
 }
 
-/** True when Apply can write a real UI field for this suggestion. */
+/**
+ * Determines whether an audit autofix suggestion can be applied to the UI state.
+ *
+ * @param autofix - The audit autofix suggestion to validate
+ * @returns `true` if the suggestion has a recognized, non-rejected pass and a valid value, `false` otherwise
+ */
 export function isAuditAutofixApplyable(autofix: AuditAutofixInput | undefined | null): boolean {
   if (!autofix?.pass) return false;
   const key = canonicalizeAutofixPass(autofix.pass);

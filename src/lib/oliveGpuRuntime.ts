@@ -34,6 +34,11 @@ export function pinnedOrtGpuInstallArgs(): string[] {
   return [`onnxruntime-gpu==${PINNED_ORT_GPU_VERSION}`];
 }
 
+/**
+ * Creates a human-readable label for the pinned ONNX Runtime GPU package.
+ *
+ * @returns The package name followed by its pinned version
+ */
 export function pinnedOrtGpuLabel(): string {
   return `onnxruntime-gpu (${PINNED_ORT_GPU_VERSION})`;
 }
@@ -59,6 +64,12 @@ except Exception as exc:
     print(f"fail:{exc}")
 `.trim();
 
+/**
+ * Parses the ONNX Runtime GPU probe output and verifies both reported versions.
+ *
+ * @param stdout - The probe's standard output
+ * @returns The parsed distribution and module versions, with `ok` set to `true` when both match the pinned version
+ */
 export function parseOrtGpuProbe(stdout: string): {
   ok: boolean;
   distVersion?: string;
@@ -81,6 +92,12 @@ export function parseOrtGpuProbe(stdout: string): {
   };
 }
 
+/**
+ * Determines whether an execution provider uses GPU acceleration.
+ *
+ * @param provider - The execution provider name
+ * @returns `true` for CUDA, TensorRT, TensorRT RTX, or ROCm providers, `false` otherwise.
+ */
 export function isGpuExecutionProvider(provider: string): boolean {
   return (
     provider === "CUDAExecutionProvider" ||

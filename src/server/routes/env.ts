@@ -19,6 +19,12 @@ import { resolveAllowedPythonFile } from "../services/venv/pythonGuard.ts";
 /** Serialize TensorRT + TensorRT RTX installs (shared venv / pip). */
 let tensorrtInstallChain: Promise<unknown> = Promise.resolve();
 
+/**
+ * Serializes TensorRT installation operations so that only one runs at a time.
+ *
+ * @param fn - The asynchronous TensorRT installation operation to run
+ * @returns The result of the installation operation
+ */
 function withTensorrtInstallMutex<T>(fn: () => Promise<T>): Promise<T> {
   const run = tensorrtInstallChain.then(fn, fn);
   tensorrtInstallChain = run.then(
@@ -28,6 +34,12 @@ function withTensorrtInstallMutex<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
+/**
+ * Streams installation log messages and a final result as newline-delimited JSON.
+ *
+ * @param res - The response used to send progress and completion records.
+ * @param run - The installation operation that receives a callback for progress lines.
+ */
 function streamNdjsonInstall(
   res: Response,
   run: (onLine: (line: string) => void) => Promise<{ ok: boolean; error?: string; libsDir?: string | null }>,
@@ -57,6 +69,13 @@ function streamNdjsonInstall(
     });
 }
 
+/**
+ * Registers environment and virtual-environment management routes on an Express router.
+ *
+ * The routes manage Hugging Face tokens, Python configuration, runtime status, virtual-environment installation, TensorRT installation, and PATH updates.
+ *
+ * @param router - Express router on which to register the routes
+ */
 export function mountEnvRoutes(router: Router): void {
   // ─── HuggingFace Token Management ──────────────────────────────────────
   router.get("/env/hf-token-status", (_req, res) => {

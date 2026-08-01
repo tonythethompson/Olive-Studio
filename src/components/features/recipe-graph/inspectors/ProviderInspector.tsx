@@ -13,6 +13,12 @@ import { UIState } from "@/types";
 import { AlertTriangle, Cpu as TargetIcon, Loader2 } from "lucide-react";
 import type { InspectorProps } from "./types";
 
+/**
+ * Selects the active hardware execution provider and displays its availability.
+ *
+ * @param state - The current interface state.
+ * @param setState - Applies updates to the interface state.
+ */
 export function ProviderInspector({ state, setState }: InspectorProps) {
   const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
   const [probeLoading, setProbeLoading] = useState(true);

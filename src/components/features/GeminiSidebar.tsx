@@ -37,9 +37,12 @@ const TABS = [
 ];
 
 /**
- * Assistant sidebar: pipeline audit, workspace-aware chat, and AI provider
- * settings. State and side effects live in the `./gemini` hooks; this component
- * wires them together and owns the tab chrome.
+ * Renders a sidebar for pipeline auditing, workspace-aware chat, and AI provider configuration.
+ *
+ * @param isOpen - Whether the sidebar is visible
+ * @param onClose - Callback invoked when the sidebar is closed
+ * @param openToAudit - Whether to select the audit tab and restart analysis
+ * @param onAuditOpened - Optional callback invoked after the audit tab is opened
  */
 export function GeminiSidebar({
   state: propState,

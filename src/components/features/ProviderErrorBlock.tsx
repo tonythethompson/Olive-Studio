@@ -1,8 +1,11 @@
 import { AlertTriangle } from "lucide-react";
 
 /**
- * Renders an error message, distinguishing provider-configuration errors
- * (which show a "go to Settings" prompt) from generic errors.
+ * Renders an error block with tailored guidance for invalid model output, provider configuration issues, and other errors.
+ *
+ * @param msg - The error message to classify and display.
+ * @param onGoSettings - Called when the user selects the Settings link for provider configuration.
+ * @returns The rendered error block.
  */
 export function ProviderErrorBlock({ msg, onGoSettings }: { msg: string; onGoSettings: () => void }) {
   const isJsonModelErr = /not valid JSON|Expected ','|Unexpected token|JSON at position/i.test(msg);

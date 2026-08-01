@@ -691,7 +691,12 @@ export function applyMcpDiagnosticToUiState(
   return { patches, logs, appliedQuirks: [], notedQuirks };
 }
 
-/** Whether Apply Fix can change pipeline state for this diagnostic. */
+/**
+ * Determines whether a diagnostic contains an enabled configuration remedy that can change pipeline state.
+ *
+ * @param diagnostic - The diagnostic to evaluate, or `null`.
+ * @returns `true` if the diagnostic is applyable and contains at least one updated configuration value, `false` otherwise.
+ */
 export function canApplyMcpDiagnostic(
   diagnostic: {
     updated_config?: Record<string, unknown>;
