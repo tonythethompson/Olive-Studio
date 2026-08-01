@@ -50,6 +50,8 @@ import {
   List,
   RefreshCw,
   HardDrive,
+  XCircle,
+  Globe,
 } from "lucide-react";
 
 export { getProviderConflicts };
@@ -303,37 +305,106 @@ export function IHVIntegrationPanel({
   const [installingTrtRtx, setInstallingTrtRtx] = useState(false);
   const [installTrtRtxError, setInstallTrtRtxError] = useState<string | null>(null);
   const [installTrtRtxLog, setInstallTrtRtxLog] = useState<string[]>([]);
+  const [installingTrt, setInstallingTrt] = useState(false);
+  const [installTrtError, setInstallTrtError] = useState<string | null>(null);
+  const [installTrtLog, setInstallTrtLog] = useState<string[]>([]);
 
   const hasAutoAppliedRef = useRef(false);
 
   const trtRtxNeedsInstall =
     Boolean(hardwareProbe?.nvidia?.gpus.length) && hardwareProbe?.tensorRtRtx?.loadable !== true;
+  const trtNeedsInstall =
+    Boolean(hardwareProbe?.nvidia?.gpus.length) && hardwareProbe?.tensorrt?.loadable !== true;
+
+  const runNdjsonInstall = async (
+    url: string,
+    setLog: (updater: string[] | ((prev: string[]) => string[])) => void,
+  ): Promise<void> => {
+    const res = await fetch(url, { method: "POST" });
+    const contentType = res.headers.get("content-type") ?? "";
+
+    let ok = false;
+    let error: string | undefined;
+
+    if (contentType.includes("ndjson") && res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n");
+        buffer = parts.pop() ?? "";
+        for (const line of parts) {
+          if (!line.trim()) continue;
+          let evt: { type?: string; message?: string; ok?: boolean; error?: string };
+          try {
+            evt = JSON.parse(line) as typeof evt;
+          } catch {
+            continue;
+          }
+          if (evt.type === "log" && evt.message) {
+            setLog((prev) => [...prev, evt.message!]);
+          } else if (evt.type === "done") {
+            ok = evt.ok === true;
+            error = evt.error;
+          }
+        }
+      }
+    } else {
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        lines?: string[];
+        log?: string[];
+      };
+      const lines = data.lines ?? data.log;
+      if (Array.isArray(lines)) setLog(lines);
+      ok = res.ok && data.ok === true;
+      error = data.error;
+    }
+
+    if (!ok) {
+      throw new Error(error ?? `Install failed (HTTP ${res.status})`);
+    }
+  };
 
   const handleInstallTensorRtRtx = async () => {
     setInstallingTrtRtx(true);
     setInstallTrtRtxError(null);
     setInstallTrtRtxLog([]);
     try {
-      const res = await fetch("/api/env/install-tensorrt-rtx", { method: "POST" });
-      const data = (await res.json()) as {
-        ok?: boolean;
-        error?: string;
-        log?: string[];
-        probe?: HardwareProbeResult;
-      };
-      if (Array.isArray(data.log)) setInstallTrtRtxLog(data.log);
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error ?? `Install failed (HTTP ${res.status})`);
-      }
-      if (data.probe) {
-        setHardwareProbe(data.probe);
-      } else {
-        await runHardwareProbe(true);
-      }
+      await runNdjsonInstall("/api/env/install-tensorrt-rtx", setInstallTrtRtxLog);
+      await runHardwareProbe(true);
     } catch (err) {
-      setInstallTrtRtxError(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setInstallTrtRtxError(
+        msg === "Failed to fetch"
+          ? "Could not reach the Olive Studio server (or the connection dropped during install). Keep pnpm dev running, then retry. First install also creates .venv and can take several minutes."
+          : msg,
+      );
     } finally {
       setInstallingTrtRtx(false);
+    }
+  };
+
+  const handleInstallTensorRt = async () => {
+    setInstallingTrt(true);
+    setInstallTrtError(null);
+    setInstallTrtLog([]);
+    try {
+      await runNdjsonInstall("/api/env/install-tensorrt", setInstallTrtLog);
+      await runHardwareProbe(true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setInstallTrtError(
+        msg === "Failed to fetch"
+          ? "Could not reach the Olive Studio server (or the connection dropped during install). Keep pnpm dev running, then retry. Full TensorRT is a large download."
+          : msg,
+      );
+    } finally {
+      setInstallingTrt(false);
     }
   };
 
@@ -384,7 +455,7 @@ export function IHVIntegrationPanel({
   const hasSelectedCritical = selectedConflicts.some((c) => c.severity === "critical");
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 min-w-0 max-w-full">
       <Card>
         <CardHeader
           title="Hardware acceleration"
@@ -392,16 +463,16 @@ export function IHVIntegrationPanel({
         />
         <CardContent>
           {/* Live hardware probe from this machine */}
-          <div className="mb-6 rounded-xl border border-slate-800/80 bg-slate-950/40 p-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div className="space-y-2">
+          <div className="mb-6 rounded-xl border border-slate-800/80 bg-slate-950/40 p-4 min-w-0 overflow-hidden">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between min-w-0">
+              <div className="space-y-2 min-w-0">
                 <div className="flex items-center gap-2">
                   <HardDrive className="h-4 w-4 text-electric-blue shrink-0" />
-                  <h4 className="text-sm font-medium text-slate-200">Detected on this machine</h4>
+                  <h3 className="text-sm font-medium text-slate-200">Detected on this machine</h3>
                   {probeLoading && <span className="text-[10px] font-mono text-slate-500">Scanning…</span>}
                 </div>
                 {probeError ? (
-                  <p className="text-xs text-rose-400">{probeError}</p>
+                  <p className="text-xs text-rose-400 break-all">{probeError}</p>
                 ) : hardwareProbe ? (
                   <div className="space-y-1.5 text-xs text-slate-400">
                     <p>
@@ -572,7 +643,7 @@ export function IHVIntegrationPanel({
               : `Showing all ${selectableProviders.length} providers. ${locallyDetectedCount} detected locally — undetected targets are still selectable for cross-compile / remote builds.`}
           </p>
 
-          <div className="grid gap-4 mt-2">
+          <div className="grid gap-4 mt-2 min-w-0 w-full">
             {probeLoading ? (
               <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-8 text-center text-sm text-slate-500">
                 <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-slate-600" />
@@ -588,64 +659,87 @@ export function IHVIntegrationPanel({
                   const pConflicts = getProviderConflicts(p.id, state.passes);
                   const cardHasCritical = pConflicts.some((c) => c.severity === "critical");
                   const cardHardwareBlocked =
-                    Boolean(getProviderHardwareBlock(p.id, hardwareProbe)) ||
-                    (p.id === "CPUExecutionProvider" && !hardwareProbe);
+                    p.id !== "WebGpuExecutionProvider" &&
+                    (Boolean(getProviderHardwareBlock(p.id, hardwareProbe)) ||
+                      (p.id === "CPUExecutionProvider" && !hardwareProbe));
                   const cardBlocked = cardHasCritical || cardHardwareBlocked;
                   const cardHasWarning = pConflicts.some((c) => c.severity === "warning");
                   const showSwitchAssist = pConflicts.length > 0 && (isSelected || !cardBlocked);
                   const detectedLocally = isProviderDetectedLocally(p.id, hardwareProbe);
+                  const isWebGpuTarget = p.id === "WebGpuExecutionProvider";
 
                   let cardClasses =
-                    "relative flex flex-col rounded-xl border p-4.5 transition-all duration-200 cursor-pointer ";
+                    "relative flex flex-col rounded-xl border p-4.5 transition-all duration-200 cursor-pointer min-w-0 max-w-full overflow-hidden ";
                   let badgeText = "";
+                  let BadgeIcon: typeof CheckCircle | null = null;
                   let badgeColor = "";
 
                   if (isSelected) {
                     if (cardBlocked) {
                       cardClasses += "border-rose-500 bg-rose-500/5";
                       badgeText = cardHardwareBlocked ? "Unavailable hardware" : "Critical Conflict";
+                      BadgeIcon = XCircle;
                       badgeColor = "bg-rose-500/10 text-rose-400 border-rose-550/25";
                     } else if (cardHasWarning) {
                       cardClasses += "border-amber-500 bg-amber-500/5";
                       badgeText = "Warning Conflict";
+                      BadgeIcon = AlertTriangle;
                       badgeColor = "bg-amber-500/10 text-amber-400 border-amber-550/25";
                     } else {
                       cardClasses += "border-electric-blue bg-electric-blue/5";
-                      badgeText = !detectedLocally && !probeLoading ? "Active (not local)" : "Active Target";
+                      badgeText =
+                        !detectedLocally && !probeLoading && !isWebGpuTarget
+                          ? "Active (not local)"
+                          : isWebGpuTarget
+                            ? "Active (browser target)"
+                            : "Active Target";
+                      BadgeIcon = CheckCircle;
                       badgeColor = "bg-electric-blue/10 text-electric-blue border-electric-blue/20";
                     }
+                  } else if (isWebGpuTarget) {
+                    cardClasses +=
+                      "border-slate-800/80 bg-slate-900/40 hover:bg-slate-900 hover:border-slate-700";
+                    badgeText = "Browser deploy target";
+                    BadgeIcon = Globe;
+                    badgeColor = "bg-slate-800/80 text-slate-300 border-slate-700/60";
                   } else if (cardHardwareBlocked) {
                     cardClasses +=
                       "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-75 hover:border-slate-700";
                     badgeText = "Not on this system";
+                    BadgeIcon = XCircle;
                     badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
                   } else if (
-                    p.id === "NvTensorRTRTXExecutionProvider" &&
-                    trtRtxNeedsInstall &&
+                    ((p.id === "NvTensorRTRTXExecutionProvider" && trtRtxNeedsInstall) ||
+                      (p.id === "TensorrtExecutionProvider" && trtNeedsInstall)) &&
                     detectedLocally
                   ) {
                     cardClasses += "border-amber-900/40 bg-amber-950/10 opacity-95 hover:border-amber-500/40";
                     badgeText = "Plugin install needed";
+                    BadgeIcon = AlertTriangle;
                     badgeColor = "bg-amber-500/10 text-amber-400 border-amber-500/20";
                   } else if (!detectedLocally && !probeLoading) {
                     cardClasses +=
                       "border-slate-850/60 bg-zinc-950/30 opacity-80 hover:opacity-100 hover:border-slate-700";
                     badgeText = "Not on this system";
+                    BadgeIcon = AlertCircle;
                     badgeColor = "bg-slate-800/80 text-slate-500 border-slate-700/60";
                   } else if (cardHasCritical) {
                     cardClasses +=
                       "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-100 hover:border-rose-500/40";
                     badgeText = "Incompatible";
+                    BadgeIcon = XCircle;
                     badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
                   } else if (cardHasWarning) {
                     cardClasses +=
                       "border-amber-950/35 bg-zinc-950/40 opacity-75 hover:opacity-100 hover:border-amber-500/40";
                     badgeText = "Needs Adjust";
+                    BadgeIcon = AlertTriangle;
                     badgeColor = "bg-amber-500/5 text-amber-400/80 border-amber-550/15";
                   } else {
                     cardClasses +=
                       "border-slate-800/80 bg-slate-900/40 hover:bg-slate-900 hover:border-slate-700";
                     badgeText = "Compatible with active passes";
+                    BadgeIcon = CheckCircle;
                     badgeColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/15";
                   }
 
@@ -683,7 +777,7 @@ export function IHVIntegrationPanel({
                       }}
                       className={cardClasses}
                     >
-                      <div className="flex items-start gap-4">
+                      <div className="flex items-start gap-4 min-w-0">
                         <div
                           className={`mt-0.5 shrink-0 rounded-xl p-2.5 transition-all ${
                             isSelected
@@ -698,14 +792,15 @@ export function IHVIntegrationPanel({
                           <Icon className="h-5 w-5" />
                         </div>
 
-                        <div className="flex-1 space-y-1">
+                        <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex items-center gap-2">
                             <p className="font-semibold text-slate-200 text-sm md:text-base leading-none">
                               {p.name}
                             </p>
                             <span
-                              className={`text-[9px] font-mono uppercase tracking-wider font-extrabold px-2 py-0.5 rounded border ${badgeColor}`}
+                              className={`inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider font-extrabold px-2 py-0.5 rounded border ${badgeColor}`}
                             >
+                              {BadgeIcon ? <BadgeIcon className="h-3 w-3" aria-hidden /> : null}
                               {badgeText}
                             </span>
                           </div>
@@ -753,10 +848,12 @@ export function IHVIntegrationPanel({
                             </TooltipContent>
                           </Tooltip>
                           {detectedLocally && hardwareDetail && (
-                            <p className="text-[11px] text-emerald-400/90 font-mono">{hardwareDetail}</p>
+                            <p className="text-[11px] text-emerald-400/90 font-mono break-words">
+                              {hardwareDetail}
+                            </p>
                           )}
                           {p.id === "NvTensorRTRTXExecutionProvider" && trtRtxNeedsInstall && (
-                            <div className="mt-2 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                            <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
                               <p className="text-[11px] text-amber-400/90 leading-relaxed">
                                 GPU is compatible. The TensorRT RTX runtime is a separate package (not the
                                 full TensorRT SDK). Install into the project{" "}
@@ -764,7 +861,7 @@ export function IHVIntegrationPanel({
                               </p>
                               {hardwareProbe?.tensorRtRtx?.detail && (
                                 <p
-                                  className="text-[10px] text-slate-500 font-mono truncate"
+                                  className="text-[10px] text-slate-500 font-mono break-all max-w-full"
                                   title={hardwareProbe.tensorRtRtx.detail}
                                 >
                                   {hardwareProbe.tensorRtRtx.detail}
@@ -786,16 +883,64 @@ export function IHVIntegrationPanel({
                                 )}
                               </button>
                               {installTrtRtxError && (
-                                <p className="text-[11px] text-rose-400">{installTrtRtxError}</p>
+                                <p className="text-[11px] text-rose-400 break-all">{installTrtRtxError}</p>
                               )}
                               {installTrtRtxLog.length > 0 && (
-                                <pre className="text-[10px] text-slate-500 max-h-24 overflow-auto font-mono whitespace-pre-wrap">
+                                <pre className="text-[10px] text-slate-500 max-h-24 max-w-full overflow-auto font-mono whitespace-pre-wrap break-all">
                                   {installTrtRtxLog.slice(-12).join("\n")}
                                 </pre>
                               )}
                             </div>
                           )}
-                          {!detectedLocally && !probeLoading && (
+                          {p.id === "TensorrtExecutionProvider" && trtNeedsInstall && (
+                            <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
+                              <p className="text-[11px] text-amber-400/90 leading-relaxed">
+                                GPU is compatible (Turing / GeForce RTX 20xx+). Full TensorRT needs the{" "}
+                                <code className="text-slate-400">nvinfer_10</code> SDK in the project{" "}
+                                <code className="text-slate-400">.venv</code>. Prefer TensorRT RTX for a
+                                lighter consumer install when that fits your recipe.
+                              </p>
+                              {hardwareProbe?.tensorrt?.detail && (
+                                <p
+                                  className="text-[10px] text-slate-500 font-mono break-all max-w-full"
+                                  title={hardwareProbe.tensorrt.detail}
+                                >
+                                  {hardwareProbe.tensorrt.detail}
+                                </p>
+                              )}
+                              <button
+                                type="button"
+                                disabled={installingTrt}
+                                onClick={() => void handleInstallTensorRt()}
+                                className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
+                              >
+                                {installingTrt ? (
+                                  <>
+                                    <RefreshCw className="h-3 w-3 animate-spin" />
+                                    Installing tensorrt…
+                                  </>
+                                ) : (
+                                  "Install full TensorRT into .venv"
+                                )}
+                              </button>
+                              {installTrtError && (
+                                <p className="text-[11px] text-rose-400 break-all">{installTrtError}</p>
+                              )}
+                              {installTrtLog.length > 0 && (
+                                <pre className="text-[10px] text-slate-500 max-h-24 max-w-full overflow-auto font-mono whitespace-pre-wrap break-all">
+                                  {installTrtLog.slice(-12).join("\n")}
+                                </pre>
+                              )}
+                            </div>
+                          )}
+                          {isWebGpuTarget && (
+                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                              Not a local Python EP. Select to build web-oriented recipes, then use{" "}
+                              <span className="text-slate-400">Recipe &amp; run → Browser Test</span> / WebGPU
+                              benchmark in Chrome or Edge 113+.
+                            </p>
+                          )}
+                          {!detectedLocally && !probeLoading && !isWebGpuTarget && (
                             <p className="text-[11px] text-slate-600">
                               {p.id === "CPUExecutionProvider"
                                 ? "Hardware detection unavailable — CPU status is unknown."
@@ -952,6 +1097,7 @@ export function IHVIntegrationPanel({
                   )}
                 </div>
                 <Switch
+                  aria-label="Hybrid memory offload"
                   disabled={!isMemoryOffloadAvailable(state)}
                   checked={isMemoryOffloadAvailable(state) && state.memoryOffload === "auto"}
                   onCheckedChange={(checked) => setState({ memoryOffload: checked ? "auto" : "gpu_only" })}
@@ -1012,6 +1158,9 @@ export function IHVIntegrationPanel({
                     <option value="cu121">CUDA 12.1</option>
                     <option value="cu124">CUDA 12.4</option>
                     <option value="cu126">CUDA 12.6</option>
+                    <option value="cu128">CUDA 12.8</option>
+                    <option value="cu130">CUDA 13.0</option>
+                    <option value="cu132">CUDA 13.2 (experimental)</option>
                   </select>
                 </div>
               </div>
@@ -1024,10 +1173,10 @@ export function IHVIntegrationPanel({
             <div className="flex flex-col gap-6 mb-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
                     <Activity className="h-4.5 w-4.5 text-electric-blue shrink-0" />
                     Pass ↔ Provider Compatibility Matrix
-                  </h4>
+                  </h3>
                   <p className="text-xs text-slate-500 mt-1 max-w-2xl">
                     Rule-based pass compatibility for each execution provider. Green cells mean the pass is
                     allowed on that backend; hardware availability is shown separately in the probe banner and
@@ -1137,11 +1286,13 @@ export function IHVIntegrationPanel({
             ) : activeTab === "matrix" ? (
               /* TAB 1: VALIDATION MATRIX INTERACTIVE HEATMAP */
               <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/25 mt-2 shadow-xl animate-in fade-in duration-300">
-                <div className="overflow-x-auto">
-                  <table
-                    aria-label="Pass and execution provider compatibility matrix"
-                    className="w-full text-left border-collapse min-w-[720px]"
-                  >
+                <div
+                  className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Pass and execution provider compatibility matrix"
+                >
+                  <table className="w-full text-left border-collapse min-w-[720px]">
                     <thead>
                       <tr className="border-b border-slate-800/80 bg-slate-900/30">
                         {/* Header Cell 1 */}
@@ -1578,6 +1729,7 @@ export function IHVIntegrationPanel({
                                 : `Direct toggle on ${providers.find((p) => p.id === state.ihvProvider)?.name}`}
                           </span>
                           <Switch
+                            aria-label={`Toggle ${v.name} pass`}
                             disabled={toggleDisabled}
                             checked={toggleDisabled ? false : isActiveState}
                             onCheckedChange={(checked) => {
@@ -1597,9 +1749,9 @@ export function IHVIntegrationPanel({
 
           {/* Vendor Specific Flags - Show dynamically based on selection */}
           <div className="mt-8 pt-6 border-t border-slate-800">
-            <h4 className="text-sm font-medium mb-4 text-slate-300 flex items-center gap-2">
+            <h3 className="text-sm font-medium mb-4 text-slate-300 flex items-center gap-2">
               <Settings2 className="w-4 h-4" /> Target Specific Flags
-            </h4>
+            </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {state.ihvProvider === "TensorrtExecutionProvider" ||
@@ -1607,17 +1759,21 @@ export function IHVIntegrationPanel({
                 <>
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label>Use fp16</Label>
+                      <Label htmlFor="flag-use-fp16">Use fp16</Label>
                       <p className="text-xs text-slate-500">Enable Tensor Core math.</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch id="flag-use-fp16" aria-label="Use fp16" defaultChecked />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label>Enable TensorRT Graph Optimizations</Label>
+                      <Label htmlFor="flag-trt-graph-opts">Enable TensorRT Graph Optimizations</Label>
                       <p className="text-xs text-slate-500">Build TensorRT engines dynamically.</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      id="flag-trt-graph-opts"
+                      aria-label="Enable TensorRT Graph Optimizations"
+                      defaultChecked
+                    />
                   </div>
                 </>
               ) : state.ihvProvider === "OpenVINOExecutionProvider" ? (

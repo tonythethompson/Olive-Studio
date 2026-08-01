@@ -61,7 +61,7 @@ function SwitchRow({ id, label, checked, onCheckedChange, labelOn, labelOff }: S
         {label}
       </Label>
       <div className="flex items-center gap-2 h-9 pt-0.5">
-        <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
+        <Switch id={id} aria-label={label} checked={checked} onCheckedChange={onCheckedChange} />
         <span className="text-[11px] text-slate-500">{checked ? labelOn : labelOff}</span>
       </div>
     </div>

@@ -65,6 +65,7 @@ export function EnterpriseInfraPanel({
                 </p>
               </div>
               <Switch
+                aria-label="Enable Distributed Caching"
                 checked={state.distributedCaching}
                 onCheckedChange={(checked) => setState({ distributedCaching: checked })}
               />
