@@ -1,5 +1,6 @@
 import { UIState } from "@/types";
 import { getPipelineValidation, getProviderConflicts } from "@/lib/pipelineValidation";
+import { resolveHfTask } from "@/lib/oliveRecipeBuilder";
 
 export interface AiWorkspaceContext {
   modelSource: UIState["modelSource"];
@@ -9,6 +10,10 @@ export interface AiWorkspaceContext {
     localFileNames: string[];
     azurePath: string;
     displayName: string;
+    /** Resolved Olive/HF task written into recipes (explicit or inferred). */
+    hfTask: string;
+    /** True when hfTask came from inference, not an explicit UI override. */
+    hfTaskInferred: boolean;
   };
   hardware: {
     executionProvider: UIState["ihvProvider"];
@@ -63,7 +68,9 @@ function shortModelName(displayName: string): string {
 function collectActivePassLabels(passes: UIState["passes"]): string[] {
   const labels: string[] = [];
   if (passes.conversion) {
-    labels.push(`conversion (${passes.conversionFormat}, opset ${passes.conversionOpset})`);
+    labels.push(
+      `conversion (${passes.conversionFormat}, opset ${passes.conversionOpset}, dtype ${passes.conversionInputTargetTypes || "default"})`,
+    );
   }
   if (passes.quantization) {
     const preset = passes.quantPreset ? `, preset: ${passes.quantPreset}` : "";
@@ -94,6 +101,8 @@ export function buildAiWorkspaceContext(state: UIState): AiWorkspaceContext {
   const conflicts = getProviderConflicts(state.ihvProvider, state.passes);
   const batchJobs = state.batchJobs ?? [];
   const displayName = resolveModelDisplayName(state);
+  const explicitTask = state.hfTask?.trim() ?? "";
+  const hfTask = resolveHfTask(state);
 
   return {
     modelSource: state.modelSource,
@@ -103,6 +112,8 @@ export function buildAiWorkspaceContext(state: UIState): AiWorkspaceContext {
       localFileNames: state.localFiles.map((f) => f.name),
       azurePath: state.azureModelPath,
       displayName,
+      hfTask,
+      hfTaskInferred: !explicitTask,
     },
     hardware: {
       executionProvider: state.ihvProvider,
@@ -142,10 +153,13 @@ export function formatAiWorkspaceContextForPrompt(ctx: AiWorkspaceContext): stri
     "Current Olive Studio workspace (live UI selections):",
     `- Model source: ${ctx.modelSource}`,
     `- Model: ${ctx.model.displayName}`,
+    `- HF / Olive task: ${ctx.model.hfTask}${ctx.model.hfTaskInferred ? " (inferred from model id)" : " (set in UI)"}`,
   ];
 
   if (ctx.model.huggingFaceDataset) {
     lines.push(`- Calibration dataset: ${ctx.model.huggingFaceDataset}`);
+  } else if (ctx.passes.quantization) {
+    lines.push("- Calibration dataset: (not set — static PTQ/AWQ/GPTQ may need one)");
   }
   if (ctx.model.localFileNames.length > 0) {
     lines.push(`- Local files: ${ctx.model.localFileNames.join(", ")}`);

@@ -17,6 +17,7 @@ function baseState(overrides?: Partial<UIState>): UIState {
     localFiles: [],
     azureModelPath: "",
     hfModelId: "meta-llama/Meta-Llama-3-8B",
+    hfTask: "",
     hfDataset: "",
     ihvProvider: "CPUExecutionProvider" as IHVProvider,
     memoryOffload: "gpu_only",
@@ -66,6 +67,13 @@ describe("inferHfTask", () => {
     expect(inferHfTask("mistralai/Mistral-7B-v0.1")).toBe("text-generation");
     expect(inferHfTask("unknown-model-name")).toBe("text-generation");
     expect(inferHfTask("")).toBe("text-generation");
+  });
+
+  it("returns 'feature-extraction' for embedding models", () => {
+    expect(inferHfTask("Alibaba-NLP/gte-large-en-v1.5")).toBe("feature-extraction");
+    expect(inferHfTask("BAAI/bge-large-en-v1.5")).toBe("feature-extraction");
+    expect(inferHfTask("intfloat/e5-large-v2")).toBe("feature-extraction");
+    expect(inferHfTask("sentence-transformers/all-MiniLM-L6-v2")).toBe("feature-extraction");
   });
 });
 

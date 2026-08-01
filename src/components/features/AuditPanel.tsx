@@ -1,4 +1,5 @@
 import { RefreshCw, AlertTriangle, CheckCircle2, Zap, Check } from "lucide-react";
+import { isAuditAutofixApplyable } from "@/lib/auditAutofix";
 import { ProviderErrorBlock } from "./ProviderErrorBlock";
 import type { AnalysisResult, Suggestion } from "./gemini/types";
 
@@ -128,7 +129,7 @@ export function AuditPanel({
                   </div>
                   <p className="text-[11px] text-slate-400 leading-relaxed">{s.description}</p>
                 </div>
-                {s.autofix?.pass && (
+                {s.autofix?.pass && isAuditAutofixApplyable(s.autofix) && (
                   <div className="pt-2 border-t border-slate-900/60 flex items-center justify-between">
                     <span className="text-[9px] font-mono text-slate-500">→ {s.autofix.pass}</span>
                     <button
@@ -138,6 +139,13 @@ export function AuditPanel({
                     >
                       <Check className="h-3 w-3" /> Apply
                     </button>
+                  </div>
+                )}
+                {s.autofix?.pass && !isAuditAutofixApplyable(s.autofix) && (
+                  <div className="pt-2 border-t border-slate-900/60">
+                    <span className="text-[9px] text-slate-600">
+                      Advisory only (no matching UI field to Apply).
+                    </span>
                   </div>
                 )}
               </div>

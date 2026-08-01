@@ -4,7 +4,7 @@ import type { LocalEngine } from "./aiProviderCatalog";
 interface UseLocalEngineSetupOptions {
   isOpen: boolean;
   /** Called after a 1-click pull finishes so the provider status / audit can refresh. */
-  onModelActivated: () => void | Promise<void>;
+  onModelActivated: (modelTag: string, source: LocalEngine) => void | Promise<void>;
 }
 
 type InstallStreamEvent = {
@@ -331,7 +331,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
 
       await consumePullStream(r);
       markEngineReady(source);
-      await onModelActivated();
+      await onModelActivated(modelTag, source);
     } catch (err: unknown) {
       setLocalPullError(describePullFetchError(err));
       setLocalInstallInfo(null);

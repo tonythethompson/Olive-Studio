@@ -433,8 +433,13 @@ export function useAiProviderSettings({
   /** Validate the manual form, then persist the key/model/base URL server-side. */
   const saveApiKeyProvider = async () => {
     const key = settingsApiKey.trim();
-    const model = isCompatMode ? customModel.trim() : settingsModel;
-    if (!key) {
+    const model = isCompatMode ? customModel.trim() || settingsModel : settingsModel;
+    const resolvedBaseUrl = settingsBaseUrl.trim() || providerOption.baseUrl || undefined;
+    const allowEmptyKey =
+      settingsProvider === "openai-compat" ||
+      settingsProvider === "cloudflare" ||
+      Boolean(resolvedBaseUrl && /localhost|127\.0\.0\.1/i.test(resolvedBaseUrl));
+    if (!key && !allowEmptyKey) {
       setProviderSaveError("Enter an API key.");
       return;
     }
@@ -442,7 +447,7 @@ export function useAiProviderSettings({
       setProviderSaveError(isCompatMode ? "Enter a model name." : "Select a model.");
       return;
     }
-    if (isCompatMode && !settingsBaseUrl.trim() && !providerOption.baseUrl) {
+    if (isCompatMode && !resolvedBaseUrl) {
       setProviderSaveError("Base URL is required for OpenAI-compatible providers.");
       return;
     }
@@ -454,9 +459,9 @@ export function useAiProviderSettings({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           provider: settingsProvider,
-          apiKey: key,
+          apiKey: key || undefined,
           model,
-          baseUrl: settingsBaseUrl.trim() || providerOption.baseUrl || undefined,
+          baseUrl: resolvedBaseUrl,
         }),
       });
       const contentType = r.headers.get("content-type") ?? "";
@@ -467,6 +472,37 @@ export function useAiProviderSettings({
       onProviderActivated();
     } catch (err: unknown) {
       setProviderSaveError(err instanceof Error ? err.message : "Failed to save provider.");
+    } finally {
+      setIsSavingProvider(false);
+    }
+  };
+
+  /** Activate LM Studio / Ollama as openai-compat local provider. */
+  const enableLocalAiProvider = async (source: "lms" | "ollama", modelTag: string) => {
+    const baseUrl = source === "ollama" ? "http://127.0.0.1:11434/v1" : "http://127.0.0.1:1234/v1";
+    setIsSavingProvider(true);
+    setProviderSaveError("");
+    try {
+      const r = await fetch("/api/ai/provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "openai-compat",
+          apiKey: "local",
+          model: modelTag,
+          baseUrl,
+        }),
+      });
+      const data = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      setSettingsProvider("openai-compat");
+      setSettingsModel(modelTag);
+      setCustomModel(modelTag);
+      setSettingsBaseUrl(baseUrl);
+      await fetchProviderStatus();
+      onProviderActivated();
+    } catch (err: unknown) {
+      setProviderSaveError(err instanceof Error ? err.message : "Failed to enable local provider.");
     } finally {
       setIsSavingProvider(false);
     }
@@ -516,6 +552,7 @@ export function useAiProviderSettings({
     isSavingProvider,
     providerSaveError,
     saveProvider,
+    enableLocalAiProvider,
     clearProvider,
     refreshProviderStatus: fetchProviderStatus,
     codexAccount,

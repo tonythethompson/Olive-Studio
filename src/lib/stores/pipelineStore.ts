@@ -8,6 +8,7 @@ const defaultState: UIState = {
   localFiles: [],
   azureModelPath: "",
   hfModelId: "meta-llama/Meta-Llama-3-8B",
+  hfTask: "",
   hfDataset: "",
   ihvProvider: "CPUExecutionProvider",
   memoryOffload: "gpu_only",

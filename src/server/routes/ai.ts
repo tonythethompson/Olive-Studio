@@ -12,12 +12,21 @@ import path from "path";
 import os from "os";
 import rateLimit from "express-rate-limit";
 
-import { callAI, getAiProvider, detectEnvProvider, setRuntimeAiProvider } from "../services/ai/index.ts";
+import { callAI, detectEnvProvider, setRuntimeAiProvider, getProvider } from "../services/ai/index.ts";
+import { getRuntimeAiProvider } from "../services/ai/state.ts";
+import { listEnvCredentialStatus } from "../services/ai/registry.ts";
 import type { ProviderConfig } from "../types.ts";
 import { sanitizeProviderBaseUrl, stripTrailingSlashes } from "../services/ai/security.ts";
 import { ALLOWED_AI_PROVIDERS } from "../services/ai/detect.ts";
-import { parseJsonFromAiResponse } from "../../lib/aiResponse.ts";
-import { buildAiWorkspaceContext, formatAiWorkspaceContextForPrompt } from "../../lib/aiWorkspaceContext.ts";
+import { parseJsonFromAiResponse, readEnvApiKey } from "../../lib/aiResponse.ts";
+import { parseAuditAnalysisReply, stabilizeAuditScore } from "../../lib/auditAnalysis.ts";
+import { filterAuditAnalysis } from "../../lib/auditSuggestionFilter.ts";
+import { CHAT_JSON_RESPONSE_CONTRACT, parseChatStructuredReply } from "../../lib/chatActions.ts";
+import {
+  buildAiWorkspaceContext,
+  formatAiWorkspaceContextForPrompt,
+  type AiWorkspaceContext,
+} from "../../lib/aiWorkspaceContext.ts";
 import { validateOliveRecipeStructure } from "../../lib/oliveRecipeSchema.ts";
 import { getCodexAppServer } from "../../lib/codex/CodexAppServerClient.ts";
 import { codexAsk } from "../../lib/codex/codexAgent.ts";
@@ -294,9 +303,28 @@ export function mountAiRoutes(router: Router): void {
   // ─── AI Provider ──────────────────────────────────────────────────────────
 
   router.get("/ai/provider", (_req, res) => {
-    const cfg = getAiProvider();
-    if (!cfg) return res.json({ provider: null, model: null, source: "none" });
-    return res.json({ provider: cfg.provider, model: cfg.model });
+    const envCredentials = listEnvCredentialStatus();
+    const runtime = getRuntimeAiProvider();
+    if (runtime) {
+      return res.json({
+        provider: runtime.provider,
+        model: runtime.model,
+        baseUrl: runtime.baseUrl ?? null,
+        source: "user",
+        envCredentials,
+      });
+    }
+    const cfg = detectEnvProvider();
+    if (!cfg) {
+      return res.json({ provider: null, model: null, baseUrl: null, source: "none", envCredentials });
+    }
+    return res.json({
+      provider: cfg.provider,
+      model: cfg.model,
+      baseUrl: cfg.baseUrl ?? null,
+      source: "env",
+      envCredentials,
+    });
   });
 
   router.post("/ai/provider", (req, res) => {
@@ -310,7 +338,26 @@ export function mountAiRoutes(router: Router): void {
     } catch (err: unknown) {
       return res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
     }
-    setRuntimeAiProvider({ provider, apiKey, model, baseUrl: normalizedBaseUrl });
+    const plugin = getProvider(provider);
+    const envKey = plugin ? readEnvApiKey(...plugin.envVarNames) : undefined;
+    const resolvedKey = typeof apiKey === "string" && apiKey.trim() ? apiKey.trim() : (envKey ?? "");
+    const allowEmptyKey =
+      provider === "openai-compat" ||
+      provider === "codex" ||
+      provider === "devin" ||
+      provider === "cloudflare" ||
+      Boolean(normalizedBaseUrl && /localhost|127\.0\.0\.1/i.test(normalizedBaseUrl));
+    if (!resolvedKey && !allowEmptyKey) {
+      return res.status(400).json({
+        error: "API key required. Paste a key or set the provider env var, then try again.",
+      });
+    }
+    setRuntimeAiProvider({
+      provider,
+      apiKey: resolvedKey || "local",
+      model,
+      baseUrl: normalizedBaseUrl,
+    });
     return res.json({ ok: true, provider, model });
   });
 
@@ -376,13 +423,33 @@ export function mountAiRoutes(router: Router): void {
   // ─── AI Chat ──────────────────────────────────────────────────────────────
 
   router.post("/ai/chat", async (req, res) => {
-    const { message, chatHistory } = req.body;
+    const { message, chatHistory, workspaceContext, state } = req.body ?? {};
     if (!message || typeof message !== "string") return res.status(400).json({ error: "Missing message" });
     try {
-      const system = "You are an Olive model optimization assistant.";
-      const messages = (chatHistory ?? []).concat([{ role: "user", content: message }]);
-      const reply = await callAI(system, messages);
-      return res.json({ reply });
+      let workspaceSummary = "";
+      try {
+        if (workspaceContext && typeof workspaceContext === "object") {
+          workspaceSummary = formatAiWorkspaceContextForPrompt(workspaceContext as AiWorkspaceContext);
+        } else if (state && typeof state === "object") {
+          workspaceSummary = formatAiWorkspaceContextForPrompt(buildAiWorkspaceContext(state));
+        }
+      } catch {
+        // Workspace context is optional
+      }
+      const system =
+        "You are an Olive model optimization assistant. Use the live workspace when provided. " +
+        (workspaceSummary ? `Workspace:\n${workspaceSummary.slice(0, 3500)}\n\n` : "") +
+        CHAT_JSON_RESPONSE_CONTRACT;
+      const messages = (Array.isArray(chatHistory) ? chatHistory : []).concat([
+        { role: "user", content: message },
+      ]);
+      const rawReply = await callAI(system, messages, true);
+      const structured = parseChatStructuredReply(rawReply);
+      return res.json({
+        reply: structured.reply,
+        text: structured.reply,
+        actions: structured.actions,
+      });
     } catch (err: unknown) {
       return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -414,19 +481,55 @@ export function mountAiRoutes(router: Router): void {
   });
 
   router.post("/ai/analyze-state", async (req, res) => {
-    const { state } = req.body ?? {};
+    const { state, previousScore } = req.body ?? {};
     if (!state) return res.status(400).json({ error: "Missing state" });
     try {
       const ctx = buildAiWorkspaceContext(state);
-      const ctxSummary = formatAiWorkspaceContextForPrompt(ctx);
-      const system = `You analyze Olive optimization pipelines. Return JSON: { score: number 0-100, level: "Optimized"|"Suboptimal"|"Critical", summary: string, suggestions: Array<{ title: string, description: string, impact: "High"|"Medium"|"Low", type: "warning"|"success"|"suggestion"|"info", autofix: { pass: string, value: string } }> }`;
-      const reply = await callAI(system, [{ role: "user", content: ctxSummary }], true);
-      const parsed = parseJsonFromAiResponse(reply);
-      return res.json(
-        typeof parsed === "object" && parsed
-          ? parsed
-          : { score: 50, level: "Suboptimal", summary: "Could not analyze.", suggestions: [] },
-      );
+      const ctxSummary = formatAiWorkspaceContextForPrompt(ctx).slice(0, 3500);
+      const prior =
+        typeof previousScore === "number" && Number.isFinite(previousScore)
+          ? Math.max(0, Math.min(100, Math.round(previousScore)))
+          : null;
+      const continuity =
+        prior != null
+          ? ` Score continuity: the user just Applied an audit suggestion. Previous score was ${prior}. ` +
+            `Do not crash the score by more than about 15 points unless Apply clearly made the pipeline worse ` +
+            `(for example enabled broken quantization). Pre-existing issues that were already present should not ` +
+            `suddenly turn an Optimized/Suboptimal pipeline into Critical. Prefer holding or slightly adjusting the score.`
+          : "";
+      const system =
+        "You analyze Olive optimization pipelines for ONNX Runtime / TensorRT / quantization. " +
+        "Reply with ONE JSON object only (no markdown, no prose outside JSON). Schema: " +
+        '{"score":0-100,"level":"Optimized"|"Suboptimal"|"Critical","summary":string,"suggestions":[{"title":string,"description":string,"impact":"High"|"Medium"|"Low","type":"warning"|"success"|"suggestion"|"info","autofix":{"pass":string,"value":string}}]}. ' +
+        "Writing rules: summary must be 1-2 complete sentences. Each title must be a short readable phrase (not a bare field name like opset/dtype/cache). " +
+        "Each description must be 1-2 complete sentences explaining why and what to change. Keep JSON valid with commas between elements. " +
+        "Suggestion count (hard): Return 0 to 3 suggestions. Prefer fewer. Only include a suggestion if it is concrete, applyable, and would materially improve THIS workspace. " +
+        "Never invent filler to reach 3. If the pipeline is already solid, return suggestions:[]. If only one real improvement exists, return exactly one. " +
+        "Relevance rules (hard): Only suggest changes for the Model and execution provider in the workspace. " +
+        "Trust the listed HF / Olive task as ground truth (including inferred). Do not claim the UI misidentifies the task when the workspace already shows the correct task. " +
+        "Never mention speech recognition / ASR / Whisper unless the model is an ASR model. " +
+        "If execution provider is NvTensorRTRTXExecutionProvider, do NOT suggest TensorRTExecutionProvider, TensorRTPass, tensor_rt, TRT engine build/caching, or adding TensorRT after CUDA. That EP already is the consumer RTX path. " +
+        "autofix.pass must be a UI field (e.g. quantMethod, quantPrecision, conversionInputTargetTypes, conversionOpset, ihvProvider, hfTask), never a nested Olive JSON path like passes.conversion.config.input_model_dtype or systems.local_system.config.accelerators. " +
+        "For Hugging Face task mismatches (embedding vs text-generation), set autofix.pass to hfTask and autofix.value to the task string (e.g. feature-extraction). " +
+        "For half-precision / FP16 advice, set autofix.pass to conversionInputTargetTypes and autofix.value to float16 (do not enable quantization for FP16)." +
+        continuity;
+      let reply = await callAI(system, [{ role: "user", content: ctxSummary }], true);
+      let analysis = filterAuditAnalysis(parseAuditAnalysisReply(reply), ctx);
+      const looksSoft =
+        analysis.suggestions.length === 0 &&
+        analysis.summary.startsWith("Partial audit (model returned unstructured text)");
+      if (looksSoft) {
+        reply = await callAI(
+          `${system}\nRetry with valid JSON only. Example with ONE suggestion (0 is also fine; do not pad to 3): ` +
+            '{"score":60,"level":"Suboptimal","summary":"The pipeline can better match TensorRT RTX with AWQ int4 quantization.",' +
+            '"suggestions":[{"title":"Enable AWQ quantization","description":"Switch the quant method to AWQ so weights fit TensorRT RTX more efficiently.","impact":"High","type":"suggestion","autofix":{"pass":"quantMethod","value":"awq"}}]}',
+          [{ role: "user", content: ctxSummary }],
+          true,
+        );
+        analysis = filterAuditAnalysis(parseAuditAnalysisReply(reply), ctx);
+      }
+      analysis = stabilizeAuditScore(analysis, prior);
+      return res.json(analysis);
     } catch (err: unknown) {
       return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -530,8 +633,9 @@ export function mountAiRoutes(router: Router): void {
       return;
     }
     try {
-      send({ type: "step", message: `Pulling ${modelTag} via LM Studio…`, percent: 5 });
-      const proc = spawn(lmsCli, ["pull", String(modelTag)], { stdio: "pipe" });
+      send({ type: "step", message: `Downloading ${modelTag} via LM Studio (lms get)…`, percent: 5 });
+      // LM Studio CLI downloads with `lms get`, not Ollama-style `pull`. `-y` skips prompts.
+      const proc = spawn(lmsCli, ["get", String(modelTag), "-y"], { stdio: "pipe" });
       proc.stdout.on("data", (d: Buffer) => {
         d.toString()
           .split(/\r?\n/)
@@ -545,8 +649,13 @@ export function mountAiRoutes(router: Router): void {
           .forEach((l) => send({ type: "log", message: l }));
       });
       proc.on("close", (code) => {
-        if (code === 0) send({ type: "done", message: "Model pulled successfully.", ok: true });
-        else send({ type: "error", error: `LM Studio pull exited with code ${code}` });
+        if (code === 0) send({ type: "done", message: "Model downloaded successfully.", ok: true });
+        else
+          send({
+            type: "error",
+            error: `LM Studio download exited with code ${code}`,
+            hint: "Official CLI is `lms get <model> -y` (not `pull`).",
+          });
         res.end();
       });
       proc.on("error", (err) => {

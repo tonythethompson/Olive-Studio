@@ -447,6 +447,11 @@ export function deriveUiStateFromOliveRecipe(parsed: any, options?: DeriveUiStat
     if (hfConfig?.dataset) {
       incomingState.hfDataset = hfConfig.dataset;
     }
+    const task =
+      (typeof hfConfig?.task === "string" && hfConfig.task) ||
+      (typeof inputModel?.config?.task === "string" && inputModel.config.task) ||
+      "";
+    if (task) incomingState.hfTask = task;
   }
 
   const localFiles = inputModel?.config?.local_files;

@@ -36,7 +36,7 @@ function ProviderSelect({ providers }: ProvidersProp) {
           acc.push(
             <option key={p.id} value={p.id}>
               {p.name}
-              {p.description ? ` — ${p.description}` : ""}
+              {p.description ? `: ${p.description}` : ""}
             </option>,
           );
           return acc;
@@ -192,7 +192,10 @@ function ApiKeyForm({ providers }: ProvidersProp) {
             onBlur={() => providers.refreshModelsForTypedBaseUrl()}
             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
           />
-          <p className="text-[10px] text-slate-600 mt-1">Works with LM Studio, vLLM, Ollama, etc.</p>
+          <p className="text-[10px] text-slate-600 mt-1">
+            For OpenAI-compatible cloud or self-hosted endpoints (vLLM, SGLang, custom gateways). Local LM
+            Studio / Ollama live under the Local tab.
+          </p>
         </div>
       )}
 
@@ -239,15 +242,11 @@ function ApiKeyForm({ providers }: ProvidersProp) {
   );
 }
 
-/** Manual provider setup: pick provider + model, then sign in or save a key. */
+/** Cloud provider setup: pick provider + model, then sign in or save a key. */
 export function ManualProviderSetup({ providers }: ProvidersProp) {
   const { settingsProvider, providerOption, providerSaveError } = providers;
   return (
     <div className="space-y-3">
-      <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">
-        Manual Provider Setup
-      </p>
-
       <ProviderSelect providers={providers} />
       <ModelField providers={providers} />
 

@@ -38,8 +38,40 @@
   /* Full three-column shell + horizontal graph (below this: compact rearrange) */
   --breakpoint-wide: 900px;
 
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-sans: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-mono: "Hurmit", "Hermit", ui-monospace, SFMono-Regular, monospace;
+}
+
+@font-face {
+  font-family: "Hurmit";
+  src: url("/fonts/hurmit/Hurmit-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Hurmit";
+  src: url("/fonts/hurmit/Hurmit-RegularItalic.otf") format("opentype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Hurmit";
+  src: url("/fonts/hurmit/Hurmit-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Hurmit";
+  src: url("/fonts/hurmit/Hurmit-BoldItalic.otf") format("opentype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
 }
 
 @layer base {
@@ -101,67 +133,4 @@
 
 .glow-pulsar {
   animation: pulsar-glow 2s ease-in-out infinite;
-}
-
-/* ─── Print styles for PDF export via window.print() ─────────────────────── */
-@media print {
-  body {
-    background: #fff !important;
-    color: #1a1a2e !important;
-    font-size: 11px;
-  }
-
-  /* Hide app chrome — only print the report container */
-  .no-print,
-  nav,
-  header,
-  footer,
-  aside,
-  [data-print-hide] {
-    display: none !important;
-  }
-
-  .print-only {
-    display: block !important;
-  }
-
-  /* Ensure report content fills the page */
-  [data-print-area] {
-    position: static !important;
-    width: 100% !important;
-    max-height: none !important;
-    overflow: visible !important;
-    background: #fff !important;
-    color: #1a1a2e !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-  }
-
-  /* Tables in print */
-  table {
-    border-collapse: collapse;
-    width: 100%;
-  }
-  th,
-  td {
-    border: 1px solid #cbd5e1;
-    padding: 4px 8px;
-    text-align: left;
-    font-size: 10px;
-  }
-  th {
-    background: #f1f5f9 !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  /* Avoid page breaks inside table rows */
-  tr {
-    page-break-inside: avoid;
-  }
-
-  a[href]::after {
-    content: none; /* Don't append URLs */
-  }
 }

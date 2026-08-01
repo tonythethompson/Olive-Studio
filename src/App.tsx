@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw } from "lucide-react";
 import { InputEnvironmentPanel } from "@/components/features/InputEnvironmentPanel";
@@ -12,16 +12,7 @@ import { RuntimeEnvControls } from "@/components/features/RuntimeEnvControls";
 import { TitleBar } from "@/components/TitleBar";
 import { DesktopMinimumViewport } from "@/components/DesktopMinimumViewport";
 import { cn } from "@/lib/utils";
-import {
-  attemptPipelineNavigate,
-  isPipelineOliveRunning,
-  isPipelineViewId,
-  OLIVE_PIPELINE_NAV_BLOCKED,
-  OLIVE_PIPELINE_NAVIGATE,
-  setPipelineOliveRunning,
-  type PipelineNavBlockedDetail,
-  type PipelineViewId,
-} from "@/lib/pipelineNavigation";
+import { OLIVE_PIPELINE_NAVIGATE, type PipelineViewId } from "@/lib/pipelineNavigation";
 
 const BatchProcessingPanel = lazy(() =>
   import("@/components/features/BatchProcessingPanel").then((m) => ({ default: m.BatchProcessingPanel })),
@@ -71,6 +62,7 @@ const SECTIONS: { id: ActiveView; step: string; label: string; desc: string; ico
 
 /**
  * Renders the Olive Studio recipe builder dashboard.
+ * Pipeline steps share one scrollable page; the sidebar tracks the in-view section.
  */
 function Dashboard() {
   const [activeView, setActiveView] = useState<ActiveView>("input");
@@ -78,67 +70,62 @@ function Dashboard() {
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
   const [triggerAiAudit, setTriggerAiAudit] = useState(false);
   const [licenseOpen, setLicenseOpen] = useState(false);
-  const [navBlockedMessage, setNavBlockedMessage] = useState<string | null>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const scrollingToRef = useRef<ActiveView | null>(null);
 
   const handleOpenAiAudit = () => {
     setIsAiSidebarOpen(true);
     setTriggerAiAudit(true);
   };
 
-  const mainRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    setPipelineOliveRunning(isOliveRunning);
-  }, [isOliveRunning]);
+  const scrollToSection = useCallback(
+    (id: ActiveView) => {
+      if (isOliveRunning && id !== "execute") return;
+      setActiveView(id);
+      scrollingToRef.current = id;
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.setTimeout(() => {
+        if (scrollingToRef.current === id) scrollingToRef.current = null;
+      }, 900);
+    },
+    [isOliveRunning],
+  );
 
   useEffect(() => {
     const onNavigate = (event: Event) => {
-      const detail = (event as CustomEvent<unknown>).detail;
-      if (!isPipelineViewId(detail)) return;
-      // Defensive: events that bypass navigatePipeline still get shared blocked feedback.
-      if (isPipelineOliveRunning() && detail !== "execute") {
-        attemptPipelineNavigate(detail);
-        return;
-      }
-      setActiveView(detail);
-    };
-    const onNavBlocked = (event: Event) => {
-      const detail = (event as CustomEvent<PipelineNavBlockedDetail>).detail;
-      const message = detail?.message;
-      if (!message) return;
-      setNavBlockedMessage(message);
+      const detail = (event as CustomEvent<PipelineViewId>).detail;
+      if (detail !== "input" && detail !== "ihv" && detail !== "execute") return;
+      scrollToSection(detail);
     };
     window.addEventListener(OLIVE_PIPELINE_NAVIGATE, onNavigate);
-    window.addEventListener(OLIVE_PIPELINE_NAV_BLOCKED, onNavBlocked);
-    return () => {
-      window.removeEventListener(OLIVE_PIPELINE_NAVIGATE, onNavigate);
-      window.removeEventListener(OLIVE_PIPELINE_NAV_BLOCKED, onNavBlocked);
+    return () => window.removeEventListener(OLIVE_PIPELINE_NAVIGATE, onNavigate);
+  }, [scrollToSection]);
+
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main) return;
+
+    const syncActiveFromScroll = () => {
+      if (scrollingToRef.current) return;
+      const mainTop = main.getBoundingClientRect().top;
+      let current: ActiveView = "input";
+      for (const { id } of SECTIONS) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        if (el.getBoundingClientRect().top - mainTop <= 96) current = id;
+      }
+      setActiveView((prev) => (prev === current ? prev : current));
     };
+
+    main.addEventListener("scroll", syncActiveFromScroll, { passive: true });
+    syncActiveFromScroll();
+    return () => main.removeEventListener("scroll", syncActiveFromScroll);
   }, []);
-
-  useEffect(() => {
-    if (!navBlockedMessage) return;
-    const timer = window.setTimeout(() => setNavBlockedMessage(null), 4000);
-    return () => window.clearTimeout(timer);
-  }, [navBlockedMessage]);
-
-  useEffect(() => {
-    mainRef.current?.scrollTo({ top: 0 });
-  }, [activeView]);
 
   return (
     <DesktopMinimumViewport>
       <div className="flex flex-col h-screen bg-slate-950 text-slate-300 overflow-hidden font-sans">
         <TitleBar />
-        {navBlockedMessage ? (
-          <div
-            role="status"
-            aria-live="polite"
-            className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-200"
-          >
-            {navBlockedMessage}
-          </div>
-        ) : null}
         <div className="flex flex-1 min-h-0 overflow-hidden">
           <a
             href="#main"
@@ -168,29 +155,22 @@ function Dashboard() {
               <div className="space-y-0.5">
                 {SECTIONS.map(({ id, step, label, icon: Icon }) => {
                   const isActive = activeView === id;
-                  const stepBlocked = isOliveRunning && id !== "execute";
                   return (
                     <button
                       key={id}
                       type="button"
-                      title={
-                        stepBlocked
-                          ? `${step} ${label}: unavailable while Olive is running`
-                          : `${step} ${label}`
-                      }
+                      title={`${step} ${label}`}
                       aria-label={`${step} ${label}`}
-                      onClick={() => {
-                        if (!attemptPipelineNavigate(id)) return;
-                        setActiveView(id);
-                      }}
+                      onClick={() => scrollToSection(id)}
                       aria-current={isActive ? "step" : undefined}
-                      disabled={stepBlocked}
+                      disabled={isOliveRunning && id !== "execute"}
                       className={cn(
                         "w-full flex items-center gap-2.5 justify-center wide:justify-start px-2 wide:pl-4 wide:pr-3 py-2.5 wide:py-2 text-sm transition-colors border-l-2 text-left",
                         isActive
                           ? "border-electric-blue text-slate-100 bg-electric-blue/5"
                           : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40",
-                        stepBlocked &&
+                        isOliveRunning &&
+                          id !== "execute" &&
                           "opacity-40 cursor-not-allowed hover:bg-transparent hover:text-slate-400",
                       )}
                     >
@@ -233,83 +213,85 @@ function Dashboard() {
 
           <div className="flex-1 flex min-w-0 overflow-hidden">
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
-              <header className="h-12 flex items-center justify-between px-3 wide:px-6 min-[1000px]:px-8 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 shrink-0 gap-2">
-                <div className="flex items-center gap-2 wide:gap-4 min-w-0 overflow-hidden">
-                  <span className="text-sm text-slate-400 shrink-0 hidden wide:inline">
+              <header className="h-12 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 px-3 wide:px-6 min-[1000px]:px-8 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 shrink-0">
+                <div className="justify-self-start min-w-0">
+                  <span className="text-sm text-slate-400 truncate hidden wide:inline">
                     Optimization pipeline
                   </span>
+                </div>
+                <div className="justify-self-center flex items-center gap-5 min-w-0">
                   <KbSyncIndicator />
+                  <span className="hidden sm:block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />
                   <RuntimeEnvControls />
                 </div>
-                <button
-                  type="button"
-                  aria-expanded={isAiSidebarOpen}
-                  aria-controls="assistant-panel"
-                  onClick={() => setIsAiSidebarOpen((open) => !open)}
-                  className={cn(
-                    "px-2.5 wide:px-3 py-1.5 border text-sm flex items-center gap-1.5 transition-colors cursor-pointer shrink-0",
-                    isAiSidebarOpen
-                      ? "border-electric-blue text-electric-blue bg-electric-blue/5"
-                      : "border-slate-700 text-slate-400 hover:border-electric-blue hover:text-electric-blue",
-                  )}
-                >
-                  <Bot className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Assistant</span>
-                </button>
+                <div className="justify-self-end">
+                  <button
+                    type="button"
+                    onClick={() => setIsAiSidebarOpen((open) => !open)}
+                    className={cn(
+                      "px-2.5 wide:px-3 py-1.5 border text-sm flex items-center gap-1.5 transition-colors cursor-pointer shrink-0",
+                      isAiSidebarOpen
+                        ? "border-electric-blue text-electric-blue bg-electric-blue/5"
+                        : "border-slate-700 text-slate-400 hover:border-electric-blue hover:text-electric-blue",
+                    )}
+                  >
+                    <Bot className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Assistant</span>
+                  </button>
+                </div>
               </header>
 
               <main
                 ref={mainRef}
                 id="main"
-                className="flex-1 overflow-y-auto px-3 py-5 wide:px-6 wide:py-8 min-[1000px]:px-10 h-full"
+                className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-5 wide:px-6 wide:py-8 min-[1000px]:px-10 h-full min-w-0"
               >
-                <h1 className="sr-only">Olive Studio — Recipe builder</h1>
-                <div className="pb-16">
-                  {SECTIONS.map(({ id, step, label, desc }) => {
-                    const isActive = activeView === id;
-                    return (
-                      <section
-                        key={id}
-                        id={id}
-                        className={cn("mx-auto w-full max-w-7xl", !isActive && "hidden")}
-                        {...(!isActive ? { inert: true } : {})}
-                      >
-                        <header className="mb-5 pb-4 border-b border-slate-800">
-                          <p className="text-xs text-electric-blue mb-1">{step}</p>
-                          <h2 className="text-lg font-semibold text-slate-100">{label}</h2>
-                          <p className="text-sm text-slate-400 mt-0.5">{desc}</p>
-                        </header>
-                        {id === "input" && (
-                          <ErrorBoundary label="Model source">
-                            <InputEnvironmentPanel />
+                <h1 className="sr-only">Olive Studio recipe builder</h1>
+                <div className="mx-auto w-full max-w-5xl min-w-0 pb-16">
+                  {SECTIONS.map(({ id, step, label, desc }, index) => (
+                    <section
+                      key={id}
+                      id={id}
+                      aria-labelledby={`${id}-heading`}
+                      className={cn("scroll-mt-4", index > 0 && "mt-12 pt-10 border-t border-slate-800")}
+                    >
+                      <header className="mb-5 pb-4 border-b border-slate-800/80">
+                        <p className="text-xs text-electric-blue mb-1">{step}</p>
+                        <h2 id={`${id}-heading`} className="text-lg font-semibold text-slate-100">
+                          {label}
+                        </h2>
+                        <p className="text-sm text-slate-400 mt-0.5">{desc}</p>
+                      </header>
+                      {id === "input" && (
+                        <ErrorBoundary label="Model source">
+                          <InputEnvironmentPanel />
+                        </ErrorBoundary>
+                      )}
+                      {id === "ihv" && (
+                        <ErrorBoundary label="Hardware">
+                          <IHVIntegrationPanel />
+                        </ErrorBoundary>
+                      )}
+                      {id === "execute" && (
+                        <div className="space-y-8">
+                          <ErrorBoundary label="Recipe &amp; run">
+                            <ExecutionWorkspace
+                              onOpenAiAudit={handleOpenAiAudit}
+                              onRunStateChange={(running) => {
+                                setIsOliveRunning(running);
+                                if (running) scrollToSection("execute");
+                              }}
+                            />
                           </ErrorBoundary>
-                        )}
-                        {id === "ihv" && (
-                          <ErrorBoundary label="Hardware">
-                            <IHVIntegrationPanel />
+                          <ErrorBoundary label="Batch queue">
+                            <Suspense fallback={<BatchPanelFallback />}>
+                              <BatchProcessingPanel />
+                            </Suspense>
                           </ErrorBoundary>
-                        )}
-                        {id === "execute" && (
-                          <div className="space-y-8">
-                            <ErrorBoundary label="Recipe &amp; run">
-                              <ExecutionWorkspace
-                                onOpenAiAudit={handleOpenAiAudit}
-                                onRunStateChange={(running) => {
-                                  setIsOliveRunning(running);
-                                  if (running) setActiveView("execute");
-                                }}
-                              />
-                            </ErrorBoundary>
-                            <ErrorBoundary label="Batch queue">
-                              <Suspense fallback={<BatchPanelFallback />}>
-                                <BatchProcessingPanel />
-                              </Suspense>
-                            </ErrorBoundary>
-                          </div>
-                        )}
-                      </section>
-                    );
-                  })}
+                        </div>
+                      )}
+                    </section>
+                  ))}
                 </div>
               </main>
             </div>
