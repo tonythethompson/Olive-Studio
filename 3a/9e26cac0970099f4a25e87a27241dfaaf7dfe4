@@ -1,0 +1,74 @@
+src/lib/hardwareProbe.ts
+  s_da107fccb58d2e::t_46539a6b9e90f4 95-97
+src/server/routes/ai.ts
+  s_da107fccb58d2e::t_133bbf254c6f0f 589-596,600
+src/lib/__tests__/hooks.test.ts
+  s_da107fccb58d2e::t_e83c566a73606b 166
+src/lib/modelCatalog.ts
+  s_da107fccb58d2e::t_bf872fda6c1da6 10
+.agents/skills/vite-react-best-practices/rules/vite-build-validation.md
+  s_da107fccb58d2e::t_17f6733064eea7 3,22,27-30,35-38
+src/server/services/ai/state.ts
+  s_da107fccb58d2e::t_dca8b84e93f487 5
+  s_da107fccb58d2e::t_91b581c637005b 70-81,86
+src/lib/chatActions.ts
+  s_da107fccb58d2e::t_309aeda935e48c 87-102
+  s_da107fccb58d2e::t_0d0047dd9fdf95 112-114
+src/lib/hooks.ts
+  s_da107fccb58d2e::t_051401cf8c982d 219,225-229
+src/lib/auditSuggestionFilter.ts
+  s_da107fccb58d2e::t_6cf0e5bcb66e8f 82
+  s_da107fccb58d2e::t_7086bdabb4872f 45-46
+  s_da107fccb58d2e::t_1ff94d0c04d790 56-59
+src/components/features/gemini/SettingsPanel.tsx
+  s_da107fccb58d2e::t_bf840678b2fa2f 132-135
+src/lib/recipePipeline.ts
+  s_da107fccb58d2e::t_83124b3a3e67b3 31-34,44
+src/server/services/ai/security.ts
+  s_da107fccb58d2e::t_81c9ed3977c5c1 36-44
+  s_da107fccb58d2e::t_e9bbe82d40b665 90
+src/components/features/IHVIntegrationPanel.tsx
+  s_da107fccb58d2e::t_249eeccc6bc108 375
+  s_da107fccb58d2e::t_b505f2a7039c23 395
+  s_da107fccb58d2e::t_c27aa97d6fedb7 318
+  s_da107fccb58d2e::t_0cca1b14edd6dd 916
+  s_da107fccb58d2e::t_282b8962d3dfe4 875
+src/lib/pipelineValidation.ts
+  s_da107fccb58d2e::t_111699c45a4e0e 649
+  s_da107fccb58d2e::t_26cdcd26fec1a2 9-10
+  s_da107fccb58d2e::t_0b913f8d8f3371 611-626
+olive-mcp-server/olive_mcp_server/mcp_server.py
+  s_da107fccb58d2e::t_a9f2ac4177ddfb 14-15
+  s_da107fccb58d2e::t_fe99872b2d053e 108-113,115-128
+src/components/features/gemini/useAiProviderSettings.ts
+  s_da107fccb58d2e::t_e99efb7253f34c 480-481
+  s_da107fccb58d2e::t_885a18ff165210 504,507
+src/lib/hardwareProbe.test.ts
+  s_da107fccb58d2e::t_0f23f0ea8082c5 5,14,18-28
+src/components/features/GeminiSidebar.tsx
+  s_da107fccb58d2e::t_317b2e84f41860 99-100
+src/server/routes/system.ts
+  s_da107fccb58d2e::t_7adb062b2b6d3a 147-148
+  s_da107fccb58d2e::t_470436248f7207 169-171,178-180
+  s_da107fccb58d2e::t_a0bd13d1ea9bc7 243-244
+src/server/services/ai/registry.ts
+  s_da107fccb58d2e::t_197e0f4e0a4db7 96
+src/server/services/ai/security.test.ts
+  s_da107fccb58d2e::t_05b8e37e757ad3 89-105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3a9e26cac0970099f4a25e87a27241dfaaf7dfe4",
+  "prompts": {},
+  "sessions": {
+    "s_da107fccb58d2e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9d5aeab5-a5f0-4a78-b997-cfe2969c6beb",
+        "model": "composer-2.5-fast"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
