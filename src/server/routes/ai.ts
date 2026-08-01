@@ -278,61 +278,61 @@ async function tryWingetInstall(packageIds: string[]): Promise<boolean> {
  * Observes async ChildProcess `error` so launch failures propagate to callers.
  */
 function startOllamaOnce(cliPath: string): Promise<{ mode: "app" | "serve"; detail: string }> {
-  let mode: "app" | "serve" = "serve";
-  let detail = `${cliPath} serve`;
-  let child: ChildProcess | null = null;
+  return new Promise((resolve, reject) => {
+    let mode: "app" | "serve" = "serve";
+    let detail = `${cliPath} serve`;
+    let child: ChildProcess | null = null;
 
-  if (process.platform === "win32") {
-    const app = findOllamaApp();
-    if (app) {
-      child = spawn(app, [], {
+    if (process.platform === "win32") {
+      const app = findOllamaApp();
+      if (app) {
+        child = spawn(app, [], {
+          detached: true,
+          stdio: "ignore",
+          windowsHide: true,
+          env: { ...process.env },
+        });
+        mode = "app";
+        detail = app;
+      }
+    } else if (process.platform === "darwin") {
+      const app = findOllamaApp();
+      if (app && fs.existsSync(app)) {
+        child = spawn("open", ["-a", "Ollama"], {
+          detached: true,
+          stdio: "ignore",
+          env: { ...process.env },
+        });
+        mode = "app";
+        detail = app;
+      }
+    }
+
+    if (!child) {
+      child = spawn(cliPath, ["serve"], {
         detached: true,
         stdio: "ignore",
         windowsHide: true,
         env: { ...process.env },
       });
-      mode = "app";
-      detail = app;
+      mode = "serve";
+      detail = `${cliPath} serve`;
     }
-  } else if (process.platform === "darwin") {
-    const app = findOllamaApp();
-    if (app && fs.existsSync(app)) {
-      child = spawn("open", ["-a", "Ollama"], {
-        detached: true,
-        stdio: "ignore",
-        env: { ...process.env },
-      });
-      mode = "app";
-      detail = app;
-    }
-  }
 
-  if (!child) {
-    child = spawn(cliPath, ["serve"], {
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true,
-      env: { ...process.env },
-    });
-    mode = "serve";
-    detail = `${cliPath} serve`;
-  }
-
-  const launched = child;
-  return new Promise((resolve, reject) => {
+    // Attach listeners in the same turn as spawn so async failures are never unhandled.
     let settled = false;
     const settleOk = () => {
       if (settled) return;
       settled = true;
-      launched.unref();
+      child!.unref();
       resolve({ mode, detail });
     };
-    launched.once("error", (err) => {
+    child.once("error", (err) => {
       if (settled) return;
       settled = true;
       reject(err);
     });
-    launched.once("spawn", settleOk);
+    child.once("spawn", settleOk);
   });
 }
 

@@ -154,7 +154,7 @@ export async function requestMcpDiagnostic(
         return {
           diagnostic: {
             ...(payload as unknown as McpDiagnostic),
-            matched_entry: payload.matched_entry ?? null,
+            matched_entry: typeof payload.matched_entry === "string" ? payload.matched_entry : null,
           },
           error: null,
         };
