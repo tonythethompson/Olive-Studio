@@ -5,6 +5,12 @@ import { UIState } from "@/types";
 import { Fingerprint, Layers } from "lucide-react";
 import type { InspectorProps } from "./types";
 
+/**
+ * Renders PEFT configuration controls and status for the selected provider and model.
+ *
+ * @param state - The current inspector state.
+ * @param setState - Updates the inspector state when PEFT settings change.
+ */
 export function PeftInspector({ state, setState }: InspectorProps) {
   const peftAllowed = isPeftAllowed(state.ihvProvider);
   const allowedPeftMethods = getAllowedPeftMethods(state.ihvProvider);

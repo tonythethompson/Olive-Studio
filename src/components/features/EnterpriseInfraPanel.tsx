@@ -2,6 +2,13 @@ import { Card, CardContent, CardHeader, Input, Label, Switch } from "@/component
 import { UIState } from "@/types";
 import { KeyRound, Database, Network } from "lucide-react";
 
+/**
+ * Renders controls for configuring enterprise caching and remote storage.
+ *
+ * @param state - Current cache directory, Azure connection string, and distributed caching settings
+ * @param setState - Updates one or more infrastructure settings
+ * @returns The enterprise infrastructure configuration panel
+ */
 export function EnterpriseInfraPanel({
   state,
   setState,

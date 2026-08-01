@@ -103,6 +103,14 @@ export function Card({ className, children }: { className?: string; children: Re
     </div>
   );
 }
+/**
+ * Renders a card header with a title, optional description, badge, and tooltip.
+ *
+ * @param title - The card title
+ * @param description - Supporting text displayed below the title
+ * @param badge - Optional content displayed beside the title and description
+ * @param tooltip - Optional explanatory text shown when hovering over the info icon
+ */
 export function CardHeader({
   title,
   description,

@@ -37,6 +37,16 @@ interface GraphCanvasProps {
   onLayoutTick: () => void;
 }
 
+/**
+ * Renders an interactive graph of the model input, optimization passes, target provider, and output.
+ *
+ * @param state - Current recipe and pipeline configuration
+ * @param selectedNodeId - Identifier of the currently selected graph node
+ * @param onSelectNode - Handles graph-node selection
+ * @param showDot - Whether to display animated dots along the connections
+ * @param layoutTick - Layout update value used to trigger connection recalculation
+ * @param onLayoutTick - Triggers a graph layout update
+ */
 export function GraphCanvas({
   state,
   selectedNodeId,

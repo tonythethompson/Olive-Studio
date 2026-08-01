@@ -12,6 +12,12 @@ export type PipelineNavBlockedDetail = {
   message: string;
 };
 
+/**
+ * Determines whether a value identifies a supported pipeline view.
+ *
+ * @param value - The value to check
+ * @returns `true` if the value is a supported pipeline view ID, `false` otherwise
+ */
 export function isPipelineViewId(value: unknown): value is PipelineViewId {
   return typeof value === "string" && (PIPELINE_VIEW_IDS as readonly string[]).includes(value);
 }
@@ -20,17 +26,32 @@ let olivePipelineRunning = false;
 type OliveRunningListener = () => void;
 const oliveRunningListeners = new Set<OliveRunningListener>();
 
-/** App sets this while Execute Live is in progress so inspectors can disable nav. */
+/**
+ * Updates whether Execute Live is currently running.
+ *
+ * @param running - Whether Execute Live is in progress
+ */
 export function setPipelineOliveRunning(running: boolean): void {
   if (olivePipelineRunning === running) return;
   olivePipelineRunning = running;
   for (const listener of oliveRunningListeners) listener();
 }
 
+/**
+ * Gets the current Execute Live running state.
+ *
+ * @returns `true` if Execute Live is running, `false` otherwise.
+ */
 export function isPipelineOliveRunning(): boolean {
   return olivePipelineRunning;
 }
 
+/**
+ * Subscribes to changes in the pipeline Execute Live running state.
+ *
+ * @param listener - The function called when the running state changes
+ * @returns A function that removes the listener
+ */
 export function subscribePipelineOliveRunning(listener: OliveRunningListener): () => void {
   oliveRunningListeners.add(listener);
   return () => {

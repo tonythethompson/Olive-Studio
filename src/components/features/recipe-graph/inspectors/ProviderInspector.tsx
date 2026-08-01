@@ -18,6 +18,12 @@ import { UIState } from "@/types";
 import { AlertTriangle, Cpu as TargetIcon, Loader2 } from "lucide-react";
 import type { InspectorProps } from "./types";
 
+/**
+ * Provides a hardware execution-provider selector with local availability detection.
+ *
+ * @param state - The current pipeline UI state.
+ * @param setState - Applies updates to the pipeline UI state.
+ */
 export function ProviderInspector({ state, setState }: InspectorProps) {
   const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
   const [probeLoading, setProbeLoading] = useState(true);

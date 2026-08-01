@@ -169,7 +169,11 @@ function ModelField({ providers }: ProvidersProp) {
   );
 }
 
-/** Base URL (compat providers only) + API key input and the save button. */
+/**
+ * Renders provider connection fields and a button to save and activate the provider.
+ *
+ * @param providers - Provider settings, state, and actions used by the form
+ */
 function ApiKeyForm({ providers }: ProvidersProp) {
   const { isCompatMode, providerOption, settingsBaseUrl, settingsApiKey, isSavingProvider } = providers;
   return (

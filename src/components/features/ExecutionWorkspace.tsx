@@ -82,10 +82,10 @@ function LoadingFallback({ label, minH }: { label: string; minH?: string }) {
 }
 
 /**
- * Renders the Olive recipe workspace for reviewing, exporting, queuing, and executing a pipeline.
+ * Renders the Olive recipe workspace for reviewing, validating, exporting, queuing, executing, and diagnosing pipeline runs.
  *
- * @param state - Optional pipeline state override; the store state is used when omitted.
- * @param setState - Optional state update function; the store updater is used when omitted.
+ * @param state - Optional controlled pipeline state; store state is used when omitted.
+ * @param setState - Optional controlled state updater; the store updater is used when omitted.
  * @param onOpenAiAudit - Callback invoked when the AI audit review is opened.
  * @param onRunStateChange - Callback invoked when live execution starts or stops.
  */

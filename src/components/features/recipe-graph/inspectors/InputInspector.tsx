@@ -15,6 +15,11 @@ const SOURCE_LABELS = {
   local: "Local Directory Framework Weights",
 } as const;
 
+/**
+ * Displays the selected input model source and current model summary.
+ *
+ * @param state - The current inspector state containing model source details
+ */
 export function InputInspector({ state }: InspectorProps) {
   const sourceLabel = SOURCE_LABELS[state.modelSource] ?? state.modelSource;
   const navBlocked = useSyncExternalStore(subscribePipelineOliveRunning, isPipelineOliveRunning, () => false);
