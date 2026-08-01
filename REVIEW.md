@@ -14,16 +14,16 @@
 
 The product core (recipe build → validate → spawn Olive → SSE logs) is coherent and well gated by schema/pipeline validation. The largest risks are network exposure (binds `0.0.0.0`, no auth), user-controlled recipe filesystem paths, and a broken MCP tool proxy import.
 
-| Area | Assessment |
-| ---- | ---------- |
-| Recipe correctness | Strong: layered client + server validation |
-| Local runner / venv | Solid process model; pin `olive-ai` for supply-chain stability |
-| AI providers | Good plugin registry; some duplication and catalog sync risk |
-| MCP (stdio agents) | Healthy FastMCP package + pytest |
-| MCP (in-app proxy) | Broken: imports missing `call_tool` |
-| UI maintainability | Three mega-panels (~1.6k–2k lines) dominate complexity |
-| Test tiers | Strong lib/server/integration; gaps in recipe-graph and large panels |
-| Network security | Local-trust only; not safe as a shared service |
+| Area                | Assessment                                                           |
+| ------------------- | -------------------------------------------------------------------- |
+| Recipe correctness  | Strong: layered client + server validation                           |
+| Local runner / venv | Solid process model; pin `olive-ai` for supply-chain stability       |
+| AI providers        | Good plugin registry; some duplication and catalog sync risk         |
+| MCP (stdio agents)  | Healthy FastMCP package + pytest                                     |
+| MCP (in-app proxy)  | Broken: imports missing `call_tool`                                  |
+| UI maintainability  | Three mega-panels (~1.6k–2k lines) dominate complexity               |
+| Test tiers          | Strong lib/server/integration; gaps in recipe-graph and large panels |
+| Network security    | Local-trust only; not safe as a shared service                       |
 
 ---
 
@@ -81,15 +81,15 @@ Key files: `recipePipeline.ts`, `pipelineValidation.ts` (~761), `oliveRecipeBuil
 
 ### 6. Tests / CI
 
-| Tier | Command | Notes |
-| ---- | ------- | ----- |
-| Lib unit | `pnpm test` | Strong on recipe/pipeline/schema |
-| Server unit | `pnpm test:server` | AI registry, olive cancel, MCP route |
-| Integration | `pnpm test:integration` | Real Express; externals mocked |
-| Component | `pnpm test:component` | 9 feature tests; thin vs mega-panel size |
-| Recipe smoke | `pnpm validate:recipe` | In CI |
-| Python | pytest in `olive-mcp-server/tests/` | Separate CI job |
-| E2E | Playwright `e2e/` | Not in main `validate` job |
+| Tier         | Command                             | Notes                                    |
+| ------------ | ----------------------------------- | ---------------------------------------- |
+| Lib unit     | `pnpm test`                         | Strong on recipe/pipeline/schema         |
+| Server unit  | `pnpm test:server`                  | AI registry, olive cancel, MCP route     |
+| Integration  | `pnpm test:integration`             | Real Express; externals mocked           |
+| Component    | `pnpm test:component`               | 9 feature tests; thin vs mega-panel size |
+| Recipe smoke | `pnpm validate:recipe`              | In CI                                    |
+| Python       | pytest in `olive-mcp-server/tests/` | Separate CI job                          |
+| E2E          | Playwright `e2e/`                   | Not in main `validate` job               |
 
 CI also runs `pnpm audit --audit-level high`, build, artifact assert, prod smoke, CodeQL.
 
@@ -132,34 +132,34 @@ Severity assumes the documented local-first threat model. LAN exposure raises ev
 
 ### Medium
 
-7. Several cost/abuse endpoints lack rate limits (`/ai/chat`, Codex ask, Ollama pull path).  
-8. HF token setter is unrate-limited.  
-9. Job logs are readable by job ID on the open API.  
-10. Tauri CSP is null; weaker XSS containment in the desktop shell.  
-11. Version skew: Tauri `0.3.0` vs npm `0.2.0`.  
-12. KB sync unexpected errors may surface as success-shaped responses (check `mcp.ts` catch path).  
-13. No global Express error middleware (unhandled errors may leak stacks).  
-14. Devin credentials persist on disk (`0o600`, gitignored); acceptable for local-first, harden later if needed.  
+7. Several cost/abuse endpoints lack rate limits (`/ai/chat`, Codex ask, Ollama pull path).
+8. HF token setter is unrate-limited.
+9. Job logs are readable by job ID on the open API.
+10. Tauri CSP is null; weaker XSS containment in the desktop shell.
+11. Version skew: Tauri `0.3.0` vs npm `0.2.0`.
+12. KB sync unexpected errors may surface as success-shaped responses (check `mcp.ts` catch path).
+13. No global Express error middleware (unhandled errors may leak stacks).
+14. Devin credentials persist on disk (`0o600`, gitignored); acceptable for local-first, harden later if needed.
 15. Local Python `mcp` dep allows `>=1.0.0` in `pyproject.toml`; CI pins `mcp<2`, but local installs can still break on 2.x.
 
 ### Low / positive controls
 
-- Olive executable/args are server-chosen; temp recipes under `.olive-runs/`.  
-- Python interpreter allowlisting (`pythonGuard.ts`).  
-- AI provider base-URL SSRF checks; GitHub proxy capped.  
-- Runtime AI keys are memory-only (not written from Settings).  
-- GET provider status omits `apiKey`.  
+- Olive executable/args are server-chosen; temp recipes under `.olive-runs/`.
+- Python interpreter allowlisting (`pythonGuard.ts`).
+- AI provider base-URL SSRF checks; GitHub proxy capped.
+- Runtime AI keys are memory-only (not written from Settings).
+- GET provider status omits `apiKey`.
 - CI audit + CodeQL + multi-tier tests.
 
 ---
 
 ## Maintainability priorities
 
-1. **Split mega-panels** (`InputEnvironment`, `IHV`, `ExecutionWorkspace`) into feature folders with colocated hooks/tests.  
-2. **Keep validation logic in libs**, not duplicated in IHV cell helpers / inspectors.  
-3. **Deduplicate OpenAI-compat provider registrations** and `wantJson` prompt suffixes; keep UI `aiProviderCatalog.ts` in sync with server registry via a shared ID list or test.  
-4. **Cover `recipe-graph/`** and large untested libs (`passCatalog`, `oliveRecipeHub`, `jobHistoryStore`, `vramEstimate`).  
-5. **Confirm or remove** orphan panels (`EnterpriseInfraPanel`, `PerformanceMetrics`).  
+1. **Split mega-panels** (`InputEnvironment`, `IHV`, `ExecutionWorkspace`) into feature folders with colocated hooks/tests.
+2. **Keep validation logic in libs**, not duplicated in IHV cell helpers / inspectors.
+3. **Deduplicate OpenAI-compat provider registrations** and `wantJson` prompt suffixes; keep UI `aiProviderCatalog.ts` in sync with server registry via a shared ID list or test.
+4. **Cover `recipe-graph/`** and large untested libs (`passCatalog`, `oliveRecipeHub`, `jobHistoryStore`, `vramEstimate`).
+5. **Confirm or remove** orphan panels (`EnterpriseInfraPanel`, `PerformanceMetrics`).
 6. **Fix MCP proxy** before relying on in-app diagnostics in production UX.
 
 ---
@@ -168,29 +168,29 @@ Severity assumes the documented local-first threat model. LAN exposure raises ev
 
 When reviewing changes, prioritize:
 
-- [ ] `src/server/routes/olive.ts` + `services/venv/` (spawn, paths, env secrets)  
-- [ ] `src/server/routes/mcp.ts` (Python bridge, tool allowlist, rate limits)  
-- [ ] `src/server/routes/ai.ts` + `services/ai/security.ts` (keys, SSRF, spend)  
-- [ ] `src/lib/pipelineValidation.ts` + `oliveRecipeBuilder.ts` + `schemaEngine.ts`  
-- [ ] `src-tauri/src/lib.rs` (sidecar lifecycle)  
-- [ ] No real Olive GPU / model downloads in CI  
-- [ ] New providers registered on both server and UI catalog  
-- [ ] Rate limits on new heavy or secret-mutating endpoints  
+- [ ] `src/server/routes/olive.ts` + `services/venv/` (spawn, paths, env secrets)
+- [ ] `src/server/routes/mcp.ts` (Python bridge, tool allowlist, rate limits)
+- [ ] `src/server/routes/ai.ts` + `services/ai/security.ts` (keys, SSRF, spend)
+- [ ] `src/lib/pipelineValidation.ts` + `oliveRecipeBuilder.ts` + `schemaEngine.ts`
+- [ ] `src-tauri/src/lib.rs` (sidecar lifecycle)
+- [ ] No real Olive GPU / model downloads in CI
+- [ ] New providers registered on both server and UI catalog
+- [ ] Rate limits on new heavy or secret-mutating endpoints
 
 ---
 
 ## Suggested next actions
 
-| Priority | Action |
-| -------- | ------ |
-| P0 | Bind default to `127.0.0.1`; document local-trust threat model in README |
-| P0 | Repair MCP `call_tool` proxy + tool allowlist + rate limit |
-| P1 | Recipe path allowlisting before spawn |
-| P1 | Enforce or drop `SYNC_KB_TOKEN` |
-| P1 | Pin `olive-ai` (and document supported range) |
-| P2 | Align Tauri / package versions; tighten packaged CSP |
-| P2 | Split mega-panels; add recipe-graph component tests |
-| P2 | Gate Playwright smoke in CI (CPU-only flows) |
+| Priority | Action                                                                   |
+| -------- | ------------------------------------------------------------------------ |
+| P0       | Bind default to `127.0.0.1`; document local-trust threat model in README |
+| P0       | Repair MCP `call_tool` proxy + tool allowlist + rate limit               |
+| P1       | Recipe path allowlisting before spawn                                    |
+| P1       | Enforce or drop `SYNC_KB_TOKEN`                                          |
+| P1       | Pin `olive-ai` (and document supported range)                            |
+| P2       | Align Tauri / package versions; tighten packaged CSP                     |
+| P2       | Split mega-panels; add recipe-graph component tests                      |
+| P2       | Gate Playwright smoke in CI (CPU-only flows)                             |
 
 ---
 
@@ -202,5 +202,4 @@ When reviewing changes, prioritize:
 - [README.md](README.md): user-facing setup
 - [CHANGELOG.md](CHANGELOG.md): shipped behavior
 
-
-*This file is a point-in-time review snapshot. Update it when critical findings are fixed or the threat model changes.*
+_This file is a point-in-time review snapshot. Update it when critical findings are fixed or the threat model changes._

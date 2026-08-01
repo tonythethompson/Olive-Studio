@@ -30,6 +30,13 @@ start-server.bat
 /.opencode/
 /.remember/logs/
 /.cursor/hooks/state/
+/.devin
+/.claude
+.review-threads.json
+/dogfood-output
+
+# Local Olive optimization outputs (ONNX, footprints, run history)
+/models/
 
 # Lockfiles for non-pnpm package managers (this repo uses pnpm exclusively)
 package-lock.json

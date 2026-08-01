@@ -56,8 +56,11 @@ export function DevinAccountPanel({ providers }: DevinAccountPanelProps) {
         </button>
       </div>
       <div>
-        <label className="text-xs text-slate-400 mb-1 block">Paste token from sign-in page</label>
+        <label htmlFor="gemini-settings-devin-token" className="text-xs text-slate-400 mb-1 block">
+          Paste token from sign-in page
+        </label>
         <input
+          id="gemini-settings-devin-token"
           type="password"
           autoComplete="off"
           value={devinToken}

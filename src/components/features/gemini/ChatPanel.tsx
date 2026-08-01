@@ -86,6 +86,7 @@ export function ChatPanel({
         className="flex gap-2 pt-1.5 border-t border-slate-800/60"
       >
         <input
+          aria-label="Chat message"
           placeholder="Ask about optimization, passes, hardware..."
           value={inputQuestion}
           onChange={(e) => onInputChange(e.target.value)}
@@ -94,6 +95,7 @@ export function ChatPanel({
         />
         <button
           type="submit"
+          aria-label="Send message"
           disabled={isChatting || !inputQuestion.trim()}
           className="h-9 w-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg flex items-center justify-center shrink-0 text-white cursor-pointer"
         >

@@ -67,6 +67,7 @@ export function PeftInspector({ state, setState }: InspectorProps) {
                 <div className="flex items-center gap-2">
                   <Switch
                     id="diffusionLora"
+                    aria-label="Diffusion LoRA mode"
                     checked={state.passes.diffusionLora}
                     onCheckedChange={(v) => setState({ passes: { ...state.passes, diffusionLora: v } })}
                   />

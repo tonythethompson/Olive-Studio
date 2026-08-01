@@ -201,21 +201,54 @@ interface LocalAiSetupCardProps {
   isOpen: boolean;
 }
 
+type EngineHealth = boolean | null | undefined;
+
+function resolveEngineHealthLabel(engineName: string, healthy: EngineHealth): string {
+  if (healthy === true) return `${engineName} ready`;
+  if (healthy === false) return `${engineName} not reachable`;
+  return `Checking ${engineName}`;
+}
+
+function engineHealthDotClass(healthy: EngineHealth): string {
+  if (healthy === true) return "bg-emerald-400";
+  if (healthy === false) return "bg-rose-400";
+  return "bg-slate-500";
+}
+
+function EngineHealthDot({ engineName, healthy }: { engineName: string; healthy: EngineHealth }) {
+  const label = resolveEngineHealthLabel(engineName, healthy);
+  return (
+    <span
+      className={`inline-block w-2 h-2 shrink-0 rounded-full ${engineHealthDotClass(healthy)}`}
+      role="status"
+      aria-label={label}
+      title={healthy === true || healthy === false ? label : "Checking…"}
+    />
+  );
+}
+
+function resolveLocalEngineView(local: LocalEngineSetup) {
+  const isLms = local.preferredEngine === "lms";
+  return {
+    isLms,
+    accentText: isLms ? "text-electric-blue" : "text-emerald-400",
+    accentBg: isLms
+      ? "bg-electric-blue/10 hover:bg-electric-blue/20 border-electric-blue/30 text-electric-blue"
+      : "bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-400",
+    healthy: isLms ? local.lmsHealthy : local.ollamaHealthy,
+    missing: isLms ? local.lmsInstalled === false : local.ollamaHealthy === false,
+    models: isLms ? LMS_STARTER_MODELS : OLLAMA_STARTER_MODELS,
+    engineName: isLms ? "LM Studio" : "Ollama",
+    showProgress: !!(local.pullingModel || local.localInstallInfo || local.localPullPercent !== null),
+  };
+}
+
 /**
  * "1-Click Local AI Setup" card: engine choice, health, starter model pulls and
  * the installed-model manager for the selected engine.
  */
 export function LocalAiSetupCard({ local, activeModel, isOpen }: LocalAiSetupCardProps) {
-  const isLms = local.preferredEngine === "lms";
-  const accentText = isLms ? "text-electric-blue" : "text-emerald-400";
-  const accentBg = isLms
-    ? "bg-electric-blue/10 hover:bg-electric-blue/20 border-electric-blue/30 text-electric-blue"
-    : "bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-400";
-  const healthy = isLms ? local.lmsHealthy : local.ollamaHealthy;
-  const missing = isLms ? local.lmsInstalled === false : local.ollamaHealthy === false;
-  const models = isLms ? LMS_STARTER_MODELS : OLLAMA_STARTER_MODELS;
-  const engineName = isLms ? "LM Studio" : "Ollama";
-  const showProgress = !!(local.pullingModel || local.localInstallInfo || local.localPullPercent !== null);
+  const view = resolveLocalEngineView(local);
 
   return (
     <div className="p-3.5 rounded-xl border border-electric-blue/20 bg-electric-blue/5 space-y-3">
@@ -232,28 +265,17 @@ export function LocalAiSetupCard({ local, activeModel, isOpen }: LocalAiSetupCar
 
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] text-slate-300 leading-relaxed">
-          Download &amp; enable a local model via {isLms ? "LM Studio (Llmster CLI)" : "Ollama"} for offline
-          Olive Studio AI — zero cloud keys.
+          Download &amp; enable a local model via {view.isLms ? "LM Studio (Llmster CLI)" : "Ollama"} for
+          offline Olive Studio AI, zero cloud keys.
         </p>
-        <span
-          className={`inline-block w-2 h-2 shrink-0 rounded-full ${
-            healthy === true ? "bg-emerald-400" : healthy === false ? "bg-rose-400" : "bg-slate-500"
-          }`}
-          title={
-            healthy === true
-              ? `${engineName} ready`
-              : healthy === false
-                ? `${engineName} not reachable`
-                : "Checking…"
-          }
-        />
+        <EngineHealthDot engineName={view.engineName} healthy={view.healthy} />
       </div>
 
-      {missing && (
+      {view.missing && (
         <EngineMissingBanner
-          isLms={isLms}
-          accentBg={accentBg}
-          accentText={accentText}
+          isLms={view.isLms}
+          accentBg={view.accentBg}
+          accentText={view.accentText}
           installing={local.installingEngine === local.preferredEngine}
           disabled={local.installingEngine !== null}
           onInstall={() => void local.installEngine(local.preferredEngine)}
@@ -261,19 +283,19 @@ export function LocalAiSetupCard({ local, activeModel, isOpen }: LocalAiSetupCar
       )}
 
       <div className="space-y-2">
-        {models.map((m) => (
+        {view.models.map((m) => (
           <StarterModelCard
             key={m.tag}
             model={m}
             displaySize={resolveDisplaySize(m, local.modelSizes)}
-            accentBg={accentBg}
+            accentBg={view.accentBg}
             isPulling={local.pullingModel === m.tag}
             onPull={() => void local.pullLocalModel(m.tag, local.preferredEngine)}
           />
         ))}
       </div>
 
-      {showProgress && (
+      {view.showProgress && (
         <LocalPullProgress
           pullingModel={local.pullingModel}
           localInstallInfo={local.localInstallInfo}

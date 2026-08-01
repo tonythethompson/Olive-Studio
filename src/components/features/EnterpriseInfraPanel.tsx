@@ -58,13 +58,14 @@ export function EnterpriseInfraPanel({
           <div className="mt-4 pt-6 border-t border-slate-800">
             <div className="flex items-center justify-between">
               <div>
-                <Label>Enable Distributed Caching</Label>
+                <Label htmlFor="enterprise-distributed-caching">Enable Distributed Caching</Label>
                 <p className="text-xs text-slate-500">
                   When enabled, the Olive recipe will use Azure Blob storage as cache if a connection string
                   is provided; otherwise falls back to local cache.
                 </p>
               </div>
               <Switch
+                id="enterprise-distributed-caching"
                 checked={state.distributedCaching}
                 onCheckedChange={(checked) => setState({ distributedCaching: checked })}
               />

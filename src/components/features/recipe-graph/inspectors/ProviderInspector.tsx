@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Label, Select } from "@/components/ui";
 import {
   fetchHardwareProbe,
@@ -7,6 +7,12 @@ import {
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
 import { prepareProviderChange } from "@/lib/pipelineValidation";
+import {
+  isPipelineOliveRunning,
+  navigatePipeline,
+  PIPELINE_NAV_BLOCKED_MESSAGE,
+  subscribePipelineOliveRunning,
+} from "@/lib/pipelineNavigation";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { UIState } from "@/types";
 import { AlertTriangle, Cpu as TargetIcon, Loader2 } from "lucide-react";
@@ -15,6 +21,7 @@ import type { InspectorProps } from "./types";
 export function ProviderInspector({ state, setState }: InspectorProps) {
   const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
   const [probeLoading, setProbeLoading] = useState(true);
+  const navBlocked = useSyncExternalStore(subscribePipelineOliveRunning, isPipelineOliveRunning, () => false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: on-mount hardware probe
@@ -63,10 +70,14 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
         </p>
         <button
           type="button"
-          onClick={() =>
-            document.getElementById("ihv")?.scrollIntoView({ behavior: "smooth", block: "start" })
+          aria-disabled={navBlocked}
+          title={navBlocked ? PIPELINE_NAV_BLOCKED_MESSAGE : undefined}
+          onClick={() => navigatePipeline("ihv")}
+          className={
+            navBlocked
+              ? "mt-2 text-[10px] text-electric-blue opacity-40 cursor-not-allowed"
+              : "mt-2 text-[10px] text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer"
           }
-          className="mt-2 text-[10px] text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer"
         >
           Full hardware options in step 02
         </button>

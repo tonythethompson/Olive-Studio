@@ -35,6 +35,9 @@
   --radius-2xl: 4px;
   --radius-3xl: 4px;
 
+  /* Full three-column shell + horizontal graph (below this: compact rearrange) */
+  --breakpoint-wide: 900px;
+
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
@@ -45,6 +48,19 @@
   }
   body {
     @apply bg-slate-950 text-slate-300 font-sans antialiased selection:bg-electric-blue/30;
+  }
+
+  /*
+   * Strong keyboard focus for anything that does not opt into a custom ring.
+   * Components using focus-visible:outline-none + ring still win via utilities.
+   */
+  :focus-visible {
+    outline: 2px solid var(--color-electric-blue);
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--color-electric-blue) 30%, transparent);
   }
 }
 

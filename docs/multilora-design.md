@@ -81,6 +81,7 @@ interface OliveRecipe {
 ```
 
 **Validation notes (as of `validateRecipeSchema` in `src/lib/schemaEngine.ts`):**
+
 - `rank` must be a positive integer (`> 0`).
 - `alpha` must be a positive finite number (`> 0`, not `NaN` or `Infinity`).
 - `targetModules`, when present, must be an array of non-empty strings.
@@ -151,6 +152,7 @@ generator.set_active_adapter(adapters, "code-generation")
 ```
 
 **Key behaviors:**
+
 - Each adapter must be registered with a unique name (the `adapter_name` / `AdapterConfig.name`
   field serves this purpose); loading two adapters with the same name is treated as a conflict.
 - **Disabling an adapter:** Stop referencing it as the active adapter (base model behavior

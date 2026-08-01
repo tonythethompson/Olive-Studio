@@ -62,7 +62,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const [compatValidated, setCompatValidated] = useState(false);
   const [mcpParamWarnings, setMcpParamWarnings] = useState<McpParamWarning[]>([]);
   const [mcpParamLoading, setMcpParamLoading] = useState(false);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [showCompatDetails, setShowCompatDetails] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const forceRefreshRef = useRef(false);
@@ -282,11 +282,11 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     return (
       <div
         data-testid="recipe-validation-panel"
-        className="rounded-lg border border-emerald-800/50 bg-emerald-950/20 p-3"
+        className="rounded-lg border border-emerald-800/50 bg-emerald-950/20 px-3 py-2"
       >
         <div className="flex items-center gap-2 text-emerald-400">
-          <CheckCircle className="h-4 w-4" />
-          <span className="text-xs font-medium">Recipe validated — no issues found</span>
+          <CheckCircle className="h-4 w-4 shrink-0" />
+          <span className="text-xs font-medium">Recipe validated. No issues found.</span>
         </div>
       </div>
     );
@@ -301,6 +301,8 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
       <div className="w-full flex items-center justify-between p-3 hover:bg-slate-800/50 transition-colors">
         <button
           type="button"
+          aria-expanded={expanded}
+          aria-controls="recipe-validation-issue-list"
           onClick={() => setExpanded(!expanded)}
           className="flex items-center gap-2 flex-1 min-w-0 text-left cursor-pointer"
         >
@@ -347,7 +349,10 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
 
       {/* Issue list */}
       {expanded && (
-        <div className="border-t border-slate-800 divide-y divide-slate-800/50">
+        <div
+          id="recipe-validation-issue-list"
+          className="border-t border-slate-800 divide-y divide-slate-800/50"
+        >
           {allIssues.map((issue) => (
             <div
               key={issue.id}

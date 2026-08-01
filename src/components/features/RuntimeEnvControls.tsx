@@ -43,6 +43,15 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   const savePython = async () => {
     setBusy(true);
     setMessage(null);
@@ -127,37 +136,60 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
   const needsAttention = status && (!status.systemPython || !status.oliveInstalled || !status.venvExists);
   const pathOk = status?.venvOnUserPath;
 
+  const runtimeTitle = status?.oliveInstalled
+    ? `Olive ${status.oliveVersion ?? "ready"} in project .venv`
+    : needsAttention
+      ? "Python / Olive runtime needs setup. Click to install the project venv or set a Python path"
+      : "Python / Olive runtime and PATH";
+
+  const runtimeLabel = status?.oliveInstalled
+    ? `Olive ${status.oliveVersion ?? "ok"}`
+    : needsAttention
+      ? "Setup runtime"
+      : "Runtime";
+
+  const pathWarning = Boolean(status && !pathOk && status.venvExists);
+  const accessibleName = pathWarning ? `${runtimeTitle}. Project .venv is not on PATH` : runtimeTitle;
+
   return (
     <div className="relative text-[11px] font-mono">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 transition-colors"
-        title="Python / Olive runtime and PATH"
+        title={runtimeTitle}
+        aria-expanded={open}
+        aria-haspopup="true"
+        aria-controls="runtime-env-popover"
       >
-        <Terminal className="h-3 w-3 text-slate-500" />
+        <Terminal className="h-3 w-3 text-slate-500" aria-hidden />
         {status?.oliveInstalled ? (
           <span className="text-emerald-500 flex items-center gap-0.5">
-            <CheckCircle2 className="h-3 w-3" />
-            Olive {status.oliveVersion ?? "ok"}
+            <CheckCircle2 className="h-3 w-3" aria-hidden />
+            {runtimeLabel}
           </span>
         ) : needsAttention ? (
           <span className="text-amber-500 flex items-center gap-0.5">
-            <AlertTriangle className="h-3 w-3" />
-            Runtime
+            <AlertTriangle className="h-3 w-3" aria-hidden />
+            {runtimeLabel}
           </span>
         ) : (
-          <span className="text-slate-500">Runtime</span>
+          <span className="text-slate-500">{runtimeLabel}</span>
         )}
         {status && !pathOk && status.venvExists && (
-          <span className="text-amber-600/90" title="Project .venv not on user PATH">
-            · PATH
+          <span className="text-amber-600/90" title="Project .venv Scripts/bin is not on your user PATH">
+            · add PATH
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 z-40 w-[min(100vw-2rem,22rem)] rounded border border-slate-700 bg-slate-900 shadow-xl p-3 space-y-3 text-left">
+        <div
+          id="runtime-env-popover"
+          role="region"
+          aria-label={accessibleName}
+          className="absolute right-0 top-full mt-2 z-40 w-[min(100vw-2rem,22rem)] rounded border border-slate-700 bg-slate-900 shadow-xl p-3 space-y-3 text-left"
+        >
           <div className="flex items-start justify-between gap-2">
             <div>
               <div className="text-xs font-semibold text-slate-200 font-sans">Runtime &amp; PATH</div>

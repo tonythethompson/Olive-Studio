@@ -41,10 +41,7 @@ export function renderMessageContent(text: string) {
       });
       if (isBullet)
         return (
-          <div
-            key={`${i}-${j}`}
-            className="ml-3.5 text-xs text-slate-300 leading-relaxed my-0.5 flex gap-1"
-          >
+          <div key={`${i}-${j}`} className="ml-3.5 text-xs text-slate-300 leading-relaxed my-0.5 flex gap-1">
             <span aria-hidden="true">•</span>
             <span>{elems}</span>
           </div>

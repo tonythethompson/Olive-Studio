@@ -14,23 +14,31 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
   const isStale =
     syncTime == null || !Number.isFinite(syncTime) || Date.now() - syncTime > 7 * 24 * 60 * 60 * 1000;
 
+  const staleTitle =
+    syncTime == null || !Number.isFinite(syncTime)
+      ? "Pass catalog age unknown. Sync to refresh Olive pass docs from the official knowledge base."
+      : `Pass catalog last updated ${new Date(syncTime).toLocaleString()}. Older than 7 days; sync to pull the latest Olive docs.`;
+
   return (
     <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400">
-      <Database className="h-3 w-3 text-slate-500" />
+      <Database className="h-3 w-3 text-slate-500" aria-hidden />
       {status?.available ? (
         <>
-          <span className="text-slate-500">
+          <span className="text-slate-400" title="Olive pass knowledge base used by the recipe builder">
             KB v{status.version} · {status.passCount} passes
           </span>
           {isStale ? (
-            <span className="text-amber-500 flex items-center gap-0.5" title="Knowledge base may be outdated">
-              <AlertCircle className="h-3 w-3" />
-              stale
+            <span className="text-amber-500 flex items-center gap-0.5" title={staleTitle}>
+              <AlertCircle className="h-3 w-3" aria-hidden />
+              <span>KB stale</span>
             </span>
           ) : (
-            <span className="text-emerald-500 flex items-center gap-0.5" title="Knowledge base is up to date">
-              <CheckCircle className="h-3 w-3" />
-              fresh
+            <span
+              className="text-emerald-500 flex items-center gap-0.5"
+              title="Pass catalog synced within the last 7 days"
+            >
+              <CheckCircle className="h-3 w-3" aria-hidden />
+              <span>KB fresh</span>
             </span>
           )}
           <button
@@ -38,14 +46,19 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
             onClick={() => void syncKb()}
             disabled={syncing}
             className="ml-1 text-electric-blue hover:text-electric-blue/80 disabled:opacity-40 flex items-center gap-1 transition-colors"
-            title="Sync knowledge base from official Olive docs"
+            title="Pull the latest Olive pass docs into the local knowledge base"
+            aria-label={syncing ? "Syncing knowledge base" : "Sync knowledge base"}
           >
-            <RefreshCw className={`h-3 w-3 ${syncing ? "animate-spin" : ""}`} />
+            <span className={syncing ? "animate-spin" : ""}>
+              <RefreshCw className="h-3 w-3" aria-hidden />
+            </span>
             {syncing ? "syncing…" : "sync"}
           </button>
         </>
       ) : (
-        <span className="text-amber-500">KB unavailable</span>
+        <span className="text-amber-500" title="Local Olive pass catalog could not be loaded">
+          KB unavailable
+        </span>
       )}
       {error && <span className="text-red-400 truncate max-w-[200px]">{error}</span>}
     </div>
