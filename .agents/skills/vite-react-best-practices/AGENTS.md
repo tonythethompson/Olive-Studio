@@ -163,11 +163,11 @@ Issues like case-sensitive file imports, missing public assets, or aggressive tr
 
 ### Anti-Pattern
 
-Pushing code to CI/CD immediately after verifying it works in `npm run dev`.
+Pushing code to CI/CD immediately after verifying it works in `pnpm dev`.
 
 ```bash
 # Don't do this only
-npm run dev
+pnpm dev
 git commit -m "It works on my machine"
 git push
 ```

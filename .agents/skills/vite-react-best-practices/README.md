@@ -30,10 +30,10 @@ For a complete, compiled version of all rules, see the `AGENTS.md` file.
 
 ## Installation
 
-You can install this skill for your AI coding assistant using the `npx skills add` command:
+You can install this skill for your AI coding assistant using the `pnpm dlx skills add` command:
 
 ```bash
-npx skills add claudiocebpaz/vite-react-best-practices
+pnpm dlx skills add claudiocebpaz/vite-react-best-practices
 ```
 
 This command will install the skill for all supported AI agents found on your system, such as Gemini CLI, Claude Code, OpenCode, and others.
