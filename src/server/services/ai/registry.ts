@@ -93,7 +93,7 @@ export function listEnvCredentialStatus(
   for (const plugin of providers.values()) {
     const envVar = matchedEnvApiKeyName(...plugin.envVarNames) ?? null;
     const present = Boolean(envVar);
-    const usable = present && (extraUsable?.[plugin.name] ?? true);
+    const usable = extraUsable?.[plugin.name] ?? present;
     out[plugin.name] = { present, envVar, usable };
   }
   return out;

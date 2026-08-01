@@ -84,6 +84,22 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+const PASS_NUMBER_RANGES: Record<string, { min: number; max: number }> = {
+  conversionOpset: { min: 13, max: 21 },
+  gptqBlockSize: { min: 32, max: 4096 },
+  gptqGroupSize: { min: 32, max: 4096 },
+  awqGroupSize: { min: 32, max: 4096 },
+  awqDampPercent: { min: 0, max: 1 },
+  qatCalibrateSteps: { min: 1, max: 10_000 },
+  pruningSparsity: { min: 0.01, max: 0.99 },
+};
+
+function isAllowedPassNumber(key: string, value: number): boolean {
+  const range = PASS_NUMBER_RANGES[key];
+  if (!range) return false;
+  return value >= range.min && value <= range.max;
+}
+
 function sanitizePasses(raw: unknown): Partial<UIState["passes"]> | undefined {
   if (!isRecord(raw)) return undefined;
   const out: Partial<UIState["passes"]> = {};
@@ -93,7 +109,9 @@ function sanitizePasses(raw: unknown): Partial<UIState["passes"]> | undefined {
       continue;
     }
     if (PASS_NUMBER_KEYS.has(key) && typeof value === "number" && Number.isFinite(value)) {
-      (out as Record<string, unknown>)[key] = value;
+      if (isAllowedPassNumber(key, value)) {
+        (out as Record<string, unknown>)[key] = value;
+      }
       continue;
     }
     if (key in PASS_STRING_ENUMS && typeof value === "string") {

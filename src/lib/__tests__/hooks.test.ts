@@ -163,7 +163,7 @@ describe("useMcpDiagnosticKeyed", () => {
     });
 
     expect(result.current.diagnostics["job-empty"]).toBeUndefined();
-    expect(result.current.diagnosingKeys["job-empty"]).toBe(false);
+    expect(result.current.diagnosingKeys["job-empty"]).toBeUndefined();
   });
 
   it("handles fetch failure gracefully — diagnosingKeys resets, diagnostics not updated", async () => {

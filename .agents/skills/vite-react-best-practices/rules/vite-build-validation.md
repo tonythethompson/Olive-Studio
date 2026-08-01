@@ -1,6 +1,6 @@
 # Validate Production Builds Locally
 
-The development server (`vite`) uses `esbuild` and serves unbundled files. The production build (`vite build`) uses Rollup and bundles files. This slight difference can hide bugs until deployment.
+The development server (`pnpm dev`) runs Express + Vite together. The production build bundles the client with Vite and the server with esbuild. This difference can hide bugs until deployment.
 
 ## Why it matters
 
@@ -19,19 +19,20 @@ git push
 
 ## Correct Workflow
 
-Always run a full build and preview cycle locally before pushing major changes.
+Always run a full build and production smoke locally before pushing major changes.
 
 ```package.json
 {
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "dev": "tsx server.ts",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=esm --packages=external --sourcemap --outfile=dist/server.mjs",
+    "start": "node dist/server.mjs",
+    "lint": "tsc --noEmit && eslint"
   }
 }
 ```
 
-1. **Typecheck First:** Run `tsc --noEmit` to catch type errors (Vite builds ignore them by default).
-2. **Build:** Run `vite build` to generate the `dist/` folder.
-3. **Preview:** Run `vite preview` to spin up a local static server serving the contents of `dist/`.
-4. **Verify behaviors:** Click around the preview app to ensure everything loads correctly.
+1. **Typecheck First:** Run `pnpm lint` (includes `tsc --noEmit`) to catch type errors.
+2. **Build:** Run `pnpm build` to generate `dist/` (client assets + `dist/server.mjs`).
+3. **Smoke:** Run `pnpm start` and click around the app on port 3000.
+4. **Verify behaviors:** Confirm API routes, provider settings, and recipe export still work in the production bundle.

@@ -7,7 +7,7 @@ export type CatalogModel = { id: string; label: string };
 
 /** Ids that are almost never valid chat/completions targets. */
 const NON_CHAT_ID =
-  /(?:^|[/_.-])(embed(?:ding)?s?|embedqa|rerank(?:er)?|retriev(?:e|al)|whisper|tts|asr|speech(?:-to-text)?|diffusion|stable-diffusion|sdxl|text-to-image|image-to-image|image-generation|dall-e|imagen|flux\.?1|moderation|transcribe|coding-embedding|nv-embed\w*|e5-(?:large|v\d)|bge-\w+)(?:$|[/_.-]|\w*)/i;
+  /(?:^|[/_.-])(embed(?:ding)?s?|embedqa|rerank(?:er)?|retriev(?:e|al)|whisper|tts|asr|speech(?:-to-text)?|diffusion|stable-diffusion|sdxl|text-to-image|image-to-image|image-generation|dall-e|gpt-image|imagen|flux\.?1|moderation|transcribe|coding-embedding|nv-embed\w*|e5-(?:large|v\d)|bge-\w+)(?:$|[/_.-])/i;
 
 export function isLikelyChatModelId(id: string): boolean {
   const trimmed = id.trim();

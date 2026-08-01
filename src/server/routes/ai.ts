@@ -586,10 +586,18 @@ export function mountAiRoutes(router: Router): void {
         });
       }
       // Still surface the last UI selection even if the env key is missing.
+      let savedBaseUrl = pref.baseUrl ?? null;
+      if (savedBaseUrl) {
+        try {
+          savedBaseUrl = sanitizeProviderBaseUrl(pref.provider, savedBaseUrl) ?? null;
+        } catch {
+          savedBaseUrl = null;
+        }
+      }
       return res.json({
         provider: pref.provider,
         model: pref.model,
-        baseUrl: pref.baseUrl ?? null,
+        baseUrl: savedBaseUrl,
         source: "saved",
         envCredentials,
       });

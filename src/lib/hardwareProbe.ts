@@ -91,11 +91,10 @@ export function mergeDetectedProviders(input: {
   // nvidia-smi / rocm-smi / openvino fill gaps when the installed ORT wheel lacks GPU EPs.
   if (input.hasNvidiaGpu) {
     detected.add("CUDAExecutionProvider");
-    // Both TensorRT paths are GPU-compatible on NVIDIA cards even before the
-    // pip packages are installed — the app can install them on demand.
-    // (Full TensorRT SDK works on GeForce Turing+; TRT RTX is the lighter consumer path.)
     detected.add("NvTensorRTRTXExecutionProvider");
-    detected.add("TensorrtExecutionProvider");
+    if (tensorRtOk) {
+      detected.add("TensorrtExecutionProvider");
+    }
   }
   if (input.hasRocmGpu) {
     detected.add("ROCMExecutionProvider");

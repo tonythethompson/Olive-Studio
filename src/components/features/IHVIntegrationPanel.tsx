@@ -315,6 +315,7 @@ export function IHVIntegrationPanel({
     Boolean(hardwareProbe?.nvidia?.gpus.length) && hardwareProbe?.tensorRtRtx?.loadable !== true;
   const trtNeedsInstall =
     Boolean(hardwareProbe?.nvidia?.gpus.length) && hardwareProbe?.tensorrt?.loadable !== true;
+  const tensorRtInstallBusy = installingTrt || installingTrtRtx;
 
   const runNdjsonInstall = async (
     url: string,
@@ -371,6 +372,7 @@ export function IHVIntegrationPanel({
   };
 
   const handleInstallTensorRtRtx = async () => {
+    if (tensorRtInstallBusy) return;
     setInstallingTrtRtx(true);
     setInstallTrtRtxError(null);
     setInstallTrtRtxLog([]);
@@ -390,6 +392,7 @@ export function IHVIntegrationPanel({
   };
 
   const handleInstallTensorRt = async () => {
+    if (tensorRtInstallBusy) return;
     setInstallingTrt(true);
     setInstallTrtError(null);
     setInstallTrtLog([]);
@@ -869,7 +872,7 @@ export function IHVIntegrationPanel({
                               )}
                               <button
                                 type="button"
-                                disabled={installingTrtRtx}
+                                disabled={tensorRtInstallBusy}
                                 onClick={() => void handleInstallTensorRtRtx()}
                                 className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
                               >
@@ -910,7 +913,7 @@ export function IHVIntegrationPanel({
                               )}
                               <button
                                 type="button"
-                                disabled={installingTrt}
+                                disabled={tensorRtInstallBusy}
                                 onClick={() => void handleInstallTensorRt()}
                                 className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
                               >

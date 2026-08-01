@@ -11,6 +11,8 @@ Usage:
 from __future__ import annotations
 
 import importlib
+import os
+import sys
 from typing import Any
 
 # name → (module path, attribute). Lazy so HTTP diagnosis does not pull in
@@ -103,8 +105,27 @@ def __getattr__(name: str):
 
 
 def main() -> None:
+    """Run the MCP server with the configured transport.
+
+    Transport selection:
+      - CLI flag: ``--sse`` or ``--stdio``
+      - Environment: ``MCP_TRANSPORT=sse|stdio`` (default: stdio)
+    """
     mcp = _build_mcp()
-    mcp.run()
+    transport = os.environ.get("MCP_TRANSPORT", "stdio").lower()
+    if "--sse" in sys.argv:
+        transport = "sse"
+    elif "--stdio" in sys.argv:
+        transport = "stdio"
+
+    if transport == "sse":
+        mcp.run(
+            transport="sse",
+            host=os.environ.get("MCP_HOST", "127.0.0.1"),
+            port=int(os.environ.get("MCP_PORT", "8000")),
+        )
+    else:
+        mcp.run()
 
 
 if __name__ == "__main__":
