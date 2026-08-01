@@ -129,6 +129,29 @@ describe("resolveAuditAutofix", () => {
     ).toBeNull();
     expect(resolveAuditAutofix({ pass: "modelSource", value: '{"modelSource":"s3"}' }, state)).toBeNull();
   });
+
+  it("merges JSON awq+int4 and disables pruning", () => {
+    const withPruning = {
+      ...state,
+      passes: { ...basePasses, pruning: true },
+    };
+    const patch = resolveAuditAutofix(
+      { pass: "passes", value: '{"quantMethod":"awq","quantPrecision":"int4"}' },
+      withPruning,
+    );
+    expect(patch?.passes?.quantization).toBe(true);
+    expect(patch?.passes?.quantMethod).toBe("awq");
+    expect(patch?.passes?.quantPrecision).toBe("int4");
+    expect(patch?.passes?.pruning).toBe(false);
+  });
+
+  it("returns null when JSON only contains a rejected tensor_rt pass", () => {
+    expect(resolveAuditAutofix({ pass: "passes", value: '{"tensor_rt":"enable"}' }, state)).toBeNull();
+  });
+
+  it("rejects out-of-range numeric pass values", () => {
+    expect(resolveAuditAutofix({ pass: "conversionOpset", value: "99" }, state)).toBeNull();
+  });
 });
 
 describe("isAuditAutofixApplyable", () => {
@@ -143,5 +166,9 @@ describe("isAuditAutofixApplyable", () => {
 
   it("is false for TensorRTPass", () => {
     expect(isAuditAutofixApplyable({ pass: "passes.tensor_rt", value: "x" })).toBe(false);
+  });
+
+  it("is false for truncated JSON values", () => {
+    expect(isAuditAutofixApplyable({ pass: "passes", value: "{oops" })).toBe(false);
   });
 });

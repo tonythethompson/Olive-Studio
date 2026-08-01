@@ -64,7 +64,7 @@ else:
   try {
     const { stdout } = await execFileAsync(python, ["-c", probeScript]);
     const out = stdout.trim();
-    if (/(?:^|\\n)ok:/.test(out)) {
+    if (/(?:^|\n)ok:/.test(out)) {
       return {
         loadable: true,
         version: out.split("ok:").pop()?.trim() || undefined,

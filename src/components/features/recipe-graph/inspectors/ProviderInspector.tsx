@@ -7,7 +7,11 @@ import {
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
 import { prepareProviderChange } from "@/lib/pipelineValidation";
-import { navigatePipeline } from "@/lib/pipelineNavigation";
+import {
+  navigatePipeline,
+  isPipelineOliveRunning,
+  PIPELINE_NAV_BLOCKED_MESSAGE,
+} from "@/lib/pipelineNavigation";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { UIState } from "@/types";
 import { AlertTriangle, Cpu as TargetIcon, Loader2 } from "lucide-react";
@@ -40,6 +44,7 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
   }, [selectableProviders, state.ihvProvider]);
 
   const currentHardwareBlock = getProviderAvailabilityBlock(state.ihvProvider, hardwareProbe);
+  const ihvNavBlocked = isPipelineOliveRunning();
 
   const handleProviderChange = (nextProvider: UIState["ihvProvider"]) => {
     if (nextProvider === state.ihvProvider) {
@@ -65,7 +70,14 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
         <button
           type="button"
           onClick={() => navigatePipeline("ihv")}
-          className="mt-2 text-[10px] text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer"
+          disabled={ihvNavBlocked}
+          title={ihvNavBlocked ? PIPELINE_NAV_BLOCKED_MESSAGE : undefined}
+          aria-disabled={ihvNavBlocked}
+          className={`mt-2 text-[10px] underline underline-offset-2 ${
+            ihvNavBlocked
+              ? "text-slate-600 cursor-not-allowed no-underline"
+              : "text-electric-blue hover:text-white cursor-pointer"
+          }`}
         >
           Full hardware options in step 02
         </button>

@@ -33,6 +33,7 @@ export function getAiProvider(): ProviderConfig | null {
   if (runtime) return runtime;
 
   const pref = readAiPreference();
+  const env = detectEnvProvider();
   if (pref) {
     const restored = restoreProviderFromPreference(pref);
     if (restored && !(restored.provider === "openai-compat" && !restored.baseUrl?.trim())) {
@@ -40,7 +41,6 @@ export function getAiProvider(): ProviderConfig | null {
     }
 
     // Preference matches the env-detected provider: keep the user's model/baseUrl.
-    const env = detectEnvProvider();
     if (env && env.provider === pref.provider) {
       return {
         ...env,
@@ -50,7 +50,7 @@ export function getAiProvider(): ProviderConfig | null {
     }
   }
 
-  return detectEnvProvider();
+  return env;
 }
 
 /** Set of all registered provider identifiers (for UI allowlists, validation). */

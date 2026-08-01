@@ -22,6 +22,17 @@ describe("matchLocalLogDiagnostic", () => {
     expect(d!.workaround).toMatch(/automatic-speech-recognition/);
     expect(d!.evidence.some((e) => /KeyError|Unknown task/i.test(e))).toBe(true);
   });
+
+  it("does not treat non-speech unknown tasks as the speech studio fix", () => {
+    const logs = [
+      "KeyError: \"Unknown task image-classification, available tasks are ['automatic-speech-recognition', ...]\"",
+    ];
+    const d = matchLocalLogDiagnostic(logs);
+    expect(d).not.toBeNull();
+    expect(d!.matched_entry).toBe("studio-hf-unknown-task");
+    expect(d!.applyable).toBe(false);
+    expect(isStudioHfTaskSpeechFix(d)).toBe(false);
+  });
 });
 
 describe("logsIndicateFailure", () => {

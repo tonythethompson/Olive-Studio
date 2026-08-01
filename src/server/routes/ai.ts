@@ -24,7 +24,12 @@ import {
   gatherOliveMcpKnowledge,
 } from "../services/ai/oliveMcpKnowledge.ts";
 import type { ProviderConfig } from "../types.ts";
-import { sanitizeProviderBaseUrl, stripTrailingSlashes } from "../services/ai/security.ts";
+import {
+  sanitizeProviderBaseUrl,
+  stripTrailingSlashes,
+  isLoopbackHostname,
+} from "../services/ai/security.ts";
+import { fetchWithTimeout } from "../services/shared/http.ts";
 import { ALLOWED_AI_PROVIDERS } from "../services/ai/detect.ts";
 import { parseJsonFromAiResponse, readEnvApiKey } from "../../lib/aiResponse.ts";
 import { parseAuditAnalysisReply } from "../../lib/auditAnalysis.ts";
@@ -149,7 +154,8 @@ function resetLmsCliCache(): void {
 }
 
 function findLmsCli(): string | null {
-  if (cachedLmsCli !== undefined) return cachedLmsCli;
+  // Only reuse a positive cache hit. A prior miss must not block re-probe after install.
+  if (cachedLmsCli) return cachedLmsCli;
   const home = os.homedir();
   const candidates =
     process.platform === "win32"
@@ -183,7 +189,6 @@ function findLmsCli(): string | null {
   } catch {
     /* not on PATH */
   }
-  cachedLmsCli = null;
   return null;
 }
 
@@ -337,20 +342,33 @@ function startOllamaOnce(cliPath: string): Promise<{ mode: "app" | "serve"; deta
 }
 
 type OllamaEnsureResult = { ok: boolean; error?: string; steps: string[] };
+type EnsureProgressEvt = { type: string; message: string; percent?: number };
 
 /** Single-flight: concurrent Setup / pull calls must not spawn multiple Ollama processes. */
 let ollamaEnsureInFlight: Promise<OllamaEnsureResult> | null = null;
+const ollamaProgressSubscribers = new Set<(evt: EnsureProgressEvt) => void>();
 let lastOllamaStartAt = 0;
 const OLLAMA_START_COOLDOWN_MS = 45_000;
 
-async function ensureOllamaReady(
-  onProgress?: (evt: { type: string; message: string; percent?: number }) => void,
-): Promise<OllamaEnsureResult> {
-  if (ollamaEnsureInFlight) return ollamaEnsureInFlight;
-  ollamaEnsureInFlight = ensureOllamaReadyImpl(onProgress).finally(() => {
-    ollamaEnsureInFlight = null;
-  });
-  return ollamaEnsureInFlight;
+async function ensureOllamaReady(onProgress?: (evt: EnsureProgressEvt) => void): Promise<OllamaEnsureResult> {
+  if (onProgress) {
+    ollamaProgressSubscribers.add(onProgress);
+    if (ollamaEnsureInFlight) {
+      onProgress({ type: "step", message: "Ollama setup already in progress…", percent: 5 });
+    }
+  }
+  if (!ollamaEnsureInFlight) {
+    ollamaEnsureInFlight = ensureOllamaReadyImpl((evt) => {
+      for (const sub of ollamaProgressSubscribers) sub(evt);
+    }).finally(() => {
+      ollamaEnsureInFlight = null;
+    });
+  }
+  try {
+    return await ollamaEnsureInFlight;
+  } finally {
+    if (onProgress) ollamaProgressSubscribers.delete(onProgress);
+  }
 }
 
 async function ensureOllamaReadyImpl(
@@ -437,9 +455,33 @@ async function ensureOllamaReadyImpl(
   return { ok: true, steps };
 }
 
-async function ensureLmsReady(
-  onProgress?: (evt: { type: string; message: string; percent?: number }) => void,
-): Promise<{ ok: boolean; error?: string; openedUrl?: string; steps: string[] }> {
+type LmsEnsureResult = { ok: boolean; error?: string; openedUrl?: string; steps: string[] };
+
+let lmsEnsureInFlight: Promise<LmsEnsureResult> | null = null;
+const lmsProgressSubscribers = new Set<(evt: EnsureProgressEvt) => void>();
+
+async function ensureLmsReady(onProgress?: (evt: EnsureProgressEvt) => void): Promise<LmsEnsureResult> {
+  if (onProgress) {
+    lmsProgressSubscribers.add(onProgress);
+    if (lmsEnsureInFlight) {
+      onProgress({ type: "step", message: "LM Studio setup already in progress…", percent: 5 });
+    }
+  }
+  if (!lmsEnsureInFlight) {
+    lmsEnsureInFlight = ensureLmsReadyImpl((evt) => {
+      for (const sub of lmsProgressSubscribers) sub(evt);
+    }).finally(() => {
+      lmsEnsureInFlight = null;
+    });
+  }
+  try {
+    return await lmsEnsureInFlight;
+  } finally {
+    if (onProgress) lmsProgressSubscribers.delete(onProgress);
+  }
+}
+
+async function ensureLmsReadyImpl(onProgress?: (evt: EnsureProgressEvt) => void): Promise<LmsEnsureResult> {
   const steps: string[] = [];
   const note = (message: string, percent?: number) => {
     steps.push(message);
@@ -457,45 +499,15 @@ async function ensureLmsReady(
     if (process.platform === "win32") {
       note("Running winget install ElementLabs.LMStudio…", 8);
       await tryWingetInstall(["ElementLabs.LMStudio"]);
-      note("Bootstrapping LM Studio CLI (install.ps1 / llmster)…", 12);
-      try {
-        await execFileAsync(
-          "powershell.exe",
-          [
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            "irm https://lmstudio.ai/install.ps1 | iex",
-          ],
-          { timeout: 600_000, windowsHide: true },
-        );
-      } catch {
-        note("install.ps1 failed or skipped. Will keep looking for lms", 14);
-      }
     } else if (process.platform === "darwin") {
       note("Running brew install --cask lm-studio…", 8);
       try {
         await execFileAsync("brew", ["install", "--cask", "lm-studio"], { timeout: 600_000 });
       } catch {
-        note("brew cask install failed. Trying install.sh", 10);
-      }
-      try {
-        await execFileAsync("bash", ["-lc", "curl -fsSL https://lmstudio.ai/install.sh | bash"], {
-          timeout: 600_000,
-        });
-      } catch {
-        note("install.sh failed or skipped", 14);
+        note("brew cask install failed. Continuing discovery…", 10);
       }
     } else {
-      note("Running LM Studio install.sh…", 8);
-      try {
-        await execFileAsync("bash", ["-lc", "curl -fsSL https://lmstudio.ai/install.sh | bash"], {
-          timeout: 600_000,
-        });
-      } catch {
-        note("install.sh failed or skipped", 14);
-      }
+      note("No package-manager install path for this Linux host. Install LM Studio manually if needed.", 8);
     }
 
     for (let i = 0; i < 20; i++) {
@@ -565,15 +577,6 @@ function endNdjson(res: import("express").Response, final: Record<string, unknow
     res.write(`${JSON.stringify(final)}\n`);
     res.end();
   }
-}
-
-/** True for localhost / loopback IPv4 / IPv6 (with or without brackets). */
-function isLoopbackHostname(hostname: string): boolean {
-  const host = hostname
-    .trim()
-    .toLowerCase()
-    .replace(/^\[|\]$/g, "");
-  return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
 /** Local openai-compat endpoints may omit API keys for model listing. */
@@ -890,19 +893,22 @@ export function mountAiRoutes(router: Router): void {
       }
 
       let workspace: AiWorkspaceContext | null = null;
+      let workspaceBlock: string | null = null;
       try {
         if (workspaceContext && typeof workspaceContext === "object") {
           workspace = workspaceContext as AiWorkspaceContext;
         } else if (state && typeof state === "object") {
           workspace = buildAiWorkspaceContext(state);
         }
+        workspaceBlock = workspace ? formatAiWorkspaceContextForPrompt(workspace) : null;
       } catch {
         // Workspace context is optional; ignore malformed client payloads.
+        workspace = null;
+        workspaceBlock = null;
       }
 
       // Olive MCP is the primary knowledge source for assistant chat.
       const mcpKnowledge = await gatherOliveMcpKnowledge(message, workspace);
-      const workspaceBlock = workspace ? formatAiWorkspaceContextForPrompt(workspace) : null;
       const system = buildOliveAssistantSystemPrompt({
         mcpBlock: mcpKnowledge.promptBlock,
         workspaceBlock,
@@ -1597,7 +1603,7 @@ async function fetchLiveModelCatalog(provider: string, apiKey: string, baseUrl?:
     let pages = 0;
     while (nextUrl && pages < 10) {
       pages += 1;
-      const r = await fetch(nextUrl, { headers });
+      const r = await fetchWithTimeout(nextUrl, { headers });
       if (!r.ok) {
         if (pages === 1) {
           return { models: [], source: "fallback" as const, error: `HTTP ${r.status}` };
@@ -1647,7 +1653,7 @@ async function fetchGeminiModelCatalog(apiKey: string) {
     url.searchParams.set("key", apiKey);
     url.searchParams.set("pageSize", "100");
     if (pageToken) url.searchParams.set("pageToken", pageToken);
-    const r = await fetch(url);
+    const r = await fetchWithTimeout(url);
     if (!r.ok) {
       if (page === 0) {
         return { models: [], source: "fallback" as const, error: `Gemini HTTP ${r.status}` };
@@ -1682,7 +1688,7 @@ async function fetchAnthropicModelCatalog(apiKey: string) {
     const url = new URL("https://api.anthropic.com/v1/models");
     url.searchParams.set("limit", "100");
     if (afterId) url.searchParams.set("after_id", afterId);
-    const r = await fetch(url, {
+    const r = await fetchWithTimeout(url, {
       headers: {
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
@@ -1720,7 +1726,7 @@ async function fetchCopilotModelCatalog(apiKey: string, baseUrl?: string) {
   // constant allowlisted endpoint (breaks CodeQL SSRF taint from user baseUrl).
   sanitizeProviderBaseUrl("copilot", baseUrl);
   const modelsUrl = "https://api.githubcopilot.com/models";
-  const r = await fetch(modelsUrl, {
+  const r = await fetchWithTimeout(modelsUrl, {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       Accept: "application/json",

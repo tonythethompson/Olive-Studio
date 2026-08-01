@@ -41,7 +41,7 @@ export function matchLocalLogDiagnostic(logs: string[]): LocalLogDiagnostic | nu
       evidence.push(unknownTask[0]!.slice(0, 240));
     }
 
-    if (badTask === "speech-recognition" || /\bspeech-recognition\b/i.test(joined)) {
+    if (badTask === "speech-recognition") {
       return {
         matched_entry: STUDIO_HF_TASK_SPEECH,
         domain: "studio",
@@ -93,6 +93,20 @@ export function matchLocalLogDiagnostic(logs: string[]): LocalLogDiagnostic | nu
 
 export function isStudioHfTaskSpeechFix(diagnostic: { matched_entry?: string | null } | null): boolean {
   return diagnostic?.matched_entry === STUDIO_HF_TASK_SPEECH;
+}
+
+/** True when a single log line looks like a failure anchor for selection / diagnose. */
+export function isFailureLine(line: string): boolean {
+  return (
+    line.includes("[ERROR]") ||
+    line.includes("Traceback") ||
+    line.includes("Exception") ||
+    line.includes("Error:") ||
+    line.includes("error:") ||
+    line.includes("KeyError") ||
+    line.includes("Unknown task") ||
+    line.includes("FAILED")
+  );
 }
 
 /** True when logs look like a hard failure even if the process exited 0. */

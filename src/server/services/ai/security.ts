@@ -1,4 +1,5 @@
 import type { ProviderConfig } from "../../types.ts";
+import { isValidCloudflareAccountId } from "../../../lib/cloudflare/credentials.ts";
 
 /** Allowed base URL prefixes per provider (SSRF protection). */
 export const ALLOWED_BASE_URL_PREFIX_BY_PROVIDER: Partial<Record<ProviderConfig["provider"], string[]>> = {
@@ -33,10 +34,15 @@ export function isIpLiteralHost(hostname: string): boolean {
   return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname);
 }
 
+/** Normalize hostname and detect loopback (IPv4, IPv6, bracketed IPv6). */
+export function isLoopbackHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
 /** Ollama / LM Studio loopback endpoints used by the built-in Local AI flow. */
 export function isKnownLocalOpenAiCompatUrl(parsed: URL): boolean {
-  const host = parsed.hostname.toLowerCase();
-  const isLoopback = host === "localhost" || host === "127.0.0.1" || host === "::1";
+  const isLoopback = isLoopbackHostname(parsed.hostname);
   if (!isLoopback || parsed.protocol !== "http:") return false;
   const port = parsed.port ? Number(parsed.port) : 80;
   return port === 11434 || port === 1234;
@@ -81,8 +87,7 @@ export function sanitizeProviderBaseUrl(provider: string, rawBaseUrl?: string): 
     throw new Error("baseUrl must not include credentials");
   }
 
-  const host = parsed.hostname.toLowerCase();
-  const isLoopback = host === "localhost" || host === "127.0.0.1" || host === "::1";
+  const isLoopback = isLoopbackHostname(parsed.hostname);
   // Local engines (Ollama / LM Studio) are openai-compat over plain HTTP on loopback only.
   const allowLocalEngine =
     provider === "openai-compat" &&
@@ -99,6 +104,12 @@ export function sanitizeProviderBaseUrl(provider: string, rawBaseUrl?: string): 
   const allowed = ALLOWED_BASE_URL_PREFIX_BY_PROVIDER[provider as ProviderConfig["provider"]];
   if (allowed && !allowed.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`))) {
     throw new Error(`baseUrl is not allowed for provider: ${provider}`);
+  }
+  if (provider === "cloudflare") {
+    const accountMatch = normalized.match(/\/accounts\/([^/]+)\/ai\/v1\/?$/i);
+    if (!accountMatch || !isValidCloudflareAccountId(accountMatch[1]!)) {
+      throw new Error("Cloudflare baseUrl must include a valid 32-hex account ID");
+    }
   }
   return normalized;
 }

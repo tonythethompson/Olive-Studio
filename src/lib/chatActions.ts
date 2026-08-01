@@ -4,6 +4,7 @@
  */
 import type { IHVProvider, ModelSource, UIState } from "@/types";
 import { parseJsonFromAiResponse } from "@/lib/aiResponse";
+import { coercePassValue } from "@/lib/auditAutofix";
 
 const IHV_PROVIDERS = new Set<string>([
   "CPUExecutionProvider",
@@ -20,18 +21,6 @@ const CUDA_VERSIONS = new Set(["auto", "cpu", "cu118", "cu121", "cu124", "cu126"
 const MODEL_SOURCES = new Set(["huggingface", "local", "azure"]);
 const MEMORY_OFFLOAD = new Set(["gpu_only", "auto"]);
 
-const PASS_BOOL_KEYS = new Set([
-  "conversion",
-  "quantization",
-  "pruning",
-  "splitting",
-  "onnxTransforms",
-  "peft",
-  "diffusionLora",
-  "gptqDescAct",
-  "awqSym",
-]);
-
 const PASS_STRING_ENUMS: Record<string, Set<string>> = {
   conversionSourceFormat: new Set(["pytorch", "tensorflow", "jax"]),
   conversionFormat: new Set(["onnx", "openvino", "qnn", "tensorrt"]),
@@ -46,16 +35,6 @@ const PASS_STRING_ENUMS: Record<string, Set<string>> = {
   qatQuantPrecision: new Set(["int4", "int8"]),
   qatCalibrateMethod: new Set(["minmax", "percentile", "entropy"]),
 };
-
-const PASS_NUMBER_KEYS = new Set([
-  "conversionOpset",
-  "gptqBlockSize",
-  "gptqGroupSize",
-  "awqGroupSize",
-  "awqDampPercent",
-  "qatCalibrateSteps",
-  "pruningSparsity",
-]);
 
 export type ChatActionPatch = {
   ihvProvider?: IHVProvider;
@@ -84,42 +63,13 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-const PASS_NUMBER_RANGES: Record<string, { min: number; max: number }> = {
-  conversionOpset: { min: 13, max: 21 },
-  gptqBlockSize: { min: 32, max: 4096 },
-  gptqGroupSize: { min: 32, max: 4096 },
-  awqGroupSize: { min: 32, max: 4096 },
-  awqDampPercent: { min: 0, max: 1 },
-  qatCalibrateSteps: { min: 1, max: 10_000 },
-  pruningSparsity: { min: 0.01, max: 0.99 },
-};
-
-function isAllowedPassNumber(key: string, value: number): boolean {
-  const range = PASS_NUMBER_RANGES[key];
-  if (!range) return false;
-  return value >= range.min && value <= range.max;
-}
-
 function sanitizePasses(raw: unknown): Partial<UIState["passes"]> | undefined {
   if (!isRecord(raw)) return undefined;
   const out: Partial<UIState["passes"]> = {};
   for (const [key, value] of Object.entries(raw)) {
-    if (PASS_BOOL_KEYS.has(key) && typeof value === "boolean") {
-      (out as Record<string, unknown>)[key] = value;
-      continue;
-    }
-    if (PASS_NUMBER_KEYS.has(key) && typeof value === "number" && Number.isFinite(value)) {
-      if (isAllowedPassNumber(key, value)) {
-        (out as Record<string, unknown>)[key] = value;
-      }
-      continue;
-    }
-    if (key in PASS_STRING_ENUMS && typeof value === "string") {
-      const allowed = PASS_STRING_ENUMS[key]!;
-      if (allowed.size === 0 || allowed.has(value)) {
-        (out as Record<string, unknown>)[key] = value;
-      }
-    }
+    const coerced = coercePassValue(key, value);
+    if (coerced === null) continue;
+    (out as Record<string, unknown>)[key] = coerced;
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }

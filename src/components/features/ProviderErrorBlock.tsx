@@ -55,7 +55,9 @@ export function ProviderErrorBlock({ msg, onGoSettings }: { msg: string; onGoSet
         <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">OPENCODE_API_KEY</code>,{" "}
         <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">FIREWORKS_API_KEY</code>,{" "}
         <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">NVIDIA_API_KEY</code>,{" "}
-        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">HF_TOKEN</code>) in{" "}
+        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">HF_TOKEN</code>,{" "}
+        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">CLOUDFLARE_API_TOKEN</code>,{" "}
+        <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">CLOUDFLARE_ACCOUNT_ID</code>) in{" "}
         <code className="font-mono">.env</code> or <code className="font-mono">.env.local</code>, then restart{" "}
         <code className="font-mono">pnpm dev</code>.
       </p>

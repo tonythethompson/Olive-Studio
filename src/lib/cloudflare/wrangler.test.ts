@@ -28,7 +28,16 @@ describe("parseWranglerStdoutJson", () => {
     expect(parseWranglerStdoutJson<typeof payload>(text)).toEqual(payload);
   });
 
-  it("does not pick a nested trailing object over the top-level payload", () => {
+  it("parses JSON when logs precede the payload on the same line", () => {
+    const payload = {
+      email: "dev@example.com",
+      accounts: [{ id: "abc123456789012345678901234567890", name: "Primary" }],
+    };
+    const text = `Getting User settings...${JSON.stringify(payload)}`;
+    expect(parseWranglerStdoutJson<typeof payload>(text)).toEqual(payload);
+  });
+
+  it("prefers the first top-level object when a trailing sibling follows", () => {
     const payload = {
       email: "dev@example.com",
       accounts: [{ id: "abc123456789012345678901234567890", name: "Primary" }],

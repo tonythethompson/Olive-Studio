@@ -112,7 +112,7 @@ export function BatchProcessingPanel({
     const queuedJobs = (state.batchJobs || []).filter((j) => j.status === "queued");
     if (queuedJobs.length === 0) return;
 
-    const queueValidation = getPipelineValidation(state);
+    const queueValidation = getPipelineValidation(state, { forLocalExecution: true });
     if (queueValidation.isBlocked) {
       return;
     }

@@ -101,6 +101,79 @@ function parseScalar(value: string): string | number | boolean {
   return value;
 }
 
+const PASS_BOOL_COERCE = new Set([
+  "conversion",
+  "quantization",
+  "pruning",
+  "splitting",
+  "onnxTransforms",
+  "peft",
+  "diffusionLora",
+  "gptqDescAct",
+  "awqSym",
+]);
+
+const PASS_STRING_COERCE: Record<string, Set<string>> = {
+  conversionSourceFormat: new Set(["pytorch", "tensorflow", "jax"]),
+  conversionFormat: new Set(["onnx", "openvino", "qnn", "tensorrt"]),
+  conversionInputTargetTypes: new Set(),
+  quantMethod: new Set(["ptq", "awq", "qat", "gptq", "hqq", "rtn", "spinquant", "quarot"]),
+  quantPrecision: new Set(["int4", "int8", "fp16"]),
+  quantPreset: new Set(),
+  pruningType: new Set(["structured", "unstructured"]),
+  pruningMethod: new Set(["magnitude", "sparsegpt", "wanda"]),
+  pruningCriteria: new Set(["l1_norm", "l2_norm"]),
+  peftMethod: new Set(["lora", "qlora"]),
+  qatQuantPrecision: new Set(["int4", "int8"]),
+  qatCalibrateMethod: new Set(["minmax", "percentile", "entropy"]),
+};
+
+const PASS_NUMBER_COERCE: Record<string, { min: number; max: number }> = {
+  conversionOpset: { min: 13, max: 21 },
+  gptqBlockSize: { min: 32, max: 4096 },
+  gptqGroupSize: { min: 32, max: 4096 },
+  awqGroupSize: { min: 32, max: 4096 },
+  awqDampPercent: { min: 0, max: 1 },
+  qatCalibrateSteps: { min: 1, max: 10_000 },
+  pruningSparsity: { min: 0.01, max: 0.99 },
+};
+
+const FREE_PASS_STRING_RE = /^[\w.\-/:+=,\s]+$/i;
+
+/** Coerce a pass field to a safe UI value, or null when the value cannot be applied. */
+export function coercePassValue(key: string, raw: unknown): string | number | boolean | null {
+  if (PASS_BOOL_COERCE.has(key)) {
+    if (typeof raw === "boolean") return raw;
+    if (raw === "true" || raw === "false") return raw === "true";
+    return null;
+  }
+  if (key in PASS_NUMBER_COERCE) {
+    const n =
+      typeof raw === "number"
+        ? raw
+        : typeof raw === "string" && raw.trim() !== "" && /^-?\d+(\.\d+)?$/.test(raw.trim())
+          ? Number(raw.trim())
+          : NaN;
+    if (!Number.isFinite(n)) return null;
+    const range = PASS_NUMBER_COERCE[key]!;
+    if (n < range.min || n > range.max) return null;
+    return n;
+  }
+  if (key in PASS_STRING_COERCE) {
+    if (typeof raw !== "string" && typeof raw !== "number") return null;
+    const trimmed = String(raw).trim();
+    if (!trimmed) return null;
+    const allowed = PASS_STRING_COERCE[key]!;
+    if (allowed.size === 0) {
+      if (trimmed.length > 128 || !FREE_PASS_STRING_RE.test(trimmed)) return null;
+      return trimmed.slice(0, 128);
+    }
+    if (trimmed.length > 256) return null;
+    return allowed.has(trimmed) ? trimmed : null;
+  }
+  return null;
+}
+
 function normalizeDtype(value: string): string {
   const v = value.trim().toLowerCase().replace(/['"]/g, "");
   if (v === "fp16" || v === "float16" || v === "half") return "float16";
@@ -270,8 +343,10 @@ export function resolveAuditAutofix(
     nextPasses.quantMethod = method;
     if (method === "awq") nextPasses.pruning = false;
   } else {
+    const coerced = coercePassValue(key, parseScalar(value));
+    if (coerced === null) return null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (nextPasses as any)[key] = parseScalar(value);
+    (nextPasses as any)[key] = coerced;
   }
 
   return { passes: nextPasses };
@@ -308,12 +383,10 @@ function resolveJsonAutofix(
   }
 
   const passPatch: Partial<UIState["passes"]> = {};
-  let touched = false;
   for (const [k, v] of Object.entries(obj)) {
     const canon = canonicalizeAutofixPass(k) ?? (PASS_KEYS.has(k) ? k : null);
     if (!canon || canon.startsWith("__") || TOP_LEVEL.has(canon)) continue;
     if (!PASS_KEYS.has(canon)) continue;
-    touched = true;
     if (canon === "conversionInputTargetTypes" && typeof v === "string") {
       passPatch.conversion = true;
       passPatch.conversionInputTargetTypes = normalizeDtype(v);
@@ -336,12 +409,14 @@ function resolveJsonAutofix(
       passPatch.quantMethod = method;
       if (method === "awq") passPatch.pruning = false;
     } else {
+      const coerced = coercePassValue(canon, v);
+      if (coerced === null) continue;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (passPatch as any)[canon] = v;
+      (passPatch as any)[canon] = coerced;
     }
   }
 
-  if (!touched) return null;
+  if (Object.keys(passPatch).length === 0) return null;
   return { passes: { ...state.passes, ...passPatch } };
 }
 

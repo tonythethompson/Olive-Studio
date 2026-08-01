@@ -254,8 +254,8 @@ export async function listCloudflareModels(): Promise<{
       })
       .filter((m): m is { id: string; name: string } => Boolean(m))
       .filter((m) => !/embed|whisper|tts|asr|diffusion|image/i.test(m.id))
-      .slice(0, 120)
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 80);
     if (models.length === 0) {
       return {
         models: [],

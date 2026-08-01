@@ -91,13 +91,13 @@ export async function listDevinModels(): Promise<{
     const enabled = entries.filter((e) => !e.disabled);
     const source = enabled.length > 0 ? enabled : entries;
     const models = source
-      .slice(0, 80)
       .map((e) => ({
         id: e.modelUid,
         name: e.label || e.modelUid,
         disabled: e.disabled,
       }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 80);
     return { models, source: "live" };
   } catch (err: unknown) {
     return {

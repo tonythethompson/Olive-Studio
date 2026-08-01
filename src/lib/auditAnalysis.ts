@@ -109,12 +109,20 @@ function normalizeSuggestion(raw: unknown, index: number): AuditSuggestion | nul
 
 export function normalizeAuditAnalysis(parsed: unknown): AuditAnalysis | null {
   if (!isRecord(parsed)) return null;
+  const hasScore =
+    "score" in parsed && (typeof parsed.score === "number" || typeof parsed.score === "string");
+  const hasLevel =
+    parsed.level === "Optimized" || parsed.level === "Suboptimal" || parsed.level === "Critical";
+  const hasSummary = typeof parsed.summary === "string" && parsed.summary.trim().length > 0;
+  const hasSuggestions = Array.isArray(parsed.suggestions);
+  // Reject arbitrary JSON that merely parses (e.g. wrangler whoami) as an audit.
+  if (!hasScore && !hasLevel && !hasSummary && !hasSuggestions) return null;
+
   const score = clampScore(parsed.score);
-  const summary =
-    typeof parsed.summary === "string" && parsed.summary.trim()
-      ? parsed.summary.trim().slice(0, 1200)
-      : "Pipeline analysis complete.";
-  const suggestionsRaw = Array.isArray(parsed.suggestions) ? parsed.suggestions : [];
+  const summary = hasSummary
+    ? (parsed.summary as string).trim().slice(0, 1200)
+    : "Pipeline analysis complete.";
+  const suggestionsRaw = hasSuggestions ? (parsed.suggestions as unknown[]) : [];
   const suggestions: AuditSuggestion[] = [];
   for (let i = 0; i < suggestionsRaw.length && suggestions.length < 3; i++) {
     const row = normalizeSuggestion(suggestionsRaw[i], i);
@@ -185,6 +193,7 @@ function fallbackFromText(rawText: string): AuditAnalysis & { structured: false 
 
 /** Chat-style graceful parse for Audit: never throws for malformed model JSON. */
 export function parseAuditAnalysisReply(rawText: string): AuditAnalysis & { structured: boolean } {
+  // closeTruncatedJson once up front; do not re-close an already-repaired attempt.
   const attempts = [rawText, closeTruncatedJson(rawText)];
   for (const attempt of attempts) {
     try {
@@ -195,8 +204,7 @@ export function parseAuditAnalysisReply(rawText: string): AuditAnalysis & { stru
       /* try next */
     }
     try {
-      const closed = closeTruncatedJson(attempt);
-      const normalized = normalizeAuditAnalysis(JSON.parse(closed));
+      const normalized = normalizeAuditAnalysis(JSON.parse(attempt));
       if (normalized) return { ...normalized, structured: true };
     } catch {
       /* try next */

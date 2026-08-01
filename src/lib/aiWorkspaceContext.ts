@@ -1,6 +1,6 @@
 import { UIState } from "@/types";
 import { getPipelineValidation, getProviderConflicts } from "@/lib/pipelineValidation";
-import { buildOliveRecipe, resolveHfTask } from "@/lib/oliveRecipeBuilder";
+import { resolveHfTask } from "@/lib/oliveRecipeBuilder";
 import type { HardwareProbeResult } from "@/lib/hardwareProbe";
 
 export interface AiWorkspaceProbeSummary {
@@ -175,9 +175,11 @@ export function redactRecipeSecretsForAi(value: unknown): unknown {
   return value;
 }
 
-function buildRecipeSnapshot(state: UIState, maxChars: number): AiWorkspaceRecipeSnapshot | undefined {
+function buildRecipeSnapshot(
+  recipe: Record<string, unknown>,
+  maxChars: number,
+): AiWorkspaceRecipeSnapshot | undefined {
   try {
-    const recipe = buildOliveRecipe(state);
     const safeRecipe = redactRecipeSecretsForAi(recipe) as Record<string, unknown>;
     const input = safeRecipe.input_model as { type?: string } | undefined;
     const passes = (safeRecipe.passes ?? {}) as Record<string, { type?: string }>;
@@ -241,7 +243,10 @@ export function buildAiWorkspaceContext(
       memoryOffload: state.memoryOffload,
     },
     detectedHardware: opts?.probe ? summarizeProbe(opts.probe) : undefined,
-    recipeSnapshot: buildRecipeSnapshot(state, recipePreviewChars),
+    recipeSnapshot: buildRecipeSnapshot(
+      validation.recipe as unknown as Record<string, unknown>,
+      recipePreviewChars,
+    ),
     passes: state.passes,
     activePassLabels: collectActivePassLabels(state.passes),
     validation: {
