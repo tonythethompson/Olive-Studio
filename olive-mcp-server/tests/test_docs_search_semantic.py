@@ -14,11 +14,23 @@ def _reset_kb_index_cache():
     """Ensure each test starts with a clean KB embedding cache."""
     docs_search._KB_TEXTS = []
     docs_search._KB_EMBEDDINGS = None
-    docs_search._KB_INDEX_MTIME = -1.0
+    docs_search._KB_INDEX_MTIME = (-1.0, -1)
+    docs_search._LIVE_CACHE = {}
+    docs_search._LAST_FETCH_TIME = 0.0
+    docs_search._LIVE_FETCH_GENERATION = 0
+    docs_search._LIVE_SNIPPETS = []
+    docs_search._LIVE_EMBEDDINGS = None
+    docs_search._LIVE_EMBED_CACHE_TIME = -1.0
     yield
     docs_search._KB_TEXTS = []
     docs_search._KB_EMBEDDINGS = None
-    docs_search._KB_INDEX_MTIME = -1.0
+    docs_search._KB_INDEX_MTIME = (-1.0, -1)
+    docs_search._LIVE_CACHE = {}
+    docs_search._LAST_FETCH_TIME = 0.0
+    docs_search._LIVE_FETCH_GENERATION = 0
+    docs_search._LIVE_SNIPPETS = []
+    docs_search._LIVE_EMBEDDINGS = None
+    docs_search._LIVE_EMBED_CACHE_TIME = -1.0
 
 
 def _install_fake_semantic(
@@ -135,7 +147,7 @@ def test_kb_mtime_invalidation_rebuilds_index(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(docs_search, "semantic_search", fake_semantic)
 
     # First build
-    monkeypatch.setattr(docs_search, "_kb_max_mtime", lambda: 100.0)
+    monkeypatch.setattr(docs_search, "_kb_max_mtime", lambda: (100.0, 2))
     docs_search._search_local("quantization", 3)
     assert len(build_calls) == 1
 
@@ -144,9 +156,21 @@ def test_kb_mtime_invalidation_rebuilds_index(monkeypatch: pytest.MonkeyPatch):
     assert len(build_calls) == 1
 
     # mtime change → rebuild
-    monkeypatch.setattr(docs_search, "_kb_max_mtime", lambda: 200.0)
+    monkeypatch.setattr(docs_search, "_kb_max_mtime", lambda: (200.0, 2))
     docs_search._search_local("quantization", 3)
     assert len(build_calls) == 2
+
+
+def test_weak_live_result_does_not_displace_strong_local_top1(monkeypatch: pytest.MonkeyPatch):
+    """A weak live hit must not evict the single strongest local result at top_k=1."""
+    strong_local = [{"source": "passes.foo", "snippet": "strong", "relevance": 0.85}]
+    weak_live = [{"source": "live:index", "snippet": "weak", "relevance": 0.31}]
+
+    monkeypatch.setattr(docs_search, "_search_local", lambda query, top_k: strong_local[:top_k])
+    monkeypatch.setattr(docs_search, "_search_live", lambda query, top_k: weak_live[:top_k])
+
+    result = search_olive_documentation(query="quantization", top_k=1, live=True)
+    assert result["results"] == [strong_local[0]]
 
 
 def test_empty_query_unchanged():
@@ -177,7 +201,7 @@ def test_kb_stale_build_does_not_poison_cache(monkeypatch: pytest.MonkeyPatch):
     load_calls: list[str] = []
 
     def fake_mtime():
-        return mtime_box["v"]
+        return (mtime_box["v"], 1)
 
     def fake_load():
         if mtime_box["v"] >= 200.0:
@@ -199,54 +223,55 @@ def test_kb_stale_build_does_not_poison_cache(monkeypatch: pytest.MonkeyPatch):
     texts1, _emb1 = docs_search.get_or_build_kb_index()
     # Stale build returned locally but must not poison global cache at mtime 200.
     assert texts1[0][0] == "old.path"
-    assert docs_search._KB_INDEX_MTIME != 200.0 or docs_search._KB_TEXTS[0][0] != "old.path"
+    assert docs_search._KB_INDEX_MTIME != (200.0, 1) or docs_search._KB_TEXTS[0][0] != "old.path"
 
     # Next call with mtime 200 should load fresh content and cache it.
     texts2, _emb2 = docs_search.get_or_build_kb_index()
     assert texts2[0][0] == "new.path"
-    assert docs_search._KB_INDEX_MTIME == 200.0
+    assert docs_search._KB_INDEX_MTIME == (200.0, 1)
     assert docs_search._KB_TEXTS[0][0] == "new.path"
 
 
 def test_live_fetch_generation_ignores_stale_completion(monkeypatch: pytest.MonkeyPatch):
-    """Older in-flight fetch must not overwrite a newer generation's cache."""
-    docs_search._LIVE_CACHE = {}
-    docs_search._LAST_FETCH_TIME = 0.0
-    docs_search._LIVE_FETCH_GENERATION = 0
+    """An older in-flight fetch completing after a newer one must not win.
 
-    results_queue = [
-        {"status": "ok", "pages": {"index": "OLDER live page content calibration"}},
-        {"status": "ok", "pages": {"index": "NEWER live page content calibration"}},
-    ]
+    Drives the real ``_fetch_live_docs`` through two threads so the
+    generation-token guard inside the function itself is exercised, not
+    re-implemented in the test.
+    """
+    import threading as _threading
+
+    started_gen1 = _threading.Event()
+    release_gen1 = _threading.Event()
     call_i = {"n": 0}
 
     def fake_fetch(pages=None):
-        # First call is gen 1 (older), second is gen 2 (newer) — complete out of order.
         i = call_i["n"]
         call_i["n"] += 1
-        return results_queue[min(i, len(results_queue) - 1)]
+        if i == 0:
+            # gen1: signal it has started, then block until gen2 finishes.
+            started_gen1.set()
+            release_gen1.wait(timeout=5)
+            return {"status": "ok", "pages": {"index": "OLDER live page content calibration"}}
+        return {"status": "ok", "pages": {"index": "NEWER live page content calibration"}}
 
-    # Patch the lazy import path used inside _fetch_live_docs.
     import olive_mcp_server.fetchers.official_docs_fetcher as fetcher
 
     monkeypatch.setattr(fetcher, "fetch_official_docs", fake_fetch)
 
-    # Start gen1 and gen2 by forcing TTL miss; manually exercise publish races.
-    with docs_search._LIVE_FETCH_LOCK:
-        docs_search._LIVE_FETCH_GENERATION = 1
-        gen1 = 1
-        docs_search._LIVE_FETCH_GENERATION = 2
-        gen2 = 2
+    result_gen1: dict = {}
+    t1 = _threading.Thread(
+        target=lambda: result_gen1.update(pages=docs_search._fetch_live_docs()[0])
+    )
+    t1.start()
+    assert started_gen1.wait(timeout=5)
 
-    # Apply gen2 first (newer).
-    with docs_search._LIVE_FETCH_LOCK:
-        if gen2 == docs_search._LIVE_FETCH_GENERATION:
-            docs_search._LIVE_CACHE = {"index": "NEWER"}
-            docs_search._LAST_FETCH_TIME = 999.0
-    # Stale gen1 must not overwrite.
-    with docs_search._LIVE_FETCH_LOCK:
-        if gen1 == docs_search._LIVE_FETCH_GENERATION:
-            docs_search._LIVE_CACHE = {"index": "OLDER"}
-            docs_search._LAST_FETCH_TIME = 1000.0
+    # gen2 runs to completion while gen1 is still blocked.
+    pages_gen2, _ = docs_search._fetch_live_docs()
+    assert "NEWER" in next(iter(pages_gen2.values()))
 
-    assert docs_search._LIVE_CACHE == {"index": "NEWER"}
+    # Now let the stale gen1 completion land; it must not clobber gen2's cache.
+    release_gen1.set()
+    t1.join(timeout=5)
+
+    assert "NEWER" in next(iter(docs_search._LIVE_CACHE.values()))

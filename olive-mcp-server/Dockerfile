@@ -10,9 +10,16 @@ WORKDIR /build
 COPY pyproject.toml ./
 COPY olive_mcp_server/ ./olive_mcp_server/
 
-# Prefer CPU-only torch wheels to avoid multi-GB CUDA packages.
+# Install torch from the CPU-only index first. --extra-index-url does not
+# prioritize this index over PyPI, so a plain combined install can still
+# resolve PyPI's CUDA-bundled torch wheel; installing torch alone against
+# --index-url forces the CPU build, and PYTHONPATH makes it visible as
+# "already satisfied" to the next install so it isn't pulled again from PyPI.
 RUN pip install --no-cache-dir --prefix=/install \
-    --extra-index-url https://download.pytorch.org/whl/cpu \
+    --index-url https://download.pytorch.org/whl/cpu \
+    torch \
+ && PYTHONPATH="$(echo /install/lib/python*/site-packages)" \
+    pip install --no-cache-dir --prefix=/install \
     . "mcp<2"
 
 # Pre-cache the embedding model so the runtime image does not need network
@@ -33,8 +40,7 @@ WORKDIR /app
 
 COPY --from=builder /install /usr/local
 
-COPY --from=builder /root/.cache/huggingface /home/mcp/.cache/huggingface
-RUN chown -R mcp:mcp /home/mcp/.cache
+COPY --from=builder --chown=mcp:mcp /root/.cache/huggingface /home/mcp/.cache/huggingface
 
 COPY olive_mcp_server/ ./olive_mcp_server/
 COPY pyproject.toml ./
@@ -49,6 +55,7 @@ ENV MCP_TRANSPORT=sse
 ENV MCP_HOST=0.0.0.0
 ENV MCP_PORT=8000
 ENV HF_HOME=/home/mcp/.cache/huggingface
+ENV HF_HUB_OFFLINE=1
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD python -c "import urllib.request; r=urllib.request.urlopen('http://localhost:8000/sse',timeout=3); r.close()" || exit 1

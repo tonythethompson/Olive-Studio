@@ -7,7 +7,8 @@ The model is loaded lazily on first encode call, not at import time.
 from __future__ import annotations
 
 import threading
-from typing import Any, Iterable
+from collections.abc import Iterable, Sequence
+from typing import Any
 
 import numpy as np
 

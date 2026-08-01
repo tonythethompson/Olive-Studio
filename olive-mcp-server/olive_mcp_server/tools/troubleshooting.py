@@ -50,6 +50,7 @@ _frequency_store: dict[str, dict[str, Any]] = {}
 _ts_index_lock = threading.Lock()
 # fingerprint -> (entries, embeddings, kb_mtime_at_build)
 _ts_index_cache: dict[str, tuple[list[dict[str, Any]], np.ndarray, float]] = {}
+_TS_INDEX_CACHE_MAX = 8
 
 
 def _get_frequency_key(matched_entry: str | None, error_message: str) -> str:
@@ -143,8 +144,6 @@ def _get_troubleshooting_index(
     Invalidates when fingerprint or KB mtime changes. Callers must score using
     the returned entries list so embeddings stay position-aligned.
     """
-    global _ts_index_cache
-
     if entries is None:
         entries = load_troubleshooting()
     entries_list = list(entries)
@@ -171,6 +170,13 @@ def _get_troubleshooting_index(
         if current_mtime != file_mtime:
             return entries_list, embeddings
         _ts_index_cache[fingerprint] = (entries_list, embeddings, file_mtime)
+        # Bound cache size: domain pools are few (olive/studio/auto), so evict
+        # the oldest entry rather than let stale fingerprints from a
+        # hot-reloading KB accumulate forever.
+        if len(_ts_index_cache) > _TS_INDEX_CACHE_MAX:
+            oldest_key = next(iter(_ts_index_cache))
+            if oldest_key != fingerprint:
+                del _ts_index_cache[oldest_key]
         return entries_list, embeddings
 
 
@@ -406,6 +412,35 @@ def _no_match_payload() -> dict[str, Any]:
     }
 
 
+def _build_diagnosis_payload(
+    best: dict[str, Any],
+    matched_entry: str | None,
+    matched_domain: str | None,
+    applyable: bool,
+    pass_name: str,
+    freq: dict[str, Any],
+) -> dict[str, Any]:
+    """Assemble the diagnosis response shared by the matched and no-match paths."""
+    updated_config = best.get("updated_config", {}) or {}
+    return {
+        "matched_entry": matched_entry,
+        "domain": matched_domain,
+        "applyable": applyable if matched_entry else False,
+        "title": best.get("title", ""),
+        "root_cause": best.get("root_cause", ""),
+        "workaround": best.get("solution", ""),
+        "updated_config": updated_config if isinstance(updated_config, dict) else {},
+        "relevant_quirks": _build_relevant_quirks(matched_entry, pass_name, matched_domain),
+        "related_olive_entry": best.get("related_olive_entry"),
+        "frequency": {
+            "occurrence_count": freq["occurrence_count"],
+            "first_seen": _format_ts(freq["first_seen"]),
+            "last_seen": _format_ts(freq["last_seen"]),
+            "label": _frequency_label(freq["occurrence_count"]),
+        },
+    }
+
+
 def troubleshoot_olive_error(
     error_message: str,
     pass_name: str = "",
@@ -429,28 +464,9 @@ def troubleshoot_olive_error(
     # Empty body: never match from pass_name/config_context alone (TensorRT/AWQ/…).
     if not (error_message or "").strip():
         best = _no_match_payload()
-        matched_entry = None
-        matched_domain = None
-        applyable = False
-        freq_key = _get_frequency_key(matched_entry, error_message)
+        freq_key = _get_frequency_key(None, error_message)
         freq = _record_occurrence(freq_key)
-        return {
-            "matched_entry": matched_entry,
-            "domain": matched_domain,
-            "applyable": applyable,
-            "title": best["title"],
-            "root_cause": best["root_cause"],
-            "workaround": best["solution"],
-            "updated_config": best["updated_config"],
-            "relevant_quirks": _build_relevant_quirks(matched_entry, pass_name, matched_domain),
-            "related_olive_entry": None,
-            "frequency": {
-                "occurrence_count": freq["occurrence_count"],
-                "first_seen": _format_ts(freq["first_seen"]),
-                "last_seen": _format_ts(freq["last_seen"]),
-                "label": _frequency_label(freq["occurrence_count"]),
-            },
-        }
+        return _build_diagnosis_payload(best, None, None, False, pass_name, freq)
 
     resolved = _resolve_domain(domain)
 
@@ -494,25 +510,7 @@ def troubleshoot_olive_error(
     freq_key = _get_frequency_key(matched_entry, error_message)
     freq = _record_occurrence(freq_key)
 
-    updated_config = best.get("updated_config", {}) or {}
-
-    return {
-        "matched_entry": matched_entry,
-        "domain": matched_domain,
-        "applyable": applyable if matched_entry else False,
-        "title": best.get("title", ""),
-        "root_cause": best.get("root_cause", ""),
-        "workaround": best.get("solution", ""),
-        "updated_config": updated_config if isinstance(updated_config, dict) else {},
-        "relevant_quirks": _build_relevant_quirks(matched_entry, pass_name, matched_domain),
-        "related_olive_entry": best.get("related_olive_entry"),
-        "frequency": {
-            "occurrence_count": freq["occurrence_count"],
-            "first_seen": _format_ts(freq["first_seen"]),
-            "last_seen": _format_ts(freq["last_seen"]),
-            "label": _frequency_label(freq["occurrence_count"]),
-        },
-    }
+    return _build_diagnosis_payload(best, matched_entry, matched_domain, applyable, pass_name, freq)
 
 
 def diagnose_error(

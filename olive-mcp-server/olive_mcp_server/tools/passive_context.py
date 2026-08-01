@@ -6,10 +6,13 @@ system prompt based on the current pipeline configuration.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from .docs_search import get_or_build_kb_index
 from .embeddings import DEFAULT_THRESHOLD, semantic_search
+
+logger = logging.getLogger(__name__)
 
 
 def _pass_descriptor_text(item: Any) -> str:
@@ -102,7 +105,8 @@ def get_context_for_pipeline(
             top_k,
             threshold=DEFAULT_THRESHOLD,
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.warning("KB retrieval failed for pipeline context", exc_info=True)
         results = []
 
     confidences = [float(r.get("relevance", 0.0)) for r in results]
