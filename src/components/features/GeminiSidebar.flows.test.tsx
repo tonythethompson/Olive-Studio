@@ -52,14 +52,14 @@ describe("GeminiSidebar flows", () => {
     await waitFor(() => expect(screen.getByText("Looks fine")).toBeTruthy());
 
     // Chat tab: preset query round-trips through /api/ai/chat
-    fireEvent.click(screen.getByRole("button", { name: /^Chat$/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Chat$/ }));
     fireEvent.click(screen.getByRole("button", { name: /Why is my model slow\?/ }));
     await waitFor(() => expect(screen.getByText(/quantization is off/)).toBeTruthy());
 
     // Settings tab: Cloud provider form by default (gemini is cloud)
-    fireEvent.click(screen.getByRole("button", { name: /^Settings$/ }));
-    expect(screen.getByRole("tab", { name: "Cloud" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Local" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: /^Settings$/ }));
+    expect(screen.getByRole("button", { name: "Cloud settings" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Local settings" })).toBeTruthy();
     const provider = screen.getByLabelText("AI provider") as HTMLSelectElement;
     expect(provider.value).toBe("gemini");
     await waitFor(() => expect(screen.getByText("Live catalog")).toBeTruthy());
@@ -71,7 +71,7 @@ describe("GeminiSidebar flows", () => {
     expect(screen.getByPlaceholderText(/Or type a model id/)).toBeTruthy();
     expect(screen.getByPlaceholderText(/localhost:11434/)).toBeTruthy();
     // Local tab: LM Studio / Ollama inventory (not mixed into Cloud)
-    fireEvent.click(screen.getByRole("tab", { name: "Local" }));
+    fireEvent.click(screen.getByRole("button", { name: "Local settings" }));
     expect(screen.getByText("LM Studio")).toBeTruthy();
     expect(screen.getByText("Ollama")).toBeTruthy();
     expect(screen.getByText(/Starter downloads/i)).toBeTruthy();
