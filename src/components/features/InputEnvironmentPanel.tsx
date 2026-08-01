@@ -1097,7 +1097,9 @@ export function InputEnvironmentPanel({
                                           onClick={() => handleApplyCuratedRecipeAnyway(item)}
                                         >
                                           {applyingRecipePath === item.repoPath ? (
-                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                            <span className="animate-spin">
+                                              <Loader2 className="h-3 w-3" />
+                                            </span>
                                           ) : (
                                             "Apply anyway"
                                           )}
@@ -1110,7 +1112,9 @@ export function InputEnvironmentPanel({
                                           onClick={() => handleApplyCuratedRecipe(item)}
                                         >
                                           {applyingRecipePath === item.repoPath ? (
-                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                            <span className="animate-spin">
+                                              <Loader2 className="h-3 w-3" />
+                                            </span>
                                           ) : (
                                             "Apply"
                                           )}

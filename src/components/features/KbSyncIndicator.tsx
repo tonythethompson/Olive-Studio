@@ -49,7 +49,9 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
             title="Pull the latest Olive pass docs into the local knowledge base"
             aria-label={syncing ? "Syncing knowledge base" : "Sync knowledge base"}
           >
-            <RefreshCw className={`h-3 w-3 ${syncing ? "animate-spin" : ""}`} aria-hidden />
+            <span className={syncing ? "animate-spin" : ""}>
+              <RefreshCw className="h-3 w-3" aria-hidden />
+            </span>
             {syncing ? "syncing…" : "sync"}
           </button>
         </>
