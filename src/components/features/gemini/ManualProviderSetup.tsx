@@ -175,7 +175,15 @@ function ModelField({ providers }: ProvidersProp) {
  * @param providers - Provider settings, state, and actions used by the form
  */
 function ApiKeyForm({ providers }: ProvidersProp) {
-  const { isCompatMode, providerOption, settingsBaseUrl, settingsApiKey, isSavingProvider } = providers;
+  const {
+    isCompatMode,
+    providerOption,
+    settingsProvider,
+    settingsBaseUrl,
+    settingsApiKey,
+    settingsCloudflareAccountId,
+    isSavingProvider,
+  } = providers;
   return (
     <>
       {isCompatMode && (
@@ -224,6 +232,27 @@ function ApiKeyForm({ providers }: ProvidersProp) {
           className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
         />
       </div>
+
+      {settingsProvider === "cloudflare" && (
+        <div>
+          <label className="text-xs text-slate-400 mb-1 block" htmlFor="gemini-cf-account-id">
+            Cloudflare Account ID
+          </label>
+          <input
+            id="gemini-cf-account-id"
+            type="text"
+            autoComplete="off"
+            placeholder="32-char hex CLOUDFLARE_ACCOUNT_ID"
+            value={settingsCloudflareAccountId}
+            onChange={(e) => providers.setSettingsCloudflareAccountId(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void providers.saveProvider()}
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+          />
+          <p className="text-[10px] text-slate-600 mt-1">
+            Required with the API token. Workers AI is account-scoped.
+          </p>
+        </div>
+      )}
 
       <button
         type="button"

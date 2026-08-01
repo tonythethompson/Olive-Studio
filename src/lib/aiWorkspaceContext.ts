@@ -168,15 +168,7 @@ export function redactRecipeSecretsForAi(value: unknown): unknown {
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (
-        (k === "cache_dir" || k === "cacheDir" || k === "connection_string" || k === "azureStr") &&
-        typeof v === "string" &&
-        isCredentialBearingCacheUrl(v)
-      ) {
-        out[k] = "[REDACTED]";
-      } else {
-        out[k] = redactRecipeSecretsForAi(v);
-      }
+      out[k] = redactRecipeSecretsForAi(v);
     }
     return out;
   }
@@ -269,12 +261,10 @@ export function buildAiWorkspaceContext(
       severity: c.severity,
     })),
     infrastructure: {
-      cacheDir:
-        state.distributedCaching && state.azureStr && isCredentialBearingCacheUrl(state.azureStr)
-          ? "[REDACTED]"
-          : isCredentialBearingCacheUrl(state.cacheDir)
-            ? "[REDACTED]"
-            : state.cacheDir,
+      cacheDir: (() => {
+        const effective = state.distributedCaching && state.azureStr ? state.azureStr : state.cacheDir;
+        return isCredentialBearingCacheUrl(effective) ? "[REDACTED]" : effective;
+      })(),
       distributedCaching: state.distributedCaching,
       batchJobCount: batchJobs.length,
       batchQueued: batchJobs.filter((j) => j.status === "queued").length,

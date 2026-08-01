@@ -132,8 +132,12 @@ function inferModelSizeBucket(
   workspace: AiWorkspaceContext | null | undefined,
 ): "small" | "medium" | "large" | undefined {
   // Cap scan length and bound digit runs to avoid ReDoS on pathological input.
+  const boundedMessage = message.slice(0, 400);
   const text =
-    `${workspace?.model.displayName ?? ""} ${workspace?.model.huggingFaceId ?? ""} ${message}`.slice(0, 500);
+    `${workspace?.model.displayName ?? ""} ${workspace?.model.huggingFaceId ?? ""} ${boundedMessage}`.slice(
+      0,
+      500,
+    );
   const m = text.match(/\b(\d{1,4}(?:\.\d{1,3})?)\s*[bB]\b/);
   if (!m) return undefined;
   const billions = Number.parseFloat(m[1]!);

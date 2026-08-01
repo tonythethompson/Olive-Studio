@@ -19,11 +19,20 @@ export function useAiAudit({ state, setState }: UseAiAuditOptions) {
   /** When true, the next analyze call includes previousScore for continuity. */
   const continuityScoreRef = useRef<number | null>(null);
   const stateRef = useRef(state);
+  const analysisRequestIdRef = useRef(0);
+  const autofixTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
 
+  useEffect(() => {
+    return () => {
+      if (autofixTimerRef.current) clearTimeout(autofixTimerRef.current);
+    };
+  }, []);
+
   const runAnalysis = async (opts?: { previousScore?: number | null; stateOverride?: UIState }) => {
+    const requestId = ++analysisRequestIdRef.current;
     setIsAnalyzing(true);
     setAnalysisError("");
     const previousScore = opts?.previousScore !== undefined ? opts.previousScore : continuityScoreRef.current;
@@ -46,12 +55,14 @@ export function useAiAudit({ state, setState }: UseAiAuditOptions) {
           "Server returned non-JSON. Restart with npm run dev (Express + API), not vite alone.",
         );
       }
+      if (requestId !== analysisRequestIdRef.current) return;
       setAnalysis(data as AnalysisResult);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
+      if (requestId !== analysisRequestIdRef.current) return;
       setAnalysisError(err.message || "Analysis failed.");
     } finally {
-      setIsAnalyzing(false);
+      if (requestId === analysisRequestIdRef.current) setIsAnalyzing(false);
     }
   };
 
@@ -79,7 +90,11 @@ export function useAiAudit({ state, setState }: UseAiAuditOptions) {
     };
     setState(patch);
     continuityScoreRef.current = prior;
-    setTimeout(() => void runAnalysis({ previousScore: prior, stateOverride: next }), 400);
+    if (autofixTimerRef.current) clearTimeout(autofixTimerRef.current);
+    autofixTimerRef.current = setTimeout(() => {
+      autofixTimerRef.current = null;
+      void runAnalysis({ previousScore: prior, stateOverride: next });
+    }, 400);
   };
 
   return {

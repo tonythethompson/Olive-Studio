@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useTransition } from "react";
+import { useState, useEffect, useMemo, useTransition, useRef } from "react";
 import { UIState } from "@/types";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { cn } from "@/lib/utils";
@@ -67,6 +67,13 @@ export function GeminiSidebar({
 
   const audit = useAiAudit({ state, setState });
   const chat = useAiChat(workspaceContext);
+  const chatActionAuditTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (chatActionAuditTimerRef.current) clearTimeout(chatActionAuditTimerRef.current);
+    };
+  }, []);
 
   const handleApplyChatAction = (messageIndex: number, action: ChatAction) => {
     const patch = sanitizeChatActionPatch(action.patch);
@@ -79,7 +86,11 @@ export function GeminiSidebar({
     };
     setState(partial);
     chat.markActionApplied(messageIndex, action.id);
-    setTimeout(() => void audit.runAnalysis({ stateOverride: next }), 400);
+    if (chatActionAuditTimerRef.current) clearTimeout(chatActionAuditTimerRef.current);
+    chatActionAuditTimerRef.current = setTimeout(() => {
+      chatActionAuditTimerRef.current = null;
+      void audit.runAnalysis({ stateOverride: next });
+    }, 400);
   };
 
   const providers = useAiProviderSettings({

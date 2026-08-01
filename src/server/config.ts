@@ -39,7 +39,9 @@ const CONFIG_PATH = path.join(CONFIG_DIR, "config.json");
 function readDiskConfig(): StudioConfig {
   try {
     if (!fs.existsSync(CONFIG_PATH)) return {};
-    return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8")) as StudioConfig;
+    const parsed: unknown = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return parsed as StudioConfig;
   } catch {
     return {};
   }

@@ -113,6 +113,22 @@ describe("resolveAuditAutofix", () => {
     expect(patch?.passes?.conversionInputTargetTypes).toBe("float16");
     expect(patch?.passes?.quantPrecision).toBe("fp16");
   });
+
+  it("applies JSON memoryOffload and modelSource top-level passes", () => {
+    expect(
+      resolveAuditAutofix({ pass: "memoryOffload", value: '{"memoryOffload":"auto"}' }, state)?.memoryOffload,
+    ).toBe("auto");
+    expect(
+      resolveAuditAutofix({ pass: "modelSource", value: '{"modelSource":"local"}' }, state)?.modelSource,
+    ).toBe("local");
+  });
+
+  it("returns null for invalid JSON memoryOffload and modelSource", () => {
+    expect(
+      resolveAuditAutofix({ pass: "memoryOffload", value: '{"memoryOffload":"disk"}' }, state),
+    ).toBeNull();
+    expect(resolveAuditAutofix({ pass: "modelSource", value: '{"modelSource":"s3"}' }, state)).toBeNull();
+  });
 });
 
 describe("isAuditAutofixApplyable", () => {

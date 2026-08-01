@@ -608,7 +608,7 @@ function getPassCatalogIssues(state: UIState, recipe: OliveRecipe): PipelineIssu
   return issues;
 }
 
-function getLocalExecutionIssues(state: UIState, forLocalExecution?: boolean): PipelineIssue[] {
+export function getLocalExecutionIssues(state: UIState, forLocalExecution?: boolean): PipelineIssue[] {
   if (!forLocalExecution || state.ihvProvider !== "WebGpuExecutionProvider") {
     return [];
   }

@@ -225,8 +225,8 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     hasNvidiaGpu: Boolean(nvidia?.gpus.length),
     hasRocmGpu: Boolean(rocm?.gpus.length),
     hasOpenVino: Boolean(openvino?.available),
-    tensorRtLoadable: tensorrt?.loadable === true,
-    tensorRtRtxLoadable: tensorRtRtx?.loadable === true,
+    tensorRtLoadable: tensorRtVenvLoadable,
+    tensorRtRtxLoadable: tensorRtRtxVenvLoadable,
   });
 
   return {

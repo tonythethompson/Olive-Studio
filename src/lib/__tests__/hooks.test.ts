@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useMcpDiagnosticKeyed } from "@/lib/hooks";
+import { useMcpDiagnostic, useMcpDiagnosticKeyed } from "@/lib/hooks";
 import type { McpDiagnostic } from "@/types";
 
 // ── Mock fetch ───────────────────────────────────────────────────
@@ -297,5 +297,92 @@ describe("useMcpDiagnosticKeyed", () => {
     expect(typeof result.current.diagnostics["job-race"].title).toBe("string");
     expect(typeof result.current.diagnostics["job-race"].root_cause).toBe("string");
     expect(typeof result.current.diagnostics["job-race"].workaround).toBe("string");
+  });
+
+  it("stores returned error messages in errors[key]", async () => {
+    const { result } = renderHook(() => useMcpDiagnosticKeyed());
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "KB unavailable" }), { status: 500 }),
+    );
+    await act(async () => {
+      await result.current.fetchKeyedDiagnostic("job-err", emptyLogs);
+    });
+    expect(result.current.diagnostics["job-err"]).toBeUndefined();
+    expect(result.current.errors["job-err"]).toBe("KB unavailable");
+  });
+
+  it("treats title-only payloads as malformed errors", async () => {
+    const { result } = renderHook(() => useMcpDiagnosticKeyed());
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ title: "Only a title" }), { status: 200 }),
+    );
+    await act(async () => {
+      await result.current.fetchKeyedDiagnostic("job-partial", emptyLogs);
+    });
+    expect(result.current.diagnostics["job-partial"]).toBeUndefined();
+    expect(result.current.errors["job-partial"]).toMatch(/incomplete|malformed/i);
+  });
+});
+
+describe("useMcpDiagnostic", () => {
+  it("stores diagnostic and clears error on success", async () => {
+    const { result } = renderHook(() => useMcpDiagnostic());
+    await act(async () => {
+      await result.current.fetchDiagnostic(emptyLogs);
+    });
+    expect(result.current.diagnostic).toEqual(mockDiagnostic);
+    expect(result.current.error).toBeNull();
+    expect(result.current.isDiagnosing).toBe(false);
+  });
+
+  it("exposes error messages on the single-hook error contract", async () => {
+    const { result } = renderHook(() => useMcpDiagnostic());
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "tool failed" }), { status: 502 }),
+    );
+    await act(async () => {
+      await result.current.fetchDiagnostic(emptyLogs);
+    });
+    expect(result.current.diagnostic).toBeNull();
+    expect(result.current.error).toBe("tool failed");
+  });
+
+  it("stays silent when the request is aborted", async () => {
+    const { result } = renderHook(() => useMcpDiagnostic());
+    let call = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation((_url, opts) => {
+      call += 1;
+      const signal = (opts as RequestInit | undefined)?.signal;
+      if (call === 1) {
+        return new Promise((_resolve, reject) => {
+          signal?.addEventListener("abort", () => {
+            reject(new DOMException("Aborted", "AbortError"));
+          });
+        });
+      }
+      return Promise.resolve(new Response(JSON.stringify(mockDiagnostic), { status: 200 }));
+    });
+
+    act(() => {
+      void result.current.fetchDiagnostic(emptyLogs);
+    });
+    await act(async () => {
+      await result.current.fetchDiagnostic(emptyLogs);
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.diagnostic).toEqual(mockDiagnostic);
+  });
+
+  it("rejects title-only malformed payloads", async () => {
+    const { result } = renderHook(() => useMcpDiagnostic());
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ title: "Incomplete" }), { status: 200 }),
+    );
+    await act(async () => {
+      await result.current.fetchDiagnostic(emptyLogs);
+    });
+    expect(result.current.diagnostic).toBeNull();
+    expect(result.current.error).toMatch(/incomplete|malformed/i);
   });
 });

@@ -81,6 +81,20 @@ interface ReconstructedItem {
   reconstructedAt: string;
 }
 
+/** Lineage for an archived chunk points back at the assembled model. */
+type ArchivedChunkLineage = ReconstructedItem & { parent: string };
+
+type FileDetailLineage = ReconstructedItem | ArchivedChunkLineage;
+
+interface FileDetailedInfo {
+  name: string;
+  size: number;
+  status: string;
+  isChunk: boolean;
+  reconstructed: boolean;
+  lineage: FileDetailLineage | null;
+}
+
 /**
  * Splits a preset name into its primary title and supplemental metadata.
  *
@@ -456,7 +470,7 @@ export function InputEnvironmentPanel({
   const groupedRecipes = useMemo(() => {
     const groups = new Map<string, { title: string; rows: typeof curatedRecipesWithMatch }>();
     for (const row of curatedRecipesWithMatch) {
-      const { title } = presetDisplayName(row.item.name);
+      const title = row.modelTitle;
       const existing = groups.get(title);
       if (existing) {
         existing.rows.push(row);
@@ -722,7 +736,7 @@ export function InputEnvironmentPanel({
         : null);
 
   // Find file in local files or in reconstructed history or as part of chunks
-  const getFileDetailedInfo = (name: string | null) => {
+  const getFileDetailedInfo = (name: string | null): FileDetailedInfo | null => {
     if (!name) return null;
 
     // Check in active localFiles
@@ -755,13 +769,14 @@ export function InputEnvironmentPanel({
     for (const r of reconstructedHistory) {
       const chunk = r.chunks.find((c) => c.name === name);
       if (chunk) {
+        const lineage: ArchivedChunkLineage = { parent: r.baseName, ...r };
         return {
           name: chunk.name,
           size: chunk.size,
           status: "Archived Chunk Segment",
           isChunk: true,
           reconstructed: false,
-          lineage: { parent: r.baseName, ...r },
+          lineage,
         };
       }
     }
@@ -1320,7 +1335,7 @@ export function InputEnvironmentPanel({
                               branch: "main",
                               path: "examples/resnet/resnet_ptq.json",
                             },
-                          ].map((sc, i) => {
+                          ].map((sc) => {
                             const isActive =
                               repoPath === sc.path &&
                               repoBranch === sc.branch &&
@@ -1329,7 +1344,7 @@ export function InputEnvironmentPanel({
                                 : repoUrl.replace(/\/$/, "") === sc.repo.replace(/\/$/, ""));
                             return (
                               <button
-                                key={i}
+                                key={sc.path}
                                 type="button"
                                 disabled={syncStatus === "loading"}
                                 aria-label={`Pull ${sc.label} into JSON editor`}
@@ -1725,14 +1740,13 @@ export function InputEnvironmentPanel({
                             Uploaded Model Files ({state.localFiles.length})
                           </Label>
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {state.localFiles.map((file, i) => {
+                            {state.localFiles.map((file) => {
                               const isChunk = getBaseName(file.name) !== null;
                               const isCurSelected = activeFileSelectedName === file.name;
                               return (
                                 <div
-                                  key={i}
-                                  onClick={() => setSelectedFileName(file.name)}
-                                  className={`flex items-center justify-between p-3 rounded-lg border group transition-all cursor-pointer ${
+                                  key={file.name}
+                                  className={`flex items-center justify-between p-3 rounded-lg border group transition-all ${
                                     isCurSelected
                                       ? "bg-electric-blue/10 border-electric-blue/60 shadow-sm ring-1 ring-electric-blue/25"
                                       : isChunk
@@ -1740,7 +1754,13 @@ export function InputEnvironmentPanel({
                                         : "bg-slate-950 border-slate-800 hover:border-slate-700 hover:bg-slate-950/80"
                                   }`}
                                 >
-                                  <div className="flex items-center gap-3 overflow-hidden">
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedFileName(file.name)}
+                                    aria-label={`Select ${file.name}`}
+                                    aria-pressed={isCurSelected}
+                                    className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden text-left cursor-pointer bg-transparent border-0 p-0"
+                                  >
                                     <FileIcon
                                       className={`h-4 w-4 shrink-0 transition-colors ${isCurSelected ? "text-electric-blue" : isChunk ? "text-blue-400" : "text-slate-500"}`}
                                     />
@@ -1754,8 +1774,10 @@ export function InputEnvironmentPanel({
                                         {formatSize(file.size)}
                                       </p>
                                     </div>
-                                  </div>
+                                  </button>
                                   <button
+                                    type="button"
+                                    aria-label={`Remove ${file.name}`}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       removeFile(file.name);
@@ -1860,14 +1882,17 @@ export function InputEnvironmentPanel({
                                     Active Workspace Files ({state.localFiles.length})
                                   </span>
                                   <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                                    {state.localFiles.map((file, idx) => {
+                                    {state.localFiles.map((file) => {
                                       const isCurSelected = activeFileSelectedName === file.name;
                                       const isChunk = getBaseName(file.name) !== null;
                                       return (
-                                        <div
-                                          key={idx}
+                                        <button
+                                          type="button"
+                                          key={file.name}
                                           onClick={() => setSelectedFileName(file.name)}
-                                          className={`flex items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                                          aria-label={`Select ${file.name}`}
+                                          aria-pressed={isCurSelected}
+                                          className={`flex w-full items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
                                             isCurSelected
                                               ? "bg-electric-blue/10 border-electric-blue/60 text-white shadow-sm"
                                               : "bg-slate-950/60 border-slate-900/60 text-slate-400 hover:border-slate-800 hover:bg-slate-950 hover:text-slate-200"
@@ -1888,7 +1913,7 @@ export function InputEnvironmentPanel({
                                               className={`h-3 w-3 shrink-0 opacity-50 ${isCurSelected ? "text-electric-blue opacity-100 translate-x-0.5 transition-transform" : ""}`}
                                             />
                                           </div>
-                                        </div>
+                                        </button>
                                       );
                                     })}
                                   </div>
@@ -1906,13 +1931,16 @@ export function InputEnvironmentPanel({
                                     </div>
                                   ) : (
                                     <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                                      {reconstructedHistory.map((item, idx) => {
+                                      {reconstructedHistory.map((item) => {
                                         const isCurSelected = activeFileSelectedName === item.baseName;
                                         return (
-                                          <div
-                                            key={idx}
+                                          <button
+                                            type="button"
+                                            key={item.baseName}
                                             onClick={() => setSelectedFileName(item.baseName)}
-                                            className={`flex items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                                            aria-label={`Select reconstructed ${item.baseName}`}
+                                            aria-pressed={isCurSelected}
+                                            className={`flex w-full items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
                                               isCurSelected
                                                 ? "bg-amber-500/10 border-amber-500/50 text-white"
                                                 : "bg-slate-950/60 border-slate-900/60 text-slate-400 hover:border-slate-800 hover:bg-slate-950 hover:text-slate-200"
@@ -1935,7 +1963,7 @@ export function InputEnvironmentPanel({
                                                 className={`h-3 w-3 shrink-0 opacity-50 ${isCurSelected ? "text-amber-500 opacity-100 translate-x-0.5 transition-transform" : ""}`}
                                               />
                                             </div>
-                                          </div>
+                                          </button>
                                         );
                                       })}
                                     </div>
@@ -1988,6 +2016,7 @@ export function InputEnvironmentPanel({
                                             </span>
                                             <button
                                               type="button"
+                                              aria-label="Copy verification checksum"
                                               onClick={() =>
                                                 handleCopyHash(getDisplayHash(selectedFileDetailed.name))
                                               }
@@ -2038,60 +2067,62 @@ export function InputEnvironmentPanel({
                                               This model file was compiled locally at{" "}
                                               <code className="text-white bg-slate-900 px-1 py-0.5 rounded font-mono text-[10px]">
                                                 {new Date(
-                                                  (selectedFileDetailed.lineage as ReconstructedItem)
-                                                    .reconstructedAt,
+                                                  selectedFileDetailed.lineage.reconstructedAt,
                                                 ).toLocaleTimeString()}
                                               </code>{" "}
                                               from the following byte segments:
                                             </p>
                                             <div className="space-y-1.5">
-                                              {(selectedFileDetailed.lineage as ReconstructedItem).chunks.map(
-                                                (ch, idx) => (
-                                                  <div
-                                                    key={idx}
-                                                    onClick={() => setSelectedFileName(ch.name)}
-                                                    className="flex items-center justify-between text-[10px] font-mono p-1.5 bg-slate-950 rounded border border-slate-900 hover:border-slate-800 cursor-pointer transition-colors"
-                                                  >
-                                                    <div className="flex items-center gap-1.5 truncate">
-                                                      <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse shrink-0" />
-                                                      <span className="text-slate-300 font-medium truncate">
-                                                        {ch.name}
-                                                      </span>
-                                                    </div>
-                                                    <div className="text-slate-500 flex items-center gap-2">
-                                                      <span>{formatSize(ch.size)}</span>
-                                                      <span className="text-slate-600">
-                                                        ({ch.hash.substring(7, 15)})
-                                                      </span>
-                                                    </div>
+                                              {selectedFileDetailed.lineage.chunks.map((ch) => (
+                                                <button
+                                                  type="button"
+                                                  key={ch.name}
+                                                  onClick={() => setSelectedFileName(ch.name)}
+                                                  aria-label={`Select chunk ${ch.name}`}
+                                                  className="flex w-full items-center justify-between text-[10px] font-mono p-1.5 bg-slate-950 rounded border border-slate-900 hover:border-slate-800 cursor-pointer transition-colors text-left"
+                                                >
+                                                  <div className="flex items-center gap-1.5 truncate">
+                                                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse shrink-0" />
+                                                    <span className="text-slate-300 font-medium truncate">
+                                                      {ch.name}
+                                                    </span>
                                                   </div>
-                                                ),
-                                              )}
+                                                  <div className="text-slate-500 flex items-center gap-2">
+                                                    <span>{formatSize(ch.size)}</span>
+                                                    <span className="text-slate-600">
+                                                      ({ch.hash.substring(7, 15)})
+                                                    </span>
+                                                  </div>
+                                                </button>
+                                              ))}
                                             </div>
                                           </div>
                                         </div>
                                       )}
 
                                       {/* If selected file is an archived/historical chunk segment, render back-link */}
-                                      {selectedFileDetailed.status === "Archived Chunk Segment" && (
-                                        <div className="p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between text-xs text-slate-400">
-                                          <span className="flex items-center gap-1.5">
-                                            <Info className="h-3.5 w-3.5 text-emerald-400" />
-                                            Component part of reconstructed model
-                                          </span>
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              setSelectedFileName(
-                                                (selectedFileDetailed.lineage as any).parent,
-                                              )
-                                            }
-                                            className="text-[10px] font-mono text-emerald-400 hover:underline hover:text-emerald-300 font-semibold cursor-pointer"
-                                          >
-                                            Go to assembled model →
-                                          </button>
-                                        </div>
-                                      )}
+                                      {selectedFileDetailed.status === "Archived Chunk Segment" &&
+                                        selectedFileDetailed.lineage &&
+                                        "parent" in selectedFileDetailed.lineage && (
+                                          <div className="p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between text-xs text-slate-400">
+                                            <span className="flex items-center gap-1.5">
+                                              <Info className="h-3.5 w-3.5 text-emerald-400" />
+                                              Component part of reconstructed model
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const lineage = selectedFileDetailed.lineage;
+                                                if (lineage && "parent" in lineage) {
+                                                  setSelectedFileName(lineage.parent);
+                                                }
+                                              }}
+                                              className="text-[10px] font-mono text-emerald-400 hover:underline hover:text-emerald-300 font-semibold cursor-pointer"
+                                            >
+                                              Go to assembled model →
+                                            </button>
+                                          </div>
+                                        )}
                                     </div>
                                   </div>
                                 ) : (
