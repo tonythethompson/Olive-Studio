@@ -1109,7 +1109,7 @@ export function mountAiRoutes(router: Router): void {
     return res.json({ healthy });
   });
 
-  router.post("/ai/ollama-pull", async (req, res) => {
+  router.post("/ai/ollama-pull", heavyCommandRateLimit, async (req, res) => {
     const { modelTag } = req.body ?? {};
     if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
     const send = beginPullSse(res);
