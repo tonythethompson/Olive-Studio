@@ -1,0 +1,152 @@
+src/lib/oliveRecipeHub.ts
+  s_d35b29515e08d0::t_4bc00c86ad31b9 450-454
+src/index.css
+  s_d35b29515e08d0::t_1796799b784375 38-40,84-96
+  s_d35b29515e08d0::t_d4823ec502e7b8 41-74
+index.html
+  s_d35b29515e08d0::t_54e6fa8c11f323 9
+src/components/features/InputEnvironmentPanel.tsx
+  s_d35b29515e08d0::t_f2f63b04a6c461 1538-1544,1546,1548-1550,1553,1556-1559
+src/components/features/gemini/ManualProviderSetup.tsx
+  s_d35b29515e08d0::t_f2f63b04a6c461 39,179-182,225
+src/lib/__tests__/oliveRecipeBuilder.test.ts
+  s_d35b29515e08d0::t_dbd40a0c9fb688 71-77
+  s_d35b29515e08d0::t_cb414d4bd9c6c0 20
+src/lib/stores/pipelineStore.ts
+  s_d35b29515e08d0::t_a4bfb25ff92811 11
+src-tauri/tauri.conf.json
+  s_d35b29515e08d0::t_589c3381b07db0 17-18
+src/components/features/GeminiSidebar.flows.test.tsx
+  s_d35b29515e08d0::t_292691b4526ee7 59,61-62,73-77
+src/lib/auditAutofix.test.ts
+  s_d35b29515e08d0::t_a7cfd8fc255c28 1,3-55,63-75,77-96,116-130,139-140
+  s_d35b29515e08d0::t_cff6bd88e287cd 99,101-103
+  s_d35b29515e08d0::t_40e7be7d486a48 56-62,97-98,131-133,135-138
+  s_d35b29515e08d0::t_2d1bed5d7b38e9 104-115
+  s_d35b29515e08d0::t_f2f63b04a6c461 2,76,100,134
+server.ts
+  s_d35b29515e08d0::t_a5adb5c184cf8c 6,17-18
+src/App.tsx
+  s_d35b29515e08d0::t_cbf391f729bbb7 1,13,15,43,65,73-74,81-124,126-147,151-166,168-174,177-197,199-201,203,206-207,209,211-212,214-235,237-267,269-272,274-297,299-309,312-314
+src/lib/oliveRecipeBuilder.ts
+  s_d35b29515e08d0::t_5c7ffec79a9cb6 180
+  s_d35b29515e08d0::t_a1de56d69bfe93 172
+  s_d35b29515e08d0::t_f3778b03c4ea4d 16-26,35-39
+AGENTS.md
+  s_d35b29515e08d0::t_f2f63b04a6c461 41-60
+src/lib/assistantSettingsMode.ts
+  s_d35b29515e08d0::t_101aafb4a8a414 1-37
+src/components/features/LocalModelManager.tsx
+  s_d35b29515e08d0::t_101aafb4a8a414 15-17,22-27,183,214,216-224,234-238
+src/components/features/gemini/types.ts
+  s_d35b29515e08d0::t_6c0749f6a12a8e 20
+vite.config.ts
+  s_d35b29515e08d0::t_97e997a909c9e1 2
+src/components/DesktopMinimumViewport.tsx
+  s_d35b29515e08d0::t_cbf391f729bbb7 1-50
+.env.example
+  s_d35b29515e08d0::t_101aafb4a8a414 40-50,53-58,68-71,73-74,76
+src/types.ts
+  s_d35b29515e08d0::t_3bfc499cd6e595 88-89
+src/components/features/gemini/LocalAiSetupCard.tsx
+  s_d35b29515e08d0::t_f2f63b04a6c461 82-83,140,202,206,208,215-216,222,227-228,256-266,280-295
+package.json
+  s_d35b29515e08d0::t_478f4e436b9d54 113
+src/components/features/gemini/ChatPanel.tsx
+  s_d35b29515e08d0::t_7da8b7103caec2 68
+  s_d35b29515e08d0::t_4394ead7f13bc3 3-4,20,35,55-67,69-73
+src/components/features/__tests__/testUtils.tsx
+  s_d35b29515e08d0::t_46a9638f66a43d 17
+src/components/features/GeminiSidebar.tsx
+  s_d35b29515e08d0::t_6508f178795e41 197
+  s_d35b29515e08d0::t_1a3027805eea12 92-93
+  s_d35b29515e08d0::t_ea79e20d5fa59c 10
+  s_d35b29515e08d0::t_9274b94daf296d 213,220-223
+  s_d35b29515e08d0::t_033b318cdffdbd 71-78
+src/lib/__tests__/chatActions.test.ts
+  s_d35b29515e08d0::t_101aafb4a8a414 1-140
+src/lib/auditSuggestionFilter.ts
+  s_d35b29515e08d0::t_08cc0773d9a49e 8
+  s_d35b29515e08d0::t_101aafb4a8a414 1-7,9-11,13-51,53-97,99,105-106,108-111,113-127
+  s_d35b29515e08d0::t_3a4182c06b2003 98,100-101,103,107
+  s_d35b29515e08d0::t_fb614c954303a2 102,104
+  s_d35b29515e08d0::t_f2f63b04a6c461 12,52,112
+src/lib/aiResponse.ts
+  s_d35b29515e08d0::t_a5adb5c184cf8c 10-29,31-80,83-106,133-139
+src/lib/auditSuggestionFilter.test.ts
+  s_d35b29515e08d0::t_101aafb4a8a414 1-17,20-103,135-160
+  s_d35b29515e08d0::t_13a9ee9df190c6 18-19
+  s_d35b29515e08d0::t_19da16a47fc75b 104-134
+src/components/features/gemini/SettingsPanel.tsx
+  s_d35b29515e08d0::t_f2f63b04a6c461 1-6,52-93,100,102-119,121-136
+src/components/features/VramEstimateBanner.tsx
+  s_d35b29515e08d0::t_f2f63b04a6c461 109-111,114-146,148-155,160,167,177,184,192-221,268-271,278-283
+src/lib/aiWorkspaceContext.ts
+  s_d35b29515e08d0::t_531267f7640ea6 71-73
+  s_d35b29515e08d0::t_4e78b04f58e0bf 3,13-16
+  s_d35b29515e08d0::t_47cabab6d146e3 104-105,115-116
+  s_d35b29515e08d0::t_0fc809d1aa4e67 156,161-162
+src/lib/__tests__/assistantSettingsMode.test.ts
+  s_d35b29515e08d0::t_101aafb4a8a414 1-27
+src/lib/auditAnalysis.ts
+  s_d35b29515e08d0::t_101aafb4a8a414 1-34,41-137,159-232
+  s_d35b29515e08d0::t_82c3278ec0c248 138-158
+  s_d35b29515e08d0::t_8980a00cdade19 35-40
+src/server/loadStudioEnv.test.ts
+  s_d35b29515e08d0::t_101aafb4a8a414 1-4,6-72
+  s_d35b29515e08d0::t_f2f63b04a6c461 5
+src/components/features/gemini/useAiAudit.ts
+  s_d35b29515e08d0::t_f2f63b04a6c461 1-2,19-20,22,25-26,31-34,60,66-71
+src/components/features/LocalModelManager.test.tsx
+  s_d35b29515e08d0::t_101aafb4a8a414 61,65,69
+src/components/features/AuditPanel.tsx
+  s_d35b29515e08d0::t_63b87a0c10567a 2,149-150
+  s_d35b29515e08d0::t_7a4b0f4913bf98 132,144-148
+src/server/routes/ai.ts
+  s_d35b29515e08d0::t_f2f63b04a6c461 15-17,21-29,306-327,341-360,426,429-452,484,488-532,636-638,652-658
+src/lib/chatActions.ts
+  s_d35b29515e08d0::t_f2f63b04a6c461 1-421
+src/server/loadStudioEnv.ts
+  s_d35b29515e08d0::t_f2f63b04a6c461 92-96
+  s_d35b29515e08d0::t_101aafb4a8a414 1-91,97-129
+src/components/features/gemini/useLocalEngineSetup.ts
+  s_d35b29515e08d0::t_9bf2f2bac1c176 334
+  s_d35b29515e08d0::t_8eb21553ae32f6 7
+src/lib/pipelineNavigation.ts
+  s_d35b29515e08d0::t_84020909d2e760 5
+src/lib/auditAutofix.ts
+  s_d35b29515e08d0::t_a7cfd8fc255c28 1-9,20-49,69-80,83-92,116-118,133-141,147-150,152-194,196-217,223-233,242-276,281-300,302,314,316,318
+  s_d35b29515e08d0::t_83480e324bcfa0 119-132
+  s_d35b29515e08d0::t_adc8c306840030 10-19,50-68,81-82,101-108,111-115,142-144,146,151
+  s_d35b29515e08d0::t_72125fdadf28c8 109-110
+  s_d35b29515e08d0::t_a509fba6904077 234-241
+  s_d35b29515e08d0::t_47cbc0d6fc87e4 301,303-313,315,317
+  s_d35b29515e08d0::t_65b1d35f3ae589 195,218-222
+  s_d35b29515e08d0::t_375c2b5aa0a7e8 277-280
+  s_d35b29515e08d0::t_e4ae7a8dbd908e 93-100
+  s_d35b29515e08d0::t_f2f63b04a6c461 145
+src/server/services/ai/registry.ts
+  s_d35b29515e08d0::t_6a86aa821f1374 2-8
+  s_d35b29515e08d0::t_0869df07fa8529 79-95
+src/components/features/gemini/useAiProviderSettings.ts
+  s_d35b29515e08d0::t_88f842ee814051 436-442,450,462,464,480-510
+  s_d35b29515e08d0::t_5443cb347cf4a0 555
+src/components/features/gemini/useAiChat.ts
+  s_d35b29515e08d0::t_f2f63b04a6c461 2-3,8-9,14,63-85,88,98-108,117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "33d56c923fd63a6cf27a9ba70b759c75731d5ca3",
+  "prompts": {},
+  "sessions": {
+    "s_d35b29515e08d0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f88350b3-eb33-4d77-8be0-90da0daad3f7",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
