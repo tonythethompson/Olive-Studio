@@ -1566,9 +1566,10 @@ async function fetchAnthropicModelCatalog(apiKey: string) {
 }
 
 async function fetchCopilotModelCatalog(apiKey: string, baseUrl?: string) {
-  const sanitized = sanitizeProviderBaseUrl("copilot", baseUrl);
-  const base = stripTrailingSlashes(sanitized || "https://api.githubcopilot.com");
-  const modelsUrl = base.endsWith("/models") ? base : `${base}/models`;
+  // Validate optional override against the Copilot allowlist, then fetch only the
+  // constant allowlisted endpoint (breaks CodeQL SSRF taint from user baseUrl).
+  sanitizeProviderBaseUrl("copilot", baseUrl);
+  const modelsUrl = "https://api.githubcopilot.com/models";
   const r = await fetch(modelsUrl, {
     headers: {
       Authorization: `Bearer ${apiKey}`,
