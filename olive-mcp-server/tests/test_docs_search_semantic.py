@@ -273,6 +273,8 @@ def test_live_fetch_generation_ignores_stale_completion(monkeypatch: pytest.Monk
     # Now let the stale gen1 completion land; it must not clobber gen2's cache.
     release_gen1.set()
     t1.join(timeout=5)
+    assert not t1.is_alive(), "stale generation-1 fetch did not complete"
+    assert result_gen1.get("pages"), "generation-1 thread raised before returning"
 
     assert "NEWER" in next(iter(docs_search._LIVE_CACHE.values()))
 

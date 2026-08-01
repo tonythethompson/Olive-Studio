@@ -180,6 +180,11 @@ describe("BatchProcessingPanel", () => {
     expect(mockFetchKeyedDiagnostic).toHaveBeenCalledWith("job-invalid", expect.any(Array));
 
     // Verify the valid job was attempted to run (fetch was called for /api/olive/run)
-    expect(global.fetch).toHaveBeenCalledWith("/api/olive/run", expect.any(Object));
+    await waitFor(
+      () => {
+        expect(global.fetch).toHaveBeenCalledWith("/api/olive/run", expect.any(Object));
+      },
+      { timeout: 3000 },
+    );
   });
 });

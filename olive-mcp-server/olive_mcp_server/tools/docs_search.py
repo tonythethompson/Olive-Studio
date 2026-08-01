@@ -226,8 +226,12 @@ def _fetch_live_docs() -> tuple[dict[str, str], float]:
             fetched = {k: v for k, v in pages.items() if isinstance(v, str)}
             if fetched:
                 with _LIVE_FETCH_LOCK:
-                    # Ignore stale completions if a newer fetch was started.
-                    if my_generation == _LIVE_FETCH_GENERATION:
+                    # Publish unless a newer generation has already succeeded
+                    # (empty cache means no generation has published yet, so
+                    # an older completion racing behind a newer *failure* is
+                    # still the only good data available and must not be
+                    # discarded).
+                    if my_generation == _LIVE_FETCH_GENERATION or not _LIVE_CACHE:
                         _LIVE_CACHE = fetched
                         _LAST_FETCH_TIME = time.monotonic()
     except Exception:
