@@ -1,0 +1,133 @@
+src/lib/chatActions.ts
+  s_d35b29515e08d0::t_ff36bd4a068071 7
+  s_d35b29515e08d0::t_20ee7f291fdc44 70-72
+src/lib/oliveRecipeHub.ts
+  s_d35b29515e08d0::t_7445d6ce5966f7 451,454,456
+src/lib/cloudflare/wrangler.test.ts
+  s_d35b29515e08d0::t_b933fcb2a089f5 31-40
+src/lib/recipePipeline.ts
+  s_d35b29515e08d0::t_223a6f674ce62b 20-21,44
+src/components/features/ExecutionWorkspace.tsx
+  s_d35b29515e08d0::t_e6e7b99b0b04c9 6-7,11,13,20-25,59,135,137-145,157-158,273,327,399-404,406-409,411-428,431,460-461,483,485,501,504,506-513,626,629,632-637,917,1193,1205,1238,1240
+src/lib/__tests__/assistantSettingsMode.test.ts
+  s_d35b29515e08d0::t_0bd648286ad4d0 12,17-19
+src/server/services/ai/security.ts
+  s_d35b29515e08d0::t_0f424c148cdc1a 90,108-112
+  s_d35b29515e08d0::t_9348840960ee93 2
+  s_d35b29515e08d0::t_b8197ccdbdfc1d 37-42,45
+src/components/features/LocalModelManager.tsx
+  s_d35b29515e08d0::t_ade4066c2f44fc 185-191
+  s_d35b29515e08d0::t_9c36c1dc8b98bf 30
+src/server/routes/ai.ts
+  s_d35b29515e08d0::t_e6e7b99b0b04c9 27-32,157-158,345,349,353-371,458-484,507,510,896,903,906-907,1606,1656,1691,1729
+src/server/services/ai/security.test.ts
+  s_d35b29515e08d0::t_ee165139779283 142-150
+  s_d35b29515e08d0::t_d0a45535b48715 99-101
+src/lib/__tests__/aiWorkspaceContext.test.ts
+  s_d35b29515e08d0::t_92a876f79a67ac 87-88
+src/lib/presetVramEstimate.test.ts
+  s_d35b29515e08d0::t_37c99d72393657 71-82,90
+src/lib/devin/client.ts
+  s_d35b29515e08d0::t_e6e0a78f4b8bf1 99-100
+src/lib/aiWorkspaceContext.ts
+  s_d35b29515e08d0::t_d7f1dc2514c999 3
+  s_d35b29515e08d0::t_26b629d7506c9d 246-249
+  s_d35b29515e08d0::t_cab53e7e7ea57c 178-181
+src/lib/aiResponse.ts
+  s_d35b29515e08d0::t_141baaf6c3eca4 87-88,91-105
+src/lib/owrExportConfigs.ts
+  s_d35b29515e08d0::t_e6e7b99b0b04c9 76
+src/components/features/recipe-graph/inspectors/ProviderInspector.tsx
+  s_d35b29515e08d0::t_d6a0948a3e4c23 73-80
+  s_d35b29515e08d0::t_e6e7b99b0b04c9 10-14
+  s_d35b29515e08d0::t_0c354415cca321 47
+src/lib/auditAutofix.ts
+  s_d35b29515e08d0::t_fbf2b8d9a3ede6 104-176
+  s_d35b29515e08d0::t_e9d6fa59008d12 346-347,349
+  s_d35b29515e08d0::t_259fef1b44d139 412-413,415,419
+src/components/features/RuntimeEnvControls.tsx
+  s_d35b29515e08d0::t_7724b7942402be 199-221
+olive-mcp-server/tests/test_call_tool.py
+  s_d35b29515e08d0::t_2aa1c71009530a 2-12,21
+olive-mcp-server/olive_mcp_server/knowledge_base/troubleshooting.json
+  s_d35b29515e08d0::t_ae01f4119098e3 512-513
+  s_d35b29515e08d0::t_9cff5cdd09b313 556-557
+  s_d35b29515e08d0::t_e1ba168cf43a65 617-618
+src/lib/localFileDetails.ts
+  s_d35b29515e08d0::t_57dff5c9eb1be1 1-23,25-82
+  s_d35b29515e08d0::t_2e39d7209c06a9 24
+src/lib/logFailurePatterns.test.ts
+  s_d35b29515e08d0::t_ffb24f8feb9b8e 25-35
+src/lib/assistantSettingsMode.ts
+  s_d35b29515e08d0::t_b0140e79e1ad12 12,18-19
+src/components/features/gemini/SettingsPanel.tsx
+  s_d35b29515e08d0::t_73db2597aad260 59,62-63,75-76
+src/server/services/ai/index.ts
+  s_d35b29515e08d0::t_e382c63afa008f 36,53
+src/lib/__tests__/localFileDetails.test.ts
+  s_d35b29515e08d0::t_a40cc5126786c8 1-39
+src/lib/presetVramEstimate.ts
+  s_d35b29515e08d0::t_99dc8922c603b9 132,136,156-158,160-162,164,167-173
+src/lib/auditAnalysis.ts
+  s_d35b29515e08d0::t_9bc35360532d80 112-120,122-125
+  s_d35b29515e08d0::t_c1f0cfdd7b59b7 196,207
+src/lib/auditAutofix.test.ts
+  s_d35b29515e08d0::t_e6e7b99b0b04c9 149
+  s_d35b29515e08d0::t_6c53717a949b0a 132-148,150-154,170-172
+src/lib/auditAnalysis.test.ts
+  s_d35b29515e08d0::t_b86d644e732386 74-81
+src/components/features/IHVIntegrationPanel.tsx
+  s_d35b29515e08d0::t_2e11e76f04ce66 351
+  s_d35b29515e08d0::t_34f7d613445f33 1315-1318,1331-1333
+  s_d35b29515e08d0::t_e6e7b99b0b04c9 1783-1785
+  s_d35b29515e08d0::t_68382510f96236 1787-1789,1795-1806
+src/components/features/BatchProcessingPanel.tsx
+  s_d35b29515e08d0::t_116a4426cd5f5b 115
+src/lib/__tests__/recipePipeline.test.ts
+  s_d35b29515e08d0::t_6d6b835b3b3f0c 48
+src/components/features/ProviderErrorBlock.tsx
+  s_d35b29515e08d0::t_edc9ab96a81ee3 58-60
+src/components/features/InputEnvironmentPanel.tsx
+  s_d35b29515e08d0::t_0de8a6e10a6680 476-477,484
+  s_d35b29515e08d0::t_1ccf7593e93418 728-730
+  s_241531fd9a93f5::t_f1a2291ab6bdab 657,666-674
+  s_d35b29515e08d0::t_0fb91a2688cd39 29
+  s_d35b29515e08d0::t_9f237662918043 972
+  s_d35b29515e08d0::t_d556f2bfe5a762 538-541
+  s_d35b29515e08d0::t_f88c7b9dead3d3 1957-1964,1966-1988
+src/lib/logFailurePatterns.ts
+  s_d35b29515e08d0::t_4866780a9f5330 98-111
+  s_d35b29515e08d0::t_f35fa4d11afcc2 44
+src/components/features/recipe-graph/RecipeValidationPanel.tsx
+  s_d35b29515e08d0::t_c334274fb80945 305-306
+  s_d35b29515e08d0::t_e6e7b99b0b04c9 355-356
+  s_d35b29515e08d0::t_9c765c7fe3f345 352-354
+src/server/services/olive/tensorrt-rtx.ts
+  s_d35b29515e08d0::t_480829b69c570f 67
+src/lib/cloudflare/client.ts
+  s_d35b29515e08d0::t_6ff83d11988ca4 257-258
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2e59db0416198a18ed42d2ca730534ac6b6a71f4",
+  "prompts": {},
+  "sessions": {
+    "s_241531fd9a93f5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1a82e9f3-c156-459c-b298-3c94b14fd87a",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    },
+    "s_d35b29515e08d0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f88350b3-eb33-4d77-8be0-90da0daad3f7",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
