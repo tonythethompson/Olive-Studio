@@ -9,15 +9,15 @@ from olive_mcp_server.tools import docs_search
 from olive_mcp_server.tools.passive_context import get_context_for_pipeline
 
 
-@pytest.fixture(autouse=True)
+`@pytest.fixture`(autouse=True)
 def _reset_kb_cache():
     docs_search._KB_TEXTS = []
     docs_search._KB_EMBEDDINGS = None
-    docs_search._KB_INDEX_MTIME = -1.0
+    docs_search._KB_INDEX_MTIME = (-1.0, -1)
     yield
     docs_search._KB_TEXTS = []
     docs_search._KB_EMBEDDINGS = None
-    docs_search._KB_INDEX_MTIME = -1.0
+    docs_search._KB_INDEX_MTIME = (-1.0, -1)
 
 
 def test_empty_pipeline():
