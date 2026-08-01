@@ -192,8 +192,7 @@ async function startServer() {
       try {
         const result = performKbSync();
         if (result.ok) {
-          // eslint-disable-next-line no-console -- intentional server startup message
-          console.log(`[kb] synced at startup (${result.status.passCount ?? "?"} passes)`);
+          console.warn(`[kb] synced at startup (${result.status.passCount ?? "?"} passes)`);
         } else {
            
           console.warn("[kb] startup sync skipped:", result.body.error ?? "unavailable");
