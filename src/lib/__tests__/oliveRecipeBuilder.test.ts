@@ -80,6 +80,17 @@ describe("resolveHfTask", () => {
   it("preserves other explicit tasks", () => {
     expect(resolveHfTask({ hfTask: "text-generation", hfModelId: "" })).toBe("text-generation");
   });
+
+  it("prefers an explicit hfTask over id inference in the built recipe", () => {
+    const state = baseState({
+      modelSource: "huggingface",
+      hfModelId: "openai/whisper-large-v3",
+      hfTask: "audio-classification",
+    });
+    const recipe = buildOliveRecipe(state);
+    const config = (recipe.input_model as Record<string, unknown>).config as Record<string, unknown>;
+    expect(config.task).toBe("audio-classification");
+  });
 });
 
 // ─── inferModelType ────────────────────────────────────────────

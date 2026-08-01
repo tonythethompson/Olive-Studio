@@ -39,11 +39,11 @@
   --breakpoint-wide: 900px;
 
   --font-sans: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-mono: "Hurmit", "Hermit", ui-monospace, SFMono-Regular, monospace;
+  --font-mono: Hurmit, Hermit, ui-monospace, SFMono-Regular, monospace;
 }
 
 @font-face {
-  font-family: "Hurmit";
+  font-family: Hurmit;
   src: url("/fonts/hurmit/Hurmit-Regular.otf") format("opentype");
   font-weight: 400;
   font-style: normal;
@@ -51,7 +51,7 @@
 }
 
 @font-face {
-  font-family: "Hurmit";
+  font-family: Hurmit;
   src: url("/fonts/hurmit/Hurmit-RegularItalic.otf") format("opentype");
   font-weight: 400;
   font-style: italic;
@@ -59,7 +59,7 @@
 }
 
 @font-face {
-  font-family: "Hurmit";
+  font-family: Hurmit;
   src: url("/fonts/hurmit/Hurmit-Bold.otf") format("opentype");
   font-weight: 700;
   font-style: normal;
@@ -67,7 +67,7 @@
 }
 
 @font-face {
-  font-family: "Hurmit";
+  font-family: Hurmit;
   src: url("/fonts/hurmit/Hurmit-BoldItalic.otf") format("opentype");
   font-weight: 700;
   font-style: italic;

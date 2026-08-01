@@ -129,6 +129,17 @@ describe("resolveAuditAutofix", () => {
     ).toBeNull();
     expect(resolveAuditAutofix({ pass: "modelSource", value: '{"modelSource":"s3"}' }, state)).toBeNull();
   });
+
+  it("applies multi-key JSON pass autofixes and drops unknown sentinels", () => {
+    const patch = resolveAuditAutofix(
+      { pass: "passes", value: '{"quantMethod":"awq","quantPrecision":"int4"}' },
+      state,
+    );
+    expect(patch?.passes?.quantMethod).toBe("awq");
+    expect(patch?.passes?.quantPrecision).toBe("int4");
+    expect(patch?.passes?.pruning).toBe(false);
+    expect(resolveAuditAutofix({ pass: "passes", value: '{"tensor_rt":true}' }, state)).toBeNull();
+  });
 });
 
 describe("isAuditAutofixApplyable", () => {
@@ -143,5 +154,9 @@ describe("isAuditAutofixApplyable", () => {
 
   it("is false for TensorRTPass", () => {
     expect(isAuditAutofixApplyable({ pass: "passes.tensor_rt", value: "x" })).toBe(false);
+  });
+
+  it("is false for malformed JSON values", () => {
+    expect(isAuditAutofixApplyable({ pass: "quantMethod", value: "{oops" })).toBe(false);
   });
 });

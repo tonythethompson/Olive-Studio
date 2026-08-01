@@ -42,7 +42,9 @@ export function matchLocalLogDiagnostic(logs: string[]): LocalLogDiagnostic | nu
       evidence.push(unknownTask[0]!.slice(0, 240));
     }
 
-    if (badTask === "speech-recognition" || /\bspeech-recognition\b/i.test(joined)) {
+    // Match the captured bad task only. Do not scan `joined` for
+    // `\bspeech-recognition\b` — it matches inside `automatic-speech-recognition`.
+    if (badTask === "speech-recognition") {
       return {
         matched_entry: STUDIO_HF_TASK_SPEECH,
         domain: "studio",

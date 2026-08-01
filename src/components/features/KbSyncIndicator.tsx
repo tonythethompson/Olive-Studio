@@ -1,6 +1,8 @@
 import { memo } from "react";
 import { RefreshCw, Database, CheckCircle, AlertCircle } from "lucide-react";
-import { isKbStatusStale, kbFreshnessMs, useKbSync } from "@/lib/hooks/useKbSync";
+import { KB_STALE_AFTER_MS, isKbStatusStale, kbFreshnessMs, useKbSync } from "@/lib/hooks/useKbSync";
+
+const STALE_AFTER_DAYS = Math.round(KB_STALE_AFTER_MS / 86_400_000);
 
 export const KbSyncIndicator = memo(function KbSyncIndicator() {
   const { status, syncing, error, syncKb } = useKbSync();
@@ -13,7 +15,7 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
   const staleTitle =
     syncTime == null
       ? "Pass catalog age unknown. Sync to refresh Olive pass docs from the local knowledge base."
-      : `Pass catalog last updated ${new Date(syncTime).toLocaleString()}. Older than 7 days; sync to reload the local Olive docs.`;
+      : `Pass catalog last updated ${new Date(syncTime).toLocaleString()}. Older than ${STALE_AFTER_DAYS} days; sync to reload the local Olive docs.`;
 
   return (
     <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400">
@@ -43,7 +45,7 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
           ) : (
             <span
               className="text-emerald-500 flex items-center gap-1 shrink-0"
-              title="Pass catalog synced within the last 7 days"
+              title={`Pass catalog synced within the last ${STALE_AFTER_DAYS} days`}
             >
               <CheckCircle className="h-3 w-3" aria-hidden />
               <span>fresh</span>

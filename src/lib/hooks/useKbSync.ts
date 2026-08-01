@@ -30,7 +30,9 @@ export const KB_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 export function kbFreshnessMs(
   status: Pick<KbStatus, "lastSync" | "lastUpdated"> | null | undefined,
 ): number | null {
-  const raw = status?.lastSync ?? status?.lastUpdated ?? null;
+  // Prefer lastSync, but empty strings must fall through to lastUpdated (`??` does not).
+  const raw =
+    [status?.lastSync, status?.lastUpdated].find((s) => typeof s === "string" && s.trim().length > 0) ?? null;
   if (!raw) return null;
   // Date-only stamps (YYYY-MM-DD) are treated as end-of-day UTC so a catalog
   // updated "today" is not immediately ~24h old at local afternoon.
@@ -135,11 +137,10 @@ export function useKbSync() {
   }, [fetchStatus]);
 
   useEffect(() => {
-     
     void (async () => {
-      const initial = await fetchStatus();
       if (autoSyncAttempted.current) return;
       autoSyncAttempted.current = true;
+      const initial = await fetchStatus();
       if (initial?.available && isKbStatusStale(initial)) {
         await syncKb();
       }

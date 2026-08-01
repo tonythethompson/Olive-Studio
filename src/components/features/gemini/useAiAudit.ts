@@ -51,9 +51,7 @@ export function useAiAudit({ state, setState }: UseAiAuditOptions) {
       const data = contentType.includes("application/json") ? await r.json().catch(() => ({})) : {};
       if (!r.ok) throw new Error((data as { error?: string }).error || `HTTP ${r.status}`);
       if (!contentType.includes("application/json")) {
-        throw new Error(
-          "Server returned non-JSON. Restart with npm run dev (Express + API), not vite alone.",
-        );
+        throw new Error("Server returned non-JSON. Restart with pnpm dev (Express + API), not vite alone.");
       }
       if (requestId !== analysisRequestIdRef.current) return;
       setAnalysis(data as AnalysisResult);

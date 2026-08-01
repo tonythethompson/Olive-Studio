@@ -3,6 +3,7 @@ import {
   sanitizeChatActionPatch,
   chatPatchToUiState,
   parseChatStructuredReply,
+  salvageChatActionPatchFromLooseJson,
   summarizeChatPatch,
 } from "@/lib/chatActions";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
@@ -114,6 +115,14 @@ describe("parseChatStructuredReply", () => {
     expect(out.actions[0]!.patch.passes?.quantization).toBe(true);
     expect(out.actions[0]!.patch.passes?.quantPrecision).toBe("int8");
     expect(out.reply).toMatch(/Apply/i);
+  });
+
+  it("salvages step-only convert and quant actions without sibling fields", () => {
+    const convertOnly = salvageChatActionPatchFromLooseJson({ step: "convert_to_onnx" });
+    expect(convertOnly?.passes?.conversion).toBe(true);
+    const quantOnly = salvageChatActionPatchFromLooseJson({ step: "apply_quantization" });
+    expect(quantOnly?.passes?.quantization).toBe(true);
+    expect(quantOnly?.passes?.quantMethod).toBe("ptq");
   });
 
   it("strips misleading Apply instructions when no patch exists", () => {

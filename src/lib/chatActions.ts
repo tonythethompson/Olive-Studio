@@ -309,6 +309,18 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
         }
       }
 
+      // Loose schemas often put the action name in `step` / `action` values.
+      if ((key === "step" || key === "action") && typeof value === "string") {
+        const step = value.trim().toLowerCase();
+        if (/quant|awq|gptq|ptq|hqq|rtn|int[48]/.test(step)) {
+          passes.quantization = true;
+          passes.quantMethod = passes.quantMethod ?? "ptq";
+        }
+        if (/convert|onnx/.test(step)) {
+          passes.conversion = true;
+        }
+      }
+
       if (key === "precision" || key === "quantprecision" || key === "quant_precision") {
         if (typeof value === "string") {
           const prec = normalizeLooseQuantPrecision(value);
