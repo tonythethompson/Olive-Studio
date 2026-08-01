@@ -222,9 +222,9 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
       }
 
       if (
-        /quant/i.test(key) &&
+        (/quant/i.test(key) || (typeof value === "string" && /quant/i.test(value))) &&
         (value === true ||
-          (typeof value === "string" && /apply|enable|true|int[48]|awq|gptq|ptq/i.test(value)))
+          (typeof value === "string" && /apply|enable|true|int[48]|awq|gptq|ptq|quant/i.test(value)))
       ) {
         passes.quantization = true;
         if (typeof value === "string") {
@@ -240,7 +240,10 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
       }
 
       if (
-        (/convert/.test(key) || key === "onnx" || /onnx/.test(key)) &&
+        (/convert/.test(key) ||
+          key === "onnx" ||
+          /onnx/.test(key) ||
+          (typeof value === "string" && (/convert/i.test(value) || /onnx/i.test(value)))) &&
         (value === true || typeof value === "string" || typeof value === "number" || isRecord(value))
       ) {
         passes.conversion = true;
