@@ -15,8 +15,9 @@ def test_server_lists_all_tools():
 
     tools = _run(mcp.list_tools())
     names = {t.name for t in tools}
-    expected = set(_TOOL_IMPORTS.keys())
-    assert expected <= names
+    assert set(_TOOL_IMPORTS.keys()) <= names
+    required = {"get_olive_passes", "search_olive_documentation", "troubleshoot_olive_error"}
+    assert required <= names
     assert "get_context_for_pipeline" in names
     assert "diagnose_error" in names
 
