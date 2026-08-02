@@ -27,7 +27,7 @@ Adds a fourth top-level "Playground" navigation entry to the Olive Studio sideba
     - `setSlotA` / `setSlotB` apply partial patches via spread: `{ ...s.slotA, ...patch }`
     - _Requirements: 2.5, 5.1–5.3_
 
-- [ ] 3. Create `src/server/routes/arena.ts` and register it in `server.ts`
+- [x] 3. Create `src/server/routes/arena.ts` and register it in `server.ts`
   - [x] 3.1 Implement `mountArenaRoutes(router: Router)` with `POST /arena/cloud-inference`
     - Validate `endpointUrl` (required, must be `http:` or `https:` protocol only)
     - Validate `prompt` (required string)
