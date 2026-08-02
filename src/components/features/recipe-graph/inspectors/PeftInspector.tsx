@@ -35,7 +35,7 @@ export function PeftInspector({ state, setState }: InspectorProps) {
       </div>
       <div className="grid grid-cols-2 gap-3 border-l border-slate-800/50 pl-4">
         {!peftAllowed ? (
-          <div className="col-span-2 flex items-center justify-center text-xs text-slate-500 font-mono italic text-center px-4">
+          <div className="col-span-2 flex items-center justify-center text-xs text-slate-500 font-sans italic text-center px-4">
             PEFT is not supported on the selected execution provider. Change target in step 02 or the provider
             node below.
           </div>
@@ -89,7 +89,7 @@ export function PeftInspector({ state, setState }: InspectorProps) {
             )}
           </>
         ) : (
-          <div className="col-span-2 flex items-center justify-center text-xs text-slate-500 font-mono italic">
+          <div className="col-span-2 flex items-center justify-center text-xs text-slate-500 font-sans italic">
             PEFT adapter tuning is bypassed. Model weights are static baseline.
           </div>
         )}

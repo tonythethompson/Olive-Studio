@@ -27,7 +27,7 @@ export function OrtTransformsInspector({ state }: InspectorProps) {
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-center text-xs text-slate-500 font-mono italic">
+          <div className="flex items-center justify-center text-xs text-slate-500 font-sans italic">
             ORT Optimization passes are disabled. Computational graphs preserve base node steps.
           </div>
         )}

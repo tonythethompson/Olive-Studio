@@ -40,6 +40,14 @@
 
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Fira Code", ui-monospace, SFMono-Regular, monospace;
+
+  /*
+   * IBM Plex Sans variable face tops out at 700. Remap Tailwind's heavier
+   * utilities so font-extrabold / font-black don't silently collapse to the
+   * same rendered weight as font-bold without an intentional mapping.
+   */
+  --font-weight-extrabold: 700;
+  --font-weight-black: 700;
 }
 
 @font-face {
