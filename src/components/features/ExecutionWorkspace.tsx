@@ -447,7 +447,7 @@ Contents of this bundle:
 
 Deployment Steps:
 ${owrPlatform === "web"
-        ? "- Place the optimized model file (model.onnx) in your public asset folder.\\n- Install 'onnxruntime-web' dependency using npm.\\n- Import and invoke your customized initializeOrtSession() function. "
+        ? "- Place the optimized model file (model.onnx) in your public asset folder.\\n- Install 'onnxruntime-web' dependency using pnpm.\\n- Import and invoke your customized initializeOrtSession() function. "
         : "- Place the compiled ORT flatbuffer file (model.ort) under your Android App's 'src/main/assets' directory.\\n- Implement 'ai.onnxruntime:onnxruntime-android' via gradle.\\n- Wire up your OnnxModelExecutor wrapper inside Activities/Handlers."
       }
 `;
