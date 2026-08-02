@@ -29,7 +29,7 @@ const PlaygroundPanel = lazy(() =>
 function SidebarFallback() {
   return (
     <div className="w-80 border-l border-slate-800 bg-slate-900/40 flex items-center justify-center">
-      <RefreshCw className="h-5 w-5 text-electric-blue animate-spin" />
+      <span className="animate-spin"><RefreshCw className="h-5 w-5 text-electric-blue" /></span>
     </div>
   );
 }
@@ -37,7 +37,7 @@ function SidebarFallback() {
 function BatchPanelFallback() {
   return (
     <div className="rounded border border-slate-800 bg-slate-900/40 p-12 flex items-center justify-center">
-      <RefreshCw className="h-5 w-5 text-electric-blue animate-spin" />
+      <span className="animate-spin"><RefreshCw className="h-5 w-5 text-electric-blue" /></span>
     </div>
   );
 }
@@ -45,7 +45,7 @@ function BatchPanelFallback() {
 function PlaygroundPanelFallback() {
   return (
     <div className="rounded border border-slate-800 bg-slate-900/40 p-12 flex items-center justify-center">
-      <RefreshCw className="h-5 w-5 text-electric-blue animate-spin" />
+      <span className="animate-spin"><RefreshCw className="h-5 w-5 text-electric-blue" /></span>
     </div>
   );
 }

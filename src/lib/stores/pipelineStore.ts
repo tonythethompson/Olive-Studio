@@ -20,8 +20,25 @@ const defaultState: UIState = {
   passes: { ...DEFAULT_PASSES },
 };
 
+export type PlaygroundSubView = "browser-test" | "benchmark" | "arena";
+export interface ArenaSlotConfig {
+  type: "local" | "cloud";
+  file: File | null;
+  endpointUrl: string;
+  apiKey: string;
+  modelId: string;
+}
+
+const defaultArenaSlot = (): ArenaSlotConfig => ({ type: "local", file: null, endpointUrl: "", apiKey: "", modelId: "" });
+
 interface PipelineStore {
   state: UIState;
+  activeSubView: PlaygroundSubView;
+  setActiveSubView: (v: PlaygroundSubView) => void;
+  slotA: ArenaSlotConfig;
+  slotB: ArenaSlotConfig;
+  setSlotA: (patch: Partial<ArenaSlotConfig>) => void;
+  setSlotB: (patch: Partial<ArenaSlotConfig>) => void;
   setState: (partial: Partial<UIState>) => void;
   /** Replace the entire state (used by recipe import / preset load). */
   replaceState: (next: UIState) => void;
@@ -31,6 +48,12 @@ interface PipelineStore {
 
 export const usePipelineStore = create<PipelineStore>((set) => ({
   state: defaultState,
+  activeSubView: "browser-test",
+  setActiveSubView: (v) => set({ activeSubView: v }),
+  slotA: defaultArenaSlot(),
+  slotB: defaultArenaSlot(),
+  setSlotA: (patch) => set((s) => ({ slotA: { ...s.slotA, ...patch } })),
+  setSlotB: (patch) => set((s) => ({ slotB: { ...s.slotB, ...patch } })),
 
   setState: (partial) =>
     set((store) => ({

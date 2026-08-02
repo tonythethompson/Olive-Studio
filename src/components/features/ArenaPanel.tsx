@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef } from "react";
 import * as ort from "onnxruntime-web";
-import { Button, Input, Label } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
   FileUp,
@@ -18,7 +20,7 @@ import {
   Loader2,
   Clock,
 } from "lucide-react";
-import { usePlaygroundStore } from "@/lib/stores/playgroundStore";
+import { usePipelineStore } from "@/lib/stores/pipelineStore";
 import { ARENA_CLOUD_TIMEOUT_MS } from "@/lib/arenaConstants";
 
 /* ------------------------------------------------------------------ */
@@ -368,7 +370,7 @@ function SlotResultPanel({ label, result, isWinner }: SlotResultPanelProps) {
       case "running":
         return (
           <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-electric-blue/10 text-electric-blue">
-            <Loader2 className="h-2.5 w-2.5 animate-spin" />
+            <span className="animate-spin"><Loader2 className="h-2.5 w-2.5" /></span>
             running
           </span>
         );
@@ -542,10 +544,10 @@ async function runCloudInference(
 /* ------------------------------------------------------------------ */
 
 export function ArenaPanel() {
-  const slotA = usePlaygroundStore((s) => s.slotA);
-  const slotB = usePlaygroundStore((s) => s.slotB);
-  const setSlotA = usePlaygroundStore((s) => s.setSlotA);
-  const setSlotB = usePlaygroundStore((s) => s.setSlotB);
+  const slotA = usePipelineStore((s) => s.slotA);
+  const slotB = usePipelineStore((s) => s.slotB);
+  const setSlotA = usePipelineStore((s) => s.setSlotA);
+  const setSlotB = usePipelineStore((s) => s.setSlotB);
 
   // Prompt state
   const [prompt, setPrompt] = useState<string>("");

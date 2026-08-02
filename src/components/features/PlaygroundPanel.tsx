@@ -2,7 +2,7 @@ import { useState, useTransition, lazy, Suspense } from "react";
 import { RefreshCw, Globe, Gauge, Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { usePlaygroundStore, type PlaygroundSubView } from "@/lib/stores/playgroundStore";
+import { usePipelineStore, type PlaygroundSubView } from "@/lib/stores/pipelineStore";
 import { ArenaPanel } from "./ArenaPanel";
 
 /* ------------------------------------------------------------------ */
@@ -35,7 +35,7 @@ function LoadingFallback({ label }: { label: string }) {
   return (
     <div className="flex items-center justify-center w-full min-h-[320px]">
       <div className="flex flex-col items-center gap-3 py-16">
-        <RefreshCw className="h-5 w-5 text-electric-blue animate-spin" />
+        <span className="animate-spin"><RefreshCw className="h-5 w-5 text-electric-blue" /></span>
         <p className="text-sm text-slate-500">{label}</p>
       </div>
     </div>
@@ -47,12 +47,12 @@ function LoadingFallback({ label }: { label: string }) {
 /* ------------------------------------------------------------------ */
 
 export function PlaygroundPanel() {
-  const activeSubView = usePlaygroundStore((s) => s.activeSubView);
-  const setActiveSubView = usePlaygroundStore((s) => s.setActiveSubView);
+  const activeSubView = usePipelineStore((s) => s.activeSubView);
+  const setActiveSubView = usePipelineStore((s) => s.setActiveSubView);
 
   // Keep-alive: track which sub-views have been opened so they stay mounted
   const [visitedSubViews, setVisitedSubViews] = useState<Set<string>>(
-    new Set(["browser-test"])
+    () => new Set(["browser-test"])
   );
 
   const [, startSubViewTransition] = useTransition();
@@ -68,11 +68,7 @@ export function PlaygroundPanel() {
   };
 
   return (
-    <section
-      id="playground"
-      aria-labelledby="playground-heading"
-      className="flex flex-col gap-6"
-    >
+    <div className="flex flex-col gap-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 id="playground-heading" className="sr-only">
@@ -138,6 +134,6 @@ export function PlaygroundPanel() {
           </div>
         )}
       </div>
-    </section>
+    </div>
   );
 }
