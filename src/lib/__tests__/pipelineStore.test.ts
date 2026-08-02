@@ -102,6 +102,7 @@ describe("pipelineStore", () => {
     expect(store.slotA).toEqual({
       type: "local",
       file: null,
+      tokenizerId: "",
       endpointUrl: "",
       apiKey: "",
       modelId: "",
@@ -109,6 +110,7 @@ describe("pipelineStore", () => {
     expect(store.slotB).toEqual({
       type: "local",
       file: null,
+      tokenizerId: "",
       endpointUrl: "",
       apiKey: "",
       modelId: "",

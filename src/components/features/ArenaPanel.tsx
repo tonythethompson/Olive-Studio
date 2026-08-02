@@ -19,6 +19,10 @@ import {
 } from "lucide-react";
 import { usePipelineStore } from "@/lib/stores/pipelineStore";
 import { ARENA_CLOUD_TIMEOUT_MS } from "@/lib/arenaConstants";
+import {
+  buildArenaLocalFeeds,
+  DEFAULT_ARENA_TOKENIZER_ID,
+} from "@/lib/arenaLocalInference";
 
 /* ------------------------------------------------------------------ */
 /*  Exported types                                                     */
@@ -200,12 +204,14 @@ interface SlotConfigProps {
   label: "Slot A" | "Slot B";
   slotType: "local" | "cloud";
   file: File | null;
+  tokenizerId: string;
   endpointUrl: string;
   apiKey: string;
   modelId: string;
   onTypeChange: (type: "local" | "cloud") => void;
   onFile: (file: File) => void;
   onClearFile: () => void;
+  onTokenizerIdChange: (val: string) => void;
   onEndpointChange: (val: string) => void;
   onApiKeyChange: (val: string) => void;
   onModelIdChange: (val: string) => void;
@@ -215,12 +221,14 @@ function SlotConfig({
   label,
   slotType,
   file,
+  tokenizerId,
   endpointUrl,
   apiKey,
   modelId,
   onTypeChange,
   onFile,
   onClearFile,
+  onTokenizerIdChange,
   onEndpointChange,
   onApiKeyChange,
   onModelIdChange,
@@ -278,7 +286,31 @@ function SlotConfig({
 
       {/* Content area */}
       {slotType === "local" ? (
-        <SlotDropZone file={file} onFile={onFile} onClear={onClearFile} />
+        <div className="flex flex-col gap-3">
+          <SlotDropZone file={file} onFile={onFile} onClear={onClearFile} />
+          <div className="space-y-1.5">
+            <Label
+              htmlFor={`${label.replace(" ", "-").toLowerCase()}-tokenizer`}
+              className="text-[11px] text-slate-400 flex items-center gap-1"
+            >
+              <Cpu className="h-3 w-3" />
+              Tokenizer (HF id)
+              <span className="text-slate-600 ml-0.5 text-[10px]">(NLP local)</span>
+            </Label>
+            <Input
+              id={`${label.replace(" ", "-").toLowerCase()}-tokenizer`}
+              type="text"
+              placeholder={DEFAULT_ARENA_TOKENIZER_ID}
+              value={tokenizerId}
+              onChange={(e) => onTokenizerIdChange(e.target.value)}
+              className="h-9 text-xs font-mono"
+            />
+            <p className="text-[10px] text-slate-600 leading-relaxed">
+              Used when the ONNX graph looks like NLP (<code className="text-slate-500">input_ids</code>
+              ). Loads via transformers.js; falls back to a prompt-derived encoding offline.
+            </p>
+          </div>
+        </div>
       ) : (
         <div className="flex flex-col gap-3">
           {/* Endpoint URL — required */}
@@ -476,26 +508,6 @@ function SlotResultPanel({ label, result, isWinner }: SlotResultPanelProps) {
 /*  Local ONNX inference helper                                        */
 /* ------------------------------------------------------------------ */
 
-/** Deterministic PRNG so both local slots share the same synthetic feeds for a given seed. */
-function mulberry32(seed: number): () => number {
-  let t = seed >>> 0;
-  return () => {
-    t += 0x6d2b79f5;
-    let r = Math.imul(t ^ (t >>> 15), 1 | t);
-    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
-    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function hashSeed(key: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < key.length; i++) {
-    h ^= key.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
 function formatTensorPreview(data: ArrayLike<number | bigint | string>): string {
   const preview = Array.from(data as ArrayLike<number | bigint | string>)
     .slice(0, 8)
@@ -508,49 +520,13 @@ function formatTensorPreview(data: ArrayLike<number | bigint | string>): string 
   return `[${preview}${(data as { length: number }).length > 8 ? ", …" : ""}]`;
 }
 
-type OrtModule = typeof import("onnxruntime-web");
-
-/**
- * Build synthetic feeds from input *names* + a shared seed.
- * Heuristics cover common NLP int64 tensors; other inputs stay float32[1,128].
- * Not a full tokenizer — local Arena is a latency/smoke path, not prompt parity with cloud.
- */
-function buildSyntheticFeeds(
-  ort: OrtModule,
-  inputNames: readonly string[],
-  seedKey: string,
-): Record<string, InstanceType<OrtModule["Tensor"]>> {
-  const rng = mulberry32(hashSeed(seedKey || "arena-local"));
-  const feeds: Record<string, InstanceType<OrtModule["Tensor"]>> = {};
-  const seq = 128;
-
-  for (const name of inputNames) {
-    const lower = name.toLowerCase();
-    if (/input_ids|token_ids|ids$/.test(lower) && !/mask|type/.test(lower)) {
-      const data = BigInt64Array.from({ length: seq }, () => BigInt(Math.floor(rng() * 1000)));
-      feeds[name] = new ort.Tensor("int64", data, [1, seq]);
-    } else if (/attention_mask|padding_mask|mask$/.test(lower)) {
-      const data = BigInt64Array.from({ length: seq }, () => 1n);
-      feeds[name] = new ort.Tensor("int64", data, [1, seq]);
-    } else if (/token_type|segment/.test(lower)) {
-      const data = BigInt64Array.from({ length: seq }, () => 0n);
-      feeds[name] = new ort.Tensor("int64", data, [1, seq]);
-    } else {
-      const data = new Float32Array(seq);
-      for (let i = 0; i < seq; i++) data[i] = rng() * 2 - 1;
-      feeds[name] = new ort.Tensor("float32", data, [1, seq]);
-    }
-  }
-  return feeds;
-}
-
 /**
  * Runs inference on a local ONNX file using onnxruntime-web (dynamically imported).
- * Uses seedKey so two local slots can share the same synthetic inputs.
+ * NLP graphs + prompt → transformers.js tokenization (shared across slots via same prompt).
  */
 async function runLocalInference(
   file: File,
-  seedKey: string,
+  opts: { prompt: string; seedKey: string; tokenizerId?: string },
 ): Promise<{ output: string; elapsedMs: number }> {
   const ort = await import("onnxruntime-web");
   const ortAny = ort as unknown as { env?: { wasm?: { wasmPaths?: string } } };
@@ -561,10 +537,16 @@ async function runLocalInference(
   const objectUrl = URL.createObjectURL(file);
   try {
     const session = await ort.InferenceSession.create(objectUrl);
-    const feeds = buildSyntheticFeeds(ort, session.inputNames, seedKey);
+    const { feeds, kind, tokenize } = await buildArenaLocalFeeds(ort, session.inputNames, {
+      prompt: opts.prompt,
+      seedKey: opts.seedKey,
+      tokenizerId: opts.tokenizerId,
+    });
 
     const startTime = performance.now();
-    const outputMap = await session.run(feeds);
+    const outputMap = await session.run(
+      feeds as Parameters<typeof session.run>[0],
+    );
     const endTime = performance.now();
     const elapsedMs = computeElapsed(startTime, endTime);
 
@@ -575,6 +557,11 @@ async function runLocalInference(
       const data = firstOutput.data as ArrayLike<number | bigint | string>;
       output = `${formatTensorPreview(data)} (shape: [${firstOutput.dims.join(", ")}])`;
     }
+    const meta =
+      kind === "nlp" && tokenize
+        ? ` · ${tokenize.source}${tokenize.tokenizerId ? `:${tokenize.tokenizerId}` : ""}`
+        : ` · ${kind}`;
+    if (output) output = `${output}${meta}`;
 
     return { output, elapsedMs };
   } finally {
@@ -653,8 +640,13 @@ export function ArenaPanel() {
   });
 
   const needsPrompt = slotA.type === "cloud" || slotB.type === "cloud";
-  // Shared seed for local synthetic feeds (prompt text if present, else fixed).
+  // Shared seed / prompt so both local slots compare the same request.
   const localSeedKey = prompt.trim() || "arena-local-default";
+  // Prefer Slot A's tokenizer when both local; either slot's id works for mixed.
+  const sharedTokenizerId =
+    (slotA.type === "local" && slotA.tokenizerId.trim()) ||
+    (slotB.type === "local" && slotB.tokenizerId.trim()) ||
+    "";
 
   const handlePromptChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -677,6 +669,11 @@ export function ArenaPanel() {
     setIsRunning(true);
 
     const bothLocal = slotA.type === "local" && slotB.type === "local";
+    const localOpts = {
+      prompt,
+      seedKey: localSeedKey,
+      tokenizerId: sharedTokenizerId || undefined,
+    };
 
     try {
       if (bothLocal) {
@@ -688,7 +685,7 @@ export function ArenaPanel() {
         let slotASuccess = false;
         if (slotA.file) {
           try {
-            const { output, elapsedMs } = await runLocalInference(slotA.file, localSeedKey);
+            const { output, elapsedMs } = await runLocalInference(slotA.file, localOpts);
             if (!isCurrent()) return;
             setResultA({ output, elapsedMs, status: "done" });
             slotASuccess = true;
@@ -712,7 +709,7 @@ export function ArenaPanel() {
           setResultB((prev) => ({ ...prev, status: "running" }));
           if (slotB.file) {
             try {
-              const { output, elapsedMs } = await runLocalInference(slotB.file, localSeedKey);
+              const { output, elapsedMs } = await runLocalInference(slotB.file, localOpts);
               if (!isCurrent()) return;
               setResultB({ output, elapsedMs, status: "done" });
             } catch (err) {
@@ -756,7 +753,7 @@ export function ArenaPanel() {
               return;
             }
             try {
-              const { output, elapsedMs } = await runLocalInference(slotA.file, localSeedKey);
+              const { output, elapsedMs } = await runLocalInference(slotA.file, localOpts);
               if (isCurrent()) setResultA({ output, elapsedMs, status: "done" });
             } catch (err) {
               if (!isCurrent()) return;
@@ -800,7 +797,7 @@ export function ArenaPanel() {
               return;
             }
             try {
-              const { output, elapsedMs } = await runLocalInference(slotB.file, localSeedKey);
+              const { output, elapsedMs } = await runLocalInference(slotB.file, localOpts);
               if (isCurrent()) setResultB({ output, elapsedMs, status: "done" });
             } catch (err) {
               if (!isCurrent()) return;
@@ -835,7 +832,7 @@ export function ArenaPanel() {
     } finally {
       if (isCurrent()) setIsRunning(false);
     }
-  }, [isRunning, needsPrompt, prompt, localSeedKey, slotA, slotB]);
+  }, [isRunning, needsPrompt, prompt, localSeedKey, sharedTokenizerId, slotA, slotB]);
 
   return (
     <div className="flex flex-col gap-6 select-text">
@@ -846,12 +843,14 @@ export function ArenaPanel() {
           label="Slot A"
           slotType={slotA.type}
           file={slotA.file}
+          tokenizerId={slotA.tokenizerId}
           endpointUrl={slotA.endpointUrl}
           apiKey={slotA.apiKey}
           modelId={slotA.modelId}
           onTypeChange={(type) => setSlotA({ type })}
           onFile={(file) => setSlotA({ file })}
           onClearFile={() => setSlotA({ file: null })}
+          onTokenizerIdChange={(tokenizerId) => setSlotA({ tokenizerId })}
           onEndpointChange={(endpointUrl) => setSlotA({ endpointUrl })}
           onApiKeyChange={(apiKey) => setSlotA({ apiKey })}
           onModelIdChange={(modelId) => setSlotA({ modelId })}
@@ -862,12 +861,14 @@ export function ArenaPanel() {
           label="Slot B"
           slotType={slotB.type}
           file={slotB.file}
+          tokenizerId={slotB.tokenizerId}
           endpointUrl={slotB.endpointUrl}
           apiKey={slotB.apiKey}
           modelId={slotB.modelId}
           onTypeChange={(type) => setSlotB({ type })}
           onFile={(file) => setSlotB({ file })}
           onClearFile={() => setSlotB({ file: null })}
+          onTokenizerIdChange={(tokenizerId) => setSlotB({ tokenizerId })}
           onEndpointChange={(endpointUrl) => setSlotB({ endpointUrl })}
           onApiKeyChange={(apiKey) => setSlotB({ apiKey })}
           onModelIdChange={(modelId) => setSlotB({ modelId })}
@@ -912,8 +913,8 @@ export function ArenaPanel() {
           {!promptError && (
             <p id="arena-prompt-hint" className="text-[11px] text-slate-500">
               {needsPrompt
-                ? "Cloud slots send this prompt to the OpenAI-compatible chat API. Local slots use synthetic tensors (seeded from the prompt when present)."
-                : "Local Arena builds synthetic ONNX feeds (int64 for common NLP input names, float32 otherwise). Matching seeds keep both slots comparable."}
+                ? "Cloud slots send this prompt to the chat API. Local NLP models tokenize the same prompt (transformers.js or prompt-derived fallback)."
+                : "Local NLP models tokenize this prompt into input_ids/attention_mask for both slots. Other models use seeded synthetic tensors."}
             </p>
           )}
         </div>

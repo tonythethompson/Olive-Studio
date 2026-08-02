@@ -2,7 +2,9 @@ allowBuilds:
   '@google/genai': true
   '@mendable/firecrawl-js': true
   esbuild: true
+  onnxruntime-node: false
   protobufjs: true
+  sharp: false
 minimumReleaseAgeExclude:
   - express-rate-limit@8.6.1
 overrides:

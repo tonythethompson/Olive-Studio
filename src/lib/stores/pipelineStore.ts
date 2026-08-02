@@ -24,12 +24,21 @@ export type PlaygroundSubView = "browser-test" | "benchmark" | "arena";
 export interface ArenaSlotConfig {
   type: "local" | "cloud";
   file: File | null;
+  /** Optional HF tokenizer id for local NLP models (transformers.js). */
+  tokenizerId: string;
   endpointUrl: string;
   apiKey: string;
   modelId: string;
 }
 
-const defaultArenaSlot = (): ArenaSlotConfig => ({ type: "local", file: null, endpointUrl: "", apiKey: "", modelId: "" });
+const defaultArenaSlot = (): ArenaSlotConfig => ({
+  type: "local",
+  file: null,
+  tokenizerId: "",
+  endpointUrl: "",
+  apiKey: "",
+  modelId: "",
+});
 
 interface PipelineStore {
   state: UIState;
