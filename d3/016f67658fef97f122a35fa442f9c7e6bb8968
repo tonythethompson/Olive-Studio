@@ -1,0 +1,57 @@
+CLAUDE.md
+  s_d411e9aa53df1f::t_995f52c37a4208 1-119
+.kiro/specs/playground-tab/HANDOFF.md
+  s_2d2739ce0421d1::t_f770ead9b9a4d1 1-62
+.kiro/specs/playground-tab/tasks.md
+  s_2d2739ce0421d1::t_b3dde3f74139ed 194-198
+  s_2d2739ce0421d1::t_f21e98116fbf53 421-426
+  s_2d2739ce0421d1::t_7f22b4ff391ba5 40-44
+  s_2d2739ce0421d1::t_b9a181a0f2011d 235-245,247
+  s_2d2739ce0421d1::t_38ed4c3524b098 382,385-387
+  s_2d2739ce0421d1::t_5e4d9893288396 399-401
+  s_2d2739ce0421d1::t_a90302b6584a4f 412
+  s_2d2739ce0421d1::t_c3f81d73454fc7 229-232,234
+  s_2d2739ce0421d1::t_46d7bd3e0d1e3b 112
+  s_2d2739ce0421d1::t_050f72ba33945a 134-138,140-141
+  s_2d2739ce0421d1::t_a19ccbcc0374d4 248-259,276-280,282
+  s_2d2739ce0421d1::t_adc1f83c719644 308-323,331-332,335-338,343-354,362-381,383-384,388-389
+  s_2d2739ce0421d1::t_2d971fd9a959f7 283-293,307
+  s_2d2739ce0421d1::t_1b34304c8376f1 324-330,333-334,339-340,342
+  s_2d2739ce0421d1::t_6e98c7ca52b0f2 402
+  s_2d2739ce0421d1::t_2a11fe25a5369b 403
+  s_2d2739ce0421d1::t_feb14311c1ed29 427
+  s_2d2739ce0421d1::t_25ca6602c3e786 428-432
+.kiro/specs/playground-tab/requirements.md
+  s_2d2739ce0421d1::t_977683c2445286 352-359
+  s_2d2739ce0421d1::t_1d5f0f9402da88 239-244
+  s_2d2739ce0421d1::t_85afbf79051a76 207-212
+  s_2d2739ce0421d1::t_2227da64430f37 20-21
+  s_2d2739ce0421d1::t_57fc337f6b8536 255-258
+  s_2d2739ce0421d1::t_1d92784f400233 54-56
+  s_2d2739ce0421d1::t_a8ada749500487 128-132
+  s_2d2739ce0421d1::t_2541196938dd92 325-351,360-383
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d3016f67658fef97f122a35fa442f9c7e6bb8968",
+  "prompts": {},
+  "sessions": {
+    "s_2d2739ce0421d1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "95174d35-7f12-439a-a838-607b8c18cb4b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    },
+    "s_d411e9aa53df1f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "abdb8af8-6458-4411-a9a1-ab699ed6590d",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
