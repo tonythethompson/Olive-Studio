@@ -100,7 +100,7 @@ import * as ort from "onnxruntime-web";
 
 // Configure WASM and WebGPU threads
 ort.env.wasm.numThreads = ${threads};
-ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
+ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/";
 
 export async function initializeOrtSession() {
   console.log("Loading OWR model pipeline from memory...");

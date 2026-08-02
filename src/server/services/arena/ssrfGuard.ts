@@ -50,12 +50,27 @@ export function isBlockedIpv4(ip: string): boolean {
   return false;
 }
 
+/**
+ * Extract IPv4 from IPv4-mapped IPv6.
+ * Accepts both dotted (`::ffff:127.0.0.1`) and hex-compressed (`::ffff:7f00:1`)
+ * forms. Node's URL parser rewrites bracketed dotted-mapped literals to hex.
+ */
+export function ipv4FromMappedIpv6(ip: string): string | null {
+  const addr = stripBrackets(ip);
+  const dotted = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(addr);
+  if (dotted) return dotted[1];
+  const hex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(addr);
+  if (!hex) return null;
+  const hi = Number.parseInt(hex[1]!, 16);
+  const lo = Number.parseInt(hex[2]!, 16);
+  return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+}
+
 export function isLoopbackIp(ip: string): boolean {
   if (ip === "::1") return true;
   if (ip.startsWith("127.")) return true;
-  // IPv4-mapped IPv6 ::ffff:127.0.0.1
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip);
-  if (mapped) return mapped[1].startsWith("127.");
+  const mapped = ipv4FromMappedIpv6(ip);
+  if (mapped) return mapped.startsWith("127.");
   return false;
 }
 
@@ -66,8 +81,8 @@ export function isBlockedIpAddress(ip: string): boolean {
     if (addr === "::" || addr === "::1") return true;
     if (addr.toLowerCase().startsWith("fe80:")) return true; // link-local
     if (addr.toLowerCase().startsWith("fc") || addr.toLowerCase().startsWith("fd")) return true; // ULA
-    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(addr);
-    if (mapped) return isBlockedIpv4(mapped[1]);
+    const mapped = ipv4FromMappedIpv6(addr);
+    if (mapped) return isBlockedIpv4(mapped);
     return false;
   }
   return true; // unknown form → reject
@@ -166,12 +181,24 @@ export type PinnedFetchResult = {
   json: () => Promise<unknown>;
 };
 
+/** Max buffered upstream body for Arena proxy responses (untrusted endpoints). */
+export const MAX_PINNED_RESPONSE_BYTES = 10 * 1024 * 1024;
+
 function readBody(res: IncomingMessage, signal?: AbortSignal): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
+    let total = 0;
+    let settled = false;
+    const finish = (err?: Error, buf?: Buffer) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener("abort", onAbort);
+      if (err) reject(err);
+      else resolve(buf!);
+    };
     const onAbort = () => {
       res.destroy(new Error("Aborted"));
-      reject(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+      finish(Object.assign(new Error("Aborted"), { name: "AbortError" }));
     };
     if (signal) {
       if (signal.aborted) {
@@ -180,14 +207,21 @@ function readBody(res: IncomingMessage, signal?: AbortSignal): Promise<Buffer> {
       }
       signal.addEventListener("abort", onAbort, { once: true });
     }
-    res.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+    res.on("data", (c) => {
+      const buf = Buffer.isBuffer(c) ? c : Buffer.from(c);
+      total += buf.length;
+      if (total > MAX_PINNED_RESPONSE_BYTES) {
+        res.destroy(new Error("Response body too large"));
+        finish(new Error("Upstream response exceeded maximum allowed size"));
+        return;
+      }
+      chunks.push(buf);
+    });
     res.on("end", () => {
-      signal?.removeEventListener("abort", onAbort);
-      resolve(Buffer.concat(chunks));
+      finish(undefined, Buffer.concat(chunks));
     });
     res.on("error", (err) => {
-      signal?.removeEventListener("abort", onAbort);
-      reject(err);
+      finish(err);
     });
   });
 }

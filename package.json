@@ -86,7 +86,7 @@
     "jszip": "^3.10.1",
     "lucide-react": "^1.27.0",
     "motion": "^12.40.0",
-    "onnxruntime-web": "^1.27.0",
+    "onnxruntime-web": "1.27.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "recharts": "^3.8.1",

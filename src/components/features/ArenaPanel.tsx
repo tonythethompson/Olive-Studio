@@ -531,7 +531,8 @@ async function runLocalInference(
   const ort = await import("onnxruntime-web");
   const ortAny = ort as unknown as { env?: { wasm?: { wasmPaths?: string } } };
   if (ortAny.env?.wasm) {
-    ortAny.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
+    ortAny.env.wasm.wasmPaths =
+      "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/";
   }
 
   const objectUrl = URL.createObjectURL(file);
