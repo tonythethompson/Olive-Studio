@@ -1,4 +1,4 @@
-import { useState, useTransition, lazy, Suspense } from "react";
+import { useState, useTransition, lazy, Suspense, useRef, type KeyboardEvent } from "react";
 import { RefreshCw, Globe, Gauge, Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -65,6 +65,7 @@ export function PlaygroundPanel() {
   );
 
   const [, startSubViewTransition] = useTransition();
+  const tabRefs = useRef<Partial<Record<PlaygroundSubView, HTMLButtonElement | null>>>({});
 
   const handleSubViewChange = (id: PlaygroundSubView) => {
     startSubViewTransition(() => {
@@ -73,6 +74,37 @@ export function PlaygroundPanel() {
         if (prev.has(id)) return prev;
         return new Set(prev).add(id);
       });
+    });
+  };
+
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, id: PlaygroundSubView) => {
+    const ids = SUB_VIEWS.map((view) => view.id);
+    const index = ids.indexOf(id);
+    if (index < 0) return;
+
+    let nextIndex: number | null = null;
+    switch (event.key) {
+      case "ArrowRight":
+        nextIndex = (index + 1) % ids.length;
+        break;
+      case "ArrowLeft":
+        nextIndex = (index - 1 + ids.length) % ids.length;
+        break;
+      case "Home":
+        nextIndex = 0;
+        break;
+      case "End":
+        nextIndex = ids.length - 1;
+        break;
+      default:
+        return;
+    }
+
+    event.preventDefault();
+    const nextId = ids[nextIndex]!;
+    handleSubViewChange(nextId);
+    queueMicrotask(() => {
+      tabRefs.current[nextId]?.focus();
     });
   };
 
@@ -100,7 +132,11 @@ export function PlaygroundPanel() {
                 aria-selected={selected}
                 aria-controls={`playground-panel-${id}`}
                 tabIndex={selected ? 0 : -1}
+                ref={(el) => {
+                  tabRefs.current[id] = el;
+                }}
                 onClick={() => handleSubViewChange(id)}
+                onKeyDown={(event) => handleTabKeyDown(event, id)}
                 className={cn(
                   "px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer",
                   selected

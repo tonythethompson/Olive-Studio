@@ -17,7 +17,7 @@ import {
   Loader2,
   Clock,
 } from "lucide-react";
-import { usePipelineStore } from "@/lib/stores/pipelineStore";
+import { usePipelineStore, type ArenaSlotConfig } from "@/lib/stores/pipelineStore";
 import { ARENA_CLOUD_TIMEOUT_MS } from "@/lib/arenaConstants";
 import {
   buildArenaLocalFeeds,
@@ -613,6 +613,74 @@ async function runCloudInference(
 }
 
 /* ------------------------------------------------------------------ */
+/*  Shared slot runner                                                 */
+/* ------------------------------------------------------------------ */
+
+type LocalInferenceOpts = { prompt: string; seedKey: string; tokenizerId?: string };
+
+/**
+ * Runs one Arena slot (local or cloud). Shared by the parallel and sequential
+ * handleRun paths so guards / error strings / stale-run checks stay in sync.
+ * @returns true when inference completed successfully on the current run.
+ */
+async function runArenaSlot(opts: {
+  slot: ArenaSlotConfig;
+  label: string;
+  setResult: (result: ArenaRunResult) => void;
+  isCurrent: () => boolean;
+  prompt: string;
+  localOpts: LocalInferenceOpts;
+}): Promise<boolean> {
+  const { slot, label, setResult, isCurrent, prompt, localOpts } = opts;
+
+  if (slot.type === "local") {
+    if (!slot.file) {
+      if (isCurrent()) {
+        setResult({
+          output: "",
+          elapsedMs: 0,
+          status: "error",
+          error: `No file loaded in ${label}`,
+        });
+      }
+      return false;
+    }
+    try {
+      const { output, elapsedMs } = await runLocalInference(slot.file, localOpts);
+      if (isCurrent()) setResult({ output, elapsedMs, status: "done" });
+      return isCurrent();
+    } catch (err) {
+      if (!isCurrent()) return false;
+      const message = err instanceof Error ? err.message : String(err);
+      setResult({ output: "", elapsedMs: 0, status: "error", error: message });
+      return false;
+    }
+  }
+
+  if (!slot.endpointUrl) {
+    if (isCurrent()) {
+      setResult({
+        output: "",
+        elapsedMs: 0,
+        status: "error",
+        error: `No endpoint URL configured for ${label}`,
+      });
+    }
+    return false;
+  }
+  try {
+    const { output, elapsedMs } = await runCloudInference(slot, prompt);
+    if (isCurrent()) setResult({ output, elapsedMs, status: "done" });
+    return isCurrent();
+  } catch (err) {
+    if (!isCurrent()) return false;
+    const message = err instanceof Error ? err.message : String(err);
+    setResult({ output: "", elapsedMs: 0, status: "error", error: message });
+    return false;
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  ArenaPanel                                                         */
 /* ------------------------------------------------------------------ */
 
@@ -683,49 +751,26 @@ export function ArenaPanel() {
         setResultA({ ...cleared.resultA, status: "running" });
         setResultB({ ...cleared.resultB, status: "idle" });
 
-        let slotASuccess = false;
-        if (slotA.file) {
-          try {
-            const { output, elapsedMs } = await runLocalInference(slotA.file, localOpts);
-            if (!isCurrent()) return;
-            setResultA({ output, elapsedMs, status: "done" });
-            slotASuccess = true;
-          } catch (err) {
-            if (!isCurrent()) return;
-            const message = err instanceof Error ? err.message : String(err);
-            setResultA({ output: "", elapsedMs: 0, status: "error", error: message });
-          }
-        } else {
-          setResultA({
-            output: "",
-            elapsedMs: 0,
-            status: "error",
-            error: "No file loaded in Slot A",
-          });
-        }
-
+        const slotASuccess = await runArenaSlot({
+          slot: slotA,
+          label: "Slot A",
+          setResult: setResultA,
+          isCurrent,
+          prompt,
+          localOpts,
+        });
         if (!isCurrent()) return;
 
         if (slotASuccess) {
           setResultB((prev) => ({ ...prev, status: "running" }));
-          if (slotB.file) {
-            try {
-              const { output, elapsedMs } = await runLocalInference(slotB.file, localOpts);
-              if (!isCurrent()) return;
-              setResultB({ output, elapsedMs, status: "done" });
-            } catch (err) {
-              if (!isCurrent()) return;
-              const message = err instanceof Error ? err.message : String(err);
-              setResultB({ output: "", elapsedMs: 0, status: "error", error: message });
-            }
-          } else {
-            setResultB({
-              output: "",
-              elapsedMs: 0,
-              status: "error",
-              error: "No file loaded in Slot B",
-            });
-          }
+          await runArenaSlot({
+            slot: slotB,
+            label: "Slot B",
+            setResult: setResultB,
+            isCurrent,
+            prompt,
+            localOpts,
+          });
         } else {
           // Don't leave Slot B stranded on "Waiting…" after Slot A fails
           setResultB({
@@ -740,95 +785,24 @@ export function ArenaPanel() {
         setResultA({ ...cleared.resultA, status: "running" });
         setResultB({ ...cleared.resultB, status: "running" });
 
-        const runSlotA = async () => {
-          if (slotA.type === "local") {
-            if (!slotA.file) {
-              if (isCurrent()) {
-                setResultA({
-                  output: "",
-                  elapsedMs: 0,
-                  status: "error",
-                  error: "No file loaded in Slot A",
-                });
-              }
-              return;
-            }
-            try {
-              const { output, elapsedMs } = await runLocalInference(slotA.file, localOpts);
-              if (isCurrent()) setResultA({ output, elapsedMs, status: "done" });
-            } catch (err) {
-              if (!isCurrent()) return;
-              const message = err instanceof Error ? err.message : String(err);
-              setResultA({ output: "", elapsedMs: 0, status: "error", error: message });
-            }
-          } else {
-            if (!slotA.endpointUrl) {
-              if (isCurrent()) {
-                setResultA({
-                  output: "",
-                  elapsedMs: 0,
-                  status: "error",
-                  error: "No endpoint URL configured for Slot A",
-                });
-              }
-              return;
-            }
-            try {
-              const { output, elapsedMs } = await runCloudInference(slotA, prompt);
-              if (isCurrent()) setResultA({ output, elapsedMs, status: "done" });
-            } catch (err) {
-              if (!isCurrent()) return;
-              const message = err instanceof Error ? err.message : String(err);
-              setResultA({ output: "", elapsedMs: 0, status: "error", error: message });
-            }
-          }
-        };
-
-        const runSlotB = async () => {
-          if (slotB.type === "local") {
-            if (!slotB.file) {
-              if (isCurrent()) {
-                setResultB({
-                  output: "",
-                  elapsedMs: 0,
-                  status: "error",
-                  error: "No file loaded in Slot B",
-                });
-              }
-              return;
-            }
-            try {
-              const { output, elapsedMs } = await runLocalInference(slotB.file, localOpts);
-              if (isCurrent()) setResultB({ output, elapsedMs, status: "done" });
-            } catch (err) {
-              if (!isCurrent()) return;
-              const message = err instanceof Error ? err.message : String(err);
-              setResultB({ output: "", elapsedMs: 0, status: "error", error: message });
-            }
-          } else {
-            if (!slotB.endpointUrl) {
-              if (isCurrent()) {
-                setResultB({
-                  output: "",
-                  elapsedMs: 0,
-                  status: "error",
-                  error: "No endpoint URL configured for Slot B",
-                });
-              }
-              return;
-            }
-            try {
-              const { output, elapsedMs } = await runCloudInference(slotB, prompt);
-              if (isCurrent()) setResultB({ output, elapsedMs, status: "done" });
-            } catch (err) {
-              if (!isCurrent()) return;
-              const message = err instanceof Error ? err.message : String(err);
-              setResultB({ output: "", elapsedMs: 0, status: "error", error: message });
-            }
-          }
-        };
-
-        await Promise.allSettled([runSlotA(), runSlotB()]);
+        await Promise.allSettled([
+          runArenaSlot({
+            slot: slotA,
+            label: "Slot A",
+            setResult: setResultA,
+            isCurrent,
+            prompt,
+            localOpts,
+          }),
+          runArenaSlot({
+            slot: slotB,
+            label: "Slot B",
+            setResult: setResultB,
+            isCurrent,
+            prompt,
+            localOpts,
+          }),
+        ]);
       }
     } finally {
       if (isCurrent()) setIsRunning(false);
