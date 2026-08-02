@@ -42,6 +42,15 @@ describe("ssrfGuard IP classification", () => {
     expect(isLoopbackIp("::ffff:a9fe:a9fe")).toBe(false);
   });
 
+  it("blocks IPv4-compatible IPv6 (::/96) loopback and metadata", () => {
+    expect(isBlockedIpAddress("::7f00:1")).toBe(true);
+    expect(isBlockedIpAddress("::a9fe:a9fe")).toBe(true);
+    expect(isBlockedIpAddress("0:0:0:0:0:0:7f00:1")).toBe(true);
+    expect(isBlockedIpAddress("0:0:0:0:0:0:a9fe:a9fe")).toBe(true);
+    expect(isLoopbackIp("::7f00:1")).toBe(true);
+    expect(isLoopbackIp("::a9fe:a9fe")).toBe(false);
+  });
+
   it("detects loopback helpers", () => {
     expect(isLoopbackHostname("localhost")).toBe(true);
     expect(isLoopbackHostname("127.0.0.1")).toBe(true);
@@ -80,6 +89,23 @@ describe("assertUrlPolicy", () => {
       assertUrlPolicy(new URL("https://[::ffff:169.254.169.254]/latest"), {
         allowLoopbackHttp: false,
       }),
+    ).toThrow(/Private/);
+  });
+
+  it("rejects IPv4-compatible literals (::/96) after Node normalizes", () => {
+    expect(() =>
+      assertUrlPolicy(new URL("https://[::127.0.0.1]/v1"), { allowLoopbackHttp: false }),
+    ).toThrow(/Private/);
+    expect(() =>
+      assertUrlPolicy(new URL("https://[::169.254.169.254]/latest"), {
+        allowLoopbackHttp: false,
+      }),
+    ).toThrow(/Private/);
+    expect(() =>
+      assertUrlPolicy(new URL("https://[::7f00:1]/v1"), { allowLoopbackHttp: false }),
+    ).toThrow(/Private/);
+    expect(() =>
+      assertUrlPolicy(new URL("https://[::a9fe:a9fe]/latest"), { allowLoopbackHttp: false }),
     ).toThrow(/Private/);
   });
 

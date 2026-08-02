@@ -13,6 +13,14 @@ import http, { type IncomingMessage } from "node:http";
 import https from "node:https";
 import net from "node:net";
 
+/** Typed policy/SSRF rejection so routes can map to 400 without regex on message text. */
+export class SsrfPolicyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SsrfPolicyError";
+  }
+}
+
 export type SsrfPolicy = {
   /** Allow http:// loopback only when OLIVE_ALLOW_LOOPBACK_HTTP=true. */
   allowLoopbackHttp: boolean;
@@ -50,19 +58,43 @@ export function isBlockedIpv4(ip: string): boolean {
 }
 
 /**
- * Extract IPv4 from IPv4-mapped IPv6.
- * Accepts both dotted (`::ffff:127.0.0.1`) and hex-compressed (`::ffff:7f00:1`)
- * forms. Node's URL parser rewrites bracketed dotted-mapped literals to hex.
+ * Extract IPv4 embedded in IPv6:
+ * - IPv4-mapped `::ffff:x.x.x.x` / `::ffff:HHHH:HHHH`
+ * - IPv4-compatible `::/96` `::x.x.x.x` / `::HHHH:HHHH`
+ *
+ * Node's URL parser rewrites bracketed dotted forms (e.g. `[::127.0.0.1]`,
+ * `[::ffff:127.0.0.1]`) to the hex-compressed hostname forms.
  */
+function ipv4FromHexPair(hiHex: string, loHex: string): string {
+  const hi = Number.parseInt(hiHex, 16);
+  const lo = Number.parseInt(loHex, 16);
+  return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+}
+
 export function ipv4FromMappedIpv6(ip: string): string | null {
   const addr = stripBrackets(ip);
-  const dotted = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(addr);
-  if (dotted) return dotted[1];
-  const hex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(addr);
-  if (!hex) return null;
-  const hi = Number.parseInt(hex[1]!, 16);
-  const lo = Number.parseInt(hex[2]!, 16);
-  return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+
+  // IPv4-mapped ::ffff:x.x.x.x / ::ffff:HHHH:HHHH (and expanded 0:0:0:0:0:ffff:…)
+  const mappedDotted =
+    /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(addr) ??
+    /^0:0:0:0:0:ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(addr);
+  if (mappedDotted) return mappedDotted[1];
+  const mappedHex =
+    /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(addr) ??
+    /^0:0:0:0:0:ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(addr);
+  if (mappedHex) return ipv4FromHexPair(mappedHex[1]!, mappedHex[2]!);
+
+  // Deprecated IPv4-compatible ::/96 (Node emits [::127.0.0.1] as ::7f00:1)
+  const compatDotted =
+    /^::(\d{1,3}(?:\.\d{1,3}){3})$/.exec(addr) ??
+    /^0:0:0:0:0:0:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(addr);
+  if (compatDotted) return compatDotted[1];
+  const compatHex =
+    /^::([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(addr) ??
+    /^0:0:0:0:0:0:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(addr);
+  if (compatHex) return ipv4FromHexPair(compatHex[1]!, compatHex[2]!);
+
+  return null;
 }
 
 export function isLoopbackIp(ip: string): boolean {
@@ -92,19 +124,19 @@ export function isBlockedIpAddress(ip: string): boolean {
  */
 export function assertUrlPolicy(url: URL, policy: SsrfPolicy): void {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("Only http/https endpoints are supported");
+    throw new SsrfPolicyError("Only http/https endpoints are supported");
   }
   if (url.username || url.password) {
-    throw new Error("Credentialed endpoints are not supported");
+    throw new SsrfPolicyError("Credentialed endpoints are not supported");
   }
 
   const host = stripBrackets(url.hostname);
-  if (!host) throw new Error("Invalid endpointUrl");
+  if (!host) throw new SsrfPolicyError("Invalid endpointUrl");
 
   // Block obvious metadata hostnames even before DNS
   if (host === "metadata.google.internal" || host.endsWith(".local")) {
     if (!(policy.allowLoopbackHttp && isLoopbackHostname(host))) {
-      throw new Error("Private endpoints are not supported");
+      throw new SsrfPolicyError("Private endpoints are not supported");
     }
   }
 
@@ -113,13 +145,13 @@ export function assertUrlPolicy(url: URL, policy: SsrfPolicy): void {
     policy.allowLoopbackHttp && loopbackName && url.protocol === "http:";
 
   if (url.protocol !== "https:" && !allowLoopbackHttp) {
-    throw new Error("HTTPS endpoints are required");
+    throw new SsrfPolicyError("HTTPS endpoints are required");
   }
 
   // Literal IP in the URL — validate immediately
   if (net.isIP(host)) {
     if (isBlockedIpAddress(host) && !(allowLoopbackHttp && isLoopbackIp(host))) {
-      throw new Error("Private endpoints are not supported");
+      throw new SsrfPolicyError("Private endpoints are not supported");
     }
   }
 }
@@ -138,7 +170,7 @@ export async function resolvePinnedAddresses(
 
   if (net.isIP(host)) {
     if (isBlockedIpAddress(host) && !(allowLoopback && isLoopbackIp(host))) {
-      throw new Error("Private endpoints are not supported");
+      throw new SsrfPolicyError("Private endpoints are not supported");
     }
     return [host];
   }
@@ -147,9 +179,9 @@ export async function resolvePinnedAddresses(
   try {
     records = await dns.lookup(host, { all: true, verbatim: true });
   } catch {
-    throw new Error(`DNS resolution failed for ${host}`);
+    throw new SsrfPolicyError(`DNS resolution failed for ${host}`);
   }
-  if (!records.length) throw new Error(`DNS resolution failed for ${host}`);
+  if (!records.length) throw new SsrfPolicyError(`DNS resolution failed for ${host}`);
 
   const allowed: string[] = [];
   for (const { address } of records) {
@@ -158,11 +190,11 @@ export async function resolvePinnedAddresses(
         allowed.push(address);
         continue;
       }
-      throw new Error(`Resolved address ${address} is not allowed (private/reserved)`);
+      throw new SsrfPolicyError(`Resolved address ${address} is not allowed (private/reserved)`);
     }
     allowed.push(address);
   }
-  if (!allowed.length) throw new Error("No allowed addresses after DNS resolution");
+  if (!allowed.length) throw new SsrfPolicyError("No allowed addresses after DNS resolution");
   return allowed;
 }
 
@@ -274,7 +306,7 @@ export async function pinnedFetch(url: URL, init: PinnedFetchInit = {}): Promise
         // Explicitly refuse redirects instead of following them
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
           res.resume();
-          reject(new Error(`Upstream redirect refused (${res.statusCode})`));
+          reject(new SsrfPolicyError(`Upstream redirect refused (${res.statusCode})`));
           return;
         }
 

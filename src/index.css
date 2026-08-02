@@ -39,7 +39,7 @@
   --breakpoint-wide: 900px;
 
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Fira Code", ui-monospace, SFMono-Regular, monospace;
+  --font-mono: "Fira Code", ui-monospace, "SFMono-Regular", monospace;
 
   /*
    * IBM Plex Sans variable face tops out at 700. Remap Tailwind's heavier

@@ -1,16 +1,25 @@
 /**
  * Route-level coverage for Arena cloud-inference proxy.
  * pinnedFetch is mocked so no outbound network is required.
+ * Rate limiting is bypassed here; limiter behavior is covered elsewhere.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import express from "express";
 import type { Server } from "http";
 
-vi.mock("../services/arena/ssrfGuard.ts", () => ({
-  pinnedFetch: vi.fn(),
+vi.mock("../middleware/rateLimit.ts", () => ({
+  arenaProxyRateLimit: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
-import { pinnedFetch } from "../services/arena/ssrfGuard.ts";
+vi.mock("../services/arena/ssrfGuard.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../services/arena/ssrfGuard.ts")>();
+  return {
+    ...actual,
+    pinnedFetch: vi.fn(),
+  };
+});
+
+import { pinnedFetch, SsrfPolicyError } from "../services/arena/ssrfGuard.ts";
 import { mountArenaRoutes } from "./arena.ts";
 
 const mockedPinnedFetch = vi.mocked(pinnedFetch);
@@ -136,8 +145,8 @@ describe("POST /api/arena/cloud-inference", () => {
     expect(body.error).toMatch(/timed out/i);
   });
 
-  it("maps policy/SSRF errors to 400", async () => {
-    mockedPinnedFetch.mockRejectedValue(new Error("Private endpoints are not supported"));
+  it("maps SsrfPolicyError to 400", async () => {
+    mockedPinnedFetch.mockRejectedValue(new SsrfPolicyError("Private endpoints are not supported"));
 
     const res = await postCloudInference({
       endpointUrl: "https://127.0.0.1/v1",
@@ -146,6 +155,19 @@ describe("POST /api/arena/cloud-inference", () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({
       error: "Private endpoints are not supported",
+    });
+  });
+
+  it("does not treat plain Error message text as policy", async () => {
+    mockedPinnedFetch.mockRejectedValue(new Error("HTTPS handshake failed: not allowed by peer"));
+
+    const res = await postCloudInference({
+      endpointUrl: "https://api.example.com/v1",
+      prompt: "hello",
+    });
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({
+      error: "HTTPS handshake failed: not allowed by peer",
     });
   });
 

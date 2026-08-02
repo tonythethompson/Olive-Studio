@@ -14,9 +14,12 @@ overrides:
   uuid@<11.1.1: '>=11.1.1'
   minimatch: '^10.2.5'
   brace-expansion: '5.0.8'
-  # @huggingface/transformers → onnxruntime-node / sharp (arena local NLP)
-  adm-zip: '>=0.6.0'
-  sharp: '>=0.35.0'
+  # @huggingface/transformers → onnxruntime-node / sharp (arena local NLP).
+  # Target only vulnerable release lines; bound replacements to compatible majors.
+  'adm-zip@<0.6.0': '>=0.6.0 <1.0.0'
+  'sharp@<0.35.0': '>=0.35.0 <1.0.0'
+  # Keep a single onnxruntime-web for the app + transformers.js tokenizer path.
+  onnxruntime-web: '1.27.0'
 peerDependencyRules:
   # Storybook 8 still declares vite<=6; Olive Studio runs Vite 8 (Rolldown).
   allowedVersions:

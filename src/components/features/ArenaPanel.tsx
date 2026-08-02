@@ -536,8 +536,9 @@ async function runLocalInference(
   }
 
   const objectUrl = URL.createObjectURL(file);
+  let session: Awaited<ReturnType<typeof ort.InferenceSession.create>> | undefined;
   try {
-    const session = await ort.InferenceSession.create(objectUrl);
+    session = await ort.InferenceSession.create(objectUrl);
     const { feeds, kind, tokenize } = await buildArenaLocalFeeds(ort, session.inputNames, {
       prompt: opts.prompt,
       seedKey: opts.seedKey,
@@ -567,6 +568,7 @@ async function runLocalInference(
     return { output, elapsedMs };
   } finally {
     URL.revokeObjectURL(objectUrl);
+    if (session) await session.release();
   }
 }
 
@@ -809,6 +811,10 @@ export function ArenaPanel() {
     }
   }, [isRunning, needsPrompt, prompt, localSeedKey, sharedTokenizerId, slotA, slotB]);
 
+  const comparable =
+    slotA.type === slotB.type && resultA.status === "done" && resultB.status === "done";
+  const faster = comparable ? getFasterSlot(resultA.elapsedMs, resultB.elapsedMs) : null;
+
   return (
     <div className="flex flex-col gap-6 select-text">
       {/* Two-column slot configuration */}
@@ -916,26 +922,8 @@ export function ArenaPanel() {
           "Faster" only when both slots share a type so we don't compare pure
           local ONNX latency against cloud wall-clock (includes network). */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <SlotResultPanel
-          label="Slot A"
-          result={resultA}
-          isWinner={
-            slotA.type === slotB.type &&
-            resultA.status === "done" &&
-            resultB.status === "done" &&
-            getFasterSlot(resultA.elapsedMs, resultB.elapsedMs) === "a"
-          }
-        />
-        <SlotResultPanel
-          label="Slot B"
-          result={resultB}
-          isWinner={
-            slotA.type === slotB.type &&
-            resultA.status === "done" &&
-            resultB.status === "done" &&
-            getFasterSlot(resultA.elapsedMs, resultB.elapsedMs) === "b"
-          }
-        />
+        <SlotResultPanel label="Slot A" result={resultA} isWinner={faster === "a"} />
+        <SlotResultPanel label="Slot B" result={resultB} isWinner={faster === "b"} />
       </div>
     </div>
   );

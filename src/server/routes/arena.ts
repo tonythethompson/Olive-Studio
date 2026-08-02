@@ -5,7 +5,7 @@
 import type { Router } from "express";
 import { ARENA_CLOUD_TIMEOUT_MS } from "../../lib/arenaConstants.ts";
 import { arenaProxyRateLimit } from "../middleware/rateLimit.ts";
-import { pinnedFetch } from "../services/arena/ssrfGuard.ts";
+import { pinnedFetch, SsrfPolicyError } from "../services/arena/ssrfGuard.ts";
 
 /**
  * Registers Arena routes on an Express router.
@@ -83,10 +83,7 @@ export function mountArenaRoutes(router: Router): void {
       const isTimeout = err instanceof Error && err.name === "AbortError";
       const message = err instanceof Error ? err.message : String(err);
       // Policy / SSRF rejections are client errors, not bad gateway
-      const isPolicy =
-        /not (supported|allowed)|HTTPS|Credentialed|Private|DNS resolution|redirect refused/i.test(
-          message,
-        );
+      const isPolicy = err instanceof SsrfPolicyError;
       return res.status(isTimeout ? 504 : isPolicy ? 400 : 502).json({
         error: isTimeout ? `Request timed out after ${ARENA_CLOUD_TIMEOUT_MS}ms` : message,
       });
