@@ -82,4 +82,36 @@ describe("pipelineStore", () => {
     expect(state.hfModelId).toBe("meta-llama/Meta-Llama-3-8B");
     expect(state.ihvProvider).toBe("CPUExecutionProvider");
   });
+
+  it("setSlotA merges patches without clobbering other fields", () => {
+    usePipelineStore.getState().setSlotA({ endpointUrl: "https://api.example.com/v1", type: "cloud" });
+    usePipelineStore.getState().setSlotA({ apiKey: "secret" });
+    const { slotA } = usePipelineStore.getState();
+    expect(slotA.type).toBe("cloud");
+    expect(slotA.endpointUrl).toBe("https://api.example.com/v1");
+    expect(slotA.apiKey).toBe("secret");
+  });
+
+  it("resetState clears Arena slots and playground sub-view", () => {
+    usePipelineStore.getState().setActiveSubView("arena");
+    usePipelineStore.getState().setSlotA({ type: "cloud", apiKey: "sk-test", endpointUrl: "https://x" });
+    usePipelineStore.getState().setSlotB({ modelId: "gpt-test" });
+    usePipelineStore.getState().resetState();
+    const store = usePipelineStore.getState();
+    expect(store.activeSubView).toBe("browser-test");
+    expect(store.slotA).toEqual({
+      type: "local",
+      file: null,
+      endpointUrl: "",
+      apiKey: "",
+      modelId: "",
+    });
+    expect(store.slotB).toEqual({
+      type: "local",
+      file: null,
+      endpointUrl: "",
+      apiKey: "",
+      modelId: "",
+    });
+  });
 });

@@ -3,25 +3,32 @@ import { RefreshCw, Globe, Gauge, Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePipelineStore, type PlaygroundSubView } from "@/lib/stores/pipelineStore";
-import { ArenaPanel } from "./ArenaPanel";
 
 /* ------------------------------------------------------------------ */
 /*  Lazy sub-view imports                                               */
 /* ------------------------------------------------------------------ */
 
 const InBrowserValidation = lazy(() =>
-  import("./InBrowserValidation").then((m) => ({ default: m.InBrowserValidation }))
+  import("./InBrowserValidation").then((m) => ({ default: m.InBrowserValidation })),
 );
 
 const WebGpuBenchmarkPanel = lazy(() =>
-  import("./WebGpuBenchmarkPanel").then((m) => ({ default: m.WebGpuBenchmarkPanel }))
+  import("./WebGpuBenchmarkPanel").then((m) => ({ default: m.WebGpuBenchmarkPanel })),
+);
+
+const ArenaPanel = lazy(() =>
+  import("./ArenaPanel").then((m) => ({ default: m.ArenaPanel })),
 );
 
 /* ------------------------------------------------------------------ */
 /*  Sub-view tab definitions                                            */
 /* ------------------------------------------------------------------ */
 
-const SUB_VIEWS: { id: PlaygroundSubView; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+const SUB_VIEWS: {
+  id: PlaygroundSubView;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
   { id: "browser-test", label: "Browser Test", icon: Globe },
   { id: "benchmark", label: "Benchmark", icon: Gauge },
   { id: "arena", label: "Arena", icon: Swords },
@@ -35,7 +42,9 @@ function LoadingFallback({ label }: { label: string }) {
   return (
     <div className="flex items-center justify-center w-full min-h-[320px]">
       <div className="flex flex-col items-center gap-3 py-16">
-        <span className="animate-spin"><RefreshCw className="h-5 w-5 text-electric-blue" /></span>
+        <span className="animate-spin">
+          <RefreshCw className="h-5 w-5 text-electric-blue" />
+        </span>
         <p className="text-sm text-slate-500">{label}</p>
       </div>
     </div>
@@ -50,9 +59,9 @@ export function PlaygroundPanel() {
   const activeSubView = usePipelineStore((s) => s.activeSubView);
   const setActiveSubView = usePipelineStore((s) => s.setActiveSubView);
 
-  // Keep-alive: track which sub-views have been opened so they stay mounted
+  // Keep-alive: seed from store so remounts don't blank a restored sub-view
   const [visitedSubViews, setVisitedSubViews] = useState<Set<string>>(
-    () => new Set(["browser-test"])
+    () => new Set([activeSubView, "browser-test"]),
   );
 
   const [, startSubViewTransition] = useTransition();
@@ -75,37 +84,48 @@ export function PlaygroundPanel() {
           Playground
         </h2>
 
-        {/* Sub-view tab bar — same pill/button-group style as graph/json toggle */}
         <div
           className="flex bg-slate-900 border border-slate-800 rounded p-0.5"
-          role="group"
+          role="tablist"
           aria-label="Playground sub-view"
         >
-          {SUB_VIEWS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={activeSubView === id}
-              onClick={() => handleSubViewChange(id)}
-              className={cn(
-                "px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer",
-                activeSubView === id
-                  ? "bg-electric-blue text-slate-950"
-                  : "text-slate-400 hover:text-slate-200"
-              )}
-            >
-              <Icon className="h-3 w-3" />
-              {label}
-            </button>
-          ))}
+          {SUB_VIEWS.map(({ id, label, icon: Icon }) => {
+            const selected = activeSubView === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                id={`playground-tab-${id}`}
+                aria-selected={selected}
+                aria-controls={`playground-panel-${id}`}
+                tabIndex={selected ? 0 : -1}
+                onClick={() => handleSubViewChange(id)}
+                className={cn(
+                  "px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer",
+                  selected
+                    ? "bg-electric-blue text-slate-950"
+                    : "text-slate-400 hover:text-slate-200",
+                )}
+              >
+                <Icon className="h-3 w-3" />
+                {label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Sub-view content — keep-alive via CSS hidden, not unmount */}
       <div className="relative">
-        {/* Browser Test */}
         {visitedSubViews.has("browser-test") && (
-          <div className={cn(activeSubView === "browser-test" ? "block" : "hidden")}>
+          <div
+            id="playground-panel-browser-test"
+            role="tabpanel"
+            aria-labelledby="playground-tab-browser-test"
+            hidden={activeSubView !== "browser-test"}
+            className={cn(activeSubView === "browser-test" ? "block" : "hidden")}
+          >
             <ErrorBoundary label="Browser Test">
               <Suspense fallback={<LoadingFallback label="Loading Browser Test..." />}>
                 <InBrowserValidation recipeJson={undefined} />
@@ -114,9 +134,14 @@ export function PlaygroundPanel() {
           </div>
         )}
 
-        {/* Benchmark */}
         {visitedSubViews.has("benchmark") && (
-          <div className={cn(activeSubView === "benchmark" ? "block" : "hidden")}>
+          <div
+            id="playground-panel-benchmark"
+            role="tabpanel"
+            aria-labelledby="playground-tab-benchmark"
+            hidden={activeSubView !== "benchmark"}
+            className={cn(activeSubView === "benchmark" ? "block" : "hidden")}
+          >
             <ErrorBoundary label="Benchmark">
               <Suspense fallback={<LoadingFallback label="Loading Benchmark..." />}>
                 <WebGpuBenchmarkPanel />
@@ -125,11 +150,18 @@ export function PlaygroundPanel() {
           </div>
         )}
 
-        {/* Arena */}
         {visitedSubViews.has("arena") && (
-          <div className={cn(activeSubView === "arena" ? "block" : "hidden")}>
+          <div
+            id="playground-panel-arena"
+            role="tabpanel"
+            aria-labelledby="playground-tab-arena"
+            hidden={activeSubView !== "arena"}
+            className={cn(activeSubView === "arena" ? "block" : "hidden")}
+          >
             <ErrorBoundary label="Arena">
-              <ArenaPanel />
+              <Suspense fallback={<LoadingFallback label="Loading Arena..." />}>
+                <ArenaPanel />
+              </Suspense>
             </ErrorBoundary>
           </div>
         )}

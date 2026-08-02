@@ -1,8 +1,5 @@
-import { useState, useCallback, useRef } from "react";
-import * as ort from "onnxruntime-web";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { Button, Input, Label } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import {
   FileUp,
@@ -86,6 +83,10 @@ function SlotDropZone({ file, onFile, onClear }: SlotDropZoneProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  const openPicker = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
   const handleDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
@@ -115,6 +116,16 @@ function SlotDropZone({ file, onFile, onClear }: SlotDropZoneProps) {
     [onFile],
   );
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openPicker();
+      }
+    },
+    [openPicker],
+  );
+
   if (file) {
     return (
       <div className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900/20 p-3">
@@ -139,12 +150,15 @@ function SlotDropZone({ file, onFile, onClear }: SlotDropZoneProps) {
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
-      onClick={() => fileInputRef.current?.click()}
+      onClick={openPicker}
+      onKeyDown={handleKeyDown}
       className={cn(
-        "relative flex flex-col items-center justify-center gap-2.5 rounded-lg border-2 border-dashed p-8 transition-colors cursor-pointer",
+        "relative flex flex-col items-center justify-center gap-2.5 rounded-lg border-2 border-dashed p-8 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue",
         isDragging
           ? "border-electric-blue bg-electric-blue/5"
           : "border-slate-700 hover:border-slate-600 bg-slate-900/20",
@@ -348,12 +362,20 @@ interface SlotResultPanelProps {
 
 function SlotResultPanel({ label, result, isWinner }: SlotResultPanelProps) {
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(result.output);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       // clipboard write failed silently
     }
@@ -454,41 +476,104 @@ function SlotResultPanel({ label, result, isWinner }: SlotResultPanelProps) {
 /*  Local ONNX inference helper                                        */
 /* ------------------------------------------------------------------ */
 
+/** Deterministic PRNG so both local slots share the same synthetic feeds for a given seed. */
+function mulberry32(seed: number): () => number {
+  let t = seed >>> 0;
+  return () => {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hashSeed(key: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function formatTensorPreview(data: ArrayLike<number | bigint | string>): string {
+  const preview = Array.from(data as ArrayLike<number | bigint | string>)
+    .slice(0, 8)
+    .map((v) => {
+      if (typeof v === "bigint") return v.toString();
+      if (typeof v === "number" && Number.isFinite(v)) return v.toFixed(4);
+      return String(v);
+    })
+    .join(", ");
+  return `[${preview}${(data as { length: number }).length > 8 ? ", …" : ""}]`;
+}
+
+type OrtModule = typeof import("onnxruntime-web");
+
 /**
- * Runs inference on a local ONNX file using onnxruntime-web.
- * Creates synthetic Float32 [1, 128] feeds for each input.
- * Returns { output, elapsedMs }.
+ * Build synthetic feeds from input *names* + a shared seed.
+ * Heuristics cover common NLP int64 tensors; other inputs stay float32[1,128].
+ * Not a full tokenizer — local Arena is a latency/smoke path, not prompt parity with cloud.
  */
-async function runLocalInference(file: File): Promise<{ output: string; elapsedMs: number }> {
+function buildSyntheticFeeds(
+  ort: OrtModule,
+  inputNames: readonly string[],
+  seedKey: string,
+): Record<string, InstanceType<OrtModule["Tensor"]>> {
+  const rng = mulberry32(hashSeed(seedKey || "arena-local"));
+  const feeds: Record<string, InstanceType<OrtModule["Tensor"]>> = {};
+  const seq = 128;
+
+  for (const name of inputNames) {
+    const lower = name.toLowerCase();
+    if (/input_ids|token_ids|ids$/.test(lower) && !/mask|type/.test(lower)) {
+      const data = BigInt64Array.from({ length: seq }, () => BigInt(Math.floor(rng() * 1000)));
+      feeds[name] = new ort.Tensor("int64", data, [1, seq]);
+    } else if (/attention_mask|padding_mask|mask$/.test(lower)) {
+      const data = BigInt64Array.from({ length: seq }, () => 1n);
+      feeds[name] = new ort.Tensor("int64", data, [1, seq]);
+    } else if (/token_type|segment/.test(lower)) {
+      const data = BigInt64Array.from({ length: seq }, () => 0n);
+      feeds[name] = new ort.Tensor("int64", data, [1, seq]);
+    } else {
+      const data = new Float32Array(seq);
+      for (let i = 0; i < seq; i++) data[i] = rng() * 2 - 1;
+      feeds[name] = new ort.Tensor("float32", data, [1, seq]);
+    }
+  }
+  return feeds;
+}
+
+/**
+ * Runs inference on a local ONNX file using onnxruntime-web (dynamically imported).
+ * Uses seedKey so two local slots can share the same synthetic inputs.
+ */
+async function runLocalInference(
+  file: File,
+  seedKey: string,
+): Promise<{ output: string; elapsedMs: number }> {
+  const ort = await import("onnxruntime-web");
+  const ortAny = ort as unknown as { env?: { wasm?: { wasmPaths?: string } } };
+  if (ortAny.env?.wasm) {
+    ortAny.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
+  }
+
   const objectUrl = URL.createObjectURL(file);
   try {
     const session = await ort.InferenceSession.create(objectUrl);
-    const feeds: Record<string, ort.Tensor> = {};
-    for (const name of session.inputNames) {
-      const data = new Float32Array(128);
-      for (let i = 0; i < data.length; i++) {
-        data[i] = Math.random() * 2 - 1;
-      }
-      feeds[name] = new ort.Tensor("float32", data, [1, 128]);
-    }
+    const feeds = buildSyntheticFeeds(ort, session.inputNames, seedKey);
 
     const startTime = performance.now();
     const outputMap = await session.run(feeds);
     const endTime = performance.now();
-
     const elapsedMs = computeElapsed(startTime, endTime);
 
-    // Convert first output to a string representation
     const firstOutputKey = session.outputNames[0];
     const firstOutput = firstOutputKey ? outputMap[firstOutputKey] : undefined;
     let output = "";
     if (firstOutput) {
-      const data = firstOutput.data as Float32Array | Int32Array | BigInt64Array;
-      const preview = Array.from(data as ArrayLike<number | bigint>)
-        .slice(0, 8)
-        .map((v) => (typeof v === "bigint" ? v.toString() : (v as number).toFixed(4)))
-        .join(", ");
-      output = `[${preview}${data.length > 8 ? ", …" : ""}] (shape: [${firstOutput.dims.join(", ")}])`;
+      const data = firstOutput.data as ArrayLike<number | bigint | string>;
+      output = `${formatTensorPreview(data)} (shape: [${firstOutput.dims.join(", ")}])`;
     }
 
     return { output, elapsedMs };
@@ -552,6 +637,8 @@ export function ArenaPanel() {
   // Prompt state
   const [prompt, setPrompt] = useState<string>("");
   const [promptError, setPromptError] = useState<boolean>(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const runIdRef = useRef(0);
 
   // Run result state
   const [resultA, setResultA] = useState<ArenaRunResult>({
@@ -565,141 +652,190 @@ export function ArenaPanel() {
     status: "idle",
   });
 
+  const needsPrompt = slotA.type === "cloud" || slotB.type === "cloud";
+  // Shared seed for local synthetic feeds (prompt text if present, else fixed).
+  const localSeedKey = prompt.trim() || "arena-local-default";
+
   const handlePromptChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     setPrompt(value);
-    // Clear error as soon as the user types any non-whitespace character
     if (value.trim() !== "") {
       setPromptError(false);
     }
   }, []);
 
   const handleRun = useCallback(async () => {
-    // Validate prompt
-    if (prompt.trim() === "") {
+    if (isRunning) return;
+
+    if (needsPrompt && prompt.trim() === "") {
       setPromptError(true);
       return;
     }
 
+    const runId = ++runIdRef.current;
+    const isCurrent = () => runIdRef.current === runId;
+    setIsRunning(true);
+
     const bothLocal = slotA.type === "local" && slotB.type === "local";
 
-    if (bothLocal) {
-      // Sequential execution path — Task 6.3
-      const cleared = clearRunResults();
-      setResultA({ ...cleared.resultA, status: "running" });
-      setResultB({ ...cleared.resultB, status: "idle" });
+    try {
+      if (bothLocal) {
+        // Sequential execution path — Task 6.3
+        const cleared = clearRunResults();
+        setResultA({ ...cleared.resultA, status: "running" });
+        setResultB({ ...cleared.resultB, status: "idle" });
 
-      // Run Slot A
-      let slotASuccess = false;
-      if (slotA.file) {
-        try {
-          const { output, elapsedMs } = await runLocalInference(slotA.file);
-          setResultA({ output, elapsedMs, status: "done" });
-          slotASuccess = true;
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          setResultA({ output: "", elapsedMs: 0, status: "error", error: message });
-        }
-      } else {
-        setResultA({
-          output: "",
-          elapsedMs: 0,
-          status: "error",
-          error: "No file loaded in Slot A",
-        });
-      }
-
-      // Run Slot B only if Slot A succeeded
-      if (slotASuccess) {
-        setResultB((prev) => ({ ...prev, status: "running" }));
-        if (slotB.file) {
+        let slotASuccess = false;
+        if (slotA.file) {
           try {
-            const { output, elapsedMs } = await runLocalInference(slotB.file);
-            setResultB({ output, elapsedMs, status: "done" });
+            const { output, elapsedMs } = await runLocalInference(slotA.file, localSeedKey);
+            if (!isCurrent()) return;
+            setResultA({ output, elapsedMs, status: "done" });
+            slotASuccess = true;
           } catch (err) {
+            if (!isCurrent()) return;
             const message = err instanceof Error ? err.message : String(err);
-            setResultB({ output: "", elapsedMs: 0, status: "error", error: message });
+            setResultA({ output: "", elapsedMs: 0, status: "error", error: message });
           }
         } else {
+          setResultA({
+            output: "",
+            elapsedMs: 0,
+            status: "error",
+            error: "No file loaded in Slot A",
+          });
+        }
+
+        if (!isCurrent()) return;
+
+        if (slotASuccess) {
+          setResultB((prev) => ({ ...prev, status: "running" }));
+          if (slotB.file) {
+            try {
+              const { output, elapsedMs } = await runLocalInference(slotB.file, localSeedKey);
+              if (!isCurrent()) return;
+              setResultB({ output, elapsedMs, status: "done" });
+            } catch (err) {
+              if (!isCurrent()) return;
+              const message = err instanceof Error ? err.message : String(err);
+              setResultB({ output: "", elapsedMs: 0, status: "error", error: message });
+            }
+          } else {
+            setResultB({
+              output: "",
+              elapsedMs: 0,
+              status: "error",
+              error: "No file loaded in Slot B",
+            });
+          }
+        } else {
+          // Don't leave Slot B stranded on "Waiting…" after Slot A fails
           setResultB({
             output: "",
             elapsedMs: 0,
             status: "error",
-            error: "No file loaded in Slot B",
+            error: "Skipped because Slot A failed",
           });
         }
+      } else {
+        const cleared = clearRunResults();
+        setResultA({ ...cleared.resultA, status: "running" });
+        setResultB({ ...cleared.resultB, status: "running" });
+
+        const runSlotA = async () => {
+          if (slotA.type === "local") {
+            if (!slotA.file) {
+              if (isCurrent()) {
+                setResultA({
+                  output: "",
+                  elapsedMs: 0,
+                  status: "error",
+                  error: "No file loaded in Slot A",
+                });
+              }
+              return;
+            }
+            try {
+              const { output, elapsedMs } = await runLocalInference(slotA.file, localSeedKey);
+              if (isCurrent()) setResultA({ output, elapsedMs, status: "done" });
+            } catch (err) {
+              if (!isCurrent()) return;
+              const message = err instanceof Error ? err.message : String(err);
+              setResultA({ output: "", elapsedMs: 0, status: "error", error: message });
+            }
+          } else {
+            if (!slotA.endpointUrl) {
+              if (isCurrent()) {
+                setResultA({
+                  output: "",
+                  elapsedMs: 0,
+                  status: "error",
+                  error: "No endpoint URL configured for Slot A",
+                });
+              }
+              return;
+            }
+            try {
+              const { output, elapsedMs } = await runCloudInference(slotA, prompt);
+              if (isCurrent()) setResultA({ output, elapsedMs, status: "done" });
+            } catch (err) {
+              if (!isCurrent()) return;
+              const message = err instanceof Error ? err.message : String(err);
+              setResultA({ output: "", elapsedMs: 0, status: "error", error: message });
+            }
+          }
+        };
+
+        const runSlotB = async () => {
+          if (slotB.type === "local") {
+            if (!slotB.file) {
+              if (isCurrent()) {
+                setResultB({
+                  output: "",
+                  elapsedMs: 0,
+                  status: "error",
+                  error: "No file loaded in Slot B",
+                });
+              }
+              return;
+            }
+            try {
+              const { output, elapsedMs } = await runLocalInference(slotB.file, localSeedKey);
+              if (isCurrent()) setResultB({ output, elapsedMs, status: "done" });
+            } catch (err) {
+              if (!isCurrent()) return;
+              const message = err instanceof Error ? err.message : String(err);
+              setResultB({ output: "", elapsedMs: 0, status: "error", error: message });
+            }
+          } else {
+            if (!slotB.endpointUrl) {
+              if (isCurrent()) {
+                setResultB({
+                  output: "",
+                  elapsedMs: 0,
+                  status: "error",
+                  error: "No endpoint URL configured for Slot B",
+                });
+              }
+              return;
+            }
+            try {
+              const { output, elapsedMs } = await runCloudInference(slotB, prompt);
+              if (isCurrent()) setResultB({ output, elapsedMs, status: "done" });
+            } catch (err) {
+              if (!isCurrent()) return;
+              const message = err instanceof Error ? err.message : String(err);
+              setResultB({ output: "", elapsedMs: 0, status: "error", error: message });
+            }
+          }
+        };
+
+        await Promise.allSettled([runSlotA(), runSlotB()]);
       }
-    } else {
-      // Concurrent execution path — both cloud or mixed local+cloud
-      const cleared = clearRunResults();
-      setResultA({ ...cleared.resultA, status: "running" });
-      setResultB({ ...cleared.resultB, status: "running" });
-
-      // Build promises for each slot, updating independently as they settle
-      const runSlotA = async () => {
-        if (slotA.type === "local") {
-          if (!slotA.file) {
-            setResultA({ output: "", elapsedMs: 0, status: "error", error: "No file loaded in Slot A" });
-            return;
-          }
-          try {
-            const { output, elapsedMs } = await runLocalInference(slotA.file);
-            setResultA({ output, elapsedMs, status: "done" });
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            setResultA({ output: "", elapsedMs: 0, status: "error", error: message });
-          }
-        } else {
-          // cloud
-          if (!slotA.endpointUrl) {
-            setResultA({ output: "", elapsedMs: 0, status: "error", error: "No endpoint URL configured for Slot A" });
-            return;
-          }
-          try {
-            const { output, elapsedMs } = await runCloudInference(slotA, prompt);
-            setResultA({ output, elapsedMs, status: "done" });
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            setResultA({ output: "", elapsedMs: 0, status: "error", error: message });
-          }
-        }
-      };
-
-      const runSlotB = async () => {
-        if (slotB.type === "local") {
-          if (!slotB.file) {
-            setResultB({ output: "", elapsedMs: 0, status: "error", error: "No file loaded in Slot B" });
-            return;
-          }
-          try {
-            const { output, elapsedMs } = await runLocalInference(slotB.file);
-            setResultB({ output, elapsedMs, status: "done" });
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            setResultB({ output: "", elapsedMs: 0, status: "error", error: message });
-          }
-        } else {
-          // cloud
-          if (!slotB.endpointUrl) {
-            setResultB({ output: "", elapsedMs: 0, status: "error", error: "No endpoint URL configured for Slot B" });
-            return;
-          }
-          try {
-            const { output, elapsedMs } = await runCloudInference(slotB, prompt);
-            setResultB({ output, elapsedMs, status: "done" });
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            setResultB({ output: "", elapsedMs: 0, status: "error", error: message });
-          }
-        }
-      };
-
-      // Fire both concurrently — each updates its own slot independently.
-      // allSettled, not all: Promise.all rejects on the first failure and
-      // would abandon the other slot's result (Requirement 7.4).
-      await Promise.allSettled([runSlotA(), runSlotB()]);
+    } finally {
+      if (isCurrent()) setIsRunning(false);
     }
-  }, [prompt, slotA, slotB]);
+  }, [isRunning, needsPrompt, prompt, localSeedKey, slotA, slotB]);
 
   return (
     <div className="flex flex-col gap-6 select-text">
@@ -745,16 +881,22 @@ export function ArenaPanel() {
             htmlFor="arena-prompt"
             className="text-xs font-semibold text-slate-300"
           >
-            Prompt
+            Prompt{needsPrompt ? "" : " (optional seed for local)"}
           </Label>
           <textarea
             id="arena-prompt"
             value={prompt}
             onChange={handlePromptChange}
-            placeholder="Enter a prompt to run against both slots…"
+            placeholder={
+              needsPrompt
+                ? "Enter a prompt to run against cloud slot(s)…"
+                : "Optional: used as a seed so both local models share the same synthetic inputs…"
+            }
             rows={4}
             aria-invalid={promptError}
-            aria-describedby={promptError ? "arena-prompt-error" : undefined}
+            aria-describedby={
+              promptError ? "arena-prompt-error" : "arena-prompt-hint"
+            }
             className={cn(
               "w-full resize-y rounded-lg border bg-slate-950/60 px-3 py-2 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-1 transition-colors",
               promptError
@@ -764,7 +906,14 @@ export function ArenaPanel() {
           />
           {promptError && (
             <p id="arena-prompt-error" className="text-[11px] text-red-400" role="alert">
-              Prompt cannot be empty or whitespace only.
+              Prompt cannot be empty or whitespace only when a cloud slot is configured.
+            </p>
+          )}
+          {!promptError && (
+            <p id="arena-prompt-hint" className="text-[11px] text-slate-500">
+              {needsPrompt
+                ? "Cloud slots send this prompt to the OpenAI-compatible chat API. Local slots use synthetic tensors (seeded from the prompt when present)."
+                : "Local Arena builds synthetic ONNX feeds (int64 for common NLP input names, float32 otherwise). Matching seeds keep both slots comparable."}
             </p>
           )}
         </div>
@@ -772,21 +921,30 @@ export function ArenaPanel() {
         <div className="flex items-center justify-end">
           <Button
             onClick={handleRun}
-            disabled={prompt.trim() === ""}
+            disabled={isRunning || (needsPrompt && prompt.trim() === "")}
             className="flex items-center gap-2"
           >
-            <Play className="h-3.5 w-3.5" />
-            Run Arena
+            {isRunning ? (
+              <span className="animate-spin">
+                <Loader2 className="h-3.5 w-3.5" />
+              </span>
+            ) : (
+              <Play className="h-3.5 w-3.5" />
+            )}
+            {isRunning ? "Running…" : "Run Arena"}
           </Button>
         </div>
       </div>
 
-      {/* Result display columns — Tasks 6.2-6.4 */}
+      {/* Result display columns — Tasks 6.2-6.4.
+          "Faster" only when both slots share a type so we don't compare pure
+          local ONNX latency against cloud wall-clock (includes network). */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <SlotResultPanel
           label="Slot A"
           result={resultA}
           isWinner={
+            slotA.type === slotB.type &&
             resultA.status === "done" &&
             resultB.status === "done" &&
             getFasterSlot(resultA.elapsedMs, resultB.elapsedMs) === "a"
@@ -796,6 +954,7 @@ export function ArenaPanel() {
           label="Slot B"
           result={resultB}
           isWinner={
+            slotA.type === slotB.type &&
             resultA.status === "done" &&
             resultB.status === "done" &&
             getFasterSlot(resultA.elapsedMs, resultB.elapsedMs) === "b"

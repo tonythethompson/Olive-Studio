@@ -68,6 +68,9 @@ export const usePipelineStore = create<PipelineStore>((set) => ({
   resetState: () =>
     set({
       state: commitUiStateUpdate(defaultState, {}),
+      activeSubView: "browser-test",
+      slotA: defaultArenaSlot(),
+      slotB: defaultArenaSlot(),
     }),
 }));
 
