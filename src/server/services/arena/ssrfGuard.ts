@@ -9,10 +9,9 @@
  *     so a rebinding DNS update after validation cannot retarget the TCP connect
  */
 import dns from "node:dns/promises";
-import http from "node:http";
+import http, { type IncomingMessage } from "node:http";
 import https from "node:https";
 import net from "node:net";
-import type { IncomingMessage } from "node:http";
 
 export type SsrfPolicy = {
   /** Allow http:// loopback only when OLIVE_ALLOW_LOOPBACK_HTTP=true. */

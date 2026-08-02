@@ -3,7 +3,11 @@
  * Cloud inference proxy for the Arena sub-view in the Playground tab.
  */
 import type { Router } from "express";
-import { resolveCloudTimeoutMs } from "../../lib/arenaConstants.ts";
+import {
+  ARENA_CLOUD_TIMEOUT_MAX_MS,
+  ARENA_CLOUD_TIMEOUT_MIN_MS,
+  resolveCloudTimeoutMs,
+} from "../../lib/arenaConstants.ts";
 import { arenaProxyRateLimit } from "../middleware/rateLimit.ts";
 import { pinnedFetch } from "../services/arena/ssrfGuard.ts";
 
@@ -48,7 +52,12 @@ export function mountArenaRoutes(router: Router): void {
     });
 
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), resolvedTimeoutMs);
+    // Re-assert literal bounds at the call site so static analysis sees a capped delay
+    // (resolveCloudTimeoutMs already clamps; Math.min/max with constants is the sanitizer).
+    const timer = setTimeout(
+      () => ac.abort(),
+      Math.min(ARENA_CLOUD_TIMEOUT_MAX_MS, Math.max(ARENA_CLOUD_TIMEOUT_MIN_MS, resolvedTimeoutMs)),
+    );
 
     try {
       const basePath = targetUrl.pathname.replace(/\/+$/, "");
