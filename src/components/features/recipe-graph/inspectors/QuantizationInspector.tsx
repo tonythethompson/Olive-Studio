@@ -382,7 +382,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
 
   if (!state.passes.quantization) {
     return (
-      <p className="text-sm text-slate-500 font-mono italic text-center py-4">
+      <p className="text-sm text-slate-500 font-sans italic text-center py-4">
         Quantization is skipped — model stays in floating point (FP16/FP32).
       </p>
     );

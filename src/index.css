@@ -38,39 +38,73 @@
   /* Full three-column shell + horizontal graph (below this: compact rearrange) */
   --breakpoint-wide: 900px;
 
-  --font-sans: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-mono: Hurmit, Hermit, ui-monospace, SFMono-Regular, monospace;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Fira Code", ui-monospace, SFMono-Regular, monospace;
+
+  /*
+   * IBM Plex Sans variable face tops out at 700. Remap Tailwind's heavier
+   * utilities so font-extrabold / font-black don't silently collapse to the
+   * same rendered weight as font-bold without an intentional mapping.
+   */
+  --font-weight-extrabold: 700;
+  --font-weight-black: 700;
 }
 
 @font-face {
-  font-family: Hurmit;
-  src: url("/fonts/hurmit/Hurmit-Regular.otf") format("opentype");
+  font-family: "IBM Plex Sans";
+  src: url("/fonts/IBM_Plex_Sans/IBMPlexSans-VariableFont_wdth,wght.ttf") format("truetype");
+  font-weight: 100 700;
+  font-stretch: 75% 100%;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("/fonts/IBM_Plex_Sans/IBMPlexSans-Italic-VariableFont_wdth,wght.ttf") format("truetype");
+  font-weight: 100 700;
+  font-stretch: 75% 100%;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fira Code";
+  src: url("/fonts/FiraCode/FiraCode-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fira Code";
+  src: url("/fonts/FiraCode/FiraCode-Regular.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: Hurmit;
-  src: url("/fonts/hurmit/Hurmit-RegularItalic.otf") format("opentype");
-  font-weight: 400;
-  font-style: italic;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: Hurmit;
-  src: url("/fonts/hurmit/Hurmit-Bold.otf") format("opentype");
-  font-weight: 700;
+  font-family: "Fira Code";
+  src: url("/fonts/FiraCode/FiraCode-Medium.ttf") format("truetype");
+  font-weight: 500;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: Hurmit;
-  src: url("/fonts/hurmit/Hurmit-BoldItalic.otf") format("opentype");
+  font-family: "Fira Code";
+  src: url("/fonts/FiraCode/FiraCode-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fira Code";
+  src: url("/fonts/FiraCode/FiraCode-Bold.ttf") format("truetype");
   font-weight: 700;
-  font-style: italic;
+  font-style: normal;
   font-display: swap;
 }
 

@@ -10,7 +10,7 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
 
   if (!state.passes.conversion) {
     return (
-      <p className="text-sm text-slate-500 font-mono italic text-center py-4">
+      <p className="text-sm text-slate-500 font-sans italic text-center py-4">
         Conversion is skipped — weights are not exported to ONNX/OpenVINO in this recipe.
       </p>
     );
