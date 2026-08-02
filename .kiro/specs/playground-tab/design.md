@@ -292,7 +292,7 @@ const [resultA, setResultA] = useState<ArenaRunResult>({ output: "", elapsedMs: 
 const [resultB, setResultB] = useState<ArenaRunResult>({ output: "", elapsedMs: 0, status: "idle" });
 ```
 
-**Slot configuration UI**: Each slot renders a header with a toggle (`"Local file"` / `"Cloud / API"`). When local: a file drop-zone identical in style to `InBrowserValidation`'s, accepting `.onnx` and `.ort`. When cloud: three input fields (endpoint URL, optional API key, optional model identifier).
+**Slot configuration UI**: Each slot renders a header with a toggle (`"Local file"` / `"Cloud / API"`). When local: a file drop-zone identical in style to `InBrowserValidation`'s, accepting `.onnx` and `.ort`, **plus** a "From Olive outputs" control (Requirement 18) that lists recent/browseable Olive_Output_Entry items and loads the selected file into the slot as a Session_Scoped `File`. When cloud: three input fields (endpoint URL, optional API key, optional model identifier), **plus** a "Use active Assistant provider" control that one-click snapshots an OpenAI_Compat_Provider into those fields when eligible.
 
 **Run button**: Disabled when the prompt is empty/whitespace-only. Clicking validates the prompt, clears prior results, and dispatches the appropriate execution strategy.
 
@@ -374,6 +374,8 @@ const arenaRouter = Router();
 mountArenaRoutes(arenaRouter);
 app.use("/api", arenaRouter);
 ```
+
+`mountArenaRoutes` also hosts Requirement 18 convenience endpoints (`GET /arena/olive-outputs`, `GET /arena/olive-outputs/file`, `GET /arena/assistant-cloud-snapshot`) described in "Requirement 18 Additions" below — same router, same `/api` mount.
 
 ### `ExecutionWorkspace.tsx` — cleanup
 
@@ -1884,3 +1886,172 @@ Construct records from the generated `p50Ms` sequence (holding `profileId` const
 - **`playgroundHistory.ts` — DELETE clears only the targeted scope**: seed both model names; delete one; assert the other is untouched
 - **`playgroundHistory.ts` — malformed `limit` degrades to default rather than 400**: `limit=abc` and `limit=99999` both resolve to a clamped in-range value
 - **`historyStore` — eviction keeps most-recent N**: append `HISTORY_MAX_RECORDS + 50` records to one key; assert the stored 500 are the last 500 inserted, in order
+
+---
+
+## Requirement 18 Additions: Arena Slot Convenience Sources
+
+### Overview
+
+Requirement 5 already lets each Arena slot take a local file drop or manually typed cloud fields. Requirement 18 adds **convenience entry points** on top of those modes — not a third source type:
+
+| Mode | Manual (Req 5) | Convenience (Req 18) |
+|------|----------------|----------------------|
+| Local file | Drop-zone / file picker | "From Olive outputs" — recent + browse under Olive_Output_Roots |
+| Cloud / API | endpoint / apiKey / modelId inputs | "Use active Assistant provider" — OpenAI_Compat snapshot |
+
+After fill, slots behave exactly like manually configured slots for Requirements 6–8.
+
+### Why under Local / Cloud, not a third type
+
+A third `"olive-output"` or `"assistant"` `ArenaSlotConfig.type` would fork execution, validation, and history `sourceLabel` logic. The product need is faster *entry*, not a different *runtime*. Keeping `type: "local" | "cloud"` means convenience controls only write the same fields Task 6 already understands.
+
+### Olive outputs: server scan → File
+
+Browsers cannot list arbitrary folders. The server resolves Olive_Output_Roots, scans for `.onnx`/`.ort`, and serves bytes only inside that sandbox. The client turns those bytes into a Session_Scoped `File` so existing `onnxruntime-web` load paths stay unchanged.
+
+```ts
+// Shared helpers — prefer src/lib/arenaOliveOutputs.ts (pure root resolution + path containment)
+// and implement FS IO in src/server/services/playground/oliveOutputScan.ts
+
+export interface OliveOutputEntry {
+  id: string;          // stable id for list keys (hash of resolved path or path itself)
+  displayPath: string; // path relative to its root, for UI
+  absolutePath: string;// returned only on list; file fetch accepts this or root-relative form
+  sizeBytes: number;
+  mtimeMs: number;
+  rootLabel: "cache" | "output";
+}
+
+export function resolveOliveOutputRoots(opts: {
+  cacheDir: string;           // from pipelineStore; "" → default ~/.cache/olive
+  outputDir?: string;         // from recipe engine.output_dir when known; else ./models/optimized
+  cwd?: string;               // server process cwd for relative output_dir
+}): string[]; // absolute, deduped, existing-or-creatable-not-required
+
+export function isPathInsideRoots(resolvedPath: string, roots: string[]): boolean;
+```
+
+**Routes** (extend `mountArenaRoutes`):
+
+```http
+GET /api/arena/olive-outputs
+  Query: cacheDir (required string, may be empty), outputDir (optional string)
+  Response 200: {
+    roots: Array<{ label: "cache" | "output"; path: string }>,
+    recent: OliveOutputEntry[],  // up to 10, mtime desc
+    entries: OliveOutputEntry[]  // browse list; server may cap (e.g. 200) and maxDepth (e.g. 4)
+  }
+
+GET /api/arena/olive-outputs/file?path=...
+  Response 200: application/octet-stream (raw model bytes)
+  Headers: Content-Disposition: attachment; filename="<basename>"
+  Errors: 400 invalid/missing path; 403 path outside Olive_Output_Roots; 404 missing file
+```
+
+**Client fill sequence** (`ArenaPanel` local mode):
+
+1. Open "From Olive outputs" → `GET /olive-outputs` with `cacheDir` from `pipelineStore` and optional `outputDir`.
+2. On select → `GET /olive-outputs/file?path=...` → `new File([blob], basename, { type: "application/octet-stream" })` → `setSlotX({ file })`.
+3. UI matches drop-zone success (filename + size). Drop-zone remains available.
+
+**Empty / error**: empty list → empty-state copy, drop-zone untouched. Fetch failure → inline error, do not clear an existing `file`.
+
+### Path sandbox
+
+Before any `readdir` / `readFile`:
+
+1. Resolve each configured root with `path.resolve` + `fs.realpathSync.native` when the path exists (if missing, keep resolved absolute path; do not invent roots outside the configured strings).
+2. Resolve the requested file path the same way.
+3. Allow only if `resolvedFile === root || resolvedFile.startsWith(root + path.sep)` for some root (Windows: normalize separators).
+4. Reject symlink escapes that realpath outside roots with 403.
+
+Do **not** accept arbitrary user-supplied roots beyond `cacheDir` / `outputDir` query params that themselves must map to the two allowed roles. Cap scan depth and entry count to keep the endpoint cheap.
+
+### Assistant provider snapshot
+
+Arena cloud inference is OpenAI-compatible only. One-click fill is therefore gated:
+
+```ts
+export function isArenaOpenAiCompatProvider(provider: {
+  provider: string;
+  baseUrl?: string | null;
+}): boolean {
+  // true for openai-compat / Custom, or catalog providers with a usable OpenAI-shaped baseUrl.
+  // false for native gemini (no baseUrl path), codex, devin, etc.
+}
+```
+
+**Route:**
+
+```http
+GET /api/arena/assistant-cloud-snapshot
+  Response 200:
+    | { eligible: true, endpointUrl: string, apiKey: string, modelId: string, providerLabel: string }
+    | { eligible: false, reason: string }
+```
+
+Implementation reads the same runtime/saved provider used by `GET /api/ai/provider`, then resolves the API key from the in-memory runtime config / env the server already uses for Assistant calls. `GET /api/ai/provider` itself does **not** return keys; this Arena-only snapshot endpoint exists so the client can honor the user’s chosen **snapshot-copy** UX without teaching Arena a live bind to the Assistant singleton.
+
+**Client fill sequence** (cloud mode):
+
+1. Click "Use active Assistant provider".
+2. If `eligible: false` → show `reason`, leave fields unchanged.
+3. If `eligible: true` → `setSlotX({ type: "cloud", endpointUrl, apiKey, modelId })`.
+4. Fields stay editable; Assistant settings changes do not sync until the user clicks again.
+
+**Security notes:**
+
+- Snapshot keys are Session_Scoped in the slot (lost on reload), never written to history (Property 18 / Req 16.9).
+- Do not log `apiKey` or full snapshot bodies.
+- Prefer local-only deployment assumptions already used elsewhere for Assistant secrets.
+
+### ArenaPanel UI sketch
+
+```
+[ Local file | Cloud / API ]
+
+── Local ──
+[ drop-zone ]
+From Olive outputs ▾
+  Recent
+    • models/optimized/model.onnx   42 MB   2h ago
+  Browse
+    cache/… / output/…
+
+── Cloud ──
+[ Use active Assistant provider ]
+endpoint URL
+API key (optional)
+model id (optional)
+```
+
+Independent per slot. Switching type clears the opposite-mode fields for that slot only (existing Task 6 behavior).
+
+### Correctness Properties
+
+#### Property 20: Olive output file paths outside roots are always rejected
+
+*For any* absolute or relative `path` query that, after canonicalization, is not inside any resolved Olive_Output_Root, `GET /api/arena/olive-outputs/file` returns a 4xx status and an empty body (no model bytes). Paths that stay inside a root and name an existing `.onnx`/`.ort` file return 200 with non-empty bytes.
+
+**Validates: Requirement 18.4**
+
+#### Property 21: Assistant snapshot eligibility matches OpenAI-compat gate
+
+*For any* active provider descriptor, `GET /api/arena/assistant-cloud-snapshot` returns `eligible: true` only when `isArenaOpenAiCompatProvider` is true **and** endpoint URL + model id can be resolved. Non-compat providers (and missing provider) always return `eligible: false` with a non-empty `reason`, never a partial credential payload.
+
+**Validates: Requirements 18.7, 18.8**
+
+#### Property 22: Convenience fill writes the same ArenaSlotConfig shape as manual entry
+
+*For any* successful Olive-output selection, the resulting slot has `type: "local"` and a non-null `file` whose `name` equals the entry basename. *For any* successful Assistant snapshot apply, the resulting slot has `type: "cloud"` and `endpointUrl` / `apiKey` / `modelId` equal to the snapshot fields. No additional discriminant field is required for Requirements 6–8 execution.
+
+**Validates: Requirements 18.3, 18.7, 18.11**
+
+### Testing Additions
+
+#### Server (`vitest.server.config.ts`)
+
+- Path sandbox: in-root file → 200; `../` escape → 403/400; symlink escape when exercisable → 403
+- List: seeds temp cache/output dirs; recent is mtime-ordered and ≤ 10; extensions other than `.onnx`/`.ort` excluded
+- Snapshot: mock runtime as openai-compat → `eligible: true` with expected fields; mock as gemini/codex → `e

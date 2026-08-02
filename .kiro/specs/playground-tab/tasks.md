@@ -304,6 +304,36 @@ Adds a fourth top-level "Playground" navigation entry to the Olive Studio sideba
     - Opening the sidebar for a diagnostic does not change the Playground section's scroll position
     - _Requirements: 12.1, 12.3, 12.4, 12.5, 12.6, 12.7, 12.9, 12.10, 12.11_
 
+- [ ] 19. Arena slot convenience sources (Requirement 18 — schedule after ArenaPanel/core Task 6 is stable)
+  - [ ] 19.1 Add pure helpers for roots, path containment, and OpenAI-compat gate
+    - Create `src/lib/arenaOliveOutputs.ts` with `OliveOutputEntry`, `resolveOliveOutputRoots`, `isPathInsideRoots`
+    - Create `src/lib/arenaAssistantSnapshot.ts` with `isArenaOpenAiCompatProvider` and a pure `toCloudSlotPatch(snapshot)` mapper
+    - Default roots: empty `cacheDir` → `~/.cache/olive`; missing `outputDir` → `./models/optimized`
+    - _Requirements: 18.2, 18.4, 18.8_
+  - [ ] 19.2 Extend `mountArenaRoutes` with Olive-output list + sandboxed file fetch
+    - `GET /arena/olive-outputs` — accept `cacheDir` / optional `outputDir`; return `{ roots, recent≤10 by mtime, entries }` (cap depth/count server-side)
+    - `GET /arena/olive-outputs/file?path=` — stream bytes only when path is inside resolved Olive_Output_Roots; otherwise 403/400 with empty body
+    - Implement FS scan in `src/server/services/playground/oliveOutputScan.ts` (or equivalent); never log file contents
+    - _Requirements: 18.2, 18.3, 18.4, 18.5_
+  - [ ] 19.3 Add `GET /arena/assistant-cloud-snapshot`
+    - Read active Assistant provider from the same runtime/saved source as `GET /api/ai/provider`
+    - If OpenAI_Compat and fields resolvable → `{ eligible: true, endpointUrl, apiKey, modelId, providerLabel }`
+    - Else → `{ eligible: false, reason }` (HTTP 200); never return a partial credential payload
+    - Do not log `apiKey`
+    - _Requirements: 18.7, 18.8, 18.9_
+  - [ ] 19.4 Wire convenience UI into `ArenaPanel` slot configuration
+    - Local mode: "From Olive outputs" under the drop-zone (recent + browse); on select, fetch bytes → `File` → `setSlotX({ file })`; empty/error states per Req 18.5
+    - Cloud mode: "Use active Assistant provider"; on success snapshot into editable cloud fields; on ineligible show `reason` without clearing fields
+    - Per-slot isolation; no third `ArenaSlotConfig.type`
+    - Pass `cacheDir` from `pipelineStore` into the list request
+    - _Requirements: 18.1, 18.3, 18.5, 18.6, 18.7, 18.8, 18.10, 18.11_
+  - [ ] 19.5 Tests for Requirement 18
+    - Server: in-root file → 200; traversal / outside root → 4xx empty body (Property 20)
+    - Server: list recent mtime order + extension filter; snapshot eligible vs non-compat vs missing (Property 21)
+    - Unit: `isPathInsideRoots` / `isArenaOpenAiCompatProvider` / cloud patch mapper (Property 22)
+    - Component: Olive select fills local file; empty state keeps drop-zone; Assistant fill / soft-fail; Slot A fill does not change Slot B
+    - _Requirements: 18.3, 18.4, 18.5, 18.7, 18.8, 18.10_
+
 - [ ] 14. Run History persistence (Requirement 16 — new epic, schedule after core Req 1–10 ships)
   - [ ] 14.1 Create `src/server/services/playground/historyStore.ts`
     - Define `BenchmarkRunRecord`, `ArenaSlotSummary`, `ArenaRunRecordEntry` types (co-locate or import from a shared `src/lib/playgroundHistoryTypes.ts` so client and server share one definition)
@@ -401,6 +431,7 @@ Adds a fourth top-level "Playground" navigation entry to the Olive Studio sideba
 - Tasks 14–16 (Requirements 16–17, Run History and Recommendations) are a separate epic on top of core Req 1–10 — schedule after the core Playground ships. Task 15 depends on Task 14 (recommendations read history that must already be persisted and fetchable). No SQLite or other DB dependency is introduced; persistence follows the existing `jobRegistry`-style in-memory-`Map`-plus-filesystem pattern already used in `src/server/services/olive/state.ts`
 - Tasks 17–18 (Requirement 12, MCP knowledge base integration) are **optional and decoupled from core ship** — Requirements 1–10 must pass their full test suite with the MCP server unconfigured or unreachable, and nothing in Tasks 1–13 may depend on `/api/mcp/tool` responding. Requirement 12 was rewritten this session: rather than `MCPDiagnosticCard` embedded inline in three sub-views, all Playground KB diagnostics route through the existing `GeminiSidebar` Audit tab (Playground-Diagnostic_Mode), reached via a "Diagnose with Assistant" click in each sub-view. `playgroundMcpClient.ts` (Task 17.1) is imported **only** by the sidebar — the three sub-views (`InBrowserValidation`, `WebGpuBenchmarkPanel`, `ArenaPanel`) never import it or `useMcpDiagnosticKeyed` directly, they only construct a request object. A future MCP schema change is still one function signature to update, in one file the sidebar alone depends on. That module still closes the gap a bare `try/catch` leaves open: a *reachable* MCP server returning a *reshaped* `200` response degrades to the same `null`/`[]` return as an unreachable one, rather than silently handing the sidebar an `undefined` field it renders unguarded. See design.md "Why the sidebar, not a third inline surface" for the reasoning behind this change
 - Task 15.2's "Get AI recommendation" call (Requirement 17.2) is itself an MCP call and should route through `playgroundMcpClient.ts` once Task 17 exists, rather than adding a seventh inline call site — schedule Task 15 after Task 17 if both are being built, even though the dependency graph below shows them as parallel-eligible waves
+- Task 19 (Requirement 18, Arena convenience sources) depends on Task 3 (`mountArenaRoutes`) and Task 6 (`ArenaPanel` slot UI/store). It does not depend on Tasks 14–18. Prefer scheduling after wave 8 so ArenaPanel churn has settled. Task numbering skips reusing `18.x` because Tasks 18.1–18.4 already cover MCP tests for Requirement 12
 - The `ExecutionWorkspace` cleanup (Task 4) must happen before or concurrently with `PlaygroundPanel` creation (Task 5) to avoid a window where the same components have two entry points
 - All design context documents are available during implementation — tasks reference requirements by number but assume the implementer has read the full design
 
@@ -426,9 +457,12 @@ Adds a fourth top-level "Playground" navigation entry to the Olive Studio sideba
     { "id": 14, "tasks": ["16.1", "16.2", "16.3", "16.4"] },
     { "id": 15, "tasks": ["17.1", "17.2"] },
     { "id": 16, "tasks": ["17.3", "17.4", "17.5", "17.6"] },
-    { "id": 17, "tasks": ["17.7", "18.1", "18.2", "18.3", "18.4"] }
+    { "id": 17, "tasks": ["17.7", "18.1", "18.2", "18.3", "18.4"] },
+    { "id": 18, "tasks": ["19.1", "19.2", "19.3", "19.4", "19.5"] }
   ]
 }
 ```
 
 Waves 9–14 (Run History and Recommendations) and waves 15–17 (MCP integration) are both independent of waves 0–8 in principle but should be scheduled after wave 8 completes in practice, since both extend `WebGpuBenchmarkPanel` and `ArenaPanel`, which core Task 6 and the Requirement 11 work (Task 12.2) are still actively changing. Waves 9–14 and 15–17 have no dependency on each other in the direction the graph shows — but if both are being built in the same pass, build wave 15 (`playgroundMcpClient.ts`) before Task 15.2, since Task 15.2's "Get AI recommendation" call is itself an MCP call and should reuse the consolidated client rather than becoming a seventh inline call site.
+
+Wave 18 (Requirement 18, Arena convenience sources) depends only on core Arena Task 6 + Task 3 (`mountArenaRoutes`). It does not depend on MCP (Tasks 17–18) or Run History (Tasks 14–16). Safe to schedule anytime after wave 8 once ArenaPanel is stable.

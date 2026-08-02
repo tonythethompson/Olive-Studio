@@ -17,8 +17,12 @@ This feature adds a fourth top-level navigation entry called "Playground" to the
 - **Arena_Run**: The act of executing inference on both Model_Slots and collecting their outputs for comparison.
 - **Local_Model**: An ONNX or ORT model file loaded from the user's filesystem for in-browser inference.
 - **Cloud_Model**: An external model reached via a REST API endpoint; not downloaded locally.
+- **Olive_Output_Root**: A filesystem directory the Arena is allowed to scan for Olive-produced `.onnx` / `.ort` files. Allowed roots are the resolved `pipelineStore.cacheDir` (defaulting to `~/.cache/olive` when empty) and the recipe engine `output_dir` (defaulting to `./models/optimized` when absent).
+- **Olive_Output_Entry**: A discovered `.onnx` or `.ort` file under an Olive_Output_Root, including relative display path, absolute path (server-only until selected), byte size, and modification time.
+- **Assistant_Cloud_Snapshot**: A one-shot copy of the active AI Assistant provider's OpenAI-compatible endpoint URL, API key, and model id, written into an Arena Cloud_Model slot at click time. Later Assistant settings changes do not update the slot.
+- **OpenAI_Compat_Provider**: An Assistant provider the Arena cloud proxy can call: `openai-compat` / Custom, or any catalog provider whose configured `baseUrl` targets an OpenAI-compatible chat-completions API. Native Gemini, Codex OAuth, Devin, and similar non-compat providers are not OpenAI_Compat_Providers for Arena fill.
 - **PlaygroundStore**: The Zustand store slice that persists Playground sub-view selection and Arena slot configuration. Deliberately separate from `pipelineStore` — see Design "Separate Zustand store" for the rationale and the conditions under which the two would be merged.
-- **Session_Scoped**: State that lives for the lifetime of a single browser tab session and is intentionally lost on reload. `File` handles, ONNX sessions, and run results are all Session_Scoped. Nothing in the Playground is persisted to `localStorage` or the server.
+- **Session_Scoped**: State that lives for the lifetime of a single browser tab session and is intentionally lost on reload. `File` handles, ONNX sessions, and run results are all Session_Scoped. Nothing in the Playground is persisted to `localStorage` or the server. (Requirement 16's history toggle in `localStorage` is the intentional exception for a UI preference, not model or credential state.)
 - **Sub_View_Tabs**: The horizontal tab bar rendered inside the Playground section for switching between Browser Test, Benchmark, and Arena.
 - **ExecutionWorkspace**: The existing component (`ExecutionWorkspace.tsx`) currently hosting Browser Test and Benchmark as hidden sub-views inside its "More" dropdown.
 
@@ -381,3 +385,36 @@ This feature adds a fourth top-level navigation entry called "Playground" to the
 6. THE Arena sub-view SHALL compute a Heuristic_Recommendation when the same slot configuration (by `sourceLabel`) has won Performance_Winner or Quality_Winner in at least 4 of the last 5 Arena Run_Records → "[Slot config] has won N of the last 5 comparisons."
 
 7. WHEN Run_History for the current model/config is empty (fewer than 2 records), THE Recommendations panel SHALL NOT render — there is nothing to compare yet, and an empty or placeholder panel would be visual noise on every first run.
+
+---
+
+### Requirement 18: Arena Slot Convenience Sources
+
+**User Story:** As a developer, I want easy ways to load Olive-optimized local models and my active AI Assistant API model into Arena slots, so that I can compare outputs without re-finding files or re-typing endpoint credentials.
+
+#### Acceptance Criteria
+
+1. WHEN a Model_Slot is in `"Local file"` mode, THE Arena sub-view SHALL render a "From Olive outputs" control beneath (or adjacent to) the existing file drop-zone. THE control SHALL remain available alongside manual drop/select; it does not replace Requirement 5.2.
+
+2. WHEN the user opens "From Olive outputs", THE Arena sub-view SHALL fetch Olive_Output_Entry items via `GET /api/arena/olive-outputs` and display:
+   - a **Recent** section: up to 10 entries sorted by modification time descending across all Olive_Output_Roots;
+   - a **Browse** section: a flat or shallow-tree listing of `.onnx` / `.ort` files under those roots (depth and pagination may be capped server-side; see design).
+   IF `cacheDir` is empty in `pipelineStore`, THE request SHALL still succeed using the default cache root (`~/.cache/olive`) and default output root (`./models/optimized`).
+
+3. WHEN the user selects an Olive_Output_Entry, THE Arena sub-view SHALL request the file bytes via `GET /api/arena/olive-outputs/file?path=<absolute-or-root-relative-path>`, construct a Session_Scoped browser `File` (or equivalent `Blob` assigned as the slot's `file`) with the entry's basename, and write it into that Model_Slot via the same store path as a drop-zone pick (`setSlotA` / `setSlotB` with `{ file }`). THE slot header SHALL then show filename and size per Requirement 5.5.
+
+4. THE server-side list and file endpoints SHALL sandbox reads to Olive_Output_Roots only. IF a requested path resolves outside those roots (including `..` traversal, symlink escape, or absolute paths under unrelated directories), THEN THE server SHALL return `403` (or `400`) with a clear error and SHALL NOT read or stream any bytes. Path canonicalization SHALL use resolved real paths before the containment check.
+
+5. IF no Olive_Output_Entry files are found under any allowed root, THE "From Olive outputs" UI SHALL show an empty state explaining that no `.onnx`/`.ort` files were found under the cache/output directories, and SHALL leave the drop-zone usable. IF the list or file fetch fails (network/server error), THE UI SHALL show an inline error and SHALL NOT clear an already-loaded slot file.
+
+6. WHEN a Model_Slot is in `"Cloud / API"` mode, THE Arena sub-view SHALL render a "Use active Assistant provider" control above or beside the manual endpoint/API key/model fields. THE control SHALL remain available alongside manual editing; it does not replace Requirement 5.3.
+
+7. WHEN the user activates "Use active Assistant provider", THE Arena sub-view SHALL call `GET /api/arena/assistant-cloud-snapshot`. IF the active Assistant provider is an OpenAI_Compat_Provider and credentials/endpoint/model are available, THE endpoint SHALL return an Assistant_Cloud_Snapshot and THE Arena sub-view SHALL write `{ type: "cloud", endpointUrl, apiKey, modelId }` into that slot as a one-time snapshot. Fields SHALL remain editable afterward. Subsequent changes in Assistant settings SHALL NOT mutate the slot unless the user clicks the control again.
+
+8. IF there is no active Assistant provider, OR the active provider is not an OpenAI_Compat_Provider, OR required snapshot fields cannot be resolved, THEN `GET /api/arena/assistant-cloud-snapshot` SHALL return `{ eligible: false, reason: string }` (HTTP 200) and THE Arena sub-view SHALL disable or soft-fail the control with that reason (e.g. "No Assistant provider configured", "Active provider is not OpenAI-compatible; use Custom / openai-compat, or enter endpoint fields manually"). THE manual cloud fields SHALL remain usable.
+
+9. THE Assistant_Cloud_Snapshot response MAY include the API key because Olive Studio is local-first and Arena already sends `apiKey` from the client to `POST /api/arena/cloud-inference`. THE key SHALL NOT be logged server-side (same contract as Requirement 7's cloud proxy). THE snapshot SHALL NOT be written to `localStorage`, history records, or any persisted Playground state.
+
+10. Convenience fills (Olive file or Assistant snapshot) SHALL be independent per Model_Slot. Filling Slot A SHALL NOT alter Slot B. Switching a slot's type between local and cloud SHALL clear the opposite-mode fields for that slot only (file cleared when switching to cloud; cloud fields cleared when switching to local), consistent with existing Arena slot behavior.
+
+11. Requirements 6–8 (execution, concurrent local+cloud, result display) SHALL treat convenience-filled slots identically to manually configured slots of the same `type`. No separate execution path is required beyond obtaining the `File` or cloud credentials into `ArenaSlotConfig`.
