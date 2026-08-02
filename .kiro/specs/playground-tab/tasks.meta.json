@@ -1,0 +1,544 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Add `\"playground\"` to the `PIPELINE_VIEW_IDS` tuple so `PipelineViewId` includes it": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597990868
+      },
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785598003236
+      },
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785598284694
+      }
+    ],
+    "1.2 Update `attemptPipelineNavigate` to allow `\"playground\"` during a run": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597991052
+      },
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785598003933
+      },
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785598285480
+      }
+    ],
+    "2.1 Implement the Zustand store with `activeSubView`, `slotA`, `slotB`, and their setters": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597991182
+      },
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785598004620
+      },
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785598286548
+      }
+    ],
+    "3.1 Implement `mountArenaRoutes(router: Router)` with `POST /arena/cloud-inference`": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597991269
+      },
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785598005354
+      },
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785598287351
+      }
+    ],
+    "3.2 Register the arena router in `server.ts`": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597991359
+      },
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785598291526
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601109535
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601119182
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601253623
+      }
+    ],
+    "4.1 Remove `\"browser-test\"` and `\"benchmark\"` from `recipeView` state type and narrowed the type union to `\"graph\" | \"json\"`": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597991587
+      },
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785598292385
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601109657
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601121799
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601256960
+      }
+    ],
+    "4.2 Remove lazy imports and render branches for the two promoted components": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597991679
+      },
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785598293060
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601109780
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601124359
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601259807
+      }
+    ],
+    "4.3 Remove \"Browser Test\" and \"Benchmark\" buttons from the More dropdown": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597991763
+      },
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785598293779
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601109893
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601127070
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601262653
+      }
+    ],
+    "5.1 Scaffold `PlaygroundPanel` with Sub_View_Tabs wired to `usePlaygroundStore`": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597991837
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601109990
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601268530
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601431968
+      }
+    ],
+    "5.2 Implement keep-alive rendering with `visitedSubViews` for `InBrowserValidation` and `WebGpuBenchmarkPanel`": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597991908
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601110121
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601271382
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601736047
+      }
+    ],
+    "5.3 Render `ArenaPanel` as the third sub-view tab content": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597991981
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601110231
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601743001
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785602013920
+      }
+    ],
+    "6.1 Build slot configuration UI for both slots (local file and cloud/API modes)": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597992047
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601110362
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601745847
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785602016982
+      }
+    ],
+    "6.2 Add shared prompt input with validation and run button": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597992117
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601110484
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785602023336
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785603721613
+      }
+    ],
+    "6.3 Implement sequential execution path (both slots local)": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597992194
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601110621
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785602026114
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785603724496
+      }
+    ],
+    "6.4 Implement concurrent execution path (local + cloud) and result display": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597992263
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601110765
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785603730695
+      },
+      {
+        "executionId": "3a0e2c1a-6e46-4f35-bafc-75665bf895e8",
+        "chatSessionId": "sess_fe0dd2fc-2967-4653-85ae-c4ad97b3678e",
+        "timestamp": 1785635776801
+      },
+      {
+        "executionId": "3a0e2c1a-6e46-4f35-bafc-75665bf895e8",
+        "chatSessionId": "sess_fe0dd2fc-2967-4653-85ae-c4ad97b3678e",
+        "timestamp": 1785635780009
+      },
+      {
+        "executionId": "3a0e2c1a-6e46-4f35-bafc-75665bf895e8",
+        "chatSessionId": "sess_fe0dd2fc-2967-4653-85ae-c4ad97b3678e",
+        "timestamp": 1785635787035
+      }
+    ],
+    "7.1 Add `\"playground\"` SECTIONS entry and update nav button disabled condition": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597992346
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601110874
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785603733674
+      },
+      {
+        "executionId": "3a0e2c1a-6e46-4f35-bafc-75665bf895e8",
+        "chatSessionId": "sess_fe0dd2fc-2967-4653-85ae-c4ad97b3678e",
+        "timestamp": 1785635777524
+      },
+      {
+        "executionId": "3a0e2c1a-6e46-4f35-bafc-75665bf895e8",
+        "chatSessionId": "sess_fe0dd2fc-2967-4653-85ae-c4ad97b3678e",
+        "timestamp": 1785635780114
+      },
+      {
+        "executionId": "3a0e2c1a-6e46-4f35-bafc-75665bf895e8",
+        "chatSessionId": "sess_fe0dd2fc-2967-4653-85ae-c4ad97b3678e",
+        "timestamp": 1785635787184
+      }
+    ],
+    "7.2 Render `PlaygroundPanel` inside the `\"playground\"` section in the main scroll area": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597992428
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601111000
+      }
+    ],
+    "8. Checkpoint — run all test suites and linter": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597992673
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601111116
+      }
+    ],
+    "9.1 Write unit tests for `pipelineNavigation` changes (`src/lib/__tests__/pipelineNavigation.test.ts`)": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597993263
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601111232
+      }
+    ],
+    "9.2 Write unit tests for `playgroundStore` (`src/lib/__tests__/playgroundStore.test.ts`)": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597994303
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601111337
+      }
+    ],
+    "10.1 Write server unit tests for `arena.ts` (`src/server/__tests__/arena.test.ts`)": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597995537
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601111457
+      }
+    ],
+    "11.1 Write component tests for `PlaygroundPanel` (`src/components/features/__tests__/PlaygroundPanel.test.tsx`)": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597995750
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601111581
+      }
+    ],
+    "11.2 Write component tests for `ArenaPanel` slot configuration and validation (`src/components/features/__tests__/ArenaPanel.test.tsx`)": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597995861
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601111726
+      }
+    ],
+    "11.3 Write component test for `ArenaPanel` result display highlighting": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597995962
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601111826
+      }
+    ],
+    "11.4 Write component test for `ExecutionWorkspace` cleanup": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597996090
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601111940
+      }
+    ],
+    "12.1 Add `fast-check` devDependency if not already present, then write PBT suite (`src/lib/__tests__/playgroundPBT.test.ts`)": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597996187
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601112088
+      }
+    ],
+    "13. Final checkpoint — ensure all tests pass": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785597996394
+      },
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601112197
+      }
+    ],
+    "1. Extend `pipelineNavigation.ts` with the `\"playground\"` view ID": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785598285598
+      }
+    ],
+    "2. Create `src/lib/stores/playgroundStore.ts`": [
+      {
+        "executionId": "41aa3581-4ad1-4da7-9f8e-964389645629",
+        "chatSessionId": "sess_be5dc8db-4826-4524-8716-61b299ef1d0a",
+        "timestamp": 1785598286689
+      }
+    ],
+    "3. Create `src/server/routes/arena.ts` and register it in `server.ts`": [
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601253735
+      }
+    ],
+    "4. Clean up `ExecutionWorkspace.tsx` — remove Browser Test and Benchmark": [
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785601262796
+      }
+    ],
+    "5. Create `src/components/features/PlaygroundPanel.tsx`": [
+      {
+        "executionId": "81c03721-42be-4ebb-ba66-7fa3893f7612",
+        "chatSessionId": "sess_800433b7-afdf-4ad7-9854-319ca9d1878b",
+        "timestamp": 1785602014086
+      }
+    ]
+  }
+}

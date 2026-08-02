@@ -45,7 +45,6 @@ import {
   Cpu,
   AlertTriangle,
   CircleDot,
-  Gauge,
   History,
   Square,
   Wrench,
@@ -66,14 +65,6 @@ import { downloadMarkdownReport } from "@/lib/reportGenerator";
 import { JobHistoryModal } from "@/components/features/JobHistoryModal";
 
 const RecipeGraphView = lazy(() => import("./RecipeGraphView").then((m) => ({ default: m.RecipeGraphView })));
-
-const InBrowserValidation = lazy(() =>
-  import("@/components/features/InBrowserValidation").then((m) => ({ default: m.InBrowserValidation })),
-);
-
-const WebGpuBenchmarkPanel = lazy(() =>
-  import("@/components/features/WebGpuBenchmarkPanel").then((m) => ({ default: m.WebGpuBenchmarkPanel })),
-);
 
 /**
  * Renders a centered loading spinner with a descriptive label.
@@ -151,13 +142,13 @@ export function ExecutionWorkspace({
   const liveSourceRef = useRef<EventSource | null>(null);
   const runStartTimeRef = useRef<number | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [recipeView, setRecipeViewRaw] = useState<"graph" | "json" | "browser-test" | "benchmark">("graph");
+  const [recipeView, setRecipeViewRaw] = useState<"graph" | "json">("graph");
   const [visitedRecipeViews, setVisitedRecipeViews] = useState<Set<string>>(new Set(["graph"]));
   const [moreToolsOpen, setMoreToolsOpen] = useState(false);
   const moreToolsContainerRef = useRef<HTMLDivElement | null>(null);
   const moreToolsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [, startRecipeTransition] = useTransition();
-  const setRecipeView = (view: "graph" | "json" | "browser-test" | "benchmark") => {
+  const setRecipeView = (view: "graph" | "json") => {
     startRecipeTransition(() => {
       setRecipeViewRaw(view);
       setVisitedRecipeViews((prev) => {
@@ -455,11 +446,10 @@ Contents of this bundle:
 3. ${owrPlatform === "web" ? "web_init.js" : "mobile_init.kt"} - Boilerplate initialization and execution patterns.
 
 Deployment Steps:
-${
-  owrPlatform === "web"
-    ? "- Place the optimized model file (model.onnx) in your public asset folder.\\n- Install 'onnxruntime-web' dependency using npm.\\n- Import and invoke your customized initializeOrtSession() function. "
-    : "- Place the compiled ORT flatbuffer file (model.ort) under your Android App's 'src/main/assets' directory.\\n- Implement 'ai.onnxruntime:onnxruntime-android' via gradle.\\n- Wire up your OnnxModelExecutor wrapper inside Activities/Handlers."
-}
+${owrPlatform === "web"
+        ? "- Place the optimized model file (model.onnx) in your public asset folder.\\n- Install 'onnxruntime-web' dependency using npm.\\n- Import and invoke your customized initializeOrtSession() function. "
+        : "- Place the compiled ORT flatbuffer file (model.ort) under your Android App's 'src/main/assets' directory.\\n- Implement 'ai.onnxruntime:onnxruntime-android' via gradle.\\n- Wire up your OnnxModelExecutor wrapper inside Activities/Handlers."
+      }
 `;
     zip.file("README.txt", readme);
 
@@ -490,9 +480,8 @@ ${
   const localValidationTone = !schema.valid ? "error" : validation.statusTone;
   const runFailed = executionStatus === "failed";
   const validationLabel = runFailed
-    ? `Run failed (exit ${executionExitCode ?? "?"}) · ${
-        localValidationTone === "success" ? "local checks still OK" : localValidationLabel
-      }`
+    ? `Run failed (exit ${executionExitCode ?? "?"}) · ${localValidationTone === "success" ? "local checks still OK" : localValidationLabel
+    }`
     : localValidationLabel;
   const validationTone = runFailed ? "error" : localValidationTone;
 
@@ -505,11 +494,11 @@ ${
           : `[ERROR] Cannot queue batch job: recipe schema invalid.\n${schemaErrors.map((e) => `[SCHEMA] ${e}`).join("\n")}`,
         ...(schema.valid
           ? [
-              ...validation.issues
-                .filter((issue) => issue.severity === "critical")
-                .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
-              ...localBlockLines,
-            ]
+            ...validation.issues
+              .filter((issue) => issue.severity === "critical")
+              .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
+            ...localBlockLines,
+          ]
           : []),
       ]);
       return;
@@ -630,11 +619,11 @@ ${
           : `[ERROR] Cannot execute: recipe schema invalid.`,
         ...(schema.valid
           ? [
-              ...validation.issues
-                .filter((issue) => issue.severity === "critical")
-                .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
-              ...localBlockLines,
-            ]
+            ...validation.issues
+              .filter((issue) => issue.severity === "critical")
+              .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
+            ...localBlockLines,
+          ]
           : schemaErrors.map((e) => `[SCHEMA] ${e}`)),
       ]);
       setExecutionStatus("failed");
@@ -966,11 +955,10 @@ ${
                         <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
-                            className={`p-2.5 rounded-lg border text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
-                              owrPlatform === "web"
-                                ? "bg-electric-blue/15 border-electric-blue/50 text-electric-blue font-semibold"
-                                : "bg-slate-950 border-slate-850 text-slate-400 hover:border-slate-800"
-                            }`}
+                            className={`p-2.5 rounded-lg border text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${owrPlatform === "web"
+                              ? "bg-electric-blue/15 border-electric-blue/50 text-electric-blue font-semibold"
+                              : "bg-slate-950 border-slate-850 text-slate-400 hover:border-slate-800"
+                              }`}
                             onClick={() => {
                               setOwrPlatform("web");
                               if (owrSelectedFile === "mobile_init.kt") {
@@ -983,11 +971,10 @@ ${
                           </button>
                           <button
                             type="button"
-                            className={`p-2.5 rounded-lg border text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
-                              owrPlatform === "mobile"
-                                ? "bg-electric-blue/15 border-electric-blue/50 text-electric-blue font-semibold"
-                                : "bg-slate-950 border-slate-850 text-slate-400 hover:border-slate-800"
-                            }`}
+                            className={`p-2.5 rounded-lg border text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${owrPlatform === "mobile"
+                              ? "bg-electric-blue/15 border-electric-blue/50 text-electric-blue font-semibold"
+                              : "bg-slate-950 border-slate-850 text-slate-400 hover:border-slate-800"
+                              }`}
                             onClick={() => {
                               setOwrPlatform("mobile");
                               if (owrSelectedFile === "web_init.js") {
@@ -1061,22 +1048,20 @@ ${
                     <div className="flex bg-slate-950 p-1 border border-slate-850 rounded-lg overflow-x-auto shrink-0 gap-1 scrollbar-none">
                       <button
                         type="button"
-                        className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${
-                          owrSelectedFile === "onnx_model_manifest.json"
-                            ? "bg-electric-blue text-slate-950 font-medium"
-                            : "text-slate-400 hover:text-slate-200"
-                        }`}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${owrSelectedFile === "onnx_model_manifest.json"
+                          ? "bg-electric-blue text-slate-950 font-medium"
+                          : "text-slate-400 hover:text-slate-200"
+                          }`}
                         onClick={() => setOwrSelectedFile("onnx_model_manifest.json")}
                       >
                         onnx_model_manifest.json
                       </button>
                       <button
                         type="button"
-                        className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${
-                          owrSelectedFile === "ort_config.json"
-                            ? "bg-electric-blue text-slate-950 font-medium"
-                            : "text-slate-400 hover:text-slate-200"
-                        }`}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${owrSelectedFile === "ort_config.json"
+                          ? "bg-electric-blue text-slate-950 font-medium"
+                          : "text-slate-400 hover:text-slate-200"
+                          }`}
                         onClick={() => setOwrSelectedFile("ort_config.json")}
                       >
                         ort_config.json
@@ -1084,11 +1069,10 @@ ${
                       {owrPlatform === "web" ? (
                         <button
                           type="button"
-                          className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${
-                            owrSelectedFile === "web_init.js"
-                              ? "bg-electric-blue text-slate-950 font-medium"
-                              : "text-slate-400 hover:text-slate-200"
-                          }`}
+                          className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${owrSelectedFile === "web_init.js"
+                            ? "bg-electric-blue text-slate-950 font-medium"
+                            : "text-slate-400 hover:text-slate-200"
+                            }`}
                           onClick={() => setOwrSelectedFile("web_init.js")}
                         >
                           web_init.js
@@ -1096,11 +1080,10 @@ ${
                       ) : (
                         <button
                           type="button"
-                          className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${
-                            owrSelectedFile === "mobile_init.kt"
-                              ? "bg-electric-blue text-slate-950 font-medium"
-                              : "text-slate-400 hover:text-slate-200"
-                          }`}
+                          className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${owrSelectedFile === "mobile_init.kt"
+                            ? "bg-electric-blue text-slate-950 font-medium"
+                            : "text-slate-400 hover:text-slate-200"
+                            }`}
                           onClick={() => setOwrSelectedFile("mobile_init.kt")}
                         >
                           mobile_init.kt
@@ -1192,11 +1175,10 @@ ${
                   type="button"
                   aria-pressed={recipeView === "graph"}
                   onClick={() => setRecipeView("graph")}
-                  className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${
-                    recipeView === "graph"
-                      ? "bg-electric-blue text-slate-950"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
+                  className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${recipeView === "graph"
+                    ? "bg-electric-blue text-slate-950"
+                    : "text-slate-400 hover:text-slate-200"
+                    }`}
                 >
                   <Workflow className="h-3 w-3" /> Graph Flow
                 </button>
@@ -1204,11 +1186,10 @@ ${
                   type="button"
                   aria-pressed={recipeView === "json"}
                   onClick={() => setRecipeView("json")}
-                  className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${
-                    recipeView === "json"
-                      ? "bg-electric-blue text-slate-950"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
+                  className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${recipeView === "json"
+                    ? "bg-electric-blue text-slate-950"
+                    : "text-slate-400 hover:text-slate-200"
+                    }`}
                 >
                   <Code className="h-3 w-3" /> JSON Code
                 </button>
@@ -1219,11 +1200,10 @@ ${
                   onClick={() => setShowGraphDot((v) => !v)}
                   title={showGraphDot ? "Hide flow dot" : "Show flow dot"}
                   aria-label={showGraphDot ? "Hide flow dot" : "Show flow dot"}
-                  className={`h-8 w-8 flex items-center justify-center rounded border transition-colors cursor-pointer ${
-                    showGraphDot
-                      ? "border-electric-blue/30 text-electric-blue hover:bg-electric-blue/10"
-                      : "border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-300"
-                  }`}
+                  className={`h-8 w-8 flex items-center justify-center rounded border transition-colors cursor-pointer ${showGraphDot
+                    ? "border-electric-blue/30 text-electric-blue hover:bg-electric-blue/10"
+                    : "border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-300"
+                    }`}
                 >
                   <CircleDot className="h-3.5 w-3.5" />
                 </button>
@@ -1251,36 +1231,6 @@ ${
                     role="menu"
                     className="absolute right-0 z-20 mt-1 min-w-[180px] rounded-lg border border-slate-800 bg-slate-950 p-1 shadow-xl"
                   >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] cursor-pointer ${
-                        recipeView === "browser-test"
-                          ? "bg-electric-blue/15 text-electric-blue"
-                          : "text-slate-300 hover:bg-slate-900"
-                      }`}
-                      onClick={() => {
-                        setRecipeView("browser-test");
-                        setMoreToolsOpen(false);
-                      }}
-                    >
-                      <Globe className="h-3 w-3" /> Browser Test
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] cursor-pointer ${
-                        recipeView === "benchmark"
-                          ? "bg-electric-blue/15 text-electric-blue"
-                          : "text-slate-300 hover:bg-slate-900"
-                      }`}
-                      onClick={() => {
-                        setRecipeView("benchmark");
-                        setMoreToolsOpen(false);
-                      }}
-                    >
-                      <Gauge className="h-3 w-3" /> Benchmark
-                    </button>
                     <button
                       type="button"
                       role="menuitem"
@@ -1327,7 +1277,7 @@ ${
             </div>
           }
         />
-        {(["graph", "browser-test", "benchmark", "json"] as const).map((view) => {
+        {(["graph", "json"] as const).map((view) => {
           if (!visitedRecipeViews.has(view)) return null;
           const isActive = recipeView === view;
           return (
@@ -1342,16 +1292,6 @@ ${
               {view === "graph" && (
                 <Suspense fallback={<LoadingFallback label="Loading graph editor..." minH="560px" />}>
                   <RecipeGraphView state={state} setState={setState} showDot={showGraphDot} />
-                </Suspense>
-              )}
-              {view === "browser-test" && (
-                <Suspense fallback={<LoadingFallback label="Loading inference panel..." />}>
-                  <InBrowserValidation recipeJson={JSON.stringify(recipe, null, 2)} />
-                </Suspense>
-              )}
-              {view === "benchmark" && (
-                <Suspense fallback={<LoadingFallback label="Loading benchmark panel..." />}>
-                  <WebGpuBenchmarkPanel />
                 </Suspense>
               )}
               {view === "json" && (
@@ -1439,13 +1379,12 @@ ${
                 <AlertCircle className="h-4 w-4 text-rose-400" />
               )}
               <span
-                className={`text-xs sm:text-sm font-medium ${
-                  validationTone === "success"
-                    ? "text-emerald-400"
-                    : validationTone === "warning"
-                      ? "text-amber-300"
-                      : "text-rose-300"
-                }`}
+                className={`text-xs sm:text-sm font-medium ${validationTone === "success"
+                  ? "text-emerald-400"
+                  : validationTone === "warning"
+                    ? "text-amber-300"
+                    : "text-rose-300"
+                  }`}
               >
                 {validationLabel}
               </span>
@@ -1549,11 +1488,10 @@ ${
                       <p
                         key={i}
                         onClick={(e) => handleLogLineClick(i, e)}
-                        className={`${lineClass} cursor-pointer rounded px-1 -mx-1 transition-colors ${
-                          isSelected
-                            ? "bg-electric-blue/15 ring-1 ring-electric-blue/30"
-                            : "hover:bg-slate-800/50"
-                        }`}
+                        className={`${lineClass} cursor-pointer rounded px-1 -mx-1 transition-colors ${isSelected
+                          ? "bg-electric-blue/15 ring-1 ring-electric-blue/30"
+                          : "hover:bg-slate-800/50"
+                          }`}
                       >
                         {line}
                       </p>

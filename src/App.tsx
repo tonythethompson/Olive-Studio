@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw } from "lucide-react";
+import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw, FlaskConical } from "lucide-react";
 import { InputEnvironmentPanel } from "@/components/features/InputEnvironmentPanel";
 import { IHVIntegrationPanel } from "@/components/features/IHVIntegrationPanel";
 import { ExecutionWorkspace } from "@/components/features/ExecutionWorkspace";
@@ -12,7 +12,7 @@ import { RuntimeEnvControls } from "@/components/features/RuntimeEnvControls";
 import { TitleBar } from "@/components/TitleBar";
 import { DesktopMinimumViewport } from "@/components/DesktopMinimumViewport";
 import { cn } from "@/lib/utils";
-import { OLIVE_PIPELINE_NAVIGATE, type PipelineViewId } from "@/lib/pipelineNavigation";
+import { OLIVE_PIPELINE_NAVIGATE, isPipelineViewId, type PipelineViewId } from "@/lib/pipelineNavigation";
 
 const BatchProcessingPanel = lazy(() =>
   import("@/components/features/BatchProcessingPanel").then((m) => ({ default: m.BatchProcessingPanel })),
@@ -20,6 +20,10 @@ const BatchProcessingPanel = lazy(() =>
 
 const GeminiSidebar = lazy(() =>
   import("@/components/features/GeminiSidebar").then((m) => ({ default: m.GeminiSidebar })),
+);
+
+const PlaygroundPanel = lazy(() =>
+  import("@/components/features/PlaygroundPanel").then((m) => ({ default: m.PlaygroundPanel })),
 );
 
 function SidebarFallback() {
@@ -31,6 +35,14 @@ function SidebarFallback() {
 }
 
 function BatchPanelFallback() {
+  return (
+    <div className="rounded border border-slate-800 bg-slate-900/40 p-12 flex items-center justify-center">
+      <RefreshCw className="h-5 w-5 text-electric-blue animate-spin" />
+    </div>
+  );
+}
+
+function PlaygroundPanelFallback() {
   return (
     <div className="rounded border border-slate-800 bg-slate-900/40 p-12 flex items-center justify-center">
       <RefreshCw className="h-5 w-5 text-electric-blue animate-spin" />
@@ -58,6 +70,13 @@ const SECTIONS: { id: ActiveView; step: string; label: string; desc: string; ico
     desc: "Review workflow, execute, or queue batch jobs.",
     icon: Terminal,
   },
+  {
+    id: "playground",
+    step: "04",
+    label: "Playground",
+    desc: "In-browser inference, WebGPU benchmarks, and model Arena.",
+    icon: FlaskConical,
+  },
 ];
 
 /**
@@ -79,7 +98,7 @@ function Dashboard() {
 
   const scrollToSection = useCallback(
     (id: ActiveView) => {
-      if (isOliveRunning && id !== "execute") return;
+      if (isOliveRunning && id !== "execute" && id !== "playground") return;
       setActiveView(id);
       scrollingToRef.current = id;
       document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -92,8 +111,8 @@ function Dashboard() {
 
   useEffect(() => {
     const onNavigate = (event: Event) => {
-      const detail = (event as CustomEvent<PipelineViewId>).detail;
-      if (detail !== "input" && detail !== "ihv" && detail !== "execute") return;
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (!isPipelineViewId(detail)) return;
       scrollToSection(detail);
     };
     window.addEventListener(OLIVE_PIPELINE_NAVIGATE, onNavigate);
@@ -162,15 +181,16 @@ function Dashboard() {
                       aria-label={`${step} ${label}`}
                       onClick={() => scrollToSection(id)}
                       aria-current={isActive ? "step" : undefined}
-                      disabled={isOliveRunning && id !== "execute"}
+                      disabled={isOliveRunning && id !== "execute" && id !== "playground"}
                       className={cn(
                         "w-full flex items-center gap-2.5 justify-center wide:justify-start px-2 wide:pl-4 wide:pr-3 py-2.5 wide:py-2 text-sm transition-colors border-l-2 text-left",
                         isActive
                           ? "border-electric-blue text-slate-100 bg-electric-blue/5"
                           : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40",
                         isOliveRunning &&
-                          id !== "execute" &&
-                          "opacity-40 cursor-not-allowed hover:bg-transparent hover:text-slate-400",
+                        id !== "execute" &&
+                        id !== "playground" &&
+                        "opacity-40 cursor-not-allowed hover:bg-transparent hover:text-slate-400",
                       )}
                     >
                       <span
@@ -288,6 +308,13 @@ function Dashboard() {
                             </Suspense>
                           </ErrorBoundary>
                         </div>
+                      )}
+                      {id === "playground" && (
+                        <ErrorBoundary label="Playground">
+                          <Suspense fallback={<PlaygroundPanelFallback />}>
+                            <PlaygroundPanel />
+                          </Suspense>
+                        </ErrorBoundary>
                       )}
                     </section>
                   ))}

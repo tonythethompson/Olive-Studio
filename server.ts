@@ -9,6 +9,7 @@ import { mountAiRoutes } from "./src/server/routes/ai.ts";
 import { mountMcpRoutes, performKbSync } from "./src/server/routes/mcp.ts";
 import { mountEnvRoutes } from "./src/server/routes/env.ts";
 import { mountOliveRoutes } from "./src/server/routes/olive.ts";
+import { mountArenaRoutes } from "./src/server/routes/arena.ts";
 import { probeTensorRtLoadable } from "./src/server/services/olive/tensorrt.ts";
 import { probeTensorRtRtxLoadable } from "./src/server/services/olive/tensorrt-rtx.ts";
 import { staticServeRateLimit } from "./src/server/middleware/rateLimit.ts";
@@ -101,6 +102,10 @@ const systemProbeOpts: SystemProbeOptions = {
 };
 mountSystemRoutes(systemRouter, systemProbeOpts);
 app.use("/api", systemRouter);
+
+const arenaRouter = Router();
+mountArenaRoutes(arenaRouter);
+app.use("/api", arenaRouter);
 
 // ─── Health check (required by Tauri desktop bootstrap) ────────────────────
 app.get("/api/health", (_req, res) => {
