@@ -3,11 +3,7 @@
  * Cloud inference proxy for the Arena sub-view in the Playground tab.
  */
 import type { Router } from "express";
-import {
-  ARENA_CLOUD_TIMEOUT_MAX_MS,
-  ARENA_CLOUD_TIMEOUT_MIN_MS,
-  resolveCloudTimeoutMs,
-} from "../../lib/arenaConstants.ts";
+import { ARENA_CLOUD_TIMEOUT_MS } from "../../lib/arenaConstants.ts";
 import { arenaProxyRateLimit } from "../middleware/rateLimit.ts";
 import { pinnedFetch } from "../services/arena/ssrfGuard.ts";
 
@@ -22,8 +18,7 @@ import { pinnedFetch } from "../services/arena/ssrfGuard.ts";
  */
 export function mountArenaRoutes(router: Router): void {
   router.post("/arena/cloud-inference", arenaProxyRateLimit, async (req, res) => {
-    const { endpointUrl, apiKey, modelId, prompt, timeoutMs } = req.body ?? {};
-    const resolvedTimeoutMs = resolveCloudTimeoutMs(timeoutMs);
+    const { endpointUrl, apiKey, modelId, prompt } = req.body ?? {};
 
     if (!endpointUrl || typeof endpointUrl !== "string")
       return res.status(400).json({ error: "endpointUrl is required" });
@@ -52,12 +47,9 @@ export function mountArenaRoutes(router: Router): void {
     });
 
     const ac = new AbortController();
-    // Re-assert literal bounds at the call site so static analysis sees a capped delay
-    // (resolveCloudTimeoutMs already clamps; Math.min/max with constants is the sanitizer).
-    const timer = setTimeout(
-      () => ac.abort(),
-      Math.min(ARENA_CLOUD_TIMEOUT_MAX_MS, Math.max(ARENA_CLOUD_TIMEOUT_MIN_MS, resolvedTimeoutMs)),
-    );
+    // Fixed server-side budget (shared with ArenaPanel). Do not take duration from the
+    // request body — CodeQL flags user-controlled setTimeout delays as resource exhaustion.
+    const timer = setTimeout(() => ac.abort(), ARENA_CLOUD_TIMEOUT_MS);
 
     try {
       const basePath = targetUrl.pathname.replace(/\/+$/, "");
@@ -96,7 +88,7 @@ export function mountArenaRoutes(router: Router): void {
           message,
         );
       return res.status(isTimeout ? 504 : isPolicy ? 400 : 502).json({
-        error: isTimeout ? `Request timed out after ${resolvedTimeoutMs}ms` : message,
+        error: isTimeout ? `Request timed out after ${ARENA_CLOUD_TIMEOUT_MS}ms` : message,
       });
     } finally {
       clearTimeout(timer);
