@@ -4,6 +4,7 @@
  */
 import type { Router } from "express";
 import { resolveCloudTimeoutMs } from "../../lib/arenaConstants.ts";
+import { githubProxyRateLimit } from "../middleware/rateLimit.ts";
 
 /**
  * Registers Arena routes on an Express router.
@@ -14,7 +15,7 @@ import { resolveCloudTimeoutMs } from "../../lib/arenaConstants.ts";
  * @param router - Express router on which to register the routes
  */
 export function mountArenaRoutes(router: Router): void {
-  router.post("/arena/cloud-inference", async (req, res) => {
+  router.post("/arena/cloud-inference", githubProxyRateLimit, async (req, res) => {
     const { endpointUrl, apiKey, modelId, prompt, timeoutMs } = req.body ?? {};
     const resolvedTimeoutMs = resolveCloudTimeoutMs(timeoutMs);
 
@@ -30,6 +31,16 @@ export function mountArenaRoutes(router: Router): void {
       targetUrl = new URL(endpointUrl);
       if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:")
         throw new Error("Only http/https endpoints are supported");
+      if (targetUrl.username || targetUrl.password)
+        throw new Error("Credentialed endpoints are not supported");
+      const hostname = targetUrl.hostname.toLowerCase();
+      const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+      if (targetUrl.protocol !== "https:" && !(isLoopback && process.env.OLIVE_ALLOW_LOOPBACK_HTTP === "true"))
+        throw new Error("HTTPS endpoints are required");
+      if ((!isLoopback || targetUrl.protocol !== "http:" || process.env.OLIVE_ALLOW_LOOPBACK_HTTP !== "true") &&
+          (isLoopback || hostname.endsWith(".local") || hostname === "0.0.0.0" || hostname === "::1") ||
+          /^10\./.test(hostname) || /^192\.168\./.test(hostname) || /^172\.(1[6-9]|2\d|3[01])\./.test(hostname))
+        throw new Error("Private endpoints are not supported");
     } catch (err) {
       return res.status(400).json({ error: err instanceof Error ? err.message : "Invalid endpointUrl" });
     }
@@ -46,7 +57,11 @@ export function mountArenaRoutes(router: Router): void {
     const timer = setTimeout(() => ac.abort(), resolvedTimeoutMs);
 
     try {
-      const upstream = await fetch(`${targetUrl.origin}${targetUrl.pathname}/chat/completions`, {
+      const basePath = targetUrl.pathname.replace(/\/+$/, "");
+      targetUrl.pathname = basePath.endsWith("/chat/completions")
+        ? basePath
+        : `${basePath}/chat/completions`;
+      const upstream = await fetch(targetUrl.toString(), {
         method: "POST",
         headers,
         body,
