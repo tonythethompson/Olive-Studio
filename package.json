@@ -71,7 +71,7 @@
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.6.0",
     "uuid": "^14.0.1",
-    "vite": "^8.1.5",
+    "vite": "^8.2.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
@@ -110,7 +110,7 @@
     "typegpu": "^0.11.9",
     "typescript": "~6.0.3",
     "unplugin-typegpu": "^0.11.6",
-    "vite": "^8.1.5",
+    "vite": "^8.2.0",
     "vite-plugin-compression": "^0.5.1",
     "vitest": "^4.1.10"
   }
