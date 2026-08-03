@@ -51,7 +51,7 @@ Adds a fourth top-level "Playground" navigation entry to the Olive Studio sideba
     - Apply `arenaLocalOnly` (loopback remoteAddress check) ahead of `arenaProxyRateLimit` on `POST /arena/cloud-inference`
     - Reject non-loopback callers with `403` unless `OLIVE_ARENA_ALLOW_REMOTE=true`
     - Cover unauthorized / non-local rejection in middleware unit tests (route suite may passthrough-mock the guard)
-    - Note: the repo has no shared auth middleware; a loopback-only middleware gate is the enforced access boundary (CORS alone is insufficient). Override with `OLIVE_ARENA_ALLOW_REMOTE=true` when intentionally exposing the API.
+    - Note: the Express server binds `0.0.0.0`; access control is a loopback-only middleware gate (`arenaLocalOnly` on `remoteAddress`, rejecting reverse-proxy forwarding headers). `OLIVE_ARENA_ALLOW_REMOTE=true` disables this gate. CORS alone is insufficient.
     - _Requirements: 7.1_
 
 - [x] 4. Clean up `ExecutionWorkspace.tsx` — remove Browser Test and Benchmark
@@ -333,7 +333,7 @@ Adds a fourth top-level "Playground" navigation entry to the Olive Studio sideba
     - _Requirements: 18.7, 18.8, 18.9_
   - [ ] 19.4 Wire convenience UI into `ArenaPanel` slot configuration (**depends on 19.1–19.3**)
     - Local mode: "From Olive outputs" under the drop-zone (recent + browse); on select, fetch bytes by opaque id → `File` → `setSlotX({ file })`; empty/error states per Req 18.5
-    - Cloud mode: "Use active Assistant provider"; on success snapshot into editable cloud fields; on ineligible show `reason` without clearing fields
+    - Cloud mode: "Use active Assistant provider"; fetch snapshot with `cache: "no-store"`; on success snapshot into editable cloud fields; on ineligible show `reason` without clearing fields
     - Per-slot isolation; no third `ArenaSlotConfig.type`
     - Do not send client-owned root paths in list/download requests
     - _Requirements: 18.1, 18.3, 18.5, 18.6, 18.7, 18.8, 18.10, 18.11_

@@ -2011,9 +2011,10 @@ Implementation reads the same runtime/saved provider used by `GET /api/ai/provid
 **Client fill sequence** (cloud mode):
 
 1. Click "Use active Assistant provider".
-2. If `eligible: false` → show `reason`, leave fields unchanged.
-3. If `eligible: true` → `setSlotX({ type: "cloud", endpointUrl, apiKey, modelId })`.
-4. Fields stay editable; Assistant settings changes do not sync until the user clicks again.
+2. `GET /api/arena/assistant-cloud-snapshot` with `cache: "no-store"` (or equivalent) so credential-bearing responses are never served from an HTTP cache.
+3. If `eligible: false` → show `reason`, leave fields unchanged.
+4. If `eligible: true` → `setSlotX({ type: "cloud", endpointUrl, apiKey, modelId })`.
+5. Fields stay editable; Assistant settings changes do not sync until the user clicks again.
 
 **Security notes:**
 
@@ -2021,6 +2022,7 @@ Implementation reads the same runtime/saved provider used by `GET /api/ai/provid
 - Do not log `apiKey` or full snapshot bodies.
 - Enforce the local-first access boundary before returning any credential-bearing payload.
 - Prefer local-only deployment assumptions already used elsewhere for Assistant secrets.
+- Server sends `Cache-Control: no-store, private`; client fetch must also opt out of caching (`cache: "no-store"`).
 
 ### ArenaPanel UI sketch
 
@@ -2054,7 +2056,7 @@ Independent per slot. Switching type clears the opposite-mode fields for that sl
 
 #### Property 20b: List/download roots are server-bound
 
-*For any* list or download request, Olive_Output_Roots are taken only from server-owned configuration. Query parameters `cacheDir`, `outputDir`, `path`, and `absolutePath` are ignored or rejected; list payloads never include downloadable absolute paths (only opaque ids + display metadata).
+*For any* list or download request, Olive_Output_Roots are taken only from server-owned configuration. Query parameters `cacheDir`, `outputDir`, `path`, and `absolutePath` are ignored or rejected; list payloads never include filesystem paths (only root labels, opaque ids, and relative `displayPath` metadata).
 
 **Validates: Requirement 18.2, 18.4**
 

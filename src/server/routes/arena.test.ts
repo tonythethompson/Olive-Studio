@@ -5,11 +5,18 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import express from "express";
-import type { Server } from "http";
+import http from "node:http";
+import type { Server } from "node:http";
+import {
+  ARENA_CLOUD_TIMEOUT_MAX_MS,
+  ARENA_CLOUD_TIMEOUT_MIN_MS,
+  ARENA_CLOUD_TIMEOUT_MS,
+} from "../../lib/arenaConstants.ts";
 
 vi.mock("../middleware/localOnly.ts", () => ({
   arenaLocalOnly: (_req: unknown, _res: unknown, next: () => void) => next(),
   isLoopbackRemoteAddress: () => true,
+  hasProxyForwardingHeaders: () => false,
 }));
 
 vi.mock("../middleware/rateLimit.ts", () => ({
@@ -57,11 +64,44 @@ beforeEach(() => {
   mockedPinnedFetch.mockReset();
 });
 
-async function postCloudInference(body: unknown): Promise<Response> {
-  return fetch(`${baseUrl}/api/arena/cloud-inference`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+type LocalResponse = {
+  status: number;
+  json: () => Promise<unknown>;
+  text: () => Promise<string>;
+};
+
+/** Local HTTP helper — avoids process-global `fetch` for this suite. */
+async function postCloudInference(body: unknown): Promise<LocalResponse> {
+  const payload = JSON.stringify(body);
+  const url = new URL(`${baseUrl}/api/arena/cloud-inference`);
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload),
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8");
+          resolve({
+            status: res.statusCode ?? 0,
+            text: async () => text,
+            json: async () => JSON.parse(text) as unknown,
+          });
+        });
+      },
+    );
+    req.on("error", reject);
+    req.write(payload);
+    req.end();
   });
 }
 
@@ -146,8 +186,38 @@ describe("POST /api/arena/cloud-inference", () => {
       prompt: "hello",
     });
     expect(res.status).toBe(504);
-    const body = await res.json();
+    const body = (await res.json()) as { error: string };
     expect(body.error).toMatch(/timed out/i);
+    expect(body.error).toContain(String(ARENA_CLOUD_TIMEOUT_MS));
+  });
+
+  it("clamps timeoutMs for absent, invalid, zero, and out-of-range values", async () => {
+    mockedPinnedFetch.mockRejectedValue(
+      Object.assign(new Error("Aborted"), { name: "AbortError" }),
+    );
+
+    const cases: Array<{ timeoutMs: unknown; expectedMs: number }> = [
+      { timeoutMs: undefined, expectedMs: ARENA_CLOUD_TIMEOUT_MS },
+      { timeoutMs: "not-a-number", expectedMs: ARENA_CLOUD_TIMEOUT_MS },
+      { timeoutMs: 0, expectedMs: ARENA_CLOUD_TIMEOUT_MIN_MS },
+      { timeoutMs: ARENA_CLOUD_TIMEOUT_MAX_MS + 50_000, expectedMs: ARENA_CLOUD_TIMEOUT_MAX_MS },
+      { timeoutMs: 15_000, expectedMs: 15_000 },
+    ];
+
+    for (const { timeoutMs, expectedMs } of cases) {
+      mockedPinnedFetch.mockClear();
+      mockedPinnedFetch.mockRejectedValue(
+        Object.assign(new Error("Aborted"), { name: "AbortError" }),
+      );
+      const res = await postCloudInference({
+        endpointUrl: "https://api.example.com/v1",
+        prompt: "hello",
+        timeoutMs,
+      });
+      expect(res.status).toBe(504);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain(String(expectedMs));
+    }
   });
 
   it("maps SsrfPolicyError to 400", async () => {

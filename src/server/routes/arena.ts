@@ -3,7 +3,7 @@
  * Cloud inference proxy for the Arena sub-view in the Playground tab.
  */
 import type { Router } from "express";
-import { ARENA_CLOUD_TIMEOUT_MS } from "../../lib/arenaConstants.ts";
+import { resolveCloudTimeoutMs } from "../../lib/arenaConstants.ts";
 import { arenaLocalOnly } from "../middleware/localOnly.ts";
 import { arenaProxyRateLimit } from "../middleware/rateLimit.ts";
 import { pinnedFetch, SsrfPolicyError } from "../services/arena/ssrfGuard.ts";
@@ -21,7 +21,7 @@ export function mountArenaRoutes(router: Router): void {
   // Local-first access boundary (loopback) before rate limit / proxy work.
   // Override with OLIVE_ARENA_ALLOW_REMOTE=true when intentionally exposing the API.
   router.post("/arena/cloud-inference", arenaLocalOnly, arenaProxyRateLimit, async (req, res) => {
-    const { endpointUrl, apiKey, modelId, prompt } = req.body ?? {};
+    const { endpointUrl, apiKey, modelId, prompt, timeoutMs } = req.body ?? {};
 
     if (!endpointUrl || typeof endpointUrl !== "string")
       return res.status(400).json({ error: "endpointUrl is required" });
@@ -49,10 +49,10 @@ export function mountArenaRoutes(router: Router): void {
       messages: [{ role: "user", content: prompt }],
     });
 
+    // Clamp untrusted timeoutMs into [MIN, MAX] so setTimeout never sees 0 / Infinity.
+    const resolvedTimeoutMs = resolveCloudTimeoutMs(timeoutMs);
     const ac = new AbortController();
-    // Fixed server-side budget (shared with ArenaPanel). Do not take duration from the
-    // request body — CodeQL flags user-controlled setTimeout delays as resource exhaustion.
-    const timer = setTimeout(() => ac.abort(), ARENA_CLOUD_TIMEOUT_MS);
+    const timer = setTimeout(() => ac.abort(), resolvedTimeoutMs);
 
     // Abort upstream work on client gone, but distinguish disconnect from a normal
     // response completion (`res` "close" also fires after a finished write).
@@ -103,7 +103,7 @@ export function mountArenaRoutes(router: Router): void {
       // Policy / SSRF rejections are client errors, not bad gateway
       const isPolicy = err instanceof SsrfPolicyError;
       return res.status(isTimeout ? 504 : isPolicy ? 400 : 502).json({
-        error: isTimeout ? `Request timed out after ${ARENA_CLOUD_TIMEOUT_MS}ms` : message,
+        error: isTimeout ? `Request timed out after ${resolvedTimeoutMs}ms` : message,
       });
     } finally {
       clearTimeout(timer);
