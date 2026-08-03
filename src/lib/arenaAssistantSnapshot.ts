@@ -94,6 +94,45 @@ function isLoopbackIp(ip: string): boolean {
   return host === "127.0.0.1" || host === "::1" || host.startsWith("127.");
 }
 
+function parseIpv6(host: string): bigint | null {
+  if (!host.includes(":")) return null;
+  const parts = host.split("::");
+  if (parts.length > 2) return null;
+  const expand = (value: string): string[] => {
+    if (!value) return [];
+    const items = value.split(":");
+    const last = items[items.length - 1];
+    if (last.includes(".")) {
+      const octets = last.split(".").map(Number);
+      if (octets.length !== 4 || octets.some((n) => !Number.isInteger(n) || n > 255)) return [];
+      items.splice(items.length - 1, 1, ((octets[0] << 8) | octets[1]).toString(16), ((octets[2] << 8) | octets[3]).toString(16));
+    }
+    return items;
+  };
+  const left = expand(parts[0]);
+  const right = expand(parts[1] ?? "");
+  const zeros = 8 - left.length - right.length;
+  if ((parts.length === 1 && zeros !== 0) || zeros < 0 || [...left, ...right].some((p) => !/^[0-9a-f]{1,4}$/.test(p))) return null;
+  return BigInt(`0x${[...left, ...Array(zeros).fill("0"), ...right].join("")}`);
+}
+
+function isBlockedIpv6(host: string): boolean {
+  const value = parseIpv6(host);
+  if (value === null) return false;
+  const first = Number(value >> 120n);
+  const second = Number((value >> 118n) & 0x3fn);
+  // loopback, link-local, ULA, and IPv4-mapped/compatible addresses
+  return value === 1n || (first === 0xfe && second === 0x2) || first >= 0xfc && first <= 0xfd || value >> 32n === 0n;
+}
+
+function isLoopbackIpv6(host: string): boolean {
+  const value = parseIpv6(host);
+  if (value === 1n) return true;
+  if (value === null || value >> 32n !== 0n) return false;
+  const ipv4 = Number(value & 0xffffffffn);
+  return isLoopbackIp(`${ipv4 >>> 24}.${(ipv4 >>> 16) & 255}.${(ipv4 >>> 8) & 255}.${ipv4 & 255}`);
+}
+
 /**
  * Shape-level outbound policy aligned with Arena `assertUrlPolicy`
  * (no DNS resolve — literal hosts only).
@@ -102,7 +141,7 @@ export function assertArenaEndpointUrlPolicy(
   rawUrl: string,
   opts?: { allowLoopbackHttp?: boolean },
 ): void {
-  const allowLoopbackHttp = opts?.allowLoopbackHttp ?? process.env.OLIVE_ALLOW_LOOPBACK_HTTP === "true";
+  const allowLoopbackHttp = opts?.allowLoopbackHttp ?? false;
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -131,11 +170,13 @@ export function assertArenaEndpointUrlPolicy(
     throw new Error("HTTPS endpoints are required");
   }
 
-  // Literal IPv4
+  // Literal IPv4 and IPv6 (including IPv4-mapped/compatible forms).
   if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
     if (isBlockedIpv4(host) && !(allowLoopback && isLoopbackIp(host))) {
       throw new Error("Private endpoints are not supported");
     }
+  } else if (isBlockedIpv6(host) && !(allowLoopback && isLoopbackIpv6(host))) {
+    throw new Error("Private endpoints are not supported");
   }
 }
 
@@ -156,10 +197,10 @@ export function isArenaOpenAiCompatProvider(provider: {
 /**
  * Resolves the chat base URL for a snapshot, or null when policy/missing fields fail.
  */
-export function resolveArenaSnapshotEndpointUrl(provider: {
-  provider: string;
-  baseUrl?: string | null;
-}): string | null {
+export function resolveArenaSnapshotEndpointUrl(
+  provider: { provider: string; baseUrl?: string | null },
+  opts?: { allowLoopbackHttp?: boolean },
+): string | null {
   if (!provider.provider || NON_OPENAI_COMPAT.has(provider.provider)) return null;
 
   const explicit = provider.baseUrl?.trim() ?? "";
@@ -169,7 +210,7 @@ export function resolveArenaSnapshotEndpointUrl(provider: {
   if (!raw) return null;
 
   try {
-    assertArenaEndpointUrlPolicy(raw);
+    assertArenaEndpointUrlPolicy(raw, opts);
     return stripTrailingSlashes(raw);
   } catch {
     return null;
@@ -182,6 +223,7 @@ export function resolveArenaSnapshotEndpointUrl(provider: {
  */
 export function buildAssistantCloudSnapshot(
   provider: ArenaProviderDescriptor | null | undefined,
+  opts?: { allowLoopbackHttp?: boolean },
 ): AssistantCloudSnapshotResponse {
   if (!provider?.provider) {
     return { eligible: false, reason: "No Assistant provider configured" };
@@ -195,7 +237,7 @@ export function buildAssistantCloudSnapshot(
     };
   }
 
-  const endpointUrl = resolveArenaSnapshotEndpointUrl(provider);
+  const endpointUrl = resolveArenaSnapshotEndpointUrl(provider, opts);
   if (!endpointUrl) {
     return {
       eligible: false,

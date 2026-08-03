@@ -302,6 +302,7 @@ export function mountArenaRoutes(router: Router): void {
                 label: plugin?.label ?? cfg.provider,
               }
             : null,
+          { allowLoopbackHttp: process.env.OLIVE_ALLOW_LOOPBACK_HTTP === "true" },
         );
         // Never log apiKey / full snapshot bodies.
         return res.status(200).json(snapshot);
