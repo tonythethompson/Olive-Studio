@@ -6,6 +6,11 @@ import { create } from "zustand";
  * Intentionally separate from `pipelineStore`: Playground holds non-serializable
  * `File` handles and cloud credential fields that must not participate in recipe
  * import / replace / pipeline persistence.
+ *
+ * Deliberately **not** wrapped in Zustand `persist`. `slotA.file` / `slotB.file`
+ * are `File` handles that would serialize to `{}` and rehydrate as slots that look
+ * configured but hold no model. If `activeSubView` is ever worth persisting, use a
+ * `partialize` allowlist — never whole-store persistence.
  */
 export type PlaygroundSubView = "browser-test" | "benchmark" | "arena";
 

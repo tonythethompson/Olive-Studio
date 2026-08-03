@@ -6,6 +6,16 @@ vi.mock("../../../lib/aiResponse.ts", () => ({
   readEnvApiKey: vi.fn(),
 }));
 
+// Cloudflare auth reads a local credential file and bypasses readEnvApiKey —
+// stub it so machine-local credentials cannot leak into provider detection tests.
+vi.mock("../../../lib/cloudflare/client.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../lib/cloudflare/client.ts")>();
+  return {
+    ...actual,
+    resolveCloudflareAuth: vi.fn(() => null),
+  };
+});
+
 import { readEnvApiKey } from "../../../lib/aiResponse.ts";
 
 describe("detectEnvProvider", () => {

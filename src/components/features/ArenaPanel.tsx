@@ -62,6 +62,11 @@ export function clearRunResults(): { resultA: ArenaRunResult; resultB: ArenaRunR
   };
 }
 
+/** True when prompt is empty or whitespace-only (blocks cloud Arena runs). */
+export function isArenaPromptBlank(prompt: string): boolean {
+  return prompt.trim() === "";
+}
+
 /* ------------------------------------------------------------------ */
 /*  File size formatter                                                */
 /* ------------------------------------------------------------------ */
@@ -386,13 +391,14 @@ function SlotConfig({
 /*  SlotResultPanel — displays status/output for one result slot      */
 /* ------------------------------------------------------------------ */
 
-interface SlotResultPanelProps {
+export interface SlotResultPanelProps {
   label: "Slot A" | "Slot B";
   result: ArenaRunResult;
   isWinner?: boolean;
 }
 
-function SlotResultPanel({ label, result, isWinner }: SlotResultPanelProps) {
+/** Exported for component tests of winner highlighting / error layout (Tasks 11.3, 11.5). */
+export function SlotResultPanel({ label, result, isWinner }: SlotResultPanelProps) {
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -453,7 +459,10 @@ function SlotResultPanel({ label, result, isWinner }: SlotResultPanelProps) {
       </div>
 
       {result.status === "error" && result.error && (
-        <p className="text-[11px] text-red-400 bg-red-500/5 border border-red-500/20 rounded p-2">
+        <p
+          data-testid={`${label.toLowerCase().replace(" ", "-")}-error`}
+          className="text-[11px] text-red-400 bg-red-500/5 border border-red-500/20 rounded p-2 max-h-24 overflow-y-auto"
+        >
           {result.error}
         </p>
       )}
@@ -728,12 +737,12 @@ export function ArenaPanel() {
 
   const needsPrompt = slotA.type === "cloud" || slotB.type === "cloud";
   // Shared seed / prompt so both local slots compare the same request.
-  const localSeedKey = prompt.trim() || "arena-local-default";
+  const localSeedKey = isArenaPromptBlank(prompt) ? "arena-local-default" : prompt.trim();
 
   const handlePromptChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     setPrompt(value);
-    if (value.trim() !== "") {
+    if (!isArenaPromptBlank(value)) {
       setPromptError(false);
     }
   }, []);
@@ -741,7 +750,7 @@ export function ArenaPanel() {
   const handleRun = useCallback(async () => {
     if (isRunning) return;
 
-    if (needsPrompt && prompt.trim() === "") {
+    if (needsPrompt && isArenaPromptBlank(prompt)) {
       setPromptError(true);
       return;
     }
@@ -909,7 +918,7 @@ export function ArenaPanel() {
         <div className="flex items-center justify-end">
           <Button
             onClick={handleRun}
-            disabled={isRunning || (needsPrompt && prompt.trim() === "")}
+            disabled={isRunning || (needsPrompt && isArenaPromptBlank(prompt))}
             className="flex items-center gap-2"
           >
             {isRunning ? (
