@@ -2,7 +2,7 @@ import { useState, useTransition, lazy, Suspense, useRef, type KeyboardEvent } f
 import { RefreshCw, Globe, Gauge, Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { usePipelineStore, type PlaygroundSubView } from "@/lib/stores/pipelineStore";
+import { usePlaygroundStore, type PlaygroundSubView } from "@/lib/stores/playgroundStore";
 
 /* ------------------------------------------------------------------ */
 /*  Lazy sub-view imports                                               */
@@ -56,8 +56,8 @@ function LoadingFallback({ label }: { label: string }) {
 /* ------------------------------------------------------------------ */
 
 export function PlaygroundPanel() {
-  const activeSubView = usePipelineStore((s) => s.activeSubView);
-  const setActiveSubView = usePipelineStore((s) => s.setActiveSubView);
+  const activeSubView = usePlaygroundStore((s) => s.activeSubView);
+  const setActiveSubView = usePlaygroundStore((s) => s.setActiveSubView);
 
   // Keep-alive: seed from store so remounts don't blank a restored sub-view
   const [visitedSubViews, setVisitedSubViews] = useState<Set<string>>(

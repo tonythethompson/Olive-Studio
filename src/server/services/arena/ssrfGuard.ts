@@ -200,6 +200,18 @@ async function lookupAllWithSignal(
 }
 
 /**
+ * Stable order with IPv4 before IPv6 so broken IPv6 paths do not win when an
+ * A record is available. Relative order within each family is preserved.
+ */
+export function preferIpv4First(addresses: string[]): string[] {
+  return [...addresses].sort((a, b) => {
+    const aV4 = net.isIPv4(a) ? 0 : 1;
+    const bV4 = net.isIPv4(b) ? 0 : 1;
+    return aV4 - bV4;
+  });
+}
+
+/**
  * Resolve hostname and return only publicly routable addresses
  * (or loopback when explicitly allowed).
  * Pass `signal` (typically the Arena route AbortController) so DNS can fail
@@ -242,7 +254,7 @@ export async function resolvePinnedAddresses(
     allowed.push(address);
   }
   if (!allowed.length) throw new SsrfPolicyError("No allowed addresses after DNS resolution");
-  return allowed;
+  return preferIpv4First(allowed);
 }
 
 export type PinnedFetchInit = {

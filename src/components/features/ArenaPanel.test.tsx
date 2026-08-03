@@ -5,27 +5,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ArenaPanel } from "./ArenaPanel";
-import { usePipelineStore } from "@/lib/stores/pipelineStore";
+import { usePlaygroundStore } from "@/lib/stores/playgroundStore";
 
 function resetArenaSlots(): void {
-  usePipelineStore.setState({
-    slotA: {
-      type: "local",
-      file: null,
-      tokenizerId: "",
-      endpointUrl: "",
-      apiKey: "",
-      modelId: "",
-    },
-    slotB: {
-      type: "local",
-      file: null,
-      tokenizerId: "",
-      endpointUrl: "",
-      apiKey: "",
-      modelId: "",
-    },
-  });
+  usePlaygroundStore.getState().resetPlayground();
 }
 
 describe("ArenaPanel", () => {

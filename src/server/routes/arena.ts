@@ -3,7 +3,7 @@
  * Cloud inference proxy for the Arena sub-view in the Playground tab.
  */
 import type { Router } from "express";
-import { resolveCloudTimeoutMs } from "../../lib/arenaConstants.ts";
+import { resolveCloudTimeoutMs, ARENA_PROMPT_MAX_CHARS } from "../../lib/arenaConstants.ts";
 import { arenaLocalOnly } from "../middleware/localOnly.ts";
 import { arenaProxyRateLimit } from "../middleware/rateLimit.ts";
 import { pinnedFetch, SsrfPolicyError } from "../services/arena/ssrfGuard.ts";
@@ -32,6 +32,11 @@ export function mountArenaRoutes(router: Router): void {
       return res.status(400).json({ error: "endpointUrl is required" });
     if (!prompt || typeof prompt !== "string")
       return res.status(400).json({ error: "prompt is required" });
+    if (prompt.length > ARENA_PROMPT_MAX_CHARS) {
+      return res.status(400).json({
+        error: `prompt must be at most ${ARENA_PROMPT_MAX_CHARS} characters`,
+      });
+    }
     if (apiKey !== undefined && apiKey !== null && typeof apiKey !== "string")
       return res.status(400).json({ error: "apiKey must be a string" });
     if (modelId !== undefined && modelId !== null && typeof modelId !== "string")

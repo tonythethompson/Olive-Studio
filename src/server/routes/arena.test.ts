@@ -11,6 +11,7 @@ import {
   ARENA_CLOUD_TIMEOUT_MAX_MS,
   ARENA_CLOUD_TIMEOUT_MIN_MS,
   ARENA_CLOUD_TIMEOUT_MS,
+  ARENA_PROMPT_MAX_CHARS,
 } from "../../lib/arenaConstants.ts";
 
 vi.mock("../middleware/localOnly.ts", () => ({
@@ -116,6 +117,18 @@ describe("POST /api/arena/cloud-inference", () => {
     });
     expect(missingPrompt.status).toBe(400);
     expect(await missingPrompt.json()).toMatchObject({ error: "prompt is required" });
+  });
+
+  it("rejects oversized prompts before calling upstream", async () => {
+    const res = await postCloudInference({
+      endpointUrl: "https://api.example.com/v1",
+      prompt: "x".repeat(ARENA_PROMPT_MAX_CHARS + 1),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: `prompt must be at most ${ARENA_PROMPT_MAX_CHARS} characters`,
+    });
+    expect(mockedPinnedFetch).not.toHaveBeenCalled();
   });
 
   it("rejects non-string apiKey and modelId", async () => {

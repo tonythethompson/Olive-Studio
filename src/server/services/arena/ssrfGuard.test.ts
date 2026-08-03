@@ -5,6 +5,7 @@ import {
   isBlockedIpv4,
   isLoopbackIp,
   isLoopbackHostname,
+  preferIpv4First,
   resolvePinnedAddresses,
 } from "./ssrfGuard.ts";
 
@@ -116,6 +117,23 @@ describe("assertUrlPolicy", () => {
     expect(() =>
       assertUrlPolicy(new URL("http://127.0.0.1:11434/v1"), { allowLoopbackHttp: true }),
     ).not.toThrow();
+  });
+});
+
+describe("preferIpv4First", () => {
+  it("orders IPv4 ahead of IPv6 while preserving relative order within families", () => {
+    expect(preferIpv4First(["2001:4860:4860::8888", "8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"])).toEqual([
+      "8.8.8.8",
+      "1.1.1.1",
+      "2001:4860:4860::8888",
+      "2606:4700:4700::1111",
+    ]);
+  });
+
+  it("returns a copy when only one family is present", () => {
+    const v6 = ["2001:db8::1", "2001:db8::2"];
+    expect(preferIpv4First(v6)).toEqual(v6);
+    expect(preferIpv4First(v6)).not.toBe(v6);
   });
 });
 

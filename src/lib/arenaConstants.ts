@@ -8,6 +8,9 @@ export const ARENA_CLOUD_TIMEOUT_MS = 30_000;
 export const ARENA_CLOUD_TIMEOUT_MIN_MS = 1_000;
 export const ARENA_CLOUD_TIMEOUT_MAX_MS = 120_000;
 
+/** Max characters accepted for Arena cloud `prompt` (route-level bound). */
+export const ARENA_PROMPT_MAX_CHARS = 32_000;
+
 /**
  * Clamps an arbitrary value into a valid cloud-inference timeout.
  * Non-number / non-finite input falls back to the default — never returns

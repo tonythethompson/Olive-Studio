@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { usePipelineStore } from "@/lib/stores/pipelineStore";
+import { usePlaygroundStore } from "@/lib/stores/playgroundStore";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 
 describe("pipelineStore", () => {
@@ -83,37 +84,11 @@ describe("pipelineStore", () => {
     expect(state.ihvProvider).toBe("CPUExecutionProvider");
   });
 
-  it("setSlotA merges patches without clobbering other fields", () => {
-    usePipelineStore.getState().setSlotA({ endpointUrl: "https://api.example.com/v1", type: "cloud" });
-    usePipelineStore.getState().setSlotA({ apiKey: "secret" });
-    const { slotA } = usePipelineStore.getState();
-    expect(slotA.type).toBe("cloud");
-    expect(slotA.endpointUrl).toBe("https://api.example.com/v1");
-    expect(slotA.apiKey).toBe("secret");
-  });
-
-  it("resetState clears Arena slots and playground sub-view", () => {
-    usePipelineStore.getState().setActiveSubView("arena");
-    usePipelineStore.getState().setSlotA({ type: "cloud", apiKey: "sk-test", endpointUrl: "https://x" });
-    usePipelineStore.getState().setSlotB({ modelId: "gpt-test" });
+  it("resetState does not touch playground store fields", () => {
+    usePlaygroundStore.getState().setActiveSubView("arena");
+    usePlaygroundStore.getState().setSlotA({ type: "cloud", apiKey: "sk-test" });
     usePipelineStore.getState().resetState();
-    const store = usePipelineStore.getState();
-    expect(store.activeSubView).toBe("browser-test");
-    expect(store.slotA).toEqual({
-      type: "local",
-      file: null,
-      tokenizerId: "",
-      endpointUrl: "",
-      apiKey: "",
-      modelId: "",
-    });
-    expect(store.slotB).toEqual({
-      type: "local",
-      file: null,
-      tokenizerId: "",
-      endpointUrl: "",
-      apiKey: "",
-      modelId: "",
-    });
+    expect(usePlaygroundStore.getState().activeSubView).toBe("arena");
+    expect(usePlaygroundStore.getState().slotA.apiKey).toBe("sk-test");
   });
 });

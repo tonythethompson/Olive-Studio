@@ -17,7 +17,7 @@ import {
   Loader2,
   Clock,
 } from "lucide-react";
-import { usePipelineStore, type ArenaSlotConfig } from "@/lib/stores/pipelineStore";
+import { usePlaygroundStore, type ArenaSlotConfig } from "@/lib/stores/playgroundStore";
 import { ARENA_CLOUD_TIMEOUT_MS } from "@/lib/arenaConstants";
 import {
   buildArenaLocalFeeds,
@@ -687,10 +687,10 @@ async function runArenaSlot(opts: {
 /* ------------------------------------------------------------------ */
 
 export function ArenaPanel() {
-  const slotA = usePipelineStore((s) => s.slotA);
-  const slotB = usePipelineStore((s) => s.slotB);
-  const setSlotA = usePipelineStore((s) => s.setSlotA);
-  const setSlotB = usePipelineStore((s) => s.setSlotB);
+  const slotA = usePlaygroundStore((s) => s.slotA);
+  const slotB = usePlaygroundStore((s) => s.slotB);
+  const setSlotA = usePlaygroundStore((s) => s.setSlotA);
+  const setSlotB = usePlaygroundStore((s) => s.setSlotB);
 
   // Prompt state
   const [prompt, setPrompt] = useState<string>("");
