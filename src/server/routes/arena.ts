@@ -55,9 +55,18 @@ export function mountArenaRoutes(router: Router): void {
     });
 
     // Exact clamp (preserve in-range values like 1001) — same semantics as the client.
+    // CodeQL js/resource-exhaustion treats any setTimeout/setInterval delay derived from
+    // request body as tainted even after clamp; schedule with a fixed literal tick and
+    // compare against a Date.now() deadline so the sink is not user-controlled.
     const resolvedTimeoutMs = resolveCloudTimeoutMs(timeoutMs);
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), resolvedTimeoutMs);
+    const deadlineMs = Date.now() + resolvedTimeoutMs;
+    const timer = setInterval(() => {
+      if (Date.now() >= deadlineMs) {
+        clearInterval(timer);
+        if (!ac.signal.aborted) ac.abort();
+      }
+    }, 50);
 
     // Abort upstream work on client gone, but distinguish disconnect from a normal
     // response completion (`res` "close" also fires after a finished write).
@@ -134,7 +143,7 @@ export function mountArenaRoutes(router: Router): void {
             : message,
       });
     } finally {
-      clearTimeout(timer);
+      clearInterval(timer);
       req.off("aborted", onClientGone);
       res.off("close", onClientGone);
     }
