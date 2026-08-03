@@ -341,13 +341,13 @@ Adds a fourth top-level "Playground" navigation entry to the Olive Studio sideba
     - _Requirements: 18.1, 18.3, 18.5, 18.6, 18.7, 18.8, 18.10, 18.11_
   - [ ] 19.5 Tests for Requirement 18 (**depends on completed 19.1–19.4**; completion gate for Req 18)
     - **PBT (fast-check, min 100 iterations each)** with tags `// Feature: playground-tab, Property N`:
-      - Property 20 — download rejects escapes / non-models / zero-byte / oversize (empty 4xx body); valid downloads return non-empty bytes
+      - Property 20 — download rejects escapes / non-models / zero-byte / oversize (empty **400/403** body only — never 404); valid downloads return non-empty bytes; client `path`/`absolutePath` rejected
       - Property 20b — list/download **reject** `cacheDir`/`outputDir`/`path`/`absolutePath` (not ignore); list payloads expose labels/ids/`displayPath` only
       - Property 21 — snapshot eligibility matches OpenAI-compat + outbound policy
       - Property 21b — with `OLIVE_ARENA_ALLOW_REMOTE` off/unset, non-loopback snapshot/cloud callers get 403 without credentials; with override on, non-loopback is permitted and rejected bodies still omit credential keys
       - Property 22 — convenience fill writes the same `ArenaSlotConfig` shape as manual entry
     - Server unit/route: trusted root binding + opaque id download → 200 non-empty; client-supplied path/roots rejected; list `roots[]` labels only
-    - Server: traversal / outside root / non-model extension / zero-byte / oversize → 4xx empty body
+    - Server: traversal / outside root / non-model extension / zero-byte / oversize / missing-after-revalidation → **400/403** empty body (aligned with `OliveOutputResolveErr.status`)
     - Server: list recent mtime order + extension filter; snapshot eligible vs non-compat vs private URL vs missing
     - Server: snapshot responses assert `Cache-Control: no-store, private` for eligible, ineligible, and 403
     - Server: olive-output + cloud-inference access control override-off (non-loopback → 403, no credentials) and override-on (`OLIVE_ARENA_ALLOW_REMOTE=true` permits remote through the gate); rate-limit throttling still covers olive + cloud routes
