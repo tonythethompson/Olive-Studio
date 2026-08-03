@@ -120,9 +120,9 @@ function isBlockedIpv6(host: string): boolean {
   const value = parseIpv6(host);
   if (value === null) return false;
   const first = Number(value >> 120n);
-  const second = Number((value >> 118n) & 0x3fn);
+  const second = Number((value >> 118n) & 0x3n);
   // loopback, link-local, ULA, and IPv4-mapped/compatible addresses
-  return value === 1n || (first === 0xfe && second === 0x2) || first >= 0xfc && first <= 0xfd || value >> 32n === 0n;
+  return value === 1n || (first === 0xfe && second === 0x2) || first >= 0xfc && first <= 0xfd || value >> 32n === 0n || value >> 32n === 0xffffn;
 }
 
 function isLoopbackIpv6(host: string): boolean {
