@@ -110,12 +110,16 @@ describe("playgroundPBT", () => {
 
   it("Property 7: New run clear fully replaces any prior slot results", () => {
     // Feature: playground-tab, Property 7
-    // Models handleRun's replace-with-clearRunResults() step: for any prior
-    // completed/error/running pair, applying the clear yields the idle baseline
+    // Models handleRun's replace-with-clearRunResults() step for both branches:
+    // sequential (A running, B idle) and parallel (both running). For any prior
+    // completed/error/running pair, applying the clear yields empty outputs
     // (full replace, not merge). Component-level second-run lifecycle is in
-    // ArenaPanel.test.tsx.
+    // ArenaPanel.test.tsx (parallel/cloud path).
     const statusArb = fc.constantFrom("idle", "running", "done", "error") as fc.Arbitrary<
       "idle" | "running" | "done" | "error"
+    >;
+    const modeArb = fc.constantFrom("sequential", "parallel") as fc.Arbitrary<
+      "sequential" | "parallel"
     >;
     fc.assert(
       fc.property(
@@ -129,7 +133,8 @@ describe("playgroundPBT", () => {
           errorA: fc.option(fc.string(), { nil: undefined }),
           errorB: fc.option(fc.string(), { nil: undefined }),
         }),
-        (prior) => {
+        modeArb,
+        (prior, mode) => {
           const priorState = {
             resultA: {
               output: prior.outputA,
@@ -146,22 +151,29 @@ describe("playgroundPBT", () => {
           };
 
           // handleRun does not merge prior into cleared — it assigns clearRunResults()
-          // then sets status to "running" (parallel path). Sequential path runs Slot A
-          // first with the same clear baseline for both slots.
+          // then sets branch-specific running/idle statuses before inference.
           const cleared = clearRunResults();
-          const afterClear = {
-            resultA: { ...cleared.resultA, status: "running" as const },
-            resultB: { ...cleared.resultB, status: "running" as const },
-          };
+          const afterClear =
+            mode === "sequential"
+              ? {
+                  resultA: { ...cleared.resultA, status: "running" as const },
+                  resultB: { ...cleared.resultB, status: "idle" as const },
+                }
+              : {
+                  resultA: { ...cleared.resultA, status: "running" as const },
+                  resultB: { ...cleared.resultB, status: "running" as const },
+                };
 
           expect(cleared).toEqual({
             resultA: { output: "", elapsedMs: 0, status: "idle" },
             resultB: { output: "", elapsedMs: 0, status: "idle" },
           });
-          expect(afterClear).toEqual({
-            resultA: { output: "", elapsedMs: 0, status: "running" },
-            resultB: { output: "", elapsedMs: 0, status: "running" },
-          });
+          expect(afterClear.resultA.output).toBe("");
+          expect(afterClear.resultB.output).toBe("");
+          expect(afterClear.resultA.elapsedMs).toBe(0);
+          expect(afterClear.resultB.elapsedMs).toBe(0);
+          expect(afterClear.resultA.status).toBe("running");
+          expect(afterClear.resultB.status).toBe(mode === "sequential" ? "idle" : "running");
           // Full replace: residual prior keys (e.g. error) are not kept.
           expect("error" in afterClear.resultA).toBe(false);
           expect("error" in afterClear.resultB).toBe(false);
@@ -170,6 +182,11 @@ describe("playgroundPBT", () => {
           if (prior.errorA !== undefined) {
             expect("error" in mergedA).toBe(true);
             expect("error" in afterClear.resultA).toBe(false);
+          }
+          // Prior non-empty outputs never survive either branch.
+          if (prior.outputA !== "" || prior.outputB !== "") {
+            expect(afterClear.resultA.output).toBe("");
+            expect(afterClear.resultB.output).toBe("");
           }
         },
       ),
