@@ -13,7 +13,7 @@ import {
 
 describe("isArenaOpenAiCompatProvider", () => {
   it("rejects native non-compat providers", () => {
-    for (const provider of ["gemini", "anthropic", "devin", "codex"]) {
+    for (const provider of ["gemini", "anthropic", "devin", "codex", "copilot"]) {
       expect(isArenaOpenAiCompatProvider({ provider, baseUrl: "https://api.example.com/v1" })).toBe(
         false,
       );
@@ -95,7 +95,7 @@ describe("buildAssistantCloudSnapshot", () => {
 
   it("Property 21: eligibility matches OpenAI-compat + outbound policy", () => {
     // Feature: playground-tab, Property 21
-    const nonCompat = fc.constantFrom("gemini", "anthropic", "devin", "codex");
+    const nonCompat = fc.constantFrom("gemini", "anthropic", "devin", "codex", "copilot");
     const publicHttps = fc
       .tuple(
         fc.domain(),
@@ -114,6 +114,7 @@ describe("buildAssistantCloudSnapshot", () => {
             "anthropic",
             "devin",
             "codex",
+            "copilot",
           ),
           baseUrl: fc.option(publicHttps, { nil: null }),
           apiKey: fc.string({ maxLength: 32 }),

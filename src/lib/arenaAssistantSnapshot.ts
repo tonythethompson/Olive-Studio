@@ -9,7 +9,9 @@
 import type { ArenaSlotConfig } from "@/lib/stores/playgroundStore";
 
 /** Providers that are not OpenAI chat-completions shaped for Arena cloud runs. */
-const NON_OPENAI_COMPAT = new Set(["gemini", "anthropic", "devin", "codex"]);
+// copilot: Arena cloud-inference only sends Authorization + Content-Type; Copilot
+// needs provider-specific headers, so one-click snapshot cannot work.
+const NON_OPENAI_COMPAT = new Set(["gemini", "anthropic", "devin", "codex", "copilot"]);
 
 /** Catalog defaults when the active config omits baseUrl. */
 const DEFAULT_BASE_URLS: Record<string, string> = {
@@ -185,12 +187,18 @@ export function assertArenaEndpointUrlPolicy(
  * outbound URL policy). Does not require a non-empty apiKey — local engines
  * may omit keys.
  */
-export function isArenaOpenAiCompatProvider(provider: {
-  provider: string;
-  baseUrl?: string | null;
-}): boolean {
+export function isArenaOpenAiCompatProvider(
+  provider: {
+    provider: string;
+    baseUrl?: string | null;
+  },
+  opts?: { allowLoopbackHttp?: boolean },
+): boolean {
   if (!provider.provider || NON_OPENAI_COMPAT.has(provider.provider)) return false;
-  const endpoint = resolveArenaSnapshotEndpointUrl(provider);
+  const endpoint = resolveArenaSnapshotEndpointUrl(provider, {
+    allowLoopbackHttp:
+      opts?.allowLoopbackHttp ?? process.env.OLIVE_ALLOW_LOOPBACK_HTTP === "true",
+  });
   return endpoint !== null;
 }
 
