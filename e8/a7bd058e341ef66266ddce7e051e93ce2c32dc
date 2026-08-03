@@ -1,0 +1,19 @@
+src/server/routes/arenaOliveOutputs.test.ts
+  s_9c2d5cf92056fe::t_f5ce031e378412 626-628,631,634-635,650-653,657-660,668-675
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e8a7bd058e341ef66266ddce7e051e93ce2c32dc",
+  "prompts": {},
+  "sessions": {
+    "s_9c2d5cf92056fe": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9d6192e2-4912-47d4-9625-47deca1abbad",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
