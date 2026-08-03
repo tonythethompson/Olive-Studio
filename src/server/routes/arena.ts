@@ -5,7 +5,7 @@
 import type { Request, Response, Router } from "express";
 import fs from "node:fs";
 import { resolveCloudTimeoutMs, ARENA_PROMPT_MAX_CHARS } from "../../lib/arenaConstants.ts";
-import { arenaLocalOnly } from "../middleware/localOnly.ts";
+import { arenaLocalOnly, arenaStrictLocalOnly } from "../middleware/localOnly.ts";
 import { arenaProxyRateLimit } from "../middleware/rateLimit.ts";
 import {
   pinnedFetch,
@@ -277,13 +277,14 @@ export function mountArenaRoutes(router: Router): void {
   );
 
   // Req 18 — one-click OpenAI-compat snapshot of the active Assistant provider.
+  // Strict loopback only: this response can include the raw Assistant API key.
   router.get(
     "/arena/assistant-cloud-snapshot",
     (req, res, next) => {
       setNoStorePrivate(res);
       next();
     },
-    arenaLocalOnly,
+    arenaStrictLocalOnly,
     arenaProxyRateLimit,
     (_req: Request, res: Response) => {
       setNoStorePrivate(res);

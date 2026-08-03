@@ -63,10 +63,12 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
   }, []);
 
   useEffect(() => {
-    if (open && !payload && !loading) {
+    // Do not auto-retry after a failed list: error + null payload would re-fire
+    // forever. Refresh list (or re-open after clearing) is the recovery path.
+    if (open && !payload && !loading && !error) {
       void loadList();
     }
-  }, [open, payload, loading, loadList]);
+  }, [open, payload, loading, error, loadList]);
 
   const selectEntry = useCallback(
     async (entry: OliveOutputEntry) => {

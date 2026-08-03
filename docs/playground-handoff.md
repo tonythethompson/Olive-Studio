@@ -33,7 +33,7 @@ Parent tasks **6** and **7** are complete (all sub-items landed). Checkpoint **8
 | ArenaPanel UI: From Olive outputs + Use active Assistant provider | Done (`ArenaConvenience.tsx`) |
 | Properties 21 / 21b / 22 (≥100 iterations) | Done |
 
-## Still deferred
+## Deferred (not in core ship)
 
 - Req 11 — benchmark input profiles
 - Req 12 — MCP KB via GeminiSidebar

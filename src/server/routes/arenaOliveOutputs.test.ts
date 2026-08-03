@@ -11,6 +11,7 @@ import path from "node:path";
 
 vi.mock("../middleware/localOnly.ts", () => ({
   arenaLocalOnly: (_req: unknown, _res: unknown, next: () => void) => next(),
+  arenaStrictLocalOnly: (_req: unknown, _res: unknown, next: () => void) => next(),
   isLoopbackRemoteAddress: () => true,
   hasProxyForwardingHeaders: () => false,
 }));

@@ -223,22 +223,21 @@ describe("GET /api/arena/assistant-cloud-snapshot", () => {
     );
   });
 
-  it("Property 21b: OLIVE_ARENA_ALLOW_REMOTE permits non-loopback through the gate", async () => {
-    // Feature: playground-tab, Property 21b
+  it("Property 21b: credential snapshot stays loopback-only even when OLIVE_ARENA_ALLOW_REMOTE=true", async () => {
+    // Feature: playground-tab, Property 21b — never return Assistant API keys to non-loopback.
     process.env.OLIVE_ARENA_ALLOW_REMOTE = "true";
     getAiProvider.mockReturnValue({
       provider: "openai-compat",
-      apiKey: "sk-ok",
+      apiKey: "sk-should-not-leak",
       model: "gpt",
       baseUrl: "https://api.example.com/v1",
     });
     const res = await getSnapshot({
       headers: { "x-forwarded-for": "8.8.8.8" },
     });
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { eligible: boolean; apiKey?: string };
-    expect(body.eligible).toBe(true);
-    expect(body.apiKey).toBe("sk-ok");
+    expect(res.status).toBe(403);
+    const text = await res.text();
+    expect(text).not.toContain("sk-should-not-leak");
     expect(res.headers["cache-control"]).toMatch(/no-store/);
   });
 });
