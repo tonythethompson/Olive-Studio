@@ -48,7 +48,7 @@
     "@google/genai": "^2.8.0",
     "@huggingface/transformers": "^4.2.0",
     "@mendable/firecrawl-js": "^4.30.1",
-    "@openai/codex-sdk": "^0.145.0",
+    "@openai/codex-sdk": "^0.146.0",
     "@radix-ui/react-accordion": "^1.2.20",
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slider": "^1.3.6",
