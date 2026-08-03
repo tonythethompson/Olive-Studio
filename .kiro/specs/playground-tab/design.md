@@ -2050,7 +2050,7 @@ Independent per slot. Switching type clears the opposite-mode fields for that sl
 
 #### Property 20: Olive output downloads reject escapes, non-models, and client path params
 
-*For any* `GET /api/arena/olive-outputs/file` request that includes client-supplied `path` or `absolutePath` (alone or alongside `id`), THE server SHALL reject the request with a 4xx status and an empty body (no JSON error payload and no model bytes) — these parameters never select a file. *For any* download that uses an unknown opaque id, an id that resolves outside Olive_Output_Roots, a non-regular file, or a non-`.onnx`/`.ort` extension, THE server likewise returns 4xx with an empty body. *For any* opaque id that still resolves to an in-root regular `.onnx`/`.ort` under the size limit (and no disallowed path query params), the endpoint returns 200 with non-empty bytes.
+*For any* `GET /api/arena/olive-outputs/file` request that includes client-supplied `path` or `absolutePath` (alone or alongside `id`), THE server SHALL reject the request with a 4xx status and an empty body (no JSON error payload and no model bytes) — these parameters never select a file. *For any* download that uses an unknown opaque id, an id that resolves outside Olive_Output_Roots, a non-regular file, a zero-byte file, or a non-`.onnx`/`.ort` extension, THE server likewise returns 4xx with an empty body. *For any* opaque id that still resolves to an in-root regular `.onnx`/`.ort` with size in `(0, size_limit]` (and no disallowed path query params), the endpoint returns 200 with non-empty bytes.
 
 **Validates: Requirement 18.4**
 
@@ -2087,12 +2087,15 @@ Independent per slot. Switching type clears the opposite-mode fields for that sl
 - Path sandbox: in-root model id → 200; traversal / outside root / symlink escape → 403/400 empty body (Property 20)
 - Explicit path-param rejection: `GET .../file?path=...` or `?absolutePath=...` (with or without `id`) → 4xx empty body (Property 20)
 - Non-model rejection: `.json` / `.bin` / directories under roots are not downloadable (Property 20)
+- Zero-byte rejection: in-root `.onnx`/`.ort` with size `0` → 4xx empty body (Property 20); success downloads assert `Content-Length` / body length `> 0`
 - Size limit: oversized model file → 4xx empty body
 - List: seeds temp cache/output dirs; recent is mtime-ordered and ≤ 10; extensions other than `.onnx`/`.ort` excluded
 - Snapshot eligibility: mock openai-compat public host → `eligible: true`; gemini/codex → `eligible: false` with **only** `{ eligible, reason }` (assert `apiKey`/`endpointUrl`/`modelId` are undefined); private/loopback baseUrl without override → `eligible: false` same shape; with `OLIVE_ALLOW_LOOPBACK_HTTP` → allowed when policy says so (Property 21)
-- Snapshot access control: non-loopback caller → 403 whose body contains none of `apiKey`, `endpointUrl`, `modelId` (Property 21b); loopback caller may receive credential payload when eligible
+- Snapshot access control (`OLIVE_ARENA_ALLOW_REMOTE` off / unset): non-loopback caller → 403 whose body contains none of `apiKey`, `endpointUrl`, `modelId` (Property 21b); loopback caller may receive credential payload when eligible
+- Snapshot access control (`OLIVE_ARENA_ALLOW_REMOTE=true`): non-loopback caller is permitted through the local-first gate and may receive the credential payload when eligible (still `Cache-Control: no-store, private`); rejected ineligible shapes must not include credential keys
 - Snapshot Cache-Control: eligible, ineligible, and forbidden responses include `Cache-Control: no-store, private`
-- Cloud-inference access control: non-loopback → 403; loopback passes through to rate limit / proxy
+- Cloud-inference access control (`OLIVE_ARENA_ALLOW_REMOTE` off / unset): non-loopback → 403 with no upstream proxy attempt; loopback passes through to rate limit / proxy
+- Cloud-inference access control (`OLIVE_ARENA_ALLOW_REMOTE=true`): non-loopback may reach rate limit / proxy (same credential/body rules as loopback)
 - Opaque id↔path resolution helpers (server-only module under `src/server/services/playground/`)
 
 #### Unit (`vitest.config.ts`)

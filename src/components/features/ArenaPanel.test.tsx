@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ArenaPanel } from "./ArenaPanel";
+import { ArenaPanel, localOptsForArenaSlot } from "./ArenaPanel";
 import { usePlaygroundStore } from "@/lib/stores/playgroundStore";
 
 function resetArenaSlots(): void {
@@ -71,5 +71,45 @@ describe("ArenaPanel", () => {
       expect(running.disabled).toBe(true);
     });
     expect(fetchSpy).toHaveBeenCalled();
+  });
+
+  it("builds per-slot local opts with distinct tokenizer ids and a shared seed", () => {
+    const seedKey = "shared-seed";
+    const optsA = localOptsForArenaSlot(
+      {
+        type: "local",
+        file: null,
+        tokenizerId: "org/tokenizer-a",
+        endpointUrl: "",
+        apiKey: "",
+        modelId: "",
+      },
+      "hello",
+      seedKey,
+    );
+    const optsB = localOptsForArenaSlot(
+      {
+        type: "local",
+        file: null,
+        tokenizerId: "org/tokenizer-b",
+        endpointUrl: "",
+        apiKey: "",
+        modelId: "",
+      },
+      "hello",
+      seedKey,
+    );
+
+    expect(optsA).toEqual({
+      prompt: "hello",
+      seedKey,
+      tokenizerId: "org/tokenizer-a",
+    });
+    expect(optsB).toEqual({
+      prompt: "hello",
+      seedKey,
+      tokenizerId: "org/tokenizer-b",
+    });
+    expect(optsA.tokenizerId).not.toBe(optsB.tokenizerId);
   });
 });

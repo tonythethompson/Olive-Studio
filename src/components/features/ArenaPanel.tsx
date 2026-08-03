@@ -522,7 +522,7 @@ function formatTensorPreview(data: ArrayLike<number | bigint | string>): string 
 
 /**
  * Runs inference on a local ONNX file using onnxruntime-web (dynamically imported).
- * NLP graphs + prompt → transformers.js tokenization (shared across slots via same prompt).
+ * NLP graphs + prompt → transformers.js tokenization (per-slot tokenizerId).
  */
 async function runLocalInference(
   file: File,
@@ -620,6 +620,22 @@ async function runCloudInference(
 
 type LocalInferenceOpts = { prompt: string; seedKey: string; tokenizerId?: string };
 
+/** Per-slot local opts: shared seed/prompt, slot-owned tokenizer vocabulary. */
+export function localOptsForArenaSlot(
+  slot: ArenaSlotConfig,
+  prompt: string,
+  seedKey: string,
+): LocalInferenceOpts {
+  return {
+    prompt,
+    seedKey,
+    tokenizerId:
+      slot.type === "local" && slot.tokenizerId.trim()
+        ? slot.tokenizerId.trim()
+        : undefined,
+  };
+}
+
 /**
  * Runs one Arena slot (local or cloud). Shared by the parallel and sequential
  * handleRun paths so guards / error strings / stale-run checks stay in sync.
@@ -713,11 +729,6 @@ export function ArenaPanel() {
   const needsPrompt = slotA.type === "cloud" || slotB.type === "cloud";
   // Shared seed / prompt so both local slots compare the same request.
   const localSeedKey = prompt.trim() || "arena-local-default";
-  // Prefer Slot A's tokenizer when both local; either slot's id works for mixed.
-  const sharedTokenizerId =
-    (slotA.type === "local" && slotA.tokenizerId.trim()) ||
-    (slotB.type === "local" && slotB.tokenizerId.trim()) ||
-    "";
 
   const handlePromptChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -740,11 +751,6 @@ export function ArenaPanel() {
     setIsRunning(true);
 
     const bothLocal = slotA.type === "local" && slotB.type === "local";
-    const localOpts = {
-      prompt,
-      seedKey: localSeedKey,
-      tokenizerId: sharedTokenizerId || undefined,
-    };
 
     try {
       if (bothLocal) {
@@ -759,7 +765,7 @@ export function ArenaPanel() {
           setResult: setResultA,
           isCurrent,
           prompt,
-          localOpts,
+          localOpts: localOptsForArenaSlot(slotA, prompt, localSeedKey),
         });
         if (!isCurrent()) return;
 
@@ -771,7 +777,7 @@ export function ArenaPanel() {
             setResult: setResultB,
             isCurrent,
             prompt,
-            localOpts,
+            localOpts: localOptsForArenaSlot(slotB, prompt, localSeedKey),
           });
         } else {
           // Don't leave Slot B stranded on "Waiting…" after Slot A fails
@@ -794,7 +800,7 @@ export function ArenaPanel() {
             setResult: setResultA,
             isCurrent,
             prompt,
-            localOpts,
+            localOpts: localOptsForArenaSlot(slotA, prompt, localSeedKey),
           }),
           runArenaSlot({
             slot: slotB,
@@ -802,14 +808,14 @@ export function ArenaPanel() {
             setResult: setResultB,
             isCurrent,
             prompt,
-            localOpts,
+            localOpts: localOptsForArenaSlot(slotB, prompt, localSeedKey),
           }),
         ]);
       }
     } finally {
       if (isCurrent()) setIsRunning(false);
     }
-  }, [isRunning, needsPrompt, prompt, localSeedKey, sharedTokenizerId, slotA, slotB]);
+  }, [isRunning, needsPrompt, prompt, localSeedKey, slotA, slotB]);
 
   const comparable =
     slotA.type === slotB.type && resultA.status === "done" && resultB.status === "done";

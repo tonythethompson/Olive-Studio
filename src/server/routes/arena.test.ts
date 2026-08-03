@@ -377,14 +377,21 @@ describe("POST /api/arena/cloud-inference", () => {
 
   it("does not write a JSON error body when the client disconnects during upstream body read", async () => {
     let releaseBody: ((err: Error) => void) | undefined;
+    let markJsonPending!: () => void;
+    const jsonPending = new Promise<void>((resolve) => {
+      markJsonPending = resolve;
+    });
+
     mockedPinnedFetch.mockResolvedValue({
       status: 200,
       ok: true,
       text: async () => "",
-      json: () =>
-        new Promise<never>((_resolve, reject) => {
+      json: () => {
+        markJsonPending();
+        return new Promise<never>((_resolve, reject) => {
           releaseBody = reject;
-        }),
+        });
+      },
     });
 
     const payload = JSON.stringify({
@@ -392,6 +399,9 @@ describe("POST /api/arena/cloud-inference", () => {
       prompt: "hello",
     });
     const url = new URL(`${baseUrl}/api/arena/cloud-inference`);
+
+    let responseChunks = "";
+    let sawHttpResponse = false;
 
     await new Promise<void>((resolve, reject) => {
       const req = http.request(
@@ -405,8 +415,11 @@ describe("POST /api/arena/cloud-inference", () => {
             "Content-Length": Buffer.byteLength(payload),
           },
         },
-        () => {
-          // Should not receive a finished JSON error response after we destroy the socket.
+        (res) => {
+          sawHttpResponse = true;
+          res.on("data", (chunk: Buffer | string) => {
+            responseChunks += typeof chunk === "string" ? chunk : chunk.toString("utf8");
+          });
         },
       );
       req.on("error", () => {
@@ -415,28 +428,28 @@ describe("POST /api/arena/cloud-inference", () => {
       req.write(payload);
       req.end();
 
-      // Wait until pinnedFetch has returned and json() is pending, then drop the client.
-      const waitForPending = async () => {
-        for (let i = 0; i < 50 && !releaseBody; i++) {
-          await new Promise((r) => setTimeout(r, 10));
-        }
-        if (!releaseBody) {
-          reject(new Error("upstream.json never started"));
-          return;
-        }
-        req.destroy();
-        // Simulate abort that follows client-gone → AbortController.abort().
-        releaseBody(Object.assign(new Error("Aborted"), { name: "AbortError" }));
-        // Allow the route catch/finally to run without hanging the suite.
-        await new Promise((r) => setTimeout(r, 30));
-        resolve();
-      };
-      void waitForPending().catch(reject);
+      void jsonPending
+        .then(async () => {
+          if (!releaseBody) {
+            throw new Error("upstream.json never started");
+          }
+          req.destroy();
+          // Simulate abort that follows client-gone → AbortController.abort().
+          releaseBody(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+          // Yield so the route catch/finally can run without a fixed sleep.
+          await new Promise<void>((r) => setImmediate(r));
+          await new Promise<void>((r) => setImmediate(r));
+        })
+        .then(() => resolve())
+        .catch(reject);
     });
 
-    // If disconnect handling regressed to writing after close, Node may throw; the
-    // primary assertion is that we completed without an unhandled rejection and
-    // without treating body-read AbortError as a successful upstream error payload.
     expect(mockedPinnedFetch).toHaveBeenCalled();
+    // Disconnect handling must not serialize a gateway/timeout JSON body after close.
+    expect(responseChunks).not.toMatch(/"error"\s*:/);
+    if (sawHttpResponse && responseChunks.length > 0) {
+      expect(() => JSON.parse(responseChunks)).not.toThrow();
+      expect(JSON.parse(responseChunks)).not.toHaveProperty("error");
+    }
   });
 });
