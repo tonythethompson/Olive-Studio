@@ -54,6 +54,17 @@ export function mountArenaRoutes(router: Router): void {
     // request body — CodeQL flags user-controlled setTimeout delays as resource exhaustion.
     const timer = setTimeout(() => ac.abort(), ARENA_CLOUD_TIMEOUT_MS);
 
+    // Abort upstream work on client gone, but distinguish disconnect from a normal
+    // response completion (`res` "close" also fires after a finished write).
+    let clientDisconnected = false;
+    const onClientGone = () => {
+      if (res.writableEnded) return;
+      clientDisconnected = true;
+      if (!ac.signal.aborted) ac.abort();
+    };
+    req.on("aborted", onClientGone);
+    res.on("close", onClientGone);
+
     try {
       const basePath = targetUrl.pathname.replace(/\/+$/, "");
       targetUrl.pathname = basePath.endsWith("/chat/completions")
@@ -69,6 +80,8 @@ export function mountArenaRoutes(router: Router): void {
         signal: ac.signal,
       });
 
+      if (clientDisconnected || res.writableEnded) return;
+
       if (!upstream.ok) {
         const errText = await upstream.text().catch(() => "");
         return res.status(upstream.status).json({
@@ -83,6 +96,8 @@ export function mountArenaRoutes(router: Router): void {
       const text = data?.choices?.[0]?.message?.content ?? JSON.stringify(data);
       return res.json({ output: text });
     } catch (err: unknown) {
+      // Client already left — do not serialize timeout/gateway JSON onto a closed socket.
+      if (clientDisconnected || res.writableEnded || res.headersSent) return;
       const isTimeout = err instanceof Error && err.name === "AbortError";
       const message = err instanceof Error ? err.message : String(err);
       // Policy / SSRF rejections are client errors, not bad gateway
@@ -92,6 +107,8 @@ export function mountArenaRoutes(router: Router): void {
       });
     } finally {
       clearTimeout(timer);
+      req.off("aborted", onClientGone);
+      res.off("close", onClientGone);
     }
   });
 }

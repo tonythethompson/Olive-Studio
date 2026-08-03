@@ -1911,12 +1911,13 @@ A third `"olive-output"` or `"assistant"` `ArenaSlotConfig.type` would fork exec
 Browsers cannot list arbitrary folders. The server resolves **server-owned** Olive_Output_Roots, scans for `.onnx`/`.ort`, mints opaque Olive_Output_Artifact_Id values, and serves bytes only for ids that still resolve inside that sandbox. The client turns those bytes into a Session_Scoped `File` so existing `onnxruntime-web` load paths stay unchanged.
 
 ```ts
-// Shared helpers — prefer src/lib/arenaOliveOutputs.ts (pure root resolution + path containment)
-// and implement FS IO in src/server/services/playground/oliveOutputScan.ts
+// Shareable helpers — src/lib/arenaOliveOutputs.ts (root labels + path containment only).
+// Opaque id↔path resolution and FS IO live under src/server/services/playground/
+// (never imported by the browser bundle).
 
 export interface OliveOutputEntry {
   id: string;          // opaque Olive_Output_Artifact_Id (server-minted; not a filesystem path)
-  displayPath: string; // path relative to its root, for UI only
+  displayPath: string; // path relative to its root label, for UI only
   sizeBytes: number;
   mtimeMs: number;
   rootLabel: "cache" | "output";
@@ -1939,7 +1940,7 @@ export function isPathInsideRoots(resolvedPath: string, roots: string[]): boolea
 GET /api/arena/olive-outputs
   Query: none (roots come from server-owned config)
   Response 200: {
-    roots: Array<{ label: "cache" | "output"; path: string }>, // path may be shown for UX; not used for fetch
+    roots: Array<{ label: "cache" | "output" }>, // label only — never filesystem paths
     recent: OliveOutputEntry[],  // up to 10, mtime desc — opaque ids only
     entries: OliveOutputEntry[]  // browse list; server may cap (e.g. 200) and maxDepth (e.g. 4)
   }
@@ -1952,6 +1953,7 @@ GET /api/arena/olive-outputs/file?id=<Olive_Output_Artifact_Id>
     400 unknown/missing id or disallowed query shape (path/absolutePath/cacheDir/outputDir rejected)
     403 outside roots / not a regular file / bad extension / over size limit / access boundary
     404 missing file after revalidation
+  Rejected downloads (4xx above): empty body — no JSON error payload and no model bytes
 ```
 
 **Client fill sequence** (`ArenaPanel` local mode):
@@ -1997,6 +1999,7 @@ Coverage expectations for the gate: public HTTPS OpenAI-shaped hosts → eligibl
 ```http
 GET /api/arena/assistant-cloud-snapshot
   Middleware: arenaLocalOnly (same access boundary as POST /arena/cloud-inference)
+  Headers (all outcomes — eligible, ineligible, and 403): Cache-Control: no-store, private
   Response 200:
     | { eligible: true, endpointUrl: string, apiKey: string, modelId: string, providerLabel: string }
     | { eligible: false, reason: string }
@@ -2078,18 +2081,20 @@ Independent per slot. Switching type clears the opposite-mode fields for that sl
 #### Server (`vitest.server.config.ts`)
 
 - Trusted root binding: list/download ignore or 400 on client-supplied `cacheDir`/`outputDir`/`path`/`absolutePath`; roots come from server config only (Property 20b)
-- Opaque ids: list entries expose `id` without absolute paths; download by id → 200; unknown id → 4xx empty body
+- Opaque ids: list entries expose `id` without absolute paths; `roots[]` has labels only (no `path`); download by id → 200; unknown id → 4xx empty body
 - Path sandbox: in-root model id → 200; traversal / outside root / symlink escape → 403/400 empty body (Property 20)
 - Non-model rejection: `.json` / `.bin` / directories under roots are not downloadable (Property 20)
 - Size limit: oversized model file → 4xx empty body
 - List: seeds temp cache/output dirs; recent is mtime-ordered and ≤ 10; extensions other than `.onnx`/`.ort` excluded
 - Snapshot eligibility: mock openai-compat public host → `eligible: true`; gemini/codex → `eligible: false`; private/loopback baseUrl without override → `eligible: false`; with `OLIVE_ALLOW_LOOPBACK_HTTP` → allowed when policy says so (Property 21)
 - Snapshot access control: non-loopback caller → 403 without `apiKey` (Property 21b); loopback caller may receive credential payload when eligible
+- Snapshot Cache-Control: eligible, ineligible, and forbidden responses include `Cache-Control: no-store, private`
 - Cloud-inference access control: non-loopback → 403; loopback passes through to rate limit / proxy
+- Opaque id↔path resolution helpers (server-only module under `src/server/services/playground/`)
 
 #### Unit (`vitest.config.ts`)
 
-- `isPathInsideRoots` / opaque-id mapping helpers
+- `isPathInsideRoots` / shareable root helpers from `src/lib/arenaOliveOutputs.ts`
 - `isArenaOpenAiCompatProvider` for public, private, and loopback-override cases
 - `toCloudSlotPatch(snapshot)` mapper (Property 22)
 

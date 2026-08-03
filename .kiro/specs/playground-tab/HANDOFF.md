@@ -4,7 +4,7 @@
 
 1. `requirements.md` — 18 requirements. 1–10 are core (nav, Browser Test/Benchmark promotion, Arena). 11 is Benchmark input profiles. 12 is MCP knowledge integration (optional, decoupled; rewritten this session to route through the sidebar's Audit tab rather than an inline card — see "Known decisions"). 13–14 are Benchmark/Arena scoring. 15 is baseline model download. 16–17 are run history + recommendations (server-persisted, new). 18 is Arena slot convenience sources (Olive outputs picker + active Assistant OpenAI-compat snapshot; Task 19).
 2. `design.md` — architecture, data models, correctness properties (22 total; Properties 20–22 cover Req 18), and several "why not X" sections worth reading before second-guessing the approach (see Known decisions below).
-3. `tasks.md` — implementation checklist + JSON dependency graph (waves 0–18) near the end of the file.
+3. `tasks.md` — implementation checklist + JSON dependency graph (waves 0–21) near the end of the file. Includes Task 19 UI wiring (wave 20) and Requirement 18 completion tests (wave 21).
 
 ## Current state (as of this session)
 
