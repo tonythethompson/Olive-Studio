@@ -146,12 +146,23 @@ describe("ArenaPanel", () => {
   });
 
   it("does not call scrollIntoView on initial render", () => {
-    // jsdom does not implement scrollIntoView — define a stub before spying.
-    Element.prototype.scrollIntoView = vi.fn();
-    const scrollSpy = vi.spyOn(Element.prototype, "scrollIntoView");
-    render(<ArenaPanel />);
-    expect(scrollSpy).not.toHaveBeenCalled();
-    scrollSpy.mockRestore();
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, "scrollIntoView");
+    let scrollSpy: ReturnType<typeof vi.spyOn> | undefined;
+
+    try {
+      // jsdom does not implement scrollIntoView — define a stub before spying.
+      Element.prototype.scrollIntoView = vi.fn();
+      scrollSpy = vi.spyOn(Element.prototype, "scrollIntoView");
+      render(<ArenaPanel />);
+      expect(scrollSpy).not.toHaveBeenCalled();
+    } finally {
+      scrollSpy?.mockRestore();
+      if (originalDescriptor) {
+        Object.defineProperty(Element.prototype, "scrollIntoView", originalDescriptor);
+      } else {
+        delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+      }
+    }
   });
 });
 
