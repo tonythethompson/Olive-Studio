@@ -55,18 +55,18 @@ export function mountArenaRoutes(router: Router): void {
 
     // Clamp untrusted timeoutMs with analyzer-visible bounds at this sink
     // (CodeQL js/resource-exhaustion does not treat helper Math.min/max as a barrier).
-    let resolvedTimeoutMs =
+    let safeTimeoutMs =
       typeof timeoutMs === "number" && Number.isFinite(timeoutMs)
-        ? timeoutMs
+        ? Math.trunc(timeoutMs)
         : ARENA_CLOUD_TIMEOUT_MS;
-    if (resolvedTimeoutMs > ARENA_CLOUD_TIMEOUT_MAX_MS) {
-      resolvedTimeoutMs = ARENA_CLOUD_TIMEOUT_MAX_MS;
+    if (safeTimeoutMs > ARENA_CLOUD_TIMEOUT_MAX_MS) {
+      safeTimeoutMs = ARENA_CLOUD_TIMEOUT_MAX_MS;
     }
-    if (resolvedTimeoutMs < ARENA_CLOUD_TIMEOUT_MIN_MS) {
-      resolvedTimeoutMs = ARENA_CLOUD_TIMEOUT_MIN_MS;
+    if (safeTimeoutMs < ARENA_CLOUD_TIMEOUT_MIN_MS) {
+      safeTimeoutMs = ARENA_CLOUD_TIMEOUT_MIN_MS;
     }
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), resolvedTimeoutMs);
+    const timer = setTimeout(() => ac.abort(), safeTimeoutMs);
 
     // Abort upstream work on client gone, but distinguish disconnect from a normal
     // response completion (`res` "close" also fires after a finished write).
