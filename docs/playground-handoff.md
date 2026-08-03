@@ -22,17 +22,18 @@ Parent tasks **6** and **7** are complete (all sub-items landed). Checkpoint **8
 - POSIX path expectations in `arenaOliveOutputs` unit tests
 - Cloudflare credential isolation mocks in `detect.test.ts` / `registry.test.ts`
 
-## Req 18 (partial)
+## Req 18 — Arena convenience sources
 
 | Piece | Status |
 | --- | --- |
-| Path helpers + Olive-output scan + list/file routes | Done |
-| Properties 20 / 20b (server PBT) | Done |
-| `GET /arena/assistant-cloud-snapshot` | **Not done** (Track 2) |
-| ArenaPanel “From Olive outputs” / Assistant snapshot UI | **Not done** (Track 2) |
-| Properties 21 / 21b / 22 | **Not done** (Track 2) |
+| Path helpers + Olive-output scan + list/file routes | Done (prior) |
+| Properties 20 / 20b | Done (prior) |
+| `src/lib/arenaAssistantSnapshot.ts` (`isArenaOpenAiCompatProvider`, `toCloudSlotPatch`, `buildAssistantCloudSnapshot`) | Done |
+| `GET /api/arena/assistant-cloud-snapshot` (`Cache-Control: no-store, private`, `arenaLocalOnly`) | Done |
+| ArenaPanel UI: From Olive outputs + Use active Assistant provider | Done (`ArenaConvenience.tsx`) |
+| Properties 21 / 21b / 22 (≥100 iterations) | Done |
 
-## Deferred (not in core ship)
+## Still deferred
 
 - Req 11 — benchmark input profiles
 - Req 12 — MCP KB via GeminiSidebar

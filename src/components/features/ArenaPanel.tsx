@@ -23,6 +23,7 @@ import {
   buildArenaLocalFeeds,
   DEFAULT_ARENA_TOKENIZER_ID,
 } from "@/lib/arenaLocalInference";
+import { FromOliveOutputs, UseAssistantProviderButton } from "./ArenaConvenience";
 
 /* ------------------------------------------------------------------ */
 /*  Exported types                                                     */
@@ -225,6 +226,10 @@ interface SlotConfigProps {
   onEndpointChange: (val: string) => void;
   onApiKeyChange: (val: string) => void;
   onModelIdChange: (val: string) => void;
+  /** Apply a cloud snapshot as one store patch (Req 18). */
+  onCloudPatch: (
+    patch: Pick<ArenaSlotConfig, "type" | "endpointUrl" | "apiKey" | "modelId">,
+  ) => void;
 }
 
 function SlotConfig({
@@ -242,6 +247,7 @@ function SlotConfig({
   onEndpointChange,
   onApiKeyChange,
   onModelIdChange,
+  onCloudPatch,
 }: SlotConfigProps) {
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-4">
@@ -298,6 +304,7 @@ function SlotConfig({
       {slotType === "local" ? (
         <div className="flex flex-col gap-3">
           <SlotDropZone file={file} onFile={onFile} onClear={onClearFile} />
+          <FromOliveOutputs slotLabel={label} onFile={onFile} />
           <div className="space-y-1.5">
             <Label
               htmlFor={`${label.replace(" ", "-").toLowerCase()}-tokenizer`}
@@ -323,6 +330,7 @@ function SlotConfig({
         </div>
       ) : (
         <div className="flex flex-col gap-3">
+          <UseAssistantProviderButton slotLabel={label} onApply={onCloudPatch} />
           {/* Endpoint URL — required */}
           <div className="space-y-1.5">
             <Label
@@ -863,6 +871,7 @@ export function ArenaPanel() {
           onEndpointChange={(endpointUrl) => setSlotA({ endpointUrl })}
           onApiKeyChange={(apiKey) => setSlotA({ apiKey })}
           onModelIdChange={(modelId) => setSlotA({ modelId })}
+          onCloudPatch={(patch) => setSlotA(patch)}
         />
 
         {/* Slot B */}
@@ -881,6 +890,7 @@ export function ArenaPanel() {
           onEndpointChange={(endpointUrl) => setSlotB({ endpointUrl })}
           onApiKeyChange={(apiKey) => setSlotB({ apiKey })}
           onModelIdChange={(modelId) => setSlotB({ modelId })}
+          onCloudPatch={(patch) => setSlotB(patch)}
         />
       </div>
 
