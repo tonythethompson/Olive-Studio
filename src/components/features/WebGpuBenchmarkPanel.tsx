@@ -286,7 +286,8 @@ export function WebGpuBenchmarkPanel() {
       const ortMod = await import("onnxruntime-web");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ortAny = ortMod as any;
-      ortAny.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
+      ortAny.env.wasm.wasmPaths =
+        "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/";
 
       appendLog("Reading model file...");
       const modelBuffer = await selectedFile.arrayBuffer();
