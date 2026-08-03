@@ -202,6 +202,12 @@ describe("POST /api/arena/cloud-inference", () => {
       { timeoutMs: 0, expectedMs: ARENA_CLOUD_TIMEOUT_MIN_MS },
       { timeoutMs: ARENA_CLOUD_TIMEOUT_MAX_MS + 50_000, expectedMs: ARENA_CLOUD_TIMEOUT_MAX_MS },
       { timeoutMs: 15_000, expectedMs: 15_000 },
+      // In-range values between former bucket edges must be preserved exactly
+      { timeoutMs: 1_001, expectedMs: 1_001 },
+      { timeoutMs: 7_500, expectedMs: 7_500 },
+      { timeoutMs: 45_000, expectedMs: 45_000 },
+      { timeoutMs: ARENA_CLOUD_TIMEOUT_MIN_MS, expectedMs: ARENA_CLOUD_TIMEOUT_MIN_MS },
+      { timeoutMs: ARENA_CLOUD_TIMEOUT_MAX_MS, expectedMs: ARENA_CLOUD_TIMEOUT_MAX_MS },
     ];
 
     for (const { timeoutMs, expectedMs } of cases) {
@@ -295,6 +301,65 @@ describe("POST /api/arena/cloud-inference", () => {
     expect(res.status).toBe(504);
     const body = (await res.json()) as { error: string };
     expect(body.error).toMatch(/timed out/i);
+  });
+
+  it("returns controlled 502 when upstream error body exceeds size limit (not upstream status)", async () => {
+    mockedPinnedFetch.mockResolvedValue({
+      status: 503,
+      ok: false,
+      text: async () => {
+        throw new Error("Upstream response exceeded maximum allowed size");
+      },
+      json: async () => ({}),
+    });
+
+    const res = await postCloudInference({
+      endpointUrl: "https://api.example.com/v1",
+      prompt: "hello",
+    });
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({
+      error: "Upstream response exceeded maximum allowed size",
+    });
+  });
+
+  it("returns controlled 502 when successful upstream body exceeds size limit", async () => {
+    mockedPinnedFetch.mockResolvedValue({
+      status: 200,
+      ok: true,
+      text: async () => "",
+      json: async () => {
+        throw new Error("Upstream response exceeded maximum allowed size");
+      },
+    });
+
+    const res = await postCloudInference({
+      endpointUrl: "https://api.example.com/v1",
+      prompt: "hello",
+    });
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({
+      error: "Upstream response exceeded maximum allowed size",
+    });
+  });
+
+  it("preserves upstream status for ordinary non-2xx bodies within the size limit", async () => {
+    mockedPinnedFetch.mockResolvedValue({
+      status: 429,
+      ok: false,
+      text: async () => "rate limited",
+      json: async () => ({}),
+    });
+
+    const res = await postCloudInference({
+      endpointUrl: "https://api.example.com/v1",
+      prompt: "hello",
+    });
+    expect(res.status).toBe(429);
+    expect(await res.json()).toMatchObject({
+      error: "Upstream error 429",
+      detail: "rate limited",
+    });
   });
 
   it("does not write a JSON error body when the client disconnects during upstream body read", async () => {

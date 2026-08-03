@@ -3,30 +3,14 @@
  * Cloud inference proxy for the Arena sub-view in the Playground tab.
  */
 import type { Router } from "express";
-import {
-  ARENA_CLOUD_TIMEOUT_MAX_MS,
-  ARENA_CLOUD_TIMEOUT_MIN_MS,
-  ARENA_CLOUD_TIMEOUT_MS,
-} from "../../lib/arenaConstants.ts";
+import { resolveCloudTimeoutMs } from "../../lib/arenaConstants.ts";
 import { arenaLocalOnly } from "../middleware/localOnly.ts";
 import { arenaProxyRateLimit } from "../middleware/rateLimit.ts";
 import { pinnedFetch, SsrfPolicyError } from "../services/arena/ssrfGuard.ts";
 
-/**
- * Map an untrusted timeoutMs to a fixed literal budget in [MIN, MAX].
- *
- * Returns only numeric literals so the setTimeout sink is not user-tainted
- * (CodeQL js/resource-exhaustion). Semantically still clamps into the same
- * inclusive range as `resolveCloudTimeoutMs`.
- */
-function cloudTimeoutBudgetMs(raw: unknown): number {
-  if (typeof raw !== "number" || !Number.isFinite(raw)) return ARENA_CLOUD_TIMEOUT_MS;
-  if (raw <= ARENA_CLOUD_TIMEOUT_MIN_MS) return 1_000;
-  if (raw <= 5_000) return 5_000;
-  if (raw <= 15_000) return 15_000;
-  if (raw <= 30_000) return 30_000;
-  if (raw <= 60_000) return 60_000;
-  return ARENA_CLOUD_TIMEOUT_MAX_MS;
+/** True when pinnedFetch/readBody rejected an oversized upstream payload. */
+function isUpstreamBodySizeLimitError(err: unknown): boolean {
+  return err instanceof Error && err.message.includes("exceeded maximum allowed size");
 }
 
 /**
@@ -70,23 +54,10 @@ export function mountArenaRoutes(router: Router): void {
       messages: [{ role: "user", content: prompt }],
     });
 
-    // Budget is chosen from a closed set of literals; pass the literal into
-    // setTimeout so js/resource-exhaustion cannot see a user-tainted delay.
-    const resolvedTimeoutMs = cloudTimeoutBudgetMs(timeoutMs);
+    // Exact clamp (preserve in-range values like 1001) — same semantics as the client.
+    const resolvedTimeoutMs = resolveCloudTimeoutMs(timeoutMs);
     const ac = new AbortController();
-    const abortUpstream = () => ac.abort();
-    const timer =
-      resolvedTimeoutMs === 1_000
-        ? setTimeout(abortUpstream, 1_000)
-        : resolvedTimeoutMs === 5_000
-          ? setTimeout(abortUpstream, 5_000)
-          : resolvedTimeoutMs === 15_000
-            ? setTimeout(abortUpstream, 15_000)
-            : resolvedTimeoutMs === 60_000
-              ? setTimeout(abortUpstream, 60_000)
-              : resolvedTimeoutMs === ARENA_CLOUD_TIMEOUT_MAX_MS
-                ? setTimeout(abortUpstream, 120_000)
-                : setTimeout(abortUpstream, 30_000);
+    const timer = setTimeout(() => ac.abort(), resolvedTimeoutMs);
 
     // Abort upstream work on client gone, but distinguish disconnect from a normal
     // response completion (`res` "close" also fires after a finished write).
@@ -124,6 +95,9 @@ export function mountArenaRoutes(router: Router): void {
           // Preserve timeout / disconnect AbortError for the outer catch (do not
           // convert abort into an empty upstream-error detail).
           if (readErr instanceof Error && readErr.name === "AbortError") throw readErr;
+          // Oversized upstream error bodies → controlled 502 (not the upstream status).
+          if (isUpstreamBodySizeLimitError(readErr)) throw readErr;
+          // Other read failures: fall through with empty detail, preserve upstream status.
         }
         if (clientDisconnected || res.writableEnded || res.destroyed) return;
         return res.status(upstream.status).json({
@@ -132,9 +106,15 @@ export function mountArenaRoutes(router: Router): void {
         });
       }
 
-      const data = (await upstream.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-      };
+      let data: { choices?: Array<{ message?: { content?: string } }> };
+      try {
+        data = (await upstream.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+      } catch (readErr: unknown) {
+        // AbortError and size-limit errors are classified in the outer catch.
+        throw readErr instanceof Error ? readErr : new Error(String(readErr));
+      }
       if (clientDisconnected || res.writableEnded || res.destroyed) return;
       const text = data?.choices?.[0]?.message?.content ?? JSON.stringify(data);
       return res.json({ output: text });
@@ -142,11 +122,16 @@ export function mountArenaRoutes(router: Router): void {
       // Client already left — do not serialize timeout/gateway JSON onto a closed socket.
       if (clientDisconnected || res.writableEnded || res.destroyed || res.headersSent) return;
       const isTimeout = err instanceof Error && err.name === "AbortError";
+      const isSizeLimit = isUpstreamBodySizeLimitError(err);
       const message = err instanceof Error ? err.message : String(err);
       // Policy / SSRF rejections are client errors, not bad gateway
       const isPolicy = err instanceof SsrfPolicyError;
       return res.status(isTimeout ? 504 : isPolicy ? 400 : 502).json({
-        error: isTimeout ? `Request timed out after ${resolvedTimeoutMs}ms` : message,
+        error: isTimeout
+          ? `Request timed out after ${resolvedTimeoutMs}ms`
+          : isSizeLimit
+            ? "Upstream response exceeded maximum allowed size"
+            : message,
       });
     } finally {
       clearTimeout(timer);

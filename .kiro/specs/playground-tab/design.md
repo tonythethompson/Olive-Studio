@@ -2048,27 +2048,27 @@ Independent per slot. Switching type clears the opposite-mode fields for that sl
 
 ### Correctness Properties
 
-#### Property 20: Olive output downloads reject escapes and non-models
+#### Property 20: Olive output downloads reject escapes, non-models, and client path params
 
-*For any* download request that uses a client-supplied `path`/`absolutePath`, an unknown id, a path that after canonicalization is not inside any resolved Olive_Output_Root, a non-regular file, or a non-`.onnx`/`.ort` extension, `GET /api/arena/olive-outputs/file` returns a 4xx status and an empty body (no model bytes). *For any* opaque id that still resolves to an in-root regular `.onnx`/`.ort` under the size limit, the endpoint returns 200 with non-empty bytes.
+*For any* `GET /api/arena/olive-outputs/file` request that includes client-supplied `path` or `absolutePath` (alone or alongside `id`), THE server SHALL reject the request with a 4xx status and an empty body (no JSON error payload and no model bytes) — these parameters never select a file. *For any* download that uses an unknown opaque id, an id that resolves outside Olive_Output_Roots, a non-regular file, or a non-`.onnx`/`.ort` extension, THE server likewise returns 4xx with an empty body. *For any* opaque id that still resolves to an in-root regular `.onnx`/`.ort` under the size limit (and no disallowed path query params), the endpoint returns 200 with non-empty bytes.
 
 **Validates: Requirement 18.4**
 
 #### Property 20b: List/download roots are server-bound
 
-*For any* list or download request, Olive_Output_Roots are taken only from server-owned configuration. Query parameters `cacheDir`, `outputDir`, `path`, and `absolutePath` are **rejected** (empty `400`/`403` body) — never silently ignored. List payloads never include filesystem paths (only root labels, opaque ids, and relative `displayPath` metadata).
+*For any* list (`GET /api/arena/olive-outputs`) or download request, Olive_Output_Roots are taken only from server-owned configuration. Query parameters `cacheDir` and `outputDir` are **rejected** (empty `400`/`403` body) — never silently ignored and never used to widen roots. Download additionally rejects `path` / `absolutePath` per Property 20. List payloads never include filesystem paths (only root labels, opaque ids, and relative `displayPath` metadata).
 
 **Validates: Requirement 18.2, 18.4**
 
 #### Property 21: Assistant snapshot eligibility matches OpenAI-compat + outbound policy
 
-*For any* active provider descriptor, `GET /api/arena/assistant-cloud-snapshot` returns `eligible: true` only when `isArenaOpenAiCompatProvider` is true (including the shared `pinnedFetch` endpoint policy) **and** endpoint URL + model id can be resolved. Non-compat providers, private/loopback destinations without override, and missing providers always return `eligible: false` with a non-empty `reason`, never a partial credential payload.
+*For any* active provider descriptor, `GET /api/arena/assistant-cloud-snapshot` returns `eligible: true` only when `isArenaOpenAiCompatProvider` is true (including the shared `pinnedFetch` endpoint policy) **and** endpoint URL + model id can be resolved. Non-compat providers, private/loopback destinations without override, and missing providers always return `{ eligible: false, reason: string }` (HTTP 200) — the failure shape only, with **no** `apiKey`, `endpointUrl`, or `modelId` fields present (not null, absent).
 
 **Validates: Requirements 18.7, 18.8**
 
 #### Property 21b: Snapshot credentials require the access boundary
 
-*For any* caller that fails the Arena local-first access boundary (non-loopback without `OLIVE_ARENA_ALLOW_REMOTE`), `GET /api/arena/assistant-cloud-snapshot` returns 403 and an empty/no-credential body.
+*For any* caller that fails the Arena local-first access boundary (non-loopback without `OLIVE_ARENA_ALLOW_REMOTE`), `GET /api/arena/assistant-cloud-snapshot` returns 403 and a body that contains **none** of `apiKey`, `endpointUrl`, or `modelId` (empty body or an error object without those keys).
 
 **Validates: Requirement 18.9**
 
@@ -2082,14 +2082,15 @@ Independent per slot. Switching type clears the opposite-mode fields for that sl
 
 #### Server (`vitest.server.config.ts`)
 
-- Trusted root binding: list/download reject (empty 400/403) client-supplied `cacheDir`/`outputDir`/`path`/`absolutePath`; roots come from server config only (Property 20b)
+- Trusted root binding: list rejects (empty 400/403) client-supplied `cacheDir`/`outputDir`/`path`/`absolutePath`; download rejects `path`/`absolutePath`/`cacheDir`/`outputDir` the same way (Property 20 + 20b); roots come from server config only
 - Opaque ids: list entries expose `id` without absolute paths; `roots[]` has labels only (no `path`); download by id → 200; unknown id → 4xx empty body
 - Path sandbox: in-root model id → 200; traversal / outside root / symlink escape → 403/400 empty body (Property 20)
+- Explicit path-param rejection: `GET .../file?path=...` or `?absolutePath=...` (with or without `id`) → 4xx empty body (Property 20)
 - Non-model rejection: `.json` / `.bin` / directories under roots are not downloadable (Property 20)
 - Size limit: oversized model file → 4xx empty body
 - List: seeds temp cache/output dirs; recent is mtime-ordered and ≤ 10; extensions other than `.onnx`/`.ort` excluded
-- Snapshot eligibility: mock openai-compat public host → `eligible: true`; gemini/codex → `eligible: false`; private/loopback baseUrl without override → `eligible: false`; with `OLIVE_ALLOW_LOOPBACK_HTTP` → allowed when policy says so (Property 21)
-- Snapshot access control: non-loopback caller → 403 without `apiKey` (Property 21b); loopback caller may receive credential payload when eligible
+- Snapshot eligibility: mock openai-compat public host → `eligible: true`; gemini/codex → `eligible: false` with **only** `{ eligible, reason }` (assert `apiKey`/`endpointUrl`/`modelId` are undefined); private/loopback baseUrl without override → `eligible: false` same shape; with `OLIVE_ALLOW_LOOPBACK_HTTP` → allowed when policy says so (Property 21)
+- Snapshot access control: non-loopback caller → 403 whose body contains none of `apiKey`, `endpointUrl`, `modelId` (Property 21b); loopback caller may receive credential payload when eligible
 - Snapshot Cache-Control: eligible, ineligible, and forbidden responses include `Cache-Control: no-store, private`
 - Cloud-inference access control: non-loopback → 403; loopback passes through to rate limit / proxy
 - Opaque id↔path resolution helpers (server-only module under `src/server/services/playground/`)
@@ -2104,3 +2105,4 @@ Independent per slot. Switching type clears the opposite-mode fields for that sl
 
 - Olive select fills local `file` from opaque id download; empty state keeps drop-zone
 - Assistant fill / soft-fail; Slot A fill does not change Slot B
+- Snapshot request uses `cache: "no-store"`: spy/mock `fetch` on "Use active Assistant provider" and assert the RequestInit (or equivalent options) includes `cache: "no-store"`; leave fill / soft-fail / Slot A–B isolation assertions unchanged
