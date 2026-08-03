@@ -42,11 +42,10 @@ app.use((req, res, next) => {
     // Exact match for Tauri origins
     allowed = true;
   } else {
-    // Parse URL to validate hostname and port for http origins
+    // Parse URL to validate hostname for http origins (any port allowed for local/Tauri)
     try {
       const url = new URL(origin);
       const hostname = url.hostname;
-      const port = url.port ? parseInt(url.port, 10) : url.protocol === "https:" ? 443 : 80;
 
       // Allow localhost and 127.0.0.1 with any port for dev/Tauri
       if (hostname === "localhost" || hostname === "127.0.0.1") {

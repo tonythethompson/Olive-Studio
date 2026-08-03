@@ -5,8 +5,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import express from "express";
-import http from "node:http";
-import type { Server } from "node:http";
+import http, { type Server } from "node:http";
 import {
   ARENA_CLOUD_TIMEOUT_MAX_MS,
   ARENA_CLOUD_TIMEOUT_MIN_MS,
