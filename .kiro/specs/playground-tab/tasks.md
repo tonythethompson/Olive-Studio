@@ -27,7 +27,7 @@ Adds a fourth top-level "Playground" navigation entry to the Olive Studio sideba
     - `setSlotA` / `setSlotB` apply partial patches via spread: `{ ...s.slotA, ...patch }`
     - _Requirements: 2.5, 5.1–5.3_
 
-- [ ] 3. Create `src/server/routes/arena.ts` and register it in `server.ts`
+- [x] 3. Create `src/server/routes/arena.ts` and register it in `server.ts`
   - [x] 3.1 Implement `mountArenaRoutes(router: Router)` with `POST /arena/cloud-inference`
     - Validate `endpointUrl` (required, must be `http:` or `https:` protocol only)
     - Validate `prompt` (required string)
@@ -46,6 +46,12 @@ Adds a fourth top-level "Playground" navigation entry to the Olive Studio sideba
     - Import `mountArenaRoutes` from `./src/server/routes/arena.ts`
     - Create `const arenaRouter = Router()`, call `mountArenaRoutes(arenaRouter)`, mount with `app.use("/api", arenaRouter)` following the existing pattern
     - Place the mount before the API 404 fallback handler
+    - _Requirements: 7.1_
+  - [x] 3.4 Enforce a local-first access boundary on Arena proxy routes
+    - Apply `arenaLocalOnly` (loopback remoteAddress check) ahead of `arenaProxyRateLimit` on `POST /arena/cloud-inference`
+    - Reject non-loopback callers with `403` unless `OLIVE_ARENA_ALLOW_REMOTE=true`
+    - Cover unauthorized / non-local rejection in middleware unit tests (route suite may passthrough-mock the guard)
+    - Note: the Express server binds `0.0.0.0`; access control is a loopback-only middleware gate (`arenaLocalOnly` on `remoteAddress`, rejecting reverse-proxy forwarding headers). `OLIVE_ARENA_ALLOW_REMOTE=true` disables this gate. CORS alone is insufficient.
     - _Requirements: 7.1_
 
 - [x] 4. Clean up `ExecutionWorkspace.tsx` — remove Browser Test and Benchmark
@@ -304,6 +310,52 @@ Adds a fourth top-level "Playground" navigation entry to the Olive Studio sideba
     - Opening the sidebar for a diagnostic does not change the Playground section's scroll position
     - _Requirements: 12.1, 12.3, 12.4, 12.5, 12.6, 12.7, 12.9, 12.10, 12.11_
 
+- [ ] 19. Arena slot convenience sources (Requirement 18 — schedule after ArenaPanel/core Task 6 is stable)
+  - [ ] 19.1 Add shareable root/path helpers and OpenAI-compat gate (**before 19.2 / 19.3**)
+    - Create `src/lib/arenaOliveOutputs.ts` with `OliveOutputEntry` (opaque `id`, no client absolutePath), `resolveOliveOutputRoots`, and `isPathInsideRoots` only — no id↔path map in the browser graph
+    - Put opaque ID-to-path minting/resolution under `src/server/services/playground/` (e.g. beside `oliveOutputScan.ts`); client-facing APIs return opaque ids / display metadata only, never filesystem paths
+    - Create `src/lib/arenaAssistantSnapshot.ts` with `isArenaOpenAiCompatProvider` (shared outbound policy with `pinnedFetch` / `assertUrlPolicy`) and a pure `toCloudSlotPatch(snapshot)` mapper
+    - Default roots (server-owned): empty `cacheDir` → `~/.cache/olive`; missing `outputDir` → `./models/optimized`
+    - _Requirements: 18.2, 18.4, 18.8_
+  - [ ] 19.2 Extend `mountArenaRoutes` with Olive-output list + sandboxed file fetch (**depends on 19.1**)
+    - Add `src/server/services/playground/oliveOutputScan.ts` (or equivalent) for bounded FS scan + opaque id map; never log file contents
+    - `GET /arena/olive-outputs` — no client root/path query params; scan server-owned Olive_Output_Roots; validate each discovered candidate (containment / regular file / `.onnx`|`.ort`) before minting an opaque id; return `{ roots: [{ label }], recent≤10 by mtime, entries }` (cap depth/count); `roots[]` must not include filesystem `path`. Listing does not require a client-supplied id
+    - `GET /arena/olive-outputs/file?id=` — resolve opaque id server-side, revalidate containment / regular file / `.onnx`|`.ort` / size limit, then stream; otherwise 403/400 with empty body (no JSON error payload)
+    - Reject `path` / `absolutePath` / `cacheDir` / `outputDir` query params with empty 400/403
+    - Apply `arenaLocalOnly` **before** `arenaProxyRateLimit` on both routes (same order as cloud-inference)
+    - Do not mark 19.2 complete until server tests cover access control (non-loopback → 403) and rate-limit throttling on both olive-output routes
+    - _Requirements: 18.2, 18.3, 18.4, 18.5_
+  - [ ] 19.3 Add `GET /arena/assistant-cloud-snapshot` (**depends on 19.1**)
+    - Apply `arenaLocalOnly` before handlers; unauthorized/non-local → 403 without `apiKey`
+    - Set `Cache-Control: no-store, private` on eligible, ineligible, and forbidden responses
+    - Read active Assistant provider from the same runtime/saved source as `GET /api/ai/provider`
+    - If OpenAI_Compat (including outbound endpoint policy) and fields resolvable → `{ eligible: true, endpointUrl, apiKey, modelId, providerLabel }`
+    - Else → `{ eligible: false, reason }` (HTTP 200); never return a partial credential payload
+    - Do not log `apiKey`
+    - _Requirements: 18.7, 18.8, 18.9_
+  - [ ] 19.4 Wire convenience UI into `ArenaPanel` slot configuration (**depends on 19.1–19.3**)
+    - Local mode: "From Olive outputs" under the drop-zone (recent + browse); on select, fetch bytes by opaque id → `File` → `setSlotX({ file })`; empty/error states per Req 18.5
+    - Cloud mode: "Use active Assistant provider"; fetch snapshot with `cache: "no-store"`; on success snapshot into editable cloud fields; on ineligible show `reason` without clearing fields
+    - Per-slot isolation; no third `ArenaSlotConfig.type`
+    - Do not send client-owned root paths in list/download requests
+    - _Requirements: 18.1, 18.3, 18.5, 18.6, 18.7, 18.8, 18.10, 18.11_
+  - [ ] 19.5 Tests for Requirement 18 (**depends on completed 19.1–19.4**; completion gate for Req 18)
+    - **PBT (fast-check, min 100 iterations each)** with tags `// Feature: playground-tab, Property N`:
+      - Property 20 — download rejects escapes / non-models / zero-byte / oversize (empty 4xx body); valid downloads return non-empty bytes
+      - Property 20b — list/download **reject** `cacheDir`/`outputDir`/`path`/`absolutePath` (not ignore); list payloads expose labels/ids/`displayPath` only
+      - Property 21 — snapshot eligibility matches OpenAI-compat + outbound policy
+      - Property 21b — with `OLIVE_ARENA_ALLOW_REMOTE` off/unset, non-loopback snapshot/cloud callers get 403 without credentials; with override on, non-loopback is permitted and rejected bodies still omit credential keys
+      - Property 22 — convenience fill writes the same `ArenaSlotConfig` shape as manual entry
+    - Server unit/route: trusted root binding + opaque id download → 200 non-empty; client-supplied path/roots rejected; list `roots[]` labels only
+    - Server: traversal / outside root / non-model extension / zero-byte / oversize → 4xx empty body
+    - Server: list recent mtime order + extension filter; snapshot eligible vs non-compat vs private URL vs missing
+    - Server: snapshot responses assert `Cache-Control: no-store, private` for eligible, ineligible, and 403
+    - Server: olive-output + cloud-inference access control override-off (non-loopback → 403, no credentials) and override-on (`OLIVE_ARENA_ALLOW_REMOTE=true` permits remote through the gate); rate-limit throttling still covers olive + cloud routes
+    - Unit: `isPathInsideRoots` / `isArenaOpenAiCompatProvider` (public/local/loopback override) / cloud patch mapper
+    - Component: Olive select fills local file; empty state keeps drop-zone; Assistant fill / soft-fail; Slot A fill does not change Slot B
+    - Req 18 is not complete until all five PBT properties above pass at ≥100 iterations
+    - _Requirements: 18.3, 18.4, 18.5, 18.7, 18.8, 18.9, 18.10_
+
 - [ ] 14. Run History persistence (Requirement 16 — new epic, schedule after core Req 1–10 ships)
   - [ ] 14.1 Create `src/server/services/playground/historyStore.ts`
     - Define `BenchmarkRunRecord`, `ArenaSlotSummary`, `ArenaRunRecordEntry` types (co-locate or import from a shared `src/lib/playgroundHistoryTypes.ts` so client and server share one definition)
@@ -401,6 +453,7 @@ Adds a fourth top-level "Playground" navigation entry to the Olive Studio sideba
 - Tasks 14–16 (Requirements 16–17, Run History and Recommendations) are a separate epic on top of core Req 1–10 — schedule after the core Playground ships. Task 15 depends on Task 14 (recommendations read history that must already be persisted and fetchable). No SQLite or other DB dependency is introduced; persistence follows the existing `jobRegistry`-style in-memory-`Map`-plus-filesystem pattern already used in `src/server/services/olive/state.ts`
 - Tasks 17–18 (Requirement 12, MCP knowledge base integration) are **optional and decoupled from core ship** — Requirements 1–10 must pass their full test suite with the MCP server unconfigured or unreachable, and nothing in Tasks 1–13 may depend on `/api/mcp/tool` responding. Requirement 12 was rewritten this session: rather than `MCPDiagnosticCard` embedded inline in three sub-views, all Playground KB diagnostics route through the existing `GeminiSidebar` Audit tab (Playground-Diagnostic_Mode), reached via a "Diagnose with Assistant" click in each sub-view. `playgroundMcpClient.ts` (Task 17.1) is imported **only** by the sidebar — the three sub-views (`InBrowserValidation`, `WebGpuBenchmarkPanel`, `ArenaPanel`) never import it or `useMcpDiagnosticKeyed` directly, they only construct a request object. A future MCP schema change is still one function signature to update, in one file the sidebar alone depends on. That module still closes the gap a bare `try/catch` leaves open: a *reachable* MCP server returning a *reshaped* `200` response degrades to the same `null`/`[]` return as an unreachable one, rather than silently handing the sidebar an `undefined` field it renders unguarded. See design.md "Why the sidebar, not a third inline surface" for the reasoning behind this change
 - Task 15.2's "Get AI recommendation" call (Requirement 17.2) is itself an MCP call and should route through `playgroundMcpClient.ts` once Task 17 exists, rather than adding a seventh inline call site — schedule Task 15 after Task 17 if both are being built, even though the dependency graph below shows them as parallel-eligible waves
+- Task 19 (Requirement 18, Arena convenience sources) depends on Task 3 (`mountArenaRoutes`) and Task 6 (`ArenaPanel` slot UI/store). It does not depend on Tasks 14–18. Prefer scheduling after wave 8 so ArenaPanel churn has settled. Task numbering skips reusing `18.x` because Tasks 18.1–18.4 already cover MCP tests for Requirement 12
 - The `ExecutionWorkspace` cleanup (Task 4) must happen before or concurrently with `PlaygroundPanel` creation (Task 5) to avoid a window where the same components have two entry points
 - All design context documents are available during implementation — tasks reference requirements by number but assume the implementer has read the full design
 
@@ -426,9 +479,15 @@ Adds a fourth top-level "Playground" navigation entry to the Olive Studio sideba
     { "id": 14, "tasks": ["16.1", "16.2", "16.3", "16.4"] },
     { "id": 15, "tasks": ["17.1", "17.2"] },
     { "id": 16, "tasks": ["17.3", "17.4", "17.5", "17.6"] },
-    { "id": 17, "tasks": ["17.7", "18.1", "18.2", "18.3", "18.4"] }
+    { "id": 17, "tasks": ["17.7", "18.1", "18.2", "18.3", "18.4"] },
+    { "id": 18, "tasks": ["19.1"] },
+    { "id": 19, "tasks": ["19.2", "19.3"], "dependsOn": [18] },
+    { "id": 20, "tasks": ["19.4"], "dependsOn": [19] },
+    { "id": 21, "tasks": ["19.5"], "dependsOn": [20] }
   ]
 }
 ```
 
 Waves 9–14 (Run History and Recommendations) and waves 15–17 (MCP integration) are both independent of waves 0–8 in principle but should be scheduled after wave 8 completes in practice, since both extend `WebGpuBenchmarkPanel` and `ArenaPanel`, which core Task 6 and the Requirement 11 work (Task 12.2) are still actively changing. Waves 9–14 and 15–17 have no dependency on each other in the direction the graph shows — but if both are being built in the same pass, build wave 15 (`playgroundMcpClient.ts`) before Task 15.2, since Task 15.2's "Get AI recommendation" call is itself an MCP call and should reuse the consolidated client rather than becoming a seventh inline call site.
+
+Waves 18–21 (Requirement 18, Arena convenience sources) depend only on core Arena Task 6 + Task 3 (`mountArenaRoutes`, including the Task 3.4 access boundary). They do not depend on MCP (Tasks 17–18) or Run History (Tasks 14–16). Schedule after wave 8 once ArenaPanel is stable: shareable helpers (18 / Task 19.1) → routes (19 / Tasks 19.2–19.3) → UI wiring (20 / Task 19.4) → completion tests (21 / Task 19.5).

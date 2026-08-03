@@ -178,7 +178,8 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
     try {
       const ortMod = await import("onnxruntime-web");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (ortMod.env as any).wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
+      (ortMod.env as any).wasm.wasmPaths =
+        "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/";
 
       appendLog("Reading model file...");
       const modelBuffer = await selectedFile.arrayBuffer();

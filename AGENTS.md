@@ -12,7 +12,7 @@
 
 | Command                 | Purpose                                                            |
 | ----------------------- | ------------------------------------------------------------------ |
-| `pnpm dev`              | Express+Vite dev server on http://localhost:3000                   |
+| `pnpm dev`              | Express+Vite dev server on <http://localhost:3000>                   |
 | `pnpm lint`             | tsc --noEmit + eslint (exits 0 with warnings; `--max-warnings 20`) |
 | `pnpm test`             | Unit tests (vitest, src/lib/)                                      |
 | `pnpm test:server`      | Server unit tests (src/server/)                                    |

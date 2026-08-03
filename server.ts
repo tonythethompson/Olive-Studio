@@ -9,6 +9,7 @@ import { mountAiRoutes } from "./src/server/routes/ai.ts";
 import { mountMcpRoutes, performKbSync } from "./src/server/routes/mcp.ts";
 import { mountEnvRoutes } from "./src/server/routes/env.ts";
 import { mountOliveRoutes } from "./src/server/routes/olive.ts";
+import { mountArenaRoutes } from "./src/server/routes/arena.ts";
 import { probeTensorRtLoadable } from "./src/server/services/olive/tensorrt.ts";
 import { probeTensorRtRtxLoadable } from "./src/server/services/olive/tensorrt-rtx.ts";
 import { staticServeRateLimit } from "./src/server/middleware/rateLimit.ts";
@@ -41,11 +42,10 @@ app.use((req, res, next) => {
     // Exact match for Tauri origins
     allowed = true;
   } else {
-    // Parse URL to validate hostname and port for http origins
+    // Parse URL to validate hostname for http origins (any port allowed for local/Tauri)
     try {
       const url = new URL(origin);
       const hostname = url.hostname;
-      const port = url.port ? parseInt(url.port, 10) : url.protocol === "https:" ? 443 : 80;
 
       // Allow localhost and 127.0.0.1 with any port for dev/Tauri
       if (hostname === "localhost" || hostname === "127.0.0.1") {
@@ -101,6 +101,10 @@ const systemProbeOpts: SystemProbeOptions = {
 };
 mountSystemRoutes(systemRouter, systemProbeOpts);
 app.use("/api", systemRouter);
+
+const arenaRouter = Router();
+mountArenaRoutes(arenaRouter);
+app.use("/api", arenaRouter);
 
 // ─── Health check (required by Tauri desktop bootstrap) ────────────────────
 app.get("/api/health", (_req, res) => {
