@@ -13,7 +13,9 @@ Specs originally lived under `.kiro/specs/playground-tab/` (requirements, design
 | Unit tests (navigation, store, arena constants, local inference) | Done |
 | Server arena tests | Done |
 | Component tests (Tasks 11.1–11.5) | Done — co-located under `src/components/features/*.test.tsx` |
-| PBT suite Properties 1, 3, 4, 6, 7, 13 | Done — `src/lib/__tests__/playgroundPBT.test.ts` |
+| PBT suite Properties 1, 4, 6, 13 | Done — pure helpers in `src/lib/__tests__/playgroundPBT.test.ts` |
+| Property 3 (blank cloud prompt blocks run) | Done — helper PBT (`isArenaPromptBlank` ⇔ `trim()`) + behavior component test (cloud slot, blank prompt does not start fetch; prior results preserved) |
+| Property 7 (new run clears prior outputs) | Done — helper PBT (clear replaces any prior slot pair) + behavior component test (second run drops prior outputs before inference) |
 
 Parent tasks **6** and **7** are complete (all sub-items landed). Checkpoint **8** / **13**: lint green (warnings only); unit + server + component + `validate:recipe` green on Windows after:
 

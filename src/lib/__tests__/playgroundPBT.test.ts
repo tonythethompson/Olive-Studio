@@ -35,13 +35,40 @@ describe("playgroundPBT", () => {
     );
   });
 
-  it("Property 3: Whitespace prompt blocks run", () => {
+  it("Property 3: isArenaPromptBlank matches trim() for blank and non-blank prompts", () => {
     // Feature: playground-tab, Property 3
+    // Helper invariant: blank ⇔ trim() === "". UI/behavior (cloud run blocked,
+    // prior results preserved) is covered in ArenaPanel.test.tsx.
     const whitespaceChar = fc.constantFrom(" ", "\t", "\n", "\r");
+
+    // Blank-only inputs must be blank.
     fc.assert(
       fc.property(fc.stringOf(whitespaceChar, { maxLength: 32 }), (prompt) => {
         expect(isArenaPromptBlank(prompt)).toBe(true);
-        expect(prompt.trim() === "").toBe(true);
+      }),
+      { numRuns: 50 },
+    );
+
+    // Contrapositive: any string with a non-whitespace character is not blank.
+    fc.assert(
+      fc.property(
+        fc.tuple(
+          fc.stringOf(whitespaceChar, { maxLength: 8 }),
+          fc.string({ minLength: 1 }).filter((s) => /\S/.test(s)),
+          fc.stringOf(whitespaceChar, { maxLength: 8 }),
+        ),
+        ([pre, mid, post]) => {
+          const prompt = `${pre}${mid}${post}`;
+          expect(isArenaPromptBlank(prompt)).toBe(false);
+        },
+      ),
+      { numRuns: 50 },
+    );
+
+    // Full equivalence over arbitrary strings (covers both directions).
+    fc.assert(
+      fc.property(fc.string(), (prompt) => {
+        expect(isArenaPromptBlank(prompt)).toBe(prompt.trim() === "");
       }),
       { numRuns: 100 },
     );
@@ -81,27 +108,69 @@ describe("playgroundPBT", () => {
     );
   });
 
-  it("Property 7: New run clears prior outputs", () => {
+  it("Property 7: New run clear fully replaces any prior slot results", () => {
     // Feature: playground-tab, Property 7
+    // Models handleRun's replace-with-clearRunResults() step: for any prior
+    // completed/error/running pair, applying the clear yields the idle baseline
+    // (full replace, not merge). Component-level second-run lifecycle is in
+    // ArenaPanel.test.tsx.
+    const statusArb = fc.constantFrom("idle", "running", "done", "error") as fc.Arbitrary<
+      "idle" | "running" | "done" | "error"
+    >;
     fc.assert(
       fc.property(
         fc.record({
           outputA: fc.string(),
           outputB: fc.string(),
-          elapsedA: fc.nat(),
-          elapsedB: fc.nat(),
+          elapsedA: fc.nat({ max: 1_000_000 }),
+          elapsedB: fc.nat({ max: 1_000_000 }),
+          statusA: statusArb,
+          statusB: statusArb,
+          errorA: fc.option(fc.string(), { nil: undefined }),
+          errorB: fc.option(fc.string(), { nil: undefined }),
         }),
-        (_prior) => {
-          // Prior values are only used to document the property's "for any prior state"
-          // premise; clearRunResults always returns the idle baseline regardless of input.
-          void _prior;
+        (prior) => {
+          const priorState = {
+            resultA: {
+              output: prior.outputA,
+              elapsedMs: prior.elapsedA,
+              status: prior.statusA,
+              ...(prior.errorA !== undefined ? { error: prior.errorA } : {}),
+            },
+            resultB: {
+              output: prior.outputB,
+              elapsedMs: prior.elapsedB,
+              status: prior.statusB,
+              ...(prior.errorB !== undefined ? { error: prior.errorB } : {}),
+            },
+          };
+
+          // handleRun does not merge prior into cleared — it assigns clearRunResults()
+          // then sets status to "running" (parallel path). Sequential path runs Slot A
+          // first with the same clear baseline for both slots.
           const cleared = clearRunResults();
-          expect(cleared.resultA.output).toBe("");
-          expect(cleared.resultB.output).toBe("");
-          expect(cleared.resultA.elapsedMs).toBe(0);
-          expect(cleared.resultB.elapsedMs).toBe(0);
-          expect(cleared.resultA.status).toBe("idle");
-          expect(cleared.resultB.status).toBe("idle");
+          const afterClear = {
+            resultA: { ...cleared.resultA, status: "running" as const },
+            resultB: { ...cleared.resultB, status: "running" as const },
+          };
+
+          expect(cleared).toEqual({
+            resultA: { output: "", elapsedMs: 0, status: "idle" },
+            resultB: { output: "", elapsedMs: 0, status: "idle" },
+          });
+          expect(afterClear).toEqual({
+            resultA: { output: "", elapsedMs: 0, status: "running" },
+            resultB: { output: "", elapsedMs: 0, status: "running" },
+          });
+          // Full replace: residual prior keys (e.g. error) are not kept.
+          expect("error" in afterClear.resultA).toBe(false);
+          expect("error" in afterClear.resultB).toBe(false);
+          // Contrast with merge semantics which would retain prior.error.
+          const mergedA = { ...priorState.resultA, ...cleared.resultA };
+          if (prior.errorA !== undefined) {
+            expect("error" in mergedA).toBe(true);
+            expect("error" in afterClear.resultA).toBe(false);
+          }
         },
       ),
       { numRuns: 100 },

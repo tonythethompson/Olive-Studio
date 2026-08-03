@@ -164,6 +164,96 @@ describe("ArenaPanel", () => {
       }
     }
   });
+
+  it("Property 3 behavior: blank cloud prompt does not start execution and keeps prior results", async () => {
+    // Feature: playground-tab, Property 3 (behavior)
+    const user = userEvent.setup();
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ output: "prior-cloud-output" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    render(<ArenaPanel />);
+
+    await user.click(screen.getAllByRole("button", { name: /cloud \/ api/i })[0]!);
+    await user.type(screen.getByLabelText(/endpoint url/i), "https://api.example.com/v1");
+    await user.type(screen.getByLabelText(/^prompt$/i), "first run");
+
+    await act(async () => {
+      await user.click(screen.getByRole("button", { name: /run arena/i }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("prior-cloud-output")).toBeTruthy();
+    });
+    const callsAfterFirstRun = fetchSpy.mock.calls.length;
+    expect(callsAfterFirstRun).toBeGreaterThan(0);
+
+    // Whitespace-only prompt: Run stays disabled, no new network call, prior output remains.
+    await user.clear(screen.getByLabelText(/^prompt$/i));
+    await user.type(screen.getByLabelText(/^prompt$/i), "   \t\n");
+
+    const runButton = screen.getByRole("button", { name: /run arena/i }) as HTMLButtonElement;
+    expect(runButton.disabled).toBe(true);
+    expect(fetchSpy.mock.calls.length).toBe(callsAfterFirstRun);
+    expect(screen.getByText("prior-cloud-output")).toBeTruthy();
+  });
+
+  it("Property 7 behavior: starting a new run clears prior slot outputs", async () => {
+    // Feature: playground-tab, Property 7 (behavior)
+    const user = userEvent.setup();
+    let resolveSecond: ((value: Response) => void) | undefined;
+
+    fetchSpy
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ output: "first-wave-output" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveSecond = resolve;
+          }),
+      );
+
+    render(<ArenaPanel />);
+
+    await user.click(screen.getAllByRole("button", { name: /cloud \/ api/i })[0]!);
+    await user.type(screen.getByLabelText(/endpoint url/i), "https://api.example.com/v1");
+    await user.type(screen.getByLabelText(/^prompt$/i), "wave one");
+
+    await act(async () => {
+      await user.click(screen.getByRole("button", { name: /run arena/i }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("first-wave-output")).toBeTruthy();
+    });
+
+    await act(async () => {
+      await user.click(screen.getByRole("button", { name: /run arena/i }));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("first-wave-output")).toBeNull();
+      expect(screen.getAllByText(/running inference/i).length).toBeGreaterThan(0);
+    });
+
+    // Unblock hanging second request so afterEach cleanup is clean.
+    resolveSecond?.(
+      new Response(JSON.stringify({ output: "second-wave-output" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    await waitFor(() => {
+      expect(screen.getByText("second-wave-output")).toBeTruthy();
+    });
+  });
 });
 
 describe("SlotResultPanel highlighting and error layout (Tasks 11.3, 11.5)", () => {
