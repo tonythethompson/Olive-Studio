@@ -61,6 +61,15 @@ export const githubProxyRateLimit = rateLimit({
   message: { error: "Too many GitHub proxy requests. Please wait a minute and try again." },
 });
 
+/** Arena cloud-inference proxy (outbound fetch to user-configured OpenAI-compatible hosts). */
+export const arenaProxyRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many Arena proxy requests. Please wait a minute and try again." },
+});
+
 /** Static / SPA file serving. */
 export const staticServeRateLimit = rateLimit({
   windowMs: 60_000,

@@ -28,7 +28,7 @@ export function SplittingInspector({ state }: InspectorProps) {
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-center text-xs text-slate-500 font-mono italic">
+          <div className="flex items-center justify-center text-xs text-slate-500 font-sans italic">
             Model Splitting is disabled. Model is compiled as a unified single binary file.
           </div>
         )}

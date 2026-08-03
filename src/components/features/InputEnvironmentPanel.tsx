@@ -1872,7 +1872,7 @@ export function InputEnvironmentPanel({
                                     {reconstructedHistory.length})
                                   </span>
                                   {reconstructedHistory.length === 0 ? (
-                                    <div className="p-3 text-center border border-dashed border-slate-900 rounded-lg bg-slate-950/20 text-[11px] text-slate-500 italic font-mono leading-relaxed">
+                                    <div className="p-3 text-center border border-dashed border-slate-900 rounded-lg bg-slate-950/20 text-[11px] text-slate-500 italic font-sans leading-relaxed">
                                       No reconstructions performed in this workspace session yet.
                                     </div>
                                   ) : (

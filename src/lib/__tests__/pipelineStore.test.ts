@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { usePipelineStore } from "@/lib/stores/pipelineStore";
+import { usePlaygroundStore } from "@/lib/stores/playgroundStore";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 
 describe("pipelineStore", () => {
@@ -81,5 +82,13 @@ describe("pipelineStore", () => {
     const { state } = usePipelineStore.getState();
     expect(state.hfModelId).toBe("meta-llama/Meta-Llama-3-8B");
     expect(state.ihvProvider).toBe("CPUExecutionProvider");
+  });
+
+  it("resetState does not touch playground store fields", () => {
+    usePlaygroundStore.getState().setActiveSubView("arena");
+    usePlaygroundStore.getState().setSlotA({ type: "cloud", apiKey: "sk-test" });
+    usePipelineStore.getState().resetState();
+    expect(usePlaygroundStore.getState().activeSubView).toBe("arena");
+    expect(usePlaygroundStore.getState().slotA.apiKey).toBe("sk-test");
   });
 });
