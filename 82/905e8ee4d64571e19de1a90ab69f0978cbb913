@@ -1,0 +1,35 @@
+src/server/routes/arena.test.ts
+  s_9c2d5cf92056fe::t_35d63e480ba2be 380-384,389-391,393-394,403-405,418-422,431-446,448-453
+.kiro/specs/playground-tab/requirements.md
+  s_9c2d5cf92056fe::t_ffe6b3d8913179 409-410
+src/components/features/ArenaPanel.test.tsx
+  s_9c2d5cf92056fe::t_5b9c31b9b182f0 75,102,106-107,111-112
+  s_9c2d5cf92056fe::t_690e161e24c395 7,76-101,103-105,108-110,113
+.kiro/specs/playground-tab/HANDOFF.md
+  s_9c2d5cf92056fe::t_262b78528da7b5 29
+.kiro/specs/playground-tab/design.md
+  s_9c2d5cf92056fe::t_fb1d91b70dc8e8 2053
+  s_9c2d5cf92056fe::t_4700b710e570d0 2090,2094-2095,2097-2098
+src/components/features/ArenaPanel.tsx
+  s_9c2d5cf92056fe::t_72c8b5e0e95c74 768,780,803,811
+  s_9c2d5cf92056fe::t_b5cc9074157b95 623-638
+  s_9c2d5cf92056fe::t_7a53e88206250b 818
+.kiro/specs/playground-tab/tasks.md
+  s_9c2d5cf92056fe::t_1e4ebac2f1e131 344,347,349-350,353
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "82905e8ee4d64571e19de1a90ab69f0978cbb913",
+  "prompts": {},
+  "sessions": {
+    "s_9c2d5cf92056fe": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9d6192e2-4912-47d4-9625-47deca1abbad",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
