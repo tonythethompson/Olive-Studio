@@ -13,7 +13,7 @@ overrides:
   body-parser@<1.20.6: '>=1.20.6'
   uuid@<11.1.1: '>=11.1.1'
   minimatch: '^10.2.5'
-  brace-expansion: '5.0.8'
+  brace-expansion: '>=5.0.9'
   # @huggingface/transformers → onnxruntime-node / sharp (arena local NLP).
   # Target only vulnerable release lines; bound replacements to compatible majors.
   'adm-zip@<0.6.0': '>=0.6.0 <1.0.0'
