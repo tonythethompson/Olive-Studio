@@ -1,4 +1,4 @@
-export const PIPELINE_VIEW_IDS = ["input", "ihv", "execute"] as const;
+export const PIPELINE_VIEW_IDS = ["input", "ihv", "execute", "playground"] as const;
 
 export type PipelineViewId = (typeof PIPELINE_VIEW_IDS)[number];
 
@@ -70,10 +70,10 @@ function announcePipelineNavBlocked(id: PipelineViewId): void {
 /**
  * Returns true when navigation to `id` is allowed.
  * When blocked, emits {@link OLIVE_PIPELINE_NAV_BLOCKED} for shared UI feedback.
- * Execute remains reachable during a run.
+ * Execute and Playground remain reachable during a run.
  */
 export function attemptPipelineNavigate(id: PipelineViewId): boolean {
-  if (olivePipelineRunning && id !== "execute") {
+  if (olivePipelineRunning && id !== "execute" && id !== "playground") {
     announcePipelineNavBlocked(id);
     return false;
   }

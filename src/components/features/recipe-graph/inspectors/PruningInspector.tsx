@@ -138,7 +138,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
   });
   if (!state.passes.pruning) {
     return (
-      <p className="text-sm text-slate-500 font-mono italic text-center py-4">
+      <p className="text-sm text-slate-500 font-sans italic text-center py-4">
         Pruning is skipped — weights stay dense.
       </p>
     );

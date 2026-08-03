@@ -18,7 +18,6 @@
   },
   "scripts": {
     "preinstall": "node -e \"if (!/pnpm/.test(process.env.npm_execpath || \\\"\\\")) { console.error('Use pnpm install, not npm install'); process.exit(1); }\"",
-    "postinstall": "husky",
     "dev": "tsx server.ts",
     "generate:recipes": "node scripts/generate-olive-recipes-catalog.mjs",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=esm --packages=external --sourcemap --outfile=dist/server.mjs",
@@ -36,7 +35,6 @@
     "validate:recipe": "tsx scripts/validate-recipe-builder.ts",
     "a11y:scan": "python tools/a11y-scan.py src",
     "eslint": "eslint --max-warnings 20 src/ server.ts",
-    "prepare": "husky",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
     "deepcheck": "tsc --noEmit && prettier --check \"src/**/*.{ts,tsx}\" && eslint",
@@ -46,27 +44,9 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"
   },
-  "lint-staged": {
-    "src/**/*.{ts,tsx}": [
-      "prettier --write",
-      "eslint --fix"
-    ],
-    "server.ts": [
-      "prettier --write",
-      "eslint --fix"
-    ],
-    "src/**/*.css": [
-      "prettier --write"
-    ],
-    "**/*.json": [
-      "prettier --write"
-    ],
-    "**/*.md": [
-      "prettier --write"
-    ]
-  },
   "dependencies": {
     "@google/genai": "^2.8.0",
+    "@huggingface/transformers": "^4.2.0",
     "@mendable/firecrawl-js": "^4.30.1",
     "@openai/codex-sdk": "^0.145.0",
     "@radix-ui/react-accordion": "^1.2.20",
@@ -97,7 +77,7 @@
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^21.2.0",
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.62.1",
     "@storybook/addon-essentials": "^8.6.18",
     "@storybook/react": "^8.6.18",
     "@storybook/react-vite": "^8.6.18",
@@ -107,8 +87,8 @@
     "@testing-library/user-event": "^14.6.1",
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.2",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.65.0",
     "@vitejs/plugin-react": "6.0.5",
@@ -119,9 +99,7 @@
     "eslint": "^9.39.5",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "husky": "^9.1.7",
     "jsdom": "^29.1.1",
-    "lint-staged": "^17.2.0",
     "oxlint": "^1.75.0",
     "prettier": "^3.9.6",
     "rollup-plugin-visualizer": "^7.0.1",
