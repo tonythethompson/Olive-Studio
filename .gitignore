@@ -34,7 +34,7 @@ start-server.bat
 /.claude/
 .review-threads.json
 /dogfood-output/
-/.olive-studio/
+.olive-studio/
 
 # Local Olive optimization outputs (ONNX, footprints, run history)
 /models/
@@ -48,4 +48,14 @@ bun.lock
 /.cursor/hooks/state/continual-learning-index.json
 /.dirac-cache
 /.qoder
-/.serena/project.yml/
+.serena/
+.bobignore
+.clineignore
+.devinignore
+.env.example
+
+
+.serena/
+.storybook/
+.air/
+.kiro/
