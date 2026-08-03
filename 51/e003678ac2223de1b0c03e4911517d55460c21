@@ -1,0 +1,36 @@
+.kiro/specs/playground-tab/design.md
+  s_9c2d5cf92056fe::t_b6a0a6541de1c6 2053,2090
+src/server/services/playground/oliveOutputScan.ts
+  s_9c2d5cf92056fe::t_b6a0a6541de1c6 1-311
+src/lib/arenaOliveOutputs.ts
+  s_9c2d5cf92056fe::t_b6a0a6541de1c6 1-148
+src/server/routes/arena.test.ts
+  s_9c2d5cf92056fe::t_b6a0a6541de1c6 34,108-125,235,237-238,240,258,262-323,362-371,385-391,403-412,425-431,444-451
+.kiro/specs/playground-tab/tasks.md
+  s_9c2d5cf92056fe::t_b6a0a6541de1c6 344,350
+src/server/services/arena/ssrfGuard.ts
+  s_9c2d5cf92056fe::t_b6a0a6541de1c6 277-291,320
+src/server/routes/arena.ts
+  s_9c2d5cf92056fe::t_b6a0a6541de1c6 5-6,10-19,21-57,62-73,75-82,129-131,136-137,160,167-168,170,172,174,188,191,196-198,205,215-270
+src/server/routes/arenaOliveOutputs.test.ts
+  s_9c2d5cf92056fe::t_b6a0a6541de1c6 1-625,629-631,633-668
+  s_9c2d5cf92056fe::t_a5460646472ab1 626-628,632
+src/lib/__tests__/arenaOliveOutputs.test.ts
+  s_9c2d5cf92056fe::t_b6a0a6541de1c6 1-108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "51e003678ac2223de1b0c03e4911517d55460c21",
+  "prompts": {},
+  "sessions": {
+    "s_9c2d5cf92056fe": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9d6192e2-4912-47d4-9625-47deca1abbad",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
