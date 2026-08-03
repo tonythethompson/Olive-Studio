@@ -2,7 +2,7 @@
  * Arena slot convenience sources (Req 18): Olive outputs picker + Assistant snapshot.
  */
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@/components/ui";
+import { Button } from "@/components/ui/Button";
 import { FolderOpen, Sparkles, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import type { OliveOutputEntry } from "@/lib/arenaOliveOutputs";
 import {
