@@ -3,7 +3,11 @@
  * Cloud inference proxy for the Arena sub-view in the Playground tab.
  */
 import type { Router } from "express";
-import { resolveCloudTimeoutMs } from "../../lib/arenaConstants.ts";
+import {
+  ARENA_CLOUD_TIMEOUT_MAX_MS,
+  ARENA_CLOUD_TIMEOUT_MIN_MS,
+  ARENA_CLOUD_TIMEOUT_MS,
+} from "../../lib/arenaConstants.ts";
 import { arenaLocalOnly } from "../middleware/localOnly.ts";
 import { arenaProxyRateLimit } from "../middleware/rateLimit.ts";
 import { pinnedFetch, SsrfPolicyError } from "../services/arena/ssrfGuard.ts";
@@ -49,8 +53,18 @@ export function mountArenaRoutes(router: Router): void {
       messages: [{ role: "user", content: prompt }],
     });
 
-    // Clamp untrusted timeoutMs into [MIN, MAX] so setTimeout never sees 0 / Infinity.
-    const resolvedTimeoutMs = resolveCloudTimeoutMs(timeoutMs);
+    // Clamp untrusted timeoutMs with analyzer-visible bounds at this sink
+    // (CodeQL js/resource-exhaustion does not treat helper Math.min/max as a barrier).
+    let resolvedTimeoutMs =
+      typeof timeoutMs === "number" && Number.isFinite(timeoutMs)
+        ? timeoutMs
+        : ARENA_CLOUD_TIMEOUT_MS;
+    if (resolvedTimeoutMs > ARENA_CLOUD_TIMEOUT_MAX_MS) {
+      resolvedTimeoutMs = ARENA_CLOUD_TIMEOUT_MAX_MS;
+    }
+    if (resolvedTimeoutMs < ARENA_CLOUD_TIMEOUT_MIN_MS) {
+      resolvedTimeoutMs = ARENA_CLOUD_TIMEOUT_MIN_MS;
+    }
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), resolvedTimeoutMs);
 
