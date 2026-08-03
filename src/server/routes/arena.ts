@@ -2,23 +2,84 @@
  * Arena route handlers.
  * Cloud inference proxy for the Arena sub-view in the Playground tab.
  */
-import type { Router } from "express";
+import type { Request, Response, Router } from "express";
+import fs from "node:fs";
 import { resolveCloudTimeoutMs, ARENA_PROMPT_MAX_CHARS } from "../../lib/arenaConstants.ts";
 import { arenaLocalOnly } from "../middleware/localOnly.ts";
 import { arenaProxyRateLimit } from "../middleware/rateLimit.ts";
-import { pinnedFetch, SsrfPolicyError } from "../services/arena/ssrfGuard.ts";
+import {
+  pinnedFetch,
+  SsrfPolicyError,
+  UpstreamBodyTooLargeError,
+} from "../services/arena/ssrfGuard.ts";
+import {
+  hasRejectedOliveOutputQuery,
+  listOliveOutputs,
+  resolveOliveOutputForDownload,
+} from "../services/playground/oliveOutputScan.ts";
 
-/** True when pinnedFetch/readBody rejected an oversized upstream payload. */
-function isUpstreamBodySizeLimitError(err: unknown): boolean {
+/**
+ * Starts an abort timer that invokes the callback after the specified duration.
+ *
+ * @param abort - Callback invoked when the deadline is reached
+ * @param ms - Duration before invoking the callback, in milliseconds
+ * @returns The interval handle used to monitor the deadline
+ */
+function armCloudAbort(abort: () => void, ms: number): ReturnType<typeof setInterval> {
+  const deadline = Date.now() + ms;
+  const timer = setInterval(() => {
+    if (Date.now() >= deadline) {
+      clearInterval(timer);
+      abort();
+    }
+  }, 25);
+  return timer;
+}
+
+/**
+ * Determines whether an error represents an aborted operation.
+ *
+ * @param err - The value to inspect
+ * @returns `true` if `err` is an error named `AbortError`, `false` otherwise.
+ */
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === "AbortError";
+}
+
+/**
+ * Determines whether an error indicates that an upstream response body exceeded its permitted size.
+ *
+ * @param err - The value to inspect
+ * @returns `true` if the error indicates an oversized response body, `false` otherwise.
+ */
+function isBodyTooLarge(err: unknown): boolean {
+  if (err instanceof UpstreamBodyTooLargeError) return true;
+  // Also accept plain Error messages from older/mocked size-limit paths.
   return err instanceof Error && err.message.includes("exceeded maximum allowed size");
 }
 
 /**
- * Registers Arena routes on an Express router.
+ * Determines whether the response client can no longer receive a response.
  *
- * Provides a cloud inference proxy that forwards requests to arbitrary
- * OpenAI-compatible endpoints, avoiding browser-side CORS issues.
- * Outbound fetches use DNS resolve-and-pin SSRF protection.
+ * @param res - The response to inspect
+ * @param clientDisconnected - Whether the client has disconnected
+ * @returns `true` if the client is disconnected or the response is no longer writable, `false` otherwise
+ */
+function clientGone(res: Response, clientDisconnected: boolean): boolean {
+  return clientDisconnected || res.writableEnded || res.destroyed || res.headersSent;
+}
+
+/**
+ * Ends the response with a rejection status.
+ *
+ * @param status - The rejection status code, either 400 or 403
+ */
+function emptyReject(res: Response, status: 400 | 403): void {
+  res.status(status).end();
+}
+
+/**
+ * Registers Arena routes for cloud inference and Olive output access.
  *
  * @param router - Express router on which to register the routes
  */
@@ -65,18 +126,15 @@ export function mountArenaRoutes(router: Router): void {
     // compare against a Date.now() deadline so the sink is not user-controlled.
     const resolvedTimeoutMs = resolveCloudTimeoutMs(timeoutMs);
     const ac = new AbortController();
-    const deadlineMs = Date.now() + resolvedTimeoutMs;
-    const timer = setInterval(() => {
-      if (Date.now() >= deadlineMs) {
-        clearInterval(timer);
-        if (!ac.signal.aborted) ac.abort();
-      }
-    }, 50);
-
+    const timer = armCloudAbort(() => {
+      if (!ac.signal.aborted) ac.abort();
+    }, resolvedTimeoutMs);
     // Abort upstream work on client gone, but distinguish disconnect from a normal
     // response completion (`res` "close" also fires after a finished write).
     let clientDisconnected = false;
     const onClientGone = () => {
+      // Successful completion ends the writable side first. A premature client
+      // disconnect may already set `destroyed` before this listener runs — still abort.
       if (res.writableEnded) return;
       clientDisconnected = true;
       if (!ac.signal.aborted) ac.abort();
@@ -99,21 +157,21 @@ export function mountArenaRoutes(router: Router): void {
         signal: ac.signal,
       });
 
-      if (clientDisconnected || res.writableEnded || res.destroyed) return;
+      if (clientGone(res, clientDisconnected)) return;
 
       if (!upstream.ok) {
         let errText = "";
         try {
           errText = await upstream.text();
         } catch (readErr: unknown) {
-          // Preserve timeout / disconnect AbortError for the outer catch (do not
-          // convert abort into an empty upstream-error detail).
-          if (readErr instanceof Error && readErr.name === "AbortError") throw readErr;
+          // Preserve timeout / disconnect AbortError for the outer catch.
+          if (isAbortError(readErr)) throw readErr;
           // Oversized upstream error bodies → controlled 502 (not the upstream status).
-          if (isUpstreamBodySizeLimitError(readErr)) throw readErr;
+          if (isBodyTooLarge(readErr)) throw readErr;
           // Other read failures: fall through with empty detail, preserve upstream status.
+          errText = "";
         }
-        if (clientDisconnected || res.writableEnded || res.destroyed) return;
+        if (clientGone(res, clientDisconnected)) return;
         return res.status(upstream.status).json({
           error: `Upstream error ${upstream.status}`,
           detail: errText.slice(0, 500),
@@ -127,23 +185,24 @@ export function mountArenaRoutes(router: Router): void {
         };
       } catch (readErr: unknown) {
         // AbortError and size-limit errors are classified in the outer catch.
+        if (isAbortError(readErr) || isBodyTooLarge(readErr)) throw readErr;
         throw readErr instanceof Error ? readErr : new Error(String(readErr));
       }
-      if (clientDisconnected || res.writableEnded || res.destroyed) return;
+      if (clientGone(res, clientDisconnected)) return;
       const text = data?.choices?.[0]?.message?.content ?? JSON.stringify(data);
       return res.json({ output: text });
     } catch (err: unknown) {
       // Client already left — do not serialize timeout/gateway JSON onto a closed socket.
-      if (clientDisconnected || res.writableEnded || res.destroyed || res.headersSent) return;
-      const isTimeout = err instanceof Error && err.name === "AbortError";
-      const isSizeLimit = isUpstreamBodySizeLimitError(err);
+      if (clientGone(res, clientDisconnected)) return;
+      const isTimeout = isAbortError(err);
+      const tooLarge = isBodyTooLarge(err);
       const message = err instanceof Error ? err.message : String(err);
       // Policy / SSRF rejections are client errors, not bad gateway
       const isPolicy = err instanceof SsrfPolicyError;
       return res.status(isTimeout ? 504 : isPolicy ? 400 : 502).json({
         error: isTimeout
           ? `Request timed out after ${resolvedTimeoutMs}ms`
-          : isSizeLimit
+          : tooLarge
             ? "Upstream response exceeded maximum allowed size"
             : message,
       });
@@ -153,4 +212,60 @@ export function mountArenaRoutes(router: Router): void {
       res.off("close", onClientGone);
     }
   });
+
+  router.get("/arena/olive-outputs", arenaLocalOnly, arenaProxyRateLimit, (req: Request, res: Response) => {
+    if (hasRejectedOliveOutputQuery(req.query as Record<string, unknown>)) {
+      return emptyReject(res, 400);
+    }
+    try {
+      const payload = listOliveOutputs();
+      return res.json(payload);
+    } catch (err: unknown) {
+      // Keep the empty 403 client contract; log so scan failures are distinguishable
+      // from middleware access-boundary rejections in server logs.
+      console.error("[arena/olive-outputs] listOliveOutputs failed:", err);
+      return emptyReject(res, 403);
+    }
+  });
+
+  router.get(
+    "/arena/olive-outputs/file",
+    arenaLocalOnly,
+    arenaProxyRateLimit,
+    (req: Request, res: Response) => {
+      if (hasRejectedOliveOutputQuery(req.query as Record<string, unknown>)) {
+        return emptyReject(res, 400);
+      }
+      let resolved: ReturnType<typeof resolveOliveOutputForDownload>;
+      try {
+        resolved = resolveOliveOutputForDownload(req.query.id);
+      } catch (err: unknown) {
+        // Sync FS / traversal throws must not fall through to Express's default handler.
+        console.error("[arena/olive-outputs/file] resolveOliveOutputForDownload failed:", err);
+        return emptyReject(res, 400);
+      }
+      if (!resolved.ok) {
+        return emptyReject(res, resolved.status);
+      }
+
+      res.setHeader("Content-Type", "application/octet-stream");
+      const safeBasename = resolved.basename.replace(/[\u0000-\u001f\u007f"\\]/g, "_");
+      const asciiFallback = safeBasename.replace(/[^\x20-\x7e]/g, "_");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(safeBasename)}`,
+      );
+      // Omit Content-Length: Olive jobs may still be writing these files, so a
+      // pre-declared length can silently truncate under chunked transfer instead.
+      const stream = fs.createReadStream(resolved.absolutePath);
+      const onClose = () => stream.destroy();
+      res.once("close", onClose);
+      stream.on("error", () => {
+        if (!res.headersSent) {
+          emptyReject(res, 403);
+        } else res.destroy();
+      });
+      stream.pipe(res);
+    },
+  );
 }

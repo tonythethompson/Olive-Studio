@@ -31,7 +31,7 @@ vi.mock("../services/arena/ssrfGuard.ts", async (importOriginal) => {
   };
 });
 
-import { pinnedFetch, SsrfPolicyError } from "../services/arena/ssrfGuard.ts";
+import { pinnedFetch, SsrfPolicyError, UpstreamBodyTooLargeError } from "../services/arena/ssrfGuard.ts";
 import { mountArenaRoutes } from "./arena.ts";
 
 const mockedPinnedFetch = vi.mocked(pinnedFetch);
@@ -103,6 +103,24 @@ async function postCloudInference(body: unknown): Promise<LocalResponse> {
     req.write(payload);
     req.end();
   });
+}
+
+/** Shared upstream Response-like stub for pinnedFetch mocks. */
+function mockUpstream(
+  overrides: Partial<{
+    status: number;
+    ok: boolean;
+    text: () => Promise<string>;
+    json: () => Promise<unknown>;
+  }> = {},
+) {
+  return {
+    status: 200,
+    ok: true,
+    text: async () => "",
+    json: async () => ({ choices: [{ message: { content: "ok" } }] }),
+    ...overrides,
+  };
 }
 
 describe("POST /api/arena/cloud-inference", () => {
@@ -214,9 +232,12 @@ describe("POST /api/arena/cloud-inference", () => {
       { timeoutMs: 0, expectedMs: ARENA_CLOUD_TIMEOUT_MIN_MS },
       { timeoutMs: ARENA_CLOUD_TIMEOUT_MAX_MS + 50_000, expectedMs: ARENA_CLOUD_TIMEOUT_MAX_MS },
       { timeoutMs: 15_000, expectedMs: 15_000 },
-      // In-range values between former bucket edges must be preserved exactly
+      // In-range values between former bucket edges must be preserved exactly.
       { timeoutMs: 1_001, expectedMs: 1_001 },
+      { timeoutMs: 4_999, expectedMs: 4_999 },
+      { timeoutMs: 5_001, expectedMs: 5_001 },
       { timeoutMs: 7_500, expectedMs: 7_500 },
+      { timeoutMs: 29_999, expectedMs: 29_999 },
       { timeoutMs: 45_000, expectedMs: 45_000 },
       { timeoutMs: ARENA_CLOUD_TIMEOUT_MIN_MS, expectedMs: ARENA_CLOUD_TIMEOUT_MIN_MS },
       { timeoutMs: ARENA_CLOUD_TIMEOUT_MAX_MS, expectedMs: ARENA_CLOUD_TIMEOUT_MAX_MS },
@@ -234,8 +255,70 @@ describe("POST /api/arena/cloud-inference", () => {
       });
       expect(res.status).toBe(504);
       const body = (await res.json()) as { error: string };
-      expect(body.error).toContain(String(expectedMs));
+      expect(body.error).toBe(`Request timed out after ${expectedMs}ms`);
     }
+  });
+
+  it("returns controlled 502 when an error-body read exceeds the size limit", async () => {
+    mockedPinnedFetch.mockResolvedValue(
+      mockUpstream({
+        status: 500,
+        ok: false,
+        text: async () => {
+          throw new UpstreamBodyTooLargeError();
+        },
+        json: async () => ({}),
+      }),
+    );
+
+    const res = await postCloudInference({
+      endpointUrl: "https://api.example.com/v1",
+      prompt: "hello",
+    });
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({
+      error: "Upstream response exceeded maximum allowed size",
+    });
+  });
+
+  it("returns controlled 502 when a successful body exceeds the size limit", async () => {
+    mockedPinnedFetch.mockResolvedValue(
+      mockUpstream({
+        json: async () => {
+          throw new UpstreamBodyTooLargeError();
+        },
+      }),
+    );
+
+    const res = await postCloudInference({
+      endpointUrl: "https://api.example.com/v1",
+      prompt: "hello",
+    });
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({
+      error: "Upstream response exceeded maximum allowed size",
+    });
+  });
+
+  it("preserves upstream status for ordinary non-2xx error bodies", async () => {
+    mockedPinnedFetch.mockResolvedValue(
+      mockUpstream({
+        status: 503,
+        ok: false,
+        text: async () => "service unavailable detail",
+        json: async () => ({}),
+      }),
+    );
+
+    const res = await postCloudInference({
+      endpointUrl: "https://api.example.com/v1",
+      prompt: "hello",
+    });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({
+      error: "Upstream error 503",
+      detail: "service unavailable detail",
+    });
   });
 
   it("maps SsrfPolicyError to 400", async () => {
@@ -276,14 +359,16 @@ describe("POST /api/arena/cloud-inference", () => {
   });
 
   it("maps AbortError during upstream error-body text() to 504 (not empty 502 detail)", async () => {
-    mockedPinnedFetch.mockResolvedValue({
-      status: 502,
-      ok: false,
-      text: async () => {
-        throw Object.assign(new Error("Aborted"), { name: "AbortError" });
-      },
-      json: async () => ({}),
-    });
+    mockedPinnedFetch.mockResolvedValue(
+      mockUpstream({
+        status: 502,
+        ok: false,
+        text: async () => {
+          throw Object.assign(new Error("Aborted"), { name: "AbortError" });
+        },
+        json: async () => ({}),
+      }),
+    );
 
     const res = await postCloudInference({
       endpointUrl: "https://api.example.com/v1",
@@ -297,14 +382,13 @@ describe("POST /api/arena/cloud-inference", () => {
   });
 
   it("maps AbortError during upstream.json() body read to 504", async () => {
-    mockedPinnedFetch.mockResolvedValue({
-      status: 200,
-      ok: true,
-      text: async () => "",
-      json: async () => {
-        throw Object.assign(new Error("Aborted"), { name: "AbortError" });
-      },
-    });
+    mockedPinnedFetch.mockResolvedValue(
+      mockUpstream({
+        json: async () => {
+          throw Object.assign(new Error("Aborted"), { name: "AbortError" });
+        },
+      }),
+    );
 
     const res = await postCloudInference({
       endpointUrl: "https://api.example.com/v1",
@@ -316,14 +400,16 @@ describe("POST /api/arena/cloud-inference", () => {
   });
 
   it("returns controlled 502 when upstream error body exceeds size limit (not upstream status)", async () => {
-    mockedPinnedFetch.mockResolvedValue({
-      status: 503,
-      ok: false,
-      text: async () => {
-        throw new Error("Upstream response exceeded maximum allowed size");
-      },
-      json: async () => ({}),
-    });
+    mockedPinnedFetch.mockResolvedValue(
+      mockUpstream({
+        status: 503,
+        ok: false,
+        text: async () => {
+          throw new Error("Upstream response exceeded maximum allowed size");
+        },
+        json: async () => ({}),
+      }),
+    );
 
     const res = await postCloudInference({
       endpointUrl: "https://api.example.com/v1",
@@ -336,14 +422,13 @@ describe("POST /api/arena/cloud-inference", () => {
   });
 
   it("returns controlled 502 when successful upstream body exceeds size limit", async () => {
-    mockedPinnedFetch.mockResolvedValue({
-      status: 200,
-      ok: true,
-      text: async () => "",
-      json: async () => {
-        throw new Error("Upstream response exceeded maximum allowed size");
-      },
-    });
+    mockedPinnedFetch.mockResolvedValue(
+      mockUpstream({
+        json: async () => {
+          throw new Error("Upstream response exceeded maximum allowed size");
+        },
+      }),
+    );
 
     const res = await postCloudInference({
       endpointUrl: "https://api.example.com/v1",
@@ -356,12 +441,14 @@ describe("POST /api/arena/cloud-inference", () => {
   });
 
   it("preserves upstream status for ordinary non-2xx bodies within the size limit", async () => {
-    mockedPinnedFetch.mockResolvedValue({
-      status: 429,
-      ok: false,
-      text: async () => "rate limited",
-      json: async () => ({}),
-    });
+    mockedPinnedFetch.mockResolvedValue(
+      mockUpstream({
+        status: 429,
+        ok: false,
+        text: async () => "rate limited",
+        json: async () => ({}),
+      }),
+    );
 
     const res = await postCloudInference({
       endpointUrl: "https://api.example.com/v1",

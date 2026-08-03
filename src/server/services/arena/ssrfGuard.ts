@@ -274,6 +274,21 @@ export type PinnedFetchResult = {
 /** Max buffered upstream body for Arena proxy responses (untrusted endpoints). */
 export const MAX_PINNED_RESPONSE_BYTES = 10 * 1024 * 1024;
 
+/** Thrown when a pinned upstream response exceeds {@link MAX_PINNED_RESPONSE_BYTES}. */
+export class UpstreamBodyTooLargeError extends Error {
+  constructor(message = "Upstream response exceeded maximum allowed size") {
+    super(message);
+    this.name = "UpstreamBodyTooLargeError";
+  }
+}
+
+/**
+ * Buffers an upstream response body while enforcing the maximum allowed size.
+ *
+ * @param res - The upstream response stream to read
+ * @param signal - Optional signal that aborts reading
+ * @returns The complete response body as a buffer
+ */
 function readBody(res: IncomingMessage, signal?: AbortSignal): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -302,7 +317,7 @@ function readBody(res: IncomingMessage, signal?: AbortSignal): Promise<Buffer> {
       total += buf.length;
       if (total > MAX_PINNED_RESPONSE_BYTES) {
         res.destroy(new Error("Response body too large"));
-        finish(new Error("Upstream response exceeded maximum allowed size"));
+        finish(new UpstreamBodyTooLargeError());
         return;
       }
       chunks.push(buf);
