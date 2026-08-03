@@ -1,0 +1,31 @@
+src/server/routes/arena.ts
+  s_9c2d5cf92056fe::t_c417606ad069c5 97,100-108,118,123
+.kiro/specs/playground-tab/design.md
+  s_9c2d5cf92056fe::t_2963786ff19b63 2059
+  s_9c2d5cf92056fe::t_f1fed6774fae96 2085
+.kiro/specs/playground-tab/tasks.md
+  s_9c2d5cf92056fe::t_07a5659ed59324 321-322,324-326
+  s_9c2d5cf92056fe::t_0d6a31ad0aeafc 342-351,353-354,356
+.kiro/specs/playground-tab/HANDOFF.md
+  s_9c2d5cf92056fe::t_e067c5daef0f15 62-63
+src/server/routes/arena.test.ts
+  s_9c2d5cf92056fe::t_f0a9ee56bee069 259-363
+.kiro/specs/playground-tab/requirements.md
+  s_9c2d5cf92056fe::t_5de704dfe0d4a3 407-410
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8fbe0921f1cb15f59b686d0d5726910343ac7db5",
+  "prompts": {},
+  "sessions": {
+    "s_9c2d5cf92056fe": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9d6192e2-4912-47d4-9625-47deca1abbad",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
