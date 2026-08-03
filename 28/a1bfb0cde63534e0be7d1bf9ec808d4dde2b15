@@ -1,0 +1,45 @@
+src/lib/arenaConstants.ts
+  s_9c2d5cf92056fe::t_5c1743325ae385 11-13
+src/lib/stores/playgroundStore.ts
+  s_9c2d5cf92056fe::t_22da52823108ef 1-55
+src/server/services/arena/ssrfGuard.ts
+  s_9c2d5cf92056fe::t_ddee710ba9797b 203-213,257
+src/server/services/arena/ssrfGuard.test.ts
+  s_9c2d5cf92056fe::t_0b4db48f24174c 8
+  s_9c2d5cf92056fe::t_ff94b84ff1ff72 123-139
+src/components/features/PlaygroundPanel.tsx
+  s_9c2d5cf92056fe::t_9165c0cebb2602 59-60
+  s_9c2d5cf92056fe::t_69f373e3326a1d 5
+src/components/features/ArenaPanel.test.tsx
+  s_9c2d5cf92056fe::t_1763a24a521c0a 8,11
+src/lib/__tests__/playgroundStore.test.ts
+  s_9c2d5cf92056fe::t_6b0c33a3c87738 1-42
+src/server/routes/arena.ts
+  s_9c2d5cf92056fe::t_bd723fda2c0dba 35-39
+  s_9c2d5cf92056fe::t_7285823185e6fa 6
+src/components/features/ArenaPanel.tsx
+  s_9c2d5cf92056fe::t_e8b51d73c45d04 20
+  s_9c2d5cf92056fe::t_a94795f91d50a1 690-693
+src/lib/__tests__/pipelineStore.test.ts
+  s_9c2d5cf92056fe::t_a84acc3ac3f06e 87
+  s_9c2d5cf92056fe::t_4add2e285febca 88-89,91-92
+  s_9c2d5cf92056fe::t_be865af393af0c 3
+src/server/routes/arena.test.ts
+  s_9c2d5cf92056fe::t_c3dad863e8e6e0 122-133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "28a1bfb0cde63534e0be7d1bf9ec808d4dde2b15",
+  "prompts": {},
+  "sessions": {
+    "s_9c2d5cf92056fe": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9d6192e2-4912-47d4-9625-47deca1abbad",
+        "model": "default"
+      },
+      "human_author": "tonythethompson <github@trackdub.com>"
+    }
+  }
+}
