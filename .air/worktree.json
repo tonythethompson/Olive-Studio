@@ -1,5 +1,0 @@
-{
-  "setup": {
-    "windows": ["pnpm install --frozen-lockfile"]
-  }
-}
