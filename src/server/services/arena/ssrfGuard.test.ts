@@ -130,4 +130,12 @@ describe("resolvePinnedAddresses", () => {
       resolvePinnedAddresses("10.0.0.5", { allowLoopbackHttp: false }),
     ).rejects.toThrow(/Private/);
   });
+
+  it("propagates AbortError when signal is already aborted", async () => {
+    const ac = new AbortController();
+    ac.abort();
+    await expect(
+      resolvePinnedAddresses("example.com", { allowLoopbackHttp: false }, ac.signal),
+    ).rejects.toMatchObject({ name: "AbortError" });
+  });
 });

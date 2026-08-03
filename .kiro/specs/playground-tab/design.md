@@ -1908,65 +1908,70 @@ A third `"olive-output"` or `"assistant"` `ArenaSlotConfig.type` would fork exec
 
 ### Olive outputs: server scan → File
 
-Browsers cannot list arbitrary folders. The server resolves Olive_Output_Roots, scans for `.onnx`/`.ort`, and serves bytes only inside that sandbox. The client turns those bytes into a Session_Scoped `File` so existing `onnxruntime-web` load paths stay unchanged.
+Browsers cannot list arbitrary folders. The server resolves **server-owned** Olive_Output_Roots, scans for `.onnx`/`.ort`, mints opaque Olive_Output_Artifact_Id values, and serves bytes only for ids that still resolve inside that sandbox. The client turns those bytes into a Session_Scoped `File` so existing `onnxruntime-web` load paths stay unchanged.
 
 ```ts
 // Shared helpers — prefer src/lib/arenaOliveOutputs.ts (pure root resolution + path containment)
 // and implement FS IO in src/server/services/playground/oliveOutputScan.ts
 
 export interface OliveOutputEntry {
-  id: string;          // stable id for list keys (hash of resolved path or path itself)
-  displayPath: string; // path relative to its root, for UI
-  absolutePath: string;// returned only on list; file fetch accepts this or root-relative form
+  id: string;          // opaque Olive_Output_Artifact_Id (server-minted; not a filesystem path)
+  displayPath: string; // path relative to its root, for UI only
   sizeBytes: number;
   mtimeMs: number;
   rootLabel: "cache" | "output";
+  // absolutePath stays server-internal — never serialize to the client
 }
 
 export function resolveOliveOutputRoots(opts: {
-  cacheDir: string;           // from pipelineStore; "" → default ~/.cache/olive
-  outputDir?: string;         // from recipe engine.output_dir when known; else ./models/optimized
+  // Server-owned config only (pipeline/runtime). Never accept these from the browser.
+  cacheDir: string;           // "" → default ~/.cache/olive
+  outputDir?: string;         // recipe engine.output_dir when known; else ./models/optimized
   cwd?: string;               // server process cwd for relative output_dir
 }): string[]; // absolute, deduped, existing-or-creatable-not-required
 
 export function isPathInsideRoots(resolvedPath: string, roots: string[]): boolean;
 ```
 
-**Routes** (extend `mountArenaRoutes`):
+**Routes** (extend `mountArenaRoutes`; apply `arenaLocalOnly` then rate limit):
 
 ```http
 GET /api/arena/olive-outputs
-  Query: cacheDir (required string, may be empty), outputDir (optional string)
+  Query: none (roots come from server-owned config)
   Response 200: {
-    roots: Array<{ label: "cache" | "output"; path: string }>,
-    recent: OliveOutputEntry[],  // up to 10, mtime desc
+    roots: Array<{ label: "cache" | "output"; path: string }>, // path may be shown for UX; not used for fetch
+    recent: OliveOutputEntry[],  // up to 10, mtime desc — opaque ids only
     entries: OliveOutputEntry[]  // browse list; server may cap (e.g. 200) and maxDepth (e.g. 4)
   }
+  Errors: 403 when the local-first access boundary rejects the caller
 
-GET /api/arena/olive-outputs/file?path=...
+GET /api/arena/olive-outputs/file?id=<Olive_Output_Artifact_Id>
   Response 200: application/octet-stream (raw model bytes)
   Headers: Content-Disposition: attachment; filename="<basename>"
-  Errors: 400 invalid/missing path; 403 path outside Olive_Output_Roots; 404 missing file
+  Errors:
+    400 unknown/missing id or disallowed query shape (path/absolutePath/cacheDir/outputDir rejected)
+    403 outside roots / not a regular file / bad extension / over size limit / access boundary
+    404 missing file after revalidation
 ```
 
 **Client fill sequence** (`ArenaPanel` local mode):
 
-1. Open "From Olive outputs" → `GET /olive-outputs` with `cacheDir` from `pipelineStore` and optional `outputDir`.
-2. On select → `GET /olive-outputs/file?path=...` → `new File([blob], basename, { type: "application/octet-stream" })` → `setSlotX({ file })`.
+1. Open "From Olive outputs" → `GET /olive-outputs` (no root query params).
+2. On select → `GET /olive-outputs/file?id=...` → `new File([blob], basename, { type: "application/octet-stream" })` → `setSlotX({ file })`.
 3. UI matches drop-zone success (filename + size). Drop-zone remains available.
 
 **Empty / error**: empty list → empty-state copy, drop-zone untouched. Fetch failure → inline error, do not clear an existing `file`.
 
 ### Path sandbox
 
-Before any `readdir` / `readFile`:
+Before any `readdir` / `readFile` / stream:
 
 1. Resolve each configured root with `path.resolve` + `fs.realpathSync.native` when the path exists (if missing, keep resolved absolute path; do not invent roots outside the configured strings).
-2. Resolve the requested file path the same way.
+2. Resolve the artifact id through a server-side id→path map (or equivalent) and re-canonicalize the candidate file path.
 3. Allow only if `resolvedFile === root || resolvedFile.startsWith(root + path.sep)` for some root (Windows: normalize separators).
-4. Reject symlink escapes that realpath outside roots with 403.
+4. Confirm regular file, allowed extension (`.onnx` / `.ort`), and response-size limit; reject symlink escapes that realpath outside roots with 403.
 
-Do **not** accept arbitrary user-supplied roots beyond `cacheDir` / `outputDir` query params that themselves must map to the two allowed roles. Cap scan depth and entry count to keep the endpoint cheap.
+Do **not** accept client-supplied `cacheDir`, `outputDir`, `path`, or `absolutePath` for list/download. Cap scan depth and entry count to keep the endpoint cheap.
 
 ### Assistant provider snapshot
 
@@ -1977,18 +1982,25 @@ export function isArenaOpenAiCompatProvider(provider: {
   provider: string;
   baseUrl?: string | null;
 }): boolean {
-  // true for openai-compat / Custom, or catalog providers with a usable OpenAI-shaped baseUrl.
-  // false for native gemini (no baseUrl path), codex, devin, etc.
+  // true for openai-compat / Custom, or catalog providers with a usable OpenAI-shaped baseUrl
+  // that also passes the same outbound policy as pinnedFetch / assertUrlPolicy
+  // (reject private/loopback/link-local unless OLIVE_ALLOW_LOOPBACK_HTTP permits them,
+  //  or the URL is an approved trusted local path).
+  // false for native gemini (no baseUrl path), codex, devin, private URLs without override, etc.
 }
 ```
+
+Coverage expectations for the gate: public HTTPS OpenAI-shaped hosts → eligible; private/LAN/loopback hosts → ineligible unless `OLIVE_ALLOW_LOOPBACK_HTTP` (or an approved trusted local path) applies.
 
 **Route:**
 
 ```http
 GET /api/arena/assistant-cloud-snapshot
+  Middleware: arenaLocalOnly (same access boundary as POST /arena/cloud-inference)
   Response 200:
     | { eligible: true, endpointUrl: string, apiKey: string, modelId: string, providerLabel: string }
     | { eligible: false, reason: string }
+  Response 403: non-loopback / unauthorized caller (no apiKey body)
 ```
 
 Implementation reads the same runtime/saved provider used by `GET /api/ai/provider`, then resolves the API key from the in-memory runtime config / env the server already uses for Assistant calls. `GET /api/ai/provider` itself does **not** return keys; this Arena-only snapshot endpoint exists so the client can honor the user’s chosen **snapshot-copy** UX without teaching Arena a live bind to the Assistant singleton.
@@ -2002,13 +2014,14 @@ Implementation reads the same runtime/saved provider used by `GET /api/ai/provid
 
 **Security notes:**
 
-- Snapshot keys are Session_Scoped in the slot (lost on reload), never written to history (Property 18 / Req 16.9).
+- Snapshot keys are Session_Scoped in the slot (lost on reload), never written to history (Property 18 / Task 16.9).
 - Do not log `apiKey` or full snapshot bodies.
+- Enforce the local-first access boundary before returning any credential-bearing payload.
 - Prefer local-only deployment assumptions already used elsewhere for Assistant secrets.
 
 ### ArenaPanel UI sketch
 
-```
+```text
 [ Local file | Cloud / API ]
 
 ── Local ──
@@ -2030,17 +2043,29 @@ Independent per slot. Switching type clears the opposite-mode fields for that sl
 
 ### Correctness Properties
 
-#### Property 20: Olive output file paths outside roots are always rejected
+#### Property 20: Olive output downloads reject escapes and non-models
 
-*For any* absolute or relative `path` query that, after canonicalization, is not inside any resolved Olive_Output_Root, `GET /api/arena/olive-outputs/file` returns a 4xx status and an empty body (no model bytes). Paths that stay inside a root and name an existing `.onnx`/`.ort` file return 200 with non-empty bytes.
+*For any* download request that uses a client-supplied `path`/`absolutePath`, an unknown id, a path that after canonicalization is not inside any resolved Olive_Output_Root, a non-regular file, or a non-`.onnx`/`.ort` extension, `GET /api/arena/olive-outputs/file` returns a 4xx status and an empty body (no model bytes). *For any* opaque id that still resolves to an in-root regular `.onnx`/`.ort` under the size limit, the endpoint returns 200 with non-empty bytes.
 
 **Validates: Requirement 18.4**
 
-#### Property 21: Assistant snapshot eligibility matches OpenAI-compat gate
+#### Property 20b: List/download roots are server-bound
 
-*For any* active provider descriptor, `GET /api/arena/assistant-cloud-snapshot` returns `eligible: true` only when `isArenaOpenAiCompatProvider` is true **and** endpoint URL + model id can be resolved. Non-compat providers (and missing provider) always return `eligible: false` with a non-empty `reason`, never a partial credential payload.
+*For any* list or download request, Olive_Output_Roots are taken only from server-owned configuration. Query parameters `cacheDir`, `outputDir`, `path`, and `absolutePath` are ignored or rejected; list payloads never include downloadable absolute paths (only opaque ids + display metadata).
+
+**Validates: Requirement 18.2, 18.4**
+
+#### Property 21: Assistant snapshot eligibility matches OpenAI-compat + outbound policy
+
+*For any* active provider descriptor, `GET /api/arena/assistant-cloud-snapshot` returns `eligible: true` only when `isArenaOpenAiCompatProvider` is true (including the shared `pinnedFetch` endpoint policy) **and** endpoint URL + model id can be resolved. Non-compat providers, private/loopback destinations without override, and missing providers always return `eligible: false` with a non-empty `reason`, never a partial credential payload.
 
 **Validates: Requirements 18.7, 18.8**
+
+#### Property 21b: Snapshot credentials require the access boundary
+
+*For any* caller that fails the Arena local-first access boundary (non-loopback without `OLIVE_ARENA_ALLOW_REMOTE`), `GET /api/arena/assistant-cloud-snapshot` returns 403 and an empty/no-credential body.
+
+**Validates: Requirement 18.9**
 
 #### Property 22: Convenience fill writes the same ArenaSlotConfig shape as manual entry
 
@@ -2052,6 +2077,23 @@ Independent per slot. Switching type clears the opposite-mode fields for that sl
 
 #### Server (`vitest.server.config.ts`)
 
-- Path sandbox: in-root file → 200; `../` escape → 403/400; symlink escape when exercisable → 403
+- Trusted root binding: list/download ignore or 400 on client-supplied `cacheDir`/`outputDir`/`path`/`absolutePath`; roots come from server config only (Property 20b)
+- Opaque ids: list entries expose `id` without absolute paths; download by id → 200; unknown id → 4xx empty body
+- Path sandbox: in-root model id → 200; traversal / outside root / symlink escape → 403/400 empty body (Property 20)
+- Non-model rejection: `.json` / `.bin` / directories under roots are not downloadable (Property 20)
+- Size limit: oversized model file → 4xx empty body
 - List: seeds temp cache/output dirs; recent is mtime-ordered and ≤ 10; extensions other than `.onnx`/`.ort` excluded
-- Snapshot: mock runtime as openai-compat → `eligible: true` with expected fields; mock as gemini/codex → `e
+- Snapshot eligibility: mock openai-compat public host → `eligible: true`; gemini/codex → `eligible: false`; private/loopback baseUrl without override → `eligible: false`; with `OLIVE_ALLOW_LOOPBACK_HTTP` → allowed when policy says so (Property 21)
+- Snapshot access control: non-loopback caller → 403 without `apiKey` (Property 21b); loopback caller may receive credential payload when eligible
+- Cloud-inference access control: non-loopback → 403; loopback passes through to rate limit / proxy
+
+#### Unit (`vitest.config.ts`)
+
+- `isPathInsideRoots` / opaque-id mapping helpers
+- `isArenaOpenAiCompatProvider` for public, private, and loopback-override cases
+- `toCloudSlotPatch(snapshot)` mapper (Property 22)
+
+#### Component (`vitest.component.config.ts`)
+
+- Olive select fills local `file` from opaque id download; empty state keeps drop-zone
+- Assistant fill / soft-fail; Slot A fill does not change Slot B

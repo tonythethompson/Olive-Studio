@@ -156,13 +156,59 @@ export function assertUrlPolicy(url: URL, policy: SsrfPolicy): void {
   }
 }
 
+function abortError(): Error {
+  return Object.assign(new Error("Aborted"), { name: "AbortError" });
+}
+
+/**
+ * DNS lookup that honors AbortSignal via Promise.race.
+ * Node's dns.promises.lookup does not reliably cancel on abort in all versions;
+ * the underlying lookup may continue in the background after we reject.
+ */
+async function lookupAllWithSignal(
+  host: string,
+  signal?: AbortSignal,
+): Promise<Array<{ address: string; family: number }>> {
+  if (signal?.aborted) throw abortError();
+  const lookup = dns.lookup(host, { all: true, verbatim: true });
+  if (!signal) return lookup;
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      reject(abortError());
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    lookup.then(
+      (records) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        resolve(records);
+      },
+      (err: unknown) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        reject(err);
+      },
+    );
+  });
+}
+
 /**
  * Resolve hostname and return only publicly routable addresses
  * (or loopback when explicitly allowed).
+ * Pass `signal` (typically the Arena route AbortController) so DNS can fail
+ * with AbortError and the route keeps its 504 timeout mapping.
  */
 export async function resolvePinnedAddresses(
   hostname: string,
   policy: SsrfPolicy,
+  signal?: AbortSignal,
 ): Promise<string[]> {
   const host = stripBrackets(hostname);
   const allowLoopback =
@@ -177,8 +223,9 @@ export async function resolvePinnedAddresses(
 
   let records: Array<{ address: string; family: number }>;
   try {
-    records = await dns.lookup(host, { all: true, verbatim: true });
-  } catch {
+    records = await lookupAllWithSignal(host, signal);
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") throw err;
     throw new SsrfPolicyError(`DNS resolution failed for ${host}`);
   }
   if (!records.length) throw new SsrfPolicyError(`DNS resolution failed for ${host}`);
@@ -266,7 +313,8 @@ export async function pinnedFetch(url: URL, init: PinnedFetchInit = {}): Promise
     allowLoopbackHttp: process.env.OLIVE_ALLOW_LOOPBACK_HTTP === "true",
   };
   assertUrlPolicy(url, policy);
-  const addresses = await resolvePinnedAddresses(url.hostname, policy);
+  if (init.signal?.aborted) throw abortError();
+  const addresses = await resolvePinnedAddresses(url.hostname, policy, init.signal);
   const pinnedIp = addresses[0]!;
 
   const isHttps = url.protocol === "https:";

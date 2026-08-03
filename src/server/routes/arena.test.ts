@@ -7,6 +7,11 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vites
 import express from "express";
 import type { Server } from "http";
 
+vi.mock("../middleware/localOnly.ts", () => ({
+  arenaLocalOnly: (_req: unknown, _res: unknown, next: () => void) => next(),
+  isLoopbackRemoteAddress: () => true,
+}));
+
 vi.mock("../middleware/rateLimit.ts", () => ({
   arenaProxyRateLimit: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));

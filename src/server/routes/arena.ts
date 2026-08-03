@@ -4,6 +4,7 @@
  */
 import type { Router } from "express";
 import { ARENA_CLOUD_TIMEOUT_MS } from "../../lib/arenaConstants.ts";
+import { arenaLocalOnly } from "../middleware/localOnly.ts";
 import { arenaProxyRateLimit } from "../middleware/rateLimit.ts";
 import { pinnedFetch, SsrfPolicyError } from "../services/arena/ssrfGuard.ts";
 
@@ -17,7 +18,9 @@ import { pinnedFetch, SsrfPolicyError } from "../services/arena/ssrfGuard.ts";
  * @param router - Express router on which to register the routes
  */
 export function mountArenaRoutes(router: Router): void {
-  router.post("/arena/cloud-inference", arenaProxyRateLimit, async (req, res) => {
+  // Local-first access boundary (loopback) before rate limit / proxy work.
+  // Override with OLIVE_ARENA_ALLOW_REMOTE=true when intentionally exposing the API.
+  router.post("/arena/cloud-inference", arenaLocalOnly, arenaProxyRateLimit, async (req, res) => {
     const { endpointUrl, apiKey, modelId, prompt } = req.body ?? {};
 
     if (!endpointUrl || typeof endpointUrl !== "string")
