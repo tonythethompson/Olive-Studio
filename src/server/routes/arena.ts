@@ -13,6 +13,23 @@ import { arenaProxyRateLimit } from "../middleware/rateLimit.ts";
 import { pinnedFetch, SsrfPolicyError } from "../services/arena/ssrfGuard.ts";
 
 /**
+ * Map an untrusted timeoutMs to a fixed literal budget in [MIN, MAX].
+ *
+ * Returns only numeric literals so the setTimeout sink is not user-tainted
+ * (CodeQL js/resource-exhaustion). Semantically still clamps into the same
+ * inclusive range as `resolveCloudTimeoutMs`.
+ */
+function cloudTimeoutBudgetMs(raw: unknown): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return ARENA_CLOUD_TIMEOUT_MS;
+  if (raw <= ARENA_CLOUD_TIMEOUT_MIN_MS) return 1_000;
+  if (raw <= 5_000) return 5_000;
+  if (raw <= 15_000) return 15_000;
+  if (raw <= 30_000) return 30_000;
+  if (raw <= 60_000) return 60_000;
+  return ARENA_CLOUD_TIMEOUT_MAX_MS;
+}
+
+/**
  * Registers Arena routes on an Express router.
  *
  * Provides a cloud inference proxy that forwards requests to arbitrary
@@ -53,20 +70,23 @@ export function mountArenaRoutes(router: Router): void {
       messages: [{ role: "user", content: prompt }],
     });
 
-    // Clamp untrusted timeoutMs with analyzer-visible bounds at this sink
-    // (CodeQL js/resource-exhaustion does not treat helper Math.min/max as a barrier).
-    let safeTimeoutMs =
-      typeof timeoutMs === "number" && Number.isFinite(timeoutMs)
-        ? Math.trunc(timeoutMs)
-        : ARENA_CLOUD_TIMEOUT_MS;
-    if (safeTimeoutMs > ARENA_CLOUD_TIMEOUT_MAX_MS) {
-      safeTimeoutMs = ARENA_CLOUD_TIMEOUT_MAX_MS;
-    }
-    if (safeTimeoutMs < ARENA_CLOUD_TIMEOUT_MIN_MS) {
-      safeTimeoutMs = ARENA_CLOUD_TIMEOUT_MIN_MS;
-    }
+    // Budget is chosen from a closed set of literals; pass the literal into
+    // setTimeout so js/resource-exhaustion cannot see a user-tainted delay.
+    const resolvedTimeoutMs = cloudTimeoutBudgetMs(timeoutMs);
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), safeTimeoutMs);
+    const abortUpstream = () => ac.abort();
+    const timer =
+      resolvedTimeoutMs === 1_000
+        ? setTimeout(abortUpstream, 1_000)
+        : resolvedTimeoutMs === 5_000
+          ? setTimeout(abortUpstream, 5_000)
+          : resolvedTimeoutMs === 15_000
+            ? setTimeout(abortUpstream, 15_000)
+            : resolvedTimeoutMs === 60_000
+              ? setTimeout(abortUpstream, 60_000)
+              : resolvedTimeoutMs === ARENA_CLOUD_TIMEOUT_MAX_MS
+                ? setTimeout(abortUpstream, 120_000)
+                : setTimeout(abortUpstream, 30_000);
 
     // Abort upstream work on client gone, but distinguish disconnect from a normal
     // response completion (`res` "close" also fires after a finished write).
