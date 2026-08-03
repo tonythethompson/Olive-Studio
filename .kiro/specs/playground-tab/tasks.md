@@ -318,10 +318,12 @@ Adds a fourth top-level "Playground" navigation entry to the Olive Studio sideba
     - Default roots (server-owned): empty `cacheDir` → `~/.cache/olive`; missing `outputDir` → `./models/optimized`
     - _Requirements: 18.2, 18.4, 18.8_
   - [ ] 19.2 Extend `mountArenaRoutes` with Olive-output list + sandboxed file fetch (**depends on 19.1**)
-    - `GET /arena/olive-outputs` — no client root/path query params; return `{ roots: [{ label }], recent≤10 by mtime, entries }` with opaque ids only (cap depth/count server-side); `roots[]` must not include filesystem `path`
+    - Add `src/server/services/playground/oliveOutputScan.ts` (or equivalent) for bounded FS scan + opaque id map; never log file contents
+    - `GET /arena/olive-outputs` — no client root/path query params; scan server-owned Olive_Output_Roots; validate each discovered candidate (containment / regular file / `.onnx`|`.ort`) before minting an opaque id; return `{ roots: [{ label }], recent≤10 by mtime, entries }` (cap depth/count); `roots[]` must not include filesystem `path`. Listing does not require a client-supplied id
     - `GET /arena/olive-outputs/file?id=` — resolve opaque id server-side, revalidate containment / regular file / `.onnx`|`.ort` / size limit, then stream; otherwise 403/400 with empty body (no JSON error payload)
-    - Reject `path` / `absolutePath` / `cacheDir` / `outputDir` query params
-    - Apply `arenaLocalOnly` on both routes; implement FS scan + id map in `src/server/services/playground/oliveOutputScan.ts` (or equivalent); never log file contents
+    - Reject `path` / `absolutePath` / `cacheDir` / `outputDir` query params with empty 400/403
+    - Apply `arenaLocalOnly` **before** `arenaProxyRateLimit` on both routes (same order as cloud-inference)
+    - Do not mark 19.2 complete until server tests cover access control (non-loopback → 403) and rate-limit throttling on both olive-output routes
     - _Requirements: 18.2, 18.3, 18.4, 18.5_
   - [ ] 19.3 Add `GET /arena/assistant-cloud-snapshot` (**depends on 19.1**)
     - Apply `arenaLocalOnly` before handlers; unauthorized/non-local → 403 without `apiKey`
@@ -337,14 +339,21 @@ Adds a fourth top-level "Playground" navigation entry to the Olive Studio sideba
     - Per-slot isolation; no third `ArenaSlotConfig.type`
     - Do not send client-owned root paths in list/download requests
     - _Requirements: 18.1, 18.3, 18.5, 18.6, 18.7, 18.8, 18.10, 18.11_
-  - [ ] 19.5 Tests for Requirement 18 (**depends on completed 19.1–19.4**)
-    - Server: trusted root binding + opaque id download → 200; client-supplied path/roots rejected; list `roots[]` labels only (Property 20b)
-    - Server: traversal / outside root / non-model extension / oversize → 4xx empty body (Property 20)
-    - Server: list recent mtime order + extension filter; snapshot eligible vs non-compat vs private URL vs missing (Property 21)
-    - Server: snapshot + cloud-inference access boundary — non-loopback → 403 without credentials (Property 21b)
+  - [ ] 19.5 Tests for Requirement 18 (**depends on completed 19.1–19.4**; completion gate for Req 18)
+    - **PBT (fast-check, min 100 iterations each)** with tags `// Feature: playground-tab, Property N`:
+      - Property 20 — download rejects escapes / non-models / oversize (empty 4xx body)
+      - Property 20b — list/download **reject** `cacheDir`/`outputDir`/`path`/`absolutePath` (not ignore); list payloads expose labels/ids/`displayPath` only
+      - Property 21 — snapshot eligibility matches OpenAI-compat + outbound policy
+      - Property 21b — non-loopback snapshot/cloud callers get 403 without credentials
+      - Property 22 — convenience fill writes the same `ArenaSlotConfig` shape as manual entry
+    - Server unit/route: trusted root binding + opaque id download → 200; client-supplied path/roots rejected; list `roots[]` labels only
+    - Server: traversal / outside root / non-model extension / oversize → 4xx empty body
+    - Server: list recent mtime order + extension filter; snapshot eligible vs non-compat vs private URL vs missing
     - Server: snapshot responses assert `Cache-Control: no-store, private` for eligible, ineligible, and 403
-    - Unit: `isPathInsideRoots` / `isArenaOpenAiCompatProvider` (public/local/loopback override) / cloud patch mapper (Property 22)
+    - Server: olive-output + cloud-inference access control and rate-limit throttling (non-loopback → 403; limiter covers olive routes)
+    - Unit: `isPathInsideRoots` / `isArenaOpenAiCompatProvider` (public/local/loopback override) / cloud patch mapper
     - Component: Olive select fills local file; empty state keeps drop-zone; Assistant fill / soft-fail; Slot A fill does not change Slot B
+    - Req 18 is not complete until all five PBT properties above pass at ≥100 iterations
     - _Requirements: 18.3, 18.4, 18.5, 18.7, 18.8, 18.9, 18.10_
 
 - [ ] 14. Run History persistence (Requirement 16 — new epic, schedule after core Req 1–10 ships)

@@ -114,10 +114,18 @@ export function mountArenaRoutes(router: Router): void {
         signal: ac.signal,
       });
 
-      if (clientDisconnected || res.writableEnded) return;
+      if (clientDisconnected || res.writableEnded || res.destroyed) return;
 
       if (!upstream.ok) {
-        const errText = await upstream.text().catch(() => "");
+        let errText = "";
+        try {
+          errText = await upstream.text();
+        } catch (readErr: unknown) {
+          // Preserve timeout / disconnect AbortError for the outer catch (do not
+          // convert abort into an empty upstream-error detail).
+          if (readErr instanceof Error && readErr.name === "AbortError") throw readErr;
+        }
+        if (clientDisconnected || res.writableEnded || res.destroyed) return;
         return res.status(upstream.status).json({
           error: `Upstream error ${upstream.status}`,
           detail: errText.slice(0, 500),
@@ -127,11 +135,12 @@ export function mountArenaRoutes(router: Router): void {
       const data = (await upstream.json()) as {
         choices?: Array<{ message?: { content?: string } }>;
       };
+      if (clientDisconnected || res.writableEnded || res.destroyed) return;
       const text = data?.choices?.[0]?.message?.content ?? JSON.stringify(data);
       return res.json({ output: text });
     } catch (err: unknown) {
       // Client already left — do not serialize timeout/gateway JSON onto a closed socket.
-      if (clientDisconnected || res.writableEnded || res.headersSent) return;
+      if (clientDisconnected || res.writableEnded || res.destroyed || res.headersSent) return;
       const isTimeout = err instanceof Error && err.name === "AbortError";
       const message = err instanceof Error ? err.message : String(err);
       // Policy / SSRF rejections are client errors, not bad gateway

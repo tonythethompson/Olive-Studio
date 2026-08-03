@@ -59,6 +59,8 @@ These were deliberately settled this session after review pushback. If reconside
 
 Correctness properties live in design.md (Properties 20 / 20b / 21 / 21b / 22 cover Req 18 security + fill contracts). Each has a `// Feature: playground-tab, Property N` tag convention and a minimum-100-iterations requirement (fast-check). Property numbers are non-contiguous by section (8, then 9 twice in different sections — pre-existing doc quirk, not a numbering error to "fix"; 13–19 were added earlier; 20–22 family added with Req 18). Cross-reference tasks.md for which task number implements which property before assuming one is missing.
 
+**Req 18 completion gate (Task 19.5):** do not mark Requirement 18 / Task 19 complete until Task 19.5 includes passing fast-check PBTs for Properties **20, 20b, 21, 21b, and 22** (≥100 iterations each, with the matching `// Feature: playground-tab, Property N` tags). Route/unit/component cases alone are not enough.
+
 ## Open scope question not yet resolved
 
 Requirements 11 and 13–15 (input profiles, scoring, baseline download) roughly double the original spec's scope beyond the core Playground tab (1–10). Not yet split into a separate spec file or explicitly deprioritized — still living in the same requirements.md/design.md/tasks.md as core. If picking this up fresh, confirm with the user whether 11/13–15 ship alongside 1–10 or get deferred, before starting Task 12.2 or anything under Req 13–15.

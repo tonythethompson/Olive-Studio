@@ -2056,7 +2056,7 @@ Independent per slot. Switching type clears the opposite-mode fields for that sl
 
 #### Property 20b: List/download roots are server-bound
 
-*For any* list or download request, Olive_Output_Roots are taken only from server-owned configuration. Query parameters `cacheDir`, `outputDir`, `path`, and `absolutePath` are ignored or rejected; list payloads never include filesystem paths (only root labels, opaque ids, and relative `displayPath` metadata).
+*For any* list or download request, Olive_Output_Roots are taken only from server-owned configuration. Query parameters `cacheDir`, `outputDir`, `path`, and `absolutePath` are **rejected** (empty `400`/`403` body) — never silently ignored. List payloads never include filesystem paths (only root labels, opaque ids, and relative `displayPath` metadata).
 
 **Validates: Requirement 18.2, 18.4**
 
@@ -2082,7 +2082,7 @@ Independent per slot. Switching type clears the opposite-mode fields for that sl
 
 #### Server (`vitest.server.config.ts`)
 
-- Trusted root binding: list/download ignore or 400 on client-supplied `cacheDir`/`outputDir`/`path`/`absolutePath`; roots come from server config only (Property 20b)
+- Trusted root binding: list/download reject (empty 400/403) client-supplied `cacheDir`/`outputDir`/`path`/`absolutePath`; roots come from server config only (Property 20b)
 - Opaque ids: list entries expose `id` without absolute paths; `roots[]` has labels only (no `path`); download by id → 200; unknown id → 4xx empty body
 - Path sandbox: in-root model id → 200; traversal / outside root / symlink escape → 403/400 empty body (Property 20)
 - Non-model rejection: `.json` / `.bin` / directories under roots are not downloadable (Property 20)

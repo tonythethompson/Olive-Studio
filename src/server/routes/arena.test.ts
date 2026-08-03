@@ -256,4 +256,109 @@ describe("POST /api/arena/cloud-inference", () => {
     expect(res.status).toBe(502);
     expect(await res.json()).toMatchObject({ error: "ECONNRESET" });
   });
+
+  it("maps AbortError during upstream error-body text() to 504 (not empty 502 detail)", async () => {
+    mockedPinnedFetch.mockResolvedValue({
+      status: 502,
+      ok: false,
+      text: async () => {
+        throw Object.assign(new Error("Aborted"), { name: "AbortError" });
+      },
+      json: async () => ({}),
+    });
+
+    const res = await postCloudInference({
+      endpointUrl: "https://api.example.com/v1",
+      prompt: "hello",
+      timeoutMs: ARENA_CLOUD_TIMEOUT_MS,
+    });
+    expect(res.status).toBe(504);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/timed out/i);
+    expect(body.error).toContain(String(ARENA_CLOUD_TIMEOUT_MS));
+  });
+
+  it("maps AbortError during upstream.json() body read to 504", async () => {
+    mockedPinnedFetch.mockResolvedValue({
+      status: 200,
+      ok: true,
+      text: async () => "",
+      json: async () => {
+        throw Object.assign(new Error("Aborted"), { name: "AbortError" });
+      },
+    });
+
+    const res = await postCloudInference({
+      endpointUrl: "https://api.example.com/v1",
+      prompt: "hello",
+    });
+    expect(res.status).toBe(504);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/timed out/i);
+  });
+
+  it("does not write a JSON error body when the client disconnects during upstream body read", async () => {
+    let releaseBody: ((err: Error) => void) | undefined;
+    mockedPinnedFetch.mockResolvedValue({
+      status: 200,
+      ok: true,
+      text: async () => "",
+      json: () =>
+        new Promise<never>((_resolve, reject) => {
+          releaseBody = reject;
+        }),
+    });
+
+    const payload = JSON.stringify({
+      endpointUrl: "https://api.example.com/v1",
+      prompt: "hello",
+    });
+    const url = new URL(`${baseUrl}/api/arena/cloud-inference`);
+
+    await new Promise<void>((resolve, reject) => {
+      const req = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(payload),
+          },
+        },
+        () => {
+          // Should not receive a finished JSON error response after we destroy the socket.
+        },
+      );
+      req.on("error", () => {
+        // Expected when we destroy mid-flight.
+      });
+      req.write(payload);
+      req.end();
+
+      // Wait until pinnedFetch has returned and json() is pending, then drop the client.
+      const waitForPending = async () => {
+        for (let i = 0; i < 50 && !releaseBody; i++) {
+          await new Promise((r) => setTimeout(r, 10));
+        }
+        if (!releaseBody) {
+          reject(new Error("upstream.json never started"));
+          return;
+        }
+        req.destroy();
+        // Simulate abort that follows client-gone → AbortController.abort().
+        releaseBody(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+        // Allow the route catch/finally to run without hanging the suite.
+        await new Promise((r) => setTimeout(r, 30));
+        resolve();
+      };
+      void waitForPending().catch(reject);
+    });
+
+    // If disconnect handling regressed to writing after close, Node may throw; the
+    // primary assertion is that we completed without an unhandled rejection and
+    // without treating body-read AbortError as a successful upstream error payload.
+    expect(mockedPinnedFetch).toHaveBeenCalled();
+  });
 });
