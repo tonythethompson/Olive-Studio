@@ -62,7 +62,12 @@ export function clearRunResults(): { resultA: ArenaRunResult; resultB: ArenaRunR
   };
 }
 
-/** True when prompt is empty or whitespace-only (blocks cloud Arena runs). */
+/**
+ * Determines whether a prompt contains no non-whitespace characters.
+ *
+ * @param prompt - The prompt to check
+ * @returns `true` if the prompt is empty or whitespace-only, `false` otherwise.
+ */
 export function isArenaPromptBlank(prompt: string): boolean {
   return prompt.trim() === "";
 }
@@ -397,7 +402,13 @@ export interface SlotResultPanelProps {
   isWinner?: boolean;
 }
 
-/** Exported for component tests of winner highlighting / error layout (Tasks 11.3, 11.5). */
+/**
+ * Displays the inference status, output, timing, and errors for an arena slot.
+ *
+ * @param label - The slot label shown in the panel.
+ * @param result - The slot's current inference result.
+ * @param isWinner - Whether to highlight the slot as the faster completed result.
+ */
 export function SlotResultPanel({ label, result, isWinner }: SlotResultPanelProps) {
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -709,7 +720,9 @@ async function runArenaSlot(opts: {
 
 /* ------------------------------------------------------------------ */
 /*  ArenaPanel                                                         */
-/* ------------------------------------------------------------------ */
+/**
+ * Renders the Arena interface for configuring, running, and comparing two inference slots.
+ */
 
 export function ArenaPanel() {
   const slotA = usePlaygroundStore((s) => s.slotA);
