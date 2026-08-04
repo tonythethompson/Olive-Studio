@@ -16,6 +16,17 @@ vi.mock("../services/venv/index.ts", () => ({
   detachVenvListener: vi.fn(),
 }));
 
+function mockSpawnProcess() {
+  const proc = new EventEmitter() as EventEmitter & {
+    stdout: EventEmitter;
+    stderr: EventEmitter;
+  };
+  proc.stdout = new EventEmitter();
+  proc.stderr = new EventEmitter();
+  setImmediate(() => proc.emit("close", 0));
+  return proc;
+}
+
 const spawnSpy = vi.fn(() => {
   throw new Error("spawn should not run for unknown-provider rejection");
 });
@@ -23,7 +34,7 @@ vi.mock("child_process", async (importOriginal) => {
   const actual = await importOriginal<typeof import("child_process")>();
   return {
     ...actual,
-    spawn: (...args: unknown[]) => spawnSpy(...args),
+    spawn: spawnSpy,
   };
 });
 
@@ -50,17 +61,6 @@ function recipeWithProvider(provider: string) {
     passes: { c: { type: "OnnxConversion", config: {} } },
     engine: { search_strategy: false, evaluate_input_model: false },
   };
-}
-
-function mockSpawnProcess() {
-  const proc = new EventEmitter() as EventEmitter & {
-    stdout: EventEmitter;
-    stderr: EventEmitter;
-  };
-  proc.stdout = new EventEmitter();
-  proc.stderr = new EventEmitter();
-  setImmediate(() => proc.emit("close", 0));
-  return proc;
 }
 
 beforeAll(async () => {
@@ -119,7 +119,7 @@ describe("POST /olive/run provider routing", () => {
       family: "cuda",
       python: "/tmp/mock-cuda-python",
     });
-    spawnSpy.mockImplementation(() => mockSpawnProcess());
+    spawnSpy.mockImplementation(() => mockSpawnProcess() as never);
 
     const res = await fetch(`${baseUrl}/api/olive/run`, {
       method: "POST",
