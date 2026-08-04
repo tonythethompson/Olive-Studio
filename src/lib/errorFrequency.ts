@@ -120,6 +120,7 @@ class ErrorFrequencyTracker {
    * Get frequency info for a specific error without recording it.
    */
   getFrequency(componentLabel: string, errorMessage: string): ErrorFrequencyInfo | null {
+    this.prune();
     const key = this.makeKey(componentLabel, errorMessage);
     const entry = this.entries.get(key);
     if (!entry) return null;
@@ -130,9 +131,8 @@ class ErrorFrequencyTracker {
    * Get all recent errors (within the last hour).
    */
   getRecentErrors(): ErrorFrequencyEntry[] {
-    const now = Date.now();
+    this.prune();
     return Array.from(this.entries.values())
-      .filter((e) => now - e.lastOccurrence < MAX_ENTRY_AGE_MS)
       .sort((a, b) => b.count - a.count);
   }
 

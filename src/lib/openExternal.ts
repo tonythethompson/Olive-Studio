@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { open as shellOpen } from "@tauri-apps/plugin-shell";
 
 /**
  * Opens an external URL in the default browser.
@@ -13,8 +13,9 @@ export async function openExternal(url: string): Promise<void> {
   if (typeof window === "undefined") return;
 
   // Avoid opening dangerous protocols like `javascript:` / `data:`
+  let parsed: URL;
   try {
-    const parsed = new URL(url, window.location.href);
+    parsed = new URL(url, window.location.href);
     if (!(["http:", "https:", "mailto:"] as const).includes(parsed.protocol as "http:" | "https:" | "mailto:")) {
       console.warn("[openExternal] Refusing to open unsupported protocol:", parsed.protocol);
       return;
@@ -27,15 +28,16 @@ export async function openExternal(url: string): Promise<void> {
   // Check if we're running in Tauri
   if ("__TAURI_INTERNALS__" in window || "__TAURI__" in window) {
     try {
-      await invoke("plugin:shell|open", { url });
+      // Shell plugin open() takes a path/URL string (not `{ url }`)
+      await shellOpen(parsed.href);
     } catch (err) {
       console.error("[openExternal] Tauri shell.open failed:", err);
       // Fallback to window.open if Tauri fails
-      window.open(url, "_blank", "noopener,noreferrer");
+      window.open(parsed.href, "_blank", "noopener,noreferrer");
     }
   } else {
     // Browser/web fallback
-    window.open(url, "_blank", "noopener,noreferrer");
+    window.open(parsed.href, "_blank", "noopener,noreferrer");
   }
 }
 

@@ -110,22 +110,85 @@ export function ReportIssueModal({
     [category, severity, area, description, selectedTelemetry, state, hardwareProbe, executionLogs, frequencyInfo],
   );
 
-  const { url, fullText } = useMemo(
+  const { url, fullText, urlExceededBudget } = useMemo(
     () => buildReport(report, { state, hardwareProbe, executionLogs }),
     [report, state, hardwareProbe, executionLogs],
   );
 
-  const handleOpenGithub = useCallback(() => {
-    void openExternal(url);
-  }, [url]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  const handleCopy = useCallback(async () => {
+  // Focus management: move focus in on open, trap Tab, Escape to close, restore on close.
+  useEffect(() => {
+    if (!open) return;
+
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+
+    const focusInitial = () => {
+      closeButtonRef.current?.focus();
+      if (document.activeElement !== closeButtonRef.current) {
+        dialogRef.current?.focus();
+      }
+    };
+    // Defer so the dialog exists in the DOM after open transitions
+    const focusTimer = window.setTimeout(focusInitial, 0);
+
+    const getFocusable = (): HTMLElement[] => {
+      const root = dialogRef.current;
+      if (!root) return [];
+      return Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => !el.hasAttribute("disabled") && el.offsetParent !== null);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = getFocusable();
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
+
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      const active = document.activeElement;
+
+      if (event.shiftKey) {
+        if (active === first || !dialogRef.current?.contains(active)) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener("keydown", onKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [open, onClose]);
+
+  const copyFullText = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(fullText);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback: select textarea content
       const textarea = document.createElement("textarea");
       textarea.value = fullText;
       document.body.appendChild(textarea);
@@ -137,16 +200,24 @@ export function ReportIssueModal({
     }
   }, [fullText]);
 
+  const handleOpenGithub = useCallback(() => {
+    if (urlExceededBudget) {
+      // Full prefilled URL was too long: keep complete report on clipboard, open blank form
+      void copyFullText().then(() => {
+        void openExternal(url);
+      });
+      return;
+    }
+    void openExternal(url);
+  }, [url, urlExceededBudget, copyFullText]);
+
+  const handleCopy = useCallback(() => {
+    void copyFullText();
+  }, [copyFullText]);
+
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent) => {
       if (e.target === e.currentTarget) onClose();
-    },
-    [onClose],
-  );
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
     },
     [onClose],
   );
@@ -155,19 +226,22 @@ export function ReportIssueModal({
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-slate-950/70"
       role="dialog"
       aria-modal="true"
       aria-labelledby="report-issue-title"
+      tabIndex={-1}
       onClick={handleBackdropClick}
-      onKeyDown={handleKeyDown}
     >
       <Card className="w-full max-w-lg border-slate-800 bg-slate-900 shadow-2xl max-h-[90vh] flex flex-col">
         <CardHeader
+          titleId="report-issue-title"
           title="Report an Issue"
           description="Help us improve Olive Studio by reporting bugs or suggesting features."
           badge={
             <Button
+              ref={closeButtonRef}
               variant="ghost"
               className="h-8 w-8 p-0 hover:bg-slate-800"
               onClick={onClose}
@@ -342,7 +416,14 @@ export function ReportIssueModal({
         </CardContent>
 
         {/* Footer with actions */}
-        <div className="p-4 border-t border-slate-800 flex items-center justify-between gap-3">
+        <div className="p-4 border-t border-slate-800 space-y-2">
+          {urlExceededBudget && (
+            <p className="text-[10px] text-amber-400/90 leading-relaxed">
+              Report is too large for a prefilled GitHub URL. Opening GitHub will copy the full report
+              to your clipboard so you can paste it into the issue body.
+            </p>
+          )}
+          <div className="flex items-center justify-between gap-3">
           <Button variant="outline" onClick={onClose} className="text-xs h-9">
             Cancel
           </Button>
@@ -370,6 +451,7 @@ export function ReportIssueModal({
             >
               <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Open GitHub Issue
             </Button>
+          </div>
           </div>
         </div>
       </Card>

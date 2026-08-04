@@ -70,6 +70,22 @@ describe("errorFrequency", () => {
       expect(info).not.toBeNull();
       expect(info?.count).toBe(1);
     });
+
+    it("prunes expired entries before lookup", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+
+      errorFrequency.recordError("Aging", "stale error");
+      expect(errorFrequency.getFrequency("Aging", "stale error")).not.toBeNull();
+
+      // Advance past MAX_ENTRY_AGE_MS (1 hour)
+      vi.advanceTimersByTime(60 * 60 * 1000 + 1);
+
+      expect(errorFrequency.getFrequency("Aging", "stale error")).toBeNull();
+      expect(errorFrequency.getRecentErrors()).toEqual([]);
+
+      vi.useRealTimers();
+    });
   });
 
   describe("getRecentErrors", () => {

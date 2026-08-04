@@ -236,6 +236,24 @@ describe("buildGitHubIssueUrl", () => {
     expect(url).toContain("labels=user-report");
     expect(url).toContain("feature");
   });
+
+  it("falls back to canonical issue URL when encoded body exceeds budget", () => {
+    const report: IssueReport = {
+      category: "bug",
+      severity: "blocking",
+      area: "execution-batch",
+      description: "x".repeat(2500),
+      telemetry: {
+        logs: Array.from({ length: 50 }, (_, i) => `log-line-${i}-${"y".repeat(80)}`).join("\n"),
+      },
+    };
+    const result = buildReport(report, {});
+    expect(result.urlExceededBudget).toBe(true);
+    expect(result.url).toBe("https://github.com/tonythethompson/Olive-Studio/issues/new");
+    expect(result.fullText).toContain(report.description);
+    expect(result.fullText).toContain("log-line-0");
+    expect(buildGitHubIssueUrl(report)).toBe(result.url);
+  });
 });
 
 // ── Full report ──────────────────────────────────────────────────────────────
@@ -255,5 +273,6 @@ describe("buildReport", () => {
     expect(result.title).toBeDefined();
     expect(result.fullText).toContain("# ");
     expect(result.fullText).toContain("Crash on quantization");
+    expect(result.urlExceededBudget).toBe(false);
   });
 });

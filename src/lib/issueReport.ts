@@ -286,11 +286,19 @@ export function buildIssueTitle(report: IssueReport): string {
 }
 
 const REPO_URL = "https://github.com/tonythethompson/Olive-Studio";
+const ISSUE_NEW_URL = `${REPO_URL}/issues/new`;
+/** Encoded URL budget for prefilled GitHub issue links (browsers and intermediaries truncate long URLs). */
+const MAX_GITHUB_ISSUE_URL_LENGTH = 2000;
 
 /**
  * Generates a pre-filled GitHub issue URL.
+ * When the encoded URL exceeds the budget, returns the canonical blank issue form instead.
  */
 export function buildGitHubIssueUrl(report: IssueReport): string {
+  return buildGitHubIssueUrlDetails(report).url;
+}
+
+function buildGitHubIssueUrlDetails(report: IssueReport): { url: string; exceededBudget: boolean } {
   const title = buildIssueTitle(report);
   const body = buildIssueBody(report);
 
@@ -299,14 +307,16 @@ export function buildGitHubIssueUrl(report: IssueReport): string {
   params.set("body", body);
   params.set("labels", ["user-report", report.category].join(","));
 
-  const url = `${REPO_URL}/issues/new?${params.toString()}`;
-  
-  // Warn if URL might be too long (browsers typically limit URLs to ~2000 chars)
-  if (url.length > 2000) {
-    console.warn("[issueReport] GitHub issue URL exceeds 2000 chars; some browsers may truncate it.");
+  const url = `${ISSUE_NEW_URL}?${params.toString()}`;
+
+  if (url.length > MAX_GITHUB_ISSUE_URL_LENGTH) {
+    console.warn(
+      "[issueReport] Encoded GitHub issue URL exceeds budget; using blank issue form. Paste the full report from the clipboard.",
+    );
+    return { url: ISSUE_NEW_URL, exceededBudget: true };
   }
-  
-  return url;
+
+  return { url, exceededBudget: false };
 }
 
 /**
@@ -315,13 +325,13 @@ export function buildGitHubIssueUrl(report: IssueReport): string {
 export function buildReport(
   report: IssueReport,
   _buildOptions: BuildReportOptions,
-): { url: string; body: string; title: string; fullText: string } {
+): { url: string; body: string; title: string; fullText: string; urlExceededBudget: boolean } {
   const title = buildIssueTitle(report);
   const body = buildIssueBody(report);
-  const url = buildGitHubIssueUrl(report);
+  const { url, exceededBudget } = buildGitHubIssueUrlDetails(report);
 
   // Full text for clipboard (includes title as header)
   const fullText = `# ${title}\n\n${body}`;
 
-  return { url, body, title, fullText };
+  return { url, body, title, fullText, urlExceededBudget: exceededBudget };
 }
