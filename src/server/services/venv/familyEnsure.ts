@@ -111,7 +111,13 @@ async function buildFamilyIsolated(
       buildEnv,
       "pip",
     ).catch(() => undefined);
-    await runPythonModule(py, ["-m", "pip", "install", ...spec.ortInstallArgs], onLine, buildEnv, "pip");
+    await runPythonModule(
+      py,
+      ["-m", "pip", "install", ...spec.packageConstraints],
+      onLine,
+      buildEnv,
+      "pip",
+    );
     await execFileAsync(py, ["-c", "import olive, onnxruntime"], { timeout: 30_000 });
     writeVenvManifest(getFamilyBuildingRoot(family), {
       family,

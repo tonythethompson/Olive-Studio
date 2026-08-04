@@ -34,6 +34,13 @@ export {
 } from "./status.ts";
 export type { RuntimeFamilyStatus, DualRuntimeStatus, CapabilityStatus } from "./status.ts";
 export type { EnsureProviderCapabilityResult } from "./capabilityEnsure.ts";
+export {
+  assertFamilyOrtConstraints,
+  enforcePackageConstraintsOrThrow,
+  findForbiddenOrtInstallArgs,
+  packageNameFromPipArg,
+} from "./packageConstraints.ts";
+export { getFamilySpec } from "./spec.ts";
 
 type SetupListener = (line: string) => void;
 

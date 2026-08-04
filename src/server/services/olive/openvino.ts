@@ -7,12 +7,11 @@
 import fs from "fs";
 
 import { execFileAsync } from "../shared/exec.ts";
-import { pipInstallViaPython } from "../shared/pipInstall.ts";
+import { pipInstallForFamily } from "../shared/pipInstall.ts";
 import { ensureVenvFamily } from "../venv/familyEnsure.ts";
-import { envForFamily } from "../venv/pathIsolation.ts";
 import { getVenvPython } from "../venv/paths.ts";
 import { listInstalledOrtDistributions, invalidateRuntimeStatusCache } from "../venv/status.ts";
-import { getFamilySpec } from "../venv/spec.ts";
+import { assertFamilyOrtConstraints } from "../venv/packageConstraints.ts";
 import { openvinoStackInstallArgs, openvinoStackLabel } from "../../../lib/openvinoDeps.ts";
 import type { OpenVinoProbeResult } from "../../../lib/hardwareProbe.ts";
 
@@ -130,15 +129,13 @@ export async function probeOpenVino(python: string): Promise<OpenVinoProbeResult
 }
 
 async function assertDefaultOrtPreserved(python: string): Promise<string | null> {
-  const spec = getFamilySpec("default");
+  // Keep an explicit onnxruntime-openvino check for clearer install errors, then
+  // fall through to shared family packageConstraints assertion.
   const dists = await listInstalledOrtDistributions(python);
   if (dists.includes("onnxruntime-openvino")) {
     return "onnxruntime-openvino must not be installed in the default runtime (conflicts with DirectML/CPU ORT)";
   }
-  if (!dists.includes(spec.ortDistribution)) {
-    return `Default runtime lost canonical ORT (${spec.ortDistribution}); OpenVINO install must not replace it`;
-  }
-  return null;
+  return assertFamilyOrtConstraints("default", python);
 }
 
 /**
@@ -181,9 +178,8 @@ export async function ensureOpenVino(
 
   onLine("[deps] Installing OpenVINO Python packages without swapping ORT wheels.");
 
-  const env = envForFamily("default");
   try {
-    await pipInstallViaPython(venvPython, openvinoStackInstallArgs(), onLine, env);
+    await pipInstallForFamily("default", venvPython, openvinoStackInstallArgs(), onLine);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, error: msg };

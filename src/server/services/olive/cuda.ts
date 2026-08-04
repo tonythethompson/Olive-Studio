@@ -10,12 +10,12 @@ import {
   isResolvableCudaTag,
 } from "../../../lib/oliveGpuRuntime.ts";
 import { execFileAsync } from "../shared/exec.ts";
-import { pipInstallViaPython } from "../shared/pipInstall.ts";
+import { pipInstallForFamily } from "../shared/pipInstall.ts";
 import { getVenvPython } from "../venv/paths.ts";
 import { ensureVenvFamily } from "../venv/familyEnsure.ts";
 import { envForFamily } from "../venv/pathIsolation.ts";
-import { listInstalledOrtDistributions, invalidateRuntimeStatusCache } from "../venv/status.ts";
-import { getFamilySpec } from "../venv/spec.ts";
+import { invalidateRuntimeStatusCache } from "../venv/status.ts";
+import { assertFamilyOrtConstraints } from "../venv/packageConstraints.ts";
 import fs from "fs";
 
 /** Parse CUDA version from nvidia-smi output. */
@@ -88,16 +88,7 @@ export async function detectCudaTag(preferred: string, onLine: (line: string) =>
 }
 
 async function assertCudaOrtPin(python: string): Promise<string | null> {
-  const spec = getFamilySpec("cuda");
-  const dists = await listInstalledOrtDistributions(python);
-  if (!dists.includes(spec.ortDistribution)) {
-    return `CUDA runtime missing canonical ${spec.ortDistribution}`;
-  }
-  const conflicting = dists.filter((d) => d !== spec.ortDistribution && d.startsWith("onnxruntime"));
-  if (conflicting.length > 0) {
-    return `CUDA runtime has conflicting ORT distributions: ${conflicting.join(", ")}`;
-  }
-  return null;
+  return assertFamilyOrtConstraints("cuda", python);
 }
 
 /**
@@ -143,7 +134,7 @@ export async function ensureOnnxRuntimeGpu(
   }
 
   onLine(`[deps] Installing ${pinnedOrtGpuLabel()} (required for CUDA EP)...`);
-  await pipInstallViaPython(venvPython, pinnedOrtGpuInstallArgs(), onLine, env);
+  await pipInstallForFamily("cuda", venvPython, pinnedOrtGpuInstallArgs(), onLine);
   onLine(`[deps] ${pinnedOrtGpuLabel()} installed`);
 
   const pinError = await assertCudaOrtPin(venvPython);

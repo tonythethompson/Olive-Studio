@@ -3,9 +3,18 @@
  * progress back to the UI as NDJSON (`/api/env/install-*` routes).
  *
  * Prefer `pipInstallViaPython` (`python -m pip`) with an isolated family env.
+ * Capability installs should use `pipInstallForFamily` so packageConstraints
+ * are enforced (no OpenVINO ORT swap; CUDA keeps pinned onnxruntime-gpu).
  * The legacy `pipInstall(pipExe, …)` path remains for transitional callers.
  */
 import { spawn } from "child_process";
+import type { VenvFamily } from "../../../lib/venvFamily.ts";
+import { envForFamily } from "../venv/pathIsolation.ts";
+import {
+  assertFamilyOrtConstraints,
+  enforcePackageConstraintsOrThrow,
+  withFamilyPipConstraintArgs,
+} from "../venv/packageConstraints.ts";
 
 export async function pipInstallViaPython(
   python: string,
@@ -30,6 +39,27 @@ export async function pipInstallViaPython(
         : reject(new Error(`pip install ${args.join(" ")} failed (exit ${code})`)),
     );
   });
+}
+
+/**
+ * Family-scoped pip install: reject forbidden ORT args, inject packageConstraints
+ * via `--constraint`, run under `envForFamily`, then assert ORT integrity.
+ */
+export async function pipInstallForFamily(
+  family: VenvFamily,
+  python: string,
+  args: string[],
+  onLine: (line: string) => void,
+): Promise<void> {
+  enforcePackageConstraintsOrThrow(family, args);
+  const constrained = withFamilyPipConstraintArgs(family, args);
+  try {
+    await pipInstallViaPython(python, constrained.args, onLine, envForFamily(family));
+  } finally {
+    constrained.cleanup();
+  }
+  const ortError = await assertFamilyOrtConstraints(family, python);
+  if (ortError) throw new Error(ortError);
 }
 
 /** @deprecated Prefer pipInstallViaPython with envForFamily. */

@@ -20,7 +20,7 @@
 import fs from "fs";
 
 import { execFileAsync } from "../shared/exec.ts";
-import { pipInstallViaPython } from "../shared/pipInstall.ts";
+import { pipInstallForFamily } from "../shared/pipInstall.ts";
 import { ensureVenvFamily } from "../venv/familyEnsure.ts";
 import { envForFamily } from "../venv/pathIsolation.ts";
 import { getVenvPython } from "../venv/paths.ts";
@@ -186,7 +186,7 @@ async function ensureTensorRtRtxEpAbi(
   env: NodeJS.ProcessEnv,
 ): Promise<void> {
   onLine(`[deps] Installing ${tensorrtRtxEpAbiLabel()} (NVIDIA EP-ABI plugin)...`);
-  await pipInstallViaPython(python, tensorrtRtxEpAbiInstallArgs(), onLine, env);
+  await pipInstallForFamily("cuda", python, tensorrtRtxEpAbiInstallArgs(), onLine);
   onLine(`[deps] ${tensorrtRtxEpAbiLabel()} installed ✓`);
 }
 
@@ -230,7 +230,7 @@ export async function ensureTensorRtRtx(
   const installed = await getInstalledTensorRtRtxVersion(venvPython);
   if (!installed) {
     onLine(`[deps] Installing ${tensorrtRtxLabel()} for TensorRT RTX runtime (may take a few minutes)...`);
-    await pipInstallViaPython(venvPython, tensorrtRtxInstallArgs(), onLine, env);
+    await pipInstallForFamily("cuda", venvPython, tensorrtRtxInstallArgs(), onLine);
     onLine(`[deps] ${tensorrtRtxLabel()} installed ✓`);
   } else {
     onLine(
