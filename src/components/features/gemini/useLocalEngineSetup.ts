@@ -29,6 +29,8 @@ type PullStreamEvent = {
   error?: string;
   hint?: string;
   ok?: boolean;
+  modelId?: string;
+  verified?: boolean;
 };
 
 function readStoredEngine(): LocalEngine {
@@ -290,7 +292,10 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     }
   };
 
-  const handlePullStreamEvent = (evt: PullStreamEvent, state: { gotDone: boolean; finalMessage: string }) => {
+  const handlePullStreamEvent = (
+    evt: PullStreamEvent,
+    state: { gotDone: boolean; finalMessage: string; modelId?: string; verified?: boolean },
+  ) => {
     if (typeof evt.percent === "number" && Number.isFinite(evt.percent)) {
       setLocalPullPercent(clampPercent(evt.percent));
     }
@@ -306,18 +311,25 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     if (evt.type === "done") {
       state.gotDone = true;
       state.finalMessage = evt.message || "Model ready.";
+      if (typeof evt.modelId === "string" && evt.modelId.trim()) state.modelId = evt.modelId.trim();
+      if (typeof evt.verified === "boolean") state.verified = evt.verified;
       setLocalPullPercent(100);
     }
   };
 
-  const consumePullStream = async (r: Response) => {
+  const consumePullStream = async (
+    r: Response,
+  ): Promise<{ modelId?: string; verified?: boolean }> => {
     if (!r.ok && !r.body) {
       const data = (await r.json().catch(() => ({}))) as { error?: string; hint?: string };
       throw new Error(joinErrorParts(data.error || `HTTP ${r.status}`, data.hint));
     }
     if (!r.body) throw new Error(`Empty response (HTTP ${r.status})`);
 
-    const state = { gotDone: false, finalMessage: "" };
+    const state: { gotDone: boolean; finalMessage: string; modelId?: string; verified?: boolean } = {
+      gotDone: false,
+      finalMessage: "",
+    };
     const buf = await readNdjsonLines(r.body, (line) => {
       try {
         handlePullStreamEvent(JSON.parse(line) as PullStreamEvent, state);
@@ -329,11 +341,19 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
 
     // Legacy JSON body (non-stream) if server ever falls back
     if (!state.gotDone && r.headers.get("content-type")?.includes("application/json") && buf.trim()) {
-      const data = JSON.parse(buf) as { ok?: boolean; error?: string; message?: string };
+      const data = JSON.parse(buf) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+        modelId?: string;
+        verified?: boolean;
+      };
       if (data.error) throw new Error(data.error);
       if (data.ok) {
         state.gotDone = true;
         state.finalMessage = data.message || "Model ready.";
+        if (data.modelId) state.modelId = data.modelId;
+        if (typeof data.verified === "boolean") state.verified = data.verified;
       }
     }
     if (!state.gotDone && !r.ok) {
@@ -341,6 +361,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     }
 
     setLocalInstallInfo(state.finalMessage || "Model ready.");
+    return { modelId: state.modelId, verified: state.verified };
   };
 
   const cancelLocalPull = () => {
@@ -391,6 +412,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
       const controller = new AbortController();
       pullAbortRef.current = controller;
       const timeout = setTimeout(() => controller.abort(), 12 * 60 * 1000);
+      let pullMeta: { modelId?: string; verified?: boolean } = {};
       try {
         const r = await fetch(endpoint, {
           method: "POST",
@@ -401,18 +423,36 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
           body: JSON.stringify({ modelTag }),
           signal: controller.signal,
         });
-        await consumePullStream(r);
+        pullMeta = await consumePullStream(r);
       } finally {
         clearTimeout(timeout);
       }
 
       markEngineReady(source);
       const after = await refreshInstalledModels(source);
-      const enableId = resolveLocalEnableModelId(
-        modelTag,
-        preferredEnableTag(modelTag, source),
+      const found = findInstalledStarterId(
+        {
+          tag: modelTag,
+          enableTag: starter?.enableTag ?? preferredEnableTag(modelTag, source) ?? modelTag,
+          match: starter?.match ?? starter?.enableTag ?? modelTag,
+        },
         after,
       );
+      const enableId =
+        found ??
+        (pullMeta.modelId && after.includes(pullMeta.modelId) ? pullMeta.modelId : undefined);
+      if (!enableId) {
+        const expected =
+          pullMeta.modelId ||
+          preferredEnableTag(modelTag, source) ||
+          resolveLocalEnableModelId(modelTag, preferredEnableTag(modelTag, source), after);
+        throw new Error(
+          joinErrorParts(
+            `Download finished but the model did not appear in ${source === "ollama" ? "Ollama" : "LM Studio"}`,
+            `Expected something like "${expected}". Click Refresh under Installed models, then Enable.`,
+          ),
+        );
+      }
       setLocalInstallInfo(`Enabling ${enableId}…`);
       await onModelActivated(enableId, source);
       setLocalInstallInfo(`Ready: ${enableId}`);

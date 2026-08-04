@@ -241,6 +241,8 @@ export type LocalStarterModel = {
   name: string;
   desc: string;
   fallbackSize: string;
+  /** Approximate on-disk / download size for disk-space gating. */
+  approxBytes: number;
 };
 
 /** LM Studio starter models for local AI (download via `lms get <HF url>`). */
@@ -252,6 +254,7 @@ export const LMS_STARTER_MODELS: readonly LocalStarterModel[] = [
     name: "Qwen2.5-Coder (1.5B)",
     desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
     fallbackSize: "~1.7 GB",
+    approxBytes: 1_700_000_000,
   },
   {
     tag: "https://huggingface.co/lmstudio-community/Llama-3.2-1B-Instruct-GGUF",
@@ -260,6 +263,7 @@ export const LMS_STARTER_MODELS: readonly LocalStarterModel[] = [
     name: "Llama-3.2 (1B)",
     desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
     fallbackSize: "~1.3 GB",
+    approxBytes: 1_300_000_000,
   },
   {
     // Point at Q4_K_M so `-y` does not auto-pick a tiny IQ2 staff option.
@@ -269,6 +273,7 @@ export const LMS_STARTER_MODELS: readonly LocalStarterModel[] = [
     name: "Phi-3.5-Mini (3.8B)",
     desc: "🧠 Advanced Reasoning: Complex compiler co-design",
     fallbackSize: "~2.4 GB",
+    approxBytes: 2_400_000_000,
   },
 ];
 
@@ -281,6 +286,7 @@ export const OLLAMA_STARTER_MODELS: readonly LocalStarterModel[] = [
     name: "Qwen2.5-Coder (1.5B)",
     desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
     fallbackSize: "1.1 GB",
+    approxBytes: 1_100_000_000,
   },
   {
     tag: "llama3.2:1b",
@@ -289,6 +295,7 @@ export const OLLAMA_STARTER_MODELS: readonly LocalStarterModel[] = [
     name: "Llama-3.2 (1B)",
     desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
     fallbackSize: "800 MB",
+    approxBytes: 800_000_000,
   },
   {
     tag: "phi3.5",
@@ -297,6 +304,7 @@ export const OLLAMA_STARTER_MODELS: readonly LocalStarterModel[] = [
     name: "Phi-3.5-Mini",
     desc: "🧠 Advanced Reasoning: Complex compiler co-design",
     fallbackSize: "~2 GB",
+    approxBytes: 2_200_000_000,
   },
 ];
 
