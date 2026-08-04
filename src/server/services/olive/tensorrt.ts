@@ -5,11 +5,11 @@
  * install-on-demand via ensureTensorRt matches the TensorRT RTX flow.
  * RTX-specific path is in tensorrt-rtx.ts.
  */
-import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 
 import { execFileAsync } from "../shared/exec.ts";
+import { pipInstall } from "../shared/pipInstall.ts";
 import { ensureVenv } from "../venv/index.ts";
 import { getVenvPython, getVenvPip } from "../venv/paths.ts";
 import { getNativeGpuLibPaths } from "../venv/gpu.ts";
@@ -79,30 +79,10 @@ function extractTrtFailDetail(text: string): string | undefined {
   return text.slice(idx + TRT_FAIL_MARK.length).trim() || undefined;
 }
 
-/**
- * Installs packages with pip and reports output through the provided callback.
- *
- * @param pip - The pip executable to run
- * @param args - Arguments passed to `pip install`
- * @param onLine - Callback invoked for each output chunk
- */
-async function pipInstall(pip: string, args: string[], onLine: (line: string) => void): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const proc = spawn(pip, ["install", ...args], { stdio: "pipe" });
-    proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-    proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-    proc.on("error", (err: Error) =>
-      reject(
-        new Error(
-          `Failed to launch ${pip}: ${err.message}. Create the project .venv via Setup runtime first.`,
-        ),
-      ),
-    );
-    proc.on("close", (code: number | null) =>
-      code === 0 ? resolve() : reject(new Error(`pip install ${args.join(" ")} failed (exit ${code})`)),
-    );
-  });
-}
+// `pipInstall` is imported from `../shared/pipInstall.ts` so all three
+// install routes (this file, `cuda.ts`, `tensorrt-rtx.ts`) share the
+// same NDJSON line shape + error contract. The local copy that lived
+// here was deleted when the helper was extracted.
 
 /**
  * Ensures the pinned ONNX Runtime GPU package is installed for TensorRT execution.
@@ -426,18 +406,8 @@ export async function ensureDeps(
     }
 
     onLine(`[deps] Installing ${pkg.label}...`);
-    await new Promise<void>((resolve, reject) => {
-      const proc = spawn(pip, ["install", ...pkg.installArgs], {
-        stdio: "pipe",
-      });
-      proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-      proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-      proc.on("error", (err: Error) => reject(new Error(`Failed to launch ${pip}: ${err.message}`)));
-      proc.on("close", (code: number | null) =>
-        code === 0 ? resolve() : reject(new Error(`pip install ${pkg.label} failed (exit ${code})`)),
-      );
-    });
-    onLine(`[deps] ${pkg.label} installed ✓`);
+    await pipInstall(pip, pkg.installArgs, onLine);
+    onLine(`[deps] ${pkg.label} installed`);
   }
 
   return { ok: true };

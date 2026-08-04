@@ -326,7 +326,13 @@ export function IHVIntegrationPanel({
     Boolean(hardwareProbe?.nvidia?.gpus.length) && hardwareProbe?.tensorRtRtx?.loadable !== true;
   const trtNeedsInstall =
     Boolean(hardwareProbe?.nvidia?.gpus.length) && hardwareProbe?.tensorrt?.loadable !== true;
-  const tensorRtInstallBusy = installingTrt || installingTrtRtx;
+  // Single mutex covering all three pip install flows (TensorRT,
+  // TensorRT-RTX, onnxruntime-gpu). All three routes hit the same
+  // `.venv`, so any pair would step on each other's lock files if
+  // allowed to run concurrently. The individual `installingTrt | `
+  // Rtx | OrtGpu` booleans stay below so each button can keep its
+  // own per-flow spinner + error state, but the gate is shared.
+  const installInProgress = installingTrt || installingTrtRtx || installingOrtGpu;
 
   // CUDA install / toolkit-link gating. These mirror the TRT shape but
   // distinguish the four CUDA states:
@@ -345,7 +351,6 @@ export function IHVIntegrationPanel({
     nvidiaGpus.length > 0 && !isPreMaxwellBox && !cudaEpInVenv;
   const cudaToolkitMissing = hardwareProbe?.nvidia?.cudaToolkit?.available === false;
   const cudaToolkitMissingAndEpWorks = nvidiaGpus.length > 0 && !isPreMaxwellBox && cudaEpInVenv && cudaToolkitMissing;
-  const ortGpuInstallBusy = installingOrtGpu;
 
   const runNdjsonInstall = async (
     url: string,
@@ -402,7 +407,7 @@ export function IHVIntegrationPanel({
   };
 
   const handleInstallTensorRtRtx = async () => {
-    if (tensorRtInstallBusy) return;
+    if (installInProgress) return;
     setInstallingTrtRtx(true);
     setInstallTrtRtxError(null);
     setInstallTrtRtxLog([]);
@@ -422,7 +427,7 @@ export function IHVIntegrationPanel({
   };
 
   const handleInstallTensorRt = async () => {
-    if (tensorRtInstallBusy) return;
+    if (installInProgress) return;
     setInstallingTrt(true);
     setInstallTrtError(null);
     setInstallTrtLog([]);
@@ -442,7 +447,7 @@ export function IHVIntegrationPanel({
   };
 
   const handleInstallOrtGpu = async () => {
-    if (ortGpuInstallBusy || tensorRtInstallBusy) return;
+    if (installInProgress) return;
     setInstallingOrtGpu(true);
     setInstallOrtGpuError(null);
     setInstallOrtGpuLog([]);
@@ -922,7 +927,7 @@ export function IHVIntegrationPanel({
                               )}
                               <button
                                 type="button"
-                                disabled={tensorRtInstallBusy}
+                                disabled={installInProgress}
                                 onClick={() => void handleInstallTensorRtRtx()}
                                 className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
                               >
@@ -963,7 +968,7 @@ export function IHVIntegrationPanel({
                               )}
                               <button
                                 type="button"
-                                disabled={tensorRtInstallBusy}
+                                disabled={installInProgress}
                                 onClick={() => void handleInstallTensorRt()}
                                 className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
                               >
@@ -1025,7 +1030,7 @@ export function IHVIntegrationPanel({
                                   </p>
                                   <button
                                     type="button"
-                                    disabled={ortGpuInstallBusy || tensorRtInstallBusy}
+                                    disabled={installInProgress}
                                     onClick={() => void handleInstallOrtGpu()}
                                     className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
                                   >

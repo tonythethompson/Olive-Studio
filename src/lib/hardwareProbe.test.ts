@@ -338,17 +338,35 @@ describe("getProviderAvailabilityBlock — CUDA 4-state branching", () => {
     expect(block?.reason).toMatch(/developer\.nvidia\.com/);
   });
 
-  it("4) reports driver/wheel mismatch when NVIDIA + driver + toolkit OK but EP not registered", () => {
+  it("4) reports state-4 driver/wheel mismatch when NVIDIA + ORT + toolkit OK but EP stripped from detectedProviders", () => {
+    // State 4: NVIDIA + driver + toolkit + onnxruntime-gpu CUDA EP all
+    // detected — but the EP is NOT in detectedProviders (because the
+    // route's mergeDetectedProviders stripped it via cudaLoadable=false,
+    // e.g. a CUDA 13 wheel against a CUDA 11 driver). `detectedProviders`
+    // set explicitly here mirrors what /api/system/hardware-probe would
+    // surface so getProviderAvailabilityBlock reaches the state-4
+    // reason branch instead of the install-hint branch.
     const probe = makeProbe({
       nvidia: {
         gpus: [{ name: "NVIDIA GeForce RTX 5070", computeCapability: "12.0" }],
         cudaVersion: "12.8",
         cudaToolkit: { available: true, version: "12.8" },
       },
-      onnxRuntimeProviders: ["CPUExecutionProvider"], // CUDA EP not registered
+      // state-4 fixture: NVIDIA + driver + toolkit all healthy AND
+      // probe.cuda.loadable === true (so the state-3 install-hint branch
+      // is bypassed), but detectedProviders was post-processed to drop
+      // CUDAExecutionProvider (e.g. a downstream merge only kept EP
+      // strings whose .loadable flag was true at probe time, and the EP
+      // fell out). This exercises the cascade through state 3 -> state
+      // 4 and surfaces the driver/wheel mismatch reason rather than the
+      // 'install onnxruntime-gpu' advice.
+      cuda: { loadable: true },
+      onnxRuntimeProviders: ["CPUExecutionProvider", "CUDAExecutionProvider"],
+      detectedProviders: ["CPUExecutionProvider"],
     });
     const block = getProviderAvailabilityBlock("CUDAExecutionProvider", probe);
-    expect(block?.reason).toMatch(/driver.*wheel|driver.*version|mismatch/i);
+    expect(block?.reason).toMatch(/driver\/wheel version mismatch/i);
+    expect(block?.reason).not.toMatch(/pip install onnxruntime-gpu/);
   });
 
   it("returns null block when CUDA is in detectedProviders (already working)", () => {
