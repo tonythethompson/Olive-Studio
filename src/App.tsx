@@ -103,19 +103,14 @@ function Dashboard() {
       scrollingToRef.current = id;
       const main = mainRef.current;
       const target = document.getElementById(id);
-      if (!target) return;
-      // Resolve where we want to scroll to. `scroll-margin-top: 1rem` on
-      // each section gives us 16px of headroom above the section, so the
-      // ideal landing is `target.offsetTop - 16`. Browsers normally do this
-      // via `scrollIntoView({block:"start"})`, but they clamp to maxScroll
-      // and that leaves the *previous* section's tail visible above the
-      // targeted section's header when the target is short (Playground).
-      // The min-height on the last section keeps the target reachable, so
-      // we set `scrollTop` explicitly to honor the same offset without the
-      // pre-section bleed.
-      const top = target.offsetTop - 16;
-      const max = main ? main.scrollHeight - main.clientHeight : top;
-      main?.scrollTo({ top: Math.max(0, Math.min(top, max)), behavior: "smooth" });
+      if (!main || !target) return;
+      // Resolve the target position relative to the scroll container. Using
+      // offsetTop here would depend on the element's offsetParent.
+      const mainTop = main.getBoundingClientRect().top;
+      const targetTop = target.getBoundingClientRect().top;
+      const top = targetTop - mainTop + main.scrollTop - 16;
+      const max = main.scrollHeight - main.clientHeight;
+      main.scrollTo({ top: Math.max(0, Math.min(top, max)), behavior: "smooth" });
       window.setTimeout(() => {
         if (scrollingToRef.current === id) scrollingToRef.current = null;
       }, 900);
