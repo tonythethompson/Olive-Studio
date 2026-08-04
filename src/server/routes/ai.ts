@@ -5,7 +5,7 @@
  * Codex, Devin, pipeline validation, and analysis.
  */
 import { Router } from "express";
-import { spawn, execFile, execFileSync, execSync, type ChildProcess } from "child_process";
+import { spawn, execFile, execSync, type ChildProcess } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import path from "path";
@@ -25,7 +25,7 @@ import {
   LMS_STARTER_MODELS,
   OLLAMA_STARTER_MODELS,
   resolveLocalEnableModelId,
-} from "../../components/features/gemini/aiProviderCatalog.ts";
+} from "../../lib/localEngineStarters.ts";
 
 import { callAI, detectEnvProvider, setRuntimeAiProvider, getProvider } from "../services/ai/index.ts";
 import {
@@ -220,17 +220,17 @@ function findLmsCli(): string | null {
 }
 
 /** List downloaded LM Studio LLM model keys via `lms ls --json` (not just currently loaded). */
-function listLmsInstalledModelKeys(): string[] | null {
+async function listLmsInstalledModelKeys(): Promise<string[] | null> {
   const lms = findLmsCli();
   if (!lms) return null;
   try {
-    const out = execFileSync(lms, ["ls", "--json"], {
+    const { stdout } = await execFileAsync(lms, ["ls", "--json"], {
       encoding: "utf-8",
       timeout: 20_000,
       windowsHide: true,
       maxBuffer: 12 * 1024 * 1024,
     });
-    const parsed = JSON.parse(out) as Array<{ type?: string; modelKey?: string; path?: string }>;
+    const parsed = JSON.parse(stdout) as Array<{ type?: string; modelKey?: string; path?: string }>;
     if (!Array.isArray(parsed)) return null;
     return parsed
       .filter((m) => m && (m.type === "llm" || m.type === undefined))
@@ -1126,7 +1126,7 @@ export function mountAiRoutes(router: Router): void {
       }
 
       // Downloaded/catalog models: prefer `lms ls` (API only lists currently loaded).
-      const fromCli = listLmsInstalledModelKeys();
+      const fromCli = await listLmsInstalledModelKeys();
       const installedModels =
         fromCli && fromCli.length > 0
           ? fromCli
@@ -1302,50 +1302,52 @@ export function mountAiRoutes(router: Router): void {
       proc.stderr?.on("data", pushCliChunk);
       proc.on("close", (code) => {
         clearTimeout(maxTimer);
-        try {
-          if (!guard.disconnected()) {
-            if (timedOut) {
-              send({
-                type: "error",
-                error: "LM Studio download exceeded the server time limit (20 minutes).",
-                hint: "Retry when the network is stable, or finish/resume the download in the LM Studio app.",
-              });
-            } else if (code === 0) {
-              const listed = listLmsInstalledModelKeys();
-              if (listed === null) {
-                const starter = starterMetaForTag("lms", tag);
+        void (async () => {
+          try {
+            if (!guard.disconnected()) {
+              if (timedOut) {
                 send({
-                  type: "done",
-                  message: "Model downloaded successfully.",
-                  ok: true,
-                  percent: 100,
-                  modelId: starter?.enableTag ?? tag,
-                  verified: false,
+                  type: "error",
+                  error: "LM Studio download exceeded the server time limit (20 minutes).",
+                  hint: "Retry when the network is stable, or finish/resume the download in the LM Studio app.",
                 });
-              } else {
-                const check = verifyInstalledAfterPull("lms", tag, listed);
-                if (!check.ok) {
-                  send({ type: "error", error: check.error, hint: check.hint });
-                } else {
+              } else if (code === 0) {
+                const listed = await listLmsInstalledModelKeys();
+                if (listed === null) {
+                  const starter = starterMetaForTag("lms", tag);
                   send({
                     type: "done",
-                    message: `Model ready: ${check.modelId}`,
+                    message: "Model downloaded successfully.",
                     ok: true,
                     percent: 100,
-                    modelId: check.modelId,
-                    verified: true,
+                    modelId: starter?.enableTag ?? tag,
+                    verified: false,
                   });
+                } else {
+                  const check = verifyInstalledAfterPull("lms", tag, listed);
+                  if (!check.ok) {
+                    send({ type: "error", error: check.error, hint: check.hint });
+                  } else {
+                    send({
+                      type: "done",
+                      message: `Model ready: ${check.modelId}`,
+                      ok: true,
+                      percent: 100,
+                      modelId: check.modelId,
+                      verified: true,
+                    });
+                  }
                 }
+              } else {
+                const { error, hint } = hintForLmsPullFailure(logBuf.join("\n"), code);
+                send({ type: "error", error, hint });
               }
-            } else {
-              const { error, hint } = hintForLmsPullFailure(logBuf.join("\n"), code);
-              send({ type: "error", error, hint });
             }
+          } finally {
+            releaseBusy();
+            guard.endOnce();
           }
-        } finally {
-          releaseBusy();
-          guard.endOnce();
-        }
+        })();
       });
       proc.on("error", (err) => {
         clearTimeout(maxTimer);
@@ -1462,16 +1464,20 @@ export function mountAiRoutes(router: Router): void {
         timedOut = true;
         timeoutAc.abort();
       }, OLLAMA_PULL_MAX_MS);
-      const pullSignal =
-        typeof AbortSignal !== "undefined" && typeof AbortSignal.any === "function"
-          ? AbortSignal.any([guard.signal, timeoutAc.signal])
-          : guard.signal;
+      // Combine disconnect + wall-clock timeout without relying on AbortSignal.any.
+      const pullAc = new AbortController();
+      const forwardAbort = () => {
+        if (!pullAc.signal.aborted) pullAc.abort();
+      };
+      guard.signal.addEventListener("abort", forwardAbort, { once: true });
+      timeoutAc.signal.addEventListener("abort", forwardAbort, { once: true });
+      if (guard.signal.aborted || timeoutAc.signal.aborted) forwardAbort();
 
       const r = await fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/pull`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: tag, stream: true }),
-        signal: pullSignal,
+        signal: pullAc.signal,
       });
       if (guard.disconnected()) {
         releaseBusy();

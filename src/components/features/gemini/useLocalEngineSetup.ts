@@ -295,7 +295,16 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
   const handlePullStreamEvent = (
     evt: PullStreamEvent,
     state: { gotDone: boolean; finalMessage: string; modelId?: string; verified?: boolean },
+    onDownloadPhase?: () => void,
   ) => {
+    // Server only starts its 20m lms get / ollama timer after ensure*; arm ours then too.
+    if (
+      evt.type === "progress" ||
+      evt.type === "log" ||
+      (evt.type === "step" && /download|pulling/i.test(evt.message ?? ""))
+    ) {
+      onDownloadPhase?.();
+    }
     if (typeof evt.percent === "number" && Number.isFinite(evt.percent)) {
       setLocalPullPercent(clampPercent(evt.percent));
     }
@@ -319,6 +328,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
 
   const consumePullStream = async (
     r: Response,
+    onDownloadPhase?: () => void,
   ): Promise<{ modelId?: string; verified?: boolean }> => {
     if (!r.ok && !r.body) {
       const data = (await r.json().catch(() => ({}))) as { error?: string; hint?: string };
@@ -332,7 +342,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     };
     const buf = await readNdjsonLines(r.body, (line) => {
       try {
-        handlePullStreamEvent(JSON.parse(line) as PullStreamEvent, state);
+        handlePullStreamEvent(JSON.parse(line) as PullStreamEvent, state, onDownloadPhase);
       } catch (e) {
         if (e instanceof SyntaxError) return;
         throw e;
@@ -354,6 +364,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
         state.finalMessage = data.message || "Model ready.";
         if (data.modelId) state.modelId = data.modelId;
         if (typeof data.verified === "boolean") state.verified = data.verified;
+        onDownloadPhase?.();
       }
     }
     if (!state.gotDone && !r.ok) {
@@ -411,7 +422,19 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
       const endpoint = source === "ollama" ? "/api/ai/ollama-pull" : "/api/ai/local-pull";
       const controller = new AbortController();
       pullAbortRef.current = controller;
-      const timeout = setTimeout(() => controller.abort(), 12 * 60 * 1000);
+      // Align the 20m abort with the server's lms get / ollama pull timer (starts after ensure*).
+      const DOWNLOAD_MAX_MS = 20 * 60 * 1000;
+      // Cap hung ensure/install so a stuck startup cannot stream forever.
+      const ENSURE_PHASE_MAX_MS = 15 * 60 * 1000;
+      let downloadTimer: ReturnType<typeof setTimeout> | undefined;
+      const ensureTimer = setTimeout(() => {
+        if (!downloadTimer) controller.abort();
+      }, ENSURE_PHASE_MAX_MS);
+      const armDownloadTimeout = () => {
+        if (downloadTimer) return;
+        clearTimeout(ensureTimer);
+        downloadTimer = setTimeout(() => controller.abort(), DOWNLOAD_MAX_MS);
+      };
       let pullMeta: { modelId?: string; verified?: boolean } = {};
       try {
         const r = await fetch(endpoint, {
@@ -423,9 +446,10 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
           body: JSON.stringify({ modelTag }),
           signal: controller.signal,
         });
-        pullMeta = await consumePullStream(r);
+        pullMeta = await consumePullStream(r, armDownloadTimeout);
       } finally {
-        clearTimeout(timeout);
+        clearTimeout(ensureTimer);
+        if (downloadTimer) clearTimeout(downloadTimer);
       }
 
       markEngineReady(source);
@@ -468,6 +492,31 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     }
   };
 
+  /** Load an already-installed model into the engine, then activate it for chat. */
+  const enableInstalledModel = async (modelTag: string, source: LocalEngine = preferredEngine) => {
+    setLocalPullError("");
+    setLocalInstallInfo(`Loading ${modelTag}…`);
+    try {
+      const endpoint = source === "ollama" ? "/api/ai/ollama-load" : "/api/ai/local-load";
+      const r = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modelTag }),
+      });
+      if (!r.ok) {
+        const d = (await r.json().catch(() => ({}))) as { error?: string };
+        throw new Error(d.error || `HTTP ${r.status}`);
+      }
+      setLocalInstallInfo(`Enabling ${modelTag}…`);
+      await onModelActivated(modelTag, source);
+      await refreshInstalledModels(source);
+      setLocalInstallInfo(`Ready: ${modelTag}`);
+    } catch (err: unknown) {
+      setLocalPullError(err instanceof Error ? err.message : String(err));
+      setLocalInstallInfo(null);
+    }
+  };
+
   return {
     preferredEngine,
     selectPreferredEngine,
@@ -478,6 +527,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     installEngine,
     pullingModel,
     pullLocalModel,
+    enableInstalledModel,
     cancelLocalPull,
     localPullError,
     localInstallInfo,

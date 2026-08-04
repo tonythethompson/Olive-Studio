@@ -5,7 +5,8 @@ import {
   LMS_STARTER_MODELS,
   normalizeModelIdStem,
   resolveLocalEnableModelId,
-} from "../components/features/gemini/aiProviderCatalog";
+  stemsLooselyMatch,
+} from "./localEngineStarters";
 
 describe("isValidLocalModelTag", () => {
   it("accepts Hugging Face model URLs and short engine ids", () => {
@@ -28,6 +29,11 @@ describe("isValidLocalModelTag", () => {
     expect(isValidLocalModelTag("-y")).toBe(false);
     expect(isValidLocalModelTag("foo bar")).toBe(false);
     expect(isValidLocalModelTag("https://evil.example/model")).toBe(false);
+    expect(isValidLocalModelTag("../models/foo")).toBe(false);
+    expect(isValidLocalModelTag("../../foo")).toBe(false);
+    expect(isValidLocalModelTag("./models/foo")).toBe(false);
+    expect(isValidLocalModelTag("/abs/path")).toBe(false);
+    expect(isValidLocalModelTag("C:\\models\\foo")).toBe(false);
   });
 });
 
@@ -48,5 +54,17 @@ describe("local starter enable resolution", () => {
         "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf",
       ),
     ).toContain("phi35miniinstruct");
+  });
+
+  it("rejects short fuzzy stems that would cross-match models", () => {
+    expect(stemsLooselyMatch("a", "ba")).toBe(false);
+    expect(stemsLooselyMatch("phi35", "phi35miniinstruct")).toBe(false);
+    expect(stemsLooselyMatch("qwen25coder15b", "qwen25coder15binstruct")).toBe(true);
+    expect(
+      findInstalledStarterId(
+        { enableTag: "other", match: "coder", tag: "coder" },
+        ["qwen2.5-coder-1.5b-instruct", "other-model"],
+      ),
+    ).toBeNull();
   });
 });

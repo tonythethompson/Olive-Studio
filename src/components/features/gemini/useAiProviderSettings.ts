@@ -174,6 +174,9 @@ export function useAiProviderSettings({
       }
       if (typeof d.baseUrl === "string" && d.baseUrl.trim()) {
         setSettingsBaseUrl(d.baseUrl.trim());
+      } else {
+        // Server omitted/nulled baseUrl (e.g. left a local provider). Clear stale client URL.
+        setSettingsBaseUrl("");
       }
       return d;
     } catch {

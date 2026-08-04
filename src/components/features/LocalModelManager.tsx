@@ -1,9 +1,21 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
-function modelIdsMatch(a: string | undefined, b: string): boolean {
-  if (!a) return false;
-  return a === b || a.endsWith(b) || b.endsWith(a);
+import { MODEL_ID_FUZZY_MIN_LEN } from "../../lib/localEngineStarters";
+
+function modelIdsMatch(activeModel: string | undefined, installedId: string): boolean {
+  if (!activeModel) return false;
+  if (activeModel === installedId) return true;
+  // Path-qualified active ids must match exactly so two publishers with the same
+  // model tail cannot both show as Active.
+  if (activeModel.includes("/")) return false;
+  const installedTail = installedId.includes("/")
+    ? installedId.slice(installedId.lastIndexOf("/") + 1)
+    : installedId;
+  if (activeModel === installedTail) return true;
+  // Bare active id may still match a path-qualified install via a long suffix.
+  if (activeModel.length >= MODEL_ID_FUZZY_MIN_LEN && installedId.endsWith(activeModel)) return true;
+  return false;
 }
 
 /**
@@ -165,14 +177,15 @@ export function LocalModelManager({
   };
 
   useEffect(() => {
+    if (!isOpen) return;
     const cancelGuard = { cancelled: false };
     void refresh(() => cancelGuard.cancelled);
     return () => {
       cancelGuard.cancelled = true;
     };
-    // refresh on engine switch only
+    // Refresh when the panel opens or the engine filter changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine]);
+  }, [engine, isOpen]);
 
   /** Load into engine memory if needed, then set Active Provider. */
   const handleEnable = async (

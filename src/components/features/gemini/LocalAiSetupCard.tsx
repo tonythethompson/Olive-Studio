@@ -124,6 +124,8 @@ interface StarterModelCardProps {
   displaySize: string;
   accentBg: string;
   isPulling: boolean;
+  /** True while any starter pull is in flight (disables sibling cards). */
+  pullBusy?: boolean;
   installedId: string | null;
   onPull: () => void;
   onEnable: () => void;
@@ -134,7 +136,8 @@ interface StarterModelCardProps {
  *
  * @param model - The starter model to display
  * @param displaySize - The formatted model size
- * @param isPulling - Whether the model is currently being downloaded and activated
+ * @param isPulling - Whether this model is currently being downloaded and activated
+ * @param pullBusy - Whether any starter pull is in progress
  * @param installedId - Installed engine model id when already present locally
  * @param onPull - Called when the download action is selected
  * @param onEnable - Called when enabling an already-installed starter
@@ -148,7 +151,7 @@ function StarterModelCard({
   installedId,
   onPull,
   onEnable,
-}: StarterModelCardProps & { pullBusy?: boolean }) {
+}: StarterModelCardProps) {
   const installed = Boolean(installedId);
   const disabled = isPulling || Boolean(pullBusy);
   return (
@@ -362,7 +365,7 @@ export function LocalAiSetupCard({ local, activeModel, isOpen, onActivate }: Loc
               onPull={() => void local.pullLocalModel(m.tag, local.preferredEngine)}
               onEnable={() => {
                 if (!installedId || local.pullingModel) return;
-                void onActivate?.(installedId, local.preferredEngine);
+                void local.enableInstalledModel(installedId, local.preferredEngine);
               }}
             />
           );

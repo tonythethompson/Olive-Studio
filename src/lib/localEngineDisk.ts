@@ -8,7 +8,7 @@ import {
   LMS_STARTER_MODELS,
   OLLAMA_STARTER_MODELS,
   type LocalEngine,
-} from "../components/features/gemini/aiProviderCatalog.ts";
+} from "./localEngineStarters.ts";
 
 /** Require this multiple of the estimated download size free before starting. */
 export const LOCAL_PULL_DISK_HEADROOM = 1.15;

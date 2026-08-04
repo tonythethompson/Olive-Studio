@@ -5,7 +5,7 @@ import {
   LOCAL_PULL_DISK_HEADROOM,
   starterApproxBytes,
 } from "./localEngineDisk";
-import { LMS_STARTER_MODELS } from "../components/features/gemini/aiProviderCatalog";
+import { LMS_STARTER_MODELS } from "./localEngineStarters";
 
 describe("localEngineDisk", () => {
   it("resolves approx bytes for known LMS starters", () => {
