@@ -369,7 +369,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
         : "OpenVINO packages are incomplete — use Install in Hardware.",
     );
   } else {
-    notes.push("OpenVINO Python stack not found locally (needs openvino + onnxruntime-openvino).");
+    notes.push("OpenVINO Python stack not found locally (needs openvino + optimum-intel).");
   }
   notes.push("QNN requires Snapdragon/Hexagon dev hardware — not probed on desktop.");
 
