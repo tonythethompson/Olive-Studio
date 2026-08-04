@@ -119,7 +119,7 @@ export async function probeOpenVino(python: string): Promise<OpenVinoProbeResult
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     if (/No module named ['"]openvino['"]/i.test(message)) {
-      return { available: false, detail: "openvino is not installed in .venv" };
+      return { available: false, detail: "openvino is not installed in this Python environment" };
     }
     return { available: false, detail: message };
   }
