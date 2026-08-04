@@ -54,7 +54,6 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     docsUrl: "console.x.ai",
     baseUrl: "https://api.x.ai/v1",
     category: "direct",
-    description: "Grok models by xAI",
   },
   // ── API Routers & Aggregators ────────────────────────────────────────
   {
@@ -72,7 +71,6 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     docsUrl: "openrouter.ai/keys",
     baseUrl: "https://openrouter.ai/api/v1",
     category: "router",
-    description: "Access 200+ models via one API key",
   },
   {
     id: "groq",
@@ -82,7 +80,6 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     docsUrl: "console.groq.com/keys",
     baseUrl: "https://api.groq.com/openai/v1",
     category: "router",
-    description: "Ultra-fast inference on Groq LPU",
   },
   {
     id: "together",
@@ -96,7 +93,6 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     docsUrl: "api.together.xyz/settings/api-keys",
     baseUrl: "https://api.together.xyz/v1",
     category: "router",
-    description: "Open-source model hosting & inference",
   },
   {
     id: "fireworks",
@@ -106,7 +102,6 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     docsUrl: "fireworks.ai/account/api-keys",
     baseUrl: "https://api.fireworks.ai/inference/v1",
     category: "router",
-    description: "Fast OpenAI-compatible inference",
   },
   {
     id: "nvidia",
@@ -116,7 +111,6 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     docsUrl: "build.nvidia.com",
     baseUrl: "https://integrate.api.nvidia.com/v1",
     category: "router",
-    description: "NVIDIA hosted OpenAI-compatible endpoints",
   },
   {
     id: "huggingface",
@@ -126,7 +120,6 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     docsUrl: "huggingface.co/settings/tokens",
     baseUrl: "https://router.huggingface.co/v1",
     category: "router",
-    description: "HF Inference router (OpenAI-compatible)",
   },
   {
     id: "opencode",
@@ -136,7 +129,6 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     docsUrl: "opencode.ai",
     baseUrl: "https://opencode.ai/zen/v1",
     category: "router",
-    description: "OpenCode Zen gateway",
   },
   {
     id: "opencode-go",
@@ -146,7 +138,6 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     docsUrl: "opencode.ai",
     baseUrl: "https://opencode.ai/zen/go/v1",
     category: "router",
-    description: "OpenCode Go gateway",
   },
   // ── Subscription / gateway services ─────────────────────────────────
   {
@@ -156,25 +147,14 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     keyEnvVar: "CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID",
     docsUrl: "developers.cloudflare.com/workers-ai",
     category: "subscription",
-    description: "Token + account id",
   },
   {
     id: "codex",
-    name: "OpenAI Codex",
+    name: "ChatGPT Plus/Pro OAuth",
     models: ["default", "o3", "o4-mini", "gpt-5"],
     keyEnvVar: "",
     docsUrl: "developers.openai.com/codex/auth",
     category: "subscription",
-    description: "ChatGPT Plus/Pro sign-in",
-  },
-  {
-    id: "chatgpt-sub",
-    name: "OpenAI API key",
-    models: ["gpt-4o", "gpt-4o-mini", "o4-mini"],
-    keyEnvVar: "OPENAI_API_KEY",
-    docsUrl: "platform.openai.com/api-keys",
-    category: "subscription",
-    description: "Platform key (usage-based)",
   },
   {
     id: "copilot",
@@ -184,7 +164,6 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     docsUrl: "github.com/settings/copilot",
     baseUrl: "https://api.githubcopilot.com",
     category: "subscription",
-    description: "OAuth or session token",
   },
   {
     id: "kilocode",
@@ -194,7 +173,6 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     docsUrl: "kilo.ai/docs/gateway",
     baseUrl: "https://api.kilo.ai/api/gateway",
     category: "subscription",
-    description: "OpenAI-compatible gateway",
   },
   {
     id: "devin",
@@ -203,7 +181,6 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     keyEnvVar: "",
     docsUrl: "devin.ai",
     category: "subscription",
-    description: "Sign in for plan models",
   },
   // ── Custom / Self-Hosted ─────────────────────────────────────────────
   {
@@ -213,15 +190,24 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     keyEnvVar: "",
     docsUrl: "",
     category: "custom",
-    description: "Ollama, vLLM, LiteLLM, or any OpenAI-compatible endpoint",
   },
 ] as const;
 
 export type ProviderId = (typeof PROVIDER_OPTIONS)[number]["id"];
 
+/**
+ * Map legacy / alias provider ids to the catalog entry shown in Settings.
+ * `chatgpt-sub` was a duplicate OpenAI Platform key entry under Subscriptions.
+ */
+export function normalizeUiProviderId(provider: string): ProviderId | null {
+  if (provider === "chatgpt-sub") return "openai";
+  if (PROVIDER_OPTIONS.some((p) => p.id === provider)) return provider as ProviderId;
+  return null;
+}
+
 /** Category labels for the dropdown optgroup headers. */
 export const CATEGORY_LABELS: Record<string, string> = {
-  direct: "Direct API Providers",
+  direct: "Direct API Key Providers",
   router: "API Routers & Aggregators",
   subscription: "Subscription Services",
   custom: "Custom / Self-Hosted",

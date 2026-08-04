@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { CATEGORY_LABELS, PROVIDER_OPTIONS, type ProviderId } from "./aiProviderCatalog";
 import { CodexAccountPanel } from "./CodexAccountPanel";
 import { DevinAccountPanel } from "./DevinAccountPanel";
+import { ModelCombobox } from "./ModelCombobox";
 import type { AiProviderSettings } from "./useAiProviderSettings";
 
 interface ProvidersProp {
@@ -41,7 +42,6 @@ function ProviderSelect({ providers }: ProvidersProp) {
           acc.push(
             <option key={p.id} value={p.id}>
               {p.name}
-              {p.description ? `: ${p.description}` : ""}
             </option>,
           );
           return acc;
@@ -80,9 +80,17 @@ function ModelSourceBadge({ providers }: ProvidersProp) {
   );
 }
 
-/** Model input: free text for openai-compat, list + free text for routers, list otherwise. */
+/** Model input: free text for openai-compat, combobox for routers, list otherwise. */
 function ModelInput({ providers }: ProvidersProp) {
-  const { isCompatMode, settingsProvider, displayedModels, customModel, settingsModel } = providers;
+  const {
+    isCompatMode,
+    settingsProvider,
+    displayedModels,
+    customModel,
+    settingsModel,
+    modelsSource,
+    modelsLoading,
+  } = providers;
 
   if (isCompatMode && settingsProvider === "openai-compat") {
     return (
@@ -98,45 +106,19 @@ function ModelInput({ providers }: ProvidersProp) {
   }
 
   if (isCompatMode && displayedModels.length > 0) {
-    // OpenAI-compat routers (xAI, OpenRouter, …): show live list + allow free text
     const selected = customModel || settingsModel;
-    const isKnown = displayedModels.some((m) => m.id === selected);
     return (
-      <div className="space-y-1.5">
-        <select
-          id="gemini-settings-model"
-          aria-label="AI model"
-          value={isKnown ? selected : ""}
-          onChange={(e) => {
-            providers.setSettingsModel(e.target.value);
-            providers.setCustomModel(e.target.value);
-          }}
-          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue cursor-pointer"
-        >
-          {!isKnown && <option value="">Select a model…</option>}
-          {displayedModels.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-        <div>
-          <label htmlFor="gemini-settings-custom-model" className="sr-only">
-            Custom model id
-          </label>
-          <input
-            id="gemini-settings-custom-model"
-            aria-label="Custom model id"
-            placeholder="Or type a model id…"
-            value={customModel}
-            onChange={(e) => {
-              providers.setCustomModel(e.target.value);
-              providers.setSettingsModel(e.target.value);
-            }}
-            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
-          />
-        </div>
-      </div>
+      <ModelCombobox
+        id="gemini-settings-model"
+        value={selected}
+        options={displayedModels}
+        modelsSource={modelsSource}
+        modelsLoading={modelsLoading}
+        onChange={(modelId) => {
+          providers.setCustomModel(modelId);
+          providers.setSettingsModel(modelId);
+        }}
+      />
     );
   }
 

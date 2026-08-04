@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { canActivateWithEnvKey, hydratedSettingsBaseUrl } from "@/lib/envCredentialUi";
-import { PROVIDER_OPTIONS, type ProviderId } from "./aiProviderCatalog";
+import { PROVIDER_OPTIONS, normalizeUiProviderId, type ProviderId } from "./aiProviderCatalog";
 import type { ProviderStatus, SidebarTab } from "./types";
 
 interface UseAiProviderSettingsOptions {
@@ -15,6 +15,84 @@ interface UseAiProviderSettingsOptions {
 }
 
 export type AiProviderSettings = ReturnType<typeof useAiProviderSettings>;
+
+function isLocalAllowEmptyKey(baseUrl: string | undefined): boolean {
+  if (!baseUrl) return false;
+  try {
+    const host = new URL(baseUrl).hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  } catch {
+    return false;
+  }
+}
+
+function validateApiKeyProviderForm(input: {
+  settingsProvider: ProviderId;
+  key: string;
+  model: string;
+  isCompatMode: boolean;
+  resolvedBaseUrl: string | undefined;
+  cloudflareAccountId: string;
+  envUsable: boolean;
+}): string | null {
+  const allowEmptyKey =
+    input.envUsable ||
+    input.settingsProvider === "openai-compat" ||
+    isLocalAllowEmptyKey(input.resolvedBaseUrl);
+  if (input.settingsProvider === "cloudflare") {
+    // Env-only activation requires both manual fields empty. A partial paste is rejected.
+    if (input.envUsable && Boolean(input.key) !== Boolean(input.cloudflareAccountId)) {
+      return input.key
+        ? "Enter a Cloudflare account ID, or clear the token to use env credentials."
+        : "Enter a Cloudflare API token, or clear the account ID to use env credentials.";
+    }
+    if (!input.key && !input.envUsable) return "Enter a Cloudflare API token.";
+    if (!input.cloudflareAccountId && !input.envUsable) {
+      return "Enter a Cloudflare account ID (CLOUDFLARE_ACCOUNT_ID).";
+    }
+  } else if (!input.key && !allowEmptyKey) {
+    return "Enter an API key.";
+  }
+  if (!input.model || input.model === "n/a") {
+    return input.isCompatMode ? "Enter a model name." : "Select a model.";
+  }
+  if (input.isCompatMode && !input.resolvedBaseUrl) {
+    return "Base URL is required for OpenAI-compatible providers.";
+  }
+  return null;
+}
+
+async function persistApiKeyProvider(input: {
+  settingsProvider: ProviderId;
+  key: string;
+  model: string;
+  resolvedBaseUrl: string | undefined;
+  cloudflareAccountId: string;
+}): Promise<void> {
+  // Paste path: store token+account. Env-usable path skips this and relies on server resolve.
+  if (input.settingsProvider === "cloudflare" && input.key && input.cloudflareAccountId) {
+    const credRes = await fetch("/api/cloudflare/login/manual", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiToken: input.key, accountId: input.cloudflareAccountId }),
+    });
+    const credData = (await credRes.json().catch(() => ({}))) as { error?: string };
+    if (!credRes.ok) throw new Error(credData.error || `HTTP ${credRes.status}`);
+  }
+  const r = await fetch("/api/ai/provider", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      provider: input.settingsProvider,
+      apiKey: input.key || undefined,
+      model: input.model,
+      baseUrl: input.resolvedBaseUrl,
+    }),
+  });
+  const contentType = r.headers.get("content-type") ?? "";
+  const data = contentType.includes("application/json") ? await r.json().catch(() => ({})) : {};
+  if (!r.ok) throw new Error((data as { error?: string }).error || `HTTP ${r.status}`);
+}
 
 /**
  * Manages AI provider settings, model catalogs, provider status, and Codex and Devin authentication flows.
@@ -68,21 +146,43 @@ export function useAiProviderSettings({
   /** Last values used for model fetching to avoid redundant refetches. */
   const lastFetchedApiKeyRef = useRef<string>("");
   const lastFetchedBaseUrlRef = useRef<string>("");
+  /**
+   * True once the user (or a saved/active provider) deliberately chose a model id.
+   * Lets catalog refresh preserve freehand ids without blocking the initial live list apply.
+   */
+  const userModelOverrideRef = useRef(false);
 
-  const providerOption = PROVIDER_OPTIONS.find((p) => p.id === settingsProvider)!;
+  const providerOption =
+    PROVIDER_OPTIONS.find((p) => p.id === settingsProvider) ?? PROVIDER_OPTIONS[0]!;
   const isCompatMode = settingsProvider === "openai-compat" || !!providerOption.baseUrl;
 
   const isStaleRefresh = (sequence: number) => sequence !== refreshSequenceRef.current;
+
+  const setSettingsModelFromUi = (modelId: string) => {
+    userModelOverrideRef.current = true;
+    setSettingsModel(modelId);
+  };
+
+  const setCustomModelFromUi = (modelId: string) => {
+    userModelOverrideRef.current = true;
+    setCustomModel(modelId);
+  };
 
   const applyFetchedModels = (providerId: ProviderId, models: Array<{ id: string; label: string }>) => {
     setLiveModelsByProvider((prev) => ({ ...prev, [providerId]: models }));
     if (providerId === "devin") {
       setDevinModels(models.map((m) => ({ id: m.id, name: m.label })));
     }
-    // Keep selection valid when the live list differs from static defaults
-    setSettingsModel((current) => (models.some((m) => m.id === current) ? current : models[0]!.id));
+    // Keep known selections. Preserve freehand only after an explicit UI/saved choice.
+    setSettingsModel((current) => {
+      if (models.some((m) => m.id === current)) return current;
+      if (userModelOverrideRef.current && current.trim()) return current;
+      return models[0]!.id;
+    });
     setCustomModel((current) => {
-      if (!current || models.some((m) => m.id === current)) return current || models[0]!.id;
+      if (!current) return models[0]!.id;
+      if (models.some((m) => m.id === current)) return current;
+      if (userModelOverrideRef.current) return current;
       return models[0]!.id;
     });
   };
@@ -165,15 +265,12 @@ export function useAiProviderSettings({
       }
       const d = (await r.json()) as ProviderStatus;
       setProviderStatus(d);
-      const providerIds = new Set(PROVIDER_OPTIONS.map((p) => p.id));
-      const providerId =
-        d.provider && providerIds.has(d.provider as ProviderId)
-          ? (d.provider as ProviderId)
-          : settingsProvider;
-      if (d.provider && providerIds.has(d.provider as ProviderId)) {
-        setSettingsProvider(providerId);
+      if (d.provider) {
+        const uiProvider = normalizeUiProviderId(d.provider);
+        if (uiProvider) setSettingsProvider(uiProvider);
       }
       if (d.model) {
+        userModelOverrideRef.current = true;
         setSettingsModel(d.model);
         setCustomModel(d.model);
       }
@@ -258,6 +355,7 @@ export function useAiProviderSettings({
     // Prefer cached live list; otherwise static default until fetch returns
     const cached = liveModelsByProvider[id];
     const first = cached?.[0]?.id ?? opt.models[0] ?? "";
+    userModelOverrideRef.current = false;
     setSettingsModel(first);
     setCustomModel(id === "openai-compat" ? "" : first);
     setSettingsBaseUrl(opt.baseUrl ?? "");
@@ -448,74 +546,29 @@ export function useAiProviderSettings({
     const resolvedBaseUrl = settingsBaseUrl.trim() || providerOption.baseUrl || undefined;
     const cloudflareAccountId = settingsCloudflareAccountId.trim();
     const envUsable = canActivateWithEnvKey(providerStatus.envCredentials, settingsProvider);
-    const allowEmptyKey =
-      envUsable ||
-      settingsProvider === "openai-compat" ||
-      (() => {
-        if (!resolvedBaseUrl) return false;
-        try {
-          const host = new URL(resolvedBaseUrl).hostname.replace(/^\[|\]$/g, "").toLowerCase();
-          return host === "localhost" || host === "127.0.0.1" || host === "::1";
-        } catch {
-          return false;
-        }
-      })();
-    if (settingsProvider === "cloudflare") {
-      // Env-only activation requires both manual fields empty. A partial paste is rejected.
-      if (envUsable && (Boolean(key) !== Boolean(cloudflareAccountId))) {
-        setProviderSaveError(
-          key
-            ? "Enter a Cloudflare account ID, or clear the token to use env credentials."
-            : "Enter a Cloudflare API token, or clear the account ID to use env credentials.",
-        );
-        return;
-      }
-      if (!key && !envUsable) {
-        setProviderSaveError("Enter a Cloudflare API token.");
-        return;
-      }
-      if (!cloudflareAccountId && !envUsable) {
-        setProviderSaveError("Enter a Cloudflare account ID (CLOUDFLARE_ACCOUNT_ID).");
-        return;
-      }
-    } else if (!key && !allowEmptyKey) {
-      setProviderSaveError("Enter an API key.");
-      return;
-    }
-    if (!model || model === "n/a") {
-      setProviderSaveError(isCompatMode ? "Enter a model name." : "Select a model.");
-      return;
-    }
-    if (isCompatMode && !resolvedBaseUrl) {
-      setProviderSaveError("Base URL is required for OpenAI-compatible providers.");
+    const validationError = validateApiKeyProviderForm({
+      settingsProvider,
+      key,
+      model,
+      isCompatMode,
+      resolvedBaseUrl,
+      cloudflareAccountId,
+      envUsable,
+    });
+    if (validationError) {
+      setProviderSaveError(validationError);
       return;
     }
     setIsSavingProvider(true);
     setProviderSaveError("");
     try {
-      // Paste path: store token+account. Env-usable path skips this and relies on server resolve.
-      if (settingsProvider === "cloudflare" && key && cloudflareAccountId) {
-        const credRes = await fetch("/api/cloudflare/login/manual", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ apiToken: key, accountId: cloudflareAccountId }),
-        });
-        const credData = (await credRes.json().catch(() => ({}))) as { error?: string };
-        if (!credRes.ok) throw new Error(credData.error || `HTTP ${credRes.status}`);
-      }
-      const r = await fetch("/api/ai/provider", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider: settingsProvider,
-          apiKey: key || undefined,
-          model,
-          baseUrl: resolvedBaseUrl,
-        }),
+      await persistApiKeyProvider({
+        settingsProvider,
+        key,
+        model,
+        resolvedBaseUrl,
+        cloudflareAccountId,
       });
-      const contentType = r.headers.get("content-type") ?? "";
-      const data = contentType.includes("application/json") ? await r.json().catch(() => ({})) : {};
-      if (!r.ok) throw new Error((data as { error?: string }).error || `HTTP ${r.status}`);
       await fetchProviderStatus();
       setSettingsApiKey("");
       setSettingsCloudflareAccountId("");
@@ -546,6 +599,7 @@ export function useAiProviderSettings({
       const data = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
       setSettingsProvider("openai-compat");
+      userModelOverrideRef.current = true;
       setSettingsModel(modelTag);
       setCustomModel(modelTag);
       setSettingsBaseUrl(baseUrl);
@@ -587,7 +641,7 @@ export function useAiProviderSettings({
     settingsProvider,
     selectProvider,
     settingsModel,
-    setSettingsModel,
+    setSettingsModel: setSettingsModelFromUi,
     settingsApiKey,
     setSettingsApiKey,
     settingsCloudflareAccountId,
@@ -595,7 +649,7 @@ export function useAiProviderSettings({
     settingsBaseUrl,
     setSettingsBaseUrl,
     customModel,
-    setCustomModel,
+    setCustomModel: setCustomModelFromUi,
     displayedModels,
     modelsLoading,
     modelsSource,
