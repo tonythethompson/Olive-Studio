@@ -281,7 +281,7 @@ export function buildIssueBody(report: IssueReport): string {
 export function buildIssueTitle(report: IssueReport): string {
   const categoryLabel = REPORT_CATEGORIES.find((c) => c.id === report.category)?.label ?? report.category;
   const areaLabel = REPORT_AREAS.find((a) => a.id === report.area)?.label ?? report.area;
-  const snippet = report.description.slice(0, 60).replace(/\n/g, " ").trim();
+  const snippet = redactSecrets(report.description).slice(0, 60).replace(/\n/g, " ").trim();
   return `[${categoryLabel}] ${areaLabel}: ${snippet || "Untitled report"}`;
 }
 
