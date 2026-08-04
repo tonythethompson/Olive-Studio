@@ -43,7 +43,7 @@ export function ReportIssueModal({
   state,
   hardwareProbe,
   executionLogs,
-  mcpDiagnostic,
+  mcpDiagnostic: _mcpDiagnostic,
   defaultArea,
   defaultDescription,
   frequencyInfo,
