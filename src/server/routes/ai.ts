@@ -13,6 +13,12 @@ import os from "os";
 import rateLimit from "express-rate-limit";
 
 import { isValidLocalModelTag } from "../../lib/localModelTag.ts";
+import {
+  hintForLmsPullFailure,
+  mapLmsDownloadPercent,
+  parseLmsGetPercent,
+  splitCliLines,
+} from "../../lib/lmsPullProgress.ts";
 
 import { callAI, detectEnvProvider, setRuntimeAiProvider, getProvider } from "../services/ai/index.ts";
 import {
@@ -1193,28 +1199,33 @@ export function mountAiRoutes(router: Router): void {
         }
       };
       guard.signal.addEventListener("abort", killProc, { once: true });
-      proc.stdout?.on("data", (d: Buffer) => {
-        d.toString()
-          .split(/\r?\n/)
-          .filter(Boolean)
-          .forEach((l) => send({ type: "log", message: l }));
-      });
-      proc.stderr?.on("data", (d: Buffer) => {
-        d.toString()
-          .split(/\r?\n/)
-          .filter(Boolean)
-          .forEach((l) => send({ type: "log", message: l }));
-      });
+
+      const logBuf: string[] = [];
+      const pushCliChunk = (d: Buffer) => {
+        for (const line of splitCliLines(d.toString())) {
+          logBuf.push(line);
+          if (logBuf.length > 80) logBuf.splice(0, logBuf.length - 80);
+          const cliPct = parseLmsGetPercent(line);
+          if (cliPct !== null) {
+            send({
+              type: "progress",
+              message: line.replace(/\s+/g, " ").slice(0, 160),
+              percent: mapLmsDownloadPercent(cliPct),
+            });
+          } else {
+            send({ type: "log", message: line.slice(0, 240) });
+          }
+        }
+      };
+      proc.stdout?.on("data", pushCliChunk);
+      proc.stderr?.on("data", pushCliChunk);
       proc.on("close", (code) => {
         if (!guard.disconnected()) {
           if (code === 0) {
             send({ type: "done", message: "Model downloaded successfully.", ok: true, percent: 100 });
           } else {
-            send({
-              type: "error",
-              error: `LM Studio download exited with code ${code}`,
-              hint: "Official CLI is `lms get <model> -y` (not `pull`). Open LM Studio once if get fails to resolve the model.",
-            });
+            const { error, hint } = hintForLmsPullFailure(logBuf.join("\n"), code);
+            send({ type: "error", error, hint });
           }
         }
         guard.endOnce();

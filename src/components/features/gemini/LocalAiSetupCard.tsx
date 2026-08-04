@@ -144,11 +144,13 @@ function StarterModelCard({
   displaySize,
   accentBg,
   isPulling,
+  pullBusy,
   installedId,
   onPull,
   onEnable,
-}: StarterModelCardProps) {
+}: StarterModelCardProps & { pullBusy?: boolean }) {
   const installed = Boolean(installedId);
+  const disabled = isPulling || Boolean(pullBusy);
   return (
     <div className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60 flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
@@ -166,7 +168,7 @@ function StarterModelCard({
       <button
         type="button"
         onClick={installed ? onEnable : onPull}
-        disabled={isPulling}
+        disabled={disabled}
         className={`mt-1 w-full h-7 border rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 ${accentBg}`}
       >
         {isPulling ? (
@@ -192,6 +194,7 @@ interface LocalPullProgressProps {
   localInstallInfo: string | null;
   localPullPercent: number | null;
   localPullLog: readonly string[];
+  onCancel: () => void;
 }
 
 function LocalPullProgress({
@@ -199,6 +202,7 @@ function LocalPullProgress({
   localInstallInfo,
   localPullPercent,
   localPullLog,
+  onCancel,
 }: LocalPullProgressProps) {
   return (
     <div className="mt-2 rounded-lg border border-slate-800 bg-slate-950/80 p-2.5 space-y-2">
@@ -209,11 +213,22 @@ function LocalPullProgress({
             {localInstallInfo || (pullingModel ? `Working on ${pullingModel}…` : "Ready")}
           </span>
         </p>
-        {localPullPercent !== null && (
-          <span className="text-[10px] font-mono text-slate-400 shrink-0">
-            {Math.round(localPullPercent)}%
-          </span>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {localPullPercent !== null && (
+            <span className="text-[10px] font-mono text-slate-400">
+              {Math.round(localPullPercent)}%
+            </span>
+          )}
+          {pullingModel ? (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="text-[10px] font-semibold px-2 py-0.5 rounded border border-rose-500/35 text-rose-300 hover:bg-rose-500/10 cursor-pointer"
+            >
+              Cancel
+            </button>
+          ) : null}
+        </div>
       </div>
       {localPullPercent !== null && (
         <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
@@ -322,6 +337,7 @@ export function LocalAiSetupCard({ local, activeModel, isOpen, onActivate }: Loc
           localInstallInfo={local.localInstallInfo}
           localPullPercent={local.localPullPercent}
           localPullLog={local.localPullLog}
+          onCancel={local.cancelLocalPull}
         />
       )}
       {local.localPullError && (
@@ -341,10 +357,11 @@ export function LocalAiSetupCard({ local, activeModel, isOpen, onActivate }: Loc
               displaySize={resolveDisplaySize(m, local.modelSizes)}
               accentBg={accentBg}
               isPulling={local.pullingModel === m.tag}
+              pullBusy={Boolean(local.pullingModel)}
               installedId={installedId}
               onPull={() => void local.pullLocalModel(m.tag, local.preferredEngine)}
               onEnable={() => {
-                if (!installedId) return;
+                if (!installedId || local.pullingModel) return;
                 void onActivate?.(installedId, local.preferredEngine);
               }}
             />

@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { LocalEngine } from "./aiProviderCatalog";
 import {
   LMS_STARTER_MODELS,
   OLLAMA_STARTER_MODELS,
+  findInstalledStarterId,
   resolveLocalEnableModelId,
 } from "./aiProviderCatalog";
 
@@ -74,9 +75,10 @@ function describeInstallFetchError(err: unknown): string {
   return err instanceof Error ? err.message : "Install failed";
 }
 
-function describePullFetchError(err: unknown): string {
+function describePullFetchError(err: unknown, opts?: { userCancelled?: boolean }): string {
+  if (opts?.userCancelled) return "Download cancelled.";
   if (err instanceof Error && err.name === "AbortError") {
-    return "Download timed out (install + pull can take several minutes). Retry once the engine is installed.";
+    return "Download timed out or was cancelled. Large pulls can take several minutes — retry if needed.";
   }
   if (err instanceof TypeError && /fetch/i.test(err.message)) {
     return "Failed to reach Olive Studio server (Failed to fetch). Keep pnpm dev / tauri:dev running, then retry.";
@@ -96,9 +98,13 @@ async function fetchInstalledModelIds(engine: LocalEngine): Promise<string[]> {
   }
 }
 
-function preferredEnableTag(downloadTag: string, source: LocalEngine): string | undefined {
+function starterForTag(downloadTag: string, source: LocalEngine) {
   const list = source === "ollama" ? OLLAMA_STARTER_MODELS : LMS_STARTER_MODELS;
-  return list.find((m) => m.tag === downloadTag)?.enableTag;
+  return list.find((m) => m.tag === downloadTag);
+}
+
+function preferredEnableTag(downloadTag: string, source: LocalEngine): string | undefined {
+  return starterForTag(downloadTag, source)?.enableTag;
 }
 
 /**
@@ -121,6 +127,8 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
   const [lmsInstalled, setLmsInstalled] = useState<boolean | null>(null);
   const [installingEngine, setInstallingEngine] = useState<LocalEngine | null>(null);
   const [preferredEngine, setPreferredEngine] = useState<LocalEngine>(readStoredEngine);
+  const pullAbortRef = useRef<AbortController | null>(null);
+  const pullUserCancelledRef = useRef(false);
 
   const selectPreferredEngine = (engine: LocalEngine) => {
     setPreferredEngine(engine);
@@ -335,23 +343,56 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     setLocalInstallInfo(state.finalMessage || "Model ready.");
   };
 
+  const cancelLocalPull = () => {
+    pullUserCancelledRef.current = true;
+    pullAbortRef.current?.abort();
+    setLocalInstallInfo("Cancelling download…");
+  };
+
   const pullLocalModel = async (modelTag: string, source: LocalEngine = "lms") => {
+    if (pullAbortRef.current) {
+      setLocalPullError("A download is already in progress. Cancel it first, or wait for it to finish.");
+      return;
+    }
+
     setPullingModel(modelTag);
     setLocalPullError("");
-    setLocalPullPercent(0);
+    setLocalPullPercent(null);
     setLocalPullLog([]);
-    setLocalInstallInfo(
-      source === "ollama"
-        ? "Starting: ensure Ollama → serve → download…"
-        : "Starting: ensure LM Studio → serve → download…",
-    );
+    pullUserCancelledRef.current = false;
+
     try {
+      const starter = starterForTag(modelTag, source);
+      const installed = await refreshInstalledModels(source);
+      const existing = findInstalledStarterId(
+        {
+          tag: modelTag,
+          enableTag: starter?.enableTag ?? preferredEnableTag(modelTag, source) ?? modelTag,
+          match: starter?.match ?? starter?.enableTag ?? modelTag,
+        },
+        installed,
+      );
+      if (existing) {
+        setLocalPullPercent(100);
+        setLocalInstallInfo(`Already installed — enabling ${existing}…`);
+        await onModelActivated(existing, source);
+        setLocalInstallInfo(`Ready: ${existing}`);
+        return;
+      }
+
+      setLocalPullPercent(0);
+      setLocalInstallInfo(
+        source === "ollama"
+          ? "Starting: ensure Ollama → serve → download…"
+          : "Starting: ensure LM Studio → serve → download…",
+      );
+
       const endpoint = source === "ollama" ? "/api/ai/ollama-pull" : "/api/ai/local-pull";
       const controller = new AbortController();
+      pullAbortRef.current = controller;
       const timeout = setTimeout(() => controller.abort(), 12 * 60 * 1000);
-      let r: Response;
       try {
-        r = await fetch(endpoint, {
+        const r = await fetch(endpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -360,25 +401,29 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
           body: JSON.stringify({ modelTag }),
           signal: controller.signal,
         });
+        await consumePullStream(r);
       } finally {
         clearTimeout(timeout);
       }
 
-      await consumePullStream(r);
       markEngineReady(source);
-      const installed = await refreshInstalledModels(source);
+      const after = await refreshInstalledModels(source);
       const enableId = resolveLocalEnableModelId(
         modelTag,
         preferredEnableTag(modelTag, source),
-        installed,
+        after,
       );
       setLocalInstallInfo(`Enabling ${enableId}…`);
       await onModelActivated(enableId, source);
       setLocalInstallInfo(`Ready: ${enableId}`);
     } catch (err: unknown) {
-      setLocalPullError(describePullFetchError(err));
+      setLocalPullError(
+        describePullFetchError(err, { userCancelled: pullUserCancelledRef.current }),
+      );
       setLocalInstallInfo(null);
     } finally {
+      pullAbortRef.current = null;
+      pullUserCancelledRef.current = false;
       setPullingModel(null);
     }
   };
@@ -393,6 +438,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     installEngine,
     pullingModel,
     pullLocalModel,
+    cancelLocalPull,
     localPullError,
     localInstallInfo,
     localPullPercent,
