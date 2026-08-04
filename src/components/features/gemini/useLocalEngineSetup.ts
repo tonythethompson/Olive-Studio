@@ -216,7 +216,8 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     if (evt.message) {
       setLocalInstallInfo(evt.message);
       appendPullLog(evt.message);
-    }      if (evt.openedUrl) state.openedUrl = evt.openedUrl;
+    }
+    if (evt.openedUrl) state.openedUrl = evt.openedUrl;
     if (evt.type === "error") {
       const urlToOpen = state.openedUrl || evt.openedUrl;
       if (urlToOpen) {
