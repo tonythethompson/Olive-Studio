@@ -60,3 +60,4 @@ bun.lock
 .air/
 .kiro/
 /.playwright-mcp
+/.cursor/worktrees
