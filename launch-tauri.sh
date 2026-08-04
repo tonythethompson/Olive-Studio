@@ -42,11 +42,22 @@ stop_olive_studio_dev_stack() {
   echo "Stopping any running Olive Studio servers / Tauri leftovers..."
 
   local port=3000
-  local pids=""
+  local self_pid=$$
+  local parent_pid=${PPID:-0}
+
+  is_self_or_parent() {
+    local pid="$1"
+    [[ -z "$pid" ]] && return 1
+    [[ "$pid" == "$self_pid" || "$pid" == "$parent_pid" ]] && return 0
+    return 1
+  }
 
   if command -v lsof >/dev/null 2>&1; then
     while read -r pid; do
       [[ -z "$pid" ]] && continue
+      if is_self_or_parent "$pid"; then
+        continue
+      fi
       local cmd
       cmd="$(ps -p "$pid" -o args= 2>/dev/null || true)"
       # Only stop listeners whose command line belongs to this checkout.
@@ -68,14 +79,21 @@ stop_olive_studio_dev_stack() {
     taskkill.exe /F /IM "olive-studio.exe" >/dev/null 2>&1 || true
   fi
 
-  # Repo-scoped leftover tauri / server processes (avoid nuking unrelated node apps)
+  # Repo-scoped leftover tauri / server processes (avoid nuking unrelated node apps).
+  # Skip this shell and its parent: absolute-path launchers include $ROOT and "tauri" in argv.
   if command -v pgrep >/dev/null 2>&1; then
     local match_pids
     match_pids="$(pgrep -f "$ROOT" 2>/dev/null || true)"
     if [[ -n "$match_pids" ]]; then
       local pid cmd
       for pid in $match_pids; do
+        if is_self_or_parent "$pid"; then
+          continue
+        fi
         cmd="$(ps -p "$pid" -o args= 2>/dev/null || true)"
+        if [[ "$cmd" == *launch-tauri.sh* || "$cmd" == *launch-tauri.ps1* || "$cmd" == *launch-tauri.cmd* ]]; then
+          continue
+        fi
         if [[ "$cmd" == *tauri* || "$cmd" == *server.ts* || "$cmd" == *server.mjs* ]]; then
           echo "  Stopping leftover PID $pid"
           kill "$pid" 2>/dev/null || true
@@ -83,8 +101,14 @@ stop_olive_studio_dev_stack() {
       done
       sleep 0.2
       for pid in $match_pids; do
+        if is_self_or_parent "$pid"; then
+          continue
+        fi
         if kill -0 "$pid" 2>/dev/null; then
           cmd="$(ps -p "$pid" -o args= 2>/dev/null || true)"
+          if [[ "$cmd" == *launch-tauri.sh* || "$cmd" == *launch-tauri.ps1* || "$cmd" == *launch-tauri.cmd* ]]; then
+            continue
+          fi
           if [[ "$cmd" == *tauri* || "$cmd" == *server.ts* || "$cmd" == *server.mjs* ]]; then
             kill -9 "$pid" 2>/dev/null || true
           fi
