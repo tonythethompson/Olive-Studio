@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { canActivateWithEnvKey, hydratedSettingsBaseUrl } from "@/lib/envCredentialUi";
+import { openExternal } from "@/lib/openExternal";
 import { PROVIDER_OPTIONS, normalizeUiProviderId, type ProviderId } from "./aiProviderCatalog";
 import type { ProviderStatus, SidebarTab } from "./types";
 
@@ -412,7 +413,7 @@ export function useAiProviderSettings({
       };
       if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
       if (data.authUrl) {
-        window.open(data.authUrl, "_blank", "noopener,noreferrer");
+        void openExternal(data.authUrl);
       }
       setCodexMessage(data.message || "Complete sign-in in the browser, then click Refresh status.");
       // Poll account a few times after login window opens
@@ -463,7 +464,7 @@ export function useAiProviderSettings({
       const r = await fetch("/api/devin/login");
       const data = (await r.json()) as { ok?: boolean; authUrl?: string; error?: string };
       if (!r.ok || !data.ok || !data.authUrl) throw new Error(data.error || `HTTP ${r.status}`);
-      window.open(data.authUrl, "_blank", "noopener,noreferrer");
+      void openExternal(data.authUrl);
       setDevinMessage("Sign in in the browser, then paste the token shown on the page below.");
     } catch (err: unknown) {
       setProviderSaveError(err instanceof Error ? err.message : String(err));

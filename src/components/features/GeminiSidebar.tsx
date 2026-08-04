@@ -8,8 +8,9 @@ import {
   buildWorkspaceContextSummary,
 } from "@/lib/aiWorkspaceContext";
 import { chatPatchToUiState, sanitizeChatActionPatch, type ChatAction } from "@/lib/chatActions";
-import { Bot, X, Lightbulb, MessageSquareCode, Settings2 } from "lucide-react";
+import { Bot, X, Lightbulb, MessageSquareCode, Settings2, Bug } from "lucide-react";
 import { AuditPanel } from "./AuditPanel";
+import { ReportIssueModal } from "@/components/ReportIssueModal";
 import { PROVIDER_OPTIONS, normalizeUiProviderId } from "./gemini/aiProviderCatalog";
 import { ChatPanel } from "./gemini/ChatPanel";
 import { SettingsPanel } from "./gemini/SettingsPanel";
@@ -141,6 +142,9 @@ export function GeminiSidebar({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isOpen, onClose]);
+
+  // Report issue modal state
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
   const providerLabel =
     providerSource !== "none"
@@ -283,7 +287,7 @@ export function GeminiSidebar({
           </div>
 
           {/* Footer */}
-          <div className="p-3.5 border-t border-slate-800 shrink-0 bg-slate-950/85 space-y-1.5">
+          <div className="p-3.5 border-t border-slate-800 shrink-0 bg-slate-950/85 space-y-2">
             <div className="flex items-center gap-2 text-[10px] text-slate-500 justify-center">
               <Bot className="h-3 w-3 text-slate-600" />
               <span>
@@ -294,7 +298,22 @@ export function GeminiSidebar({
               AI can be wrong. Verify Audit, Chat, and Apply changes against your model, EP, and Olive docs
               before running jobs.
             </p>
+            <button
+              type="button"
+              onClick={() => setIsReportOpen(true)}
+              className="w-full flex items-center justify-center gap-1.5 text-[11px] text-slate-500 hover:text-electric-blue transition-colors cursor-pointer py-1.5 rounded hover:bg-slate-800/50"
+            >
+              <Bug className="h-3 w-3" />
+              Report an issue
+            </button>
           </div>
+
+          {/* Report Issue Modal */}
+          <ReportIssueModal
+            open={isReportOpen}
+            onClose={() => setIsReportOpen(false)}
+            state={state}
+          />
         </div>
       </aside>
     </>

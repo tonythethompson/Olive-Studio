@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import { openExternal } from "@/lib/openExternal";
 
 const REPO_URL = "https://github.com/tonythethompson/Olive-Studio";
 const LICENSE_URL = `${REPO_URL}/blob/main/LICENSE`;
@@ -40,14 +41,13 @@ export function LicenseNotice({ open, onClose }: LicenseNoticeProps) {
         <div className="space-y-3 text-xs text-slate-400 leading-relaxed">
           <p>
             <span className="text-slate-200">Olive Studio</span> is free software licensed under the{" "}
-            <a
-              href={MIT_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-electric-blue hover:underline"
+            <button
+              type="button"
+              onClick={() => void openExternal(MIT_URL)}
+              className="text-electric-blue hover:underline cursor-pointer bg-transparent border-none p-0 inline"
             >
               MIT License
-            </a>
+            </button>
             .
           </p>
           <p>
@@ -56,23 +56,21 @@ export function LicenseNotice({ open, onClose }: LicenseNoticeProps) {
           </p>
           <p className="text-[11px] text-slate-500">
             Copyright © 2026 Anthony Thompson. Source:{" "}
-            <a
-              href={REPO_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-electric-blue hover:underline"
+            <button
+              type="button"
+              onClick={() => void openExternal(REPO_URL)}
+              className="text-electric-blue hover:underline cursor-pointer bg-transparent border-none p-0 inline text-[11px]"
             >
               GitHub
-            </a>
+            </button>
             {" · "}
-            <a
-              href={LICENSE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-electric-blue hover:underline"
+            <button
+              type="button"
+              onClick={() => void openExternal(LICENSE_URL)}
+              className="text-electric-blue hover:underline cursor-pointer bg-transparent border-none p-0 inline text-[11px]"
             >
               full license text
-            </a>
+            </button>
           </p>
         </div>
       </div>
