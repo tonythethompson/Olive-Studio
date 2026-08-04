@@ -213,49 +213,14 @@ export const CATEGORY_LABELS: Record<string, string> = {
   custom: "Custom / Self-Hosted",
 };
 
-/** LM Studio starter models for local AI. */
-export const LMS_STARTER_MODELS = [
-  {
-    tag: "qwen2.5-coder-1.5b-instruct",
-    name: "Qwen2.5-Coder (1.5B)",
-    desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
-    fallbackSize: "1.1 GB",
-  },
-  {
-    tag: "llama-3.2-1b-instruct",
-    name: "Llama-3.2 (1B)",
-    desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
-    fallbackSize: "800 MB",
-  },
-  {
-    tag: "phi-3.5-mini-instruct",
-    name: "Phi-3.5-Mini (3.8B)",
-    desc: "🧠 Advanced Reasoning: Complex compiler co-design",
-    fallbackSize: "2.2 GB",
-  },
-] as const;
-
-/** Ollama starter models for local AI. */
-export const OLLAMA_STARTER_MODELS = [
-  {
-    tag: "qwen2.5-coder:1.5b",
-    name: "Qwen2.5-Coder (1.5B)",
-    desc: "⭐ Recommended: Best tool-calling accuracy & Olive recipe precision",
-    fallbackSize: "1.1 GB",
-  },
-  {
-    tag: "llama3.2:1b",
-    name: "Llama-3.2 (1B)",
-    desc: "⚡ Ultra-lightweight: Lowest RAM footprint (<1.2GB)",
-    fallbackSize: "800 MB",
-  },
-  {
-    tag: "phi3.5",
-    name: "Phi-3.5-Mini",
-    desc: "🧠 Advanced Reasoning: Complex compiler co-design",
-    fallbackSize: "~2 GB",
-  },
-] as const;
-
-/** A local engine that can serve models from the user's machine. */
-export type LocalEngine = "lms" | "ollama";
+/** Re-export local engine starters from lib (server/lib safe). */
+export type { LocalEngine, LocalStarterModel } from "../../../lib/localEngineStarters.ts";
+export {
+  LMS_STARTER_MODELS,
+  OLLAMA_STARTER_MODELS,
+  MODEL_ID_FUZZY_MIN_LEN,
+  normalizeModelIdStem,
+  stemsLooselyMatch,
+  findInstalledStarterId,
+  resolveLocalEnableModelId,
+} from "../../../lib/localEngineStarters.ts";

@@ -1,6 +1,23 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
+import { MODEL_ID_FUZZY_MIN_LEN } from "../../lib/localEngineStarters";
+
+function modelIdsMatch(activeModel: string | undefined, installedId: string): boolean {
+  if (!activeModel) return false;
+  if (activeModel === installedId) return true;
+  // Path-qualified active ids must match exactly so two publishers with the same
+  // model tail cannot both show as Active.
+  if (activeModel.includes("/")) return false;
+  const installedTail = installedId.includes("/")
+    ? installedId.slice(installedId.lastIndexOf("/") + 1)
+    : installedId;
+  if (activeModel === installedTail) return true;
+  // Bare active id may still match a path-qualified install via a long suffix.
+  if (activeModel.length >= MODEL_ID_FUZZY_MIN_LEN && installedId.endsWith(activeModel)) return true;
+  return false;
+}
+
 /**
  * Displays installed local models with search, grouping, loading, and unloading controls.
  *
@@ -70,7 +87,7 @@ export function LocalModelManager({
     const groups = new Map<string, Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }>>();
     for (const m of filteredModels) {
       const parts = m.id.split("/");
-      const publisher = parts.length > 1 ? parts[0] : "Other";
+      const publisher = parts.length > 1 ? parts[0]! : "Other";
       if (!groups.has(publisher)) groups.set(publisher, []);
       groups.get(publisher)!.push(m);
     }
@@ -160,38 +177,41 @@ export function LocalModelManager({
   };
 
   useEffect(() => {
+    if (!isOpen) return;
     const cancelGuard = { cancelled: false };
     void refresh(() => cancelGuard.cancelled);
     return () => {
       cancelGuard.cancelled = true;
     };
+    // Refresh when the panel opens or the engine filter changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine]);
+  }, [engine, isOpen]);
 
-  const handleLoad = async (modelTag: string, source: "lms" | "ollama" = "lms") => {
+  /** Load into engine memory if needed, then set Active Provider. */
+  const handleEnable = async (
+    modelTag: string,
+    source: "lms" | "ollama",
+    alreadyLoaded: boolean,
+  ) => {
     setBusy(modelTag);
     setError("");
     try {
-      const endpoint = source === "ollama" ? "/api/ai/ollama-load" : "/api/ai/local-load";
-      const r = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelTag }),
-      });
-      if (!r.ok) {
-        const d = await r.json();
-        throw new Error(d.error || `HTTP ${r.status}`);
+      if (!alreadyLoaded) {
+        const endpoint = source === "ollama" ? "/api/ai/ollama-load" : "/api/ai/local-load";
+        const r = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ modelTag }),
+        });
+        if (!r.ok) {
+          const d = (await r.json().catch(() => ({}))) as { error?: string };
+          throw new Error(d.error || `HTTP ${r.status}`);
+        }
       }
+      if (onActivate) await onActivate(modelTag, source);
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Load failed");
-      setBusy(null);
-      return;
-    }
-    try {
-      if (onActivate) await onActivate(modelTag, source);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Activation failed");
+      setError(err instanceof Error ? err.message : "Enable failed");
     } finally {
       setBusy(null);
     }
@@ -208,7 +228,7 @@ export function LocalModelManager({
         body: JSON.stringify({ modelTag }),
       });
       if (!r.ok) {
-        const d = await r.json();
+        const d = (await r.json().catch(() => ({}))) as { error?: string };
         throw new Error(d.error || `HTTP ${r.status}`);
       }
       await refresh();
@@ -228,7 +248,7 @@ export function LocalModelManager({
           </p>
         ) : (
           <span className="text-[10px] text-slate-500">
-            {loading ? "Checking installed models…" : `${models.length} installed`}
+            {loading ? "Checking installed models…" : `${models.length} installed · pick one to enable`}
           </span>
         )}
         <button
@@ -246,12 +266,12 @@ export function LocalModelManager({
         </p>
       ) : null}
       <div className="space-y-1.5">
-        {models.length > 3 && (
+        {models.length > 1 && (
           <div className="relative">
             <input
               ref={searchInputRef}
               type="text"
-              placeholder="Search models…"
+              placeholder="Search installed models…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -266,14 +286,14 @@ export function LocalModelManager({
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-slate-500 hover:text-slate-300 cursor-pointer"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-slate-500 hover:text-slate-300 cursor-pointer"
               >
                 ✕
               </button>
             )}
           </div>
         )}
-        <div className="space-y-2 max-h-48 overflow-y-auto">
+        <div className="space-y-2 max-h-64 overflow-y-auto">
           {groupedModels.map(([publisher, pubModels]) => {
             const isCollapsed = collapsedPublishers.has(publisher);
             return (
@@ -294,47 +314,63 @@ export function LocalModelManager({
                 </button>
                 {!isCollapsed && (
                   <div className="space-y-1 mt-0.5">
-                    {pubModels.map((m) => (
-                      <div
-                        key={m.id}
-                        className="flex items-center justify-between gap-2 p-2 rounded-lg border border-slate-800 bg-slate-950/60 text-[11px]"
-                      >
-                        <span
-                          className="font-mono text-slate-300 truncate flex-1 flex items-center gap-1.5"
-                          title={m.id}
+                    {pubModels.map((m) => {
+                      const active = modelIdsMatch(activeModel, m.id);
+                      return (
+                        <div
+                          key={`${m.source}:${m.id}`}
+                          className={`flex items-center justify-between gap-2 p-2 rounded-lg border text-[11px] ${
+                            active
+                              ? "border-emerald-500/40 bg-emerald-950/20"
+                              : "border-slate-800 bg-slate-950/60"
+                          }`}
                         >
-                          {activeModel &&
-                            (m.id === activeModel ||
-                              activeModel.endsWith(m.id) ||
-                              m.id.endsWith(activeModel)) && (
-                              <span
-                                className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"
-                                title="Active model"
-                              />
-                            )}
-                          {m.id.split("/").pop() || m.id}
-                        </span>
-                        {m.loaded ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleUnload(m.id, m.source)}
-                            disabled={busy === m.id}
-                            className="text-[10px] px-2 py-0.5 rounded border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
-                          >
-                            {busy === m.id ? "…" : "Unload"}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => void handleLoad(m.id, m.source)}
-                            disabled={busy === m.id}
-                            className="text-[10px] px-2 py-0.5 rounded border border-electric-blue/30 text-electric-blue hover:bg-electric-blue/10 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
-                          >
-                            {busy === m.id ? "…" : "Load"}
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                          <div className="min-w-0 flex-1 space-y-0.5">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {active ? (
+                                <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-1 py-px rounded">
+                                  Active
+                                </span>
+                              ) : null}
+                              {m.loaded && !active ? (
+                                <span
+                                  className="shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-sky-400"
+                                  title="Loaded in memory"
+                                />
+                              ) : null}
+                              <span className="font-mono text-slate-200 truncate" title={m.id}>
+                                {m.id.split("/").pop() || m.id}
+                              </span>
+                            </div>
+                            {m.id.includes("/") ? (
+                              <p className="text-[9px] text-slate-600 font-mono truncate">{m.id}</p>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {m.loaded ? (
+                              <button
+                                type="button"
+                                onClick={() => void handleUnload(m.id, m.source)}
+                                disabled={busy === m.id}
+                                className="text-[10px] px-2 py-0.5 rounded border border-slate-700 text-slate-400 hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50"
+                              >
+                                {busy === m.id ? "…" : "Unload"}
+                              </button>
+                            ) : null}
+                            {!active || !m.loaded ? (
+                              <button
+                                type="button"
+                                onClick={() => void handleEnable(m.id, m.source, m.loaded)}
+                                disabled={busy === m.id}
+                                className="text-[10px] px-2 py-0.5 rounded border border-electric-blue/30 text-electric-blue hover:bg-electric-blue/10 transition-colors cursor-pointer disabled:opacity-50 font-semibold"
+                              >
+                                {busy === m.id ? "…" : m.loaded ? "Enable" : "Load & enable"}
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

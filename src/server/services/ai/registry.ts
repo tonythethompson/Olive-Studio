@@ -1,5 +1,6 @@
 import type { ProviderConfig, AIChatMessage } from "../../types.ts";
 import { matchedEnvApiKeyName, readEnvApiKey } from "../../../lib/aiResponse.ts";
+import type { EnvCredentialStatus } from "../../../lib/envCredentialUi.ts";
 import { resolveCloudflareAuth } from "../../../lib/cloudflare/client.ts";
 import { cloudflareAiBaseUrl } from "../../../lib/cloudflare/credentials.ts";
 
@@ -45,14 +46,7 @@ export interface AiProviderPlugin {
   supportsJsonResponseFormat?: boolean;
 }
 
-export type EnvCredentialStatus = {
-  /** Non-placeholder key present in process.env (Windows user/system + dotenv). */
-  present: boolean;
-  /** Env var name that matched (never the secret value). */
-  envVar: string | null;
-  /** Enough env/file state to activate without pasting a key in the UI. */
-  usable: boolean;
-};
+export type { EnvCredentialStatus };
 
 // ─── Registry ─────────────────────────────────────────────────────────────────
 

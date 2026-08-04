@@ -49,6 +49,12 @@ export function BatchProcessingPanel({
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const activeSourcesRef = useRef<EventSource[]>([]);
+  /** When true, stop starting further jobs and treat current job as halted. */
+  const haltRequestedRef = useRef(false);
+  /** Server Olive job id for the batch item currently running (for cancel). */
+  const currentOliveJobIdRef = useRef<string | null>(null);
+  /** Resolver for the active SSE wait (fallback if cancel cannot deliver `done`). */
+  const currentStreamResolveRef = useRef<(() => void) | null>(null);
   // Always keep a ref to the latest jobs array so SSE callbacks can read current state
   const jobsRef = useRef<typeof state.batchJobs>(state.batchJobs || []);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -102,20 +108,60 @@ export function BatchProcessingPanel({
 
   const handleStartQueue = async () => {
     if (isProcessing) {
-      // Halt: close all active SSE connections
-      activeSourcesRef.current.forEach((s) => s.close());
-      activeSourcesRef.current = [];
-      setIsProcessing(false);
+      // Halt: request cancel and keep the open SSE so the server `done` event
+      // settles the queue waiter. Do not clear isProcessing here — the running
+      // start loop exits after the stream completes.
+      haltRequestedRef.current = true;
+      const oliveJobId = currentOliveJobIdRef.current;
+      if (oliveJobId) {
+        try {
+          const resp = await fetch("/api/olive/cancel", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jobId: oliveJobId }),
+          });
+          const data = (await resp.json().catch(() => ({}))) as { status?: string };
+          if (resp.ok && data.status === "cancelled") {
+            // `finalizeJob` emits `done`; leave EventSource open for that path.
+            return;
+          }
+          // Already terminal with another status — leave the stream to report it.
+          if (resp.ok) return;
+        } catch {
+          /* fall through to force-settle */
+        }
+        // Cancel failed: close SSE and release the waiter so the queue cannot hang.
+        activeSourcesRef.current.forEach((s) => s.close());
+        activeSourcesRef.current = [];
+        const resolveStream = currentStreamResolveRef.current;
+        currentStreamResolveRef.current = null;
+        resolveStream?.();
+        setState({
+          batchJobs: (jobsRef.current ?? []).map((j) =>
+            j.status === "running" || j.oliveJobId === oliveJobId
+              ? {
+                  ...j,
+                  status: "cancelled",
+                  logs: [...(j.logs || []), "[INFO] Halted by user."],
+                }
+              : j,
+          ),
+        });
+      }
+      // No live job id yet (POST still in flight): the start loop cancels after jobId.
       return;
     }
 
     const queuedJobs = (state.batchJobs || []).filter((j) => j.status === "queued");
     if (queuedJobs.length === 0) return;
 
+    haltRequestedRef.current = false;
     setIsProcessing(true);
 
     // Process jobs sequentially
     for (const job of queuedJobs) {
+      if (haltRequestedRef.current) break;
+
       // Materialize this job's state to validate it before execution
       const jobState: UIState = {
         ...state,
@@ -188,8 +234,66 @@ export function BatchProcessingPanel({
         continue;
       }
 
+      if (haltRequestedRef.current) {
+        // No SSE yet — apply the cancel endpoint's terminal status (or force
+        // cancelled if cancel fails) so the row cannot stick on "running".
+        type TerminalBatchStatus = "cancelled" | "completed" | "failed";
+        const isTerminal = (s: string | undefined): s is TerminalBatchStatus =>
+          s === "cancelled" || s === "completed" || s === "failed";
+        let terminalStatus: TerminalBatchStatus = "cancelled";
+        let haltLog = "[INFO] Halted before stream started.";
+        try {
+          const cancelResp = await fetch("/api/olive/cancel", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jobId }),
+          });
+          const cancelData = (await cancelResp.json().catch(() => ({}))) as { status?: string };
+          if (cancelResp.ok && isTerminal(cancelData.status)) {
+            terminalStatus = cancelData.status;
+            if (terminalStatus === "completed") {
+              haltLog = "[INFO] Halt requested after job already completed.";
+            } else if (terminalStatus === "failed") {
+              haltLog = "[INFO] Halt requested after job already failed.";
+            }
+          }
+        } catch {
+          /* keep cancelled + default log */
+        }
+        setState({
+          batchJobs: (jobsRef.current ?? []).map((j) =>
+            j.id === job.id
+              ? {
+                  ...j,
+                  oliveJobId: jobId,
+                  status: terminalStatus,
+                  logs: [...(j.logs || []), haltLog],
+                }
+              : j,
+          ),
+        });
+        break;
+      }
+
+      currentOliveJobIdRef.current = jobId;
+      setState({
+        batchJobs: (jobsRef.current ?? []).map((j) =>
+          j.id === job.id ? { ...j, oliveJobId: jobId } : j,
+        ),
+      });
+
       // Open SSE stream and wait for completion
       await new Promise<void>((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          if (currentStreamResolveRef.current === finish) {
+            currentStreamResolveRef.current = null;
+          }
+          resolve();
+        };
+        currentStreamResolveRef.current = finish;
         const evtSource = new EventSource(`/api/olive/stream/${jobId}`);
         activeSourcesRef.current.push(evtSource);
 
@@ -210,9 +314,15 @@ export function BatchProcessingPanel({
           return -1;
         };
 
-        // Handle named 'log' SSE events from Olive
+        // Named 'log' SSE events: { line: string }
         evtSource.addEventListener("log", (e: MessageEvent) => {
-          const line: string = e.data;
+          let line = String(e.data ?? "");
+          try {
+            const payload = JSON.parse(line) as { line?: string };
+            if (typeof payload.line === "string") line = payload.line;
+          } catch {
+            /* raw line fallback */
+          }
           const parsedPct = parseProgress(line);
           const currentJobs = jobsRef.current ?? [];
           setState({
@@ -230,16 +340,23 @@ export function BatchProcessingPanel({
           });
         });
 
-        // Handle named 'done' SSE event with {exitCode: N}
+        // Named 'done' SSE event with { exitCode, status }
         evtSource.addEventListener("done", (e: MessageEvent) => {
           let exitCode = 1;
+          let serverStatus: string | undefined;
           try {
-            const payload = JSON.parse(e.data);
+            const payload = JSON.parse(e.data) as { exitCode?: number; status?: string };
             exitCode = typeof payload.exitCode === "number" ? payload.exitCode : 1;
+            serverStatus = payload.status;
           } catch {
             exitCode = 1;
           }
-          const finalStatus = exitCode === 0 ? "completed" : "failed";
+          const finalStatus =
+            serverStatus === "cancelled" || haltRequestedRef.current
+              ? "cancelled"
+              : exitCode === 0
+                ? "completed"
+                : "failed";
           const currentJobs = jobsRef.current ?? [];
           const completedJob = currentJobs.find((j) => j.id === job.id);
           const metrics =
@@ -265,11 +382,27 @@ export function BatchProcessingPanel({
           evtSource.close();
           const idx = activeSourcesRef.current.indexOf(evtSource);
           if (idx !== -1) activeSourcesRef.current.splice(idx, 1);
-          resolve();
+          finish();
         });
 
         evtSource.onerror = () => {
           const currentJobs = jobsRef.current ?? [];
+          if (haltRequestedRef.current) {
+            setState({
+              batchJobs: currentJobs.map((j) =>
+                j.id === job.id
+                  ? {
+                      ...j,
+                      status: "cancelled",
+                      logs: [...(j.logs || []), "[INFO] Halted by user."],
+                    }
+                  : j,
+              ),
+            });
+            evtSource.close();
+            finish();
+            return;
+          }
           const failedJob = currentJobs.find((j) => j.id === job.id);
           const errorLogs = [...(failedJob?.logs || []), "[ERROR] SSE connection lost."];
           setState({
@@ -280,11 +413,15 @@ export function BatchProcessingPanel({
           // Auto-diagnose SSE failures via MCP knowledge base
           fetchKeyedDiagnostic(job.id, errorLogs);
           evtSource.close();
-          resolve();
+          finish();
         };
       });
+
+      currentOliveJobIdRef.current = null;
+      if (haltRequestedRef.current) break;
     }
 
+    currentOliveJobIdRef.current = null;
     setIsProcessing(false);
   };
 
@@ -587,6 +724,7 @@ export function BatchProcessingPanel({
                           {job.status === "running" && <PlayCircle className="h-5 w-5 text-electric-blue" />}
                           {job.status === "queued" && <Clock className="h-5 w-5 text-slate-500" />}
                           {job.status === "failed" && <XCircle className="h-5 w-5 text-red-500" />}
+                          {job.status === "cancelled" && <Pause className="h-5 w-5 text-amber-400" />}
                         </div>
 
                         <div className="min-w-0">

@@ -1,8 +1,7 @@
 # Devin subscription client (Olive Studio)
 
-**Devin is not a model.** It is a subscription that unlocks multiple models
-through Devin’s chat backend. Olive Studio uses it only for AI Assistant
-(audit / chat) after the user signs in.
+**Devin** is a multi-model subscription for Assistant audit/chat after the user
+signs in (plan models are selected separately).
 
 ## Flow
 

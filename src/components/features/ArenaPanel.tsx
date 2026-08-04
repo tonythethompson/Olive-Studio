@@ -630,10 +630,13 @@ async function runCloudInference(
   const elapsedMs = computeElapsed(startTime, endTime);
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-    throw new Error(
-      (body as { error?: string }).error ?? `HTTP ${res.status}`,
-    );
+    const body = (await res.json().catch(() => ({ error: `HTTP ${res.status}` }))) as {
+      error?: string;
+      detail?: string;
+    };
+    const detail = typeof body.detail === "string" ? body.detail.trim() : "";
+    const base = body.error ?? `HTTP ${res.status}`;
+    throw new Error(detail ? `${base}: ${detail.slice(0, 300)}` : base);
   }
 
   const data = (await res.json()) as { output?: string; error?: string };

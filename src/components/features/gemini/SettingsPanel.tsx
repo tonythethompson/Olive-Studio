@@ -4,6 +4,10 @@ import {
   preferredEngineFromBaseUrl,
   type AssistantSettingsMode,
 } from "@/lib/assistantSettingsMode";
+import {
+  activeProviderSourceLabel,
+  canClearActiveProvider,
+} from "@/lib/envCredentialUi";
 import { PROVIDER_OPTIONS, normalizeUiProviderId } from "./aiProviderCatalog";
 import { LocalAiSetupCard } from "./LocalAiSetupCard";
 import { ManualProviderSetup } from "./ManualProviderSetup";
@@ -23,6 +27,7 @@ function ActiveProviderCard({ providers }: ActiveProviderCardProps) {
     PROVIDER_OPTIONS.find(
       (p) => p.id === (normalizeUiProviderId(providerStatus.provider ?? "") ?? providerStatus.provider),
     )?.name ?? providerStatus.provider;
+  const sourceLabel = activeProviderSourceLabel(providerStatus);
 
   return (
     <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-2.5 py-1.5">
@@ -33,9 +38,10 @@ function ActiveProviderCard({ providers }: ActiveProviderCardProps) {
           <span className="font-medium text-slate-100">{providerName}</span>
           <span className="text-slate-500">:</span>{" "}
           <span className="font-mono text-slate-300">{providerStatus.model}</span>
+          {sourceLabel ? <span className="text-slate-500"> · {sourceLabel}</span> : null}
         </p>
       )}
-      {providerStatus.source === "user" && (
+      {canClearActiveProvider(providerStatus.source) ? (
         <button
           type="button"
           onClick={() => void providers.clearProvider()}
@@ -43,7 +49,7 @@ function ActiveProviderCard({ providers }: ActiveProviderCardProps) {
         >
           Clear
         </button>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -5,6 +5,9 @@
  * and a typed fetch wrapper for the frontend.
  */
 
+import type { HardwareProbeResult } from "./hardwareProbe.ts";
+import type { EnvCredentialStatus } from "./envCredentialUi.ts";
+
 // ─── API Base Types ─────────────────────────────────────────────────────────
 
 export interface ApiResponse<T = unknown> {
@@ -98,23 +101,8 @@ export interface OliveJobStatus {
 
 // ─── Hardware Probe ─────────────────────────────────────────────────────────
 
-export interface HardwareProbeResponse {
-  probedAt: string;
-  platform: {
-    os: string;
-    arch: string;
-    cpuModel: string;
-    cpuCores: number;
-    systemRamGb?: number;
-  };
-  nvidia?: {
-    gpus: Array<{ name: string; vramMb?: number; driver?: string }>;
-    cudaVersion?: string;
-  };
-  detectedProviders: string[];
-  recommendedProvider: string;
-  notes: string[];
-}
+export type { HardwareProbeResult as HardwareProbeResponse };
+export type { EnvCredentialStatus };
 
 // ─── MCP ────────────────────────────────────────────────────────────────────
 
@@ -123,10 +111,10 @@ export interface McpToolRequest {
   args: Record<string, unknown>;
 }
 
-export interface McpToolResponse {
-  result?: unknown;
+/** Olive MCP tool proxy returns the tool payload at the top level (not wrapped). */
+export type McpToolResponse = Record<string, unknown> & {
   error?: string;
-}
+};
 
 export interface KbStatusResponse {
   available: boolean;
@@ -135,6 +123,7 @@ export interface KbStatusResponse {
   lastSync?: string | null;
   passCount?: number;
   error?: string;
+  reason?: "missing" | "unreadable" | "invalid";
 }
 
 export interface KbSyncResponse {
@@ -191,9 +180,10 @@ export interface LocalUnloadRequest {
 export interface BatchJobResponse {
   id: string;
   name: string;
-  status: "queued" | "running" | "completed" | "failed";
+  status: "queued" | "running" | "completed" | "failed" | "cancelled";
   progress: number;
   logs: string[];
+  oliveJobId?: string;
 }
 
 // ─── Typed Fetch Wrapper ────────────────────────────────────────────────────

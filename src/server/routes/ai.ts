@@ -12,6 +12,21 @@ import path from "path";
 import os from "os";
 import rateLimit from "express-rate-limit";
 
+import { isValidLocalModelTag } from "../../lib/localModelTag.ts";
+import {
+  hintForLmsPullFailure,
+  mapLmsDownloadPercent,
+  parseLmsGetPercent,
+  splitCliLines,
+} from "../../lib/lmsPullProgress.ts";
+import { gateLocalPullDiskSpace } from "../../lib/localEngineDisk.ts";
+import {
+  findInstalledStarterId,
+  LMS_STARTER_MODELS,
+  OLLAMA_STARTER_MODELS,
+  resolveLocalEnableModelId,
+} from "../../lib/localEngineStarters.ts";
+
 import { callAI, detectEnvProvider, setRuntimeAiProvider, getProvider } from "../services/ai/index.ts";
 import {
   getRuntimeAiProvider,
@@ -202,6 +217,28 @@ function findLmsCli(): string | null {
   cachedLmsCli = null;
   lmsCliMissAt = Date.now();
   return null;
+}
+
+/** List downloaded LM Studio LLM model keys via `lms ls --json` (not just currently loaded). */
+async function listLmsInstalledModelKeys(): Promise<string[] | null> {
+  const lms = findLmsCli();
+  if (!lms) return null;
+  try {
+    const { stdout } = await execFileAsync(lms, ["ls", "--json"], {
+      encoding: "utf-8",
+      timeout: 20_000,
+      windowsHide: true,
+      maxBuffer: 12 * 1024 * 1024,
+    });
+    const parsed = JSON.parse(stdout) as Array<{ type?: string; modelKey?: string; path?: string }>;
+    if (!Array.isArray(parsed)) return null;
+    return parsed
+      .filter((m) => m && (m.type === "llm" || m.type === undefined))
+      .map((m) => String(m.modelKey || m.path || "").trim())
+      .filter(Boolean);
+  } catch {
+    return null;
+  }
 }
 
 function findOllamaCli(): string | null {
@@ -477,6 +514,58 @@ type LmsEnsureResult = { ok: boolean; error?: string; openedUrl?: string; steps:
 
 let lmsEnsureInFlight: Promise<LmsEnsureResult> | null = null;
 const lmsProgressSubscribers = new Set<(evt: EnsureProgressEvt) => void>();
+
+/** One active `lms get` / Ollama pull at a time per engine (server-side single-flight). */
+let lmsPullBusyTag: string | null = null;
+let ollamaPullBusyTag: string | null = null;
+const LMS_GET_MAX_MS = 20 * 60 * 1000;
+const OLLAMA_PULL_MAX_MS = 20 * 60 * 1000;
+
+function starterMetaForTag(engine: "lms" | "ollama", tag: string) {
+  const list = engine === "ollama" ? OLLAMA_STARTER_MODELS : LMS_STARTER_MODELS;
+  return list.find((m) => m.tag === tag);
+}
+
+function verifyInstalledAfterPull(
+  engine: "lms" | "ollama",
+  downloadTag: string,
+  installed: readonly string[],
+): { ok: true; modelId: string } | { ok: false; error: string; hint: string } {
+  const starter = starterMetaForTag(engine, downloadTag);
+  const found = findInstalledStarterId(
+    {
+      tag: downloadTag,
+      enableTag: starter?.enableTag ?? downloadTag,
+      match: starter?.match ?? starter?.enableTag ?? downloadTag,
+    },
+    installed,
+  );
+  if (found) return { ok: true, modelId: found };
+  const expected = starter?.enableTag ?? resolveLocalEnableModelId(downloadTag, starter?.enableTag, installed);
+  const engineName = engine === "ollama" ? "Ollama" : "LM Studio";
+  return {
+    ok: false,
+    error: `Download finished but the model did not appear in ${engineName}.`,
+    hint: `Expected something like "${expected}". Open ${engineName}, click Refresh under Installed models, then Enable.`,
+  };
+}
+
+async function listOllamaInstalledNames(): Promise<string[] | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2000);
+  try {
+    const tagsRes = await fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/tags`, {
+      signal: controller.signal,
+    });
+    if (!tagsRes.ok) return null;
+    const data = (await tagsRes.json()) as { models?: Array<{ name: string }> };
+    return (data.models ?? []).map((m) => m.name);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 async function ensureLmsReady(onProgress?: (evt: EnsureProgressEvt) => void): Promise<LmsEnsureResult> {
   if (onProgress) {
@@ -1030,20 +1119,27 @@ export function mountAiRoutes(router: Router): void {
 
   router.get("/ai/local-models", async (_req, res) => {
     try {
-      const [installedRes, loadedRes] = await Promise.allSettled([
-        fetch(`http://127.0.0.1:${LM_STUDIO_PORT}/v1/models`, lmStudioFetchInit()),
-        fetch(`http://127.0.0.1:${LM_STUDIO_PORT}/v1/models`, lmStudioFetchInit()),
-      ]);
-      const installedData =
-        installedRes.status === "fulfilled" && installedRes.value.ok
-          ? ((await installedRes.value.json()) as { data?: Array<{ id: string }> })
-          : { data: [] };
-      const loadedData =
-        loadedRes.status === "fulfilled" && loadedRes.value.ok
-          ? ((await loadedRes.value.json()) as { data?: Array<{ id: string }> })
-          : { data: [] };
-      const installedModels = (installedData.data ?? []).map((m: { id: string }) => m.id);
-      const loadedModels = (loadedData.data ?? []).map((m: { id: string }) => m.id);
+      // Loaded (serving) models come from the local OpenAI-compat API.
+      let loadedModels: string[] = [];
+      try {
+        const loadedRes = await fetch(`http://127.0.0.1:${LM_STUDIO_PORT}/v1/models`, lmStudioFetchInit());
+        if (loadedRes.ok) {
+          const loadedData = (await loadedRes.json()) as { data?: Array<{ id: string }> };
+          loadedModels = (loadedData.data ?? []).map((m) => m.id);
+        }
+      } catch {
+        /* server down */
+      }
+
+      // Downloaded/catalog models: prefer `lms ls` (API only lists currently loaded).
+      const fromCli = await listLmsInstalledModelKeys();
+      const installedModels =
+        fromCli && fromCli.length > 0
+          ? fromCli
+          : loadedModels.length > 0
+            ? loadedModels
+            : [];
+
       return res.json({ installedModels, loadedModels });
     } catch {
       return res.json({ installedModels: [], loadedModels: [] });
@@ -1119,9 +1215,36 @@ export function mountAiRoutes(router: Router): void {
       if (guard.disconnected()) return;
       rawSend(evt);
     };
+    const tag = String(modelTag);
+    const releaseBusy = () => {
+      if (lmsPullBusyTag === tag) lmsPullBusyTag = null;
+    };
     try {
+      if (!isValidLocalModelTag(tag)) {
+        send({ type: "error", error: "Invalid modelTag." });
+        guard.endOnce();
+        return;
+      }
+      if (lmsPullBusyTag) {
+        send({
+          type: "error",
+          error: "Another LM Studio download is already in progress.",
+          hint: `Wait for "${lmsPullBusyTag}" to finish, or cancel that download, then retry.`,
+        });
+        guard.endOnce();
+        return;
+      }
+      const disk = gateLocalPullDiskSpace("lms", tag);
+      if (!disk.ok) {
+        send({ type: "error", error: disk.error, hint: disk.hint });
+        guard.endOnce();
+        return;
+      }
+
+      lmsPullBusyTag = tag;
       const ready = await ensureLmsReady((evt) => send(evt));
       if (guard.disconnected()) {
+        releaseBusy();
         guard.endOnce();
         return;
       }
@@ -1131,6 +1254,7 @@ export function mountAiRoutes(router: Router): void {
           error: ready.error || "LM Studio is not ready",
           openedUrl: ready.openedUrl ?? "https://lmstudio.ai",
         });
+        releaseBusy();
         guard.endOnce();
         return;
       }
@@ -1141,57 +1265,124 @@ export function mountAiRoutes(router: Router): void {
           error: "LM Studio CLI (lms) not found. Install LM Studio from https://lmstudio.ai",
           openedUrl: "https://lmstudio.ai",
         });
+        releaseBusy();
         guard.endOnce();
         return;
       }
-      send({ type: "step", message: `Downloading ${modelTag} via LM Studio (lms get)…`, percent: 5 });
+      send({ type: "step", message: `Downloading ${tag} via LM Studio (lms get)…`, percent: 5 });
       // LM Studio CLI downloads with `lms get`, not Ollama-style `pull`. `-y` skips prompts.
-      const tag = String(modelTag);
-      if (tag.startsWith("-") || !/^[\w./:@-]+$/.test(tag)) {
-        send({ type: "error", error: "Invalid modelTag." });
-        guard.endOnce();
-        return;
-      }
+      // Prefer Hugging Face URLs for starters; bare staff-pick names often exit 1.
       const proc = spawn(lmsCli, ["get", tag, "-y"], { stdio: "pipe" });
+      let timedOut = false;
+      /** Escalate SIGTERM → SIGKILL so a stuck `lms get` cannot pin the busy gate forever. */
+      const KILL_ESCALATE_MS = 2_000;
+      let killEscalateTimer: ReturnType<typeof setTimeout> | undefined;
+      const clearKillEscalate = () => {
+        if (killEscalateTimer) {
+          clearTimeout(killEscalateTimer);
+          killEscalateTimer = undefined;
+        }
+      };
       const killProc = () => {
         try {
-          proc.kill();
+          proc.kill("SIGTERM");
         } catch {
           /* already exited */
         }
+        if (killEscalateTimer) return;
+        killEscalateTimer = setTimeout(() => {
+          try {
+            proc.kill("SIGKILL");
+          } catch {
+            /* already exited */
+          }
+        }, KILL_ESCALATE_MS);
+        if (typeof killEscalateTimer.unref === "function") killEscalateTimer.unref();
       };
+      const maxTimer = setTimeout(() => {
+        timedOut = true;
+        killProc();
+      }, LMS_GET_MAX_MS);
       guard.signal.addEventListener("abort", killProc, { once: true });
-      proc.stdout?.on("data", (d: Buffer) => {
-        d.toString()
-          .split(/\r?\n/)
-          .filter(Boolean)
-          .forEach((l) => send({ type: "log", message: l }));
-      });
-      proc.stderr?.on("data", (d: Buffer) => {
-        d.toString()
-          .split(/\r?\n/)
-          .filter(Boolean)
-          .forEach((l) => send({ type: "log", message: l }));
-      });
-      proc.on("close", (code) => {
-        if (!guard.disconnected()) {
-          if (code === 0) {
-            send({ type: "done", message: "Model downloaded successfully.", ok: true, percent: 100 });
-          } else {
+
+      const logBuf: string[] = [];
+      const pushCliChunk = (d: Buffer) => {
+        for (const line of splitCliLines(d.toString())) {
+          logBuf.push(line);
+          if (logBuf.length > 80) logBuf.splice(0, logBuf.length - 80);
+          const cliPct = parseLmsGetPercent(line);
+          if (cliPct !== null) {
             send({
-              type: "error",
-              error: `LM Studio download exited with code ${code}`,
-              hint: "Official CLI is `lms get <model> -y` (not `pull`). Open LM Studio once if get fails to resolve the model.",
+              type: "progress",
+              message: line.replace(/\s+/g, " ").slice(0, 160),
+              percent: mapLmsDownloadPercent(cliPct),
             });
+          } else {
+            send({ type: "log", message: line.slice(0, 240) });
           }
         }
-        guard.endOnce();
+      };
+      proc.stdout?.on("data", pushCliChunk);
+      proc.stderr?.on("data", pushCliChunk);
+      proc.on("close", (code) => {
+        clearTimeout(maxTimer);
+        clearKillEscalate();
+        void (async () => {
+          try {
+            if (!guard.disconnected()) {
+              if (timedOut) {
+                send({
+                  type: "error",
+                  error: "LM Studio download exceeded the server time limit (20 minutes).",
+                  hint: "Retry when the network is stable, or finish/resume the download in the LM Studio app.",
+                });
+              } else if (code === 0) {
+                const listed = await listLmsInstalledModelKeys();
+                if (listed === null) {
+                  const starter = starterMetaForTag("lms", tag);
+                  send({
+                    type: "done",
+                    message: "Model downloaded successfully.",
+                    ok: true,
+                    percent: 100,
+                    modelId: starter?.enableTag ?? tag,
+                    verified: false,
+                  });
+                } else {
+                  const check = verifyInstalledAfterPull("lms", tag, listed);
+                  if (!check.ok) {
+                    send({ type: "error", error: check.error, hint: check.hint });
+                  } else {
+                    send({
+                      type: "done",
+                      message: `Model ready: ${check.modelId}`,
+                      ok: true,
+                      percent: 100,
+                      modelId: check.modelId,
+                      verified: true,
+                    });
+                  }
+                }
+              } else {
+                const { error, hint } = hintForLmsPullFailure(logBuf.join("\n"), code);
+                send({ type: "error", error, hint });
+              }
+            }
+          } finally {
+            releaseBusy();
+            guard.endOnce();
+          }
+        })();
       });
       proc.on("error", (err) => {
+        clearTimeout(maxTimer);
+        clearKillEscalate();
         if (!guard.disconnected()) send({ type: "error", error: err.message });
+        releaseBusy();
         guard.endOnce();
       });
     } catch (err: unknown) {
+      releaseBusy();
       if (!guard.disconnected()) {
         send({ type: "error", error: err instanceof Error ? err.message : String(err) });
       }
@@ -1250,31 +1441,83 @@ export function mountAiRoutes(router: Router): void {
       if (guard.disconnected()) return;
       rawSend(evt);
     };
-    // Shared ensure continues for other clients; this request just stops consuming progress.
-    const ready = await ensureOllamaReady((evt) => send(evt));
-    if (guard.disconnected()) {
-      guard.endOnce();
-      return;
-    }
-    if (!ready.ok) {
-      send({ type: "error", error: ready.error });
-      guard.endOnce();
-      return;
-    }
+    const tag = String(modelTag);
+    let ownsBusy = false;
+    const releaseBusy = () => {
+      if (ownsBusy && ollamaPullBusyTag === tag) {
+        ollamaPullBusyTag = null;
+        ownsBusy = false;
+      }
+    };
+    let maxTimer: ReturnType<typeof setTimeout> | null = null;
+    let timedOut = false;
     try {
-      send({ type: "step", message: `Pulling ${modelTag} via Ollama…`, percent: 30 });
+      if (!isValidLocalModelTag(tag)) {
+        send({ type: "error", error: "Invalid modelTag." });
+        guard.endOnce();
+        return;
+      }
+      if (ollamaPullBusyTag) {
+        send({
+          type: "error",
+          error: "Another Ollama download is already in progress.",
+          hint: `Wait for "${ollamaPullBusyTag}" to finish, or cancel that download, then retry.`,
+        });
+        guard.endOnce();
+        return;
+      }
+      const disk = gateLocalPullDiskSpace("ollama", tag);
+      if (!disk.ok) {
+        send({ type: "error", error: disk.error, hint: disk.hint });
+        guard.endOnce();
+        return;
+      }
+
+      ollamaPullBusyTag = tag;
+      ownsBusy = true;
+      // Shared ensure continues for other clients; this request just stops consuming progress.
+      const ready = await ensureOllamaReady((evt) => send(evt));
+      if (guard.disconnected()) {
+        releaseBusy();
+        guard.endOnce();
+        return;
+      }
+      if (!ready.ok) {
+        send({ type: "error", error: ready.error });
+        releaseBusy();
+        guard.endOnce();
+        return;
+      }
+
+      send({ type: "step", message: `Pulling ${tag} via Ollama…`, percent: 30 });
+      const timeoutAc = new AbortController();
+      maxTimer = setTimeout(() => {
+        timedOut = true;
+        timeoutAc.abort();
+      }, OLLAMA_PULL_MAX_MS);
+      // Combine disconnect + wall-clock timeout without relying on AbortSignal.any.
+      const pullAc = new AbortController();
+      const forwardAbort = () => {
+        if (!pullAc.signal.aborted) pullAc.abort();
+      };
+      guard.signal.addEventListener("abort", forwardAbort, { once: true });
+      timeoutAc.signal.addEventListener("abort", forwardAbort, { once: true });
+      if (guard.signal.aborted || timeoutAc.signal.aborted) forwardAbort();
+
       const r = await fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/pull`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: modelTag, stream: true }),
-        signal: guard.signal,
+        body: JSON.stringify({ name: tag, stream: true }),
+        signal: pullAc.signal,
       });
       if (guard.disconnected()) {
+        releaseBusy();
         guard.endOnce();
         return;
       }
       if (!r.ok || !r.body) {
         send({ type: "error", error: `Ollama pull failed (HTTP ${r.status})` });
+        releaseBusy();
         guard.endOnce();
         return;
       }
@@ -1282,12 +1525,20 @@ export function mountAiRoutes(router: Router): void {
       const decoder = new TextDecoder();
       let buf = "";
       while (true) {
-        if (guard.disconnected()) {
+        if (guard.disconnected() || timedOut) {
           try {
             await reader.cancel();
           } catch {
             /* ignore */
           }
+          if (timedOut && !guard.disconnected()) {
+            send({
+              type: "error",
+              error: "Ollama download exceeded the server time limit (20 minutes).",
+              hint: "Retry when the network is stable, or run `ollama pull` in a terminal.",
+            });
+          }
+          releaseBusy();
           guard.endOnce();
           return;
         }
@@ -1307,6 +1558,7 @@ export function mountAiRoutes(router: Router): void {
             };
             if (evt.error) {
               send({ type: "error", error: evt.error });
+              releaseBusy();
               guard.endOnce();
               return;
             }
@@ -1325,13 +1577,59 @@ export function mountAiRoutes(router: Router): void {
           }
         }
       }
-      send({ type: "done", message: "Model pulled successfully.", ok: true, percent: 100 });
+
+      const listed = await listOllamaInstalledNames();
+      if (listed === null) {
+        send({
+          type: "done",
+          message: "Model pulled successfully.",
+          ok: true,
+          percent: 100,
+          modelId: tag,
+          verified: false,
+        });
+      } else {
+        const check = verifyInstalledAfterPull("ollama", tag, listed);
+        if (!check.ok) {
+          send({ type: "error", error: check.error, hint: check.hint });
+        } else {
+          send({
+            type: "done",
+            message: `Model ready: ${check.modelId}`,
+            ok: true,
+            percent: 100,
+            modelId: check.modelId,
+            verified: true,
+          });
+        }
+      }
     } catch (err: unknown) {
       if (!guard.disconnected()) {
-        send({ type: "error", error: err instanceof Error ? err.message : String(err) });
+        const isAbort = err instanceof Error && err.name === "AbortError";
+        if (isAbort) {
+          if (timedOut) {
+            send({
+              type: "error",
+              error: "Ollama download exceeded the server time limit (20 minutes).",
+              hint: "Retry when the network is stable, or run `ollama pull` in a terminal.",
+            });
+          } else {
+            send({
+              type: "error",
+              error: "Ollama download was cancelled.",
+              hint: "Retry the download, or cancel only if you meant to stop it.",
+            });
+          }
+        } else {
+          const msg = err instanceof Error ? err.message : String(err);
+          send({ type: "error", error: msg });
+        }
       }
+    } finally {
+      if (maxTimer) clearTimeout(maxTimer);
+      releaseBusy();
+      guard.endOnce();
     }
-    guard.endOnce();
   });
 
   router.post("/ai/ollama-load", async (req, res) => {

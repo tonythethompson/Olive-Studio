@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { canActivateWithEnvKey, hydratedSettingsBaseUrl } from "@/lib/envCredentialUi";
 import { PROVIDER_OPTIONS, normalizeUiProviderId, type ProviderId } from "./aiProviderCatalog";
 import type { ProviderStatus, SidebarTab } from "./types";
 
@@ -32,12 +33,23 @@ function validateApiKeyProviderForm(input: {
   isCompatMode: boolean;
   resolvedBaseUrl: string | undefined;
   cloudflareAccountId: string;
+  envUsable: boolean;
 }): string | null {
   const allowEmptyKey =
-    input.settingsProvider === "openai-compat" || isLocalAllowEmptyKey(input.resolvedBaseUrl);
+    input.envUsable ||
+    input.settingsProvider === "openai-compat" ||
+    isLocalAllowEmptyKey(input.resolvedBaseUrl);
   if (input.settingsProvider === "cloudflare") {
-    if (!input.key) return "Enter a Cloudflare API token.";
-    if (!input.cloudflareAccountId) return "Enter a Cloudflare account ID (CLOUDFLARE_ACCOUNT_ID).";
+    // Env-only activation requires both manual fields empty. A partial paste is rejected.
+    if (input.envUsable && Boolean(input.key) !== Boolean(input.cloudflareAccountId)) {
+      return input.key
+        ? "Enter a Cloudflare account ID, or clear the token to use env credentials."
+        : "Enter a Cloudflare API token, or clear the account ID to use env credentials.";
+    }
+    if (!input.key && !input.envUsable) return "Enter a Cloudflare API token.";
+    if (!input.cloudflareAccountId && !input.envUsable) {
+      return "Enter a Cloudflare account ID (CLOUDFLARE_ACCOUNT_ID).";
+    }
   } else if (!input.key && !allowEmptyKey) {
     return "Enter an API key.";
   }
@@ -57,7 +69,8 @@ async function persistApiKeyProvider(input: {
   resolvedBaseUrl: string | undefined;
   cloudflareAccountId: string;
 }): Promise<void> {
-  if (input.settingsProvider === "cloudflare") {
+  // Paste path: store token+account. Env-usable path skips this and relies on server resolve.
+  if (input.settingsProvider === "cloudflare" && input.key && input.cloudflareAccountId) {
     const credRes = await fetch("/api/cloudflare/login/manual", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -261,6 +274,8 @@ export function useAiProviderSettings({
         setSettingsModel(d.model);
         setCustomModel(d.model);
       }
+      // Null/empty/absent server baseUrl clears stale client URLs (e.g. left a local engine).
+      setSettingsBaseUrl(hydratedSettingsBaseUrl(d.baseUrl));
       return d;
     } catch {
       const fallback: ProviderStatus = { source: "none" };
@@ -353,8 +368,9 @@ export function useAiProviderSettings({
   const refreshModels = () =>
     void refreshProviderModels(settingsProvider, {
       force: true,
-      apiKey: settingsApiKey || undefined,
-      baseUrl: settingsBaseUrl || providerOption.baseUrl || undefined,
+      // Omit empty paste so server uses runtime override / Windows+dotenv env keys.
+      apiKey: settingsApiKey.trim() || undefined,
+      baseUrl: settingsBaseUrl.trim() || providerOption.baseUrl || undefined,
     });
 
   /** Re-list models with the key the user just typed (env may already work). */
@@ -529,6 +545,7 @@ export function useAiProviderSettings({
     const model = isCompatMode ? customModel.trim() || settingsModel : settingsModel;
     const resolvedBaseUrl = settingsBaseUrl.trim() || providerOption.baseUrl || undefined;
     const cloudflareAccountId = settingsCloudflareAccountId.trim();
+    const envUsable = canActivateWithEnvKey(providerStatus.envCredentials, settingsProvider);
     const validationError = validateApiKeyProviderForm({
       settingsProvider,
       key,
@@ -536,6 +553,7 @@ export function useAiProviderSettings({
       isCompatMode,
       resolvedBaseUrl,
       cloudflareAccountId,
+      envUsable,
     });
     if (validationError) {
       setProviderSaveError(validationError);
@@ -586,7 +604,7 @@ export function useAiProviderSettings({
       setCustomModel(modelTag);
       setSettingsBaseUrl(baseUrl);
       await fetchProviderStatus();
-      onProviderActivated();
+      // Stay on Settings after local enable (do not jump to Audit).
       return true;
     } catch (err: unknown) {
       setProviderSaveError(err instanceof Error ? err.message : "Failed to enable local provider.");

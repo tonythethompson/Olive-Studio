@@ -113,7 +113,6 @@ export function GeminiSidebar({
       const ok = await providers.enableLocalAiProvider(source, modelTag);
       if (!ok) return;
       audit.resetAnalysis();
-      setActiveTab("audit");
     },
   });
 

@@ -198,4 +198,93 @@ describe("BatchProcessingPanel", () => {
       { timeout: 3000 },
     );
   });
+
+  it("settles a job when halt wins before SSE and cancel reports already completed", async () => {
+    const queuedJob: BatchJob = {
+      id: "job-race",
+      name: "Race Job",
+      modelSource: "huggingface",
+      modelIdentifier: "meta-llama/Llama-3-8B",
+      provider: "CPUExecutionProvider",
+      passes: ["Model Conversion (ONNX)"],
+      recipeJson: undefined,
+      status: "queued",
+      progress: 0,
+      progressKnown: true,
+      logs: ["Queued"],
+    };
+    const stateWithJobs: UIState = {
+      ...createMockUIState(),
+      batchJobs: [queuedJob],
+    };
+    mockStoreState = stateWithJobs;
+    mockSetState.mockClear();
+
+    let resolveRun!: (value: Response) => void;
+    const runPending = new Promise<Response>((resolve) => {
+      resolveRun = resolve;
+    });
+
+    global.fetch = vi.fn((url) => {
+      if (url === "/api/olive/run") return runPending;
+      if (url === "/api/olive/cancel") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, status: "completed" }),
+        } as Response);
+      }
+      return Promise.reject(new Error(`Unexpected fetch: ${String(url)}`));
+    });
+
+    const eventSourceCtor = vi.fn(function EventSourceMock() {
+      return { addEventListener: vi.fn(), close: vi.fn(), onerror: null };
+    });
+    global.EventSource = eventSourceCtor as unknown as typeof EventSource;
+
+    await act(async () => {
+      render(<BatchProcessingPanel state={stateWithJobs} setState={mockSetState} />);
+    });
+
+    await act(async () => {
+      await userEvent.click(screen.getByRole("button", { name: /start queue/i }));
+    });
+
+    // Halt while POST /olive/run is still in flight.
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /halt/i })).toBeDefined();
+    });
+    await act(async () => {
+      await userEvent.click(screen.getByRole("button", { name: /halt/i }));
+    });
+
+    await act(async () => {
+      resolveRun({
+        ok: true,
+        json: () => Promise.resolve({ jobId: "olive-already-done" }),
+      } as Response);
+    });
+
+    await waitFor(() => {
+      const settled = mockSetState.mock.calls.some((call) => {
+        const update = call[0] as { batchJobs?: BatchJob[] };
+        return update.batchJobs?.some(
+          (j) =>
+            j.id === "job-race" &&
+            j.status === "completed" &&
+            j.oliveJobId === "olive-already-done" &&
+            j.logs.some((log) => log.includes("already completed")),
+        );
+      });
+      expect(settled).toBe(true);
+    });
+
+    expect(eventSourceCtor).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/olive/cancel",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ jobId: "olive-already-done" }),
+      }),
+    );
+  });
 });

@@ -1,8 +1,8 @@
 /**
  * Shared types for Devin subscription OAuth + credentials.
  *
- * Devin is not a model — it is a subscription that unlocks multiple models
- * through Cognition's chat backend (historical hostnames may still say windsurf/codeium).
+ * Devin is a multi-model subscription for Assistant audit/chat via Cognition's
+ * chat backend (historical hostnames may still say windsurf/codeium).
  */
 
 export interface OAuthLoginResult {

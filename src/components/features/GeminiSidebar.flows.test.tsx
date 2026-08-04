@@ -27,7 +27,15 @@ describe("GeminiSidebar flows", () => {
   });
   it("audits on open, chats, and renders provider settings", async () => {
     const routes: Record<string, unknown> = {
-      "ai/provider": { source: "user", provider: "gemini", model: "gemini-2.5-flash" },
+      "ai/provider": {
+        source: "runtime",
+        provider: "gemini",
+        model: "gemini-2.5-flash",
+        baseUrl: null,
+        envCredentials: {
+          gemini: { present: true, envVar: "GEMINI_API_KEY", usable: true },
+        },
+      },
       "analyze-state": { score: 82, level: "Good", summary: "Looks fine", suggestions: [] },
       "ai/chat": { text: "**Because** quantization is off." },
       "ai/models": { models: [{ id: "gemini-2.5-pro", label: "gemini-2.5-pro" }], source: "live" },
