@@ -18,6 +18,7 @@ import {
 } from "@/lib/pipelineValidation";
 import {
   isProviderDetectedLocally,
+  type GpuInfo,
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
 import type { ProviderCatalogEntry } from "@/lib/providerCatalog";
@@ -25,6 +26,11 @@ import {
   OPEN_VINO_GPU_DRIVER_URL,
   OPEN_VINO_NPU_DRIVER_URL,
 } from "@/lib/openvinoDeps";
+import {
+  CUDA_DOWNLOAD_LINKS,
+  CUDA_SM_FLOOR,
+  pinnedOrtGpuInstallCommand,
+} from "@/lib/cudaDeps";
 import type { IHVProvider, UIState } from "@/types";
 import {
   AlertTriangle,
@@ -34,6 +40,7 @@ import {
   RefreshCw,
   XCircle,
   Globe,
+  ExternalLink,
 } from "lucide-react";
 
 export interface HardwareProviderCardProps {
@@ -59,6 +66,16 @@ export interface HardwareProviderCardProps {
     state: OpenVinoInstallState;
     install: () => Promise<void>;
   };
+  isPreMaxwellBox: boolean;
+  cudaNeedsOrtGpuInstall: boolean;
+  cudaToolkitMissingAndEpWorks: boolean;
+  cudaToolkitMissing: boolean;
+  cudaEpInVenv: boolean;
+  nvidiaGpus: GpuInfo[];
+  installingOrtGpu: boolean;
+  installOrtGpuError: string | null;
+  installOrtGpuLog: string[];
+  onInstallOrtGpu: () => void;
 }
 
 function resolveCardChrome(input: {
@@ -299,6 +316,16 @@ function ProviderPluginInstalls({
   installTrtLog,
   onInstallTensorRt,
   openvinoInstall,
+  isPreMaxwellBox,
+  cudaNeedsOrtGpuInstall,
+  cudaToolkitMissingAndEpWorks,
+  cudaToolkitMissing,
+  cudaEpInVenv,
+  nvidiaGpus,
+  installingOrtGpu,
+  installOrtGpuError,
+  installOrtGpuLog,
+  onInstallOrtGpu,
 }: {
   providerId: IHVProvider;
   hardwareProbe: HardwareProbeResult | null;
@@ -315,6 +342,16 @@ function ProviderPluginInstalls({
   installTrtLog: string[];
   onInstallTensorRt: () => void;
   openvinoInstall: HardwareProviderCardProps["openvinoInstall"];
+  isPreMaxwellBox: boolean;
+  cudaNeedsOrtGpuInstall: boolean;
+  cudaToolkitMissingAndEpWorks: boolean;
+  cudaToolkitMissing: boolean;
+  cudaEpInVenv: boolean;
+  nvidiaGpus: GpuInfo[];
+  installingOrtGpu: boolean;
+  installOrtGpuError: string | null;
+  installOrtGpuLog: string[];
+  onInstallOrtGpu: () => void;
 }) {
   if (providerId === "NvTensorRTRTXExecutionProvider" && trtRtxNeedsInstall) {
     return (
@@ -380,6 +417,67 @@ function ProviderPluginInstalls({
         error={openvinoInstall.state.error}
         log={openvinoInstall.state.log}
       />
+    );
+  }
+  if (providerId === "CUDAExecutionProvider" && isPreMaxwellBox) {
+    return (
+      <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
+        <p className="text-[11px] text-rose-400/90 leading-relaxed">
+          {nvidiaGpus.map((g) => g.name).join(", ")} predates the CUDA 12 toolkit floor (compute
+          capability ≥ {CUDA_SM_FLOOR}, Maxwell / RTX 20xx+). Installing the toolkit or the CUDA
+          wheel cannot recover this — these cards cannot execute modern CUDA. Use the CPU provider,
+          or upgrade hardware.
+        </p>
+      </div>
+    );
+  }
+  if (
+    providerId === "CUDAExecutionProvider" &&
+    (cudaNeedsOrtGpuInstall || cudaToolkitMissingAndEpWorks)
+  ) {
+    return (
+      <div className="mt-2 space-y-2 min-w-0" onClick={(e) => e.stopPropagation()}>
+        {cudaNeedsOrtGpuInstall ? (
+          <PluginInstallBlock
+            description={
+              <>
+                {hardwareProbe?.onnxRuntimeProviders === undefined
+                  ? "Onnxruntime-gpu isn't installed in the project "
+                  : "Onnxruntime-gpu CUDA execution provider is not registered in the project "}
+                <code className="text-slate-400">.venv</code>. Click below to pip-install the pinned
+                wheel (
+                <code className="text-slate-400 font-mono break-all">{pinnedOrtGpuInstallCommand()}</code>
+                ); the panel re-probes after install.
+              </>
+            }
+            detail={hardwareProbe?.cuda?.detail}
+            busy={hardwareInstallBusy}
+            installing={installingOrtGpu}
+            installLabel="Install onnxruntime-gpu into .venv"
+            installingLabel="Installing onnxruntime-gpu…"
+            onInstall={onInstallOrtGpu}
+            error={installOrtGpuError}
+            log={installOrtGpuLog}
+          />
+        ) : null}
+        {cudaToolkitMissing && cudaEpInVenv ? (
+          <p className="text-[11px] text-amber-500/80 leading-relaxed">
+            NVIDIA driver + onnxruntime-gpu CUDA EP detected, but the CUDA Toolkit (
+            <code className="text-slate-400">nvcc</code>) is not installed. Inference via OLIVE
+            recipes does not need it; for native CUDA builds, grab it from{" "}
+            <a
+              href={CUDA_DOWNLOAD_LINKS.archive}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-electric-blue hover:text-white underline-offset-2 underline inline-flex items-center gap-1"
+            >
+              NVIDIA&apos;s CUDA Toolkit Archive
+              <ExternalLink className="h-3 w-3" />
+            </a>
+            .
+          </p>
+        ) : null}
+      </div>
     );
   }
   return null;
@@ -499,6 +597,16 @@ export function HardwareProviderCard({
   installTrtLog,
   onInstallTensorRt,
   openvinoInstall,
+  isPreMaxwellBox,
+  cudaNeedsOrtGpuInstall,
+  cudaToolkitMissingAndEpWorks,
+  cudaToolkitMissing,
+  cudaEpInVenv,
+  nvidiaGpus,
+  installingOrtGpu,
+  installOrtGpuError,
+  installOrtGpuLog,
+  onInstallOrtGpu,
 }: HardwareProviderCardProps) {
   const isSelected = state.ihvProvider === p.id;
   const Icon = p.icon;
@@ -516,7 +624,8 @@ export function HardwareProviderCard({
   const needsPluginInstall =
     (p.id === "NvTensorRTRTXExecutionProvider" && trtRtxNeedsInstall) ||
     (p.id === "TensorrtExecutionProvider" && trtNeedsInstall) ||
-    (p.id === "OpenVINOExecutionProvider" && openvinoNeedsInstall);
+    (p.id === "OpenVINOExecutionProvider" && openvinoNeedsInstall) ||
+    (p.id === "CUDAExecutionProvider" && cudaNeedsOrtGpuInstall);
 
   const { cardClasses, badgeText, BadgeIcon, badgeColor } = resolveCardChrome({
     isSelected,
@@ -609,6 +718,16 @@ export function HardwareProviderCard({
             installTrtLog={installTrtLog}
             onInstallTensorRt={onInstallTensorRt}
             openvinoInstall={openvinoInstall}
+            isPreMaxwellBox={isPreMaxwellBox}
+            cudaNeedsOrtGpuInstall={cudaNeedsOrtGpuInstall}
+            cudaToolkitMissingAndEpWorks={cudaToolkitMissingAndEpWorks}
+            cudaToolkitMissing={cudaToolkitMissing}
+            cudaEpInVenv={cudaEpInVenv}
+            nvidiaGpus={nvidiaGpus}
+            installingOrtGpu={installingOrtGpu}
+            installOrtGpuError={installOrtGpuError}
+            installOrtGpuLog={installOrtGpuLog}
+            onInstallOrtGpu={onInstallOrtGpu}
           />
           {p.id === "OpenVINOExecutionProvider" ? (
             <OpenVinoDeviceHint hardwareProbe={hardwareProbe} />

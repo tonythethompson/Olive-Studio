@@ -32,6 +32,9 @@ import {
   isProviderDetectedLocally,
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
+import {
+  isPreMaxwellNvidiaBox,
+} from "@/lib/cudaDeps";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { HardwareProviderCard } from "@/components/features/HardwareProviderCard";
@@ -309,6 +312,9 @@ export function IHVIntegrationPanel({
   const [installingTrt, setInstallingTrt] = useState(false);
   const [installTrtError, setInstallTrtError] = useState<string | null>(null);
   const [installTrtLog, setInstallTrtLog] = useState<string[]>([]);
+  const [installingOrtGpu, setInstallingOrtGpu] = useState(false);
+  const [installOrtGpuError, setInstallOrtGpuError] = useState<string | null>(null);
+  const [installOrtGpuLog, setInstallOrtGpuLog] = useState<string[]>([]);
 
   const hasAutoAppliedRef = useRef(false);
 
@@ -337,7 +343,7 @@ export function IHVIntegrationPanel({
 
   const openvinoInstall = useOpenVinoInstall({
     onProbeRefresh: runHardwareProbe,
-    isInstallBusy: installingTrt || installingTrtRtx,
+    isInstallBusy: installingTrt || installingTrtRtx || installingOrtGpu,
   });
 
   const trtRtxNeedsInstall =
@@ -348,7 +354,19 @@ export function IHVIntegrationPanel({
     Boolean(hardwareProbe) &&
     isProviderDetectedLocally("OpenVINOExecutionProvider", hardwareProbe) &&
     hardwareProbe?.openvino?.loadable !== true;
-  const hardwareInstallBusy = installingTrt || installingTrtRtx || openvinoInstall.state.installing;
+
+  // CUDA install / toolkit-link gating (from PR #106).
+  const nvidiaGpus = hardwareProbe?.nvidia?.gpus ?? [];
+  const isPreMaxwellBox = isPreMaxwellNvidiaBox(nvidiaGpus);
+  const cudaEpInVenv = hardwareProbe?.cuda?.loadable === true;
+  const cudaNeedsOrtGpuInstall = nvidiaGpus.length > 0 && !isPreMaxwellBox && !cudaEpInVenv;
+  const cudaToolkitMissing = hardwareProbe?.nvidia?.cudaToolkit?.available === false;
+  const cudaToolkitMissingAndEpWorks =
+    nvidiaGpus.length > 0 && !isPreMaxwellBox && cudaEpInVenv && cudaToolkitMissing;
+
+  // Shared mutex: TRT / TRT RTX / OrtGpu / OpenVINO all mutate the same .venv.
+  const hardwareInstallBusy =
+    installingTrt || installingTrtRtx || installingOrtGpu || openvinoInstall.state.installing;
 
   const handleInstallTensorRtRtx = async () => {
     if (hardwareInstallBusy) return;
@@ -387,6 +405,26 @@ export function IHVIntegrationPanel({
       );
     } finally {
       setInstallingTrt(false);
+    }
+  };
+
+  const handleInstallOrtGpu = async () => {
+    if (hardwareInstallBusy) return;
+    setInstallingOrtGpu(true);
+    setInstallOrtGpuError(null);
+    setInstallOrtGpuLog([]);
+    try {
+      await runNdjsonInstall("/api/env/install-onnxruntime-gpu", setInstallOrtGpuLog);
+      await runHardwareProbe(true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setInstallOrtGpuError(
+        msg === "Failed to fetch"
+          ? "Could not reach the Olive Studio server (or the connection dropped during install). Keep pnpm dev running, then retry."
+          : msg,
+      );
+    } finally {
+      setInstallingOrtGpu(false);
     }
   };
 
@@ -632,6 +670,16 @@ export function IHVIntegrationPanel({
                     installTrtLog={installTrtLog}
                     onInstallTensorRt={() => void handleInstallTensorRt()}
                     openvinoInstall={openvinoInstall}
+                    isPreMaxwellBox={isPreMaxwellBox}
+                    cudaNeedsOrtGpuInstall={cudaNeedsOrtGpuInstall}
+                    cudaToolkitMissingAndEpWorks={cudaToolkitMissingAndEpWorks}
+                    cudaToolkitMissing={cudaToolkitMissing}
+                    cudaEpInVenv={cudaEpInVenv}
+                    nvidiaGpus={nvidiaGpus}
+                    installingOrtGpu={installingOrtGpu}
+                    installOrtGpuError={installOrtGpuError}
+                    installOrtGpuLog={installOrtGpuLog}
+                    onInstallOrtGpu={() => void handleInstallOrtGpu()}
                   />
                 ))}
               </TooltipProvider>

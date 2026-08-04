@@ -101,7 +101,16 @@ function Dashboard() {
       if (isOliveRunning && id !== "execute" && id !== "playground") return;
       setActiveView(id);
       scrollingToRef.current = id;
-      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const main = mainRef.current;
+      const target = document.getElementById(id);
+      if (!main || !target) return;
+      // Resolve the target position relative to the scroll container. Using
+      // offsetTop here would depend on the element's offsetParent.
+      const mainTop = main.getBoundingClientRect().top;
+      const targetTop = target.getBoundingClientRect().top;
+      const top = targetTop - mainTop + main.scrollTop - 16;
+      const max = main.scrollHeight - main.clientHeight;
+      main.scrollTo({ top: Math.max(0, Math.min(top, max)), behavior: "smooth" });
       window.setTimeout(() => {
         if (scrollingToRef.current === id) scrollingToRef.current = null;
       }, 900);
@@ -258,21 +267,36 @@ function Dashboard() {
                     <span className="hidden sm:inline">Assistant</span>
                   </button>
                 </div>
-              </header>
-
-              <main
+              </header>                              <main
                 ref={mainRef}
                 id="main"
-                className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-5 wide:px-6 wide:py-8 min-[1000px]:px-10 h-full min-w-0"
+                className="flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-5 wide:px-6 wide:py-8 min-[1000px]:px-10 h-full min-w-0"
               >
                 <h1 className="sr-only">Olive Studio recipe builder</h1>
-                <div className="mx-auto w-full max-w-5xl min-w-0 pb-16">
-                  {SECTIONS.map(({ id, step, label, desc }, index) => (
+                <div className="mx-auto w-full max-w-5xl min-w-0">
+                  {SECTIONS.map(({ id, step, label, desc }, index) => {
+                    const isLast = index === SECTIONS.length - 1;
+                    return (
                     <section
                       key={id}
                       id={id}
                       aria-labelledby={`${id}-heading`}
-                      className={cn("scroll-mt-4", index > 0 && "mt-12 pt-10 border-t border-slate-800")}
+                      data-pipeline-section={id}
+                      className={cn(
+                        "scroll-mt-4",
+                        index > 0 && "mt-12 pt-10 border-t border-slate-800",
+                        // The final pipeline section must be tall enough that
+                        // `scrollIntoView({block:"start"})` can land its top at
+                        // the scroll-container's top without being clamped to
+                        // `maxScroll`. Otherwise the user sees the tail of the
+                        // previous section (visible as empty gray) above the
+                        // playground header, which reads as "the app rolled
+                        // past the section". Height covers title bar + header
+                        // + post-section breathing room; uses the dynamic
+                        // viewport unit so browser chrome (URL bar, devtools)
+                        // does not leave the section short.
+                        isLast && "min-h-[calc(100dvh-3rem)] pb-16",
+                      )}
                     >
                       <header className="mb-5 pb-4 border-b border-slate-800/80">
                         <p className="text-xs text-electric-blue mb-1">{step}</p>
@@ -317,7 +341,8 @@ function Dashboard() {
                         </ErrorBoundary>
                       )}
                     </section>
-                  ))}
+                    );
+                  })}
                 </div>
               </main>
             </div>

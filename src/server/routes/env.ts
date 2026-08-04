@@ -14,6 +14,7 @@ import { writeStudioConfig, addVenvToUserPath } from "../services/venv/config.ts
 import { setRuntimeHfToken, getRuntimeHfToken } from "../services/olive/state.ts";
 import { ensureTensorRtRtx, ensureTensorRt } from "./tensorrt.ts";
 import { ensureOpenVino } from "../services/olive/openvino.ts";
+import { ensureOnnxRuntimeGpu } from "../services/olive/cuda.ts";
 import { fsWriteRateLimit, heavyCommandRateLimit } from "../middleware/rateLimit.ts";
 import { resolveAllowedPythonFile } from "../services/venv/pythonGuard.ts";
 
@@ -105,6 +106,13 @@ export function mountEnvRoutes(router: Router): void {
 
   router.post("/env/install-openvino", heavyCommandRateLimit, async (_req, res) => {
     await withVenvPipInstallMutex(() => streamNdjsonInstall(res, ensureOpenVino));
+  });
+
+  // Pip-installs the pinned onnxruntime-gpu wheel into `.venv` and verifies
+  // the CUDA execution provider registers. Shares the venv pip mutex with
+  // TensorRT / OpenVINO installs.
+  router.post("/env/install-onnxruntime-gpu", heavyCommandRateLimit, async (_req, res) => {
+    await withVenvPipInstallMutex(() => streamNdjsonInstall(res, ensureOnnxRuntimeGpu));
   });
 
   // ─── Runtime Status ───────────────────────────────────────────────────

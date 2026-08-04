@@ -2,6 +2,8 @@ import express, { Router } from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import fs from "fs";
+import { ANY_DOT_VENV_DIR } from "./src/server/shared/anyDotVenvDir.ts";
+
 import { loadStudioEnv } from "./src/server/loadStudioEnv.ts";
 import { mountSystemRoutes, type SystemProbeOptions } from "./src/server/routes/system.ts";
 import { mountGithubRoutes } from "./src/server/routes/github.ts";
@@ -161,7 +163,13 @@ async function startServer() {
       server: {
         middlewareMode: true,
         watch: {
-          ignored: ["**/.venv/**", "**/node_modules/**", "**/models/**", "**/.cache/**"],
+          ignored: [
+            "**/.venv/**",
+            ANY_DOT_VENV_DIR,
+            "**/node_modules/**",
+            "**/models/**",
+            "**/.cache/**",
+          ],
         },
       },
       appType: "spa",
