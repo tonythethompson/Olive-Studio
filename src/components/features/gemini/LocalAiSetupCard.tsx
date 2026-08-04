@@ -309,7 +309,10 @@ export function LocalAiSetupCard({ local, activeModel, isOpen, onActivate }: Loc
           engine={local.preferredEngine}
           showTitle={false}
           emptyHint="No models installed for this engine yet. Use Starter downloads below."
-          onActivate={onActivate}
+          onActivate={async (modelTag, source) => {
+            await onActivate?.(modelTag, source);
+            void local.refreshInstalledModels(source);
+          }}
         />
       </div>
 

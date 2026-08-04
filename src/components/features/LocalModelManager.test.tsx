@@ -106,7 +106,7 @@ describe("LocalModelManager — models display", () => {
     expect(screen.getByText("Llama-3.1-1B-Instruct")).toBeDefined();
   });
 
-  it("renders load/unload buttons for each model", async () => {
+  it("renders Load & enable for unloaded models", async () => {
     mockFetch({
       lms: {
         installedModels: ["meta-llama/Llama-3.1-8B-Instruct"],
@@ -119,11 +119,11 @@ describe("LocalModelManager — models display", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Load")).toBeDefined();
+      expect(screen.getByText("Load & enable")).toBeDefined();
     });
   });
 
-  it("shows Unload button for loaded models", async () => {
+  it("shows Enable and Unload for loaded models that are not active", async () => {
     mockFetch({
       lms: {
         installedModels: ["meta-llama/TinyModel"],
@@ -137,6 +137,26 @@ describe("LocalModelManager — models display", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Unload")).toBeDefined();
+      expect(screen.getByText("Enable")).toBeDefined();
+    });
+  });
+
+  it("shows Active badge and hides Enable for the active model", async () => {
+    mockFetch({
+      lms: {
+        installedModels: ["meta-llama/TinyModel"],
+        loadedModels: ["meta-llama/TinyModel"],
+      },
+    });
+
+    await act(async () => {
+      render(<LocalModelManager isOpen activeModel="meta-llama/TinyModel" />);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Active")).toBeDefined();
+      expect(screen.queryByText("Enable")).toBeNull();
+      expect(screen.queryByText("Load & enable")).toBeNull();
     });
   });
 });
@@ -144,10 +164,10 @@ describe("LocalModelManager — models display", () => {
 // ── 3. Search filtering ─────────────────────────────────────────────────────
 
 describe("LocalModelManager — search filtering", () => {
-  it("shows search input when more than 3 models are loaded", async () => {
+  it("shows search input when more than one model is installed", async () => {
     mockFetch({
       lms: {
-        installedModels: ["meta-llama/A", "meta-llama/B", "mistralai/C", "google/D"],
+        installedModels: ["meta-llama/A", "meta-llama/B"],
         loadedModels: [],
       },
     });
@@ -157,7 +177,7 @@ describe("LocalModelManager — search filtering", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("Search models…")).toBeDefined();
+      expect(screen.getByPlaceholderText("Search installed models…")).toBeDefined();
     });
   });
 
@@ -177,7 +197,7 @@ describe("LocalModelManager — search filtering", () => {
       expect(screen.getByText("Alpha")).toBeDefined();
     });
 
-    const input = screen.getByPlaceholderText("Search models…");
+    const input = screen.getByPlaceholderText("Search installed models…");
     fireEvent.change(input, { target: { value: "Beta" } });
 
     expect(screen.getByText("Beta")).toBeDefined();
@@ -201,7 +221,7 @@ describe("LocalModelManager — search filtering", () => {
       expect(screen.getByText("Alpha")).toBeDefined();
     });
 
-    const input = screen.getByPlaceholderText("Search models…");
+    const input = screen.getByPlaceholderText("Search installed models…");
     fireEvent.change(input, { target: { value: "ZzzNotExist" } });
 
     expect(screen.getByText(/No models match/)).toBeDefined();
@@ -223,7 +243,7 @@ describe("LocalModelManager — search filtering", () => {
       expect(screen.getByText("Alpha")).toBeDefined();
     });
 
-    const input = screen.getByPlaceholderText("Search models…");
+    const input = screen.getByPlaceholderText("Search installed models…");
     fireEvent.change(input, { target: { value: "Alpha" } });
     fireEvent.keyDown(input, { key: "Escape" });
 
@@ -277,10 +297,10 @@ describe("LocalModelManager — keyboard shortcut", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("Search models…")).toBeDefined();
+      expect(screen.getByPlaceholderText("Search installed models…")).toBeDefined();
     });
 
-    const input = screen.getByPlaceholderText("Search models…");
+    const input = screen.getByPlaceholderText("Search installed models…");
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     expect(document.activeElement).toBe(input);
   });
