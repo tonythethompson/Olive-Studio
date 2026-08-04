@@ -137,11 +137,11 @@ export function GeminiSidebar({
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && !isReportOpen) onClose();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, isReportOpen, onClose]);
 
   // Report issue modal state
   const [isReportOpen, setIsReportOpen] = useState(false);
