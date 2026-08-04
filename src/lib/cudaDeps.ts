@@ -97,7 +97,7 @@ export function cudaDownloadUrlForOs(os: string | undefined | null): string {
   const text = (os ?? "").toLowerCase();
   if (text.includes("wsl")) return CUDA_DOWNLOAD_LINKS.wsl;
   if (text.includes("win")) return CUDA_DOWNLOAD_LINKS.windows;
-  if (text.includes("linux") || text.includes("darwin")) return CUDA_DOWNLOAD_LINKS.linux;
+  if (text.includes("linux")) return CUDA_DOWNLOAD_LINKS.linux;
   return CUDA_DOWNLOAD_LINKS.archive;
 }
 
