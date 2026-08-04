@@ -68,6 +68,17 @@ export function mountOliveRoutes(router: Router): void {
       return res.status(400).json({ ok: false, error: validation.errors.join("; ") });
     }
 
+    const providerRaw =
+      recipe.systems?.local_system?.config?.accelerators?.[0]?.execution_providers?.[0] ??
+      "CPUExecutionProvider";
+    const provider = normalizeIhvProvider(providerRaw);
+    if (!provider) {
+      return res.status(400).json({
+        ok: false,
+        error: `Unknown execution provider: ${String(providerRaw)}`,
+      });
+    }
+
     const jobId = uuidv4();
     const job: OliveJob = {
       id: jobId,
@@ -85,19 +96,6 @@ export function mountOliveRoutes(router: Router): void {
       doneSubscribers: [],
     };
     jobRegistry.set(jobId, job);
-
-    const providerRaw =
-      recipe.systems?.local_system?.config?.accelerators?.[0]?.execution_providers?.[0] ??
-      "CPUExecutionProvider";
-    const provider = normalizeIhvProvider(providerRaw);
-    if (!provider) {
-      cleanupJobArtifacts(job);
-      jobRegistry.delete(jobId);
-      return res.status(400).json({
-        ok: false,
-        error: `Unknown execution provider: ${String(providerRaw)}`,
-      });
-    }
 
     // Cancellation can arrive during the long setup awaits below, before a
     // process exists. Bail out (and respond) instead of spawning Olive anyway.
@@ -198,8 +196,8 @@ export function mountOliveRoutes(router: Router): void {
 
       return res.json({ ok: true, jobId });
     } catch (err: unknown) {
-      // Preserve intentional cancellation — e.g. ensureVenv/buildOliveRunEnvironment
-      // rejecting after /olive/cancel already stamped "cancelled".
+      // Preserve intentional cancellation — e.g. ensureProviderCapability /
+      // buildOliveRunEnvironment rejecting after /olive/cancel already stamped "cancelled".
       if (job.status !== "cancelled") {
         job.status = "failed";
       }

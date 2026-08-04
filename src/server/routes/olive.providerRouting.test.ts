@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import express from "express";
 import type { Server } from "http";
+import { EventEmitter } from "events";
 
 vi.mock("../services/venv/index.ts", () => ({
   ensureProviderCapability: vi.fn(async () => {
@@ -9,20 +10,20 @@ vi.mock("../services/venv/index.ts", () => ({
   buildOliveRunEnvironment: vi.fn(async () => ({}) as NodeJS.ProcessEnv),
   resolveOliveCommand: vi.fn(() => ({
     executable: "python",
-    args: ["-m", "olive"],
-    family: "default",
+    args: ["-m", "olive", "run", "--config", "x"],
+    family: "cuda",
   })),
   detachVenvListener: vi.fn(),
-  getVenvPython: vi.fn(() => "/tmp/mock-python"),
 }));
 
+const spawnSpy = vi.fn(() => {
+  throw new Error("spawn should not run for unknown-provider rejection");
+});
 vi.mock("child_process", async (importOriginal) => {
   const actual = await importOriginal<typeof import("child_process")>();
   return {
     ...actual,
-    spawn: vi.fn(() => {
-      throw new Error("spawn should not run for unknown-provider rejection");
-    }),
+    spawn: (...args: unknown[]) => spawnSpy(...args),
   };
 });
 
@@ -51,6 +52,17 @@ function recipeWithProvider(provider: string) {
   };
 }
 
+function mockSpawnProcess() {
+  const proc = new EventEmitter() as EventEmitter & {
+    stdout: EventEmitter;
+    stderr: EventEmitter;
+  };
+  proc.stdout = new EventEmitter();
+  proc.stderr = new EventEmitter();
+  setImmediate(() => proc.emit("close", 0));
+  return proc;
+}
+
 beforeAll(async () => {
   const app = express();
   app.use(express.json());
@@ -75,6 +87,13 @@ afterAll(async () => {
 beforeEach(() => {
   jobRegistry.clear();
   vi.mocked(venv.ensureProviderCapability).mockClear();
+  vi.mocked(venv.ensureProviderCapability).mockImplementation(async () => {
+    throw new Error("ensureProviderCapability must not run for unknown providers");
+  });
+  spawnSpy.mockReset();
+  spawnSpy.mockImplementation(() => {
+    throw new Error("spawn should not run for unknown-provider rejection");
+  });
 });
 
 describe("POST /olive/run provider routing", () => {
@@ -91,5 +110,31 @@ describe("POST /olive/run provider routing", () => {
     expect(body.ok).toBe(false);
     expect(body.error).toMatch(/Unknown execution provider/i);
     expect(venv.ensureProviderCapability).not.toHaveBeenCalled();
+    expect(jobRegistry.size).toBe(0);
+  });
+
+  it("routes CUDA recipes through ensureProviderCapability with CUDAExecutionProvider", async () => {
+    vi.mocked(venv.ensureProviderCapability).mockResolvedValue({
+      ok: true,
+      family: "cuda",
+      python: "/tmp/mock-cuda-python",
+    });
+    spawnSpy.mockImplementation(() => mockSpawnProcess());
+
+    const res = await fetch(`${baseUrl}/api/olive/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipeJson: JSON.stringify(recipeWithProvider("CUDAExecutionProvider")),
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; jobId?: string };
+    expect(body.ok).toBe(true);
+    expect(venv.ensureProviderCapability).toHaveBeenCalledWith(
+      "CUDAExecutionProvider",
+      expect.any(Function),
+    );
+    expect(spawnSpy).toHaveBeenCalled();
   });
 });

@@ -15,7 +15,6 @@ import { envForFamily } from "../venv/pathIsolation.ts";
 import { getVenvPython } from "../venv/paths.ts";
 import { getNativeGpuLibPaths } from "../venv/gpu.ts";
 import { invalidateRuntimeStatusCache } from "../venv/status.ts";
-import { assertFamilyOrtConstraints } from "../venv/packageConstraints.ts";
 import {
   envWithPrependedPaths,
   isCompatibleTensorRtVersion,
@@ -36,6 +35,7 @@ import {
 } from "../../../lib/tensorrtRtxDeps.ts";
 import { probeTensorRtRtxLoadable } from "./tensorrt-rtx.ts";
 import type { PkgDef } from "./recipe.ts";
+import { assertFamilyOrtConstraints } from "../venv/packageConstraints.ts";
 
 const TRT_FAIL_MARK = "OLIVE_TRT_FAIL:";
 
@@ -113,12 +113,13 @@ async function ensureOnnxRuntimeGpu(
     /* install below */
   }
   onLine(`[deps] Installing ${pinnedOrtGpuLabel()} (required for TensorRT EP)...`);
-  await pipInstallForFamily("cuda", python, pinnedOrtGpuInstallArgs(), onLine);
+  try {
+    await pipInstallForFamily("cuda", python, pinnedOrtGpuInstallArgs(), onLine);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(msg);
+  }
   onLine(`[deps] ${pinnedOrtGpuLabel()} installed ✓`);
-}
-
-async function assertCudaOrtPin(python: string): Promise<string | null> {
-  return assertFamilyOrtConstraints("cuda", python);
 }
 
 // ─── TensorRT load probe ──────────────────────────────────────────────────
@@ -248,7 +249,12 @@ export async function ensureTensorRt(
   }
 
   const env = envForFamily("cuda");
-  await ensureOnnxRuntimeGpu(venvPython, onLine, env);
+  try {
+    await ensureOnnxRuntimeGpu(venvPython, onLine, env);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
 
   const probe = await probeTensorRtLoadable(venvPython, env);
   if (probe.loadable) {
@@ -272,13 +278,14 @@ export async function ensureTensorRt(
     onLine(`[deps] TensorRT ${installed} present but EP not loadable — reinstalling pinned runtime...`);
   }
 
-  await pipInstallForFamily("cuda", venvPython, pinnedTensorRtInstallArgs(), onLine);
+  try {
+    await pipInstallForFamily("cuda", venvPython, pinnedTensorRtInstallArgs(), onLine);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
   onLine(`[deps] ${pinnedTensorRtLabel()} installed ✓`);
 
-  const pinError = await assertCudaOrtPin(venvPython);
-  if (pinError) {
-    return { ok: false, error: pinError };
-  }
   invalidateRuntimeStatusCache();
 
   const retry = await probeTensorRtLoadable(venvPython, env);
@@ -318,10 +325,11 @@ export async function ensureDeps(
     // Torch: check installed CUDA version matches what we need (GPU vs CPU)
     if (pkg.importName === "torch") {
       try {
-        const { stdout } = await execFileAsync(venvPython, [
-          "-c",
-          "import torch; print(torch.version.cuda or 'NONE')",
-        ]);
+        const { stdout } = await execFileAsync(
+          venvPython,
+          ["-c", "import torch; print(torch.version.cuda or 'NONE')"],
+          { env },
+        );
         const installedCuda = stdout.trim();
         const needsGpu = !pkg.installArgs.some(
           (arg) => typeof arg === "string" && (arg.includes("whl/cpu") || /(?:^|\/)cpu\/?$/.test(arg)),
@@ -340,7 +348,7 @@ export async function ensureDeps(
     } else if (pkg.importName === "tensorrt") {
       const installed = await getInstalledTensorRtVersion(venvPython);
       if (installed && isCompatibleTensorRtVersion(installed)) {
-        const probe = await probeTensorRtLoadable(venvPython);
+        const probe = await probeTensorRtLoadable(venvPython, env);
         if (probe.loadable) {
           onLine(`[deps] ${pkg.label} already installed (${installed}) ✓`);
           continue;
@@ -352,7 +360,7 @@ export async function ensureDeps(
         );
       }
     } else if (pkg.importName === "tensorrt_rtx") {
-      const probe = await probeTensorRtRtxLoadable(venvPython);
+      const probe = await probeTensorRtRtxLoadable(venvPython, env);
       if (probe.loadable) {
         onLine(`[deps] ${pkg.label} already installed (${probe.version ?? "ok"}) ✓`);
         continue;
@@ -367,8 +375,13 @@ export async function ensureDeps(
       onLine(
         `[deps] ${pkg.label} present but EP not loaded by onnxruntime — installing ${tensorrtRtxEpAbiLabel()}...`,
       );
-      await pipInstallForFamily("cuda", venvPython, tensorrtRtxEpAbiInstallArgs(), onLine);
-      const rtProbe = await probeTensorRtRtxLoadable(venvPython);
+      try {
+        await pipInstallForFamily("cuda", venvPython, tensorrtRtxEpAbiInstallArgs(), onLine);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { ok: false, error: msg };
+      }
+      const rtProbe = await probeTensorRtRtxLoadable(venvPython, env);
       if (rtProbe.loadable) {
         onLine(`[deps] ${tensorrtRtxEpAbiLabel()} installed — TensorRT RTX EP loadable ✓`);
         continue;
@@ -383,10 +396,11 @@ export async function ensureDeps(
       );
     } else if (pkg.importName.startsWith("nvidia.")) {
       try {
-        await execFileAsync(venvPython, [
-          "-c",
-          `import importlib; importlib.import_module(${JSON.stringify(pkg.importName)})`,
-        ]);
+        await execFileAsync(
+          venvPython,
+          ["-c", `import importlib; importlib.import_module(${JSON.stringify(pkg.importName)})`],
+          { env },
+        );
         onLine(`[deps] ${pkg.label} already installed ✓`);
         continue;
       } catch {
@@ -394,10 +408,11 @@ export async function ensureDeps(
       }
     } else if (pkg.importName === "onnxruntime") {
       try {
-        const { stdout } = await execFileAsync(venvPython, [
-          "-c",
-          "import onnxruntime as ort; print(ort.__version__)",
-        ]);
+        const { stdout } = await execFileAsync(
+          venvPython,
+          ["-c", "import onnxruntime as ort; print(ort.__version__)"],
+          { env },
+        );
         const installed = stdout.trim();
         const expected = pinnedOrtGpuInstallArgs()[0]?.split("==")[1];
         if (installed && expected && installed === expected) {
@@ -414,7 +429,7 @@ export async function ensureDeps(
       }
     } else {
       try {
-        await execFileAsync(venvPython, ["-c", `import ${pkg.importName}`]);
+        await execFileAsync(venvPython, ["-c", `import ${pkg.importName}`], { env });
         onLine(`[deps] ${pkg.label} already installed ✓`);
         continue;
       } catch {
@@ -423,11 +438,16 @@ export async function ensureDeps(
     }
 
     onLine(`[deps] Installing ${pkg.label}...`);
-    await pipInstallForFamily("cuda", venvPython, pkg.installArgs, onLine);
+    try {
+      await pipInstallForFamily("cuda", venvPython, pkg.installArgs, onLine);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: msg };
+    }
     onLine(`[deps] ${pkg.label} installed`);
   }
 
-  const pinError = await assertCudaOrtPin(venvPython);
+  const pinError = await assertFamilyOrtConstraints("cuda", venvPython);
   if (pinError) return { ok: false, error: pinError };
   invalidateRuntimeStatusCache();
   return { ok: true };

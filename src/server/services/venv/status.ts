@@ -3,10 +3,10 @@
  */
 import fs from "fs";
 import type { IHVProvider } from "../../../types.ts";
-import type { VenvFamily } from "../../../lib/venvFamily.ts";
 import {
   emptyFamilyFlags,
   type RuntimeFamilyFlags,
+  type VenvFamily,
   VENV_FAMILIES,
 } from "../../../lib/venvFamily.ts";
 import { execFileAsync } from "../shared/exec.ts";

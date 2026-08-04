@@ -25,6 +25,7 @@ import {
   writeMigrationJournal,
 } from "./migration.ts";
 import {
+  conflictingOrtDistributions,
   getFamilyBuildingRoot,
   getFamilyRoot,
   getFamilySpec,
@@ -107,7 +108,7 @@ async function buildFamilyTree(
     const buildEnv = envForFamily(family, { ...process.env });
     onLine(`[setup] Installing olive-ai into ${family} building tree...`);
     await runPythonModule(py, ["-m", "pip", "install", "--upgrade", "pip"], onLine, buildEnv, "pip");
-    await runPythonModule(py, ["-m", "pip", "install", "olive-ai", "requests"], onLine, buildEnv, "pip");
+    await runPythonModule(py, ["-m", "pip", "install", ...spec.oliveInstallArgs], onLine, buildEnv, "pip");
     onLine(`[setup] Installing canonical ORT (${spec.ortDistribution})...`);
     await runPythonModule(
       py,
@@ -167,10 +168,8 @@ async function familyNeedsRebuild(family: VenvFamily): Promise<boolean> {
   }
   const dists = await listInstalledOrtDistributions(py);
   if (!dists.includes(spec.ortDistribution)) return true;
-  if (dists.some((d) => d !== spec.ortDistribution && (d.startsWith("onnxruntime")))) {
-    // conflicting ORT flavor present
-    const others = dists.filter((d) => d !== spec.ortDistribution);
-    if (others.length > 0) return true;
+  if (conflictingOrtDistributions(spec.ortDistribution).some((c) => dists.includes(c))) {
+    return true;
   }
   return false;
 }
@@ -210,7 +209,7 @@ async function migrateGpuContaminatedVenv(
       onLine("[migrate] Building default runtime tree (not live yet)...");
       const defBuild = await buildFamilyTree("default", systemPython, onLine);
       if (!defBuild.ok) {
-        writeMigrationJournal("default_built", defBuild.error);
+        writeMigrationJournal("building", defBuild.error);
         clearBuildingRoot("default");
         if (cudaNeedsBuild) clearBuildingRoot("cuda");
         return defBuild;
@@ -248,11 +247,18 @@ async function migrateGpuContaminatedVenv(
       }
       writeMigrationJournal("default_promoted");
 
-      // Rename leftover default backup to legacy-gpu if present
+      // Rename newest leftover default backup to legacy-gpu if present
       const backups = fs
         .readdirSync(process.cwd())
         .filter((n) => n.startsWith(".venv.backup-"))
-        .map((n) => path.join(process.cwd(), n));
+        .map((n) => path.join(process.cwd(), n))
+        .sort((a, b) => {
+          try {
+            return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
+          } catch {
+            return 0;
+          }
+        });
       const legacy = getLegacyGpuBackupRoot();
       if (backups.length > 0 && !fs.existsSync(legacy)) {
         try {
@@ -294,25 +300,29 @@ async function ensureVenvFamilyInner(
     };
   }
 
-  // Repair GPU-contaminated `.venv` even when `.venvs/cuda` already exists.
-  if (family === "default" || family === "cuda") {
-    const intent = await inspectDefaultVenvIntent(listInstalledOrtDistributions);
-    if (intent === "cuda-contaminated") {
-      onLine(
-        familyPythonExists("cuda")
-          ? "[migrate] Existing .venv still has onnxruntime-gpu — rebuilding default (CUDA family present)..."
-          : "[migrate] Existing .venv has onnxruntime-gpu — migrating to dual-runtime layout...",
-      );
-      const migrated = await migrateGpuContaminatedVenv(systemPython, onLine);
-      if (!migrated.ok) return migrated;
-      if (family === "cuda" && familyPythonExists("cuda")) {
-        const needs = await familyNeedsRebuild("cuda");
-        if (!needs) return { ok: true };
-      }
-      if (family === "default" && familyPythonExists("default")) {
-        const needs = await familyNeedsRebuild("default");
-        if (!needs) return { ok: true };
-      }
+  // All families: check whether default `.venv` is GPU-contaminated or unprobeable.
+  const intent = await inspectDefaultVenvIntent(listInstalledOrtDistributions);
+  if (intent === "unknown") {
+    onLine(
+      "[migrate] Could not probe default .venv ORT state — rebuilding default runtime (fail-closed)...",
+    );
+    const rebuilt = await buildFamilyIsolated("default", systemPython, onLine);
+    if (!rebuilt.ok) return rebuilt;
+  } else if (intent === "cuda-contaminated") {
+    onLine(
+      familyPythonExists("cuda")
+        ? "[migrate] Existing .venv still has onnxruntime-gpu — rebuilding default (CUDA family present)..."
+        : "[migrate] Existing .venv has onnxruntime-gpu — migrating to dual-runtime layout...",
+    );
+    const migrated = await migrateGpuContaminatedVenv(systemPython, onLine);
+    if (!migrated.ok) return migrated;
+    if (family === "cuda" && familyPythonExists("cuda")) {
+      const needs = await familyNeedsRebuild("cuda");
+      if (!needs) return { ok: true };
+    }
+    if (family === "default" && familyPythonExists("default")) {
+      const needs = await familyNeedsRebuild("default");
+      if (!needs) return { ok: true };
     }
   }
 

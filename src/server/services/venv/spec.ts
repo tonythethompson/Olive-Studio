@@ -16,22 +16,27 @@ export type VenvFamilySpec = {
   ortVersionSpec?: string;
   /** Pip install args for the canonical ORT wheel (no conflicting flavors). */
   ortInstallArgs: string[];
+  /** Pip install args for olive-ai (+ requests) into a fresh family tree. */
+  oliveInstallArgs: string[];
   packageConstraints: string[];
   specVersion: number;
 };
 
 /** Bump when pins / layout change so ensure triggers an isolated rebuild. */
-export const VENV_SPEC_VERSION = 1;
+export const VENV_SPEC_VERSION = 2;
+
+/** Pinned olive-ai range for family builds (avoid floating major). */
+export const PINNED_OLIVE_AI_INSTALL = "olive-ai>=0.9.0,<1";
+
+const OLIVE_INSTALL_ARGS = [PINNED_OLIVE_AI_INSTALL, "requests"] as const;
 
 /** Manifest filename written inside each family root. */
 export const VENV_MANIFEST_NAME = ".olive-studio-venv.json";
 
-/** Journal lives outside either venv so it survives directory swaps. */
-export const MIGRATION_JOURNAL_PATH = path.join(
-  process.cwd(),
-  ".olive-studio",
-  "runtime-migration.json",
-);
+/** Journal path resolved against current cwd (safe under tests that chdir). */
+export function getMigrationJournalPath(): string {
+  return path.join(process.cwd(), ".olive-studio", "runtime-migration.json");
+}
 
 export const ALL_ORT_DISTRIBUTIONS: readonly OrtDistributionName[] = [
   "onnxruntime",
@@ -78,6 +83,7 @@ export function getFamilySpec(family: VenvFamily): VenvFamilySpec {
       ortDistribution: "onnxruntime-gpu",
       ortVersionSpec: PINNED_ORT_GPU_VERSION,
       ortInstallArgs: pinnedOrtGpuInstallArgs(),
+      oliveInstallArgs: [...OLIVE_INSTALL_ARGS],
       packageConstraints: pinnedOrtGpuInstallArgs(),
       specVersion: VENV_SPEC_VERSION,
     };
@@ -89,6 +95,7 @@ export function getFamilySpec(family: VenvFamily): VenvFamilySpec {
     buildingRoot: getFamilyBuildingRoot("default"),
     ortDistribution: ort,
     ortInstallArgs: defaultOrtInstallArgs(),
+    oliveInstallArgs: [...OLIVE_INSTALL_ARGS],
     packageConstraints: defaultOrtInstallArgs(),
     specVersion: VENV_SPEC_VERSION,
   };

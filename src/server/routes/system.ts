@@ -242,9 +242,10 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
 
   const defaultPython = getVenvPython("default");
   const cudaPython = getVenvPython("cuda");
+  const cudaPythonExists = fs.existsSync(cudaPython);
   const pythonCandidates: string[] = [];
   if (fs.existsSync(defaultPython)) pythonCandidates.push(defaultPython);
-  if (fs.existsSync(cudaPython)) pythonCandidates.push(cudaPython);
+  if (cudaPythonExists) pythonCandidates.push(cudaPython);
   const systemPython = await findSystemPython();
   if (systemPython) pythonCandidates.push(systemPython);
 
@@ -278,7 +279,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     }
     // CUDA / TRT probes prefer the cuda-family python, with PATH isolation so
     // sibling family Scripts dirs cannot skew EP discovery.
-    if (!cuda && (isCuda || (!fs.existsSync(cudaPython) && isDefault))) {
+    if (!cuda && (isCuda || (!cudaPythonExists && isDefault))) {
       try {
         const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT], {
           timeout: ORT_PROBE_TIMEOUT_MS,
@@ -286,7 +287,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
         });
         const probe = parseOrtGpuProbe(stdout);
         if (isCuda && probe.ok) cudaVenvLoadable = true;
-        if (isDefault && !fs.existsSync(cudaPython) && probe.ok) cudaVenvLoadable = true;
+        if (isDefault && !cudaPythonExists && probe.ok) cudaVenvLoadable = true;
         const pinnedLabel = pinnedOrtGpuLabel();
         const requiredVersionMatch = pinnedLabel.match(/==\s*([\d.]+[^\s]*)/);
         const pinnedVersion = requiredVersionMatch?.[1] ?? pinnedLabel;
@@ -308,7 +309,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
         };
       }
     }
-    if (!tensorrt?.loadable && (isCuda || (!fs.existsSync(cudaPython) && isDefault))) {
+    if (!tensorrt?.loadable && (isCuda || (!cudaPythonExists && isDefault))) {
       const trt = await opts.probeTensorRtLoadable(python, familyEnv);
       if (isCuda && trt.loadable) {
         tensorRtVenvLoadable = true;
@@ -317,7 +318,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
         tensorrt = trt;
       }
     }
-    if (!tensorRtRtx?.loadable && (isCuda || (!fs.existsSync(cudaPython) && isDefault))) {
+    if (!tensorRtRtx?.loadable && (isCuda || (!cudaPythonExists && isDefault))) {
       const rtx = await opts.probeTensorRtRtxLoadable(python, familyEnv);
       if (isCuda && rtx.loadable) {
         tensorRtRtxVenvLoadable = true;

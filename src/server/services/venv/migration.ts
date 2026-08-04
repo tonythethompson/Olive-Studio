@@ -8,7 +8,7 @@ import {
   getFamilyBuildingRoot,
   getFamilyRoot,
   getLegacyGpuBackupRoot,
-  MIGRATION_JOURNAL_PATH,
+  getMigrationJournalPath,
 } from "./spec.ts";
 
 export type MigrationPhase =
@@ -40,36 +40,40 @@ export function withMigrationLock<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 export function readMigrationJournal(): RuntimeMigrationState | null {
-  if (!fs.existsSync(MIGRATION_JOURNAL_PATH)) return null;
+  const journalPath = getMigrationJournalPath();
+  if (!fs.existsSync(journalPath)) return null;
   try {
-    return JSON.parse(fs.readFileSync(MIGRATION_JOURNAL_PATH, "utf-8")) as RuntimeMigrationState;
+    return JSON.parse(fs.readFileSync(journalPath, "utf-8")) as RuntimeMigrationState;
   } catch {
     return null;
   }
 }
 
 export function writeMigrationJournal(phase: MigrationPhase, error?: string): void {
-  fs.mkdirSync(path.dirname(MIGRATION_JOURNAL_PATH), { recursive: true });
+  const journalPath = getMigrationJournalPath();
+  fs.mkdirSync(path.dirname(journalPath), { recursive: true });
   const state: RuntimeMigrationState = {
     version: 1,
     phase,
     updatedAt: new Date().toISOString(),
     ...(error ? { error } : {}),
   };
-  fs.writeFileSync(MIGRATION_JOURNAL_PATH, JSON.stringify(state, null, 2), "utf-8");
+  fs.writeFileSync(journalPath, JSON.stringify(state, null, 2), "utf-8");
 }
 
 export function clearMigrationJournal(): void {
-  if (fs.existsSync(MIGRATION_JOURNAL_PATH)) fs.unlinkSync(MIGRATION_JOURNAL_PATH);
+  const journalPath = getMigrationJournalPath();
+  if (fs.existsSync(journalPath)) fs.unlinkSync(journalPath);
 }
 
 /**
  * Detect whether an existing default `.venv` looks CUDA/GPU-ORT contaminated
  * (needs migration into dual-family layout).
+ * Probe failures return `"unknown"` (fail-closed) rather than assuming healthy default.
  */
 export async function inspectDefaultVenvIntent(
   probeOrtDists: (python: string) => Promise<string[]>,
-): Promise<"default" | "cuda-contaminated" | "missing"> {
+): Promise<"default" | "cuda-contaminated" | "missing" | "unknown"> {
   const root = getFamilyRoot("default");
   const py =
     process.platform === "win32"
@@ -81,7 +85,7 @@ export async function inspectDefaultVenvIntent(
     if (dists.includes("onnxruntime-gpu")) return "cuda-contaminated";
     return "default";
   } catch {
-    return "default";
+    return "unknown";
   }
 }
 

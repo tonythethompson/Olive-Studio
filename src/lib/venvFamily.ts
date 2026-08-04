@@ -24,6 +24,34 @@ export const KNOWN_IHV_PROVIDERS: readonly IHVProvider[] = [
 
 const KNOWN_SET = new Set<string>(KNOWN_IHV_PROVIDERS);
 
+/**
+ * Exact case-insensitive aliases (documented short names + lowercased canonical IDs).
+ * Substring matching is intentionally rejected (`fake-cuda`, `openvino-custom`, etc.).
+ */
+const PROVIDER_ALIASES: ReadonlyMap<string, IHVProvider> = new Map([
+  ["cpuexecutionprovider", "CPUExecutionProvider"],
+  ["cudaexecutionprovider", "CUDAExecutionProvider"],
+  ["tensorrtexecutionprovider", "TensorrtExecutionProvider"],
+  ["nvtensorrtrtxexecutionprovider", "NvTensorRTRTXExecutionProvider"],
+  ["dmlexecutionprovider", "DmlExecutionProvider"],
+  ["openvinoexecutionprovider", "OpenVINOExecutionProvider"],
+  ["qnnexecutionprovider", "QNNExecutionProvider"],
+  ["rocmexecutionprovider", "ROCMExecutionProvider"],
+  ["webgpuexecutionprovider", "WebGpuExecutionProvider"],
+  ["cpu", "CPUExecutionProvider"],
+  ["cuda", "CUDAExecutionProvider"],
+  ["tensorrt", "TensorrtExecutionProvider"],
+  ["trt", "TensorrtExecutionProvider"],
+  ["nvtensorrtrtx", "NvTensorRTRTXExecutionProvider"],
+  ["tensorrtrtx", "NvTensorRTRTXExecutionProvider"],
+  ["dml", "DmlExecutionProvider"],
+  ["directml", "DmlExecutionProvider"],
+  ["openvino", "OpenVINOExecutionProvider"],
+  ["qnn", "QNNExecutionProvider"],
+  ["rocm", "ROCMExecutionProvider"],
+  ["webgpu", "WebGpuExecutionProvider"],
+]);
+
 export function isKnownIhvProvider(id: string): id is IHVProvider {
   return KNOWN_SET.has(id);
 }
@@ -36,21 +64,7 @@ export function normalizeIhvProvider(raw: unknown): IHVProvider | null {
   if (typeof raw !== "string" || !raw.trim()) return null;
   const token = raw.trim();
   if (isKnownIhvProvider(token)) return token;
-  const lower = token.toLowerCase();
-  if (lower.includes("nvtensorrtrtx") || lower.includes("tensorrtrtx")) {
-    return "NvTensorRTRTXExecutionProvider";
-  }
-  if (lower.includes("tensorrt") || lower === "trt") return "TensorrtExecutionProvider";
-  if (lower.includes("directml") || lower === "dml" || lower.includes("dmlexecution")) {
-    return "DmlExecutionProvider";
-  }
-  if (lower.includes("cuda")) return "CUDAExecutionProvider";
-  if (lower.includes("openvino")) return "OpenVINOExecutionProvider";
-  if (lower.includes("qnn")) return "QNNExecutionProvider";
-  if (lower.includes("rocm")) return "ROCMExecutionProvider";
-  if (lower.includes("webgpu")) return "WebGpuExecutionProvider";
-  if (lower.includes("cpu")) return "CPUExecutionProvider";
-  return null;
+  return PROVIDER_ALIASES.get(token.toLowerCase()) ?? null;
 }
 
 /** Capability keys used for ready-reuse / preflight (subset of RuntimeFamilyStatus). */

@@ -184,7 +184,6 @@ print("ok:" + tensorrt_rtx.__version__)
 async function ensureTensorRtRtxEpAbi(
   python: string,
   onLine: (line: string) => void,
-  env: NodeJS.ProcessEnv,
 ): Promise<void> {
   onLine(`[deps] Installing ${tensorrtRtxEpAbiLabel()} (NVIDIA EP-ABI plugin)...`);
   await pipInstallForFamily("cuda", python, tensorrtRtxEpAbiInstallArgs(), onLine);
@@ -231,7 +230,12 @@ export async function ensureTensorRtRtx(
   const installed = await getInstalledTensorRtRtxVersion(venvPython);
   if (!installed) {
     onLine(`[deps] Installing ${tensorrtRtxLabel()} for TensorRT RTX runtime (may take a few minutes)...`);
-    await pipInstallForFamily("cuda", venvPython, tensorrtRtxInstallArgs(), onLine);
+    try {
+      await pipInstallForFamily("cuda", venvPython, tensorrtRtxInstallArgs(), onLine);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: msg };
+    }
     onLine(`[deps] ${tensorrtRtxLabel()} installed ✓`);
   } else {
     onLine(
@@ -240,7 +244,7 @@ export async function ensureTensorRtRtx(
   }
 
   try {
-    await ensureTensorRtRtxEpAbi(venvPython, onLine, env);
+    await ensureTensorRtRtxEpAbi(venvPython, onLine);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return {

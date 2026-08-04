@@ -1,8 +1,9 @@
 /**
  * Route-level coverage for cancelling an Olive job *during* environment setup,
- * before the child process exists. Gated `ensureVenv` / `buildOliveRunEnvironment`
- * mocks let us hold the run in `setting_up` at each setup await, cancel it, then
- * assert the run aborts without writing a recipe or spawning Olive.
+ * before the child process exists. Gated `ensureProviderCapability` /
+ * `buildOliveRunEnvironment` mocks let us hold the run in `setting_up` at each
+ * setup await, cancel it, then assert the run aborts without writing a recipe
+ * or spawning Olive.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import express from "express";
@@ -10,9 +11,9 @@ import type { Server } from "http";
 import fs from "fs";
 
 // ── Controllable setup gates ──────────────────────────────────────────────
-// ensureVenv always pauses on its gate. buildOliveRunEnvironment only pauses
-// when `gateBuildEnv` is set, so most tests aren't blocked by it.
-let releaseEnsureVenv: (() => void) | null = null;
+// ensureProviderCapability always pauses on its gate. buildOliveRunEnvironment
+// only pauses when `gateBuildEnv` is set, so most tests aren't blocked by it.
+let releaseEnsureProviderCapability: (() => void) | null = null;
 let releaseBuildEnv: (() => void) | null = null;
 let gateBuildEnv = false;
 
@@ -21,7 +22,7 @@ vi.mock("../services/venv/index.ts", () => ({
     onLine("[setup] Using default runtime");
     onLine("[setup] (mock) creating venv…");
     await new Promise<void>((resolve) => {
-      releaseEnsureVenv = resolve;
+      releaseEnsureProviderCapability = resolve;
     });
     return { ok: true, family: "default", python: "/tmp/mock-python" };
   }),
@@ -85,7 +86,7 @@ afterAll(async () => {
 beforeEach(() => {
   jobRegistry.clear();
   spawnSpy.mockClear();
-  releaseEnsureVenv = null;
+  releaseEnsureProviderCapability = null;
   releaseBuildEnv = null;
   gateBuildEnv = false;
 });
@@ -113,7 +114,7 @@ describe("POST /api/olive/cancel during setup", () => {
     });
 
     // Job is registered synchronously before the first await; grab it while
-    // ensureVenv is gated in "setting_up".
+    // ensureProviderCapability is gated in "setting_up".
     const jobId = await waitFor(() => {
       for (const [id, job] of jobRegistry) {
         if (job.status === "setting_up") return id;
@@ -130,8 +131,8 @@ describe("POST /api/olive/cancel during setup", () => {
     const cancelBody = await cancelRes.json();
     expect(cancelBody).toMatchObject({ ok: true, status: "cancelled" });
 
-    // Let the gated ensureVenv resolve; the run must now abort, not spawn.
-    releaseEnsureVenv?.();
+    // Let the gated ensureProviderCapability resolve; the run must now abort, not spawn.
+    releaseEnsureProviderCapability?.();
     const runRes = await runPromise;
     const runBody = await runRes.json();
     expect(runBody).toMatchObject({ ok: false, status: "cancelled" });
@@ -150,8 +151,8 @@ describe("POST /api/olive/cancel during setup", () => {
       body: JSON.stringify({ recipeJson: "{}" }),
     });
 
-    // Advance past ensureVenv, then hold inside buildOliveRunEnvironment.
-    (await waitFor(() => releaseEnsureVenv ?? undefined))();
+    // Advance past ensureProviderCapability, then hold inside buildOliveRunEnvironment.
+    (await waitFor(() => releaseEnsureProviderCapability ?? undefined))();
     await waitFor(() => releaseBuildEnv ?? undefined);
 
     const jobId = await waitFor(() => {
@@ -281,8 +282,8 @@ describe("POST /api/olive/run temp-recipe write failure", () => {
       body: JSON.stringify({ recipeJson: "{}" }),
     });
 
-    // ensureVenv is gated — release it so setup proceeds to the failing write.
-    const release = await waitFor(() => releaseEnsureVenv ?? undefined);
+    // ensureProviderCapability is gated — release it so setup proceeds to the failing write.
+    const release = await waitFor(() => releaseEnsureProviderCapability ?? undefined);
     release();
 
     const res = await runPromise;

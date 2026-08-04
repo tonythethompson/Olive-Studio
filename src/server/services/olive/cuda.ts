@@ -15,7 +15,6 @@ import { getVenvPython } from "../venv/paths.ts";
 import { ensureVenvFamily } from "../venv/familyEnsure.ts";
 import { envForFamily } from "../venv/pathIsolation.ts";
 import { invalidateRuntimeStatusCache } from "../venv/status.ts";
-import { assertFamilyOrtConstraints } from "../venv/packageConstraints.ts";
 import fs from "fs";
 
 /** Parse CUDA version from nvidia-smi output. */
@@ -87,10 +86,6 @@ export async function detectCudaTag(preferred: string, onLine: (line: string) =>
   return "cpu";
 }
 
-async function assertCudaOrtPin(python: string): Promise<string | null> {
-  return assertFamilyOrtConstraints("cuda", python);
-}
-
 /**
  * Ensures the cuda-family venv has the pinned onnxruntime-gpu wheel with a
  * usable CUDA execution provider.
@@ -134,13 +129,13 @@ export async function ensureOnnxRuntimeGpu(
   }
 
   onLine(`[deps] Installing ${pinnedOrtGpuLabel()} (required for CUDA EP)...`);
-  await pipInstallForFamily("cuda", venvPython, pinnedOrtGpuInstallArgs(), onLine);
-  onLine(`[deps] ${pinnedOrtGpuLabel()} installed`);
-
-  const pinError = await assertCudaOrtPin(venvPython);
-  if (pinError) {
-    return { ok: false, libsDir: null, error: pinError };
+  try {
+    await pipInstallForFamily("cuda", venvPython, pinnedOrtGpuInstallArgs(), onLine);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, libsDir: null, error: msg };
   }
+  onLine(`[deps] ${pinnedOrtGpuLabel()} installed`);
 
   invalidateRuntimeStatusCache();
 

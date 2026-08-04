@@ -19,7 +19,7 @@ import {
 } from "./familyEnsure.ts";
 import { envForFamily } from "./pathIsolation.ts";
 import { getDualRuntimeStatus } from "./status.ts";
-import { resolveVenvFamily, humanFamilyLabel } from "../../../lib/venvFamily.ts";
+import { resolveVenvFamily, humanFamilyLabel, type VenvFamily } from "../../../lib/venvFamily.ts";
 import { ensureProviderCapability } from "./capabilityEnsure.ts";
 
 export { findSystemPython, getPythonVersion, isSupportedOlivePython };
@@ -167,8 +167,9 @@ export function resolveOliveCommand(
   provider: IHVProvider,
   configPath: string,
   listPackages: boolean,
-  family: "default" | "cuda" = resolveVenvFamily(provider),
-): { executable: string; args: string[]; family: "default" | "cuda" } {
+  /** Explicit family wins over provider-derived default. */
+  family: VenvFamily = resolveVenvFamily(provider),
+): { executable: string; args: string[]; family: VenvFamily } {
   const venvPython = getVenvPython(family);
   const oliveArgs = oliveSpawnArgs(configPath, listPackages);
   if (isGpuExecutionProvider(provider) && fs.existsSync(OLIVE_GPU_LAUNCHER)) {
@@ -181,7 +182,8 @@ export async function buildOliveRunEnvironment(
   python: string,
   provider: IHVProvider,
   base: NodeJS.ProcessEnv,
-  family: "default" | "cuda" = resolveVenvFamily(provider),
+  /** Explicit family wins over provider-derived default. */
+  family: VenvFamily = resolveVenvFamily(provider),
 ): Promise<NodeJS.ProcessEnv> {
   let env = envForFamily(family, base);
   if (!isGpuExecutionProvider(provider)) {

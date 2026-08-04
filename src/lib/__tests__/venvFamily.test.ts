@@ -8,11 +8,22 @@ import {
 } from "../venvFamily";
 
 describe("venvFamily policy", () => {
-  it("normalizes known aliases", () => {
+  it("normalizes known aliases (exact, case-insensitive)", () => {
     expect(normalizeIhvProvider("dml")).toBe("DmlExecutionProvider");
     expect(normalizeIhvProvider("DirectML")).toBe("DmlExecutionProvider");
+    expect(normalizeIhvProvider("cuda")).toBe("CUDAExecutionProvider");
+    expect(normalizeIhvProvider("tensorrt")).toBe("TensorrtExecutionProvider");
+    expect(normalizeIhvProvider("trt")).toBe("TensorrtExecutionProvider");
+    expect(normalizeIhvProvider("openvino")).toBe("OpenVINOExecutionProvider");
     expect(normalizeIhvProvider("CUDAExecutionProvider")).toBe("CUDAExecutionProvider");
+    expect(normalizeIhvProvider("cudaexecutionprovider")).toBe("CUDAExecutionProvider");
     expect(normalizeIhvProvider("not-a-provider")).toBeNull();
+  });
+
+  it("rejects substring-only tokens that are not exact aliases", () => {
+    expect(normalizeIhvProvider("fake-cuda")).toBeNull();
+    expect(normalizeIhvProvider("unsupported-cpu-backend")).toBeNull();
+    expect(normalizeIhvProvider("openvino-custom")).toBeNull();
   });
 
   it("maps mandatory families", () => {

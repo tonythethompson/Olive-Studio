@@ -8,6 +8,7 @@ import type { VenvFamily } from "../../../lib/venvFamily.ts";
 import { VENV_FAMILIES } from "../../../lib/venvFamily.ts";
 import { envWithPrependedPaths } from "../../../lib/tensorrtDeps.ts";
 import { getVenvScriptsDir } from "./paths.ts";
+import { getFamilyRoot } from "./spec.ts";
 import { appConfig } from "../../config.ts";
 
 function normalizeDir(p: string): string {
@@ -24,6 +25,7 @@ export function allFamilyScriptsDirs(): string[] {
  * - remove both family Scripts dirs from inherited PATH
  * - prepend only the selected family's Scripts (if present)
  * - optionally prepend configured system Python dir
+ * - clear PYTHONPATH / PYTHONHOME and set VIRTUAL_ENV to the family root
  */
 export function envForFamily(
   family: VenvFamily,
@@ -38,6 +40,9 @@ export function envForFamily(
     .filter((p) => !strip.has(normalizeDir(p)));
 
   const env: NodeJS.ProcessEnv = { ...base, [pathKey]: existing.join(sep) };
+  delete env.PYTHONPATH;
+  delete env.PYTHONHOME;
+  env.VIRTUAL_ENV = getFamilyRoot(family);
 
   const dirs: string[] = [];
   const scripts = getVenvScriptsDir(family);

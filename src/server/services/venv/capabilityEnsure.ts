@@ -7,6 +7,10 @@ import {
   resolveVenvFamily,
   type VenvFamily,
 } from "../../../lib/venvFamily.ts";
+import { ensureOpenVino } from "../olive/openvino.ts";
+import { ensureOnnxRuntimeGpu } from "../olive/cuda.ts";
+import { ensureTensorRt } from "../olive/tensorrt.ts";
+import { ensureTensorRtRtx } from "../olive/tensorrt-rtx.ts";
 import { ensureVenvFamily } from "./familyEnsure.ts";
 import { getVenvPython } from "./paths.ts";
 import {
@@ -60,7 +64,19 @@ export async function ensureProviderCapability(
 
   // Providers without a capability slot (QNN/ROCm/WebGPU) only need the family base.
   if (cap === undefined) {
-    return { ok: true, family, python: getVenvPython(family) };
+    if (
+      provider === "QNNExecutionProvider" ||
+      provider === "ROCMExecutionProvider" ||
+      provider === "WebGpuExecutionProvider"
+    ) {
+      return { ok: true, family, python: getVenvPython(family) };
+    }
+    return {
+      ok: false,
+      error: `Provider ${provider} has no capability slot in ${humanFamilyLabel(family)} (status mismatch)`,
+      family,
+      python: getVenvPython(family),
+    };
   }
   if (!cap.usable) {
     return {
@@ -80,41 +96,42 @@ async function installCapabilityPackages(
   provider: IHVProvider,
   onLine: SetupListener,
 ): Promise<{ ok: boolean; error?: string }> {
-  switch (provider) {
-    case "CPUExecutionProvider":
-    case "DmlExecutionProvider":
-    case "QNNExecutionProvider":
-    case "ROCMExecutionProvider":
-    case "WebGpuExecutionProvider":
-      return { ok: true };
+  try {
+    switch (provider) {
+      case "CPUExecutionProvider":
+      case "DmlExecutionProvider":
+      case "QNNExecutionProvider":
+      case "ROCMExecutionProvider":
+      case "WebGpuExecutionProvider":
+        return { ok: true };
 
-    case "OpenVINOExecutionProvider": {
-      const { ensureOpenVino } = await import("../olive/openvino.ts");
-      const result = await ensureOpenVino(onLine);
-      return result.ok ? { ok: true } : { ok: false, error: result.error };
-    }
+      case "OpenVINOExecutionProvider": {
+        const result = await ensureOpenVino(onLine);
+        return result.ok ? { ok: true } : { ok: false, error: result.error };
+      }
 
-    case "CUDAExecutionProvider": {
-      const { ensureOnnxRuntimeGpu } = await import("../olive/cuda.ts");
-      const result = await ensureOnnxRuntimeGpu(onLine);
-      return result.ok ? { ok: true } : { ok: false, error: result.error };
-    }
+      case "CUDAExecutionProvider": {
+        const result = await ensureOnnxRuntimeGpu(onLine);
+        return result.ok ? { ok: true } : { ok: false, error: result.error };
+      }
 
-    case "TensorrtExecutionProvider": {
-      const { ensureTensorRt } = await import("../olive/tensorrt.ts");
-      const result = await ensureTensorRt(onLine);
-      return result.ok ? { ok: true } : { ok: false, error: result.error };
-    }
+      case "TensorrtExecutionProvider": {
+        const result = await ensureTensorRt(onLine);
+        return result.ok ? { ok: true } : { ok: false, error: result.error };
+      }
 
-    case "NvTensorRTRTXExecutionProvider": {
-      const { ensureTensorRtRtx } = await import("../olive/tensorrt-rtx.ts");
-      const result = await ensureTensorRtRtx(onLine);
-      return result.ok ? { ok: true } : { ok: false, error: result.error };
-    }
+      case "NvTensorRTRTXExecutionProvider": {
+        const result = await ensureTensorRtRtx(onLine);
+        return result.ok ? { ok: true } : { ok: false, error: result.error };
+      }
 
-    default: {
-      const _exhaustive: never = provider;
-      return { ok: false, error: `Unsupported provider: ${_exhaustive}` };
+      default: {
+        const _exhaustive: never = provider;
+        return { ok: false, error: `Unsupported provider: ${_exhaustive}` };
+      }
     }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
   }
 }

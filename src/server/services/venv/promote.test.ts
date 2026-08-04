@@ -43,7 +43,7 @@ describe("promoteBuildingToLive", () => {
     expect(fs.existsSync(building)).toBe(false);
   });
 
-  it("backs up live then promotes; rolls back rename failure when building missing mid-flight", () => {
+  it("backs up live then promotes when live already exists", () => {
     const live = getFamilyRoot("default");
     const building = getFamilyBuildingRoot("default");
     fs.mkdirSync(live, { recursive: true });
