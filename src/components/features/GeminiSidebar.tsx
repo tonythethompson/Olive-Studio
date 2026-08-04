@@ -134,7 +134,7 @@ export function GeminiSidebar({
     onAuditOpened?.();
   }, [openToAudit]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Report issue modal state — must precede the Escape-key effect that reads it
+  // Report issue modal state (must precede the Escape-key effect that reads it)
   const [isReportOpen, setIsReportOpen] = useState(false);
 
   useEffect(() => {
