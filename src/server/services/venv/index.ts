@@ -2,7 +2,7 @@ import path from "path";
 import fs from "fs";
 import { spawn } from "child_process";
 import type { IHVProvider } from "../../../types.ts";
-import { execFileAsync, readStudioConfig, envWithVenvOnPath } from "./config.ts";
+import { execFileAsync, readStudioConfig } from "./config.ts";
 import {
   getVenvPython,
   getVenvScriptsDir,
@@ -17,10 +17,14 @@ import {
   detachFamilyVenvListener,
   ensureVenvFamily,
 } from "./familyEnsure.ts";
+import { envForFamily } from "./pathIsolation.ts";
 import { getDualRuntimeStatus } from "./status.ts";
+import { resolveVenvFamily, humanFamilyLabel } from "../../../lib/venvFamily.ts";
+import { ensureProviderCapability } from "./capabilityEnsure.ts";
 
 export { findSystemPython, getPythonVersion, isSupportedOlivePython };
 export { ensureVenvFamily, detachFamilyVenvListener, detachAnyFamilyVenvListener };
+export { ensureProviderCapability };
 export {
   getDualRuntimeStatus,
   invalidateRuntimeStatusCache,
@@ -29,6 +33,7 @@ export {
   capabilityForProvider,
 } from "./status.ts";
 export type { RuntimeFamilyStatus, DualRuntimeStatus, CapabilityStatus } from "./status.ts";
+export type { EnsureProviderCapabilityResult } from "./capabilityEnsure.ts";
 
 type SetupListener = (line: string) => void;
 
@@ -155,22 +160,23 @@ export function resolveOliveCommand(
   provider: IHVProvider,
   configPath: string,
   listPackages: boolean,
-): { executable: string; args: string[] } {
-  // PR1: still default-family python. PR2 routes by resolveVenvFamily(provider).
-  const venvPython = getVenvPython("default");
+  family: "default" | "cuda" = resolveVenvFamily(provider),
+): { executable: string; args: string[]; family: "default" | "cuda" } {
+  const venvPython = getVenvPython(family);
   const oliveArgs = oliveSpawnArgs(configPath, listPackages);
   if (isGpuExecutionProvider(provider) && fs.existsSync(OLIVE_GPU_LAUNCHER)) {
-    return { executable: venvPython, args: [OLIVE_GPU_LAUNCHER, ...oliveArgs] };
+    return { executable: venvPython, args: [OLIVE_GPU_LAUNCHER, ...oliveArgs], family };
   }
-  return { executable: venvPython, args: ["-m", "olive", ...oliveArgs] };
+  return { executable: venvPython, args: ["-m", "olive", ...oliveArgs], family };
 }
 
 export async function buildOliveRunEnvironment(
   python: string,
   provider: IHVProvider,
   base: NodeJS.ProcessEnv,
+  family: "default" | "cuda" = resolveVenvFamily(provider),
 ): Promise<NodeJS.ProcessEnv> {
-  let env = envWithVenvOnPath(base);
+  let env = envForFamily(family, base);
   if (!isGpuExecutionProvider(provider)) {
     return env;
   }
@@ -178,3 +184,5 @@ export async function buildOliveRunEnvironment(
   env = envWithPrependedPaths(env, libPaths);
   return env;
 }
+
+export { humanFamilyLabel, resolveVenvFamily };

@@ -9,6 +9,7 @@ import type { VenvFamily } from "../../../lib/venvFamily.ts";
 import { execFileAsync } from "../shared/exec.ts";
 import { findSystemPython } from "./systemPython.ts";
 import { getVenvPython } from "./paths.ts";
+import { envForFamily } from "./pathIsolation.ts";
 import {
   clearBuildingRoot,
   familyPythonExists,
@@ -98,7 +99,7 @@ async function buildFamilyIsolated(
     await createVenvAt(getFamilyBuildingRoot(family), systemPython, onLine);
     const py = buildingPython(family);
     const spec = getFamilySpec(family);
-    const buildEnv = { ...process.env };
+    const buildEnv = envForFamily(family, { ...process.env });
     onLine(`[setup] Installing olive-ai into ${family} building tree...`);
     await runPythonModule(py, ["-m", "pip", "install", "--upgrade", "pip"], onLine, buildEnv, "pip");
     await runPythonModule(py, ["-m", "pip", "install", "olive-ai", "requests"], onLine, buildEnv, "pip");

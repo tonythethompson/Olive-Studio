@@ -7,6 +7,7 @@ const GPU_PROVIDERS: IHVProvider[] = [
   "TensorrtExecutionProvider",
   "ROCMExecutionProvider",
   "WebGpuExecutionProvider",
+  "DmlExecutionProvider",
 ];
 const NPU_PROVIDERS: IHVProvider[] = ["QNNExecutionProvider"];
 

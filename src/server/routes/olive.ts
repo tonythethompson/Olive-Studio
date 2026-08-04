@@ -8,11 +8,11 @@ import path from "path";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
 
-import type { IHVProvider } from "../../types.ts";
 import type { GpuMetrics } from "../../lib/gpuMetrics.ts";
 import { validateOliveRecipeStructure } from "../../lib/oliveRecipeSchema.ts";
 import { enrichRecipeMemoryOffloadForRun } from "../../lib/memoryOffload.ts";
 import { isGpuExecutionProvider } from "../../lib/oliveGpuRuntime.ts";
+import { normalizeIhvProvider } from "../../lib/venvFamily.ts";
 
 import {
   jobRegistry,
@@ -24,7 +24,7 @@ import {
 import { pushLog, startGpuMetricsTimer, stopGpuMetricsTimer } from "../services/olive/gpu.ts";
 import { getVenvPython } from "../services/venv/paths.ts";
 import {
-  ensureVenv,
+  ensureProviderCapability,
   buildOliveRunEnvironment,
   resolveOliveCommand,
   detachVenvListener,
@@ -86,8 +86,18 @@ export function mountOliveRoutes(router: Router): void {
     };
     jobRegistry.set(jobId, job);
 
-    const provider = (recipe.systems?.local_system?.config?.accelerators?.[0]?.execution_providers?.[0] ??
-      "CPUExecutionProvider") as IHVProvider;
+    const providerRaw =
+      recipe.systems?.local_system?.config?.accelerators?.[0]?.execution_providers?.[0] ??
+      "CPUExecutionProvider";
+    const provider = normalizeIhvProvider(providerRaw);
+    if (!provider) {
+      cleanupJobArtifacts(job);
+      jobRegistry.delete(jobId);
+      return res.status(400).json({
+        ok: false,
+        error: `Unknown execution provider: ${String(providerRaw)}`,
+      });
+    }
 
     // Cancellation can arrive during the long setup awaits below, before a
     // process exists. Bail out (and respond) instead of spawning Olive anyway.
@@ -104,21 +114,20 @@ export function mountOliveRoutes(router: Router): void {
       // Retain the listener so /olive/cancel can detach it if setup is pending.
       const venvListener = (line: string) => pushLog(job, line);
       job.venvListener = venvListener;
-      const venvResult = await ensureVenv(venvListener);
+      const capResult = await ensureProviderCapability(provider, venvListener);
       // Setup finished for this caller — the listener is no longer registered.
       job.venvListener = undefined;
       if (bailIfCancelled()) return;
-      if (!venvResult.ok) {
+      if (!capResult.ok) {
         job.status = "failed";
-        // Log before finalizeJob so the error reaches any stream before it drains.
-        pushLog(job, `[error] ${venvResult.error}`);
+        pushLog(job, `[error] ${capResult.error}`);
         cleanupJobArtifacts(job);
         finalizeJob(job);
-        return res.status(500).json({ ok: false, jobId, error: venvResult.error });
+        return res.status(500).json({ ok: false, jobId, error: capResult.error });
       }
 
-      const venvPython = getVenvPython();
-      const env = await buildOliveRunEnvironment(venvPython, provider, process.env);
+      const venvPython = capResult.python ?? getVenvPython(capResult.family);
+      const env = await buildOliveRunEnvironment(venvPython, provider, process.env, capResult.family);
       if (bailIfCancelled()) return;
 
       if (cudaVersion !== "auto") {
@@ -141,7 +150,7 @@ export function mountOliveRoutes(router: Router): void {
       pushLog(job, "[setup] Starting Olive optimization...");
       job.status = "running";
 
-      const { executable, args } = resolveOliveCommand(provider, configPath, false);
+      const { executable, args } = resolveOliveCommand(provider, configPath, false, capResult.family);
       const proc = spawn(executable, args, { stdio: "pipe", env });
       job.process = proc;
 

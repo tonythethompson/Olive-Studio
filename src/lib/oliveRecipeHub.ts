@@ -168,7 +168,7 @@ function mapExecutionProviderFromRecipe(parsed: any): IHVProvider | undefined {
           return "NvTensorRTRTXExecutionProvider";
         }
         if (token.includes("tensorrt") || token.includes("trt")) return "TensorrtExecutionProvider";
-        if (token.includes("directml") || token.includes("dml")) return "CPUExecutionProvider";
+        if (token.includes("directml") || token.includes("dml")) return "DmlExecutionProvider";
         if (token.includes("qnn")) return "QNNExecutionProvider";
         if (token.includes("openvino")) return "OpenVINOExecutionProvider";
         if (token.includes("rocm")) return "ROCMExecutionProvider";
@@ -222,9 +222,16 @@ export function mapProviderToCatalogDevice(provider: IHVProvider): string {
       return "OpenVINO";
     case "QNNExecutionProvider":
       return "QNN";
+    case "DmlExecutionProvider":
+      return "DirectML";
+    case "WebGpuExecutionProvider":
+      return "WebGPU";
     case "CPUExecutionProvider":
-    default:
       return "CPU";
+    default: {
+      const _exhaustive: never = provider;
+      return _exhaustive;
+    }
   }
 }
 

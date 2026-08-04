@@ -403,9 +403,9 @@ function ProviderPluginInstalls({
           <>
             OpenVINOExecutionProvider not ready in the project{" "}
             <code className="text-slate-400">.venv</code>. Install installs{" "}
-            <code className="text-slate-400">onnxruntime-openvino</code> (replaces{" "}
-            <code className="text-slate-400">onnxruntime-gpu</code> in this venv) plus OpenVINO and
-            Optimum-Intel.
+            <code className="text-slate-400">openvino</code> +{" "}
+            <code className="text-slate-400">optimum-intel[openvino]</code> without replacing the
+            default ORT wheel.
           </>
         }
         detail={hardwareProbe?.openvino?.detail}

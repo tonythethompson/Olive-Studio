@@ -42,6 +42,8 @@ function getHardwareTargetFromProvider(provider: IHVProvider): string {
     case "TensorrtExecutionProvider":
     case "NvTensorRTRTXExecutionProvider":
       return "NVIDIA RTX 4090";
+    case "DmlExecutionProvider":
+      return "Windows DirectML GPU";
     case "OpenVINOExecutionProvider":
     case "CPUExecutionProvider":
       return "Intel Core i9 CPU";
@@ -50,8 +52,11 @@ function getHardwareTargetFromProvider(provider: IHVProvider): string {
     case "ROCMExecutionProvider":
       return "AMD MI300X / ROCm";
     case "WebGpuExecutionProvider":
-    default:
       return "";
+    default: {
+      const _exhaustive: never = provider;
+      return _exhaustive;
+    }
   }
 }
 

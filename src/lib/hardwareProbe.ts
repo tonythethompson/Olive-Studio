@@ -141,6 +141,7 @@ const ORT_PROVIDER_MAP: Record<string, IHVProvider> = {
   TensorrtExecutionProvider: "TensorrtExecutionProvider",
   NvTensorRTRTXExecutionProvider: "NvTensorRTRTXExecutionProvider",
   NvTensorRtRtxExecutionProvider: "NvTensorRTRTXExecutionProvider",
+  DmlExecutionProvider: "DmlExecutionProvider",
   OpenVINOExecutionProvider: "OpenVINOExecutionProvider",
   ROCMExecutionProvider: "ROCMExecutionProvider",
   WebGpuExecutionProvider: "WebGpuExecutionProvider",
@@ -188,36 +189,17 @@ export function mergeDetectedProviders(input: {
   hasOpenVino: boolean;
   /** True when the local CPU/platform can run the OpenVINO runtime, even if not yet installed. */
   hasOpenVinoCompatibleHardware?: boolean;
+  /** Windows + DirectML ORT / platform support. */
+  hasDirectMl?: boolean;
   tensorRtLoadable?: boolean;
   tensorRtRtxLoadable?: boolean;
-  /**
-   * Pre-computed by the route handler from `nvidia.gpus[].computeCapability`.
-   * When `true`, at least one NVIDIA GPU meets the TensorRT-family floor
-   * (SM 7.5 / Turing+). Defaults to `true` for backwards compatibility with
-   * callers that did not supply the GPU detail; routes that have it should
-   * always pass it explicitly.
-   */
   nvidiaTensorRtFamilyCapable?: boolean;
-  /**
-   * Pre-computed from the ORT CUDA EP probe (`ORT_GPU_PROBE_SCRIPT`).
-   * When explicitly `false`, the CUDA execution provider is not loadable in
-   * this environment (e.g. onnxruntime-gpu wheel missing, driver/wheel
-   * mismatch) and `mergeDetectedProviders` strips `CUDAExecutionProvider`
-   * from the detected list. Defaults to `true` for callers that don't probe
-   * the EP — same permissive-to-unknown convention as TensorRT.
-   */
   cudaLoadable?: boolean;
 }): IHVProvider[] {
   const detected = new Set<IHVProvider>(["CPUExecutionProvider"]);
   const tensorRtOk = input.tensorRtLoadable === true;
   const tensorRtRtxOk = input.tensorRtRtxLoadable === true;
-  // Treat `undefined` as "we don't know yet" → permissive (don't strip CUDA).
-  // Only an explicit `false` from the ORT probe removes the EP from the
-  // detected list, unlocking the install-needed branch in the recipe
-  // compat layer. Same permissive-to-unknown convention as the RTX gate.
   const cudaOk = input.cudaLoadable !== false;
-  // Default true: callers without compute-cap data must not silently hide
-  // the RTX-family EPs (pre-Turing downgrades only fire when we KNOW the SM).
   const tensorRtFamilyCapable = input.nvidiaTensorRtFamilyCapable ?? true;
 
   if (input.onnxRuntimeProviders?.length) {
@@ -228,14 +210,9 @@ export function mergeDetectedProviders(input: {
       if (provider === "NvTensorRTRTXExecutionProvider" && !tensorRtRtxOk) {
         continue;
       }
-      // Gate RTX-family EPs even when ORT reports them — nvidia-smi SM ≥ 7.5
-      // is the real floor; without it the EP load is a lie.
       if (provider === "TensorrtExecutionProvider" || provider === "NvTensorRTRTXExecutionProvider") {
         if (!tensorRtFamilyCapable) continue;
       }
-      // Mirror the RTX gate: if the CUDA EP is not actually loadable in
-      // this environment, strip it from ORT's reported list even when ORT
-      // reports it (e.g. wheel installed but EP failed to register).
       if (provider === "CUDAExecutionProvider" && !cudaOk) {
         continue;
       }
@@ -243,11 +220,7 @@ export function mergeDetectedProviders(input: {
     }
   }
 
-  // nvidia-smi / rocm-smi / openvino fill gaps when the installed ORT wheel lacks GPU EPs.
   if (input.hasNvidiaGpu) {
-    // Only fill CUDA from nvidia-smi when the ORT probe confirms the EP loads.
-    // Falls back to the onnxRuntimeProviders branch when probe hasn't run yet
-    // (caller didn't pass cudaLoadable, defaults to permissive).
     if (cudaOk) {
       detected.add("CUDAExecutionProvider");
     }
@@ -263,6 +236,9 @@ export function mergeDetectedProviders(input: {
   }
   if (input.hasOpenVino || input.hasOpenVinoCompatibleHardware) {
     detected.add("OpenVINOExecutionProvider");
+  }
+  if (input.hasDirectMl) {
+    detected.add("DmlExecutionProvider");
   }
 
   return Array.from(detected);
@@ -287,6 +263,7 @@ export function pickRecommendedProvider(
     "NvTensorRTRTXExecutionProvider",
     "TensorrtExecutionProvider",
     "ROCMExecutionProvider",
+    "DmlExecutionProvider",
     ...(opts?.openvinoLoadable ? (["OpenVINOExecutionProvider"] as const) : []),
     "WebGpuExecutionProvider",
     "CPUExecutionProvider",

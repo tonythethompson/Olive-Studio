@@ -9,6 +9,7 @@ const GPU_PROVIDERS: IHVProvider[] = [
   "NvTensorRTRTXExecutionProvider",
   "TensorrtExecutionProvider",
   "ROCMExecutionProvider",
+  "DmlExecutionProvider",
 ];
 
 export function isMemoryOffloadAvailable(state: UIState): boolean {

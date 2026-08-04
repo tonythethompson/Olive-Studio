@@ -9,10 +9,13 @@ import fs from "fs";
 import path from "path";
 
 import { execFileAsync } from "../shared/exec.ts";
-import { pipInstall } from "../shared/pipInstall.ts";
-import { ensureVenv } from "../venv/index.ts";
-import { getVenvPython, getVenvPip } from "../venv/paths.ts";
+import { pipInstallViaPython } from "../shared/pipInstall.ts";
+import { ensureVenvFamily } from "../venv/familyEnsure.ts";
+import { envForFamily } from "../venv/pathIsolation.ts";
+import { getVenvPython } from "../venv/paths.ts";
 import { getNativeGpuLibPaths } from "../venv/gpu.ts";
+import { listInstalledOrtDistributions, invalidateRuntimeStatusCache } from "../venv/status.ts";
+import { getFamilySpec } from "../venv/spec.ts";
 import {
   envWithPrependedPaths,
   isCompatibleTensorRtVersion,
@@ -91,11 +94,11 @@ function extractTrtFailDetail(text: string): string | undefined {
  */
 async function ensureOnnxRuntimeGpu(
   python: string,
-  pip: string,
   onLine: (line: string) => void,
+  env: NodeJS.ProcessEnv,
 ): Promise<void> {
   try {
-    const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT]);
+    const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT], { env });
     const probe = parseOrtGpuProbe(stdout);
     if (probe.ok) {
       onLine("[deps] onnxruntime-gpu already installed ✓");
@@ -110,8 +113,17 @@ async function ensureOnnxRuntimeGpu(
     /* install below */
   }
   onLine(`[deps] Installing ${pinnedOrtGpuLabel()} (required for TensorRT EP)...`);
-  await pipInstall(pip, pinnedOrtGpuInstallArgs(), onLine);
+  await pipInstallViaPython(python, pinnedOrtGpuInstallArgs(), onLine, env);
   onLine(`[deps] ${pinnedOrtGpuLabel()} installed ✓`);
+}
+
+async function assertCudaOrtPin(python: string): Promise<string | null> {
+  const spec = getFamilySpec("cuda");
+  const dists = await listInstalledOrtDistributions(python);
+  if (!dists.includes(spec.ortDistribution)) {
+    return `CUDA runtime missing canonical ${spec.ortDistribution} after TensorRT install`;
+  }
+  return null;
 }
 
 // ─── TensorRT load probe ──────────────────────────────────────────────────
@@ -224,26 +236,26 @@ except Exception as exc:
 export async function ensureTensorRt(
   onLine: (line: string) => void,
 ): Promise<{ ok: boolean; error?: string; libsDir?: string | null }> {
-  const venvResult = await ensureVenv(onLine);
+  const venvResult = await ensureVenvFamily("cuda", onLine);
   if (!venvResult.ok) {
     return {
       ok: false,
-      error: venvResult.error ?? "Failed to create or prepare the project .venv",
+      error: venvResult.error ?? "Failed to create or prepare the CUDA runtime",
     };
   }
 
-  const venvPython = getVenvPython();
-  const pip = getVenvPip();
-  if (!fs.existsSync(venvPython) || !fs.existsSync(pip)) {
+  const venvPython = getVenvPython("cuda");
+  if (!fs.existsSync(venvPython)) {
     return {
       ok: false,
-      error: `Project .venv is incomplete (missing ${!fs.existsSync(pip) ? "pip" : "python"}). Use Setup runtime, then retry.`,
+      error: "CUDA runtime is incomplete (missing python). Use Setup runtime, then retry.",
     };
   }
 
-  await ensureOnnxRuntimeGpu(venvPython, pip, onLine);
+  const env = envForFamily("cuda");
+  await ensureOnnxRuntimeGpu(venvPython, onLine, env);
 
-  const probe = await probeTensorRtLoadable(venvPython);
+  const probe = await probeTensorRtLoadable(venvPython, env);
   if (probe.loadable) {
     onLine("[deps] TensorRT execution provider load verified ✓");
     return {
@@ -265,10 +277,16 @@ export async function ensureTensorRt(
     onLine(`[deps] TensorRT ${installed} present but EP not loadable — reinstalling pinned runtime...`);
   }
 
-  await pipInstall(pip, pinnedTensorRtInstallArgs(), onLine);
+  await pipInstallViaPython(venvPython, pinnedTensorRtInstallArgs(), onLine, env);
   onLine(`[deps] ${pinnedTensorRtLabel()} installed ✓`);
 
-  const retry = await probeTensorRtLoadable(venvPython);
+  const pinError = await assertCudaOrtPin(venvPython);
+  if (pinError) {
+    return { ok: false, error: pinError };
+  }
+  invalidateRuntimeStatusCache();
+
+  const retry = await probeTensorRtLoadable(venvPython, env);
   if (retry.loadable) {
     onLine("[deps] TensorRT execution provider load verified after install ✓");
     return {
@@ -294,8 +312,12 @@ export async function ensureDeps(
   pkgs: PkgDef[],
   onLine: (line: string) => void,
 ): Promise<{ ok: boolean; error?: string }> {
-  const venvPython = getVenvPython();
-  const pip = getVenvPip();
+  const familyResult = await ensureVenvFamily("cuda", onLine);
+  if (!familyResult.ok) {
+    return { ok: false, error: familyResult.error ?? "Failed to prepare CUDA runtime" };
+  }
+  const venvPython = getVenvPython("cuda");
+  const env = envForFamily("cuda");
 
   for (const pkg of pkgs) {
     // Torch: check installed CUDA version matches what we need (GPU vs CPU)
@@ -350,7 +372,7 @@ export async function ensureDeps(
       onLine(
         `[deps] ${pkg.label} present but EP not loaded by onnxruntime — installing ${tensorrtRtxEpAbiLabel()}...`,
       );
-      await pipInstall(pip, tensorrtRtxEpAbiInstallArgs(), onLine);
+      await pipInstallViaPython(venvPython, tensorrtRtxEpAbiInstallArgs(), onLine, env);
       const rtProbe = await probeTensorRtRtxLoadable(venvPython);
       if (rtProbe.loadable) {
         onLine(`[deps] ${tensorrtRtxEpAbiLabel()} installed — TensorRT RTX EP loadable ✓`);
@@ -406,9 +428,12 @@ export async function ensureDeps(
     }
 
     onLine(`[deps] Installing ${pkg.label}...`);
-    await pipInstall(pip, pkg.installArgs, onLine);
+    await pipInstallViaPython(venvPython, pkg.installArgs, onLine, env);
     onLine(`[deps] ${pkg.label} installed`);
   }
 
+  const pinError = await assertCudaOrtPin(venvPython);
+  if (pinError) return { ok: false, error: pinError };
+  invalidateRuntimeStatusCache();
   return { ok: true };
 }

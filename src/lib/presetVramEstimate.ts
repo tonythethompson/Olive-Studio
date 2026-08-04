@@ -14,8 +14,9 @@ import { IHVProvider, UIState } from "@/types";
 function catalogDeviceToProvider(device: string): IHVProvider {
   switch (device) {
     case "CUDA":
-    case "DirectML":
       return "CUDAExecutionProvider";
+    case "DirectML":
+      return "DmlExecutionProvider";
     case "TensorRT":
       return "TensorrtExecutionProvider";
     case "TensorRT RTX":

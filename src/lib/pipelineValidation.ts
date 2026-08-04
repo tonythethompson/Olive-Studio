@@ -49,6 +49,7 @@ const GPU_PROVIDERS: IHVProvider[] = [
   "TensorrtExecutionProvider",
   "ROCMExecutionProvider",
   "WebGpuExecutionProvider",
+  "DmlExecutionProvider",
 ];
 const TENSOR_CORE_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",

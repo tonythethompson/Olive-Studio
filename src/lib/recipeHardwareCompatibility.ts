@@ -88,6 +88,8 @@ function catalogDeviceToProvider(device: string): IHVProvider | undefined {
   switch (device) {
     case "CUDA":
       return "CUDAExecutionProvider";
+    case "DirectML":
+      return "DmlExecutionProvider";
     case "TensorRT":
       return "TensorrtExecutionProvider";
     case "TensorRT RTX":
@@ -137,12 +139,14 @@ export function assessRecipeHardwareCompatibility(
         tier: "compatible",
         targetDevice,
         reason: "DirectML targets Windows — this host qualifies.",
+        requiredProvider: "DmlExecutionProvider",
       };
     }
     return {
       tier: "unavailable",
       targetDevice,
       reason: "DirectML recipes require Windows. This host is not Windows.",
+      requiredProvider: "DmlExecutionProvider",
     };
   }
 

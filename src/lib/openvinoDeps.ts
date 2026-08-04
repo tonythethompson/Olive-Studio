@@ -1,23 +1,25 @@
 /**
- * OpenVINO + Optimum-Intel + ORT OpenVINO EP installation metadata.
+ * OpenVINO + Optimum-Intel installation metadata for the default venv family.
  *
- * Installs the PyPI OpenVINO runtime, the Hugging Face Optimum-Intel bridge
- * (openvino extra), and `onnxruntime-openvino` (supplies OpenVINOExecutionProvider)
- * into the project .venv. Used by the Hardware panel install button and by
- * recipe-required-package inference.
- *
- * Olive maps OpenVINOExecutionProvider → onnxruntime-openvino
- * (see microsoft/Olive olive/hardware/constants.py). Plain `openvino` /
- * `optimum-intel` alone do not register the ORT execution provider.
+ * Installs the PyPI OpenVINO runtime and Hugging Face Optimum-Intel bridge
+ * (openvino extra). Does NOT install `onnxruntime-openvino` — that wheel
+ * conflicts with `onnxruntime-directml` / `onnxruntime` on the default family.
+ * Olive Studio OpenVINO capability is the Python `openvino` package.
  */
 export const OPEN_VINO_PIP_PACKAGE = "openvino";
 export const OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE = "optimum-intel[openvino]";
-/** ORT wheel that bundles OpenVINOExecutionProvider (mutually exclusive with onnxruntime-gpu). */
+
+/**
+ * Historical note: `onnxruntime-openvino` supplies ORT's OpenVINOExecutionProvider
+ * but is mutually exclusive with other ORT wheels. Kept as a named constant for
+ * docs/tests that assert we do NOT install it into the default family.
+ */
 export const ONNXRUNTIME_OPENVINO_PIP_PACKAGE = "onnxruntime-openvino";
 
 /**
- * ORT distributions that conflict with `onnxruntime-openvino` on the same
- * import path. Uninstall these before installing the OpenVINO ORT wheel.
+ * ORT distributions that would conflict if `onnxruntime-openvino` were installed.
+ * Documented for constraint enforcement — default-family installs must never
+ * uninstall these to make room for the OpenVINO ORT wheel.
  */
 export const OPENVINO_CONFLICTING_ORT_PACKAGES = [
   "onnxruntime",
@@ -34,7 +36,7 @@ export const OPEN_VINO_NPU_DRIVER_URL =
   "https://docs.openvino.ai/2026/get-started/install-openvino/configurations/configurations-intel-npu.html";
 
 /**
- * Returns the pip install arguments for the OpenVINO stack.
+ * Pip install args for the OpenVINO Python stack (no ORT wheel swap).
  *
  * `--upgrade` is required for `--upgrade-strategy eager` to take effect so
  * already-installed OpenVINO packages (and their deps) are upgraded when
@@ -47,10 +49,9 @@ export function openvinoStackInstallArgs(): string[] {
     "eager",
     OPEN_VINO_PIP_PACKAGE,
     OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE,
-    ONNXRUNTIME_OPENVINO_PIP_PACKAGE,
   ];
 }
 
 export function openvinoStackLabel(): string {
-  return `${OPEN_VINO_PIP_PACKAGE} + ${OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE} + ${ONNXRUNTIME_OPENVINO_PIP_PACKAGE}`;
+  return `${OPEN_VINO_PIP_PACKAGE} + ${OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE}`;
 }

@@ -17,12 +17,13 @@ let releaseBuildEnv: (() => void) | null = null;
 let gateBuildEnv = false;
 
 vi.mock("../services/venv/index.ts", () => ({
-  ensureVenv: vi.fn(async (onLine: (line: string) => void) => {
+  ensureProviderCapability: vi.fn(async (_provider: string, onLine: (line: string) => void) => {
+    onLine("[setup] Using default runtime");
     onLine("[setup] (mock) creating venv…");
     await new Promise<void>((resolve) => {
       releaseEnsureVenv = resolve;
     });
-    return { ok: true };
+    return { ok: true, family: "default", python: "/tmp/mock-python" };
   }),
   buildOliveRunEnvironment: vi.fn(async () => {
     if (gateBuildEnv) {
@@ -32,7 +33,11 @@ vi.mock("../services/venv/index.ts", () => ({
     }
     return {} as NodeJS.ProcessEnv;
   }),
-  resolveOliveCommand: vi.fn(() => ({ executable: "python", args: ["-m", "olive"] })),
+  resolveOliveCommand: vi.fn(() => ({
+    executable: "python",
+    args: ["-m", "olive"],
+    family: "default",
+  })),
   detachVenvListener: vi.fn(),
 }));
 
