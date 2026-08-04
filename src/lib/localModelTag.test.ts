@@ -3,6 +3,7 @@ import { isValidLocalModelTag } from "./localModelTag";
 import {
   findInstalledStarterId,
   LMS_STARTER_MODELS,
+  OLLAMA_STARTER_MODELS,
   normalizeModelIdStem,
   resolveLocalEnableModelId,
   stemsLooselyMatch,
@@ -66,5 +67,21 @@ describe("local starter enable resolution", () => {
         ["qwen2.5-coder-1.5b-instruct", "other-model"],
       ),
     ).toBeNull();
+  });
+
+  it("resolves Ollama starters against engine-tag catalog (including :latest)", () => {
+    const phi = OLLAMA_STARTER_MODELS.find((m) => m.name.includes("Phi-3.5"));
+    expect(phi).toBeDefined();
+    expect(phi!.tag).toBe("phi3.5:3.8b");
+    expect(phi!.enableTag).toBe(phi!.tag);
+    expect(phi!.match).toBe(phi!.tag);
+    expect(findInstalledStarterId(phi!, [phi!.enableTag])).toBe(phi!.enableTag);
+    expect(findInstalledStarterId(phi!, ["phi3.5:latest"])).toBe("phi3.5:latest");
+    for (const starter of OLLAMA_STARTER_MODELS) {
+      expect(findInstalledStarterId(starter, [starter.enableTag])).toBe(starter.enableTag);
+    }
+    for (const starter of LMS_STARTER_MODELS) {
+      expect(findInstalledStarterId(starter, [starter.enableTag])).toBe(starter.enableTag);
+    }
   });
 });

@@ -2,6 +2,7 @@ import { Download, RefreshCw } from "lucide-react";
 import { LocalModelManager } from "../LocalModelManager";
 import {
   LMS_STARTER_MODELS,
+  MODEL_ID_FUZZY_MIN_LEN,
   OLLAMA_STARTER_MODELS,
   findInstalledStarterId,
   type LocalEngine,
@@ -23,9 +24,14 @@ function resolveDisplaySize(model: LocalStarterModel, modelSizes: Record<string,
   const sizeBytes = Object.entries(modelSizes).find(([key]) => {
     const k = key.toLowerCase();
     const needles = [model.enableTag, model.match, model.tag].map((t) => t.toLowerCase());
-    return needles.some(
-      (t) => k === t || k.includes(t.split(":")[0] ?? "") || t.includes(k.split("/").pop() ?? "___"),
-    );
+    return needles.some((t) => {
+      if (k === t) return true;
+      const colonStem = t.split(":")[0] ?? "";
+      if (colonStem.length >= MODEL_ID_FUZZY_MIN_LEN && k.includes(colonStem)) return true;
+      const keyTail = k.split("/").pop() ?? "";
+      if (keyTail.length >= MODEL_ID_FUZZY_MIN_LEN && t.includes(keyTail)) return true;
+      return false;
+    });
   })?.[1];
   return sizeBytes ? formatBytes(sizeBytes) : model.fallbackSize;
 }

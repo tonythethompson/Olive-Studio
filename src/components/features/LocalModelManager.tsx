@@ -357,7 +357,7 @@ export function LocalModelManager({
                                 {busy === m.id ? "…" : "Unload"}
                               </button>
                             ) : null}
-                            {active ? null : (
+                            {!active || !m.loaded ? (
                               <button
                                 type="button"
                                 onClick={() => void handleEnable(m.id, m.source, m.loaded)}
@@ -366,7 +366,7 @@ export function LocalModelManager({
                               >
                                 {busy === m.id ? "…" : m.loaded ? "Enable" : "Load & enable"}
                               </button>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       );

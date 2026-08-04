@@ -551,13 +551,19 @@ function verifyInstalledAfterPull(
 }
 
 async function listOllamaInstalledNames(): Promise<string[] | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2000);
   try {
-    const tagsRes = await fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/tags`);
+    const tagsRes = await fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/tags`, {
+      signal: controller.signal,
+    });
     if (!tagsRes.ok) return null;
     const data = (await tagsRes.json()) as { models?: Array<{ name: string }> };
     return (data.models ?? []).map((m) => m.name);
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -1268,12 +1274,30 @@ export function mountAiRoutes(router: Router): void {
       // Prefer Hugging Face URLs for starters; bare staff-pick names often exit 1.
       const proc = spawn(lmsCli, ["get", tag, "-y"], { stdio: "pipe" });
       let timedOut = false;
+      /** Escalate SIGTERM → SIGKILL so a stuck `lms get` cannot pin the busy gate forever. */
+      const KILL_ESCALATE_MS = 2_000;
+      let killEscalateTimer: ReturnType<typeof setTimeout> | undefined;
+      const clearKillEscalate = () => {
+        if (killEscalateTimer) {
+          clearTimeout(killEscalateTimer);
+          killEscalateTimer = undefined;
+        }
+      };
       const killProc = () => {
         try {
-          proc.kill();
+          proc.kill("SIGTERM");
         } catch {
           /* already exited */
         }
+        if (killEscalateTimer) return;
+        killEscalateTimer = setTimeout(() => {
+          try {
+            proc.kill("SIGKILL");
+          } catch {
+            /* already exited */
+          }
+        }, KILL_ESCALATE_MS);
+        if (typeof killEscalateTimer.unref === "function") killEscalateTimer.unref();
       };
       const maxTimer = setTimeout(() => {
         timedOut = true;
@@ -1302,6 +1326,7 @@ export function mountAiRoutes(router: Router): void {
       proc.stderr?.on("data", pushCliChunk);
       proc.on("close", (code) => {
         clearTimeout(maxTimer);
+        clearKillEscalate();
         void (async () => {
           try {
             if (!guard.disconnected()) {
@@ -1351,6 +1376,7 @@ export function mountAiRoutes(router: Router): void {
       });
       proc.on("error", (err) => {
         clearTimeout(maxTimer);
+        clearKillEscalate();
         if (!guard.disconnected()) send({ type: "error", error: err.message });
         releaseBusy();
         guard.endOnce();
@@ -1416,10 +1442,15 @@ export function mountAiRoutes(router: Router): void {
       rawSend(evt);
     };
     const tag = String(modelTag);
+    let ownsBusy = false;
     const releaseBusy = () => {
-      if (ollamaPullBusyTag === tag) ollamaPullBusyTag = null;
+      if (ownsBusy && ollamaPullBusyTag === tag) {
+        ollamaPullBusyTag = null;
+        ownsBusy = false;
+      }
     };
     let maxTimer: ReturnType<typeof setTimeout> | null = null;
+    let timedOut = false;
     try {
       if (!isValidLocalModelTag(tag)) {
         send({ type: "error", error: "Invalid modelTag." });
@@ -1443,6 +1474,7 @@ export function mountAiRoutes(router: Router): void {
       }
 
       ollamaPullBusyTag = tag;
+      ownsBusy = true;
       // Shared ensure continues for other clients; this request just stops consuming progress.
       const ready = await ensureOllamaReady((evt) => send(evt));
       if (guard.disconnected()) {
@@ -1458,7 +1490,6 @@ export function mountAiRoutes(router: Router): void {
       }
 
       send({ type: "step", message: `Pulling ${tag} via Ollama…`, percent: 30 });
-      let timedOut = false;
       const timeoutAc = new AbortController();
       maxTimer = setTimeout(() => {
         timedOut = true;
@@ -1574,14 +1605,23 @@ export function mountAiRoutes(router: Router): void {
       }
     } catch (err: unknown) {
       if (!guard.disconnected()) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (/abort/i.test(msg)) {
-          send({
-            type: "error",
-            error: "Ollama download was cancelled or timed out.",
-            hint: "Retry the download, or cancel only if you meant to stop it.",
-          });
+        const isAbort = err instanceof Error && err.name === "AbortError";
+        if (isAbort) {
+          if (timedOut) {
+            send({
+              type: "error",
+              error: "Ollama download exceeded the server time limit (20 minutes).",
+              hint: "Retry when the network is stable, or run `ollama pull` in a terminal.",
+            });
+          } else {
+            send({
+              type: "error",
+              error: "Ollama download was cancelled.",
+              hint: "Retry the download, or cancel only if you meant to stop it.",
+            });
+          }
         } else {
+          const msg = err instanceof Error ? err.message : String(err);
           send({ type: "error", error: msg });
         }
       }

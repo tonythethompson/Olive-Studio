@@ -165,11 +165,12 @@ export function useAiProviderSettings({
       }
       const d = (await r.json()) as ProviderStatus;
       setProviderStatus(d);
+      const providerIds = new Set(PROVIDER_OPTIONS.map((p) => p.id));
       const providerId =
-        d.provider && d.provider in Object.fromEntries(PROVIDER_OPTIONS.map((p) => [p.id, true]))
+        d.provider && providerIds.has(d.provider as ProviderId)
           ? (d.provider as ProviderId)
           : settingsProvider;
-      if (d.provider && d.provider in Object.fromEntries(PROVIDER_OPTIONS.map((p) => [p.id, true]))) {
+      if (d.provider && providerIds.has(d.provider as ProviderId)) {
         setSettingsProvider(providerId);
       }
       if (d.model) {

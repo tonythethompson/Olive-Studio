@@ -58,7 +58,13 @@ export function hintForLmsPullFailure(combinedLogs: string, code: number | null)
       hint: "Use a Hugging Face URL (https://huggingface.co/…) or open LM Studio and download from Discover.",
     };
   }
-  if (t.includes("invalid username or password") || t.includes("401") || t.includes("unauthorized")) {
+  if (
+    t.includes("invalid username or password") ||
+    t.includes("unauthorized") ||
+    /\bhttps?\s*401\b|\b401\s+(unauthorized|auth)|(?:^|[\s({\[:])401(?:[\s)}\]:;,]|$)/i.test(
+      stripAnsi(combinedLogs),
+    )
+  ) {
     return {
       error: "Hugging Face / LM Studio proxy rejected the download (auth).",
       hint: "Open LM Studio once, sign in if prompted, or pick a public community GGUF URL.",

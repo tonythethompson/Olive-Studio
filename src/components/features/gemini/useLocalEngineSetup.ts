@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { LocalEngine } from "./aiProviderCatalog";
 import {
   LMS_STARTER_MODELS,
   OLLAMA_STARTER_MODELS,
   findInstalledStarterId,
   resolveLocalEnableModelId,
+  type LocalEngine,
 } from "./aiProviderCatalog";
 
 interface UseLocalEngineSetupOptions {
@@ -387,6 +387,9 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
       return;
     }
 
+    const controller = new AbortController();
+    pullAbortRef.current = controller;
+
     setPullingModel(modelTag);
     setLocalPullError("");
     setLocalPullPercent(null);
@@ -396,6 +399,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     try {
       const starter = starterForTag(modelTag, source);
       const installed = await refreshInstalledModels(source);
+      if (controller.signal.aborted) return;
       const existing = findInstalledStarterId(
         {
           tag: modelTag,
@@ -408,6 +412,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
         setLocalPullPercent(100);
         setLocalInstallInfo(`Already installed — enabling ${existing}…`);
         await onModelActivated(existing, source);
+        if (controller.signal.aborted) return;
         setLocalInstallInfo(`Ready: ${existing}`);
         return;
       }
@@ -420,8 +425,6 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
       );
 
       const endpoint = source === "ollama" ? "/api/ai/ollama-pull" : "/api/ai/local-pull";
-      const controller = new AbortController();
-      pullAbortRef.current = controller;
       // Align the 20m abort with the server's lms get / ollama pull timer (starts after ensure*).
       const DOWNLOAD_MAX_MS = 20 * 60 * 1000;
       // Cap hung ensure/install so a stuck startup cannot stream forever.
@@ -437,6 +440,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
       };
       let pullMeta: { modelId?: string; verified?: boolean } = {};
       try {
+        if (controller.signal.aborted) return;
         const r = await fetch(endpoint, {
           method: "POST",
           headers: {
@@ -446,14 +450,17 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
           body: JSON.stringify({ modelTag }),
           signal: controller.signal,
         });
+        if (controller.signal.aborted) return;
         pullMeta = await consumePullStream(r, armDownloadTimeout);
       } finally {
         clearTimeout(ensureTimer);
         if (downloadTimer) clearTimeout(downloadTimer);
       }
 
+      if (controller.signal.aborted) return;
       markEngineReady(source);
       const after = await refreshInstalledModels(source);
+      if (controller.signal.aborted) return;
       const found = findInstalledStarterId(
         {
           tag: modelTag,
@@ -464,7 +471,8 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
       );
       const enableId =
         found ??
-        (pullMeta.modelId && after.includes(pullMeta.modelId) ? pullMeta.modelId : undefined);
+        (pullMeta.modelId && after.includes(pullMeta.modelId) ? pullMeta.modelId : undefined) ??
+        (pullMeta.verified && pullMeta.modelId ? pullMeta.modelId : undefined);
       if (!enableId) {
         const expected =
           pullMeta.modelId ||
@@ -479,6 +487,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
       }
       setLocalInstallInfo(`Enabling ${enableId}…`);
       await onModelActivated(enableId, source);
+      if (controller.signal.aborted) return;
       setLocalInstallInfo(`Ready: ${enableId}`);
     } catch (err: unknown) {
       setLocalPullError(

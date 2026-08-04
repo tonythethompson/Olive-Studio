@@ -80,9 +80,9 @@ export const OLLAMA_STARTER_MODELS: readonly LocalStarterModel[] = [
     approxBytes: 800_000_000,
   },
   {
-    tag: "phi3.5",
-    enableTag: "phi3.5",
-    match: "phi3.5",
+    tag: "phi3.5:3.8b",
+    enableTag: "phi3.5:3.8b",
+    match: "phi3.5:3.8b",
     name: "Phi-3.5-Mini",
     desc: "🧠 Advanced Reasoning: Complex compiler co-design",
     fallbackSize: "~2 GB",
@@ -123,6 +123,18 @@ export function findInstalledStarterId(
 ): string | null {
   const exact = installed.find((i) => i === starter.enableTag || i.endsWith(`/${starter.enableTag}`));
   if (exact) return exact;
+
+  // Ollama: `phi3.5:3.8b` starter should still resolve an installed `phi3.5:latest`.
+  const enableColon = starter.enableTag.indexOf(":");
+  if (enableColon > 0) {
+    const base = starter.enableTag.slice(0, enableColon).toLowerCase();
+    const family = installed.find((i) => {
+      const colon = i.indexOf(":");
+      const installedBase = (colon > 0 ? i.slice(0, colon) : i).toLowerCase();
+      return installedBase === base;
+    });
+    if (family) return family;
+  }
 
   const needles = [starter.match, starter.enableTag, starter.tag]
     .map(normalizeModelIdStem)

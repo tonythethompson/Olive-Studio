@@ -35,5 +35,9 @@ describe("lmsPullProgress", () => {
     expect(hintForLmsPullFailure("This download is already in progress.", 1).error).toMatch(/already in progress/i);
     expect(hintForLmsPullFailure("Download failed: Timed-out. Please try to resume.", 1).hint).toMatch(/resume/i);
     expect(hintForLmsPullFailure("random cli noise", 1).hint).toMatch(/lms get/);
+    // Byte counts must not be confused with HTTP 401 auth failures.
+    expect(hintForLmsPullFailure("6.60% | 401.20 MB / 1.65 GB", 1).error).not.toMatch(/auth/i);
+    expect(hintForLmsPullFailure("HTTP 401 Unauthorized from huggingface.co", 1).error).toMatch(/auth/i);
+    expect(hintForLmsPullFailure("ENOSPC: no space left on device", 1).hint).toMatch(/space|disk/i);
   });
 });
