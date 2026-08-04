@@ -13,6 +13,7 @@ import {
 import { writeStudioConfig, addVenvToUserPath } from "../services/venv/config.ts";
 import { setRuntimeHfToken, getRuntimeHfToken } from "../services/olive/state.ts";
 import { ensureTensorRtRtx, ensureTensorRt } from "./tensorrt.ts";
+import { ensureOnnxRuntimeGpu } from "../services/olive/cuda.ts";
 import { fsWriteRateLimit } from "../middleware/rateLimit.ts";
 import { resolveAllowedPythonFile } from "../services/venv/pythonGuard.ts";
 
@@ -105,6 +106,14 @@ export function mountEnvRoutes(router: Router): void {
 
   router.post("/env/install-tensorrt", async (_req, res) => {
     await withTensorrtInstallMutex(() => streamNdjsonInstall(res, ensureTensorRt));
+  });
+
+  // Pip-installs the pinned onnxruntime-gpu wheel into `.venv` and verifies
+  // the CUDA execution provider registers. Mirrors the TRT install route
+  // shape (NDJSON stream of [deps] log lines + final { ok } marker) so the
+  // IHV panel can stream the existing UI log viewer into this handler.
+  router.post("/env/install-onnxruntime-gpu", async (_req, res) => {
+    await withTensorrtInstallMutex(() => streamNdjsonInstall(res, ensureOnnxRuntimeGpu));
   });
 
   // ─── Runtime Status ───────────────────────────────────────────────────

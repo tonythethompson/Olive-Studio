@@ -39,8 +39,10 @@ import {
   assessRecipeHardwareCompatibility,
   summarizeRecipeHardwareCompatibility,
 } from "@/lib/recipeHardwareCompatibility";
-import { isNvTensorRtRtxCatalogPath } from "@/lib/tensorrtRtxDeps";
+import { isNvTensorRtRtxCatalogPath, tensorrtRtxEpAbiLabel } from "@/lib/tensorrtRtxDeps";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
+import { navigatePipeline } from "@/lib/pipelineNavigation";
+import { pinnedTensorRtLabel } from "@/lib/tensorrtDeps";
 import { estimateVramForCatalogPreset } from "@/lib/presetVramEstimate";
 import { CompatCountSummary, CompatStatusPill } from "@/components/features/CompatStatus";
 import {
@@ -1091,6 +1093,32 @@ export function InputEnvironmentPanel({
                                         <p className="text-[11px] text-amber-500/90 mt-0.5">
                                           {vramEst.fitHint}
                                         </p>
+                                      )}
+                                      {hardware.requiresInstall && (
+                                        <div
+                                          className="mt-1.5 flex items-start gap-1.5 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5"
+                                          title={hardware.requiresInstall.hint}
+                                        >
+                                          <DownloadCloud className="h-3 w-3 text-amber-400 shrink-0 mt-0.5" />
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-[11px] text-amber-300/95 leading-snug">
+                                              {hardware.requiresInstall.kind === "tensorrt-rtx"
+                                                ? `${tensorrtRtxEpAbiLabel()} not in .venv yet — GPU is in the supported family.`
+                                                : `${pinnedTensorRtLabel()} not in .venv yet — GPU is in the supported family.`}
+                                              {" "}
+                                              <button
+                                                type="button"
+                                                onClick={() => navigatePipeline("ihv")}
+                                                className="text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer"
+                                              >
+                                                Install in Hardware (step 02) →
+                                              </button>
+                                            </p>
+                                            <p className="text-[10px] font-mono text-slate-500 mt-0.5 truncate">
+                                              {hardware.requiresInstall.installCommand}
+                                            </p>
+                                          </div>
+                                        </div>
                                       )}
                                       {hwBlocked && (
                                         <p className="text-[11px] text-rose-400/80 mt-0.5 line-clamp-1">

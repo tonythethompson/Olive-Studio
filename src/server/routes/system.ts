@@ -14,10 +14,17 @@ import { getVenvPython } from "../services/venv/paths.ts";
 import { findSystemPython } from "../services/venv/index.ts";
 import { parseCudaVersionFromNvidiaSmi } from "../services/olive/cuda.ts";
 import {
+  isNvidiaGpuTensorRtFamily,
   mergeDetectedProviders,
   pickRecommendedProvider,
+  TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY,
   type HardwareProbeResult,
 } from "../../lib/hardwareProbe.ts";
+import { isPreMaxwellNvidiaBox, CUDA_SM_FLOOR } from "../../lib/cudaDeps.ts";
+import {
+  ORT_GPU_PROBE_SCRIPT,
+  parseOrtGpuProbe,
+} from "../../lib/oliveGpuRuntime.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -25,8 +32,10 @@ const execFileAsync = promisify(execFile);
 
 async function probeNvidiaGpus(): Promise<HardwareProbeResult["nvidia"] | undefined> {
   try {
+    // compute_cap lets us gate TensorRT-family EPs on the SM ≥ 7.5 (Turing)
+    // floor so pre-Turing cards are not falsely reported as compatible.
     const { stdout } = await execFileAsync("nvidia-smi", [
-      "--query-gpu=name,driver_version,memory.total",
+      "--query-gpu=name,driver_version,memory.total,compute_cap",
       "--format=csv,noheader",
     ]);
     const gpus = stdout
@@ -39,12 +48,17 @@ async function probeNvidiaGpus(): Promise<HardwareProbeResult["nvidia"] | undefi
         const name = parts[0] ?? "Unknown GPU";
         const driver = parts[1];
         const memStr = parts[2];
+        // compute_cap is reported as e.g. "8.9" — leave as-is so callers can
+        // compare via parseComputeCapability. Older drivers may emit "0.0" or
+        // be missing; `undefined` means "we couldn't tell", which our
+        // compat logic treats as permissive (no silent downgrade).
+        const computeCapability = parts[3]?.match(/^\d+\.\d+$/) ? parts[3] : undefined;
         let vramMb: number | undefined;
         if (memStr) {
           const m = memStr.match(/(\d+)/);
           if (m) vramMb = parseInt(m[1], 10);
         }
-        return { name, driver, vramMb };
+        return { name, driver, vramMb, computeCapability };
       });
 
     if (gpus.length === 0) return undefined;
@@ -62,7 +76,22 @@ async function probeNvidiaGpus(): Promise<HardwareProbeResult["nvidia"] | undefi
       /* ignore */
     }
 
-    return { gpus, cudaVersion, cudaTag };
+    // Probe for the CUDA Toolkit (`nvcc`). Pure inference via onnxruntime-gpu
+    // does NOT need the toolkit (it ships its own runtime libs), so a missing
+    // toolkit is benign for OLIVE recipes — but the IHV panel still wants
+    // to know so it can surface a download link when the user kicks off a
+    // native build. `available` is `undefined` when we couldn't even tell.
+    type NvidiaToolkit = NonNullable<HardwareProbeResult["nvidia"]>["cudaToolkit"];
+    let cudaToolkit: NvidiaToolkit;
+    try {
+      const { stdout: nvccOut } = await execFileAsync("nvcc", ["--version"]);
+      const m = nvccOut.match(/release\s+(\d+\.\d+)/i);
+      cudaToolkit = { available: true, version: m?.[1] };
+    } catch {
+      cudaToolkit = { available: false };
+    }
+
+    return { gpus, cudaVersion, cudaTag, cudaToolkit };
   } catch {
     return undefined;
   }
@@ -150,8 +179,10 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   let onnxRuntimeProviders: string[] | undefined;
   let tensorrt: HardwareProbeResult["tensorrt"];
   let tensorRtRtx: HardwareProbeResult["tensorRtRtx"];
+  let cuda: HardwareProbeResult["cuda"] | undefined;
   let tensorRtVenvLoadable = false;
   let tensorRtRtxVenvLoadable = false;
+  let cudaVenvLoadable = false;
 
   const venvPython = getVenvPython();
   const pythonCandidates: string[] = [];
@@ -169,6 +200,35 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
       notes.push(
         `ONNX Runtime providers probed via ${python === venvPython ? ".venv Python" : "system Python"}.`,
       );
+    }
+    // Probe whether the CUDA execution provider actually loads in this
+    // python environment. Distinct from `onnxRuntimeProviders` (which just
+    // reports what ORT sees) — this checks the pinned wheel version AND the
+    // CUDA EP usability, so a driver/wheel mismatch surfaces as not-loadable
+    // with the right error detail. Mirrors how `tensorRtVenvLoadable` is
+    // tracked in this same loop.
+    if (!cuda) {
+      try {
+        const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT]);
+        const probe = parseOrtGpuProbe(stdout);
+        if (python === venvPython && probe.ok) cudaVenvLoadable = true;
+        cuda = {
+          loadable: probe.ok,
+          detail: probe.ok
+            ? undefined
+            : probe.cudaUsable === false
+              ? `onnxruntime-gpu CUDA EP not registered (driver/wheel mismatch — got dist ${probe.distVersion ?? "?"} / ort ${probe.ortVersion ?? "?"})`
+              : `onnxruntime-gpu not at pinned version ${probe.distVersion ?? probe.ortVersion ?? "?"} (required 1.26.0)`,
+        };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        cuda = {
+          loadable: false,
+          detail: /No module named ['"]onnxruntime['"]/i.test(msg)
+            ? "onnxruntime (CPU/GPU) not installed in .venv"
+            : `onnxruntime-gpu probe failed: ${msg.split(/\r?\n/, 1)[0] ?? msg}`,
+        };
+      }
     }
     if (!tensorrt?.loadable) {
       const trt = await opts.probeTensorRtLoadable(python);
@@ -210,6 +270,16 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     );
   }
 
+  if (cudaVenvLoadable) {
+    notes.push("CUDA execution provider load verified.");
+  } else if (nvidia?.gpus.length) {
+    notes.push(
+      cuda?.detail
+        ? `${cuda.detail}. GPU is compatible — click "Install onnxruntime-gpu" in Hardware (step 02) or run \`pip install onnxruntime-gpu==1.26.0\` to enable CUDA EP.`
+        : "onnxruntime-gpu not in .venv yet. GPU is compatible — click \"Install onnxruntime-gpu\" in Hardware (step 02) or it installs on first CUDA run.",
+    );
+  }
+
   if (onnxRuntimeProviders?.length) {
     notes.push(`ORT execution providers: ${onnxRuntimeProviders.join(", ")}`);
     if (nvidia && !onnxRuntimeProviders.includes("CUDAExecutionProvider")) {
@@ -226,6 +296,37 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   if (!openvino?.available) notes.push("OpenVINO Python package not found locally.");
   notes.push("QNN requires Snapdragon/Hexagon dev hardware — not probed on desktop.");
 
+  // Surface pre-Maxwell NVIDIA boxes (every detected GPU below the CUDA 12
+  // toolkit floor) so the IHV panel / recipe compat layer can suppress the
+  // install hints (no install can recover Kepler SM 3.x). Mirrors the
+  // pre-Turing TensorRT short-circuit a few lines above.
+  if (nvidia?.gpus.length && isPreMaxwellNvidiaBox(nvidia.gpus)) {
+    notes.push(
+      `NVIDIA GPU(s) below CUDA 12 toolkit floor (compute capability < ${CUDA_SM_FLOOR}); modern CUDA cannot run on Maxwell/Pascal/Kepler cards.`,
+    );
+  } else if (nvidia?.cudaToolkit?.available === false) {
+    notes.push(
+      "CUDA driver detected but the CUDA Toolkit (nvcc) is not installed. Inference via onnxruntime-gpu does not need it; get it from NVIDIA's CUDA Toolkit Archive for native builds.",
+    );
+  }
+
+  // Gate TensorRT-family EPs on the SM ≥ 7.5 (Turing) floor.
+  // `hasNvidiaGpu` alone is not enough: pre-Turing cards return CUDA from
+  // ONNX Runtime but cannot execute TensorRT 10.x or TensorRT-RTX, so we
+  // must strip those EPs from the detected list (and from the install-needed
+  // hint path) before reporting compat.
+  const nvidiaTensorRtFamilyCapable = nvidia
+    ? nvidia.gpus.some((g) => isNvidiaGpuTensorRtFamily(g))
+    : false;
+  // Only warn when there are *actual* GPUs below the floor — `[].some(...)`
+  // returning false for an empty GPU list would otherwise print a misleading
+  // "all NVIDIA GPUs below TensorRT floor" note on machines with zero GPUs.
+  if (nvidiaTensorRtFamilyCapable === false && (nvidia?.gpus.length ?? 0) > 0) {
+    notes.push(
+      `NVIDIA GPU(s) below TensorRT 10.x floor (compute capability < ${TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.major}.${TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.minor}); TensorRT / TensorRT-RTX EPs hidden.`,
+    );
+  }
+
   const detectedProviders = mergeDetectedProviders({
     onnxRuntimeProviders,
     hasNvidiaGpu: Boolean(nvidia?.gpus.length),
@@ -233,6 +334,8 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     hasOpenVino: Boolean(openvino?.available),
     tensorRtLoadable: tensorRtVenvLoadable,
     tensorRtRtxLoadable: tensorRtRtxVenvLoadable,
+    nvidiaTensorRtFamilyCapable,
+    cudaLoadable: cudaVenvLoadable,
   });
 
   return {
@@ -244,6 +347,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     // UI consumers (IHV panel) read `.loadable`; keep it aligned with .venv readiness.
     tensorrt: tensorrt ? { ...tensorrt, loadable: tensorRtVenvLoadable } : tensorrt,
     tensorRtRtx: tensorRtRtx ? { ...tensorRtRtx, loadable: tensorRtRtxVenvLoadable } : tensorRtRtx,
+    cuda: cuda ? { ...cuda, loadable: cudaVenvLoadable } : cuda,
     onnxRuntimeProviders,
     detectedProviders,
     recommendedProvider: pickRecommendedProvider(detectedProviders, {

@@ -27,6 +27,10 @@ import {
   pinnedOrtGpuLabel,
   PINNED_ORT_GPU_VERSION,
 } from "../../../lib/oliveGpuRuntime.ts";
+import {
+  tensorrtRtxEpAbiInstallArgs,
+  tensorrtRtxEpAbiLabel,
+} from "../../../lib/tensorrtRtxDeps.ts";
 import { probeTensorRtRtxLoadable } from "./tensorrt-rtx.ts";
 import type { PkgDef } from "./recipe.ts";
 
@@ -356,6 +360,30 @@ export async function ensureDeps(
         onLine(`[deps] ${pkg.label} already installed (${probe.version ?? "ok"}) ✓`);
         continue;
       }
+      // The PyPI `tensorrt-rtx` package alone does NOT make
+      // `NvTensorRTRTXExecutionProvider` appear in
+      // `onnxruntime.get_available_providers()`. The NVIDIA
+      // `onnxruntime-ep-nv-tensorrt-rtx-cu13` plugin package on NVIDIA's
+      // PyPI index ships the ORT op-library DLL that actually registers
+      // the EP. Install it inline so recipes requiring tensorrt_rtx also
+      // get a working EP at runtime, not just a Python module.
+      onLine(
+        `[deps] ${pkg.label} present but EP not loaded by onnxruntime — installing ${tensorrtRtxEpAbiLabel()}...`,
+      );
+      await pipInstall(pip, tensorrtRtxEpAbiInstallArgs(), onLine);
+      const rtProbe = await probeTensorRtRtxLoadable(venvPython);
+      if (rtProbe.loadable) {
+        onLine(`[deps] ${tensorrtRtxEpAbiLabel()} installed — TensorRT RTX EP loadable ✓`);
+        continue;
+      }
+      // ABI plugin installed but the EP still didn't register (driver
+      // mismatch, transform/version mismatch in ORT ABI, etc.). Surface
+      // the detail so the user can diagnose; the surrounding loop will
+      // still install the PyPI `tensorrt-rtx` package below for the
+      // recipe's `import tensorrt_rtx` use case.
+      onLine(
+        `[deps] ${tensorrtRtxEpAbiLabel()} installed but EP still not loadable — ${rtProbe.detail ?? "unknown reason"}`,
+      );
     } else if (pkg.importName.startsWith("nvidia.")) {
       try {
         await execFileAsync(venvPython, [

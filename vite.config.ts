@@ -6,6 +6,16 @@ import { defineConfig } from 'vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import compression from 'vite-plugin-compression';
 
+/**
+ * Catch `.venv.bak`, `.venv.old`, `.venv-rename`, etc. in addition to the
+ * canonical `.venv`. The plain glob only matches `.venv` as an exact path
+ * component, so renaming or backing up the venv directory reintroduces
+ * file-watch noise: pip writes inside the renamed folder used to fire
+ * reload events. This regex sits alongside the glob in the `ignored` array
+ * (chokidar accepts strings, RegExp, and functions mixed in one list).
+ */
+const ANY_DOT_VENV_DIR = /(?:^|[\\/])\.venv(?:[._-][^\\/]+)?(?:[\\/]|$)/;
+
 export default defineConfig(() => {
   return {
     plugins: [
@@ -64,6 +74,7 @@ export default defineConfig(() => {
         : {
             ignored: [
               '**/.venv/**',
+              ANY_DOT_VENV_DIR,
               '**/node_modules/**',
               '**/models/**',
               '**/.cache/**',
