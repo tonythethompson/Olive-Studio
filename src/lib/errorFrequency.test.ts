@@ -44,13 +44,16 @@ describe("errorFrequency", () => {
     });
 
     it("updates lastOccurrence on repeat", () => {
-      const first = errorFrequency.recordError("Test", "Error");
-      // Simulate time passing
       vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+
+      const first = errorFrequency.recordError("Test", "Error");
       vi.advanceTimersByTime(1000);
       const second = errorFrequency.recordError("Test", "Error");
+
       expect(second.lastOccurrenceAgo).toBe(0);
       expect(first.lastOccurrenceAgo).toBe(0);
+
       vi.useRealTimers();
     });
   });
