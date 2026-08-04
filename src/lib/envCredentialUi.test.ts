@@ -3,6 +3,7 @@ import {
   activeProviderSourceLabel,
   canActivateWithEnvKey,
   canClearActiveProvider,
+  hydratedSettingsBaseUrl,
   providerEnvCredential,
   type ProviderStatus,
 } from "./envCredentialUi";
@@ -53,5 +54,17 @@ describe("envCredentialUi", () => {
     expect(canClearActiveProvider("saved")).toBe(true);
     expect(canClearActiveProvider("env")).toBe(false);
     expect(canClearActiveProvider("none")).toBe(false);
+  });
+
+  it("hydratedSettingsBaseUrl retains trimmed URLs and clears null/empty", () => {
+    expect(hydratedSettingsBaseUrl(" http://127.0.0.1:1234/v1 ")).toBe("http://127.0.0.1:1234/v1");
+    // Regression: a later hydrate with null must clear a previously non-empty URL.
+    let base = hydratedSettingsBaseUrl("http://127.0.0.1:1234/v1");
+    expect(base).toBe("http://127.0.0.1:1234/v1");
+    base = hydratedSettingsBaseUrl(null);
+    expect(base).toBe("");
+    expect(hydratedSettingsBaseUrl(undefined)).toBe("");
+    expect(hydratedSettingsBaseUrl("")).toBe("");
+    expect(hydratedSettingsBaseUrl("   ")).toBe("");
   });
 });

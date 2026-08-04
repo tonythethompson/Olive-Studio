@@ -68,3 +68,11 @@ export function activeProviderSourceLabel(status: ProviderStatus): string {
 export function canClearActiveProvider(source: ProviderStatusSource): boolean {
   return source === "runtime" || source === "saved";
 }
+
+/**
+ * Map GET /api/ai/provider `baseUrl` into the settings form value.
+ * Retains trimmed non-empty URLs; null/absent/empty clears stale client state.
+ */
+export function hydratedSettingsBaseUrl(baseUrl: string | null | undefined): string {
+  return typeof baseUrl === "string" ? baseUrl.trim() : "";
+}

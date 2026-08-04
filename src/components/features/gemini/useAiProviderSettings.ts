@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { canActivateWithEnvKey } from "@/lib/envCredentialUi";
+import { canActivateWithEnvKey, hydratedSettingsBaseUrl } from "@/lib/envCredentialUi";
 import { PROVIDER_OPTIONS, type ProviderId } from "./aiProviderCatalog";
 import type { ProviderStatus, SidebarTab } from "./types";
 
@@ -176,9 +176,8 @@ export function useAiProviderSettings({
         setSettingsModel(d.model);
         setCustomModel(d.model);
       }
-      // Prefer server baseUrl; fall back to catalog default so a prior local URL does not stick.
-      const option = PROVIDER_OPTIONS.find((p) => p.id === providerId);
-      setSettingsBaseUrl(typeof d.baseUrl === "string" ? d.baseUrl.trim() : (option?.baseUrl ?? ""));
+      // Null/empty/absent server baseUrl clears stale client URLs (e.g. left a local engine).
+      setSettingsBaseUrl(hydratedSettingsBaseUrl(d.baseUrl));
       return d;
     } catch {
       const fallback: ProviderStatus = { source: "none" };
@@ -461,7 +460,15 @@ export function useAiProviderSettings({
         }
       })();
     if (settingsProvider === "cloudflare") {
-      // Server marks usable only when token + account id (or synced auth) are enough.
+      // Env-only activation requires both manual fields empty. A partial paste is rejected.
+      if (envUsable && (Boolean(key) !== Boolean(cloudflareAccountId))) {
+        setProviderSaveError(
+          key
+            ? "Enter a Cloudflare account ID, or clear the token to use env credentials."
+            : "Enter a Cloudflare API token, or clear the account ID to use env credentials.",
+        );
+        return;
+      }
       if (!key && !envUsable) {
         setProviderSaveError("Enter a Cloudflare API token.");
         return;

@@ -227,9 +227,9 @@ function ApiKeyForm({ providers }: ProvidersProp) {
         >
           <Key className="h-3 w-3" />
           API Key
-          {envUsable ? (
+          {envUsable && !settingsApiKey.trim() ? (
             <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-semibold">
-              Using env: {envCred!.envVar}
+              Env available: {envCred!.envVar}
             </span>
           ) : envPresentOnly ? (
             <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-semibold">

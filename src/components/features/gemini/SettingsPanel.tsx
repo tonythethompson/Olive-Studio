@@ -46,7 +46,7 @@ function ActiveProviderCard({ providers }: ActiveProviderCardProps) {
               {providerStatus.model}
               {sourceLabel ? ` · ${sourceLabel}` : ""}
             </p>
-            {activeEnv?.usable && activeEnv.envVar ? (
+            {providerStatus.source === "env" && activeEnv?.envVar ? (
               <p className="text-[10px] font-mono text-emerald-400/90">
                 Using env: {activeEnv.envVar}
               </p>

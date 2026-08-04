@@ -600,17 +600,23 @@ ${owrPlatform === "web"
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ jobId: liveJobId }),
       });
-      if (resp.ok) {
+      const data = (await resp.json().catch(() => ({}))) as { status?: string; error?: string };
+      if (resp.ok && data.status === "cancelled") {
         setExecutionLogs((prev) => [...prev, "[INFO] Cancellation signal confirmed by server."]);
         setExecutionStatus("cancelled");
+        setExecutionExitCode(null);
         setIsRunning(false);
         onRunStateChange?.(false);
         liveSourceRef.current?.close();
         liveSourceRef.current = null;
-        recordJobCompletion(liveJobId, "cancelled", -1);
+        recordJobCompletion(liveJobId, "cancelled", null);
+      } else if (resp.ok) {
+        setExecutionLogs((prev) => [
+          ...prev,
+          `[INFO] Job already ${data.status ?? "finished"}; waiting for stream status.`,
+        ]);
       } else {
-        const errData = await resp.json().catch(() => ({ error: "Failed to cancel" }));
-        setExecutionLogs((prev) => [...prev, `[ERROR] Cancel failed: ${errData.error}`]);
+        setExecutionLogs((prev) => [...prev, `[ERROR] Cancel failed: ${data.error ?? "unknown"}`]);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -641,6 +647,8 @@ ${owrPlatform === "web"
     }
 
     pendingCancelRef.current = false;
+    setLiveJobId(null);
+    setState({ activeJobId: null });
     setIsRunning(true);
     onRunStateChange?.(true);
     setExecutionLogs(["[INFO] Initiating Olive run...\n"]);
@@ -682,18 +690,24 @@ ${owrPlatform === "web"
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ jobId }),
           });
-          if (cancelResp.ok) {
+          const cancelData = (await cancelResp.json().catch(() => ({}))) as {
+            status?: string;
+            error?: string;
+          };
+          if (cancelResp.ok && cancelData.status === "cancelled") {
             setExecutionLogs((prev) => [...prev, "[INFO] Cancellation signal confirmed by server."]);
             setExecutionStatus("cancelled");
+            setExecutionExitCode(null);
             setIsRunning(false);
             onRunStateChange?.(false);
-            recordJobCompletion(jobId, "cancelled", -1);
+            recordJobCompletion(jobId, "cancelled", null);
             return;
           }
-          const errData = await cancelResp.json().catch(() => ({ error: "Failed to cancel" }));
           setExecutionLogs((prev) => [
             ...prev,
-            `[ERROR] Queued cancel failed: ${errData.error}. Continuing with stream.`,
+            cancelResp.ok
+              ? `[INFO] Queued cancel found job already ${cancelData.status ?? "finished"}. Connecting stream.`
+              : `[ERROR] Queued cancel failed: ${cancelData.error ?? "unknown"}. Continuing with stream.`,
           ]);
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
