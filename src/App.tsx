@@ -6,6 +6,9 @@ import { IHVIntegrationPanel } from "@/components/features/IHVIntegrationPanel";
 import { ExecutionWorkspace } from "@/components/features/ExecutionWorkspace";
 import { LicenseNotice } from "@/components/LicenseNotice";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ReportIssueModal } from "@/components/ReportIssueModal";
+import { usePipelineState } from "@/lib/stores/pipelineStore";
+import type { ReportArea } from "@/lib/issueReport";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { KbSyncIndicator } from "@/components/features/KbSyncIndicator";
 import { RuntimeEnvControls } from "@/components/features/RuntimeEnvControls";
@@ -83,11 +86,44 @@ const SECTIONS: { id: ActiveView; step: string; label: string; desc: string; ico
  * Renders the Olive Studio recipe builder dashboard with navigable model, hardware, and execution sections.
  */
 function Dashboard() {
+  const { state: pipelineState } = usePipelineState();
   const [activeView, setActiveView] = useState<ActiveView>("input");
   const [isOliveRunning, setIsOliveRunning] = useState(false);
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
   const [triggerAiAudit, setTriggerAiAudit] = useState(false);
   const [licenseOpen, setLicenseOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [reportData, setReportData] = useState<{
+    error: Error;
+    label?: string;
+    componentStack?: string;
+    frequencyInfo?: import("@/lib/errorFrequency").ErrorFrequencyInfo | null;
+  } | null>(null);
+
+  const handleReportError = useCallback(
+    (details: {
+      error: Error;
+      label?: string;
+      componentStack?: string;
+      frequencyInfo?: import("@/lib/errorFrequency").ErrorFrequencyInfo | null;
+    }) => {
+      setReportData(details);
+      setIsReportOpen(true);
+    },
+    [],
+  );
+
+  // Map ErrorBoundary label to ReportArea for pre-filling
+  const labelToArea = (label?: string): ReportArea => {
+    if (!label) return "other";
+    const lower = label.toLowerCase();
+    if (lower.includes("model") || lower.includes("input")) return "recipe-builder";
+    if (lower.includes("hardware") || lower.includes("ep")) return "hardware-ep";
+    if (lower.includes("recipe") || lower.includes("run") || lower.includes("batch")) return "execution-batch";
+    if (lower.includes("playground") || lower.includes("arena")) return "playground-arena";
+    if (lower.includes("assistant") || lower.includes("chat")) return "assistant-ai";
+    return "other";
+  };
   const mainRef = useRef<HTMLElement>(null);
   const scrollingToRef = useRef<ActiveView | null>(null);
 
@@ -306,18 +342,18 @@ function Dashboard() {
                         <p className="text-sm text-slate-400 mt-0.5">{desc}</p>
                       </header>
                       {id === "input" && (
-                        <ErrorBoundary label="Model source">
+                        <ErrorBoundary label="Model source" onReportError={handleReportError}>
                           <InputEnvironmentPanel />
                         </ErrorBoundary>
                       )}
                       {id === "ihv" && (
-                        <ErrorBoundary label="Hardware">
+                        <ErrorBoundary label="Hardware" onReportError={handleReportError}>
                           <IHVIntegrationPanel />
                         </ErrorBoundary>
                       )}
                       {id === "execute" && (
                         <div className="space-y-8">
-                          <ErrorBoundary label="Recipe &amp; run">
+                          <ErrorBoundary label="Recipe & run" onReportError={handleReportError}>
                             <ExecutionWorkspace
                               onOpenAiAudit={handleOpenAiAudit}
                               onRunStateChange={(running) => {
@@ -326,7 +362,7 @@ function Dashboard() {
                               }}
                             />
                           </ErrorBoundary>
-                          <ErrorBoundary label="Batch queue">
+                          <ErrorBoundary label="Batch queue" onReportError={handleReportError}>
                             <Suspense fallback={<BatchPanelFallback />}>
                               <BatchProcessingPanel />
                             </Suspense>
@@ -334,7 +370,7 @@ function Dashboard() {
                         </div>
                       )}
                       {id === "playground" && (
-                        <ErrorBoundary label="Playground">
+                        <ErrorBoundary label="Playground" onReportError={handleReportError}>
                           <Suspense fallback={<PlaygroundPanelFallback />}>
                             <PlaygroundPanel />
                           </Suspense>
@@ -347,7 +383,7 @@ function Dashboard() {
               </main>
             </div>
 
-            <ErrorBoundary label="Assistant">
+            <ErrorBoundary label="Assistant" onReportError={handleReportError}>
               <Suspense fallback={<SidebarFallback />}>
                 <GeminiSidebar
                   isOpen={isAiSidebarOpen}
@@ -361,6 +397,23 @@ function Dashboard() {
         </div>
 
         <LicenseNotice open={licenseOpen} onClose={() => setLicenseOpen(false)} />
+
+        {/* Report Issue Modal */}
+        <ReportIssueModal
+          open={isReportOpen}
+          onClose={() => {
+            setIsReportOpen(false);
+            setReportData(null);
+          }}
+          state={pipelineState}
+          defaultArea={labelToArea(reportData?.label)}
+          defaultDescription={
+            reportData
+              ? `Error in ${reportData.label ?? "unknown section"}:\n\n${reportData.error.message}\n\n${reportData.componentStack ? `Component stack:\n${reportData.componentStack}` : ""}`
+              : undefined
+          }
+          frequencyInfo={reportData?.frequencyInfo}
+        />
       </div>
     </DesktopMinimumViewport>
   );

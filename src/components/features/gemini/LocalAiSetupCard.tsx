@@ -1,4 +1,5 @@
 import { Download, RefreshCw } from "lucide-react";
+import { openExternal } from "@/lib/openExternal";
 import { LocalModelManager } from "../LocalModelManager";
 import {
   LMS_STARTER_MODELS,
@@ -112,14 +113,13 @@ function EngineMissingBanner({
           {installing ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
           Setup {isLms ? "LM Studio" : "Ollama"} now
         </button>
-        <a
-          href={isLms ? "https://lmstudio.ai" : "https://ollama.com"}
-          target="_blank"
-          rel="noreferrer"
-          className={`text-[11px] underline ${accentText}`}
+        <button
+          type="button"
+          onClick={() => void openExternal(isLms ? "https://lmstudio.ai" : "https://ollama.com")}
+          className={`text-[11px] underline cursor-pointer bg-transparent border-none p-0 ${accentText}`}
         >
           Manual install
-        </a>
+        </button>
       </div>
     </div>
   );

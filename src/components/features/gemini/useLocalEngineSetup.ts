@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { openExternal } from "@/lib/openExternal";
 import {
   LMS_STARTER_MODELS,
   OLLAMA_STARTER_MODELS,
@@ -218,8 +219,9 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     }
     if (evt.openedUrl) state.openedUrl = evt.openedUrl;
     if (evt.type === "error") {
-      if (state.openedUrl || evt.openedUrl) {
-        window.open(state.openedUrl || evt.openedUrl, "_blank", "noopener,noreferrer");
+      const urlToOpen = state.openedUrl || evt.openedUrl;
+      if (urlToOpen) {
+        void openExternal(urlToOpen);
       }
       throw new Error(evt.error || evt.message || "Setup failed");
     }
@@ -253,7 +255,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
       openedUrl?: string;
     };
     if (!r.ok || !data.ok) {
-      if (data.openedUrl) window.open(data.openedUrl, "_blank", "noopener,noreferrer");
+      if (data.openedUrl) void openExternal(data.openedUrl);
       throw new Error(data.error || data.message || `HTTP ${r.status}`);
     }
     setLocalInstallInfo(data.message || "Engine ready.");

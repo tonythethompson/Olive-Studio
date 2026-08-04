@@ -63,6 +63,9 @@ import { parseGpuMetrics, type GpuMetrics } from "@/lib/gpuMetrics";
 import { getJobHistory, saveJobHistory } from "@/lib/jobHistoryStore";
 import { downloadMarkdownReport } from "@/lib/reportGenerator";
 import { JobHistoryModal } from "@/components/features/JobHistoryModal";
+import { ReportIssueModal } from "@/components/ReportIssueModal";
+import { Bug } from "lucide-react";
+import type { ReportArea } from "@/lib/issueReport";
 
 const RecipeGraphView = lazy(() => import("./RecipeGraphView").then((m) => ({ default: m.RecipeGraphView })));
 
@@ -144,6 +147,9 @@ export function ExecutionWorkspace({
   /** Cancel clicked before /olive/run returned a jobId — fire cancel as soon as id exists. */
   const pendingCancelRef = useRef(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [reportArea, setReportArea] = useState<ReportArea | undefined>(undefined);
+  const [reportDescription, setReportDescription] = useState("");
   const [recipeView, setRecipeViewRaw] = useState<"graph" | "json">("graph");
   const [visitedRecipeViews, setVisitedRecipeViews] = useState<Set<string>>(new Set(["graph"]));
   const [moreToolsOpen, setMoreToolsOpen] = useState(false);
@@ -1540,6 +1546,22 @@ ${owrPlatform === "web"
                       <Wrench className="h-3 w-3" />{" "}
                       {selectedLogIndices.size > 0 ? `Diagnose (${selectedLogIndices.size})` : "Diagnose"}
                     </button>
+                    {executionStatus === "failed" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReportArea("execution-batch");
+                          setReportDescription(
+                            `Execution failed with exit code ${executionExitCode ?? "?"}.\n\nRecent logs:\n${executionLogs.slice(-20).join("\n")}`,
+                          );
+                          setIsReportOpen(true);
+                        }}
+                        title="Report this failure as a GitHub issue"
+                        className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/50 transition-all cursor-pointer"
+                      >
+                        <Bug className="h-3 w-3" /> Report
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -1618,6 +1640,22 @@ ${owrPlatform === "web"
             /* ignore */
           }
         }}
+      />
+
+      {/* Report Issue Modal */}
+      <ReportIssueModal
+        open={isReportOpen}
+        onClose={() => {
+          setIsReportOpen(false);
+          setReportArea(undefined);
+          setReportDescription("");
+        }}
+        state={state}
+        hardwareProbe={hardwareProbe}
+        executionLogs={executionLogs}
+        mcpDiagnostic={mcpDiagnostic}
+        defaultArea={reportArea}
+        defaultDescription={reportDescription}
       />
     </div>
   );
