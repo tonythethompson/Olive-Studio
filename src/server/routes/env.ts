@@ -13,22 +13,18 @@ import {
 import { writeStudioConfig, addVenvToUserPath } from "../services/venv/config.ts";
 import { setRuntimeHfToken, getRuntimeHfToken } from "../services/olive/state.ts";
 import { ensureTensorRtRtx, ensureTensorRt } from "./tensorrt.ts";
+import { ensureOpenVino } from "../services/olive/openvino.ts";
 import { ensureOnnxRuntimeGpu } from "../services/olive/cuda.ts";
-import { fsWriteRateLimit } from "../middleware/rateLimit.ts";
+import { fsWriteRateLimit, heavyCommandRateLimit } from "../middleware/rateLimit.ts";
 import { resolveAllowedPythonFile } from "../services/venv/pythonGuard.ts";
 
-/** Serialize TensorRT + TensorRT RTX installs (shared venv / pip). */
-let tensorrtInstallChain: Promise<unknown> = Promise.resolve();
+/** Serialize all stack installs that mutate the shared venv via pip. */
+let venvPipInstallChain: Promise<unknown> = Promise.resolve();
 
-/**
- * Serializes TensorRT installation operations so that only one runs at a time.
- *
- * @param fn - The asynchronous TensorRT installation operation to run
- * @returns The result of the installation operation
- */
-function withTensorrtInstallMutex<T>(fn: () => Promise<T>): Promise<T> {
-  const run = tensorrtInstallChain.then(fn, fn);
-  tensorrtInstallChain = run.then(
+/** Serialize stack installation operations so that only one shared-venv pip run occurs at a time. */
+function withVenvPipInstallMutex<T>(fn: () => Promise<T>): Promise<T> {
+  const run = venvPipInstallChain.then(fn, fn);
+  venvPipInstallChain = run.then(
     () => undefined,
     () => undefined,
   );
@@ -41,9 +37,9 @@ function withTensorrtInstallMutex<T>(fn: () => Promise<T>): Promise<T> {
  * @param res - The response used to send progress and completion records.
  * @param run - The installation operation that receives a callback for progress lines.
  */
-function streamNdjsonInstall(
+function streamNdjsonInstall<T extends { ok: boolean; error?: string }>(
   res: Response,
-  run: (onLine: (line: string) => void) => Promise<{ ok: boolean; error?: string; libsDir?: string | null }>,
+  run: (onLine: (line: string) => void) => Promise<T>,
 ) {
   res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -100,20 +96,23 @@ export function mountEnvRoutes(router: Router): void {
   });
 
   // ─── TensorRT installs (NDJSON stream; creates .venv if needed) ────────
-  router.post("/env/install-tensorrt-rtx", async (_req, res) => {
-    await withTensorrtInstallMutex(() => streamNdjsonInstall(res, ensureTensorRtRtx));
+  router.post("/env/install-tensorrt-rtx", heavyCommandRateLimit, async (_req, res) => {
+    await withVenvPipInstallMutex(() => streamNdjsonInstall(res, ensureTensorRtRtx));
   });
 
-  router.post("/env/install-tensorrt", async (_req, res) => {
-    await withTensorrtInstallMutex(() => streamNdjsonInstall(res, ensureTensorRt));
+  router.post("/env/install-tensorrt", heavyCommandRateLimit, async (_req, res) => {
+    await withVenvPipInstallMutex(() => streamNdjsonInstall(res, ensureTensorRt));
+  });
+
+  router.post("/env/install-openvino", heavyCommandRateLimit, async (_req, res) => {
+    await withVenvPipInstallMutex(() => streamNdjsonInstall(res, ensureOpenVino));
   });
 
   // Pip-installs the pinned onnxruntime-gpu wheel into `.venv` and verifies
-  // the CUDA execution provider registers. Mirrors the TRT install route
-  // shape (NDJSON stream of [deps] log lines + final { ok } marker) so the
-  // IHV panel can stream the existing UI log viewer into this handler.
-  router.post("/env/install-onnxruntime-gpu", async (_req, res) => {
-    await withTensorrtInstallMutex(() => streamNdjsonInstall(res, ensureOnnxRuntimeGpu));
+  // the CUDA execution provider registers. Shares the venv pip mutex with
+  // TensorRT / OpenVINO installs.
+  router.post("/env/install-onnxruntime-gpu", heavyCommandRateLimit, async (_req, res) => {
+    await withVenvPipInstallMutex(() => streamNdjsonInstall(res, ensureOnnxRuntimeGpu));
   });
 
   // ─── Runtime Status ───────────────────────────────────────────────────

@@ -56,6 +56,23 @@ export function isNvidiaGpuTensorRtFamily(gpu: GpuInfo): boolean {
   return cap.minor >= TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.minor;
 }
 
+export interface OpenVinoProbeResult {
+  available: boolean;
+  /** True when OpenVINO EP is loadable in the .venv (matches tensorrt.loadable pattern). */
+  loadable?: boolean;
+  version?: string;
+  /** Devices reported by openvino.Core().available_devices (e.g. CPU, GPU, NPU, AUTO). */
+  devices?: string[];
+  optimumIntel?: {
+    available: boolean;
+    version?: string;
+    detail?: string;
+  };
+  /** True when onnxruntime reports OpenVINOExecutionProvider. */
+  openvinoExecutionProvider?: boolean;
+  detail?: string;
+}
+
 export interface HardwareProbeResult {
   probedAt: string;
   platform: {
@@ -87,10 +104,7 @@ export interface HardwareProbeResult {
   rocm?: {
     gpus: GpuInfo[];
   };
-  openvino?: {
-    available: boolean;
-    version?: string;
-  };
+  openvino?: OpenVinoProbeResult;
   tensorrt?: {
     loadable: boolean;
     detail?: string;
@@ -142,6 +156,26 @@ export function mapOrtProvidersToIhv(providers: string[]): IHVProvider[] {
 }
 
 /**
+ * Whether local hardware can usefully run OpenVINO acceleration.
+ *
+ * Requires an Intel CPU (vendor-qualified), an Intel GPU/NPU name from host
+ * enumeration, or OpenVINO already reporting GPU/NPU devices. Does not use
+ * NVIDIA GPU lists (Arc never appears there) and does not match AMD
+ * "N-Core Processor" strings via a bare `Core` token.
+ */
+export function computeOpenVinoCompatibleHardware(input: {
+  cpuModel: string;
+  intelGpuNames?: string[];
+  openvinoDevices?: string[];
+}): boolean {
+  const hasIntelCpu = /\bIntel\b|\bXeon\b/i.test(input.cpuModel);
+  const hasIntelGpu = (input.intelGpuNames ?? []).some((name) => /Intel/i.test(name));
+  const hasIntelOpenVinoDevices =
+    (input.openvinoDevices ?? []).some((device) => /GPU|NPU/i.test(device));
+  return hasIntelCpu || hasIntelGpu || hasIntelOpenVinoDevices;
+}
+
+/**
  * Combines ONNX Runtime providers and hardware probe results into the locally detected provider list.
  *
  * @param input - Provider and hardware detection results, including runtime loadability for TensorRT variants
@@ -152,6 +186,8 @@ export function mergeDetectedProviders(input: {
   hasNvidiaGpu: boolean;
   hasRocmGpu: boolean;
   hasOpenVino: boolean;
+  /** True when the local CPU/platform can run the OpenVINO runtime, even if not yet installed. */
+  hasOpenVinoCompatibleHardware?: boolean;
   tensorRtLoadable?: boolean;
   tensorRtRtxLoadable?: boolean;
   /**
@@ -225,7 +261,7 @@ export function mergeDetectedProviders(input: {
   if (input.hasRocmGpu) {
     detected.add("ROCMExecutionProvider");
   }
-  if (input.hasOpenVino) {
+  if (input.hasOpenVino || input.hasOpenVinoCompatibleHardware) {
     detected.add("OpenVINOExecutionProvider");
   }
 
@@ -241,7 +277,7 @@ export function mergeDetectedProviders(input: {
  */
 export function pickRecommendedProvider(
   detected: IHVProvider[],
-  opts?: { tensorRtRtxLoadable?: boolean; tensorRtLoadable?: boolean },
+  opts?: { tensorRtRtxLoadable?: boolean; tensorRtLoadable?: boolean; openvinoLoadable?: boolean },
 ): IHVProvider {
   // Prefer installed acceleration stacks; otherwise CUDA is the safe NVIDIA default.
   const priority: IHVProvider[] = [
@@ -251,7 +287,7 @@ export function pickRecommendedProvider(
     "NvTensorRTRTXExecutionProvider",
     "TensorrtExecutionProvider",
     "ROCMExecutionProvider",
-    "OpenVINOExecutionProvider",
+    ...(opts?.openvinoLoadable ? (["OpenVINOExecutionProvider"] as const) : []),
     "WebGpuExecutionProvider",
     "CPUExecutionProvider",
   ];

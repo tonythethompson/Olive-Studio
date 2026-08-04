@@ -14,11 +14,13 @@ import { getVenvPython } from "../services/venv/paths.ts";
 import { findSystemPython } from "../services/venv/index.ts";
 import { parseCudaVersionFromNvidiaSmi } from "../services/olive/cuda.ts";
 import {
+  computeOpenVinoCompatibleHardware,
   isNvidiaGpuTensorRtFamily,
   mergeDetectedProviders,
   pickRecommendedProvider,
   TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY,
   type HardwareProbeResult,
+  type OpenVinoProbeResult,
 } from "../../lib/hardwareProbe.ts";
 import {
   isPreMaxwellNvidiaBox,
@@ -119,6 +121,36 @@ async function probeRocmGpus(): Promise<HardwareProbeResult["rocm"] | undefined>
   }
 }
 
+async function probeIntelGpuNames(): Promise<string[]> {
+  if (process.platform === "linux") {
+    try {
+      const { stdout } = await execFileAsync("lspci", ["-nn"]);
+      return stdout
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => /VGA|3D|Display/i.test(line) && /Intel/i.test(line));
+    } catch {
+      return [];
+    }
+  }
+  if (process.platform === "win32") {
+    try {
+      const { stdout } = await execFileAsync("powershell.exe", [
+        "-NoProfile",
+        "-Command",
+        "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name",
+      ]);
+      return stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((name) => name.length > 0 && /Intel/i.test(name));
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 async function probePythonRuntime(
   python: string,
 ): Promise<Pick<HardwareProbeResult, "openvino" | "onnxRuntimeProviders">> {
@@ -161,6 +193,7 @@ export interface SystemProbeOptions {
   probeTensorRtRtxLoadable: (
     python: string,
   ) => Promise<{ loadable: boolean; detail?: string; version?: string }>;
+  probeOpenVino: (python: string) => Promise<OpenVinoProbeResult>;
 }
 
 /**
@@ -180,9 +213,14 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     systemRamGb: Math.round((os.totalmem() / 1024 ** 3) * 10) / 10,
   };
 
-  const [nvidia, rocm] = await Promise.all([probeNvidiaGpus(), probeRocmGpus()]);
+  const [nvidia, rocm, intelGpuNames] = await Promise.all([
+    probeNvidiaGpus(),
+    probeRocmGpus(),
+    probeIntelGpuNames(),
+  ]);
 
-  let openvino: HardwareProbeResult["openvino"];
+  let openvino: OpenVinoProbeResult | undefined;
+  let openvinoVenvAvailable = false;
   let onnxRuntimeProviders: string[] | undefined;
   let tensorrt: HardwareProbeResult["tensorrt"];
   let tensorRtRtx: HardwareProbeResult["tensorRtRtx"];
@@ -198,9 +236,18 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   if (systemPython) pythonCandidates.push(systemPython);
 
   for (const python of pythonCandidates) {
-    const pyResult = await probePythonRuntime(python);
-    if (pyResult.openvino?.available && !openvino?.available) {
-      openvino = pyResult.openvino;
+    const [pyResult, ov] = await Promise.all([
+      probePythonRuntime(python),
+      opts.probeOpenVino(python),
+    ]);
+    const hasOpenVinoSignal = Boolean(ov.version || ov.devices?.length || ov.optimumIntel || ov.detail);
+    if (hasOpenVinoSignal || ov.available) {
+      if (python === venvPython) {
+        openvino = ov;
+        openvinoVenvAvailable = ov.available;
+      } else if (!openvino) {
+        openvino = ov;
+      }
     }
     if (pyResult.onnxRuntimeProviders?.length && !onnxRuntimeProviders?.length) {
       onnxRuntimeProviders = pyResult.onnxRuntimeProviders;
@@ -319,7 +366,20 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
 
   if (!nvidia) notes.push("No NVIDIA GPU detected (nvidia-smi unavailable or returned no devices).");
   if (!rocm) notes.push("No AMD ROCm GPU detected.");
-  if (!openvino?.available) notes.push("OpenVINO Python package not found locally.");
+  if (openvinoVenvAvailable) {
+    const deviceMsg = openvino?.devices?.length ? ` [${openvino.devices.join(", ")}]` : "";
+    notes.push(
+      `OpenVINO stack verified${openvino?.version ? ` (${openvino.version})` : ""}${deviceMsg} (OpenVINOExecutionProvider).`,
+    );
+  } else if (openvino?.version || openvino?.devices?.length || openvino?.optimumIntel || openvino?.openvinoExecutionProvider === false) {
+    notes.push(
+      openvino?.detail
+        ? `OpenVINO stack not ready (${openvino.detail}). Use Install in Hardware (installs onnxruntime-openvino).`
+        : "OpenVINO is present but OpenVINOExecutionProvider is not ready — use Install in Hardware.",
+    );
+  } else {
+    notes.push("OpenVINO Python stack not found locally (needs openvino + onnxruntime-openvino).");
+  }
   notes.push("QNN requires Snapdragon/Hexagon dev hardware — not probed on desktop.");
 
   // Surface pre-Maxwell NVIDIA boxes (every detected GPU below the CUDA 12
@@ -353,11 +413,18 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     );
   }
 
+  const hasOpenVinoCompatibleHardware = computeOpenVinoCompatibleHardware({
+    cpuModel: platform.cpuModel,
+    intelGpuNames,
+    openvinoDevices: openvino?.devices,
+  });
+
   const detectedProviders = mergeDetectedProviders({
     onnxRuntimeProviders,
     hasNvidiaGpu: Boolean(nvidia?.gpus.length),
     hasRocmGpu: Boolean(rocm?.gpus.length),
     hasOpenVino: Boolean(openvino?.available),
+    hasOpenVinoCompatibleHardware,
     tensorRtLoadable: tensorRtVenvLoadable,
     tensorRtRtxLoadable: tensorRtRtxVenvLoadable,
     nvidiaTensorRtFamilyCapable,
@@ -369,7 +436,9 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     platform,
     nvidia,
     rocm,
-    openvino,
+    openvino: openvino
+      ? { ...openvino, available: openvinoVenvAvailable, loadable: openvinoVenvAvailable }
+      : undefined,
     // UI consumers (IHV panel) read `.loadable`; keep it aligned with .venv readiness.
     tensorrt: tensorrt ? { ...tensorrt, loadable: tensorRtVenvLoadable } : tensorrt,
     tensorRtRtx: tensorRtRtx ? { ...tensorRtRtx, loadable: tensorRtRtxVenvLoadable } : tensorRtRtx,
@@ -379,6 +448,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     recommendedProvider: pickRecommendedProvider(detectedProviders, {
       tensorRtRtxLoadable: tensorRtRtxVenvLoadable,
       tensorRtLoadable: tensorRtVenvLoadable,
+      openvinoLoadable: openvinoVenvAvailable,
     }),
     notes,
   };
