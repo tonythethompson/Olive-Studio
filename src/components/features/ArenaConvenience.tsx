@@ -1,7 +1,7 @@
 /**
  * Arena slot convenience sources (Req 18): Olive outputs picker + Assistant snapshot.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { FolderOpen, Sparkles, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import type { OliveOutputEntry } from "@/lib/arenaOliveOutputs";
@@ -41,6 +41,8 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
   const [fetchingId, setFetchingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<OliveListResponse | null>(null);
+  // Ref guard: state updates are async, so concurrent clicks can both see fetchingId=null.
+  const fetchingRef = useRef(false);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -76,7 +78,8 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
   const selectEntry = useCallback(
     async (entry: OliveOutputEntry) => {
       // Serialize downloads: concurrent clicks would race onFile (last response wins).
-      if (fetchingId !== null) return;
+      if (fetchingRef.current) return;
+      fetchingRef.current = true;
       setFetchingId(entry.id);
       setError(null);
       try {
@@ -97,10 +100,11 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
       } catch {
         setError("Could not download that model. The drop-zone is still available.");
       } finally {
+        fetchingRef.current = false;
         setFetchingId(null);
       }
     },
-    [onFile, fetchingId],
+    [onFile],
   );
 
   const recent = payload?.recent ?? [];

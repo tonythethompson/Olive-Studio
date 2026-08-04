@@ -1,7 +1,7 @@
 /**
  * Unit + PBT coverage for Arena Assistant snapshot helpers (Req 18 / Properties 21, 22).
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import {
   isArenaOpenAiCompatProvider,
@@ -35,41 +35,41 @@ describe("isArenaOpenAiCompatProvider", () => {
   });
 
   it("rejects private/loopback hosts without loopback override", () => {
-    const prev = process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
-    delete process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
-    try {
-      expect(
-        isArenaOpenAiCompatProvider({
-          provider: "openai-compat",
-          baseUrl: "http://127.0.0.1:11434/v1",
-        }),
-      ).toBe(false);
-      expect(
-        isArenaOpenAiCompatProvider({
-          provider: "openai-compat",
-          baseUrl: "https://192.168.1.10/v1",
-        }),
-      ).toBe(false);
-    } finally {
-      if (prev === undefined) delete process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
-      else process.env.OLIVE_ALLOW_LOOPBACK_HTTP = prev;
-    }
+    // Browser-safe: never reads process.env; default opts deny loopback HTTP.
+    expect(
+      isArenaOpenAiCompatProvider({
+        provider: "openai-compat",
+        baseUrl: "http://127.0.0.1:11434/v1",
+      }),
+    ).toBe(false);
+    expect(
+      isArenaOpenAiCompatProvider({
+        provider: "openai-compat",
+        baseUrl: "https://192.168.1.10/v1",
+      }),
+    ).toBe(false);
   });
 
-  it("allows loopback http when OLIVE_ALLOW_LOOPBACK_HTTP=true", () => {
-    const prev = process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
-    process.env.OLIVE_ALLOW_LOOPBACK_HTTP = "true";
-    try {
-      expect(
-        isArenaOpenAiCompatProvider({
+  it("allows loopback http only when opts.allowLoopbackHttp is true", () => {
+    expect(
+      isArenaOpenAiCompatProvider(
+        {
           provider: "openai-compat",
           baseUrl: "http://127.0.0.1:11434/v1",
-        }),
-      ).toBe(true);
-    } finally {
-      if (prev === undefined) delete process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
-      else process.env.OLIVE_ALLOW_LOOPBACK_HTTP = prev;
-    }
+        },
+        { allowLoopbackHttp: true },
+      ),
+    ).toBe(true);
+    // Still rejects private LAN even with loopback override
+    expect(
+      isArenaOpenAiCompatProvider(
+        {
+          provider: "openai-compat",
+          baseUrl: "https://192.168.1.10/v1",
+        },
+        { allowLoopbackHttp: true },
+      ),
+    ).toBe(false);
   });
 });
 
@@ -197,24 +197,6 @@ describe("toCloudSlotPatch", () => {
 });
 
 describe("resolveArenaSnapshotEndpointUrl", () => {
-  const envKeys = ["OLIVE_ALLOW_LOOPBACK_HTTP"] as const;
-  let saved: Record<string, string | undefined> = {};
-
-  beforeEach(() => {
-    saved = {};
-    for (const k of envKeys) {
-      saved[k] = process.env[k];
-      delete process.env[k];
-    }
-  });
-
-  afterEach(() => {
-    for (const k of envKeys) {
-      if (saved[k] === undefined) delete process.env[k];
-      else process.env[k] = saved[k];
-    }
-  });
-
   it("strips trailing slashes", () => {
     expect(
       resolveArenaSnapshotEndpointUrl({
@@ -239,13 +221,30 @@ describe("resolveArenaSnapshotEndpointUrl", () => {
     }
   });
 
-  it("allows loopback http IPv6 when OLIVE_ALLOW_LOOPBACK_HTTP=true", () => {
-    process.env.OLIVE_ALLOW_LOOPBACK_HTTP = "true";
+  it("allows loopback http IPv6 when allowLoopbackHttp opts is true", () => {
     expect(
       resolveArenaSnapshotEndpointUrl(
         { provider: "openai-compat", baseUrl: "http://[::1]/v1" },
         { allowLoopbackHttp: true },
       ),
     ).toBe("http://[::1]/v1");
+  });
+
+  it("rejects metadata and .local hostnames unconditionally", () => {
+    expect(
+      resolveArenaSnapshotEndpointUrl({
+        provider: "openai-compat",
+        baseUrl: "https://metadata.google.internal/v1",
+      }),
+    ).toBeNull();
+    expect(
+      resolveArenaSnapshotEndpointUrl(
+        {
+          provider: "openai-compat",
+          baseUrl: "http://localhost.local/v1",
+        },
+        { allowLoopbackHttp: true },
+      ),
+    ).toBeNull();
   });
 });

@@ -91,6 +91,8 @@ describe("FromOliveOutputs", () => {
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeTruthy();
     });
+    // Visible half of the loopback-only security boundary
+    expect(screen.getByText(/only available from this machine/i)).toBeTruthy();
     const callsAfterError = fetchSpy.mock.calls.length;
     expect(callsAfterError).toBeGreaterThanOrEqual(1);
 

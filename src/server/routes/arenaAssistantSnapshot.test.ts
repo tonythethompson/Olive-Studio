@@ -182,7 +182,7 @@ describe("GET /api/arena/assistant-cloud-snapshot", () => {
             expect(body).toMatchObject({
               apiKey: "k",
               endpointUrl: "https://api.example.com/v1",
-              modelId: model,
+              modelId: model.trim(),
             });
           }
         },
