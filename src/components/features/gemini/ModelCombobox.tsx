@@ -58,8 +58,9 @@ export function ModelCombobox({
   const membershipLabel = modelCatalogMembershipLabel(membership);
 
   useEffect(() => {
-    setHighlight(0);
-  }, [filterText, open]);
+    const selectedIndex = filtered.findIndex((option) => option.id === value);
+    setHighlight(selectedIndex >= 0 ? selectedIndex : 0);
+  }, [filtered, value, filterText, open]);
 
   useEffect(() => {
     if (!open) return;
