@@ -108,7 +108,7 @@ export async function probeOpenVino(python: string): Promise<OpenVinoProbeResult
   try {
     const { stdout, stderr } = await execFileAsync(python, ["-c", buildProbeScript()]);
     const acc = parseProbeOutput(`${stdout}\n${stderr}`);
-    const available = Boolean(acc.version) && Boolean(acc.optimumIntel?.available);
+    const available = Boolean(acc.version) && acc.devices !== undefined && Boolean(acc.optimumIntel?.available);
     return {
       available,
       version: acc.version,
