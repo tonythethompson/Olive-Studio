@@ -36,6 +36,7 @@ import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { HardwareProviderCard } from "@/components/features/HardwareProviderCard";
 import { useOpenVinoInstall } from "@/components/features/useOpenVinoInstall";
+import { runNdjsonInstall } from "@/lib/ndjsonInstall";
 import {
   Settings2,
   AlertTriangle,
@@ -348,60 +349,6 @@ export function IHVIntegrationPanel({
     isProviderDetectedLocally("OpenVINOExecutionProvider", hardwareProbe) &&
     hardwareProbe?.openvino?.loadable !== true;
   const hardwareInstallBusy = installingTrt || installingTrtRtx || openvinoInstall.state.installing;
-
-  const runNdjsonInstall = async (
-    url: string,
-    setLog: (updater: string[] | ((prev: string[]) => string[])) => void,
-  ): Promise<void> => {
-    const res = await fetch(url, { method: "POST" });
-    const contentType = res.headers.get("content-type") ?? "";
-
-    let ok = false;
-    let error: string | undefined;
-
-    if (contentType.includes("ndjson") && res.body) {
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n");
-        buffer = parts.pop() ?? "";
-        for (const line of parts) {
-          if (!line.trim()) continue;
-          let evt: { type?: string; message?: string; ok?: boolean; error?: string };
-          try {
-            evt = JSON.parse(line) as typeof evt;
-          } catch {
-            continue;
-          }
-          if (evt.type === "log" && evt.message) {
-            setLog((prev) => [...prev, evt.message!]);
-          } else if (evt.type === "done") {
-            ok = res.ok && evt.ok === true;
-            error = evt.error;
-          }
-        }
-      }
-    } else {
-      const data = (await res.json()) as {
-        ok?: boolean;
-        error?: string;
-        lines?: string[];
-        log?: string[];
-      };
-      const lines = data.lines ?? data.log;
-      if (Array.isArray(lines)) setLog(lines);
-      ok = res.ok && data.ok === true;
-      error = data.error;
-    }
-
-    if (!ok) {
-      throw new Error(error ?? `Install failed (HTTP ${res.status})`);
-    }
-  };
 
   const handleInstallTensorRtRtx = async () => {
     if (hardwareInstallBusy) return;

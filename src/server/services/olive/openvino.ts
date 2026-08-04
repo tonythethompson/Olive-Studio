@@ -254,11 +254,30 @@ export async function ensureOpenVino(
     onLine(`[deps] OpenVINO stack present but not loadable — reinstalling ${openvinoStackLabel()}...`);
   }
 
+  const needsOrtSwap = !probe.openvinoExecutionProvider;
   onLine(
-    `[deps] Warning: onnxruntime-openvino replaces other ORT wheels in this .venv (${OPENVINO_CONFLICTING_ORT_PACKAGES.join(", ")}). CUDA/TensorRT EPs will be unavailable until you reinstall onnxruntime-gpu.`,
+    needsOrtSwap
+      ? `[deps] Warning: onnxruntime-openvino replaces other ORT wheels in this .venv (${OPENVINO_CONFLICTING_ORT_PACKAGES.join(", ")}). CUDA/TensorRT EPs will be unavailable until you reinstall onnxruntime-gpu.`
+      : `[deps] Installing remaining OpenVINO packages without swapping ORT wheels (OpenVINOExecutionProvider already present).`,
   );
-  await pipUninstall(pip, OPENVINO_CONFLICTING_ORT_PACKAGES, onLine);
-  await pipInstall(pip, openvinoStackInstallArgs(), onLine);
+
+  let didOrtSwap = false;
+  if (needsOrtSwap) {
+    await pipUninstall(pip, OPENVINO_CONFLICTING_ORT_PACKAGES, onLine);
+    didOrtSwap = true;
+  }
+
+  try {
+    await pipInstall(pip, openvinoStackInstallArgs(), onLine);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      ok: false,
+      error: didOrtSwap
+        ? `${msg}. Conflicting ORT wheels were removed for onnxruntime-openvino; reinstall onnxruntime-gpu if you need CUDA/TensorRT again.`
+        : msg,
+    };
+  }
   onLine(`[deps] ${openvinoStackLabel()} installed ✓`);
 
   const retry = await probeOpenVino(venvPython);

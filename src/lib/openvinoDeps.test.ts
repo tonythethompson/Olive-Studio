@@ -9,13 +9,15 @@ import {
 } from "./openvinoDeps.ts";
 
 describe("openvinoStackInstallArgs", () => {
-  it("includes --upgrade-strategy eager and all OpenVINO stack packages", () => {
-    const args = openvinoStackInstallArgs();
-    expect(args).toContain("--upgrade-strategy");
-    expect(args).toContain("eager");
-    expect(args).toContain(OPEN_VINO_PIP_PACKAGE);
-    expect(args).toContain(OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE);
-    expect(args).toContain(ONNXRUNTIME_OPENVINO_PIP_PACKAGE);
+  it("returns the exact pip args contract including --upgrade and eager strategy", () => {
+    expect(openvinoStackInstallArgs()).toEqual([
+      "--upgrade",
+      "--upgrade-strategy",
+      "eager",
+      OPEN_VINO_PIP_PACKAGE,
+      OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE,
+      ONNXRUNTIME_OPENVINO_PIP_PACKAGE,
+    ]);
   });
 
   it("does not split the bracketed extra into a bare token", () => {

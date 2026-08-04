@@ -14,6 +14,7 @@ import { getVenvPython } from "../services/venv/paths.ts";
 import { findSystemPython } from "../services/venv/index.ts";
 import { parseCudaVersionFromNvidiaSmi } from "../services/olive/cuda.ts";
 import {
+  computeOpenVinoCompatibleHardware,
   mergeDetectedProviders,
   pickRecommendedProvider,
   type HardwareProbeResult,
@@ -84,6 +85,40 @@ async function probeRocmGpus(): Promise<HardwareProbeResult["rocm"] | undefined>
   }
 }
 
+/**
+ * Enumerates Intel display / compute adapters (iGPU, Arc, Xe) independently of nvidia-smi.
+ * Returns adapter name strings used for OpenVINO-compatible hardware detection.
+ */
+async function probeIntelGpuNames(): Promise<string[]> {
+  if (process.platform === "linux") {
+    try {
+      const { stdout } = await execFileAsync("lspci", ["-nn"]);
+      return stdout
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => /VGA|3D|Display/i.test(line) && /Intel/i.test(line));
+    } catch {
+      return [];
+    }
+  }
+  if (process.platform === "win32") {
+    try {
+      const { stdout } = await execFileAsync("powershell.exe", [
+        "-NoProfile",
+        "-Command",
+        "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name",
+      ]);
+      return stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((name) => name.length > 0 && /Intel/i.test(name));
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 async function probePythonRuntime(
   python: string,
 ): Promise<Pick<HardwareProbeResult, "onnxRuntimeProviders">> {
@@ -138,7 +173,11 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     systemRamGb: Math.round((os.totalmem() / 1024 ** 3) * 10) / 10,
   };
 
-  const [nvidia, rocm] = await Promise.all([probeNvidiaGpus(), probeRocmGpus()]);
+  const [nvidia, rocm, intelGpuNames] = await Promise.all([
+    probeNvidiaGpus(),
+    probeRocmGpus(),
+    probeIntelGpuNames(),
+  ]);
 
   let openvino: OpenVinoProbeResult | undefined;
   let openvinoVenvAvailable = false;
@@ -233,11 +272,12 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   }
   notes.push("QNN requires Snapdragon/Hexagon dev hardware — not probed on desktop.");
 
-  // Probe Intel-compatible hardware: Intel CPU OR Intel Arc GPU OR detected OpenVINO devices (GPU/NPU).
-  const hasIntelCpu = /Intel|Xeon|Core|Ultra/i.test(platform.cpuModel);
-  const hasIntelArcGpu = nvidia?.gpus.some((g) => /Arc/i.test(g.name)) ?? false;
-  const hasIntelOpenVinoDevices = openvino?.devices?.some((d) => /GPU|NPU/i.test(d)) ?? false;
-  const hasOpenVinoCompatibleHardware = hasIntelCpu || hasIntelArcGpu || hasIntelOpenVinoDevices;
+  // Probe Intel-compatible hardware: Intel CPU OR Intel GPU/NPU OR OpenVINO GPU/NPU devices.
+  const hasOpenVinoCompatibleHardware = computeOpenVinoCompatibleHardware({
+    cpuModel: platform.cpuModel,
+    intelGpuNames,
+    openvinoDevices: openvino?.devices,
+  });
 
   const detectedProviders = mergeDetectedProviders({
     onnxRuntimeProviders,

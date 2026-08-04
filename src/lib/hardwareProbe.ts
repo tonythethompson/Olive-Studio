@@ -79,6 +79,26 @@ export function mapOrtProvidersToIhv(providers: string[]): IHVProvider[] {
 }
 
 /**
+ * Whether local hardware can usefully run OpenVINO acceleration.
+ *
+ * Requires an Intel CPU (vendor-qualified), an Intel GPU/NPU name from host
+ * enumeration, or OpenVINO already reporting GPU/NPU devices. Does not use
+ * NVIDIA GPU lists (Arc never appears there) and does not match AMD
+ * "N-Core Processor" strings via a bare `Core` token.
+ */
+export function computeOpenVinoCompatibleHardware(input: {
+  cpuModel: string;
+  intelGpuNames?: string[];
+  openvinoDevices?: string[];
+}): boolean {
+  const hasIntelCpu = /\bIntel\b|\bXeon\b/i.test(input.cpuModel);
+  const hasIntelGpu = (input.intelGpuNames ?? []).some((name) => /Intel/i.test(name));
+  const hasIntelOpenVinoDevices =
+    (input.openvinoDevices ?? []).some((device) => /GPU|NPU/i.test(device));
+  return hasIntelCpu || hasIntelGpu || hasIntelOpenVinoDevices;
+}
+
+/**
  * Combines ONNX Runtime providers and hardware probe results into the locally detected provider list.
  *
  * @param input - Provider and hardware detection results, including runtime loadability for TensorRT variants

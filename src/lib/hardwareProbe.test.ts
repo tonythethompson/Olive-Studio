@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { mergeDetectedProviders, pickRecommendedProvider } from "@/lib/hardwareProbe";
+import {
+  computeOpenVinoCompatibleHardware,
+  mergeDetectedProviders,
+  pickRecommendedProvider,
+} from "@/lib/hardwareProbe";
 
 describe("mergeDetectedProviders TensorRT", () => {
   it("does not infer classic TensorRT until the runtime probe succeeds", () => {
@@ -53,6 +57,47 @@ describe("mergeDetectedProviders TensorRT", () => {
   });
 });
 
+describe("computeOpenVinoCompatibleHardware", () => {
+  it("detects Intel CPU by vendor qualifiers", () => {
+    expect(
+      computeOpenVinoCompatibleHardware({
+        cpuModel: "Intel(R) Core(TM) i9-13900K",
+      }),
+    ).toBe(true);
+    expect(
+      computeOpenVinoCompatibleHardware({
+        cpuModel: "Intel(R) Xeon(R) Platinum 8480+",
+      }),
+    ).toBe(true);
+  });
+
+  it("does not treat AMD N-Core Processor strings as Intel", () => {
+    expect(
+      computeOpenVinoCompatibleHardware({
+        cpuModel: "AMD Ryzen 9 7950X 16-Core Processor",
+      }),
+    ).toBe(false);
+  });
+
+  it("detects AMD CPU + Intel Arc GPU as OpenVINO-compatible", () => {
+    expect(
+      computeOpenVinoCompatibleHardware({
+        cpuModel: "AMD Ryzen 7 5800X 8-Core Processor",
+        intelGpuNames: ["Intel(R) Arc(TM) A770 Graphics"],
+      }),
+    ).toBe(true);
+  });
+
+  it("detects OpenVINO GPU/NPU devices even without Intel CPU/GPU names", () => {
+    expect(
+      computeOpenVinoCompatibleHardware({
+        cpuModel: "AMD Ryzen 9 7950X 16-Core Processor",
+        openvinoDevices: ["CPU", "GPU.0"],
+      }),
+    ).toBe(true);
+  });
+});
+
 describe("mergeDetectedProviders OpenVINO", () => {
   it("detects OpenVINO when hasOpenVinoCompatibleHardware is true (Intel CPU)", () => {
     const detected = mergeDetectedProviders({
@@ -74,13 +119,18 @@ describe("mergeDetectedProviders OpenVINO", () => {
     expect(detected).toContain("OpenVINOExecutionProvider");
   });
 
-  it("detects OpenVINO with AMD CPU + Intel Arc GPU scenario", () => {
+  it("propagates Arc-compatible hardware flag into detected providers", () => {
+    const compatible = computeOpenVinoCompatibleHardware({
+      cpuModel: "AMD Ryzen 7 5800X 8-Core Processor",
+      intelGpuNames: ["Intel(R) Arc(TM) A770 Graphics"],
+    });
     const detected = mergeDetectedProviders({
       hasNvidiaGpu: false,
       hasRocmGpu: false,
       hasOpenVino: false,
-      hasOpenVinoCompatibleHardware: true, // Set by Arc GPU detection
+      hasOpenVinoCompatibleHardware: compatible,
     });
+    expect(compatible).toBe(true);
     expect(detected).toContain("OpenVINOExecutionProvider");
   });
 

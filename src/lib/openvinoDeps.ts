@@ -36,11 +36,13 @@ export const OPEN_VINO_NPU_DRIVER_URL =
 /**
  * Returns the pip install arguments for the OpenVINO stack.
  *
- * Uses --upgrade-strategy eager so OpenVINO upgrades cleanly even when optimum-intel
- * transitively pins an older runtime.
+ * `--upgrade` is required for `--upgrade-strategy eager` to take effect so
+ * already-installed OpenVINO packages (and their deps) are upgraded when
+ * optimum-intel transitively pins an older runtime.
  */
 export function openvinoStackInstallArgs(): string[] {
   return [
+    "--upgrade",
     "--upgrade-strategy",
     "eager",
     OPEN_VINO_PIP_PACKAGE,
