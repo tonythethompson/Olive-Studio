@@ -165,19 +165,20 @@ export function useAiProviderSettings({
       }
       const d = (await r.json()) as ProviderStatus;
       setProviderStatus(d);
+      const providerId =
+        d.provider && d.provider in Object.fromEntries(PROVIDER_OPTIONS.map((p) => [p.id, true]))
+          ? (d.provider as ProviderId)
+          : settingsProvider;
       if (d.provider && d.provider in Object.fromEntries(PROVIDER_OPTIONS.map((p) => [p.id, true]))) {
-        setSettingsProvider(d.provider as ProviderId);
+        setSettingsProvider(providerId);
       }
       if (d.model) {
         setSettingsModel(d.model);
         setCustomModel(d.model);
       }
-      if (typeof d.baseUrl === "string" && d.baseUrl.trim()) {
-        setSettingsBaseUrl(d.baseUrl.trim());
-      } else {
-        // Server omitted/nulled baseUrl (e.g. left a local provider). Clear stale client URL.
-        setSettingsBaseUrl("");
-      }
+      // Prefer server baseUrl; fall back to catalog default so a prior local URL does not stick.
+      const option = PROVIDER_OPTIONS.find((p) => p.id === providerId);
+      setSettingsBaseUrl(typeof d.baseUrl === "string" ? d.baseUrl.trim() : (option?.baseUrl ?? ""));
       return d;
     } catch {
       const fallback: ProviderStatus = { source: "none" };

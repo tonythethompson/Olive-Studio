@@ -55,6 +55,8 @@ export function BatchProcessingPanel({
   const haltRequestedRef = useRef(false);
   /** Server Olive job id for the batch item currently running (for cancel). */
   const currentOliveJobIdRef = useRef<string | null>(null);
+  /** Resolver for the active SSE wait, so Halt cannot leave the queue suspended. */
+  const currentStreamResolveRef = useRef<(() => void) | null>(null);
   // Always keep a ref to the latest jobs array so SSE callbacks can read current state
   const jobsRef = useRef<typeof state.batchJobs>(state.batchJobs || []);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -113,6 +115,7 @@ export function BatchProcessingPanel({
       haltRequestedRef.current = true;
       activeSourcesRef.current.forEach((s) => s.close());
       activeSourcesRef.current = [];
+      // EventSource.close() does not reliably fire onerror; release the queue wait explicitly.
       const resolveStream = currentStreamResolveRef.current;
       currentStreamResolveRef.current = null;
       resolveStream?.();
@@ -256,7 +259,10 @@ export function BatchProcessingPanel({
 
       // Open SSE stream and wait for completion
       await new Promise<void>((resolve) => {
+        let settled = false;
         const finish = () => {
+          if (settled) return;
+          settled = true;
           if (currentStreamResolveRef.current === finish) {
             currentStreamResolveRef.current = null;
           }

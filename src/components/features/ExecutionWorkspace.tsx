@@ -750,7 +750,7 @@ ${owrPlatform === "web"
           let exitCode: number | null = null;
           let serverStatus: string | undefined;
           try {
-            const payload = JSON.parse(e.data) as { exitCode?: number; status?: string };
+            const payload = JSON.parse(e.data) as { exitCode?: number | null; status?: string };
             exitCode = typeof payload.exitCode === "number" ? payload.exitCode : null;
             serverStatus = payload.status;
           } catch {
