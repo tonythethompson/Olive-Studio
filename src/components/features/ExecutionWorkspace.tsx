@@ -747,14 +747,14 @@ ${owrPlatform === "web"
         });
 
         evtSource.addEventListener("done", (e: MessageEvent) => {
-          let exitCode = 0;
+          let exitCode: number | null = null;
           let serverStatus: string | undefined;
           try {
-            const payload = JSON.parse(e.data) as { exitCode?: number; status?: string };
-            exitCode = payload.exitCode ?? 0;
+            const payload = JSON.parse(e.data) as { exitCode?: number | null; status?: string };
+            exitCode = typeof payload.exitCode === "number" ? payload.exitCode : null;
             serverStatus = payload.status;
           } catch {
-            exitCode = 0;
+            exitCode = null;
           }
           // Olive sometimes exits 0 after a pass traceback (e.g. HF task KeyError).
           // Read the mirrored log ref so this updater stays pure (StrictMode-safe).
@@ -767,7 +767,7 @@ ${owrPlatform === "web"
             finalStatus = failed ? "failed" : "completed";
           }
           const reportedExit =
-            finalStatus === "cancelled" ? (exitCode ?? 1) : finalStatus === "failed" && exitCode === 0 ? 1 : exitCode;
+            finalStatus === "cancelled" ? null : finalStatus === "failed" && exitCode === 0 ? 1 : exitCode;
           setExecutionStatus(finalStatus);
           setExecutionExitCode(reportedExit);
           setIsRunning(false);
