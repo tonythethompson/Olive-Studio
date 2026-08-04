@@ -58,18 +58,11 @@ describe('copy ban: "(not a model)"', () => {
 });
 
 describe("Assistant provider catalog descriptions", () => {
-  const EM_DASH = "\u2014"; // —
-  const EN_DASH = "\u2013"; // –
-
-  it("keeps subscription blurbs short (no em/en dashes, under 40 chars)", () => {
-    const subs = PROVIDER_OPTIONS.filter((p) => p.category === "subscription");
-    expect(subs.length).toBeGreaterThan(0);
-    for (const p of subs) {
-      const d = p.description ?? "";
-      expect(d, `${p.id}: missing description`).not.toBe("");
-      expect(d, `${p.id}: em dash`).not.toContain(EM_DASH);
-      expect(d, `${p.id}: en dash`).not.toContain(EN_DASH);
-      expect(d.length, `${p.id}: too long (${d.length}): ${d}`).toBeLessThanOrEqual(40);
+  it("does not rely on description suffixes in the provider dropdown", () => {
+    // Dropdown renders names only; descriptions are optional metadata.
+    for (const p of PROVIDER_OPTIONS) {
+      expect(p.name.trim(), `${p.id}: empty name`).not.toBe("");
+      expect(p.name, `${p.id}: name should not embed a colon suffix`).not.toMatch(/: /);
     }
   });
 });

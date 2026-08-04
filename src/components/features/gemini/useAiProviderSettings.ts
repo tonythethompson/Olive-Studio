@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { PROVIDER_OPTIONS, type ProviderId } from "./aiProviderCatalog";
+import { PROVIDER_OPTIONS, normalizeUiProviderId, type ProviderId } from "./aiProviderCatalog";
 import type { ProviderStatus, SidebarTab } from "./types";
 
 interface UseAiProviderSettingsOptions {
@@ -67,21 +67,43 @@ export function useAiProviderSettings({
   /** Last values used for model fetching to avoid redundant refetches. */
   const lastFetchedApiKeyRef = useRef<string>("");
   const lastFetchedBaseUrlRef = useRef<string>("");
+  /**
+   * True once the user (or a saved/active provider) deliberately chose a model id.
+   * Lets catalog refresh preserve freehand ids without blocking the initial live list apply.
+   */
+  const userModelOverrideRef = useRef(false);
 
-  const providerOption = PROVIDER_OPTIONS.find((p) => p.id === settingsProvider)!;
+  const providerOption =
+    PROVIDER_OPTIONS.find((p) => p.id === settingsProvider) ?? PROVIDER_OPTIONS[0]!;
   const isCompatMode = settingsProvider === "openai-compat" || !!providerOption.baseUrl;
 
   const isStaleRefresh = (sequence: number) => sequence !== refreshSequenceRef.current;
+
+  const setSettingsModelFromUi = (modelId: string) => {
+    userModelOverrideRef.current = true;
+    setSettingsModel(modelId);
+  };
+
+  const setCustomModelFromUi = (modelId: string) => {
+    userModelOverrideRef.current = true;
+    setCustomModel(modelId);
+  };
 
   const applyFetchedModels = (providerId: ProviderId, models: Array<{ id: string; label: string }>) => {
     setLiveModelsByProvider((prev) => ({ ...prev, [providerId]: models }));
     if (providerId === "devin") {
       setDevinModels(models.map((m) => ({ id: m.id, name: m.label })));
     }
-    // Keep selection valid when the live list differs from static defaults
-    setSettingsModel((current) => (models.some((m) => m.id === current) ? current : models[0]!.id));
+    // Keep known selections. Preserve freehand only after an explicit UI/saved choice.
+    setSettingsModel((current) => {
+      if (models.some((m) => m.id === current)) return current;
+      if (userModelOverrideRef.current && current.trim()) return current;
+      return models[0]!.id;
+    });
     setCustomModel((current) => {
-      if (!current || models.some((m) => m.id === current)) return current || models[0]!.id;
+      if (!current) return models[0]!.id;
+      if (models.some((m) => m.id === current)) return current;
+      if (userModelOverrideRef.current) return current;
       return models[0]!.id;
     });
   };
@@ -164,10 +186,12 @@ export function useAiProviderSettings({
       }
       const d = (await r.json()) as ProviderStatus;
       setProviderStatus(d);
-      if (d.provider && d.provider in Object.fromEntries(PROVIDER_OPTIONS.map((p) => [p.id, true]))) {
-        setSettingsProvider(d.provider as ProviderId);
+      if (d.provider) {
+        const uiProvider = normalizeUiProviderId(d.provider);
+        if (uiProvider) setSettingsProvider(uiProvider);
       }
       if (d.model) {
+        userModelOverrideRef.current = true;
         setSettingsModel(d.model);
         setCustomModel(d.model);
       }
@@ -250,6 +274,7 @@ export function useAiProviderSettings({
     // Prefer cached live list; otherwise static default until fetch returns
     const cached = liveModelsByProvider[id];
     const first = cached?.[0]?.id ?? opt.models[0] ?? "";
+    userModelOverrideRef.current = false;
     setSettingsModel(first);
     setCustomModel(id === "openai-compat" ? "" : first);
     setSettingsBaseUrl(opt.baseUrl ?? "");
@@ -525,6 +550,7 @@ export function useAiProviderSettings({
       const data = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
       setSettingsProvider("openai-compat");
+      userModelOverrideRef.current = true;
       setSettingsModel(modelTag);
       setCustomModel(modelTag);
       setSettingsBaseUrl(baseUrl);
@@ -566,7 +592,7 @@ export function useAiProviderSettings({
     settingsProvider,
     selectProvider,
     settingsModel,
-    setSettingsModel,
+    setSettingsModel: setSettingsModelFromUi,
     settingsApiKey,
     setSettingsApiKey,
     settingsCloudflareAccountId,
@@ -574,7 +600,7 @@ export function useAiProviderSettings({
     settingsBaseUrl,
     setSettingsBaseUrl,
     customModel,
-    setCustomModel,
+    setCustomModel: setCustomModelFromUi,
     displayedModels,
     modelsLoading,
     modelsSource,

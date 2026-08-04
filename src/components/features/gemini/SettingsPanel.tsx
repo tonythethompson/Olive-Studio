@@ -4,7 +4,7 @@ import {
   preferredEngineFromBaseUrl,
   type AssistantSettingsMode,
 } from "@/lib/assistantSettingsMode";
-import { PROVIDER_OPTIONS } from "./aiProviderCatalog";
+import { PROVIDER_OPTIONS, normalizeUiProviderId } from "./aiProviderCatalog";
 import { LocalAiSetupCard } from "./LocalAiSetupCard";
 import { ManualProviderSetup } from "./ManualProviderSetup";
 import type { AiProviderSettings } from "./useAiProviderSettings";
@@ -15,40 +15,34 @@ interface ActiveProviderCardProps {
 }
 
 /**
- * Displays the active AI provider, model, configuration source, and available actions.
- *
- * @param providers - Provider status and management actions used to populate the card
+ * Compact one-line active provider status with an optional Clear action.
  */
 function ActiveProviderCard({ providers }: ActiveProviderCardProps) {
   const { providerStatus } = providers;
+  const providerName =
+    PROVIDER_OPTIONS.find(
+      (p) => p.id === (normalizeUiProviderId(providerStatus.provider ?? "") ?? providerStatus.provider),
+    )?.name ?? providerStatus.provider;
+
   return (
-    <div className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl">
-      <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold mb-2">
-        Active Provider
-      </p>
+    <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-2.5 py-1.5">
       {providerStatus.source === "none" ? (
-        <p className="text-xs text-slate-500 italic">No provider. AI features disabled.</p>
+        <p className="truncate text-xs text-slate-500 italic">No provider. AI features disabled.</p>
       ) : (
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <p className="text-sm font-semibold text-slate-100">
-              {PROVIDER_OPTIONS.find((p) => p.id === providerStatus.provider)?.name ??
-                providerStatus.provider}
-            </p>
-            <p className="text-[10px] font-mono text-slate-400">
-              {providerStatus.model} · {providerStatus.source === "env" ? "env var" : "session key"}
-            </p>
-          </div>
-          {providerStatus.source === "user" && (
-            <button
-              type="button"
-              onClick={() => void providers.clearProvider()}
-              className="text-[10px] text-rose-400 hover:text-rose-200 border border-rose-500/20 rounded px-2 py-1 font-bold transition-all cursor-pointer"
-            >
-              Clear
-            </button>
-          )}
-        </div>
+        <p className="min-w-0 truncate text-xs text-slate-200">
+          <span className="font-medium text-slate-100">{providerName}</span>
+          <span className="text-slate-500">:</span>{" "}
+          <span className="font-mono text-slate-300">{providerStatus.model}</span>
+        </p>
+      )}
+      {providerStatus.source === "user" && (
+        <button
+          type="button"
+          onClick={() => void providers.clearProvider()}
+          className="shrink-0 text-[10px] text-rose-400 hover:text-rose-200 border border-rose-500/20 rounded px-2 py-0.5 font-bold transition-all cursor-pointer"
+        >
+          Clear
+        </button>
       )}
     </div>
   );
@@ -133,7 +127,8 @@ export function SettingsPanel({ providers, local, isOpen }: SettingsPanelProps) 
 
   return (
     <div className="space-y-4">
-      <div className="space-y-3 sticky top-0 z-10 bg-slate-950/95 pb-1 backdrop-blur-sm">
+      {/* Pull into the scroll panel's p-4 so nothing peeks above/behind while sticky */}
+      <div className="sticky top-0 z-10 -mx-4 -mt-4 space-y-3 bg-slate-950 px-4 pt-4 pb-3">
         <ActiveProviderCard providers={providers} />
         <SettingsModeTabs mode={settingsMode} onChange={setSettingsMode} />
       </div>

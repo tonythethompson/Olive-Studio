@@ -10,7 +10,7 @@ import {
 import { chatPatchToUiState, sanitizeChatActionPatch, type ChatAction } from "@/lib/chatActions";
 import { Bot, X, Lightbulb, MessageSquareCode, Settings2 } from "lucide-react";
 import { AuditPanel } from "./AuditPanel";
-import { PROVIDER_OPTIONS } from "./gemini/aiProviderCatalog";
+import { PROVIDER_OPTIONS, normalizeUiProviderId } from "./gemini/aiProviderCatalog";
 import { ChatPanel } from "./gemini/ChatPanel";
 import { SettingsPanel } from "./gemini/SettingsPanel";
 import type { SidebarTab } from "./gemini/types";
@@ -145,7 +145,14 @@ export function GeminiSidebar({
 
   const providerLabel =
     providerSource !== "none"
-      ? `${PROVIDER_OPTIONS.find((p) => p.id === providers.providerStatus.provider)?.name ?? providers.providerStatus.provider} / ${providers.providerStatus.model}`
+      ? `${
+          PROVIDER_OPTIONS.find(
+            (p) =>
+              p.id ===
+              (normalizeUiProviderId(providers.providerStatus.provider ?? "") ??
+                providers.providerStatus.provider),
+          )?.name ?? providers.providerStatus.provider
+        } / ${providers.providerStatus.model}`
       : "No provider set";
 
   return (

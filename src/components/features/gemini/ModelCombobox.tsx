@@ -1,0 +1,197 @@
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import {
+  getModelCatalogMembership,
+  modelCatalogMembershipLabel,
+  type ModelCatalogSource,
+} from "@/lib/modelCatalogMembership";
+import { cn } from "@/lib/utils";
+
+export interface ModelComboboxOption {
+  id: string;
+  label: string;
+}
+
+interface ModelComboboxProps {
+  id?: string;
+  value: string;
+  options: ReadonlyArray<ModelComboboxOption>;
+  modelsSource: ModelCatalogSource | null;
+  modelsLoading?: boolean;
+  placeholder?: string;
+  onChange: (modelId: string) => void;
+}
+
+const MAX_VISIBLE = 40;
+
+/**
+ * Single searchable model control: filter live/fallback options and still accept freehand ids.
+ * Opening the list shows the full catalog; typing then narrows it.
+ */
+export function ModelCombobox({
+  id,
+  value,
+  options,
+  modelsSource,
+  modelsLoading = false,
+  placeholder = "Search or type a model id…",
+  onChange,
+}: ModelComboboxProps) {
+  const listboxId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+  /** null = not filtering (show full list); string = active search / freehand edit. */
+  const [query, setQuery] = useState<string | null>(null);
+
+  const inputValue = query ?? value;
+  const filterText = query !== null ? query.trim().toLowerCase() : "";
+
+  const filtered = useMemo(() => {
+    if (!filterText) return options.slice(0, MAX_VISIBLE);
+    const matches = options.filter(
+      (m) => m.id.toLowerCase().includes(filterText) || m.label.toLowerCase().includes(filterText),
+    );
+    return matches.slice(0, MAX_VISIBLE);
+  }, [options, filterText]);
+
+  const membership = getModelCatalogMembership(value, options, modelsSource);
+  const membershipLabel = modelCatalogMembershipLabel(membership);
+
+  useEffect(() => {
+    setHighlight(0);
+  }, [filterText, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+        setQuery(null);
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [open]);
+
+  const pick = (modelId: string) => {
+    onChange(modelId);
+    setQuery(null);
+    setOpen(false);
+  };
+
+  const openList = () => {
+    setOpen(true);
+    // Keep the selected id in the field, but do not filter until the user types.
+    setQuery(null);
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setOpen(true);
+      setHighlight((i) => Math.min(i + 1, Math.max(filtered.length - 1, 0)));
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setOpen(true);
+      setHighlight((i) => Math.max(i - 1, 0));
+      return;
+    }
+    if (event.key === "Enter" && open && filtered[highlight]) {
+      event.preventDefault();
+      pick(filtered[highlight]!.id);
+      return;
+    }
+    if (event.key === "Escape") {
+      setOpen(false);
+      setQuery(null);
+    }
+  };
+
+  return (
+    <div ref={rootRef} className="relative space-y-1">
+      <input
+        id={id}
+        role="combobox"
+        aria-label="AI model"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        aria-activedescendant={open && filtered[highlight] ? `${listboxId}-opt-${highlight}` : undefined}
+        autoComplete="off"
+        spellCheck={false}
+        placeholder={placeholder}
+        value={inputValue}
+        onChange={(e) => {
+          const next = e.target.value;
+          setQuery(next);
+          onChange(next);
+          setOpen(true);
+        }}
+        onFocus={openList}
+        onKeyDown={onKeyDown}
+        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+      />
+
+      {open && (
+        <ul
+          id={listboxId}
+          role="listbox"
+          aria-label={filterText ? "Matching models" : "Available models"}
+          className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-slate-700 bg-slate-900 shadow-lg"
+        >
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-xs text-slate-500">
+              No catalog matches. Keep typing to use a freehand model id.
+            </li>
+          ) : (
+            filtered.map((m, index) => {
+              const active = index === highlight;
+              const selected = m.id === value;
+              return (
+                <li
+                  key={m.id}
+                  id={`${listboxId}-opt-${index}`}
+                  role="option"
+                  aria-selected={selected}
+                  onMouseEnter={() => setHighlight(index)}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    pick(m.id);
+                  }}
+                  className={cn(
+                    "cursor-pointer px-3 py-1.5 text-sm",
+                    active ? "bg-electric-blue/20 text-slate-100" : "text-slate-300",
+                    selected && "font-medium",
+                  )}
+                >
+                  <span className="block truncate">{m.label}</span>
+                  {m.label !== m.id && (
+                    <span className="block truncate text-[10px] text-slate-500">{m.id}</span>
+                  )}
+                </li>
+              );
+            })
+          )}
+          {!filterText && options.length > MAX_VISIBLE && (
+            <li className="px-3 py-1.5 text-[10px] text-slate-500 border-t border-slate-800">
+              Showing first {MAX_VISIBLE} models. Type to search the full catalog.
+            </li>
+          )}
+          {filterText && options.length > MAX_VISIBLE && filtered.length === MAX_VISIBLE && (
+            <li className="px-3 py-1.5 text-[10px] text-slate-500 border-t border-slate-800">
+              Showing first {MAX_VISIBLE} matches. Type to narrow further.
+            </li>
+          )}
+        </ul>
+      )}
+
+      {!open && !modelsLoading && membershipLabel && (
+        <p className="text-[10px] leading-snug text-amber-400/90" role="status">
+          {membershipLabel}
+        </p>
+      )}
+    </div>
+  );
+}
