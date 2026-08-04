@@ -25,6 +25,19 @@ export function pinnedTensorRtLabel(): string {
   return `tensorrt (${PINNED_TENSORRT_VERSION})`;
 }
 
+/**
+ * Copy-pasteable pip command that installs the classic TensorRT SDK at the
+ * pinned version. NVIDIA publishes TRT 10.x on PyPI.org, so we deliberately
+ * avoid `--index-url` here — that flag would override the project's index
+ * resolution and could break other packages. Use this helper anywhere a
+ * user-facing hint needs the exact install invocation so the hint stays in
+ * lockstep with the version `ensureTensorRt` actually installs.
+ */
+export function pinnedTensorRtInstallCommand(): string {
+  const args = pinnedTensorRtInstallArgs();
+  return `pip install ${args.join(" ")}`;
+}
+
 /** ORT TensorrtExecutionProvider in stable wheels is built against TensorRT 10.x (nvinfer_10). */
 export function isCompatibleTensorRtVersion(version: string): boolean {
   const major = Number.parseInt(version.split(".")[0] ?? "", 10);
