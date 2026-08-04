@@ -29,7 +29,7 @@ Parent tasks **6** and **7** are complete (all sub-items landed). Checkpoint **8
 | Path helpers + Olive-output scan + list/file routes | Done (prior) |
 | Properties 20 / 20b | Done (prior) |
 | `src/lib/arenaAssistantSnapshot.ts` (`isArenaOpenAiCompatProvider`, `toCloudSlotPatch`, `buildAssistantCloudSnapshot`) | Done |
-| `GET /api/arena/assistant-cloud-snapshot` (`Cache-Control: no-store, private`, `arenaLocalOnly`) | Done |
+| `GET /api/arena/assistant-cloud-snapshot` (`Cache-Control: no-store, private`, `arenaStrictLocalOnly` — never honors `OLIVE_ARENA_ALLOW_REMOTE`) | Done |
 | ArenaPanel UI: From Olive outputs + Use active Assistant provider | Done (`ArenaConvenience.tsx`) |
 | Properties 21 / 21b / 22 (≥100 iterations) | Done |
 

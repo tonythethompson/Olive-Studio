@@ -45,8 +45,10 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
   const loadList = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const controller = new AbortController();
+    const timeoutId = globalThis.setTimeout(() => controller.abort(), 15_000);
     try {
-      const res = await fetch("/api/arena/olive-outputs");
+      const res = await fetch("/api/arena/olive-outputs", { signal: controller.signal });
       if (!res.ok) {
         setError(res.status === 403 ? "Olive outputs are only available from this machine." : "Failed to list Olive outputs.");
         setPayload(null);
@@ -58,6 +60,7 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
       setError("Failed to list Olive outputs.");
       setPayload(null);
     } finally {
+      globalThis.clearTimeout(timeoutId);
       setLoading(false);
     }
   }, []);
@@ -72,6 +75,8 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
 
   const selectEntry = useCallback(
     async (entry: OliveOutputEntry) => {
+      // Serialize downloads: concurrent clicks would race onFile (last response wins).
+      if (fetchingId !== null) return;
       setFetchingId(entry.id);
       setError(null);
       try {
@@ -95,7 +100,7 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
         setFetchingId(null);
       }
     },
-    [onFile],
+    [onFile, fetchingId],
   );
 
   const recent = payload?.recent ?? [];
@@ -148,7 +153,7 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
                   <li key={`recent-${entry.id}`}>
                     <button
                       type="button"
-                      disabled={fetchingId === entry.id}
+                      disabled={fetchingId !== null}
                       onClick={() => void selectEntry(entry)}
                       className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer disabled:opacity-50"
                     >
@@ -169,7 +174,7 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
                   <li key={`browse-${entry.id}`}>
                     <button
                       type="button"
-                      disabled={fetchingId === entry.id}
+                      disabled={fetchingId !== null}
                       onClick={() => void selectEntry(entry)}
                       className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer disabled:opacity-50"
                     >
@@ -185,15 +190,14 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
             </div>
           )}
 
-          {!loading && (
-            <button
-              type="button"
-              className="text-[10px] text-electric-blue hover:underline cursor-pointer"
-              onClick={() => void loadList()}
-            >
-              Refresh list
-            </button>
-          )}
+          <button
+            type="button"
+            className="text-[10px] text-electric-blue hover:underline cursor-pointer disabled:opacity-50"
+            disabled={loading}
+            onClick={() => void loadList()}
+          >
+            {loading ? "Scanning…" : "Refresh list"}
+          </button>
         </div>
       )}
     </div>

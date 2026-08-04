@@ -52,11 +52,16 @@ describe("FromOliveOutputs", () => {
           { status: 200 },
         ),
       )
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        blob: async () => new Blob([bytes]),
-      } as Response);
+      .mockResolvedValueOnce(
+        // jsdom Response/Blob stream support is incomplete; stub the subset selectEntry uses.
+        {
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          blob: async () => new Blob([bytes]),
+          arrayBuffer: async () => bytes.buffer,
+        } as unknown as Response,
+      );
 
     const onFile = vi.fn();
     render(<FromOliveOutputs slotLabel="Slot A" onFile={onFile} />);
@@ -73,6 +78,27 @@ describe("FromOliveOutputs", () => {
     expect(file).toBeInstanceOf(File);
     expect(file.name).toBe("demo.onnx");
     expect(file.size).toBe(4);
+  });
+
+  it("does not auto-retry the list scan after an error", async () => {
+    const user = userEvent.setup();
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ error: "forbidden" }), { status: 403 }),
+    );
+    render(<FromOliveOutputs slotLabel="Slot A" onFile={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /from olive outputs/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeTruthy();
+    });
+    const callsAfterError = fetchSpy.mock.calls.length;
+    expect(callsAfterError).toBeGreaterThanOrEqual(1);
+
+    // Stay open; effect must not re-fire into the rate limiter.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(fetchSpy.mock.calls.length).toBe(callsAfterError);
   });
 });
 

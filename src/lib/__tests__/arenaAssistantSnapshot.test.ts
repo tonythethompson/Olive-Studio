@@ -37,33 +37,39 @@ describe("isArenaOpenAiCompatProvider", () => {
   it("rejects private/loopback hosts without loopback override", () => {
     const prev = process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
     delete process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
-    expect(
-      isArenaOpenAiCompatProvider({
-        provider: "openai-compat",
-        baseUrl: "http://127.0.0.1:11434/v1",
-      }),
-    ).toBe(false);
-    expect(
-      isArenaOpenAiCompatProvider({
-        provider: "openai-compat",
-        baseUrl: "https://192.168.1.10/v1",
-      }),
-    ).toBe(false);
-    if (prev === undefined) delete process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
-    else process.env.OLIVE_ALLOW_LOOPBACK_HTTP = prev;
+    try {
+      expect(
+        isArenaOpenAiCompatProvider({
+          provider: "openai-compat",
+          baseUrl: "http://127.0.0.1:11434/v1",
+        }),
+      ).toBe(false);
+      expect(
+        isArenaOpenAiCompatProvider({
+          provider: "openai-compat",
+          baseUrl: "https://192.168.1.10/v1",
+        }),
+      ).toBe(false);
+    } finally {
+      if (prev === undefined) delete process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
+      else process.env.OLIVE_ALLOW_LOOPBACK_HTTP = prev;
+    }
   });
 
   it("allows loopback http when OLIVE_ALLOW_LOOPBACK_HTTP=true", () => {
     const prev = process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
     process.env.OLIVE_ALLOW_LOOPBACK_HTTP = "true";
-    expect(
-      isArenaOpenAiCompatProvider({
-        provider: "openai-compat",
-        baseUrl: "http://127.0.0.1:11434/v1",
-      }),
-    ).toBe(true);
-    if (prev === undefined) delete process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
-    else process.env.OLIVE_ALLOW_LOOPBACK_HTTP = prev;
+    try {
+      expect(
+        isArenaOpenAiCompatProvider({
+          provider: "openai-compat",
+          baseUrl: "http://127.0.0.1:11434/v1",
+        }),
+      ).toBe(true);
+    } finally {
+      if (prev === undefined) delete process.env.OLIVE_ALLOW_LOOPBACK_HTTP;
+      else process.env.OLIVE_ALLOW_LOOPBACK_HTTP = prev;
+    }
   });
 });
 
@@ -216,5 +222,30 @@ describe("resolveArenaSnapshotEndpointUrl", () => {
         baseUrl: "https://api.example.com/v1///",
       }),
     ).toBe("https://api.example.com/v1");
+  });
+
+  it("rejects IPv6 link-local, ULA, loopback, and IPv4-mapped private literals", () => {
+    const blocked = [
+      "http://[fe80::1]/v1",
+      "https://[fd12:3456:789a::1]/v1",
+      "https://[::1]/v1",
+      "https://[::ffff:10.0.0.1]/v1",
+      "https://[::ffff:192.168.1.1]/v1",
+    ];
+    for (const baseUrl of blocked) {
+      expect(
+        resolveArenaSnapshotEndpointUrl({ provider: "openai-compat", baseUrl }),
+      ).toBeNull();
+    }
+  });
+
+  it("allows loopback http IPv6 when OLIVE_ALLOW_LOOPBACK_HTTP=true", () => {
+    process.env.OLIVE_ALLOW_LOOPBACK_HTTP = "true";
+    expect(
+      resolveArenaSnapshotEndpointUrl(
+        { provider: "openai-compat", baseUrl: "http://[::1]/v1" },
+        { allowLoopbackHttp: true },
+      ),
+    ).toBe("http://[::1]/v1");
   });
 });

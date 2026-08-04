@@ -107,15 +107,32 @@ function parseIpv6(host: string): bigint | null {
     if (last.includes(".")) {
       const octets = last.split(".").map(Number);
       if (octets.length !== 4 || octets.some((n) => !Number.isInteger(n) || n > 255)) return [];
-      items.splice(items.length - 1, 1, ((octets[0] << 8) | octets[1]).toString(16), ((octets[2] << 8) | octets[3]).toString(16));
+      items.splice(
+        items.length - 1,
+        1,
+        ((octets[0] << 8) | octets[1]).toString(16),
+        ((octets[2] << 8) | octets[3]).toString(16),
+      );
     }
     return items;
   };
   const left = expand(parts[0]);
   const right = expand(parts[1] ?? "");
   const zeros = 8 - left.length - right.length;
-  if ((parts.length === 1 && zeros !== 0) || zeros < 0 || [...left, ...right].some((p) => !/^[0-9a-f]{1,4}$/.test(p))) return null;
-  return BigInt(`0x${[...left, ...Array(zeros).fill("0"), ...right].join("")}`);
+  if (
+    (parts.length === 1 && zeros !== 0) ||
+    zeros < 0 ||
+    [...left, ...right].some((p) => !/^[0-9a-f]{1,4}$/i.test(p))
+  ) {
+    return null;
+  }
+  // Zero-pad each hextet so the 128-bit value is always 32 hex digits.
+  // Unpadded joins (e.g. fe80::1 → "fe800…001") shift high bits and break
+  // link-local / ULA / mapped checks.
+  const groups = [...left, ...Array(zeros).fill("0"), ...right].map((g) =>
+    g.padStart(4, "0").toLowerCase(),
+  );
+  return BigInt(`0x${groups.join("")}`);
 }
 
 function isBlockedIpv6(host: string): boolean {
