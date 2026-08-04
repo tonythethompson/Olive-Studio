@@ -219,11 +219,17 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   if (!rocm) notes.push("No AMD ROCm GPU detected.");
   if (openvinoVenvAvailable) {
     const deviceMsg = openvino?.devices?.length ? ` [${openvino.devices.join(", ")}]` : "";
-    notes.push(`OpenVINO stack verified${openvino?.version ? ` (${openvino.version})` : ""}${deviceMsg}.`);
-  } else if (openvino?.version || openvino?.devices?.length || openvino?.optimumIntel) {
-    notes.push("OpenVINO is present but the complete .venv stack is not ready — use Install in Hardware.");
+    notes.push(
+      `OpenVINO stack verified${openvino?.version ? ` (${openvino.version})` : ""}${deviceMsg} (OpenVINOExecutionProvider).`,
+    );
+  } else if (openvino?.version || openvino?.devices?.length || openvino?.optimumIntel || openvino?.openvinoExecutionProvider === false) {
+    notes.push(
+      openvino?.detail
+        ? `OpenVINO stack not ready (${openvino.detail}). Use Install in Hardware (installs onnxruntime-openvino).`
+        : "OpenVINO is present but OpenVINOExecutionProvider is not ready — use Install in Hardware.",
+    );
   } else {
-    notes.push("OpenVINO Python package not found locally.");
+    notes.push("OpenVINO Python stack not found locally (needs openvino + onnxruntime-openvino).");
   }
   notes.push("QNN requires Snapdragon/Hexagon dev hardware — not probed on desktop.");
 

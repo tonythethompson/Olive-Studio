@@ -18,6 +18,8 @@ export interface OpenVinoProbeResult {
     version?: string;
     detail?: string;
   };
+  /** True when onnxruntime reports OpenVINOExecutionProvider. */
+  openvinoExecutionProvider?: boolean;
   detail?: string;
 }
 

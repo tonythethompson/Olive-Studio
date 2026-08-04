@@ -1,12 +1,29 @@
 /**
- * OpenVINO + Optimum-Intel stack installation metadata.
+ * OpenVINO + Optimum-Intel + ORT OpenVINO EP installation metadata.
  *
- * Installs the PyPI OpenVINO runtime and the Hugging Face Optimum-Intel bridge
- * (openvino extra) into the project .venv. Used by the Hardware panel install
- * button and by recipe-required-package inference.
+ * Installs the PyPI OpenVINO runtime, the Hugging Face Optimum-Intel bridge
+ * (openvino extra), and `onnxruntime-openvino` (supplies OpenVINOExecutionProvider)
+ * into the project .venv. Used by the Hardware panel install button and by
+ * recipe-required-package inference.
+ *
+ * Olive maps OpenVINOExecutionProvider → onnxruntime-openvino
+ * (see microsoft/Olive olive/hardware/constants.py). Plain `openvino` /
+ * `optimum-intel` alone do not register the ORT execution provider.
  */
 export const OPEN_VINO_PIP_PACKAGE = "openvino";
 export const OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE = "optimum-intel[openvino]";
+/** ORT wheel that bundles OpenVINOExecutionProvider (mutually exclusive with onnxruntime-gpu). */
+export const ONNXRUNTIME_OPENVINO_PIP_PACKAGE = "onnxruntime-openvino";
+
+/**
+ * ORT distributions that conflict with `onnxruntime-openvino` on the same
+ * import path. Uninstall these before installing the OpenVINO ORT wheel.
+ */
+export const OPENVINO_CONFLICTING_ORT_PACKAGES = [
+  "onnxruntime",
+  "onnxruntime-gpu",
+  "onnxruntime-directml",
+] as const;
 
 /** Intel GPU driver setup docs for OpenVINO. */
 export const OPEN_VINO_GPU_DRIVER_URL =
@@ -23,9 +40,15 @@ export const OPEN_VINO_NPU_DRIVER_URL =
  * transitively pins an older runtime.
  */
 export function openvinoStackInstallArgs(): string[] {
-  return ["--upgrade-strategy", "eager", OPEN_VINO_PIP_PACKAGE, OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE];
+  return [
+    "--upgrade-strategy",
+    "eager",
+    OPEN_VINO_PIP_PACKAGE,
+    OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE,
+    ONNXRUNTIME_OPENVINO_PIP_PACKAGE,
+  ];
 }
 
 export function openvinoStackLabel(): string {
-  return `${OPEN_VINO_PIP_PACKAGE} + ${OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE}`;
+  return `${OPEN_VINO_PIP_PACKAGE} + ${OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE} + ${ONNXRUNTIME_OPENVINO_PIP_PACKAGE}`;
 }

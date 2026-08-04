@@ -955,9 +955,11 @@ export function IHVIntegrationPanel({
                           {p.id === "OpenVINOExecutionProvider" && openvinoNeedsInstall && (
                             <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
                               <p className="text-[11px] text-amber-400/90 leading-relaxed">
-                                OpenVINO stack not in the project{" "}
-                                <code className="text-slate-400">.venv</code>. Install to enable Intel CPU,
-                                GPU, and NPU targets.
+                                OpenVINOExecutionProvider not ready in the project{" "}
+                                <code className="text-slate-400">.venv</code>. Install installs{" "}
+                                <code className="text-slate-400">onnxruntime-openvino</code> (replaces{" "}
+                                <code className="text-slate-400">onnxruntime-gpu</code> in this venv) plus
+                                OpenVINO and Optimum-Intel.
                               </p>
                               {hardwareProbe?.openvino?.detail && (
                                 <p

@@ -99,31 +99,41 @@ export function inferRequiredPackages(recipe: OliveRecipe, cudaTag: string): Pkg
         },
   );
 
-  // ONNX Runtime — pin CUDA 12 build via resolveCudaTag
-  if (passTypes.some((t) => t.includes("Onnx") || t.includes("ORT") || t.includes("Transformers"))) {
-    pkgs.push(
-      isGpu && resolved
-        ? {
-            importName: "onnxruntime",
-            installArgs: resolved.ortInstallArgs,
-            label: resolved.ortLabel,
-          }
-        : {
-            importName: "onnxruntime",
-            installArgs: ["onnxruntime"],
-            label: "onnxruntime",
-          },
-    );
+  const wantsOpenVinoEp =
+    getRecipeIhvProvider(recipe) === "OpenVINOExecutionProvider" ||
+    passTypes.some((t) => t.includes("OpenVINO"));
+
+  // ONNX Runtime — OpenVINO EP needs onnxruntime-openvino (not the CUDA wheel).
+  if (passTypes.some((t) => t.includes("Onnx") || t.includes("ORT") || t.includes("Transformers")) || wantsOpenVinoEp) {
+    if (wantsOpenVinoEp) {
+      pkgs.push({
+        importName: "onnxruntime",
+        installArgs: openvinoStackInstallArgs(),
+        label: openvinoStackLabel(),
+      });
+    } else if (isGpu && resolved) {
+      pkgs.push({
+        importName: "onnxruntime",
+        installArgs: resolved.ortInstallArgs,
+        label: resolved.ortLabel,
+      });
+    } else {
+      pkgs.push({
+        importName: "onnxruntime",
+        installArgs: ["onnxruntime"],
+        label: "onnxruntime",
+      });
+    }
   }
 
-  if (isGpu && resolved) {
+  if (isGpu && resolved && !wantsOpenVinoEp) {
     for (const pkg of resolved.runtimePackages) {
       pkgs.push(pkg);
     }
   }
 
-  // OpenVINO runtime + Optimum-Intel bridge
-  if (passTypes.some((t) => t.includes("OpenVINO"))) {
+  // OpenVINO runtime + Optimum-Intel bridge (+ ORT OpenVINO EP via stack args)
+  if (wantsOpenVinoEp) {
     pkgs.push({
       importName: "openvino",
       installArgs: openvinoStackInstallArgs(),
