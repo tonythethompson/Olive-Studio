@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { X, ExternalLink, Copy, Check, ChevronDown, AlertTriangle, Repeat } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
@@ -58,9 +58,15 @@ export function ReportIssueModal({
   const [showPreview, setShowPreview] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Reset state when modal opens with new defaults
+  // Reset state only when the modal transitions from closed → open.
+  // Keeping defaultArea/defaultDescription out of the dep array prevents a
+  // second error (fired while the modal is already open) from wiping the text
+  // the user has already typed.
+  const wasOpenRef = useRef(false);
   useEffect(() => {
-    if (open) {
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = open;
+    if (open && !wasOpen) {
       setCategory("bug");
       setSeverity("annoying");
       setArea(defaultArea ?? "other");
@@ -69,7 +75,8 @@ export function ReportIssueModal({
       setShowPreview(false);
       setCopied(false);
     }
-  }, [open, defaultArea, defaultDescription]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only depend on open
+  }, [open]);
 
   const toggleTelemetry = useCallback((id: TelemetryOptionId) => {
     setSelectedTelemetry((prev) => {
