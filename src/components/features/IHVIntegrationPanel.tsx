@@ -995,8 +995,8 @@ export function IHVIntegrationPanel({
                             </div>
                           )}
                           {p.id === "OpenVINOExecutionProvider" &&
-                            hardwareProbe?.openvino?.devices?.length &&
-                            !hardwareProbe.openvino.devices.some((d) => /GPU|NPU/i.test(d)) && (
+                            (hardwareProbe?.openvino?.devices?.length ?? 0) > 0 &&
+                            !hardwareProbe!.openvino!.devices!.some((d) => /GPU|NPU/i.test(d)) && (
                               <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
                                 Only CPU detected. For GPU/NPU inference, install Intel drivers:{" "}
                                 <a
