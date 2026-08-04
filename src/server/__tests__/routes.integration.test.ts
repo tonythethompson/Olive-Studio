@@ -415,7 +415,10 @@ describe("Route integration tests", () => {
       const body = await res.json();
       expect(Array.isArray(body.installedModels)).toBe(true);
       expect(Array.isArray(body.loadedModels)).toBe(true);
-      expect(body.installedModels).toContain("llama-3.2-3b-instruct");
+      // Loaded list always comes from the OpenAI-compat mock/API.
+      expect(body.loadedModels).toContain("llama-3.2-3b-instruct");
+      // Installed prefers `lms ls` when CLI is present; otherwise falls back to loaded.
+      expect(body.installedModels.length).toBeGreaterThan(0);
     });
   });
 

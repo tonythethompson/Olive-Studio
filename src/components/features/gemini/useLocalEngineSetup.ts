@@ -1,5 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { LocalEngine } from "./aiProviderCatalog";
+import {
+  LMS_STARTER_MODELS,
+  OLLAMA_STARTER_MODELS,
+  resolveLocalEnableModelId,
+} from "./aiProviderCatalog";
 
 interface UseLocalEngineSetupOptions {
   isOpen: boolean;
@@ -79,6 +84,23 @@ function describePullFetchError(err: unknown): string {
   return err instanceof Error ? err.message : "Failed to pull local model.";
 }
 
+async function fetchInstalledModelIds(engine: LocalEngine): Promise<string[]> {
+  const endpoint = engine === "ollama" ? "/api/ai/ollama-models" : "/api/ai/local-models";
+  try {
+    const r = await fetch(endpoint);
+    if (!r.ok) return [];
+    const d = (await r.json()) as { installedModels?: string[] };
+    return Array.isArray(d.installedModels) ? d.installedModels : [];
+  } catch {
+    return [];
+  }
+}
+
+function preferredEnableTag(downloadTag: string, source: LocalEngine): string | undefined {
+  const list = source === "ollama" ? OLLAMA_STARTER_MODELS : LMS_STARTER_MODELS;
+  return list.find((m) => m.tag === downloadTag)?.enableTag;
+}
+
 /**
  * Manages local AI engine selection, availability checks, installation, and model downloads.
  *
@@ -93,6 +115,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
   const [localPullPercent, setLocalPullPercent] = useState<number | null>(null);
   const [localPullLog, setLocalPullLog] = useState<string[]>([]);
   const [modelSizes, setModelSizes] = useState<Record<string, number>>({});
+  const [installedModels, setInstalledModels] = useState<string[]>([]);
   const [ollamaHealthy, setOllamaHealthy] = useState<boolean | null>(null);
   const [lmsHealthy, setLmsHealthy] = useState<boolean | null>(null);
   const [lmsInstalled, setLmsInstalled] = useState<boolean | null>(null);
@@ -109,6 +132,15 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
       /* ignore */
     }
   };
+
+  const refreshInstalledModels = useCallback(
+    async (engine: LocalEngine = preferredEngine) => {
+      const ids = await fetchInstalledModelIds(engine);
+      setInstalledModels(ids);
+      return ids;
+    },
+    [preferredEngine],
+  );
 
   // Engine health when sidebar opens (only surface the active tab's status)
   useEffect(() => {
@@ -127,7 +159,8 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
         setLmsHealthy(false);
         setLmsInstalled(false);
       });
-  }, [isOpen, preferredEngine]);
+    void refreshInstalledModels(preferredEngine);
+  }, [isOpen, preferredEngine, refreshInstalledModels]);
 
   // Fetch model sizes from both LM Studio and Ollama on mount
   useEffect(() => {
@@ -333,13 +366,20 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
 
       await consumePullStream(r);
       markEngineReady(source);
-      await onModelActivated(modelTag, source);
+      const installed = await refreshInstalledModels(source);
+      const enableId = resolveLocalEnableModelId(
+        modelTag,
+        preferredEnableTag(modelTag, source),
+        installed,
+      );
+      setLocalInstallInfo(`Enabling ${enableId}…`);
+      await onModelActivated(enableId, source);
+      setLocalInstallInfo(`Ready: ${enableId}`);
     } catch (err: unknown) {
       setLocalPullError(describePullFetchError(err));
       setLocalInstallInfo(null);
     } finally {
       setPullingModel(null);
-      // Keep last percent visible briefly when done; clear on next pull
     }
   };
 
@@ -358,6 +398,8 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     localPullPercent,
     localPullLog,
     modelSizes,
+    installedModels,
+    refreshInstalledModels,
   };
 }
 

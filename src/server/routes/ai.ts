@@ -5,12 +5,14 @@
  * Codex, Devin, pipeline validation, and analysis.
  */
 import { Router } from "express";
-import { spawn, execFile, execSync, type ChildProcess } from "child_process";
+import { spawn, execFile, execFileSync, execSync, type ChildProcess } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import path from "path";
 import os from "os";
 import rateLimit from "express-rate-limit";
+
+import { isValidLocalModelTag } from "../../lib/localModelTag.ts";
 
 import { callAI, detectEnvProvider, setRuntimeAiProvider, getProvider } from "../services/ai/index.ts";
 import {
@@ -202,6 +204,28 @@ function findLmsCli(): string | null {
   cachedLmsCli = null;
   lmsCliMissAt = Date.now();
   return null;
+}
+
+/** List downloaded LM Studio LLM model keys via `lms ls --json` (not just currently loaded). */
+function listLmsInstalledModelKeys(): string[] | null {
+  const lms = findLmsCli();
+  if (!lms) return null;
+  try {
+    const out = execFileSync(lms, ["ls", "--json"], {
+      encoding: "utf-8",
+      timeout: 20_000,
+      windowsHide: true,
+      maxBuffer: 12 * 1024 * 1024,
+    });
+    const parsed = JSON.parse(out) as Array<{ type?: string; modelKey?: string; path?: string }>;
+    if (!Array.isArray(parsed)) return null;
+    return parsed
+      .filter((m) => m && (m.type === "llm" || m.type === undefined))
+      .map((m) => String(m.modelKey || m.path || "").trim())
+      .filter(Boolean);
+  } catch {
+    return null;
+  }
 }
 
 function findOllamaCli(): string | null {
@@ -1030,20 +1054,27 @@ export function mountAiRoutes(router: Router): void {
 
   router.get("/ai/local-models", async (_req, res) => {
     try {
-      const [installedRes, loadedRes] = await Promise.allSettled([
-        fetch(`http://127.0.0.1:${LM_STUDIO_PORT}/v1/models`, lmStudioFetchInit()),
-        fetch(`http://127.0.0.1:${LM_STUDIO_PORT}/v1/models`, lmStudioFetchInit()),
-      ]);
-      const installedData =
-        installedRes.status === "fulfilled" && installedRes.value.ok
-          ? ((await installedRes.value.json()) as { data?: Array<{ id: string }> })
-          : { data: [] };
-      const loadedData =
-        loadedRes.status === "fulfilled" && loadedRes.value.ok
-          ? ((await loadedRes.value.json()) as { data?: Array<{ id: string }> })
-          : { data: [] };
-      const installedModels = (installedData.data ?? []).map((m: { id: string }) => m.id);
-      const loadedModels = (loadedData.data ?? []).map((m: { id: string }) => m.id);
+      // Loaded (serving) models come from the local OpenAI-compat API.
+      let loadedModels: string[] = [];
+      try {
+        const loadedRes = await fetch(`http://127.0.0.1:${LM_STUDIO_PORT}/v1/models`, lmStudioFetchInit());
+        if (loadedRes.ok) {
+          const loadedData = (await loadedRes.json()) as { data?: Array<{ id: string }> };
+          loadedModels = (loadedData.data ?? []).map((m) => m.id);
+        }
+      } catch {
+        /* server down */
+      }
+
+      // Downloaded/catalog models: prefer `lms ls` (API only lists currently loaded).
+      const fromCli = listLmsInstalledModelKeys();
+      const installedModels =
+        fromCli && fromCli.length > 0
+          ? fromCli
+          : loadedModels.length > 0
+            ? loadedModels
+            : [];
+
       return res.json({ installedModels, loadedModels });
     } catch {
       return res.json({ installedModels: [], loadedModels: [] });
@@ -1146,8 +1177,9 @@ export function mountAiRoutes(router: Router): void {
       }
       send({ type: "step", message: `Downloading ${modelTag} via LM Studio (lms get)…`, percent: 5 });
       // LM Studio CLI downloads with `lms get`, not Ollama-style `pull`. `-y` skips prompts.
+      // Prefer Hugging Face URLs for starters; bare staff-pick names often exit 1.
       const tag = String(modelTag);
-      if (tag.startsWith("-") || !/^[\w./:@-]+$/.test(tag)) {
+      if (!isValidLocalModelTag(tag)) {
         send({ type: "error", error: "Invalid modelTag." });
         guard.endOnce();
         return;

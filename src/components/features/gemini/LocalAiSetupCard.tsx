@@ -1,9 +1,13 @@
 import { Download, RefreshCw } from "lucide-react";
 import { LocalModelManager } from "../LocalModelManager";
-import { LMS_STARTER_MODELS, OLLAMA_STARTER_MODELS, type LocalEngine } from "./aiProviderCatalog";
+import {
+  LMS_STARTER_MODELS,
+  OLLAMA_STARTER_MODELS,
+  findInstalledStarterId,
+  type LocalEngine,
+  type LocalStarterModel,
+} from "./aiProviderCatalog";
 import type { LocalEngineSetup } from "./useLocalEngineSetup";
-
-type StarterModel = (typeof LMS_STARTER_MODELS)[number] | (typeof OLLAMA_STARTER_MODELS)[number];
 
 /** Format bytes to human-readable size string. */
 function formatBytes(bytes: number): string {
@@ -15,11 +19,13 @@ function formatBytes(bytes: number): string {
 }
 
 /** Best-effort match of a starter model tag against the engine's reported sizes. */
-function resolveDisplaySize(model: StarterModel, modelSizes: Record<string, number>): string {
+function resolveDisplaySize(model: LocalStarterModel, modelSizes: Record<string, number>): string {
   const sizeBytes = Object.entries(modelSizes).find(([key]) => {
     const k = key.toLowerCase();
-    const t = model.tag.toLowerCase();
-    return k === t || k.includes(t.split(":")[0] ?? "") || t.includes(k.split("/").pop() ?? "___");
+    const needles = [model.enableTag, model.match, model.tag].map((t) => t.toLowerCase());
+    return needles.some(
+      (t) => k === t || k.includes(t.split(":")[0] ?? "") || t.includes(k.split("/").pop() ?? "___"),
+    );
   })?.[1];
   return sizeBytes ? formatBytes(sizeBytes) : model.fallbackSize;
 }
@@ -114,11 +120,13 @@ function EngineMissingBanner({
 }
 
 interface StarterModelCardProps {
-  model: StarterModel;
+  model: LocalStarterModel;
   displaySize: string;
   accentBg: string;
   isPulling: boolean;
+  installedId: string | null;
   onPull: () => void;
+  onEnable: () => void;
 }
 
 /**
@@ -127,9 +135,20 @@ interface StarterModelCardProps {
  * @param model - The starter model to display
  * @param displaySize - The formatted model size
  * @param isPulling - Whether the model is currently being downloaded and activated
+ * @param installedId - Installed engine model id when already present locally
  * @param onPull - Called when the download action is selected
+ * @param onEnable - Called when enabling an already-installed starter
  */
-function StarterModelCard({ model, displaySize, accentBg, isPulling, onPull }: StarterModelCardProps) {
+function StarterModelCard({
+  model,
+  displaySize,
+  accentBg,
+  isPulling,
+  installedId,
+  onPull,
+  onEnable,
+}: StarterModelCardProps) {
+  const installed = Boolean(installedId);
   return (
     <div className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60 flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
@@ -139,9 +158,14 @@ function StarterModelCard({ model, displaySize, accentBg, isPulling, onPull }: S
         </span>
       </div>
       <p className="text-[10px] text-slate-400 leading-normal">{model.desc}</p>
+      {installed ? (
+        <p className="text-[10px] text-emerald-400/90 font-mono truncate" title={installedId ?? undefined}>
+          Installed · {installedId}
+        </p>
+      ) : null}
       <button
         type="button"
-        onClick={onPull}
+        onClick={installed ? onEnable : onPull}
         disabled={isPulling}
         className={`mt-1 w-full h-7 border rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 ${accentBg}`}
       >
@@ -150,6 +174,8 @@ function StarterModelCard({ model, displaySize, accentBg, isPulling, onPull }: S
             <RefreshCw className="h-3 w-3 animate-spin" />
             <span>Pulling & Activating...</span>
           </>
+        ) : installed ? (
+          <span>Enable</span>
         ) : (
           <>
             <Download className="h-3 w-3" />
@@ -303,16 +329,24 @@ export function LocalAiSetupCard({ local, activeModel, isOpen, onActivate }: Loc
         Starter downloads
       </p>
       <div className="space-y-2">
-        {models.map((m) => (
-          <StarterModelCard
-            key={m.tag}
-            model={m}
-            displaySize={resolveDisplaySize(m, local.modelSizes)}
-            accentBg={accentBg}
-            isPulling={local.pullingModel === m.tag}
-            onPull={() => void local.pullLocalModel(m.tag, local.preferredEngine)}
-          />
-        ))}
+        {models.map((m) => {
+          const installedId = findInstalledStarterId(m, local.installedModels);
+          return (
+            <StarterModelCard
+              key={m.tag}
+              model={m}
+              displaySize={resolveDisplaySize(m, local.modelSizes)}
+              accentBg={accentBg}
+              isPulling={local.pullingModel === m.tag}
+              installedId={installedId}
+              onPull={() => void local.pullLocalModel(m.tag, local.preferredEngine)}
+              onEnable={() => {
+                if (!installedId) return;
+                void onActivate?.(installedId, local.preferredEngine);
+              }}
+            />
+          );
+        })}
       </div>
     </div>
   );

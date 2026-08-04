@@ -538,7 +538,7 @@ export function useAiProviderSettings({
       setCustomModel(modelTag);
       setSettingsBaseUrl(baseUrl);
       await fetchProviderStatus();
-      onProviderActivated();
+      // Stay on Settings after local enable (do not jump to Audit).
       return true;
     } catch (err: unknown) {
       setProviderSaveError(err instanceof Error ? err.message : "Failed to enable local provider.");
