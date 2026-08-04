@@ -14,7 +14,9 @@ import {
   VENV_MANIFEST_NAME,
 } from "./spec.ts";
 
-export type PromoteResult = { ok: true } | { ok: false; error: string };
+export type PromoteResult =
+  | { ok: true; backupPath?: string }
+  | { ok: false; error: string; backupPath?: string };
 
 function renameDir(from: string, to: string): void {
   fs.renameSync(from, to);
@@ -43,6 +45,7 @@ export function readVenvManifest(root: string): VenvManifest | null {
 /**
  * Promote a validated `.building` tree to the live family root.
  * live → backup, building → live; rollback on failure.
+ * Returns `backupPath` when a previous live tree was moved aside.
  */
 export function promoteBuildingToLive(family: VenvFamily): PromoteResult {
   const live = getFamilyRoot(family);
@@ -63,7 +66,7 @@ export function promoteBuildingToLive(family: VenvFamily): PromoteResult {
     }
     renameDir(building, live);
     buildingMoved = true;
-    return { ok: true };
+    return { ok: true, backupPath: liveMoved ? backup : undefined };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     // Rollback best-effort
@@ -80,7 +83,33 @@ export function promoteBuildingToLive(family: VenvFamily): PromoteResult {
     return {
       ok: false,
       error: `Promotion failed for ${family} (old env preserved when possible): ${msg}`,
+      backupPath: liveMoved && fs.existsSync(backup) ? backup : undefined,
     };
+  }
+}
+
+/**
+ * Undo a successful promotion: restore `backupPath` to live, or remove a
+ * newly created live tree when there was no prior backup.
+ */
+export function rollbackPromotedFamily(
+  family: VenvFamily,
+  backupPath?: string,
+): PromoteResult {
+  const live = getFamilyRoot(family);
+  try {
+    if (backupPath && fs.existsSync(backupPath)) {
+      if (fs.existsSync(live)) rmDirSafe(live);
+      renameDir(backupPath, live);
+      return { ok: true, backupPath };
+    }
+    if (fs.existsSync(live)) {
+      rmDirSafe(live);
+    }
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: `Rollback failed for ${family}: ${msg}`, backupPath };
   }
 }
 

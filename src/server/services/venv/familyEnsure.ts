@@ -15,6 +15,7 @@ import {
   familyPythonExists,
   promoteBuildingToLive,
   readVenvManifest,
+  rollbackPromotedFamily,
   writeVenvManifest,
 } from "./promote.ts";
 import {
@@ -89,7 +90,11 @@ function buildingPython(family: VenvFamily): string {
     : path.join(root, "bin", "python");
 }
 
-async function buildFamilyIsolated(
+/**
+ * Build a family into its `.building` root and validate imports.
+ * Does not promote — callers promote after peer builds succeed when needed.
+ */
+async function buildFamilyTree(
   family: VenvFamily,
   systemPython: string,
   onLine: SetupListener,
@@ -126,15 +131,25 @@ async function buildFamilyIsolated(
       ortVersionSpec: spec.ortVersionSpec,
       createdAt: new Date().toISOString(),
     });
-    const promoted = promoteBuildingToLive(family);
-    if (!promoted.ok) return promoted;
-    onLine(`[setup] ${family} runtime ready at ${getFamilyRoot(family)}`);
-    invalidateRuntimeStatusCache();
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, error: msg };
   }
+}
+
+async function buildFamilyIsolated(
+  family: VenvFamily,
+  systemPython: string,
+  onLine: SetupListener,
+): Promise<{ ok: boolean; error?: string }> {
+  const built = await buildFamilyTree(family, systemPython, onLine);
+  if (!built.ok) return built;
+  const promoted = promoteBuildingToLive(family);
+  if (!promoted.ok) return { ok: false, error: promoted.error };
+  onLine(`[setup] ${family} runtime ready at ${getFamilyRoot(family)}`);
+  invalidateRuntimeStatusCache();
+  return { ok: true };
 }
 
 async function familyNeedsRebuild(family: VenvFamily): Promise<boolean> {
@@ -161,48 +176,79 @@ async function familyNeedsRebuild(family: VenvFamily): Promise<boolean> {
 }
 
 /**
- * Migrate a GPU-contaminated `.venv` into dual-family layout (build first, swap last).
+ * Migrate a GPU-contaminated `.venv` into dual-family layout.
+ * Builds into `.building` trees first; promotes only after both peers validate
+ * so a failed default rebuild does not leave a half-applied CUDA promote.
  */
 async function migrateGpuContaminatedVenv(
   systemPython: string,
   onLine: SetupListener,
 ): Promise<{ ok: boolean; error?: string }> {
   return withMigrationLock(async () => {
+    let cudaBackupPath: string | undefined;
+    let cudaPromoted = false;
     try {
       writeMigrationJournal("building");
-      onLine("[migrate] GPU-contaminated .venv detected — building dual runtimes from scratch...");
+      onLine("[migrate] GPU-contaminated .venv detected — repairing dual-runtime layout...");
 
-      // 1) Build cuda.building
-      clearBuildingRoot("cuda");
-      const cudaBuild = await buildFamilyIsolated("cuda", systemPython, onLine);
-      // buildFamilyIsolated already promotes — for migration we need BOTH built before swapping default.
-      // Re-implement migration-specific sequence without promoting default yet.
+      const cudaNeedsBuild =
+        !familyPythonExists("cuda") || (await familyNeedsRebuild("cuda"));
 
-      // Actually buildFamilyIsolated promotes immediately. For migration we need a custom path:
-      // build cuda.building + validate (don't promote yet if live cuda missing), build default.building,
-      // then rename live default → legacy, promote both.
-
-      // Simpler approach for v1: 
-      // - build+promote cuda first into .venvs/cuda (no conflict with .venv)
-      // - then rebuild default via isolated build+promote (moves .venv → backup, promotes new default)
-      if (!cudaBuild.ok) {
-        writeMigrationJournal("building", cudaBuild.error);
-        return cudaBuild;
+      if (cudaNeedsBuild) {
+        onLine("[migrate] Building CUDA runtime tree (not live yet)...");
+        const cudaBuild = await buildFamilyTree("cuda", systemPython, onLine);
+        if (!cudaBuild.ok) {
+          writeMigrationJournal("building", cudaBuild.error);
+          clearBuildingRoot("cuda");
+          return cudaBuild;
+        }
+        writeMigrationJournal("cuda_built");
+      } else {
+        onLine("[migrate] CUDA runtime already healthy — rebuilding default only.");
       }
-      writeMigrationJournal("cuda_built");
-      writeMigrationJournal("cuda_promoted");
 
-      // Rebuild default: isolated build promotes over .venv (backs up old)
-      onLine("[migrate] Rebuilding default runtime (previous .venv kept as backup)...");
-      writeMigrationJournal("building");
-      const defBuild = await buildFamilyIsolated("default", systemPython, onLine);
+      onLine("[migrate] Building default runtime tree (not live yet)...");
+      const defBuild = await buildFamilyTree("default", systemPython, onLine);
       if (!defBuild.ok) {
         writeMigrationJournal("default_built", defBuild.error);
+        clearBuildingRoot("default");
+        if (cudaNeedsBuild) clearBuildingRoot("cuda");
         return defBuild;
+      }
+      writeMigrationJournal("default_built");
+
+      if (cudaNeedsBuild) {
+        const cudaPromote = promoteBuildingToLive("cuda");
+        if (!cudaPromote.ok) {
+          writeMigrationJournal("cuda_promoted", cudaPromote.error);
+          clearBuildingRoot("default");
+          clearBuildingRoot("cuda");
+          return { ok: false, error: cudaPromote.error };
+        }
+        cudaBackupPath = cudaPromote.backupPath;
+        cudaPromoted = true;
+        writeMigrationJournal("cuda_promoted");
+      }
+
+      const defPromote = promoteBuildingToLive("default");
+      if (!defPromote.ok) {
+        writeMigrationJournal("default_promoted", defPromote.error);
+        if (cudaPromoted) {
+          onLine("[migrate] Default promote failed — rolling back CUDA promotion...");
+          const rolled = rollbackPromotedFamily("cuda", cudaBackupPath);
+          if (!rolled.ok) {
+            return {
+              ok: false,
+              error: `${defPromote.error}; CUDA rollback also failed: ${rolled.error}`,
+            };
+          }
+        }
+        clearBuildingRoot("default");
+        return { ok: false, error: defPromote.error };
       }
       writeMigrationJournal("default_promoted");
 
-      // Rename leftover backup to legacy-gpu if present
+      // Rename leftover default backup to legacy-gpu if present
       const backups = fs
         .readdirSync(process.cwd())
         .filter((n) => n.startsWith(".venv.backup-"))
@@ -224,6 +270,11 @@ async function migrateGpuContaminatedVenv(
       return { ok: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
+      if (cudaPromoted) {
+        rollbackPromotedFamily("cuda", cudaBackupPath);
+      }
+      clearBuildingRoot("default");
+      clearBuildingRoot("cuda");
       writeMigrationJournal("building", msg);
       return { ok: false, error: msg };
     }
@@ -243,11 +294,15 @@ async function ensureVenvFamilyInner(
     };
   }
 
-  // First ensure on default: maybe migrate contaminated .venv
+  // Repair GPU-contaminated `.venv` even when `.venvs/cuda` already exists.
   if (family === "default" || family === "cuda") {
     const intent = await inspectDefaultVenvIntent(listInstalledOrtDistributions);
-    if (intent === "cuda-contaminated" && !familyPythonExists("cuda")) {
-      onLine("[migrate] Existing .venv has onnxruntime-gpu — migrating to dual-runtime layout...");
+    if (intent === "cuda-contaminated") {
+      onLine(
+        familyPythonExists("cuda")
+          ? "[migrate] Existing .venv still has onnxruntime-gpu — rebuilding default (CUDA family present)..."
+          : "[migrate] Existing .venv has onnxruntime-gpu — migrating to dual-runtime layout...",
+      );
       const migrated = await migrateGpuContaminatedVenv(systemPython, onLine);
       if (!migrated.ok) return migrated;
       if (family === "cuda" && familyPythonExists("cuda")) {
