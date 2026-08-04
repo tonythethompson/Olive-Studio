@@ -13,11 +13,15 @@ import {
 import { writeStudioConfig, addVenvToUserPath } from "../services/venv/config.ts";
 import { setRuntimeHfToken, getRuntimeHfToken } from "../services/olive/state.ts";
 import { ensureTensorRtRtx, ensureTensorRt } from "./tensorrt.ts";
+import { ensureOpenVino } from "./openvino.ts";
 import { fsWriteRateLimit } from "../middleware/rateLimit.ts";
 import { resolveAllowedPythonFile } from "../services/venv/pythonGuard.ts";
 
 /** Serialize TensorRT + TensorRT RTX installs (shared venv / pip). */
 let tensorrtInstallChain: Promise<unknown> = Promise.resolve();
+
+/** Serialize OpenVINO installs (shared venv / pip). */
+let openvinoInstallChain: Promise<unknown> = Promise.resolve();
 
 /**
  * Serializes TensorRT installation operations so that only one runs at a time.
@@ -35,14 +39,29 @@ function withTensorrtInstallMutex<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
+ * Serializes OpenVINO installation operations so that only one runs at a time.
+ *
+ * @param fn - The asynchronous OpenVINO installation operation to run
+ * @returns The result of the installation operation
+ */
+function withOpenvinoInstallMutex<T>(fn: () => Promise<T>): Promise<T> {
+  const run = openvinoInstallChain.then(fn, fn);
+  openvinoInstallChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+/**
  * Streams installation log messages and a final result as newline-delimited JSON.
  *
  * @param res - The response used to send progress and completion records.
  * @param run - The installation operation that receives a callback for progress lines.
  */
-function streamNdjsonInstall(
+function streamNdjsonInstall<T extends { ok: boolean; error?: string }>(
   res: Response,
-  run: (onLine: (line: string) => void) => Promise<{ ok: boolean; error?: string; libsDir?: string | null }>,
+  run: (onLine: (line: string) => void) => Promise<T>,
 ) {
   res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -105,6 +124,10 @@ export function mountEnvRoutes(router: Router): void {
 
   router.post("/env/install-tensorrt", async (_req, res) => {
     await withTensorrtInstallMutex(() => streamNdjsonInstall(res, ensureTensorRt));
+  });
+
+  router.post("/env/install-openvino", async (_req, res) => {
+    await withOpenvinoInstallMutex(() => streamNdjsonInstall(res, ensureOpenVino));
   });
 
   // ─── Runtime Status ───────────────────────────────────────────────────

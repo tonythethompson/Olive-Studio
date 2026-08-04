@@ -6,6 +6,19 @@ export interface GpuInfo {
   driver?: string;
 }
 
+export interface OpenVinoProbeResult {
+  available: boolean;
+  version?: string;
+  /** Devices reported by openvino.Core().available_devices (e.g. CPU, GPU, NPU, AUTO). */
+  devices?: string[];
+  optimumIntel?: {
+    available: boolean;
+    version?: string;
+    detail?: string;
+  };
+  detail?: string;
+}
+
 export interface HardwareProbeResult {
   probedAt: string;
   platform: {
@@ -23,10 +36,7 @@ export interface HardwareProbeResult {
   rocm?: {
     gpus: GpuInfo[];
   };
-  openvino?: {
-    available: boolean;
-    version?: string;
-  };
+  openvino?: OpenVinoProbeResult;
   tensorrt?: {
     loadable: boolean;
     detail?: string;
@@ -75,6 +85,8 @@ export function mergeDetectedProviders(input: {
   hasNvidiaGpu: boolean;
   hasRocmGpu: boolean;
   hasOpenVino: boolean;
+  /** True when the local CPU/platform can run the OpenVINO runtime, even if not yet installed. */
+  hasOpenVinoCompatibleHardware?: boolean;
   tensorRtLoadable?: boolean;
   tensorRtRtxLoadable?: boolean;
 }): IHVProvider[] {
@@ -105,7 +117,7 @@ export function mergeDetectedProviders(input: {
   if (input.hasRocmGpu) {
     detected.add("ROCMExecutionProvider");
   }
-  if (input.hasOpenVino) {
+  if (input.hasOpenVino || input.hasOpenVinoCompatibleHardware) {
     detected.add("OpenVINOExecutionProvider");
   }
 
@@ -121,7 +133,7 @@ export function mergeDetectedProviders(input: {
  */
 export function pickRecommendedProvider(
   detected: IHVProvider[],
-  opts?: { tensorRtRtxLoadable?: boolean; tensorRtLoadable?: boolean },
+  opts?: { tensorRtRtxLoadable?: boolean; tensorRtLoadable?: boolean; openvinoLoadable?: boolean },
 ): IHVProvider {
   // Prefer installed acceleration stacks; otherwise CUDA is the safe NVIDIA default.
   const priority: IHVProvider[] = [
@@ -131,7 +143,7 @@ export function pickRecommendedProvider(
     "NvTensorRTRTXExecutionProvider",
     "TensorrtExecutionProvider",
     "ROCMExecutionProvider",
-    "OpenVINOExecutionProvider",
+    ...(opts?.openvinoLoadable ? (["OpenVINOExecutionProvider"] as const) : []),
     "WebGpuExecutionProvider",
     "CPUExecutionProvider",
   ];

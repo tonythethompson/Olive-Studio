@@ -6,6 +6,7 @@ import type { IHVProvider } from "../../../types.ts";
 import { recipeUsesMemoryOffload } from "../../../lib/memoryOffload.ts";
 import { resolveCudaTag, RESOLVABLE_CUDA_TAGS } from "../../../lib/oliveGpuRuntime.ts";
 import { tensorrtRtxInstallArgs, tensorrtRtxLabel } from "../../../lib/tensorrtRtxDeps.ts";
+import { openvinoStackInstallArgs, openvinoStackLabel } from "../../../lib/openvinoDeps.ts";
 
 /** Olive recipe shape (subset needed for inference). */
 export interface OliveRecipe {
@@ -121,17 +122,12 @@ export function inferRequiredPackages(recipe: OliveRecipe, cudaTag: string): Pkg
     }
   }
 
-  // OpenVINO
+  // OpenVINO runtime + Optimum-Intel bridge (single install action)
   if (passTypes.some((t) => t.includes("OpenVINO"))) {
     pkgs.push({
       importName: "openvino",
-      installArgs: ["openvino"],
-      label: "openvino",
-    });
-    pkgs.push({
-      importName: "optimum",
-      installArgs: ["optimum[openvino]"],
-      label: "optimum[openvino]",
+      installArgs: openvinoStackInstallArgs(),
+      label: openvinoStackLabel(),
     });
   }
 

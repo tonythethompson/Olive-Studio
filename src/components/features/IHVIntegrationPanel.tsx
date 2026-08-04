@@ -34,6 +34,10 @@ import {
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
+import {
+  OPEN_VINO_GPU_DRIVER_URL,
+  OPEN_VINO_NPU_DRIVER_URL,
+} from "@/lib/openvinoDeps";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import {
   Settings2,
@@ -309,6 +313,9 @@ export function IHVIntegrationPanel({
   const [installingTrt, setInstallingTrt] = useState(false);
   const [installTrtError, setInstallTrtError] = useState<string | null>(null);
   const [installTrtLog, setInstallTrtLog] = useState<string[]>([]);
+  const [installingOpenvino, setInstallingOpenvino] = useState(false);
+  const [installOpenvinoError, setInstallOpenvinoError] = useState<string | null>(null);
+  const [installOpenvinoLog, setInstallOpenvinoLog] = useState<string[]>([]);
 
   const hasAutoAppliedRef = useRef(false);
 
@@ -316,7 +323,11 @@ export function IHVIntegrationPanel({
     Boolean(hardwareProbe?.nvidia?.gpus.length) && hardwareProbe?.tensorRtRtx?.loadable !== true;
   const trtNeedsInstall =
     Boolean(hardwareProbe?.nvidia?.gpus.length) && hardwareProbe?.tensorrt?.loadable !== true;
-  const tensorRtInstallBusy = installingTrt || installingTrtRtx;
+  const openvinoNeedsInstall =
+    Boolean(hardwareProbe) &&
+    isProviderDetectedLocally("OpenVINOExecutionProvider", hardwareProbe) &&
+    hardwareProbe?.openvino?.available !== true;
+  const hardwareInstallBusy = installingTrt || installingTrtRtx || installingOpenvino;
 
   const runNdjsonInstall = async (
     url: string,
@@ -373,7 +384,7 @@ export function IHVIntegrationPanel({
   };
 
   const handleInstallTensorRtRtx = async () => {
-    if (tensorRtInstallBusy) return;
+    if (hardwareInstallBusy) return;
     setInstallingTrtRtx(true);
     setInstallTrtRtxError(null);
     setInstallTrtRtxLog([]);
@@ -393,7 +404,7 @@ export function IHVIntegrationPanel({
   };
 
   const handleInstallTensorRt = async () => {
-    if (tensorRtInstallBusy) return;
+    if (hardwareInstallBusy) return;
     setInstallingTrt(true);
     setInstallTrtError(null);
     setInstallTrtLog([]);
@@ -409,6 +420,26 @@ export function IHVIntegrationPanel({
       );
     } finally {
       setInstallingTrt(false);
+    }
+  };
+
+  const handleInstallOpenVino = async () => {
+    if (hardwareInstallBusy) return;
+    setInstallingOpenvino(true);
+    setInstallOpenvinoError(null);
+    setInstallOpenvinoLog([]);
+    try {
+      await runNdjsonInstall("/api/env/install-openvino", setInstallOpenvinoLog);
+      await runHardwareProbe(true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setInstallOpenvinoError(
+        msg === "Failed to fetch"
+          ? "Could not reach the Olive Studio server (or the connection dropped during install). Keep pnpm dev running, then retry."
+          : msg,
+      );
+    } finally {
+      setInstallingOpenvino(false);
     }
   };
 
@@ -714,7 +745,8 @@ export function IHVIntegrationPanel({
                     badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
                   } else if (
                     ((p.id === "NvTensorRTRTXExecutionProvider" && trtRtxNeedsInstall) ||
-                      (p.id === "TensorrtExecutionProvider" && trtNeedsInstall)) &&
+                      (p.id === "TensorrtExecutionProvider" && trtNeedsInstall) ||
+                      (p.id === "OpenVINOExecutionProvider" && openvinoNeedsInstall)) &&
                     detectedLocally
                   ) {
                     cardClasses += "border-amber-900/40 bg-amber-950/10 opacity-95 hover:border-amber-500/40";
@@ -755,7 +787,7 @@ export function IHVIntegrationPanel({
                       : p.id === "ROCMExecutionProvider"
                         ? hardwareProbe?.rocm?.gpus.map((g) => g.name).join(", ")
                         : p.id === "OpenVINOExecutionProvider" && hardwareProbe?.openvino?.available
-                          ? `OpenVINO ${hardwareProbe.openvino.version ?? ""}`.trim()
+                          ? `OpenVINO ${hardwareProbe.openvino.version ?? ""}${hardwareProbe.openvino.devices?.length ? ` (${hardwareProbe.openvino.devices.join(", ")})` : ""}`.trim()
                           : p.id === "CPUExecutionProvider" && hardwareProbe
                             ? hardwareProbe.platform.cpuModel
                             : null;
@@ -873,7 +905,7 @@ export function IHVIntegrationPanel({
                               )}
                               <button
                                 type="button"
-                                disabled={tensorRtInstallBusy}
+                                disabled={hardwareInstallBusy}
                                 onClick={() => void handleInstallTensorRtRtx()}
                                 className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
                               >
@@ -914,7 +946,7 @@ export function IHVIntegrationPanel({
                               )}
                               <button
                                 type="button"
-                                disabled={tensorRtInstallBusy}
+                                disabled={hardwareInstallBusy}
                                 onClick={() => void handleInstallTensorRt()}
                                 className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
                               >
@@ -937,6 +969,73 @@ export function IHVIntegrationPanel({
                               )}
                             </div>
                           )}
+                          {p.id === "OpenVINOExecutionProvider" && openvinoNeedsInstall && (
+                            <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
+                              <p className="text-[11px] text-amber-400/90 leading-relaxed">
+                                OpenVINO stack not in the project{" "}
+                                <code className="text-slate-400">.venv</code>. Install to enable Intel CPU,
+                                GPU, and NPU targets.
+                              </p>
+                              {hardwareProbe?.openvino?.detail && (
+                                <p
+                                  className="text-[10px] text-slate-500 font-mono break-all max-w-full"
+                                  title={hardwareProbe.openvino.detail}
+                                >
+                                  {hardwareProbe.openvino.detail}
+                                </p>
+                              )}
+                              <button
+                                type="button"
+                                disabled={hardwareInstallBusy}
+                                onClick={() => void handleInstallOpenVino()}
+                                className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
+                              >
+                                {installingOpenvino ? (
+                                  <>
+                                    <RefreshCw className="h-3 w-3 animate-spin" />
+                                    Installing OpenVINO stack…
+                                  </>
+                                ) : (
+                                  "Install OpenVINO stack into .venv"
+                                )}
+                              </button>
+                              {installOpenvinoError && (
+                                <p className="text-[11px] text-rose-400 break-all">{installOpenvinoError}</p>
+                              )}
+                              {installOpenvinoLog.length > 0 && (
+                                <pre className="text-[10px] text-slate-500 max-h-24 max-w-full overflow-auto font-mono whitespace-pre-wrap break-all">
+                                  {installOpenvinoLog.slice(-12).join("\n")}
+                                </pre>
+                              )}
+                            </div>
+                          )}
+                          {p.id === "OpenVINOExecutionProvider" &&
+                            hardwareProbe?.openvino?.available &&
+                            !hardwareProbe.openvino.devices?.some((d) => /GPU|NPU/i.test(d)) && (
+                              <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                                Only CPU detected. For GPU/NPU inference, install Intel drivers:{" "}
+                                <a
+                                  href={OPEN_VINO_GPU_DRIVER_URL}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-electric-blue hover:underline"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  GPU
+                                </a>
+                                {" / "}
+                                <a
+                                  href={OPEN_VINO_NPU_DRIVER_URL}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-electric-blue hover:underline"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  NPU
+                                </a>
+                                .
+                              </p>
+                            )}
                           {isWebGpuTarget && (
                             <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
                               Not a local Python EP. Select to build web-oriented recipes, then use{" "}
