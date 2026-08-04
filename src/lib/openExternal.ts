@@ -10,8 +10,22 @@ import { invoke } from "@tauri-apps/api/core";
  * @returns Promise that resolves when the URL is opened
  */
 export async function openExternal(url: string): Promise<void> {
+  if (typeof window === "undefined") return;
+
+  // Avoid opening dangerous protocols like `javascript:` / `data:`
+  try {
+    const parsed = new URL(url, window.location.href);
+    if (!(["http:", "https:", "mailto:"] as const).includes(parsed.protocol as "http:" | "https:" | "mailto:")) {
+      console.warn("[openExternal] Refusing to open unsupported protocol:", parsed.protocol);
+      return;
+    }
+  } catch {
+    console.warn("[openExternal] Refusing to open invalid URL:", url);
+    return;
+  }
+
   // Check if we're running in Tauri
-  if (window.__TAURI_INTERNALS__) {
+  if ("__TAURI_INTERNALS__" in window || "__TAURI__" in window) {
     try {
       await invoke("plugin:shell|open", { url });
     } catch (err) {
