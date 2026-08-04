@@ -52,6 +52,8 @@ export async function pipInstallForFamily(
   onLine: (line: string) => void,
 ): Promise<void> {
   enforcePackageConstraintsOrThrow(family, args);
+  const initialOrtError = await assertFamilyOrtConstraints(family, python);
+  if (initialOrtError) throw new Error(initialOrtError);
   const constrained = withFamilyPipConstraintArgs(family, args);
   try {
     await pipInstallViaPython(python, constrained.args, onLine, envForFamily(family));
