@@ -130,4 +130,27 @@ describe("ExecutionWorkspace", () => {
     const jsonControl = screen.queryByText(/json/i) || screen.queryByText(/recipe/i);
     expect(jsonControl).not.toBeNull();
   });
+
+  it("More menu no longer lists Browser Test or Benchmark (Task 11.4)", async () => {
+    await act(async () => {
+      render(<ExecutionWorkspace />);
+    });
+
+    const moreButton = screen.getByRole("button", { name: /more/i });
+    await act(async () => {
+      moreButton.click();
+    });
+
+    const menu = screen.getByRole("menu");
+    expect(menu).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /run history/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /export report/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /export for owr/i })).toBeTruthy();
+
+    expect(screen.queryByRole("menuitem", { name: /browser test/i })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: /benchmark/i })).toBeNull();
+    // Text nodes for promoted Playground views must not appear in the menu
+    expect(menu.textContent).not.toMatch(/Browser Test/i);
+    expect(menu.textContent).not.toMatch(/Benchmark/i);
+  });
 });

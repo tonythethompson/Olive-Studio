@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   attemptPipelineNavigate,
+  isPipelineViewId,
   navigatePipeline,
   OLIVE_PIPELINE_NAV_BLOCKED,
   OLIVE_PIPELINE_NAVIGATE,
@@ -14,6 +15,12 @@ afterEach(() => {
 });
 
 describe("pipelineNavigation", () => {
+  it("recognizes playground as a valid pipeline view id", () => {
+    expect(isPipelineViewId("playground")).toBe(true);
+    expect(isPipelineViewId("unknown")).toBe(false);
+    expect(isPipelineViewId(null)).toBe(false);
+  });
+
   it("allows navigation when Olive is not running", () => {
     const navigate = vi.fn();
     const blocked = vi.fn();
@@ -58,6 +65,23 @@ describe("pipelineNavigation", () => {
 
     expect(attemptPipelineNavigate("execute")).toBe(true);
     navigatePipeline("execute");
+
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(blocked).not.toHaveBeenCalled();
+
+    window.removeEventListener(OLIVE_PIPELINE_NAVIGATE, navigate);
+    window.removeEventListener(OLIVE_PIPELINE_NAV_BLOCKED, blocked);
+  });
+
+  it("still allows playground navigation during an Olive run", () => {
+    setPipelineOliveRunning(true);
+    const navigate = vi.fn();
+    const blocked = vi.fn();
+    window.addEventListener(OLIVE_PIPELINE_NAVIGATE, navigate);
+    window.addEventListener(OLIVE_PIPELINE_NAV_BLOCKED, blocked);
+
+    expect(attemptPipelineNavigate("playground")).toBe(true);
+    navigatePipeline("playground");
 
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(blocked).not.toHaveBeenCalled();

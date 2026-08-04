@@ -14,9 +14,11 @@ describe("resolveOliveOutputRoots", () => {
       cwd: "/workspace",
       homedir: "/home/olive",
     });
+    // Implementation uses slash-normalized POSIX-style paths (not Node path.resolve),
+    // so expectations must not use path.resolve (which on Windows injects a drive letter).
     expect(roots).toEqual([
-      { label: "cache", absolutePath: path.resolve("/home/olive", ".cache", "olive") },
-      { label: "output", absolutePath: path.resolve("/workspace", "models/optimized") },
+      { label: "cache", absolutePath: "/home/olive/.cache/olive" },
+      { label: "output", absolutePath: "/workspace/models/optimized" },
     ]);
   });
 
@@ -40,8 +42,8 @@ describe("resolveOliveOutputRoots", () => {
       homedir: "/home/olive",
     });
     expect(roots).toEqual([
-      { label: "cache", absolutePath: path.resolve("/workspace", "relative/cache") },
-      { label: "output", absolutePath: path.resolve("/workspace", "relative/output") },
+      { label: "cache", absolutePath: "/workspace/relative/cache" },
+      { label: "output", absolutePath: "/workspace/relative/output" },
     ]);
   });
 
