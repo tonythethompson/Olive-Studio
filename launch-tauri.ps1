@@ -52,11 +52,20 @@ function Stop-OliveStudioDevStack {
   foreach ($procId in $listenPids) {
     if ($procId -le 4) { continue }
     try {
+      $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$procId" -ErrorAction Stop
+      $commandLine = $processInfo.CommandLine
+      if (-not $commandLine -or $commandLine -notmatch [regex]::Escape($Root)) {
+        continue
+      }
       $proc = Get-Process -Id $procId -ErrorAction Stop
-      Write-Host "  Port 3000: stopping PID $procId ($($proc.ProcessName))" -ForegroundColor DarkGray
-      Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+      Write-Host "  Port 3000: stopping Olive Studio PID $procId ($($proc.ProcessName))" -ForegroundColor DarkGray
+      Stop-Process -Id $procId -ErrorAction SilentlyContinue
+      Start-Sleep -Milliseconds 300
+      if (Get-Process -Id $procId -ErrorAction SilentlyContinue) {
+        Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+      }
     } catch {
-      # already gone
+      # already gone or unavailable
     }
   }
 
@@ -110,7 +119,9 @@ if (-not (Test-Path (Join-Path $Root "node_modules"))) {
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
-Stop-OliveStudioDevStack
+if (-not $Build) {
+  Stop-OliveStudioDevStack
+}
 
 # Tauri bundle.resources maps ../dist -> dist and validates the path at cargo build,
 # including `tauri dev`. Fresh clones/worktrees often have no dist/ yet.

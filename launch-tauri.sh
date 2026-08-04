@@ -45,24 +45,18 @@ stop_olive_studio_dev_stack() {
   local pids=""
 
   if command -v lsof >/dev/null 2>&1; then
-    pids="$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
-  elif command -v fuser >/dev/null 2>&1; then
-    # fuser prints PIDs to stderr; kill directly
-    fuser -k "${port}/tcp" >/dev/null 2>&1 || true
-  elif command -v powershell.exe >/dev/null 2>&1; then
-    # Git Bash / WSL-with-Windows: reuse the PowerShell port killer
-    powershell.exe -NoProfile -Command \
-      "Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }" \
-      >/dev/null 2>&1 || true
-  fi
-
-  if [[ -n "${pids}" ]]; then
-    echo "  Port ${port}: stopping PID(s) ${pids//$'\n'/ }"
-    # shellcheck disable=SC2086
-    kill ${pids} 2>/dev/null || true
-    sleep 0.3
-    # shellcheck disable=SC2086
-    kill -9 ${pids} 2>/dev/null || true
+    while read -r pid; do
+      [[ -z "$pid" ]] && continue
+      local cmd
+      cmd="$(ps -p "$pid" -o args= 2>/dev/null || true)"
+      # Only stop listeners whose command line belongs to this checkout.
+      if [[ "$cmd" == *"$ROOT"* ]]; then
+        echo "  Port ${port}: stopping Olive Studio PID ${pid}"
+        kill "$pid" 2>/dev/null || true
+        sleep 0.3
+        kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null || true
+      fi
+    done < <(lsof -nP -t -iTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
   fi
 
   # Named desktop app processes (best-effort across platforms)
@@ -102,7 +96,9 @@ stop_olive_studio_dev_stack() {
   sleep 0.3
 }
 
-stop_olive_studio_dev_stack
+if [[ "$BUILD" -eq 0 ]]; then
+  stop_olive_studio_dev_stack
+fi
 
 # Tauri bundle.resources maps ../dist -> dist and validates the path at cargo build,
 # including `tauri dev`. Fresh clones/worktrees often have no dist/ yet.
