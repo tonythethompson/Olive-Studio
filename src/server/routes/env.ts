@@ -9,6 +9,7 @@ import {
   ensureVenv,
   getPythonVersion,
   isSupportedOlivePython,
+  invalidateRuntimeStatusCache,
 } from "../services/venv/index.ts";
 import { writeStudioConfig, addVenvToUserPath } from "../services/venv/config.ts";
 import { setRuntimeHfToken, getRuntimeHfToken } from "../services/olive/state.ts";
@@ -148,12 +149,14 @@ export function mountEnvRoutes(router: Router): void {
     }
     writeStudioConfig({ systemPython: resolved });
     process.env.OLIVE_STUDIO_PYTHON = resolved;
+    invalidateRuntimeStatusCache();
     return res.json({ ok: true, ...(await getRuntimeEnvStatus()) });
   });
 
   router.delete("/env/python-path", async (_req, res) => {
     writeStudioConfig({ systemPython: undefined });
     delete process.env.OLIVE_STUDIO_PYTHON;
+    invalidateRuntimeStatusCache();
     return res.json({ ok: true, ...(await getRuntimeEnvStatus()) });
   });
 

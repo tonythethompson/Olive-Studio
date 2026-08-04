@@ -1,26 +1,32 @@
 import path from "path";
+import type { VenvFamily } from "../../../lib/venvFamily.ts";
+import { getFamilyRoot } from "./spec.ts";
 
-/** Path to the project's Python virtual environment. */
+/** @deprecated Prefer getFamilyRoot("default") — kept for gradual migration. */
 export const VENV_DIR = path.join(process.cwd(), ".venv");
 
 /** Path to the Olive GPU launcher script. */
 export const OLIVE_GPU_LAUNCHER = path.join(process.cwd(), "scripts", "olive_gpu_launcher.py");
 
-/** Returns the path to python inside the venv. */
-export function getVenvPython(): string {
-  return process.platform === "win32"
-    ? path.join(VENV_DIR, "Scripts", "python.exe")
-    : path.join(VENV_DIR, "bin", "python");
+export function getVenvScriptsDir(family: VenvFamily = "default"): string {
+  const root = getFamilyRoot(family);
+  return process.platform === "win32" ? path.join(root, "Scripts") : path.join(root, "bin");
 }
 
-export function getVenvScriptsDir(): string {
-  return process.platform === "win32" ? path.join(VENV_DIR, "Scripts") : path.join(VENV_DIR, "bin");
+/** Absolute path to python inside the family venv. */
+export function getVenvPython(family: VenvFamily = "default"): string {
+  return process.platform === "win32"
+    ? path.join(getVenvScriptsDir(family), "python.exe")
+    : path.join(getVenvScriptsDir(family), "python");
 }
 
-export function getVenvPip(): string {
+/**
+ * @deprecated Prefer `<python> -m pip`. Kept for transitional call sites.
+ */
+export function getVenvPip(family: VenvFamily = "default"): string {
   return process.platform === "win32"
-    ? path.join(VENV_DIR, "Scripts", "pip.exe")
-    : path.join(VENV_DIR, "bin", "pip");
+    ? path.join(getVenvScriptsDir(family), "pip.exe")
+    : path.join(getVenvScriptsDir(family), "pip");
 }
 
 /**

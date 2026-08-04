@@ -38,6 +38,7 @@ export type IHVProvider =
   | "CUDAExecutionProvider"
   | "TensorrtExecutionProvider"
   | "NvTensorRTRTXExecutionProvider"
+  | "DmlExecutionProvider"
   | "OpenVINOExecutionProvider"
   | "QNNExecutionProvider"
   | "ROCMExecutionProvider"

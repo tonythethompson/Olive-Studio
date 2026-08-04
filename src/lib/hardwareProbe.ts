@@ -376,6 +376,8 @@ function undetectedProviderReason(
     }
     case "WebGpuExecutionProvider":
       return "WebGPU is a browser deploy target (ONNX Runtime Web), not a local Python EP. Select it to build web-oriented recipes, then run Browser Test / WebGPU benchmark in Recipe & run (Chrome 113+ / Edge 113+).";
+    case "DmlExecutionProvider":
+      return "Windows DirectML was not detected (requires Windows + onnxruntime-directml in the project .venv).";
     case "CPUExecutionProvider":
       return "";
     default: {
