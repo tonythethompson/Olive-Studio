@@ -39,7 +39,8 @@ export function ModelCombobox({
   const listboxId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [highlight, setHighlight] = useState(0);
+  /** null = no keyboard/mouse highlight yet; Enter must not commit a different model. */
+  const [highlight, setHighlight] = useState<number | null>(null);
   /** null = not filtering (show full list); string = active search / freehand edit. */
   const [query, setQuery] = useState<string | null>(null);
 
@@ -56,7 +57,10 @@ export function ModelCombobox({
 
   const membership = getModelCatalogMembership(value, options, modelsSource);
   const membershipLabel = modelCatalogMembershipLabel(membership);
-  const safeHighlight = Math.min(highlight, Math.max(filtered.length - 1, 0));
+  const safeHighlight =
+    highlight === null || filtered.length === 0
+      ? null
+      : Math.min(highlight, filtered.length - 1);
 
   useEffect(() => {
     if (!open) return;
@@ -73,7 +77,7 @@ export function ModelCombobox({
   const pick = (modelId: string) => {
     onChange(modelId);
     setQuery(null);
-    setHighlight(0);
+    setHighlight(null);
     setOpen(false);
   };
 
@@ -82,23 +86,37 @@ export function ModelCombobox({
     // Keep the selected id in the field, but do not filter until the user types.
     setQuery(null);
     const selectedIndex = options.findIndex((option) => option.id === value);
-    setHighlight(selectedIndex >= 0 ? Math.min(selectedIndex, MAX_VISIBLE - 1) : 0);
+    // Only auto-highlight when the current value is in the visible window.
+    // Clamping to MAX_VISIBLE-1 / 0 would make focus+Enter commit a different model.
+    if (selectedIndex >= 0 && selectedIndex < MAX_VISIBLE) {
+      setHighlight(selectedIndex);
+    } else {
+      setHighlight(null);
+    }
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setOpen(true);
-      setHighlight((i) => Math.min(i + 1, Math.max(filtered.length - 1, 0)));
+      setHighlight((i) => {
+        if (filtered.length === 0) return null;
+        if (i === null) return 0;
+        return Math.min(i + 1, filtered.length - 1);
+      });
       return;
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
       setOpen(true);
-      setHighlight((i) => Math.max(i - 1, 0));
+      setHighlight((i) => {
+        if (filtered.length === 0) return null;
+        if (i === null) return filtered.length - 1;
+        return Math.max(i - 1, 0);
+      });
       return;
     }
-    if (event.key === "Enter" && open && filtered[safeHighlight]) {
+    if (event.key === "Enter" && open && safeHighlight !== null && filtered[safeHighlight]) {
       event.preventDefault();
       pick(filtered[safeHighlight]!.id);
       return;
@@ -106,7 +124,7 @@ export function ModelCombobox({
     if (event.key === "Escape") {
       setOpen(false);
       setQuery(null);
-      setHighlight(0);
+      setHighlight(null);
     }
   };
 
@@ -117,10 +135,13 @@ export function ModelCombobox({
         role="combobox"
         aria-label="AI model"
         aria-autocomplete="list"
+        aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listboxId}
         aria-activedescendant={
-          open && filtered[safeHighlight] ? `${listboxId}-opt-${safeHighlight}` : undefined
+          open && safeHighlight !== null && filtered[safeHighlight]
+            ? `${listboxId}-opt-${safeHighlight}`
+            : undefined
         }
         autoComplete="off"
         spellCheck={false}
@@ -151,7 +172,7 @@ export function ModelCombobox({
             </li>
           ) : (
             filtered.map((m, index) => {
-              const active = index === safeHighlight;
+              const active = safeHighlight !== null && index === safeHighlight;
               const selected = m.id === value;
               return (
                 <li

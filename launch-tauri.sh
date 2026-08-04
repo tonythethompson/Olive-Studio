@@ -70,16 +70,7 @@ stop_olive_studio_dev_stack() {
     done < <(lsof -nP -t -iTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
   fi
 
-  # Named desktop app processes (best-effort across platforms)
-  if command -v pkill >/dev/null 2>&1; then
-    pkill -f "Olive Studio" 2>/dev/null || true
-    pkill -x "olive-studio" 2>/dev/null || true
-  elif command -v taskkill.exe >/dev/null 2>&1; then
-    taskkill.exe /F /IM "Olive Studio.exe" >/dev/null 2>&1 || true
-    taskkill.exe /F /IM "olive-studio.exe" >/dev/null 2>&1 || true
-  fi
-
-  # Repo-scoped leftover tauri / server processes (avoid nuking unrelated node apps).
+  # Repo-scoped leftover tauri / server / desktop processes (avoid nuking unrelated installs).
   # Skip this shell and its parent: absolute-path launchers include $ROOT and "tauri" in argv.
   if command -v pgrep >/dev/null 2>&1; then
     local match_pids
@@ -94,7 +85,7 @@ stop_olive_studio_dev_stack() {
         if [[ "$cmd" == *launch-tauri.sh* || "$cmd" == *launch-tauri.ps1* || "$cmd" == *launch-tauri.cmd* ]]; then
           continue
         fi
-        if [[ "$cmd" == *tauri* || "$cmd" == *server.ts* || "$cmd" == *server.mjs* ]]; then
+        if [[ "$cmd" == *tauri* || "$cmd" == *server.ts* || "$cmd" == *server.mjs* || "$cmd" == *olive-studio* || "$cmd" == *"Olive Studio"* ]]; then
           echo "  Stopping leftover PID $pid"
           kill "$pid" 2>/dev/null || true
         fi
@@ -109,7 +100,7 @@ stop_olive_studio_dev_stack() {
           if [[ "$cmd" == *launch-tauri.sh* || "$cmd" == *launch-tauri.ps1* || "$cmd" == *launch-tauri.cmd* ]]; then
             continue
           fi
-          if [[ "$cmd" == *tauri* || "$cmd" == *server.ts* || "$cmd" == *server.mjs* ]]; then
+          if [[ "$cmd" == *tauri* || "$cmd" == *server.ts* || "$cmd" == *server.mjs* || "$cmd" == *olive-studio* || "$cmd" == *"Olive Studio"* ]]; then
             kill -9 "$pid" 2>/dev/null || true
           fi
         fi

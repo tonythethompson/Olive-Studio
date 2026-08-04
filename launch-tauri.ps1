@@ -67,13 +67,6 @@ function Stop-OliveStudioDevStack {
     }
   }
 
-  foreach ($name in @("Olive Studio", "olive-studio")) {
-    Get-Process -Name $name -ErrorAction SilentlyContinue | ForEach-Object {
-      Write-Host "  Stopping $($_.ProcessName) PID $($_.Id)" -ForegroundColor DarkGray
-      Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
-    }
-  }
-
   try {
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
       Where-Object {
@@ -83,7 +76,10 @@ function Stop-OliveStudioDevStack {
           $_.CommandLine -match 'tauri(\.cmd|\.exe)?(\s|$)' -or
           $_.CommandLine -match 'tauri:dev' -or
           $_.CommandLine -match 'server\.ts' -or
-          $_.CommandLine -match 'dist[/\\]server\.mjs'
+          $_.CommandLine -match 'dist[/\\]server\.mjs' -or
+          $_.CommandLine -match 'olive-studio\.exe' -or
+          $_.Name -eq 'Olive Studio' -or
+          $_.Name -eq 'olive-studio'
         )
       } |
       ForEach-Object {
@@ -91,7 +87,7 @@ function Stop-OliveStudioDevStack {
         Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
       }
   } catch {
-    # CIM may be unavailable; port + named-process cleanup is enough for most cases
+    # CIM may be unavailable; port cleanup is enough for most cases
     Write-Host "  (Skipped command-line process scan: $($_.Exception.Message))" -ForegroundColor DarkGray
   }
 

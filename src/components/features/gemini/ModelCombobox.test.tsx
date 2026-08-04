@@ -59,4 +59,37 @@ describe("ModelCombobox", () => {
 
     expect(screen.getByText("Model ID not recognized. Requests may fail.")).toBeTruthy();
   });
+
+  it("does not commit a different model on focus + Enter for freehand ids", () => {
+    const onChange = vi.fn();
+    render(
+      <ModelCombobox
+        value="my-org/custom-model"
+        options={options}
+        modelsSource="live"
+        onChange={onChange}
+      />,
+    );
+
+    const input = screen.getByRole("combobox");
+    fireEvent.focus(input);
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("does not commit a different model on focus + Enter when selection is past the visible window", () => {
+    const many = Array.from({ length: 45 }, (_, i) => ({
+      id: `model-${i}`,
+      label: `Model ${i}`,
+    }));
+    const onChange = vi.fn();
+    render(
+      <ModelCombobox value="model-42" options={many} modelsSource="live" onChange={onChange} />,
+    );
+
+    const input = screen.getByRole("combobox");
+    fireEvent.focus(input);
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });
