@@ -119,7 +119,8 @@ export interface BuildReportOptions {
 // ── Telemetry collection ─────────────────────────────────────────────────────
 
 function collectPlatformInfo(): string {
-  const ua = navigator.userAgent;
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  if (!ua) return "OS: Unknown | Arch: Unknown";
   let os = "Unknown";
   let arch = "Unknown";
 
