@@ -16,7 +16,6 @@ import { usePipelineState } from "@/lib/stores/pipelineStore";
 import {
   applyProviderConflictAutofixes,
   getProviderConflicts,
-  getProviderHardwareBlock,
   getQuantMethodActivationBlock,
   isConversionFormatAllowed,
   isPeftAllowed,
@@ -34,11 +33,8 @@ import {
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
-import {
-  OPEN_VINO_GPU_DRIVER_URL,
-  OPEN_VINO_NPU_DRIVER_URL,
-} from "@/lib/openvinoDeps";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
+import { HardwareProviderCard } from "@/components/features/HardwareProviderCard";
 import { useOpenVinoInstall } from "@/components/features/useOpenVinoInstall";
 import {
   Settings2,
@@ -55,8 +51,6 @@ import {
   List,
   RefreshCw,
   HardDrive,
-  XCircle,
-  Globe,
 } from "lucide-react";
 
 export { getProviderConflicts };
@@ -669,482 +663,30 @@ export function IHVIntegrationPanel({
               </div>
             ) : (
               <TooltipProvider delayDuration={200}>
-                {selectableProviders.map((p) => {
-                  const isSelected = state.ihvProvider === p.id;
-                  const Icon = p.icon;
-
-                  // Compute conflicts for this particular card to implement visual disabled indicators & warnings
-                  const pConflicts = getProviderConflicts(p.id, state.passes);
-                  const cardHasCritical = pConflicts.some((c) => c.severity === "critical");
-                  const cardHardwareBlocked =
-                    p.id !== "WebGpuExecutionProvider" &&
-                    (Boolean(getProviderHardwareBlock(p.id, hardwareProbe)) ||
-                      (p.id === "CPUExecutionProvider" && !hardwareProbe));
-                  const cardBlocked = cardHasCritical || cardHardwareBlocked;
-                  const cardHasWarning = pConflicts.some((c) => c.severity === "warning");
-                  const showSwitchAssist = pConflicts.length > 0 && (isSelected || !cardBlocked);
-                  const detectedLocally = isProviderDetectedLocally(p.id, hardwareProbe);
-                  const isWebGpuTarget = p.id === "WebGpuExecutionProvider";
-
-                  let cardClasses =
-                    "relative flex flex-col rounded-xl border p-4.5 transition-all duration-200 cursor-pointer min-w-0 max-w-full overflow-hidden ";
-                  let badgeText = "";
-                  let BadgeIcon: typeof CheckCircle | null = null;
-                  let badgeColor = "";
-
-                  if (isSelected) {
-                    if (cardBlocked) {
-                      cardClasses += "border-rose-500 bg-rose-500/5";
-                      badgeText = cardHardwareBlocked ? "Unavailable hardware" : "Critical Conflict";
-                      BadgeIcon = XCircle;
-                      badgeColor = "bg-rose-500/10 text-rose-400 border-rose-550/25";
-                    } else if (cardHasWarning) {
-                      cardClasses += "border-amber-500 bg-amber-500/5";
-                      badgeText = "Warning Conflict";
-                      BadgeIcon = AlertTriangle;
-                      badgeColor = "bg-amber-500/10 text-amber-400 border-amber-550/25";
-                    } else {
-                      cardClasses += "border-electric-blue bg-electric-blue/5";
-                      badgeText =
-                        !detectedLocally && !probeLoading && !isWebGpuTarget
-                          ? "Active (not local)"
-                          : isWebGpuTarget
-                            ? "Active (browser target)"
-                            : "Active Target";
-                      BadgeIcon = CheckCircle;
-                      badgeColor = "bg-electric-blue/10 text-electric-blue border-electric-blue/20";
-                    }
-                  } else if (isWebGpuTarget) {
-                    cardClasses +=
-                      "border-slate-800/80 bg-slate-900/40 hover:bg-slate-900 hover:border-slate-700";
-                    badgeText = "Browser deploy target";
-                    BadgeIcon = Globe;
-                    badgeColor = "bg-slate-800/80 text-slate-300 border-slate-700/60";
-                  } else if (cardHardwareBlocked) {
-                    cardClasses +=
-                      "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-75 hover:border-slate-700";
-                    badgeText = "Not on this system";
-                    BadgeIcon = XCircle;
-                    badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
-                  } else if (
-                    ((p.id === "NvTensorRTRTXExecutionProvider" && trtRtxNeedsInstall) ||
-                      (p.id === "TensorrtExecutionProvider" && trtNeedsInstall) ||
-                      (p.id === "OpenVINOExecutionProvider" && openvinoNeedsInstall)) &&
-                    detectedLocally
-                  ) {
-                    cardClasses += "border-amber-900/40 bg-amber-950/10 opacity-95 hover:border-amber-500/40";
-                    badgeText = "Plugin install needed";
-                    BadgeIcon = AlertTriangle;
-                    badgeColor = "bg-amber-500/10 text-amber-400 border-amber-500/20";
-                  } else if (!detectedLocally && !probeLoading) {
-                    cardClasses +=
-                      "border-slate-850/60 bg-zinc-950/30 opacity-80 hover:opacity-100 hover:border-slate-700";
-                    badgeText = "Not on this system";
-                    BadgeIcon = AlertCircle;
-                    badgeColor = "bg-slate-800/80 text-slate-500 border-slate-700/60";
-                  } else if (cardHasCritical) {
-                    cardClasses +=
-                      "border-rose-950/35 bg-zinc-950/40 opacity-55 hover:opacity-100 hover:border-rose-500/40";
-                    badgeText = "Incompatible";
-                    BadgeIcon = XCircle;
-                    badgeColor = "bg-rose-500/5 text-rose-400/80 border-rose-550/15";
-                  } else if (cardHasWarning) {
-                    cardClasses +=
-                      "border-amber-950/35 bg-zinc-950/40 opacity-75 hover:opacity-100 hover:border-amber-500/40";
-                    badgeText = "Needs Adjust";
-                    BadgeIcon = AlertTriangle;
-                    badgeColor = "bg-amber-500/5 text-amber-400/80 border-amber-550/15";
-                  } else {
-                    cardClasses +=
-                      "border-slate-800/80 bg-slate-900/40 hover:bg-slate-900 hover:border-slate-700";
-                    badgeText = "Compatible with active passes";
-                    BadgeIcon = CheckCircle;
-                    badgeColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/15";
-                  }
-
-                  const hardwareDetail =
-                    p.id === "CUDAExecutionProvider" ||
-                    p.id === "NvTensorRTRTXExecutionProvider" ||
-                    p.id === "TensorrtExecutionProvider"
-                      ? hardwareProbe?.nvidia?.gpus.map((g) => g.name).join(", ")
-                      : p.id === "ROCMExecutionProvider"
-                        ? hardwareProbe?.rocm?.gpus.map((g) => g.name).join(", ")
-                        : p.id === "OpenVINOExecutionProvider" && hardwareProbe?.openvino?.version
-                          ? `OpenVINO ${hardwareProbe.openvino.version}${hardwareProbe.openvino.devices?.length ? ` (${hardwareProbe.openvino.devices.join(", ")})` : ""}`.trim()
-                          : p.id === "CPUExecutionProvider" && hardwareProbe
-                            ? hardwareProbe.platform.cpuModel
-                            : null;
-
-                  return (
-                    <div
-                      key={p.id}
-                      onClick={() => {
-                        if (isSelected && pConflicts.length > 0) {
-                          setState({ passes: applyProviderConflictAutofixes(p.id, state.passes) });
-                          return;
-                        }
-                        // Allow selecting undetected providers for cross-compile / remote targets
-                        const detected = detectedProviders.includes(p.id);
-                        if (!detected) {
-                          setState({ ihvProvider: p.id });
-                          return;
-                        }
-                        const patch = prepareProviderChange(state, p.id, hardwareProbe);
-                        if (patch) {
-                          setState(patch);
-                        }
-                      }}
-                      className={cardClasses}
-                    >
-                      <div className="flex items-start gap-4 min-w-0">
-                        <div
-                          className={`mt-0.5 shrink-0 rounded-xl p-2.5 transition-all ${
-                            isSelected
-                              ? cardHasCritical
-                                ? "bg-rose-500/20 text-rose-400"
-                                : cardHasWarning
-                                  ? "bg-amber-500/20 text-amber-400"
-                                  : "bg-electric-blue/20 text-electric-blue"
-                              : "bg-slate-850 text-slate-400 group-hover:text-slate-300"
-                          }`}
-                        >
-                          <Icon className="h-5 w-5" />
-                        </div>
-
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold text-slate-200 text-sm md:text-base leading-none">
-                              {p.name}
-                            </p>
-                            <span
-                              className={`inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider font-extrabold px-2 py-0.5 rounded border ${badgeColor}`}
-                            >
-                              {BadgeIcon ? <BadgeIcon className="h-3 w-3" aria-hidden /> : null}
-                              {badgeText}
-                            </span>
-                          </div>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <p className="text-xs text-slate-400 leading-relaxed pr-6 cursor-help border-b border-dashed border-slate-700 hover:border-slate-500 transition-colors">
-                                {p.desc}
-                              </p>
-                            </TooltipTrigger>
-                            <TooltipContent
-                              side="bottom"
-                              className="max-w-[360px] bg-slate-950 border border-slate-800 text-slate-300 p-4 shadow-2xl leading-relaxed z-50"
-                            >
-                              <div className="space-y-3">
-                                <div className="border-b border-slate-900 pb-2">
-                                  <p className="text-xs font-bold text-electric-blue uppercase tracking-wide">
-                                    {p.name}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-mono uppercase text-slate-500 mb-1">
-                                    Requirements
-                                  </p>
-                                  <p className="text-[11px] text-slate-300 leading-relaxed">
-                                    {p.tooltip.requirements}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-mono uppercase text-slate-500 mb-1">
-                                    Quantization Methods
-                                  </p>
-                                  <p className="text-[11px] text-slate-300 leading-relaxed">
-                                    {p.tooltip.quantMethods}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-mono uppercase text-slate-500 mb-1">
-                                    Recommendation
-                                  </p>
-                                  <p className="text-[11px] text-emerald-400/90 leading-relaxed">
-                                    {p.tooltip.recommendation}
-                                  </p>
-                                </div>
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                          {detectedLocally && hardwareDetail && (
-                            <p className="text-[11px] text-emerald-400/90 font-mono break-words">
-                              {hardwareDetail}
-                            </p>
-                          )}
-                          {p.id === "NvTensorRTRTXExecutionProvider" && trtRtxNeedsInstall && (
-                            <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
-                              <p className="text-[11px] text-amber-400/90 leading-relaxed">
-                                GPU is compatible. The TensorRT RTX runtime is a separate package (not the
-                                full TensorRT SDK). Install into the project{" "}
-                                <code className="text-slate-400">.venv</code> to enable detection and runs.
-                              </p>
-                              {hardwareProbe?.tensorRtRtx?.detail && (
-                                <p
-                                  className="text-[10px] text-slate-500 font-mono break-all max-w-full"
-                                  title={hardwareProbe.tensorRtRtx.detail}
-                                >
-                                  {hardwareProbe.tensorRtRtx.detail}
-                                </p>
-                              )}
-                              <button
-                                type="button"
-                                disabled={hardwareInstallBusy}
-                                onClick={() => void handleInstallTensorRtRtx()}
-                                className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
-                              >
-                                {installingTrtRtx ? (
-                                  <>
-                                    <RefreshCw className="h-3 w-3 animate-spin" />
-                                    Installing tensorrt-rtx…
-                                  </>
-                                ) : (
-                                  "Install tensorrt-rtx into .venv"
-                                )}
-                              </button>
-                              {installTrtRtxError && (
-                                <p className="text-[11px] text-rose-400 break-all">{installTrtRtxError}</p>
-                              )}
-                              {installTrtRtxLog.length > 0 && (
-                                <pre className="text-[10px] text-slate-500 max-h-24 max-w-full overflow-auto font-mono whitespace-pre-wrap break-all">
-                                  {installTrtRtxLog.slice(-12).join("\n")}
-                                </pre>
-                              )}
-                            </div>
-                          )}
-                          {p.id === "TensorrtExecutionProvider" && trtNeedsInstall && (
-                            <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
-                              <p className="text-[11px] text-amber-400/90 leading-relaxed">
-                                GPU is compatible (Turing / GeForce RTX 20xx+). Full TensorRT needs the{" "}
-                                <code className="text-slate-400">nvinfer_10</code> SDK in the project{" "}
-                                <code className="text-slate-400">.venv</code>. Prefer TensorRT RTX for a
-                                lighter consumer install when that fits your recipe.
-                              </p>
-                              {hardwareProbe?.tensorrt?.detail && (
-                                <p
-                                  className="text-[10px] text-slate-500 font-mono break-all max-w-full"
-                                  title={hardwareProbe.tensorrt.detail}
-                                >
-                                  {hardwareProbe.tensorrt.detail}
-                                </p>
-                              )}
-                              <button
-                                type="button"
-                                disabled={hardwareInstallBusy}
-                                onClick={() => void handleInstallTensorRt()}
-                                className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
-                              >
-                                {installingTrt ? (
-                                  <>
-                                    <RefreshCw className="h-3 w-3 animate-spin" />
-                                    Installing tensorrt…
-                                  </>
-                                ) : (
-                                  "Install full TensorRT into .venv"
-                                )}
-                              </button>
-                              {installTrtError && (
-                                <p className="text-[11px] text-rose-400 break-all">{installTrtError}</p>
-                              )}
-                              {installTrtLog.length > 0 && (
-                                <pre className="text-[10px] text-slate-500 max-h-24 max-w-full overflow-auto font-mono whitespace-pre-wrap break-all">
-                                  {installTrtLog.slice(-12).join("\n")}
-                                </pre>
-                              )}
-                            </div>
-                          )}
-                          {p.id === "OpenVINOExecutionProvider" && openvinoNeedsInstall && (
-                            <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
-                              <p className="text-[11px] text-amber-400/90 leading-relaxed">
-                                OpenVINOExecutionProvider not ready in the project{" "}
-                                <code className="text-slate-400">.venv</code>. Install installs{" "}
-                                <code className="text-slate-400">onnxruntime-openvino</code> (replaces{" "}
-                                <code className="text-slate-400">onnxruntime-gpu</code> in this venv) plus
-                                OpenVINO and Optimum-Intel.
-                              </p>
-                              {hardwareProbe?.openvino?.detail && (
-                                <p
-                                  className="text-[10px] text-slate-500 font-mono break-all max-w-full"
-                                  title={hardwareProbe.openvino.detail}
-                                >
-                                  {hardwareProbe.openvino.detail}
-                                </p>
-                              )}
-                              <button
-                                type="button"
-                                disabled={hardwareInstallBusy}
-                                onClick={() => void openvinoInstall.install()}
-                                className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
-                              >
-                                {openvinoInstall.state.installing ? (
-                                  <>
-                                    <RefreshCw className="h-3 w-3 animate-spin" />
-                                    Installing OpenVINO stack…
-                                  </>
-                                ) : (
-                                  "Install OpenVINO stack into .venv"
-                                )}
-                              </button>
-                              {openvinoInstall.state.error && (
-                                <p className="text-[11px] text-rose-400 break-all">{openvinoInstall.state.error}</p>
-                              )}
-                              {openvinoInstall.state.log.length > 0 && (
-                                <pre className="text-[10px] text-slate-500 max-h-24 max-w-full overflow-auto font-mono whitespace-pre-wrap break-all">
-                                  {openvinoInstall.state.log.slice(-12).join("\n")}
-                                </pre>
-                              )}
-                            </div>
-                          )}
-                          {p.id === "OpenVINOExecutionProvider" &&
-                            (hardwareProbe?.openvino?.devices?.length ?? 0) > 0 &&
-                            !hardwareProbe!.openvino!.devices!.some((d) => /GPU|NPU/i.test(d)) && (
-                              <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                                Only CPU detected. For GPU/NPU inference, install Intel drivers:{" "}
-                                <a
-                                  href={OPEN_VINO_GPU_DRIVER_URL}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-electric-blue hover:underline"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  GPU
-                                </a>
-                                {" / "}
-                                <a
-                                  href={OPEN_VINO_NPU_DRIVER_URL}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-electric-blue hover:underline"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  NPU
-                                </a>
-                                .
-                              </p>
-                            )}
-                          {isWebGpuTarget && (
-                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                              Not a local Python EP. Select to build web-oriented recipes, then use{" "}
-                              <span className="text-slate-400">Recipe &amp; run → Browser Test</span> / WebGPU
-                              benchmark in Chrome or Edge 113+.
-                            </p>
-                          )}
-                          {!detectedLocally && !probeLoading && !isWebGpuTarget && (
-                            <p className="text-[11px] text-slate-600">
-                              {p.id === "CPUExecutionProvider"
-                                ? "Hardware detection unavailable — CPU status is unknown."
-                                : "No matching hardware found locally — you can still select for remote/cross-compile targets."}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="flex items-center justify-center shrink-0">
-                          <div
-                            className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                              isSelected
-                                ? cardHasCritical
-                                  ? "border-rose-500 text-rose-500"
-                                  : cardHasWarning
-                                    ? "border-amber-500 text-amber-500"
-                                    : "border-electric-blue text-electric-blue"
-                                : "border-slate-700 hover:border-slate-500"
-                            }`}
-                          >
-                            {isSelected && (
-                              <div
-                                className={`h-2.5 w-2.5 rounded-full ${
-                                  cardHasCritical
-                                    ? "bg-rose-500"
-                                    : cardHasWarning
-                                      ? "bg-amber-500"
-                                      : "bg-electric-blue"
-                                }`}
-                              />
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Conflicts on the active target, or adjustable warnings on other targets */}
-                      {showSwitchAssist && (
-                        <div className="mt-3.5 pt-3.5 border-t border-slate-800/60 flex flex-col gap-2.5 animate-in fade-in duration-200">
-                          <p className="text-xs text-slate-500 flex items-center gap-1.5">
-                            <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
-                            {isSelected
-                              ? "Passes to fix on this target"
-                              : "Adjustments needed to use this target"}
-                          </p>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pb-1">
-                            {pConflicts.map((c, idx) => (
-                              <div
-                                key={idx}
-                                className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-900 flex items-start gap-2 text-xs"
-                              >
-                                <span
-                                  className={`inline-block h-1.5 w-1.5 rounded-full mt-1.5 shrink-0 ${
-                                    c.severity === "critical" ? "bg-rose-500" : "bg-amber-400"
-                                  }`}
-                                />
-                                <div className="leading-tight">
-                                  <span
-                                    className={`font-bold block text-[11px] mb-0.5 ${
-                                      c.severity === "critical" ? "text-rose-300" : "text-amber-400"
-                                    }`}
-                                  >
-                                    {c.passName}
-                                  </span>
-                                  <span className="text-slate-450 text-[10.5px] font-medium leading-relaxed">
-                                    {c.reason}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-
-                          <div className="flex justify-end pt-1">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isSelected) {
-                                  setState({ passes: applyProviderConflictAutofixes(p.id, state.passes) });
-                                  return;
-                                }
-                                // Allow switching to undetected providers for cross-compile / remote targets
-                                const detected = detectedProviders.includes(p.id);
-                                if (!detected) {
-                                  setState({ ihvProvider: p.id });
-                                  return;
-                                }
-                                const patch = prepareProviderChange(state, p.id, hardwareProbe);
-                                if (patch) {
-                                  setState(patch);
-                                }
-                              }}
-                              className={`text-[9.5px] uppercase tracking-wider font-extrabold px-3 py-1.5 rounded border transition-all cursor-pointer flex items-center gap-1.5 ${
-                                cardHasCritical
-                                  ? "border-rose-550/30 text-rose-400 bg-rose-950/20 hover:text-white hover:bg-rose-500/20"
-                                  : "border-amber-500/30 text-amber-400 bg-amber-950/20 hover:text-white hover:bg-amber-550/20"
-                              }`}
-                            >
-                              <Wand2 className="h-3.5 w-3.5" />
-                              {isSelected
-                                ? "Fix passes for this target"
-                                : `Switch to ${p.shortName} (adjusts passes)`}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {!isSelected && cardHasCritical && pConflicts.length > 0 && (
-                        <p className="mt-3 pt-3 border-t border-slate-800/60 text-[11px] text-slate-500 leading-relaxed">
-                          Incompatible with your current passes. Change passes in Optimization or select a
-                          compatible target above.
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
+                {selectableProviders.map((p) => (
+                  <HardwareProviderCard
+                    key={p.id}
+                    provider={p}
+                    state={state}
+                    setState={setState}
+                    hardwareProbe={hardwareProbe}
+                    probeLoading={probeLoading}
+                    detectedProviders={detectedProviders}
+                    trtRtxNeedsInstall={trtRtxNeedsInstall}
+                    trtNeedsInstall={trtNeedsInstall}
+                    openvinoNeedsInstall={openvinoNeedsInstall}
+                    hardwareInstallBusy={hardwareInstallBusy}
+                    installingTrtRtx={installingTrtRtx}
+                    installTrtRtxError={installTrtRtxError}
+                    installTrtRtxLog={installTrtRtxLog}
+                    onInstallTensorRtRtx={() => void handleInstallTensorRtRtx()}
+                    installingTrt={installingTrt}
+                    installTrtError={installTrtError}
+                    installTrtLog={installTrtLog}
+                    onInstallTensorRt={() => void handleInstallTensorRt()}
+                    openvinoInstall={openvinoInstall}
+                  />
+                ))}
               </TooltipProvider>
             )}
           </div>
