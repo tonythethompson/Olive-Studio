@@ -12,6 +12,15 @@ import dns from "node:dns/promises";
 import http, { type IncomingMessage } from "node:http";
 import https from "node:https";
 import net from "node:net";
+import {
+  isBlockedIpv4,
+  isBlockedIpv6,
+  isLoopbackHostname,
+  stripBrackets,
+} from "../../../lib/arenaEndpointPolicy.ts";
+
+// Re-export shared pure helpers so existing server tests keep importing from here.
+export { isBlockedIpv4, isBlockedIpv6, isLoopbackHostname, stripBrackets };
 
 /** Typed policy/SSRF rejection so routes can map to 400 without regex on message text. */
 export class SsrfPolicyError extends Error {
@@ -25,37 +34,6 @@ export type SsrfPolicy = {
   /** Allow http:// loopback only when OLIVE_ALLOW_LOOPBACK_HTTP=true. */
   allowLoopbackHttp: boolean;
 };
-
-export function stripBrackets(hostname: string): string {
-  return hostname.replace(/^\[|\]$/g, "").toLowerCase();
-}
-
-export function isLoopbackHostname(hostname: string): boolean {
-  const host = stripBrackets(hostname);
-  return host === "localhost" || host === "127.0.0.1" || host === "::1";
-}
-
-/** IPv4 dotted-quad private / reserved / link-local / CGNAT / metadata. */
-export function isBlockedIpv4(ip: string): boolean {
-  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
-  if (!m) return false;
-  const [a, b, c] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  if ([a, b, c, Number(m[4])].some((n) => n > 255)) return true;
-  if (a === 0) return true; // "this" network
-  if (a === 10) return true;
-  if (a === 127) return true;
-  if (a === 169 && b === 254) return true; // link-local / cloud metadata
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
-  if (a === 192 && b === 0 && c === 0) return true; // IETF protocol assignments
-  if (a === 192 && b === 0 && c === 2) return true; // TEST-NET-1
-  if (a === 198 && (b === 18 || b === 19)) return true; // benchmarking
-  if (a === 198 && b === 51 && c === 100) return true; // TEST-NET-2
-  if (a === 203 && b === 0 && c === 113) return true; // TEST-NET-3
-  if (a >= 224) return true; // multicast + reserved
-  return false;
-}
 
 /**
  * Extract IPv4 embedded in IPv6:
@@ -109,12 +87,9 @@ export function isBlockedIpAddress(ip: string): boolean {
   const addr = stripBrackets(ip);
   if (net.isIPv4(addr)) return isBlockedIpv4(addr);
   if (net.isIPv6(addr)) {
-    if (addr === "::" || addr === "::1") return true;
-    if (addr.toLowerCase().startsWith("fe80:")) return true; // link-local
-    if (addr.toLowerCase().startsWith("fc") || addr.toLowerCase().startsWith("fd")) return true; // ULA
-    const mapped = ipv4FromMappedIpv6(addr);
-    if (mapped) return isBlockedIpv4(mapped);
-    return false;
+    // Shared pure predicate: loopback, fe80::/10, fec0::/10, ULA, multicast,
+    // and IPv4-mapped/compatible forms (all blocked for Arena outbound).
+    return isBlockedIpv6(addr);
   }
   return true; // unknown form → reject
 }
@@ -133,11 +108,9 @@ export function assertUrlPolicy(url: URL, policy: SsrfPolicy): void {
   const host = stripBrackets(url.hostname);
   if (!host) throw new SsrfPolicyError("Invalid endpointUrl");
 
-  // Block obvious metadata hostnames even before DNS
+  // Metadata / mDNS names are never Arena-eligible (no loopback exemption).
   if (host === "metadata.google.internal" || host.endsWith(".local")) {
-    if (!(policy.allowLoopbackHttp && isLoopbackHostname(host))) {
-      throw new SsrfPolicyError("Private endpoints are not supported");
-    }
+    throw new SsrfPolicyError("Private endpoints are not supported");
   }
 
   const loopbackName = isLoopbackHostname(host);

@@ -5,7 +5,7 @@
 import type { Request, Response, Router } from "express";
 import fs from "node:fs";
 import { resolveCloudTimeoutMs, ARENA_PROMPT_MAX_CHARS } from "../../lib/arenaConstants.ts";
-import { arenaLocalOnly } from "../middleware/localOnly.ts";
+import { arenaLocalOnly, arenaStrictLocalOnly } from "../middleware/localOnly.ts";
 import { arenaProxyRateLimit } from "../middleware/rateLimit.ts";
 import {
   pinnedFetch,
@@ -17,6 +17,8 @@ import {
   listOliveOutputs,
   resolveOliveOutputForDownload,
 } from "../services/playground/oliveOutputScan.ts";
+import { buildAssistantCloudSnapshot } from "../../lib/arenaAssistantSnapshot.ts";
+import { getAiProvider, getProvider } from "../services/ai/index.ts";
 
 /**
  * Starts an abort timer that invokes the callback after the specified duration.
@@ -76,6 +78,11 @@ function clientGone(res: Response, clientDisconnected: boolean): boolean {
  */
 function emptyReject(res: Response, status: 400 | 403): void {
   res.status(status).end();
+}
+
+/** Credential-bearing Arena convenience responses must never be cached. */
+function setNoStorePrivate(res: Response): void {
+  res.setHeader("Cache-Control", "no-store, private");
 }
 
 /**
@@ -266,6 +273,50 @@ export function mountArenaRoutes(router: Router): void {
         } else res.destroy();
       });
       stream.pipe(res);
+    },
+  );
+
+  // Req 18 — one-click OpenAI-compat snapshot of the active Assistant provider.
+  // Strict loopback only: this response can include the raw Assistant API key.
+  router.get(
+    "/arena/assistant-cloud-snapshot",
+    (req, res, next) => {
+      setNoStorePrivate(res);
+      next();
+    },
+    arenaStrictLocalOnly,
+    arenaProxyRateLimit,
+    (_req: Request, res: Response) => {
+      setNoStorePrivate(res);
+      try {
+        const cfg = getAiProvider();
+        const plugin = cfg ? getProvider(cfg.provider) : undefined;
+        // Prefer explicit baseUrl, else catalog default so openai / mistral / etc. resolve.
+        const baseUrl = cfg?.baseUrl?.trim() || plugin?.defaultBaseUrl || null;
+        const snapshot = buildAssistantCloudSnapshot(
+          cfg
+            ? {
+                provider: cfg.provider,
+                baseUrl,
+                apiKey: cfg.apiKey,
+                model: cfg.model,
+                label: plugin?.label ?? cfg.provider,
+              }
+            : null,
+          { allowLoopbackHttp: process.env.OLIVE_ALLOW_LOOPBACK_HTTP === "true" },
+        );
+        // Never log apiKey / full snapshot bodies.
+        return res.status(200).json(snapshot);
+      } catch (err: unknown) {
+        console.error(
+          "[arena/assistant-cloud-snapshot] failed:",
+          err instanceof Error ? err.message : "unknown",
+        );
+        return res.status(200).json({
+          eligible: false,
+          reason: "Unable to resolve Assistant provider snapshot",
+        });
+      }
     },
   );
 }

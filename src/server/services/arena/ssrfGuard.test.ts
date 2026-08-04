@@ -34,6 +34,13 @@ describe("ssrfGuard IP classification", () => {
     expect(isBlockedIpAddress("::ffff:10.1.2.3")).toBe(true);
   });
 
+  it("blocks IPv6 multicast, site-local, and full link-local /10 via shared isBlockedIpv6", () => {
+    expect(isBlockedIpAddress("ff02::1")).toBe(true); // multicast ff00::/8
+    expect(isBlockedIpAddress("fec0::1")).toBe(true); // deprecated site-local fec0::/10
+    expect(isBlockedIpAddress("fe90::1")).toBe(true); // link-local fe80::/10 (not just fe80: prefix)
+    expect(isBlockedIpAddress("2001:4860:4860::8888")).toBe(false); // public Google DNS
+  });
+
   it("blocks hex-compressed IPv4-mapped IPv6 (Node URL hostname form)", () => {
     // Node rewrites https://[::ffff:127.0.0.1]/ → hostname [::ffff:7f00:1]
     expect(isBlockedIpAddress("::ffff:7f00:1")).toBe(true);

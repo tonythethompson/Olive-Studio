@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   arenaLocalOnly,
+  arenaStrictLocalOnly,
   hasProxyForwardingHeaders,
   isLoopbackRemoteAddress,
 } from "./localOnly.ts";
@@ -36,6 +37,11 @@ describe("hasProxyForwardingHeaders", () => {
     expect(
       hasProxyForwardingHeaders({
         headers: { forwarded: "for=203.0.113.10" },
+      } as unknown as Request),
+    ).toBe(true);
+    expect(
+      hasProxyForwardingHeaders({
+        headers: { "x-forwarded-host": "example.com" },
       } as unknown as Request),
     ).toBe(true);
   });
@@ -118,5 +124,46 @@ describe("arenaLocalOnly", () => {
     const res = mockRes();
     arenaLocalOnly(req, res, next);
     expect(next).toHaveBeenCalledOnce();
+  });
+});
+
+describe("arenaStrictLocalOnly", () => {
+  const prev = process.env.OLIVE_ARENA_ALLOW_REMOTE;
+
+  afterEach(() => {
+    if (prev === undefined) delete process.env.OLIVE_ARENA_ALLOW_REMOTE;
+    else process.env.OLIVE_ARENA_ALLOW_REMOTE = prev;
+  });
+
+  function mockRes() {
+    const res = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn().mockReturnThis(),
+    };
+    return res as unknown as Response & { status: ReturnType<typeof vi.fn>; json: ReturnType<typeof vi.fn> };
+  }
+
+  it("allows loopback clients", () => {
+    const next = vi.fn();
+    const req = {
+      socket: { remoteAddress: "127.0.0.1" },
+      headers: {},
+    } as unknown as Request;
+    const res = mockRes();
+    arenaStrictLocalOnly(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("rejects non-loopback even when OLIVE_ARENA_ALLOW_REMOTE=true", () => {
+    process.env.OLIVE_ARENA_ALLOW_REMOTE = "true";
+    const next = vi.fn();
+    const req = {
+      socket: { remoteAddress: "192.168.0.2" },
+      headers: { "x-forwarded-for": "203.0.113.50" },
+    } as unknown as Request;
+    const res = mockRes();
+    arenaStrictLocalOnly(req, res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
   });
 });

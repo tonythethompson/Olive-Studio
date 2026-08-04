@@ -38,11 +38,7 @@ export function hasProxyForwardingHeaders(req: Request): boolean {
   return false;
 }
 
-export function arenaLocalOnly(req: Request, res: Response, next: NextFunction): void {
-  if (process.env.OLIVE_ARENA_ALLOW_REMOTE === "true") {
-    next();
-    return;
-  }
+function enforceLoopbackOnly(req: Request, res: Response, next: NextFunction): void {
   // Same-host reverse proxies preserve a loopback remoteAddress while exposing
   // Arena to the outside world — reject when forwarding headers are present.
   if (hasProxyForwardingHeaders(req)) {
@@ -56,4 +52,20 @@ export function arenaLocalOnly(req: Request, res: Response, next: NextFunction):
     return;
   }
   res.status(403).json({ error: "Arena endpoints are only available from loopback" });
+}
+
+export function arenaLocalOnly(req: Request, res: Response, next: NextFunction): void {
+  if (process.env.OLIVE_ARENA_ALLOW_REMOTE === "true") {
+    next();
+    return;
+  }
+  enforceLoopbackOnly(req, res, next);
+}
+
+/**
+ * Strict loopback gate for credential-bearing routes (e.g. Assistant API key snapshot).
+ * Never honors `OLIVE_ARENA_ALLOW_REMOTE` — remote Arena access must not expose secrets.
+ */
+export function arenaStrictLocalOnly(req: Request, res: Response, next: NextFunction): void {
+  enforceLoopbackOnly(req, res, next);
 }
