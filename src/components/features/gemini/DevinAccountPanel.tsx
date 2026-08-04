@@ -11,9 +11,9 @@ export function DevinAccountPanel({ providers }: DevinAccountPanelProps) {
   return (
     <div className="space-y-3 p-3 rounded-xl border border-slate-800 bg-slate-950/50">
       <p className="text-[11px] text-slate-300 leading-relaxed">
-        <strong className="text-slate-200">Devin is not a model</strong> — it is a subscription that unlocks
-        multiple models for Assistant audit/chat. Sign in with your Devin account, paste the browser token,
-        then pick a model from your plan.
+        <strong className="text-slate-200">Devin subscription</strong> unlocks multiple models for Assistant
+        audit and chat. Sign in with your Devin account, paste the browser token, then pick a model from
+        your plan.
       </p>
       <p className="text-[11px] text-slate-400">
         Status:{" "}

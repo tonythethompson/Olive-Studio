@@ -107,11 +107,21 @@ mountArenaRoutes(arenaRouter);
 app.use("/api", arenaRouter);
 
 // ─── Health check (required by Tauri desktop bootstrap) ────────────────────
+// Tauri (src-tauri/src/lib.rs wait_for_health) accepts ready:true, ok:true, or status:"ok".
 app.get("/api/health", (_req, res) => {
   if (!serverReady) {
-    return res.status(503).json({ status: "starting", uptime: process.uptime() });
+    return res.status(503).json({
+      status: "starting",
+      ready: false,
+      uptime: process.uptime(),
+    });
   }
-  return res.json({ status: "ok", uptime: process.uptime() });
+  return res.json({
+    status: "ok",
+    ready: true,
+    ok: true,
+    uptime: process.uptime(),
+  });
 });
 
 // ─── API 404 fallback ────────────────────────────────────────────────────

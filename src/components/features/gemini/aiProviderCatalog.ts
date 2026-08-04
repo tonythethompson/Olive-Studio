@@ -156,7 +156,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     keyEnvVar: "CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID",
     docsUrl: "developers.cloudflare.com/workers-ai",
     category: "subscription",
-    description: "Account-scoped Workers AI (token + account id; base URL auto-filled from env)",
+    description: "Token + account id",
   },
   {
     id: "codex",
@@ -165,7 +165,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     keyEnvVar: "",
     docsUrl: "developers.openai.com/codex/auth",
     category: "subscription",
-    description: "ChatGPT Plus/Pro Codex allowance — Sign in with ChatGPT (local app-server)",
+    description: "ChatGPT Plus/Pro sign-in",
   },
   {
     id: "chatgpt-sub",
@@ -174,7 +174,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     keyEnvVar: "OPENAI_API_KEY",
     docsUrl: "platform.openai.com/api-keys",
     category: "subscription",
-    description: "Platform API key (usage-based). Not ChatGPT web login.",
+    description: "Platform key (usage-based)",
   },
   {
     id: "copilot",
@@ -184,7 +184,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     docsUrl: "github.com/settings/copilot",
     baseUrl: "https://api.githubcopilot.com",
     category: "subscription",
-    description: "Copilot chat endpoint (session/OAuth token; classic PAT often fails)",
+    description: "OAuth or session token",
   },
   {
     id: "kilocode",
@@ -194,7 +194,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     docsUrl: "kilo.ai/docs/gateway",
     baseUrl: "https://api.kilo.ai/api/gateway",
     category: "subscription",
-    description: "Official Kilo AI Gateway (OpenAI-compatible)",
+    description: "OpenAI-compatible gateway",
   },
   {
     id: "devin",
@@ -203,7 +203,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     keyEnvVar: "",
     docsUrl: "devin.ai",
     category: "subscription",
-    description: "Devin subscription (not a model) — unlocks multiple models via Sign in with Devin",
+    description: "Sign in for plan models",
   },
   // ── Custom / Self-Hosted ─────────────────────────────────────────────
   {

@@ -169,12 +169,18 @@ fn wait_for_health(
             .nth(1)
             .unwrap_or("");
 
-          // Parse JSON fields: require ready:true or ok:true, reject ready:false
-          let has_ready_true = body.contains("\"ready\":true") || body.contains("\"ready\": true");
+          // Accept Express /api/health shapes:
+          //   { "status":"ok", "ready":true, "ok":true, ... }
+          // Reject half-ready: { "status":"starting", "ready":false } or 503 body.
+          let has_ready_true =
+            body.contains("\"ready\":true") || body.contains("\"ready\": true");
           let has_ok_true = body.contains("\"ok\":true") || body.contains("\"ok\": true");
-          let has_ready_false = body.contains("\"ready\":false") || body.contains("\"ready\": false");
+          let has_status_ok =
+            body.contains("\"status\":\"ok\"") || body.contains("\"status\": \"ok\"");
+          let has_ready_false =
+            body.contains("\"ready\":false") || body.contains("\"ready\": false");
 
-          if (has_ready_true || has_ok_true) && !has_ready_false {
+          if (has_ready_true || has_ok_true || has_status_ok) && !has_ready_false {
             return Ok(());
           }
         }
