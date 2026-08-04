@@ -52,3 +52,45 @@ describe("mergeDetectedProviders TensorRT", () => {
     );
   });
 });
+
+describe("mergeDetectedProviders OpenVINO", () => {
+  it("detects OpenVINO when hasOpenVinoCompatibleHardware is true (Intel CPU)", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      hasOpenVinoCompatibleHardware: true,
+    });
+    expect(detected).toContain("OpenVINOExecutionProvider");
+  });
+
+  it("detects OpenVINO when hasOpenVino is true (runtime installed)", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: true,
+      hasOpenVinoCompatibleHardware: false,
+    });
+    expect(detected).toContain("OpenVINOExecutionProvider");
+  });
+
+  it("detects OpenVINO with AMD CPU + Intel Arc GPU scenario", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      hasOpenVinoCompatibleHardware: true, // Set by Arc GPU detection
+    });
+    expect(detected).toContain("OpenVINOExecutionProvider");
+  });
+
+  it("does not detect OpenVINO without compatible hardware or runtime", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      hasOpenVinoCompatibleHardware: false,
+    });
+    expect(detected).not.toContain("OpenVINOExecutionProvider");
+  });
+});

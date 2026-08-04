@@ -227,7 +227,11 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   }
   notes.push("QNN requires Snapdragon/Hexagon dev hardware — not probed on desktop.");
 
-  const hasOpenVinoCompatibleHardware = /Intel|Xeon|Core|Arc|Ultra/i.test(platform.cpuModel);
+  // Probe Intel-compatible hardware: Intel CPU OR Intel Arc GPU OR detected OpenVINO devices (GPU/NPU).
+  const hasIntelCpu = /Intel|Xeon|Core|Ultra/i.test(platform.cpuModel);
+  const hasIntelArcGpu = nvidia?.gpus.some((g) => /Arc/i.test(g.name)) ?? false;
+  const hasIntelOpenVinoDevices = openvino?.devices?.some((d) => /GPU|NPU/i.test(d)) ?? false;
+  const hasOpenVinoCompatibleHardware = hasIntelCpu || hasIntelArcGpu || hasIntelOpenVinoDevices;
 
   const detectedProviders = mergeDetectedProviders({
     onnxRuntimeProviders,
@@ -244,7 +248,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     platform,
     nvidia,
     rocm,
-    openvino: openvino ? { ...openvino, available: openvinoVenvAvailable } : undefined,
+    openvino: openvino ? { ...openvino, available: openvinoVenvAvailable, loadable: openvinoVenvAvailable } : undefined,
     // UI consumers (IHV panel) read `.loadable`; keep it aligned with .venv readiness.
     tensorrt: tensorrt ? { ...tensorrt, loadable: tensorRtVenvLoadable } : tensorrt,
     tensorRtRtx: tensorRtRtx ? { ...tensorRtRtx, loadable: tensorRtRtxVenvLoadable } : tensorRtRtx,

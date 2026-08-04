@@ -39,6 +39,7 @@ import {
   OPEN_VINO_NPU_DRIVER_URL,
 } from "@/lib/openvinoDeps";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
+import { useOpenVinoInstall } from "@/components/features/useOpenVinoInstall";
 import {
   Settings2,
   AlertTriangle,
@@ -313,11 +314,36 @@ export function IHVIntegrationPanel({
   const [installingTrt, setInstallingTrt] = useState(false);
   const [installTrtError, setInstallTrtError] = useState<string | null>(null);
   const [installTrtLog, setInstallTrtLog] = useState<string[]>([]);
-  const [installingOpenvino, setInstallingOpenvino] = useState(false);
-  const [installOpenvinoError, setInstallOpenvinoError] = useState<string | null>(null);
-  const [installOpenvinoLog, setInstallOpenvinoLog] = useState<string[]>([]);
 
   const hasAutoAppliedRef = useRef(false);
+
+  const runHardwareProbe = useCallback(
+    async (refresh = false) => {
+      setProbeLoading(true);
+      setProbeError(null);
+      try {
+        const result = await fetchHardwareProbe(refresh);
+        setHardwareProbe(result);
+
+        // Auto-apply recommended provider on first probe completion
+        if (!hasAutoAppliedRef.current && result.recommendedProvider) {
+          hasAutoAppliedRef.current = true;
+          setState({ ihvProvider: result.recommendedProvider });
+        }
+      } catch (err) {
+        setProbeError(err instanceof Error ? err.message : "Hardware probe failed.");
+        setHardwareProbe(null);
+      } finally {
+        setProbeLoading(false);
+      }
+    },
+    [setState],
+  );
+
+  const openvinoInstall = useOpenVinoInstall({
+    onProbeRefresh: runHardwareProbe,
+    isInstallBusy: installingTrt || installingTrtRtx,
+  });
 
   const trtRtxNeedsInstall =
     Boolean(hardwareProbe?.nvidia?.gpus.length) && hardwareProbe?.tensorRtRtx?.loadable !== true;
@@ -326,8 +352,8 @@ export function IHVIntegrationPanel({
   const openvinoNeedsInstall =
     Boolean(hardwareProbe) &&
     isProviderDetectedLocally("OpenVINOExecutionProvider", hardwareProbe) &&
-    hardwareProbe?.openvino?.available !== true;
-  const hardwareInstallBusy = installingTrt || installingTrtRtx || installingOpenvino;
+    hardwareProbe?.openvino?.loadable !== true;
+  const hardwareInstallBusy = installingTrt || installingTrtRtx || openvinoInstall.state.installing;
 
   const runNdjsonInstall = async (
     url: string,
@@ -422,49 +448,6 @@ export function IHVIntegrationPanel({
       setInstallingTrt(false);
     }
   };
-
-  const handleInstallOpenVino = async () => {
-    if (hardwareInstallBusy) return;
-    setInstallingOpenvino(true);
-    setInstallOpenvinoError(null);
-    setInstallOpenvinoLog([]);
-    try {
-      await runNdjsonInstall("/api/env/install-openvino", setInstallOpenvinoLog);
-      await runHardwareProbe(true);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setInstallOpenvinoError(
-        msg === "Failed to fetch"
-          ? "Could not reach the Olive Studio server (or the connection dropped during install). Keep pnpm dev running, then retry."
-          : msg,
-      );
-    } finally {
-      setInstallingOpenvino(false);
-    }
-  };
-
-  const runHardwareProbe = useCallback(
-    async (refresh = false) => {
-      setProbeLoading(true);
-      setProbeError(null);
-      try {
-        const result = await fetchHardwareProbe(refresh);
-        setHardwareProbe(result);
-
-        // Auto-apply recommended provider on first probe completion
-        if (!hasAutoAppliedRef.current && result.recommendedProvider) {
-          hasAutoAppliedRef.current = true;
-          setState({ ihvProvider: result.recommendedProvider });
-        }
-      } catch (err) {
-        setProbeError(err instanceof Error ? err.message : "Hardware probe failed.");
-        setHardwareProbe(null);
-      } finally {
-        setProbeLoading(false);
-      }
-    },
-    [setState],
-  );
 
   useEffect(() => {
     void runHardwareProbe(false);
@@ -563,7 +546,7 @@ export function IHVIntegrationPanel({
                         </span>
                       </p>
                     ) : null}
-                    {hardwareProbe.openvino?.available ? (
+                    {hardwareProbe.openvino?.loadable ? (
                       <p>
                         <span className="text-slate-500">OpenVINO:</span>{" "}
                         <span className="text-slate-200">
@@ -786,8 +769,8 @@ export function IHVIntegrationPanel({
                       ? hardwareProbe?.nvidia?.gpus.map((g) => g.name).join(", ")
                       : p.id === "ROCMExecutionProvider"
                         ? hardwareProbe?.rocm?.gpus.map((g) => g.name).join(", ")
-                        : p.id === "OpenVINOExecutionProvider" && hardwareProbe?.openvino?.available
-                          ? `OpenVINO ${hardwareProbe.openvino.version ?? ""}${hardwareProbe.openvino.devices?.length ? ` (${hardwareProbe.openvino.devices.join(", ")})` : ""}`.trim()
+                        : p.id === "OpenVINOExecutionProvider" && hardwareProbe?.openvino?.version
+                          ? `OpenVINO ${hardwareProbe.openvino.version}${hardwareProbe.openvino.devices?.length ? ` (${hardwareProbe.openvino.devices.join(", ")})` : ""}`.trim()
                           : p.id === "CPUExecutionProvider" && hardwareProbe
                             ? hardwareProbe.platform.cpuModel
                             : null;
@@ -987,10 +970,10 @@ export function IHVIntegrationPanel({
                               <button
                                 type="button"
                                 disabled={hardwareInstallBusy}
-                                onClick={() => void handleInstallOpenVino()}
+                                onClick={() => void openvinoInstall.install()}
                                 className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
                               >
-                                {installingOpenvino ? (
+                                {openvinoInstall.state.installing ? (
                                   <>
                                     <RefreshCw className="h-3 w-3 animate-spin" />
                                     Installing OpenVINO stack…
@@ -999,19 +982,19 @@ export function IHVIntegrationPanel({
                                   "Install OpenVINO stack into .venv"
                                 )}
                               </button>
-                              {installOpenvinoError && (
-                                <p className="text-[11px] text-rose-400 break-all">{installOpenvinoError}</p>
+                              {openvinoInstall.state.error && (
+                                <p className="text-[11px] text-rose-400 break-all">{openvinoInstall.state.error}</p>
                               )}
-                              {installOpenvinoLog.length > 0 && (
+                              {openvinoInstall.state.log.length > 0 && (
                                 <pre className="text-[10px] text-slate-500 max-h-24 max-w-full overflow-auto font-mono whitespace-pre-wrap break-all">
-                                  {installOpenvinoLog.slice(-12).join("\n")}
+                                  {openvinoInstall.state.log.slice(-12).join("\n")}
                                 </pre>
                               )}
                             </div>
                           )}
                           {p.id === "OpenVINOExecutionProvider" &&
-                            hardwareProbe?.openvino?.available &&
-                            !hardwareProbe.openvino.devices?.some((d) => /GPU|NPU/i.test(d)) && (
+                            hardwareProbe?.openvino?.devices?.length &&
+                            !hardwareProbe.openvino.devices.some((d) => /GPU|NPU/i.test(d)) && (
                               <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
                                 Only CPU detected. For GPU/NPU inference, install Intel drivers:{" "}
                                 <a

@@ -8,6 +8,8 @@ export interface GpuInfo {
 
 export interface OpenVinoProbeResult {
   available: boolean;
+  /** True when OpenVINO EP is loadable in the .venv (matches tensorrt.loadable pattern). */
+  loadable?: boolean;
   version?: string;
   /** Devices reported by openvino.Core().available_devices (e.g. CPU, GPU, NPU, AUTO). */
   devices?: string[];
