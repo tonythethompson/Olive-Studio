@@ -4,22 +4,33 @@
  * probeTensorRtRtxLoadable and ensureTensorRtRtx cover the RTX path for
  * consumer GPUs that use NvTensorRTRTXExecutionProvider.
  *
+ * Two packages must be present in the venv for the EP to be detectable:
+ *
+ *   1. `tensorrt-rtx` (PyPI) — must match the runtime ABI indirectly, but
+ *      by itself does NOT register the EP with ONNX Runtime.
+ *   2. `onnxruntime-ep-nv-tensorrt-rtx-cu13` 0.3.0 (NVIDIA PyPI index) —
+ *      ships the ORT op-library DLL that exports `CreateEpFactories` and
+ *      `tensorrt_rtx_*` runtime libs. Calling
+ *      `onnxruntime.register_execution_provider_library` against this
+ *      DLL is what causes `NvTensorRTRTXExecutionProvider` to appear in
+ *      `onnxruntime.get_available_providers()`.
+ *
  * For classic TensorRT (datacenter), see `tensorrt.ts`.
  */
-import { spawn } from "child_process";
 import fs from "fs";
 
 import { execFileAsync } from "../shared/exec.ts";
+import { pipInstall } from "../shared/pipInstall.ts";
 import { ensureVenv } from "../venv/index.ts";
 import { getVenvPython, getVenvPip } from "../venv/paths.ts";
-import { tensorrtRtxInstallArgs, tensorrtRtxLabel } from "../../../lib/tensorrtRtxDeps.ts";
 import {
-  ORT_GPU_PROBE_SCRIPT,
-  parseOrtGpuProbe,
-  pinnedOrtGpuInstallArgs,
-  pinnedOrtGpuLabel,
-  PINNED_ORT_GPU_VERSION,
-} from "../../../lib/oliveGpuRuntime.ts";
+  tensorrtRtxEpAbiInstallArgs,
+  tensorrtRtxEpAbiInstallCommand,
+  tensorrtRtxEpAbiLabel,
+  tensorrtRtxInstallArgs,
+  tensorrtRtxLabel,
+} from "../../../lib/tensorrtRtxDeps.ts";
+import { ensureOnnxRuntimeGpu } from "./cuda.ts";
 
 /**
  * Retrieves the installed TensorRT RTX package version.
@@ -55,19 +66,75 @@ export async function getTensorRtRtxLibsDir(python: string): Promise<string | nu
 /**
  * Checks whether TensorRT RTX loads successfully and provides the required ONNX Runtime execution provider.
  *
+ * Steps: import the NVIDIA EP-ABI plugin package (if installed), register
+ * `NvTensorRTRTXExecutionProvider` against the bundled op-library DLL, then
+ * check `onnxruntime.get_available_providers()`. If either the ABI package
+ * is missing or the registration fails, the probe falls through to a
+ * descriptive failure detail so the install path can act.
+ *
  * @param python - Path to the Python interpreter to probe
  * @returns The load status, with the detected version when successful or an error detail when unsuccessful
  */
 export async function probeTensorRtRtxLoadable(
   python: string,
 ): Promise<{ loadable: boolean; detail?: string; version?: string }> {
+  // Self-diagnostics: every failure case ends in `fail:<detail>` so the
+  // outer catch can keep treating missing modules uniformly. We deliberately
+  // check ABI-plugin presence BEFORE importing onnxruntime so a missing
+  // plugin reports a clean "plugin not installed" message instead of a
+  // ForeignFunction failure deep in ORT's symbol-resolution path.
   const probeScript = `
-import tensorrt_rtx
-import onnxruntime as ort
+import os, sys
+try:
+    import tensorrt_rtx
+except Exception as exc:
+    print("fail:tensorrt_rtx is not installed in .venv")
+    sys.exit(0)
+try:
+    import onnxruntime as ort
+except Exception as exc:
+    print("fail:onnxruntime is not installed in .venv (required for TensorRT RTX detection)")
+    sys.exit(0)
+
+def _register_rtx_ep():
+    try:
+        import onnxruntime_ep_nv_tensorrt_rtx as _plug
+    except Exception as exc:
+        return None
+    pkg_dir = os.path.dirname(_plug.__file__)
+    # Pick the platform-appropriate extension: .dll on Windows, .so on
+    # Linux, .dylib on macOS. A hardcoded ".dll" hides the real reason
+    # an import fails on Linux/macOS.
+    import sys
+    if sys.platform == "win32":
+        _ext = ".dll"
+        _libname = "onnxruntime_providers_nv_tensorrt_rtx" + _ext
+    elif sys.platform == "darwin":
+        _libname = "libonnxruntime_providers_nv_tensorrt_rtx.dylib"
+    else:
+        _libname = "libonnxruntime_providers_nv_tensorrt_rtx.so"
+    dll = os.path.join(pkg_dir, _libname)
+    if not os.path.isfile(dll):
+        return None
+    try:
+        ort.register_execution_provider_library("NvTensorRTRTXExecutionProvider", dll)
+        return dll
+    except Exception as exc:
+        return exc
+
+_dll_or_err = _register_rtx_ep()
+if _dll_or_err is None:
+    print("fail:onnxruntime-ep-nv-tensorrt-rtx-cu13 is not installed in .venv (NvTensorRTRTXExecutionProvider requires its ORT op-library)")
+    sys.exit(0)
+if isinstance(_dll_or_err, Exception):
+    print("fail:TensorRT RTX op-library failed to register with onnxruntime: " + str(_dll_or_err).split(chr(10))[0][:200])
+    sys.exit(0)
+
 if "NvTensorRTRTXExecutionProvider" not in ort.get_available_providers():
-    print("fail:NvTensorRTRTXExecutionProvider missing from onnxruntime-gpu")
-else:
-    print("ok:" + tensorrt_rtx.__version__)
+    print("fail:NvTensorRTRTXExecutionProvider not exposed by onnxruntime after plugin registration")
+    sys.exit(0)
+
+print("ok:" + tensorrt_rtx.__version__)
 `.trim();
   try {
     const { stdout } = await execFileAsync(python, ["-c", probeScript]);
@@ -111,55 +178,28 @@ else:
   }
 }
 
-/**
- * Installs Python packages with pip and reports process output line by line.
- *
- * @param pip - Path to the pip executable
- * @param args - Arguments specifying the packages and installation options
- * @param onLine - Callback for each captured output line
- * @throws If pip cannot be launched or the installation exits unsuccessfully
- */
-async function pipInstall(pip: string, args: string[], onLine: (line: string) => void): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const proc = spawn(pip, ["install", ...args], { stdio: "pipe" });
-    proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-    proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-    proc.on("error", (err: Error) =>
-      reject(
-        new Error(
-          `Failed to launch ${pip}: ${err.message}. Create the project .venv via Setup runtime first.`,
-        ),
-      ),
-    );
-    proc.on("close", (code: number | null) =>
-      code === 0 ? resolve() : reject(new Error(`pip install ${args.join(" ")} failed (exit ${code})`)),
-    );
-  });
-}
+// `pipInstall` is imported from `../shared/pipInstall.ts` so the same
+// NDJSON line shape + error contract is used by every install route.
+// The local copy was deleted when this was extracted.
+//
+// `ensureOnnxRuntimeGpu` is imported from `./cuda.ts` so the RTX and
+// CUDA paths share one probe-then-install-retry loop; the previous
+// private copy in this file was drifting in subtle ways from the
+// CUDA path's version.
 
-async function ensureOnnxRuntimeGpu(
-  python: string,
+/**
+ * Installs the NVIDIA standalone TensorRT-RTX EP-ABI plugin (CUDA-13) from
+ * NVIDIA's PyPI index. This is the package that ships the ORT op-library
+ * DLL (`onnxruntime_providers_nv_tensorrt_rtx.dll`) which registers the
+ * `NvTensorRTRTXExecutionProvider` symbol with onnxruntime.
+ */
+async function ensureTensorRtRtxEpAbi(
   pip: string,
   onLine: (line: string) => void,
 ): Promise<void> {
-  try {
-    const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT]);
-    const probe = parseOrtGpuProbe(stdout);
-    if (probe.ok) {
-      onLine("[deps] onnxruntime-gpu already installed ✓");
-      return;
-    }
-    if (probe.distVersion || probe.ortVersion) {
-      onLine(
-        `[deps] onnxruntime-gpu ${probe.distVersion ?? probe.ortVersion} installed — need ${PINNED_ORT_GPU_VERSION}, reinstalling...`,
-      );
-    }
-  } catch {
-    /* install below */
-  }
-  onLine(`[deps] Installing ${pinnedOrtGpuLabel()} (required to detect TensorRT RTX)...`);
-  await pipInstall(pip, pinnedOrtGpuInstallArgs(), onLine);
-  onLine(`[deps] ${pinnedOrtGpuLabel()} installed ✓`);
+  onLine(`[deps] Installing ${tensorrtRtxEpAbiLabel()} (NVIDIA EP-ABI plugin)...`);
+  await pipInstall(pip, tensorrtRtxEpAbiInstallArgs(), onLine);
+  onLine(`[deps] ${tensorrtRtxEpAbiLabel()} installed ✓`);
 }
 
 /**
@@ -188,7 +228,14 @@ export async function ensureTensorRtRtx(
     };
   }
 
-  await ensureOnnxRuntimeGpu(venvPython, pip, onLine);
+  // Reuse the shared CUDA install helper — it probes
+  // `onnxRuntimeProviders` and, on mismatch, pip-installs the pinned
+  // wheel into the same .venv. The .venv-prep work above is idempotent
+  // and fast on a warm venv.
+  const ortGpu = await ensureOnnxRuntimeGpu(onLine);
+  if (!ortGpu.ok) {
+    return { ok: false, error: ortGpu.error };
+  }
 
   const probe = await probeTensorRtRtxLoadable(venvPython);
   if (probe.loadable) {
@@ -201,13 +248,31 @@ export async function ensureTensorRtRtx(
 
   const installed = await getInstalledTensorRtRtxVersion(venvPython);
   if (!installed) {
-    onLine(`[deps] Installing ${tensorrtRtxLabel()} for TensorRT RTX EP (may take a few minutes)...`);
+    onLine(`[deps] Installing ${tensorrtRtxLabel()} for TensorRT RTX runtime (may take a few minutes)...`);
+    await pipInstall(pip, tensorrtRtxInstallArgs(), onLine);
+    onLine(`[deps] ${tensorrtRtxLabel()} installed ✓`);
   } else {
-    onLine(`[deps] ${tensorrtRtxLabel()} present but runtime not loadable — reinstalling...`);
+    onLine(
+      `[deps] ${tensorrtRtxLabel()} present but EP not loaded by onnxruntime — installing NVIDIA EP-ABI plugin...`,
+    );
   }
 
-  await pipInstall(pip, tensorrtRtxInstallArgs(), onLine);
-  onLine(`[deps] ${tensorrtRtxLabel()} installed ✓`);
+  // Always run the EP-ABI install when the probe failed. pip reinstalls
+  // an already-present package as a no-op "already satisfied" — so this
+  // stays cheap when both `tensorrt-rtx` AND the ABI plugin were already
+  // present, but it also catches the case where the ABI plugin is missing
+  // regardless of the specific failure message from `probeTensorRtRtxLoadable`.
+  try {
+    await ensureTensorRtRtxEpAbi(pip, onLine);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      ok: false,
+      error:
+        `${tensorrtRtxEpAbiLabel()} install failed: ${msg}. ` +
+        `Install it manually with: ${tensorrtRtxEpAbiInstallCommand()}`,
+    };
+  }
 
   const retry = await probeTensorRtRtxLoadable(venvPython);
   if (retry.loadable) {
@@ -220,6 +285,8 @@ export async function ensureTensorRtRtx(
 
   return {
     ok: false,
-    error: retry.detail ?? "TensorRT RTX not loadable after install",
+    error:
+      retry.detail ??
+      `TensorRT RTX not loadable after installing ${tensorrtRtxLabel()} + ${tensorrtRtxEpAbiLabel()}`,
   };
 }

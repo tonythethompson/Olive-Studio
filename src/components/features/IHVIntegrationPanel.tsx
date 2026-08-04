@@ -33,6 +33,12 @@ import {
   isProviderDetectedLocally,
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
+import {
+  CUDA_DOWNLOAD_LINKS,
+  CUDA_SM_FLOOR,
+  isPreMaxwellNvidiaBox,
+  pinnedOrtGpuInstallCommand,
+} from "@/lib/cudaDeps";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import {
@@ -52,6 +58,7 @@ import {
   HardDrive,
   XCircle,
   Globe,
+  ExternalLink,
 } from "lucide-react";
 
 export { getProviderConflicts };
@@ -309,6 +316,9 @@ export function IHVIntegrationPanel({
   const [installingTrt, setInstallingTrt] = useState(false);
   const [installTrtError, setInstallTrtError] = useState<string | null>(null);
   const [installTrtLog, setInstallTrtLog] = useState<string[]>([]);
+  const [installingOrtGpu, setInstallingOrtGpu] = useState(false);
+  const [installOrtGpuError, setInstallOrtGpuError] = useState<string | null>(null);
+  const [installOrtGpuLog, setInstallOrtGpuLog] = useState<string[]>([]);
 
   const hasAutoAppliedRef = useRef(false);
 
@@ -316,7 +326,31 @@ export function IHVIntegrationPanel({
     Boolean(hardwareProbe?.nvidia?.gpus.length) && hardwareProbe?.tensorRtRtx?.loadable !== true;
   const trtNeedsInstall =
     Boolean(hardwareProbe?.nvidia?.gpus.length) && hardwareProbe?.tensorrt?.loadable !== true;
-  const tensorRtInstallBusy = installingTrt || installingTrtRtx;
+  // Single mutex covering all three pip install flows (TensorRT,
+  // TensorRT-RTX, onnxruntime-gpu). All three routes hit the same
+  // `.venv`, so any pair would step on each other's lock files if
+  // allowed to run concurrently. The individual `installingTrt | `
+  // Rtx | OrtGpu` booleans stay below so each button can keep its
+  // own per-flow spinner + error state, but the gate is shared.
+  const installInProgress = installingTrt || installingTrtRtx || installingOrtGpu;
+
+  // CUDA install / toolkit-link gating. These mirror the TRT shape but
+  // distinguish the four CUDA states:
+  //   1. Pre-Maxwell GPU: don't offer an install button (cannot run modern CUDA).
+  //   2. NVIDIA + driver OK + onnxruntime-gpu CUDA EP missing in .venv: show
+  //      a pip install button for the pinned wheel.
+  //   3. NVIDIA + driver OK + CUDA EP registered + toolkit missing: show an
+  //      informational download link (toolkit optional for inference).
+  //   4. NVIDIA + driver OK + CUDA EP missing + toolkit missing: show BOTH
+  //      (the pip install is the actionable recovery; the download link is
+  //      informational for users who also want native builds).
+  const nvidiaGpus = hardwareProbe?.nvidia?.gpus ?? [];
+  const isPreMaxwellBox = isPreMaxwellNvidiaBox(nvidiaGpus);
+  const cudaEpInVenv = hardwareProbe?.cuda?.loadable === true;
+  const cudaNeedsOrtGpuInstall =
+    nvidiaGpus.length > 0 && !isPreMaxwellBox && !cudaEpInVenv;
+  const cudaToolkitMissing = hardwareProbe?.nvidia?.cudaToolkit?.available === false;
+  const cudaToolkitMissingAndEpWorks = nvidiaGpus.length > 0 && !isPreMaxwellBox && cudaEpInVenv && cudaToolkitMissing;
 
   const runNdjsonInstall = async (
     url: string,
@@ -373,7 +407,7 @@ export function IHVIntegrationPanel({
   };
 
   const handleInstallTensorRtRtx = async () => {
-    if (tensorRtInstallBusy) return;
+    if (installInProgress) return;
     setInstallingTrtRtx(true);
     setInstallTrtRtxError(null);
     setInstallTrtRtxLog([]);
@@ -393,7 +427,7 @@ export function IHVIntegrationPanel({
   };
 
   const handleInstallTensorRt = async () => {
-    if (tensorRtInstallBusy) return;
+    if (installInProgress) return;
     setInstallingTrt(true);
     setInstallTrtError(null);
     setInstallTrtLog([]);
@@ -409,6 +443,26 @@ export function IHVIntegrationPanel({
       );
     } finally {
       setInstallingTrt(false);
+    }
+  };
+
+  const handleInstallOrtGpu = async () => {
+    if (installInProgress) return;
+    setInstallingOrtGpu(true);
+    setInstallOrtGpuError(null);
+    setInstallOrtGpuLog([]);
+    try {
+      await runNdjsonInstall("/api/env/install-onnxruntime-gpu", setInstallOrtGpuLog);
+      await runHardwareProbe(true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setInstallOrtGpuError(
+        msg === "Failed to fetch"
+          ? "Could not reach the Olive Studio server (or the connection dropped during install). Keep pnpm dev running, then retry."
+          : msg,
+      );
+    } finally {
+      setInstallingOrtGpu(false);
     }
   };
 
@@ -873,7 +927,7 @@ export function IHVIntegrationPanel({
                               )}
                               <button
                                 type="button"
-                                disabled={tensorRtInstallBusy}
+                                disabled={installInProgress}
                                 onClick={() => void handleInstallTensorRtRtx()}
                                 className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
                               >
@@ -914,7 +968,7 @@ export function IHVIntegrationPanel({
                               )}
                               <button
                                 type="button"
-                                disabled={tensorRtInstallBusy}
+                                disabled={installInProgress}
                                 onClick={() => void handleInstallTensorRt()}
                                 className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
                               >
@@ -934,6 +988,90 @@ export function IHVIntegrationPanel({
                                 <pre className="text-[10px] text-slate-500 max-h-24 max-w-full overflow-auto font-mono whitespace-pre-wrap break-all">
                                   {installTrtLog.slice(-12).join("\n")}
                                 </pre>
+                              )}
+                            </div>
+                          )}
+                          {/* CUDA install surface (mirrors TRT shape). Four cases:
+                              (a) pre-Maxwell GPU: rose-toned terminator, no install
+                                  button (cannot run modern CUDA on Kepler SM 3.x).
+                              (b) NVIDIA + driver OK + onnxruntime-gpu CUDA EP
+                                  missing: amber pip install button for the pinned
+                                  wheel. Reprobes after install.
+                              (c) NVIDIA + driver OK + CUDA EP registered + cuda
+                                  Toolkit missing: amber-ish informational
+                                  download link (toolkit is optional for inference).
+                              (d) NVIDIA + driver OK + both missing: both controls
+                                  stacked. The pip install is the actionable recovery. */}
+                          {p.id === "CUDAExecutionProvider" && isPreMaxwellBox && (
+                            <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
+                              <p className="text-[11px] text-rose-400/90 leading-relaxed">
+                                {nvidiaGpus.map((g) => g.name).join(", ")} predates the CUDA 12 toolkit
+                                floor (compute capability ≥ {CUDA_SM_FLOOR}, Maxwell / RTX 20xx+).
+                                Installing the toolkit or the CUDA wheel cannot recover this — these
+                                cards cannot execute modern CUDA. Use the CPU provider, or upgrade
+                                hardware.
+                              </p>
+                            </div>
+                          )}
+                          {p.id === "CUDAExecutionProvider" && (cudaNeedsOrtGpuInstall || cudaToolkitMissingAndEpWorks) && (
+                            <div className="mt-2 space-y-2 min-w-0" onClick={(e) => e.stopPropagation()}>
+                              {cudaNeedsOrtGpuInstall && (
+                                <>
+                                  <p className="text-[11px] text-amber-400/90 leading-relaxed">
+                                    {hardwareProbe?.onnxRuntimeProviders === undefined
+                                      ? "Onnxruntime-gpu isn't installed in the project "
+                                      : "Onnxruntime-gpu CUDA execution provider is not registered in the project "}
+                                    <code className="text-slate-400">.venv</code>. Click below
+                                    to pip-install the pinned wheel
+                                    (<code className="text-slate-400 font-mono break-all">
+                                      {pinnedOrtGpuInstallCommand()}
+                                    </code>
+                                    ); the panel re-probes after install.
+                                  </p>
+                                  <button
+                                    type="button"
+                                    disabled={installInProgress}
+                                    onClick={() => void handleInstallOrtGpu()}
+                                    className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
+                                  >
+                                    {installingOrtGpu ? (
+                                      <>
+                                        <RefreshCw className="h-3 w-3 animate-spin" />
+                                        Installing onnxruntime-gpu…
+                                      </>
+                                    ) : (
+                                      "Install onnxruntime-gpu into .venv"
+                                    )}
+                                  </button>
+                                  {installOrtGpuError && (
+                                    <p className="text-[11px] text-rose-400 break-all">
+                                      {installOrtGpuError}
+                                    </p>
+                                  )}
+                                  {installOrtGpuLog.length > 0 && (
+                                    <pre className="text-[10px] text-slate-500 max-h-24 max-w-full overflow-auto font-mono whitespace-pre-wrap break-all">
+                                      {installOrtGpuLog.slice(-12).join("\n")}
+                                    </pre>
+                                  )}
+                                </>
+                              )}
+                              {cudaToolkitMissing && cudaEpInVenv && (
+                                <p className="text-[11px] text-amber-500/80 leading-relaxed">
+                                  NVIDIA driver + onnxruntime-gpu CUDA EP detected, but the CUDA
+                                  Toolkit (<code className="text-slate-400">nvcc</code>) is not
+                                  installed. Inference via OLIVE recipes does not need it; for
+                                  native CUDA builds, grab it from{" "}
+                                  <a
+                                    href={CUDA_DOWNLOAD_LINKS.archive}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-electric-blue hover:text-white underline-offset-2 underline inline-flex items-center gap-1"
+                                  >
+                                    NVIDIA's CUDA Toolkit Archive
+                                    <ExternalLink className="h-3 w-3" />
+                                  </a>
+                                  .
+                                </p>
                               )}
                             </div>
                           )}

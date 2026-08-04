@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { mergeDetectedProviders, pickRecommendedProvider } from "@/lib/hardwareProbe";
+import {
+  getProviderAvailabilityBlock,
+  isNvidiaGpuTensorRtFamily,
+  mergeDetectedProviders,
+  parseComputeCapability,
+  pickRecommendedProvider,
+  TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY,
+  type HardwareProbeResult,
+} from "@/lib/hardwareProbe";
 
 describe("mergeDetectedProviders TensorRT", () => {
   it("does not infer classic TensorRT until the runtime probe succeeds", () => {
@@ -50,5 +58,344 @@ describe("mergeDetectedProviders TensorRT", () => {
     expect(pickRecommendedProvider(detected, { tensorRtRtxLoadable: true, tensorRtLoadable: false })).toBe(
       "NvTensorRTRTXExecutionProvider",
     );
+  });
+
+  it("treats an unknown compute capability as permissive (does not silently downgrade)", () => {
+    // Older nvidia-smi drivers or parse hiccups can drop compute_cap.
+    // mergeDetectedProviders must NOT use that absence as an excuse to hide
+    // RTX-family EPs — the user already sees a separate "loadable" probe
+    // for the runtime side. Missing SM data == we don't know == assume yes.
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: true,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      tensorRtLoadable: true,
+      tensorRtRtxLoadable: true,
+      nvidiaTensorRtFamilyCapable: undefined,
+    });
+    expect(detected).toContain("TensorrtExecutionProvider");
+    expect(detected).toContain("NvTensorRTRTXExecutionProvider");
+  });
+});
+
+describe("parseComputeCapability", () => {
+  it("parses a well-formed '8.9' into a comparable pair", () => {
+    expect(parseComputeCapability("8.9")).toEqual({ major: 8, minor: 9 });
+    expect(parseComputeCapability("7.5")).toEqual({ major: 7, minor: 5 });
+    expect(parseComputeCapability("12.0")).toEqual({ major: 12, minor: 0 });
+  });
+
+  it("treats undefined / malformed input as 'unknown'", () => {
+    expect(parseComputeCapability(undefined)).toBeUndefined();
+    expect(parseComputeCapability("")).toBeUndefined();
+    expect(parseComputeCapability("8")).toBeUndefined();
+    expect(parseComputeCapability("8.x")).toBeUndefined();
+    expect(parseComputeCapability("0.0")).toEqual({ major: 0, minor: 0 });
+  });
+});
+
+describe("isNvidiaGpuTensorRtFamily", () => {
+  it("accepts Turing (7.5) as the boundary case", () => {
+    expect(isNvidiaGpuTensorRtFamily({ name: "RTX 2080 Ti", computeCapability: "7.5" })).toBe(true);
+  });
+
+  it("accepts cards at or above the floor", () => {
+    expect(isNvidiaGpuTensorRtFamily({ name: "RTX 3080", computeCapability: "8.6" })).toBe(true);
+    expect(isNvidiaGpuTensorRtFamily({ name: "RTX 4090", computeCapability: "8.9" })).toBe(true);
+    expect(isNvidiaGpuTensorRtFamily({ name: "RTX 5070", computeCapability: "10.0" })).toBe(true);
+  });
+
+  it("rejects pre-Turing cards (Maxwell, Pascal, Kepler)", () => {
+    expect(isNvidiaGpuTensorRtFamily({ name: "GTX 1080", computeCapability: "6.1" })).toBe(false);
+    expect(isNvidiaGpuTensorRtFamily({ name: "GTX 980", computeCapability: "5.2" })).toBe(false);
+    expect(isNvidiaGpuTensorRtFamily({ name: "GT 1030", computeCapability: "6.0" })).toBe(false);
+    // Older drivers report '0.0' which must be treated as below floor,
+    // not as 'unknown', so pre-Turing cards never silently downgrade.
+    expect(isNvidiaGpuTensorRtFamily({ name: "Unidentified", computeCapability: "0.0" })).toBe(false);
+  });
+
+  it("treats missing compute capability as 'we don't know -> permissive'", () => {
+    expect(isNvidiaGpuTensorRtFamily({ name: "GTX 1080" })).toBe(true);
+  });
+
+  it("exports the constant matching the actual minimum", () => {
+    expect(TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY).toEqual({ major: 7, minor: 5 });
+  });
+});
+
+describe("mergeDetectedProviders — CUDA cudaLoadable gating", () => {
+  it("strips CUDAExecutionProvider when cudaLoadable is explicitly false", () => {
+    // Mirrors the RTX/TRT pattern: when the ORT probe reports the EP
+    // isn't loadable (wheel missing or driver mismatch), we must NOT
+    // advertise it as detected — otherwise the recipe-compatibility
+    // layer can't gate on `isProviderDetectedLocally`.
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: true,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      cudaLoadable: false,
+    });
+    expect(detected).not.toContain("CUDAExecutionProvider");
+  });
+
+  it("strips CUDAExecutionProvider from a reported ORT list when cudaLoadable is false", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: true,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      onnxRuntimeProviders: ["CPUExecutionProvider", "CUDAExecutionProvider"],
+      cudaLoadable: false,
+    });
+    expect(detected).toContain("CPUExecutionProvider");
+    expect(detected).not.toContain("CUDAExecutionProvider");
+  });
+
+  it("keeps CUDAExecutionProvider when cudaLoadable is true (or undefined, permissive default)", () => {
+    expect(
+      mergeDetectedProviders({
+        hasNvidiaGpu: true,
+        hasRocmGpu: false,
+        hasOpenVino: false,
+        cudaLoadable: true,
+      }).includes("CUDAExecutionProvider"),
+    ).toBe(true);
+    expect(
+      mergeDetectedProviders({
+        hasNvidiaGpu: true,
+        hasRocmGpu: false,
+        hasOpenVino: false,
+        // cudaLoadable undefined → permissive
+      }).includes("CUDAExecutionProvider"),
+    ).toBe(true);
+  });
+});
+
+describe("mergeDetectedProviders — pre-Turing (SM < 7.5) gating", () => {
+  it("hides classic TensorRT and TensorRT-RTX when every NVIDIA GPU is below the floor", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: true,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      tensorRtLoadable: true, // SDK installed; doesn't matter — GPU can't run it
+      tensorRtRtxLoadable: true,
+      nvidiaTensorRtFamilyCapable: false,
+    });
+    expect(detected).toContain("CUDAExecutionProvider");
+    expect(detected).not.toContain("TensorrtExecutionProvider");
+    expect(detected).not.toContain("NvTensorRTRTXExecutionProvider");
+  });
+
+  it("keeps TensorRT family when at least one GPU meets the floor (mixed box)", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: true,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      tensorRtLoadable: true,
+      tensorRtRtxLoadable: true,
+      nvidiaTensorRtFamilyCapable: true,
+    });
+    expect(detected).toContain("NvTensorRTRTXExecutionProvider");
+    expect(detected).toContain("TensorrtExecutionProvider");
+  });
+
+  it("strips the RTX-family EPs from a reported ORT list when the GPU is pre-Turing", () => {
+    // Belt-and-braces: even if onnxruntime reports CUDA/CPU only, an ORT
+    // build that ALSO reports TensorrtExecutionProvider must still be filtered
+    // when the GPU is below floor. The probe-aware caller passes the flag;
+    // we mirror the same gate for the ORT branch.
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: true,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      onnxRuntimeProviders: [
+        "CPUExecutionProvider",
+        "CUDAExecutionProvider",
+        "TensorrtExecutionProvider",
+        "NvTensorRTRTXExecutionProvider",
+      ],
+      tensorRtLoadable: true,
+      tensorRtRtxLoadable: true,
+      nvidiaTensorRtFamilyCapable: false,
+    });
+    expect(detected).toContain("CUDAExecutionProvider");
+    expect(detected).not.toContain("TensorrtExecutionProvider");
+    expect(detected).not.toContain("NvTensorRTRTXExecutionProvider");
+  });
+});
+
+describe("getProviderAvailabilityBlock — pre-Turing messaging", () => {
+  // Lock the user-facing wording so future rewording can't drop the
+  // SM 7.5 floor or the Maxwell/Pascal/Kepler callout — those are the
+  // three pieces the user needs to understand the EP is unavailable
+  // even after a fresh install.
+  const smFloor = `${TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.major}.${TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.minor}`;
+  const preTuringProbe = {
+    probedAt: new Date().toISOString(),
+    platform: { os: "win32 10.0", arch: "x64", cpuModel: "Test CPU", cpuCores: 8 },
+    nvidia: { gpus: [{ name: "NVIDIA GeForce GTX 1080", computeCapability: "6.1" }] },
+    detectedProviders: ["CPUExecutionProvider", "CUDAExecutionProvider"],
+    recommendedProvider: "CUDAExecutionProvider",
+    notes: [],
+  } as HardwareProbeResult;
+
+  it("explains the SM 7.5 floor when classic TensorRT is unavailable on a pre-Turing GPU", () => {
+    const block = getProviderAvailabilityBlock("TensorrtExecutionProvider", preTuringProbe);
+    expect(block?.reason).toContain(smFloor);
+    expect(block?.reason.toLowerCase()).toContain("turing");
+    expect(block?.reason.toLowerCase()).toMatch(/maxwell|pascal|kepler/);
+  });
+
+  it("explains the SM 7.5 floor when TensorRT RTX is unavailable on a pre-Turing GPU", () => {
+    const block = getProviderAvailabilityBlock("NvTensorRTRTXExecutionProvider", preTuringProbe);
+    expect(block?.reason).toContain(smFloor);
+    expect(block?.reason.toLowerCase()).toContain("turing");
+    expect(block?.reason.toLowerCase()).toMatch(/maxwell|pascal|kepler/);
+  });
+
+  it("returns null for missing providers that are not gated by SM (CPU)", () => {
+    expect(getProviderAvailabilityBlock("CPUExecutionProvider", preTuringProbe)).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// CUDA: 4-state unavailable-reason branching
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("getProviderAvailabilityBlock — CUDA 4-state branching", () => {
+  const cudaSmFloor = "5.0";
+
+  function makeProbe(overrides: Partial<HardwareProbeResult>): HardwareProbeResult {
+    return {
+      probedAt: new Date().toISOString(),
+      platform: { os: "win32 10.0", arch: "x64", cpuModel: "Test CPU", cpuCores: 8 },
+      nvidia: undefined,
+      rocm: undefined,
+      openvino: undefined,
+      tensorrt: undefined,
+      tensorRtRtx: undefined,
+      onnxRuntimeProviders: undefined,
+      detectedProviders: ["CPUExecutionProvider"],
+      recommendedProvider: "CPUExecutionProvider",
+      notes: [],
+      ...overrides,
+    };
+  }
+
+  it("1) reports 'no GPU' wording for a CPU-only box (no nvidia field)", () => {
+    const block = getProviderAvailabilityBlock(
+      "CUDAExecutionProvider",
+      makeProbe({ detectedProviders: ["CPUExecutionProvider"] }),
+    );
+    expect(block?.reason).toMatch(/No NVIDIA GPU|nvidia-smi/);
+  });
+
+  it("2) reports 'pre-Maxwell' wording when every NVIDIA GPU is below SM 5.0", () => {
+    const probe = makeProbe({
+      nvidia: {
+        gpus: [{ name: "NVIDIA GeForce GTX 680", computeCapability: "3.0" }],
+      },
+      onnxRuntimeProviders: ["CPUExecutionProvider"],
+    });
+    const block = getProviderAvailabilityBlock("CUDAExecutionProvider", probe);
+    expect(block?.reason).toContain(cudaSmFloor);
+    // Names at least one of the pre-floor families for clarity.
+    expect(block?.reason.toLowerCase()).toMatch(/maxwell|pascal|kepler/);
+    // Must not advertise a one-click install that cannot succeed.
+    expect(block?.reason).not.toMatch(/pip install/);
+  });
+
+  it("3) reports pip install hint when NVIDIA driver is fine but onnxruntime-gpu missing", () => {
+    const probe = makeProbe({
+      nvidia: {
+        gpus: [{ name: "NVIDIA GeForce RTX 5070", computeCapability: "12.0" }],
+        cudaVersion: "12.8",
+        cudaToolkit: { available: true, version: "12.8" },
+      },
+    });
+    const block = getProviderAvailabilityBlock("CUDAExecutionProvider", probe);
+    expect(block?.reason).toMatch(/pip install onnxruntime-gpu/);
+    expect(block?.reason).toContain("RTX 5070");
+  });
+
+  it("3b) pip install hint references the pinned wheel version 1.26.0", () => {
+    const probe = makeProbe({
+      nvidia: {
+        gpus: [{ name: "NVIDIA GeForce RTX 5070", computeCapability: "12.0" }],
+      },
+    });
+    const block = getProviderAvailabilityBlock("CUDAExecutionProvider", probe);
+    expect(block?.reason).toContain("onnxruntime-gpu==1.26.0");
+  });
+
+  it("3c) mentions NVIDIA Toolkit archive link when toolkit is also missing", () => {
+    const probe = makeProbe({
+      nvidia: {
+        gpus: [{ name: "NVIDIA GeForce RTX 5070", computeCapability: "12.0" }],
+        cudaToolkit: { available: false },
+      },
+    });
+    const block = getProviderAvailabilityBlock("CUDAExecutionProvider", probe);
+    expect(block?.reason).toMatch(/developer\.nvidia\.com/);
+  });
+
+  it("4) reports state-4 driver/wheel mismatch when NVIDIA + ORT + toolkit OK but EP stripped from detectedProviders", () => {
+    // State 4: NVIDIA + driver + toolkit + onnxruntime-gpu CUDA EP all
+    // detected — but the EP is NOT in detectedProviders (because the
+    // route's mergeDetectedProviders stripped it via cudaLoadable=false,
+    // e.g. a CUDA 13 wheel against a CUDA 11 driver). `detectedProviders`
+    // set explicitly here mirrors what /api/system/hardware-probe would
+    // surface so getProviderAvailabilityBlock reaches the state-4
+    // reason branch instead of the install-hint branch.
+    const probe = makeProbe({
+      nvidia: {
+        gpus: [{ name: "NVIDIA GeForce RTX 5070", computeCapability: "12.0" }],
+        cudaVersion: "12.8",
+        cudaToolkit: { available: true, version: "12.8" },
+      },
+      // state-4 fixture: NVIDIA + driver + toolkit all healthy AND
+      // probe.cuda.loadable === true (so the state-3 install-hint branch
+      // is bypassed), but detectedProviders was post-processed to drop
+      // CUDAExecutionProvider (e.g. a downstream merge only kept EP
+      // strings whose .loadable flag was true at probe time, and the EP
+      // fell out). This exercises the cascade through state 3 -> state
+      // 4 and surfaces the driver/wheel mismatch reason rather than the
+      // 'install onnxruntime-gpu' advice.
+      cuda: { loadable: true },
+      onnxRuntimeProviders: ["CPUExecutionProvider", "CUDAExecutionProvider"],
+      detectedProviders: ["CPUExecutionProvider"],
+    });
+    const block = getProviderAvailabilityBlock("CUDAExecutionProvider", probe);
+    expect(block?.reason).toMatch(/driver\/wheel version mismatch/i);
+    expect(block?.reason).not.toMatch(/pip install onnxruntime-gpu/);
+  });
+
+  it("returns null block when CUDA is in detectedProviders (already working)", () => {
+    const probe = makeProbe({
+      nvidia: {
+        gpus: [{ name: "NVIDIA GeForce RTX 5070", computeCapability: "12.0" }],
+        cudaToolkit: { available: true, version: "12.8" },
+      },
+      onnxRuntimeProviders: ["CPUExecutionProvider", "CUDAExecutionProvider"],
+      detectedProviders: ["CPUExecutionProvider", "CUDAExecutionProvider"],
+    });
+    expect(getProviderAvailabilityBlock("CUDAExecutionProvider", probe)).toBeNull();
+  });
+
+  it("CUDA reason always names the SM 5.0 floor when NVIDIA is present but pre-Maxwell", () => {
+    // Use a pure pre-Maxwell box so the pre-Maxwell terminator branch
+    // fires (mixed boxes hit the install-needed path, which doesn't pin
+    // the SM floor). The terminator message must lock the 5.0 floor in
+    // user-facing copy so a future rewording can't drift away from it.
+    const probe = makeProbe({
+      nvidia: {
+        gpus: [
+          { name: "GTX 680", computeCapability: "3.0" },
+          { name: "GT 730 Kepler", computeCapability: "3.5" },
+        ],
+      },
+      detectedProviders: ["CPUExecutionProvider"],
+    });
+    const block = getProviderAvailabilityBlock("CUDAExecutionProvider", probe);
+    expect(block?.reason).toContain(cudaSmFloor);
   });
 });

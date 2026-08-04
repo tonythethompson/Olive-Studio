@@ -51,13 +51,18 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
   },
   {
     id: "NvTensorRTRTXExecutionProvider",
+    // The SM 7.5 (Turing) floor mirrors `TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY`
+    // in `src/lib/hardwareProbe.ts`. Keep this wording in lockstep with the
+    // `undetectedProviderReason('NvTensorRTRTXExecutionProvider')` text so the
+    // chip and the unavailable reason can't drift apart; the
+    // providerCatalog.test.ts guard test enforces this.
     name: "NVIDIA TensorRT RTX",
     shortName: "TRT RTX",
-    desc: "Consumer RTX GPUs (GeForce 30xx+). JIT TensorRT engines via tensorrt-rtx — no full SDK.",
+    desc: "JIT TensorRT engines via tensorrt-rtx — no full SDK. Runs on NVIDIA GPUs with compute capability ≥ 7.5 (Turing / GeForce RTX 20xx or newer; primary target Ampere/Ada/Blackwell consumer RTX).",
     icon: Layers,
     tooltip: {
       requirements:
-        "NVIDIA GeForce RTX 30xx or newer (Ampere+). Uses tensorrt-rtx runtime — no full TensorRT SDK needed.",
+        "NVIDIA GPU with compute capability ≥ 7.5 (Turing / GeForce RTX 20xx or newer). Targets consumer RTX (Ampere/Ada/Blackwell) via tensorrt-rtx runtime — no full TensorRT SDK needed. Pre-Turing cards (Maxwell/Pascal/Kepler) cannot run this EP even after install.",
       quantMethods: "AWQ INT4 (strongly recommended), GPTQ INT4. Avoid PTQ INT8 (requires QDQ nodes).",
       recommendation:
         "AWQ INT4 is optimal for consumer RTX GPUs — reduces VRAM and provides fast inference. PTQ INT8 requires QDQ format which tensorrt-rtx does not generate.",
@@ -65,13 +70,22 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
   },
   {
     id: "TensorrtExecutionProvider",
+    // The SM 7.5 (Turing) floor mirrors `TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY`
+    // in `src/lib/hardwareProbe.ts`. Keep this wording in lockstep with the
+    // catalog chip for `NvTensorRTRTXExecutionProvider` (same family, same
+    // floor, separate install path) and with the
+    // `undetectedProviderReason('TensorrtExecutionProvider')` text so the
+    // chip, the unavailable reason, and the TRT-RTX chip can't drift apart.
+    // The providerCatalog.test.ts guard test enforces this across all four
+    // surfaces.
     name: "NVIDIA TensorRT",
     shortName: "TensorRT",
-    desc: "Full TensorRT SDK (nvinfer_10) for maximum throughput on NVIDIA GPUs.",
+    desc: "Full TensorRT 10.x SDK (nvinfer_10) for maximum throughput on NVIDIA GPUs ≥ compute capability 7.5 (Turing / GeForce RTX 20xx or newer; also Quadro, Datacenter, H100/B100).",
     icon: Layers,
     tooltip: {
       requirements:
-        "NVIDIA GPU Turing or newer (GeForce RTX 20xx+, Quadro, datacenter). Requires full TensorRT 10.x SDK (nvinfer_10) in .venv — installable from Hardware. For a lighter consumer path, prefer TensorRT RTX.",
+        "NVIDIA GPU with compute capability ≥ 7.5 (Turing / GeForce RTX 20xx or newer; also Quadro, Datacenter, H100/B100). Requires full TensorRT 10.x SDK (nvinfer_10) in .venv — installable from Hardware. Pre-Turing cards (Maxwell/Pascal/Kepler) cannot run this EP even after install. For a lighter consumer path on the same floor, prefer TensorRT RTX.",
+
       quantMethods: "AWQ INT4 (recommended), GPTQ INT4. INT8 requires QDQ-format ONNX graph.",
       recommendation:
         "AWQ INT4 skips TensorRT calibration and provides the fastest build times. Use for maximum throughput in production.",
