@@ -56,11 +56,7 @@ export function ModelCombobox({
 
   const membership = getModelCatalogMembership(value, options, modelsSource);
   const membershipLabel = modelCatalogMembershipLabel(membership);
-
-  useEffect(() => {
-    const selectedIndex = filtered.findIndex((option) => option.id === value);
-    setHighlight(selectedIndex >= 0 ? selectedIndex : 0);
-  }, [filtered, value, filterText, open]);
+  const safeHighlight = Math.min(highlight, Math.max(filtered.length - 1, 0));
 
   useEffect(() => {
     if (!open) return;
@@ -77,6 +73,7 @@ export function ModelCombobox({
   const pick = (modelId: string) => {
     onChange(modelId);
     setQuery(null);
+    setHighlight(0);
     setOpen(false);
   };
 
@@ -84,6 +81,8 @@ export function ModelCombobox({
     setOpen(true);
     // Keep the selected id in the field, but do not filter until the user types.
     setQuery(null);
+    const selectedIndex = options.findIndex((option) => option.id === value);
+    setHighlight(selectedIndex >= 0 ? Math.min(selectedIndex, MAX_VISIBLE - 1) : 0);
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -99,14 +98,15 @@ export function ModelCombobox({
       setHighlight((i) => Math.max(i - 1, 0));
       return;
     }
-    if (event.key === "Enter" && open && filtered[highlight]) {
+    if (event.key === "Enter" && open && filtered[safeHighlight]) {
       event.preventDefault();
-      pick(filtered[highlight]!.id);
+      pick(filtered[safeHighlight]!.id);
       return;
     }
     if (event.key === "Escape") {
       setOpen(false);
       setQuery(null);
+      setHighlight(0);
     }
   };
 
@@ -119,7 +119,9 @@ export function ModelCombobox({
         aria-autocomplete="list"
         aria-expanded={open}
         aria-controls={listboxId}
-        aria-activedescendant={open && filtered[highlight] ? `${listboxId}-opt-${highlight}` : undefined}
+        aria-activedescendant={
+          open && filtered[safeHighlight] ? `${listboxId}-opt-${safeHighlight}` : undefined
+        }
         autoComplete="off"
         spellCheck={false}
         placeholder={placeholder}
@@ -127,6 +129,7 @@ export function ModelCombobox({
         onChange={(e) => {
           const next = e.target.value;
           setQuery(next);
+          setHighlight(0);
           onChange(next);
           setOpen(true);
         }}
@@ -148,7 +151,7 @@ export function ModelCombobox({
             </li>
           ) : (
             filtered.map((m, index) => {
-              const active = index === highlight;
+              const active = index === safeHighlight;
               const selected = m.id === value;
               return (
                 <li

@@ -51,21 +51,19 @@ function Stop-OliveStudioDevStack {
 
   foreach ($procId in $listenPids) {
     if ($procId -le 4) { continue }
-    try {
-      $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$procId" -ErrorAction Stop
-      $commandLine = $processInfo.CommandLine
-      if (-not $commandLine -or $commandLine -notmatch [regex]::Escape($Root)) {
-        continue
-      }
-      $proc = Get-Process -Id $procId -ErrorAction Stop
-      Write-Host "  Port 3000: stopping Olive Studio PID $procId ($($proc.ProcessName))" -ForegroundColor DarkGray
-      Stop-Process -Id $procId -ErrorAction SilentlyContinue
-      Start-Sleep -Milliseconds 300
-      if (Get-Process -Id $procId -ErrorAction SilentlyContinue) {
-        Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
-      }
-    } catch {
-      # already gone or unavailable
+    $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$procId" -ErrorAction SilentlyContinue
+    if (-not $processInfo) { continue }
+    $commandLine = $processInfo.CommandLine
+    if (-not $commandLine -or $commandLine -notmatch [regex]::Escape($Root)) {
+      continue
+    }
+    $proc = Get-Process -Id $procId -ErrorAction SilentlyContinue
+    if (-not $proc) { continue }
+    Write-Host "  Port 3000: stopping Olive Studio PID $procId ($($proc.ProcessName))" -ForegroundColor DarkGray
+    Stop-Process -Id $procId -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 300
+    if (Get-Process -Id $procId -ErrorAction SilentlyContinue) {
+      Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
     }
   }
 

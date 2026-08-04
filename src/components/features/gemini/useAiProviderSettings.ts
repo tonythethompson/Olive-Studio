@@ -15,6 +15,72 @@ interface UseAiProviderSettingsOptions {
 
 export type AiProviderSettings = ReturnType<typeof useAiProviderSettings>;
 
+function isLocalAllowEmptyKey(baseUrl: string | undefined): boolean {
+  if (!baseUrl) return false;
+  try {
+    const host = new URL(baseUrl).hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  } catch {
+    return false;
+  }
+}
+
+function validateApiKeyProviderForm(input: {
+  settingsProvider: ProviderId;
+  key: string;
+  model: string;
+  isCompatMode: boolean;
+  resolvedBaseUrl: string | undefined;
+  cloudflareAccountId: string;
+}): string | null {
+  const allowEmptyKey =
+    input.settingsProvider === "openai-compat" || isLocalAllowEmptyKey(input.resolvedBaseUrl);
+  if (input.settingsProvider === "cloudflare") {
+    if (!input.key) return "Enter a Cloudflare API token.";
+    if (!input.cloudflareAccountId) return "Enter a Cloudflare account ID (CLOUDFLARE_ACCOUNT_ID).";
+  } else if (!input.key && !allowEmptyKey) {
+    return "Enter an API key.";
+  }
+  if (!input.model || input.model === "n/a") {
+    return input.isCompatMode ? "Enter a model name." : "Select a model.";
+  }
+  if (input.isCompatMode && !input.resolvedBaseUrl) {
+    return "Base URL is required for OpenAI-compatible providers.";
+  }
+  return null;
+}
+
+async function persistApiKeyProvider(input: {
+  settingsProvider: ProviderId;
+  key: string;
+  model: string;
+  resolvedBaseUrl: string | undefined;
+  cloudflareAccountId: string;
+}): Promise<void> {
+  if (input.settingsProvider === "cloudflare") {
+    const credRes = await fetch("/api/cloudflare/login/manual", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiToken: input.key, accountId: input.cloudflareAccountId }),
+    });
+    const credData = (await credRes.json().catch(() => ({}))) as { error?: string };
+    if (!credRes.ok) throw new Error(credData.error || `HTTP ${credRes.status}`);
+  }
+  const r = await fetch("/api/ai/provider", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      provider: input.settingsProvider,
+      apiKey: input.key || undefined,
+      model: input.model,
+      baseUrl: input.resolvedBaseUrl,
+    }),
+  });
+  const contentType = r.headers.get("content-type") ?? "";
+  const data = contentType.includes("application/json") ? await r.json().catch(() => ({})) : {};
+  if (!r.ok) throw new Error((data as { error?: string }).error || `HTTP ${r.status}`);
+}
+
 /**
  * Manages AI provider settings, model catalogs, provider status, and Codex and Devin authentication flows.
  *
@@ -463,63 +529,28 @@ export function useAiProviderSettings({
     const model = isCompatMode ? customModel.trim() || settingsModel : settingsModel;
     const resolvedBaseUrl = settingsBaseUrl.trim() || providerOption.baseUrl || undefined;
     const cloudflareAccountId = settingsCloudflareAccountId.trim();
-    const allowEmptyKey =
-      settingsProvider === "openai-compat" ||
-      (() => {
-        if (!resolvedBaseUrl) return false;
-        try {
-          const host = new URL(resolvedBaseUrl).hostname.replace(/^\[|\]$/g, "").toLowerCase();
-          return host === "localhost" || host === "127.0.0.1" || host === "::1";
-        } catch {
-          return false;
-        }
-      })();
-    if (settingsProvider === "cloudflare") {
-      if (!key) {
-        setProviderSaveError("Enter a Cloudflare API token.");
-        return;
-      }
-      if (!cloudflareAccountId) {
-        setProviderSaveError("Enter a Cloudflare account ID (CLOUDFLARE_ACCOUNT_ID).");
-        return;
-      }
-    } else if (!key && !allowEmptyKey) {
-      setProviderSaveError("Enter an API key.");
-      return;
-    }
-    if (!model || model === "n/a") {
-      setProviderSaveError(isCompatMode ? "Enter a model name." : "Select a model.");
-      return;
-    }
-    if (isCompatMode && !resolvedBaseUrl) {
-      setProviderSaveError("Base URL is required for OpenAI-compatible providers.");
+    const validationError = validateApiKeyProviderForm({
+      settingsProvider,
+      key,
+      model,
+      isCompatMode,
+      resolvedBaseUrl,
+      cloudflareAccountId,
+    });
+    if (validationError) {
+      setProviderSaveError(validationError);
       return;
     }
     setIsSavingProvider(true);
     setProviderSaveError("");
     try {
-      if (settingsProvider === "cloudflare") {
-        const credRes = await fetch("/api/cloudflare/login/manual", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ apiToken: key, accountId: cloudflareAccountId }),
-        });
-        const credData = (await credRes.json().catch(() => ({}))) as { error?: string };
-        if (!credRes.ok) throw new Error(credData.error || `HTTP ${credRes.status}`);
-      }
-      const r = await fetch("/api/ai/provider", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider: settingsProvider,
-          apiKey: key || undefined,
-          model,
-          baseUrl: resolvedBaseUrl,
-        }),
+      await persistApiKeyProvider({
+        settingsProvider,
+        key,
+        model,
+        resolvedBaseUrl,
+        cloudflareAccountId,
       });
-      const contentType = r.headers.get("content-type") ?? "";
-      const data = contentType.includes("application/json") ? await r.json().catch(() => ({})) : {};
-      if (!r.ok) throw new Error((data as { error?: string }).error || `HTTP ${r.status}`);
       await fetchProviderStatus();
       setSettingsApiKey("");
       setSettingsCloudflareAccountId("");
