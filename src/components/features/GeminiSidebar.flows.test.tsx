@@ -63,12 +63,13 @@ describe("GeminiSidebar flows", () => {
     const provider = screen.getByLabelText("AI provider") as HTMLSelectElement;
     expect(provider.value).toBe("gemini");
     await waitFor(() => expect(screen.getByText("Live catalog")).toBeTruthy());
-    // Router providers (compat mode) additionally offer a free-text model id
+    // Router providers (compat mode): searchable combobox with catalog membership
     fireEvent.change(provider, { target: { value: "openrouter" } });
     await waitFor(() =>
-      expect((screen.getByLabelText("AI model") as HTMLSelectElement).value).toBe("gemini-2.5-pro"),
+      expect((screen.getByLabelText("AI model") as HTMLInputElement).value).toBe("gemini-2.5-pro"),
     );
-    expect(screen.getByPlaceholderText(/Or type a model id/)).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "AI model" })).toBeTruthy();
+    expect(screen.queryByText("Model ID not recognized. Requests may fail.")).toBeNull();
     expect(screen.getByPlaceholderText(/localhost:11434/)).toBeTruthy();
     // Local tab: LM Studio / Ollama inventory (not mixed into Cloud)
     fireEvent.click(screen.getByRole("button", { name: "Local settings" }));
