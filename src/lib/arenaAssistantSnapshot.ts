@@ -24,7 +24,7 @@ const NON_OPENAI_COMPAT = new Set(["gemini", "anthropic", "devin", "codex", "cop
  * Server snapshot prefers `plugin.defaultBaseUrl` first; this table is the
  * pure-helper fallback used by unit tests and offline resolution.
  * Kept in sync with `src/server/services/ai/openai.ts` registerProvider defaults
- * via `arenaAssistantSnapshot.catalog.test.ts`.
+ * via `src/server/services/ai/arenaSnapshotCatalog.test.ts`.
  */
 export const DEFAULT_BASE_URLS: Record<string, string> = {
   openai: "https://api.openai.com/v1",

@@ -8,12 +8,15 @@ import "./index.ts"; // register all providers
 import { allProviders } from "./registry.ts";
 
 describe("DEFAULT_BASE_URLS catalog sync", () => {
-  it("matches registerProvider defaultBaseUrl for every catalog entry that has one", () => {
+  it("matches registerProvider defaultBaseUrl for every provider that defines one", () => {
     for (const plugin of allProviders()) {
+      if (!plugin.defaultBaseUrl) continue;
       const catalog = DEFAULT_BASE_URLS[plugin.name];
-      if (plugin.defaultBaseUrl && catalog) {
-        expect(catalog).toBe(plugin.defaultBaseUrl);
-      }
+      expect(
+        catalog,
+        `DEFAULT_BASE_URLS is missing an entry for provider "${plugin.name}" (plugin.defaultBaseUrl=${plugin.defaultBaseUrl})`,
+      ).toBeDefined();
+      expect(catalog).toBe(plugin.defaultBaseUrl);
     }
   });
 });
