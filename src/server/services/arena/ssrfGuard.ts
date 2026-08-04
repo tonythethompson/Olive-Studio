@@ -14,12 +14,13 @@ import https from "node:https";
 import net from "node:net";
 import {
   isBlockedIpv4,
+  isBlockedIpv6,
   isLoopbackHostname,
   stripBrackets,
 } from "../../../lib/arenaEndpointPolicy.ts";
 
 // Re-export shared pure helpers so existing server tests keep importing from here.
-export { isBlockedIpv4, isLoopbackHostname, stripBrackets };
+export { isBlockedIpv4, isBlockedIpv6, isLoopbackHostname, stripBrackets };
 
 /** Typed policy/SSRF rejection so routes can map to 400 without regex on message text. */
 export class SsrfPolicyError extends Error {
@@ -86,12 +87,9 @@ export function isBlockedIpAddress(ip: string): boolean {
   const addr = stripBrackets(ip);
   if (net.isIPv4(addr)) return isBlockedIpv4(addr);
   if (net.isIPv6(addr)) {
-    if (addr === "::" || addr === "::1") return true;
-    if (addr.toLowerCase().startsWith("fe80:")) return true; // link-local
-    if (addr.toLowerCase().startsWith("fc") || addr.toLowerCase().startsWith("fd")) return true; // ULA
-    const mapped = ipv4FromMappedIpv6(addr);
-    if (mapped) return isBlockedIpv4(mapped);
-    return false;
+    // Shared pure predicate: loopback, fe80::/10, fec0::/10, ULA, multicast,
+    // and IPv4-mapped/compatible forms (all blocked for Arena outbound).
+    return isBlockedIpv6(addr);
   }
   return true; // unknown form → reject
 }

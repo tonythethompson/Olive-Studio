@@ -3,7 +3,7 @@
  *
  * Shared by:
  * - `arenaAssistantSnapshot.ts` (client + server pure helpers)
- * - `ssrfGuard.ts` (server reuses the same IPv4 blocked ranges before DNS pin)
+ * - `ssrfGuard.ts` (server reuses the same IPv4/IPv6 blocked ranges after DNS pin)
  *
  * Loopback HTTP exemption hosts (narrow, by design): only `localhost`,
  * `127.0.0.1`, and `::1`. Broader 127.0.0.0/8 or alternate IPv6 loopback forms
@@ -89,18 +89,24 @@ function parseIpv6(host: string): bigint | null {
   return BigInt(`0x${groups.join("")}`);
 }
 
-function isBlockedIpv6(host: string): boolean {
+/**
+ * Block private / reserved IPv6 for Arena outbound policy.
+ * Covers: loopback, link-local fe80::/10, deprecated site-local fec0::/10,
+ * ULA fc00::/7, multicast ff00::/8, and IPv4-mapped/compatible forms.
+ */
+export function isBlockedIpv6(host: string): boolean {
   const value = parseIpv6(host);
   if (value === null) return false;
   const first = Number(value >> 120n);
   const second = Number((value >> 118n) & 0x3n);
-  // loopback, link-local, ULA, and IPv4-mapped/compatible addresses
   return (
-    value === 1n ||
-    (first === 0xfe && second === 0x2) ||
-    (first >= 0xfc && first <= 0xfd) ||
-    value >> 32n === 0n ||
-    value >> 32n === 0xffffn
+    value === 1n || // loopback ::1
+    (first === 0xfe && second === 0x2) || // link-local fe80::/10
+    (first === 0xfe && second === 0x3) || // deprecated site-local fec0::/10
+    (first >= 0xfc && first <= 0xfd) || // ULA fc00::/7
+    first === 0xff || // multicast ff00::/8
+    value >> 32n === 0n || // IPv4-compatible ::/96
+    value >> 32n === 0xffffn // IPv4-mapped ::ffff:0:0/96
   );
 }
 
