@@ -219,7 +219,7 @@ export async function ensureTensorRtRtx(
     return { ok: false, error: ortGpu.error };
   }
 
-  const probe = await probeTensorRtRtxLoadable(venvPython);
+  const probe = await probeTensorRtRtxLoadable(venvPython, env);
   if (probe.loadable) {
     onLine(`[deps] TensorRT RTX runtime verified (${probe.version ?? "installed"}) ✓`);
     return {
@@ -252,7 +252,7 @@ export async function ensureTensorRtRtx(
   }
 
   invalidateRuntimeStatusCache();
-  const retry = await probeTensorRtRtxLoadable(venvPython);
+  const retry = await probeTensorRtRtxLoadable(venvPython, env);
   if (retry.loadable) {
     onLine(`[deps] TensorRT RTX runtime verified after install (${retry.version ?? "installed"}) ✓`);
     return {
