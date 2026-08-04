@@ -66,16 +66,17 @@ type LocalResponse = {
   text: () => Promise<string>;
 };
 
+/** Loopback-only harness: server binds 127.0.0.1, so remoteAddress is always loopback.
+ *  Non-loopback `req.socket.remoteAddress` is covered by unit tests in localOnly.test.ts;
+ *  reverse-proxy hops are exercised here via PROXY_FORWARDING_HEADERS. */
 async function getSnapshot(opts?: {
-  host?: string;
   headers?: Record<string, string>;
 }): Promise<LocalResponse> {
   const url = new URL(`${baseUrl}/api/arena/assistant-cloud-snapshot`);
-  const hostname = opts?.host ?? url.hostname;
   return new Promise((resolve, reject) => {
     const req = http.request(
       {
-        hostname,
+        hostname: url.hostname,
         port: url.port,
         path: url.pathname,
         method: "GET",
@@ -173,14 +174,16 @@ describe("GET /api/arena/assistant-cloud-snapshot", () => {
             expect(body.eligible).toBe(false);
             assertNoCredentials(body);
           }
-          if (provider === "openai-compat" && baseUrl) {
-            // may still be eligible when model non-empty
-            if (model.trim()) {
-              // endpoint present
-              if (body.eligible) {
-                expect(body).toHaveProperty("apiKey");
-              }
-            }
+          // Known-eligible inputs: openai-compat + public HTTPS base + non-empty model.
+          // Assert unconditionally so a regression that marks all compat snapshots
+          // ineligible fails loudly (do not nest under body.eligible).
+          if (provider === "openai-compat" && baseUrl && model.trim()) {
+            expect(body.eligible).toBe(true);
+            expect(body).toMatchObject({
+              apiKey: "k",
+              endpointUrl: "https://api.example.com/v1",
+              modelId: model,
+            });
           }
         },
       ),
@@ -200,7 +203,8 @@ describe("GET /api/arena/assistant-cloud-snapshot", () => {
 
     await fc.assert(
       fc.asyncProperty(
-        fc.constantFrom("x-forwarded-for", "x-real-ip", "forwarded"),
+        // All PROXY_FORWARDING_HEADERS from localOnly.ts (incl. x-forwarded-host).
+        fc.constantFrom("x-forwarded-for", "x-forwarded-host", "x-real-ip", "forwarded"),
         fc.ipV4(),
         async (header, ip) => {
           const res = await getSnapshot({
@@ -219,7 +223,8 @@ describe("GET /api/arena/assistant-cloud-snapshot", () => {
           expect(text).not.toContain("sk-should-not-leak");
         },
       ),
-      { numRuns: 100 },
+      // Network-bound property: header names × any IPv4; ~20 runs cover the set.
+      { numRuns: 20 },
     );
   });
 

@@ -39,6 +39,11 @@ describe("hasProxyForwardingHeaders", () => {
         headers: { forwarded: "for=203.0.113.10" },
       } as unknown as Request),
     ).toBe(true);
+    expect(
+      hasProxyForwardingHeaders({
+        headers: { "x-forwarded-host": "example.com" },
+      } as unknown as Request),
+    ).toBe(true);
   });
 
   it("ignores missing or blank headers", () => {
