@@ -7,7 +7,7 @@ import { ExecutionWorkspace } from "@/components/features/ExecutionWorkspace";
 import { LicenseNotice } from "@/components/LicenseNotice";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ReportIssueModal } from "@/components/ReportIssueModal";
-import { usePipelineStore } from "@/lib/stores/pipelineStore";
+import { usePipelineState } from "@/lib/stores/pipelineStore";
 import type { ReportArea } from "@/lib/issueReport";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { KbSyncIndicator } from "@/components/features/KbSyncIndicator";
@@ -86,6 +86,7 @@ const SECTIONS: { id: ActiveView; step: string; label: string; desc: string; ico
  * Renders the Olive Studio recipe builder dashboard with navigable model, hardware, and execution sections.
  */
 function Dashboard() {
+  const { state: pipelineState } = usePipelineState();
   const [activeView, setActiveView] = useState<ActiveView>("input");
   const [isOliveRunning, setIsOliveRunning] = useState(false);
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
@@ -378,7 +379,7 @@ function Dashboard() {
             setIsReportOpen(false);
             setReportData(null);
           }}
-          state={usePipelineStore.getState().state}
+          state={pipelineState}
           defaultArea={labelToArea(reportData?.label)}
           defaultDescription={
             reportData
