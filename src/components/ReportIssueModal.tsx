@@ -1,6 +1,8 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { X, ExternalLink, Copy, Check, ChevronDown, AlertTriangle, Repeat } from "lucide-react";
-import { Button, Card, CardContent, CardHeader, Label } from "@/components/ui";
+import { Button } from "@/components/ui/Button";
+import { Card, CardContent, CardHeader } from "@/components/ui/Card";
+import { Label } from "@/components/ui/Label";
 import { cn } from "@/lib/utils";
 import { openExternal } from "@/lib/openExternal";
 import type { UIState } from "@/types";
@@ -56,6 +58,15 @@ export function ReportIssueModal({
   const [showPreview, setShowPreview] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  useEffect(() => {
+    if (open) {
+      setArea(defaultArea ?? "other");
+      setDescription(defaultDescription ?? "");
+      setShowPreview(false);
+      setCopied(false);
+    }
+  }, [open, defaultArea, defaultDescription]);
+
   const toggleTelemetry = useCallback((id: TelemetryOptionId) => {
     setSelectedTelemetry((prev) => {
       const next = new Set(prev);
@@ -71,13 +82,14 @@ export function ReportIssueModal({
       severity,
       area,
       description,
+      frequencyInfo: frequencyInfo ?? null,
       telemetry: collectTelemetry(Array.from(selectedTelemetry), {
         state,
         hardwareProbe,
         executionLogs,
       }),
     }),
-    [category, severity, area, description, selectedTelemetry, state, hardwareProbe, executionLogs],
+    [category, severity, area, description, frequencyInfo, selectedTelemetry, state, hardwareProbe, executionLogs],
   );
 
   const { url, fullText } = useMemo(
