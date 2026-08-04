@@ -95,8 +95,14 @@ export const CUDA_DOWNLOAD_LINKS = {
  */
 export function cudaDownloadUrlForOs(os: string | undefined | null): string {
   const text = (os ?? "").toLowerCase();
+  // Word-boundary matches prevent `"darwin"` from accidentally hitting
+  // the Windows branch — `"darwin"` contains the substring `"win"`,
+  // which the naive loose substring check silently matched. macOS has
+  // no NVIDIA + no path forward on modern CUDA after 11.6, so it always
+  // falls to the archive landing page.
+  if (/\bdarwin\b/.test(text)) return CUDA_DOWNLOAD_LINKS.archive;
   if (text.includes("wsl")) return CUDA_DOWNLOAD_LINKS.wsl;
-  if (text.includes("win")) return CUDA_DOWNLOAD_LINKS.windows;
+  if (/\bwin(?:32|dows)?\b/.test(text)) return CUDA_DOWNLOAD_LINKS.windows;
   if (text.includes("linux")) return CUDA_DOWNLOAD_LINKS.linux;
   return CUDA_DOWNLOAD_LINKS.archive;
 }

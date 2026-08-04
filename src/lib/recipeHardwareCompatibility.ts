@@ -56,14 +56,18 @@ function isWindowsProbe(probe: HardwareProbeResult): boolean {
 }
 
 /**
- * Builds an install hint for a TensorRT-family EP on a GPU that supports it
- * but where the matching Python runtime isn't loaded in `.venv` yet.
+ * Builds an install hint for an execution provider on a GPU that supports it
+ * but where the matching Python runtime isn't loaded in `.venv` yet. Used
+ * for the TensorRT family (kind: "tensorrt" / "tensorrt-rtx") and now also
+ * for the CUDA case (kind: "onnxruntime-gpu") — the CUDA branch used to
+ * inline this object and dropped the probe's `detail` string, so a real
+ * "driver/wheel mismatch" message never made it back to the UI.
  */
-function tensorRtInstallHint(args: {
+function ePInstallHint(args: {
   probe: HardwareProbeResult;
   requiredProvider: IHVProvider;
-  kind: "tensorrt" | "tensorrt-rtx";
-  detailKey: "tensorrt" | "tensorRtRtx";
+  kind: RecipeInstallHint["kind"];
+  detailKey: "tensorrt" | "tensorRtRtx" | "cuda";
   depLabel: string;
   installCommand: string;
 }): RecipeInstallHint {
@@ -219,7 +223,12 @@ export function assessRecipeHardwareCompatibility(
     return {
       tier: "unavailable",
       targetDevice,
-      reason: `CUDA requires NVIDIA compute capability ≥ ${cudaSmFloor} (Maxwell / GeForce RTX 20xx+); ${gpuHint} is below that floor. The CUDA 12 toolkit drops SM 3.x (Kepler) support and modern Olive recipes cannot run on those cards. Use the CPU provider, or upgrade hardware.`,
+      // CUDA-floor copy must track Maxwell SM 5.0: GTX 750 Ti / GTX 9xx
+      // are the canonical Maxwell product IDs; the previous wording
+      // borrowed "GeForce RTX 20xx+" from the pre-Turing branch (RTX 20xx
+      // is Turing SM 7.5, the floor above) and would have told a Pascal
+      // SM 6.x owner their supported card is unsupported.
+      reason: `CUDA requires NVIDIA compute capability ≥ ${cudaSmFloor} (Maxwell / GeForce GTX 750 Ti or GTX 9xx series and newer); ${gpuHint} is below that floor. The CUDA 12 toolkit drops SM 3.x (Kepler) support and modern Olive recipes cannot run on those cards. Use the CPU provider, or upgrade hardware.`,
       requiredProvider,
     };
   }
@@ -243,7 +252,7 @@ export function assessRecipeHardwareCompatibility(
       targetDevice,
       reason: `TensorRT backend available on ${gpuHint} after installing tensorrt in .venv.`,
       requiredProvider,
-      requiresInstall: tensorRtInstallHint({
+      requiresInstall: ePInstallHint({
         probe,
         requiredProvider,
         kind: "tensorrt",
@@ -266,7 +275,7 @@ export function assessRecipeHardwareCompatibility(
       targetDevice,
       reason: `TensorRT RTX backend available on ${gpuHint} after installing tensorrt-rtx in .venv.`,
       requiredProvider,
-      requiresInstall: tensorRtInstallHint({
+      requiresInstall: ePInstallHint({
         probe,
         requiredProvider,
         kind: "tensorrt-rtx",
@@ -300,12 +309,14 @@ export function assessRecipeHardwareCompatibility(
       targetDevice,
       reason: `CUDA backend available on ${gpuHint} after installing onnxruntime-gpu in .venv.`,
       requiredProvider,
-      requiresInstall: {
+      requiresInstall: ePInstallHint({
+        probe,
+        requiredProvider,
         kind: "onnxruntime-gpu",
-        provider: "CUDAExecutionProvider",
-        hint: `onnxruntime-gpu CUDA EP is not registered in the project .venv. NVIDIA driver + GPU are in the supported family (${gpuHint}) — install in Hardware (step 02) or run \`${pinnedOrtGpuInstallCommand()}\` to run this recipe.`,
+        detailKey: "cuda",
+        depLabel: "onnxruntime-gpu (CUDA EP wheel)",
         installCommand: pinnedOrtGpuInstallCommand(),
-      },
+      }),
     };
   }
 

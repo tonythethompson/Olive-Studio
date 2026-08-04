@@ -5,16 +5,15 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import compression from 'vite-plugin-compression';
+import { ANY_DOT_VENV_DIR } from './src/server/shared/anyDotVenvDir';
 
 /**
- * Catch `.venv.bak`, `.venv.old`, `.venv-rename`, etc. in addition to the
- * canonical `.venv`. The plain glob only matches `.venv` as an exact path
- * component, so renaming or backing up the venv directory reintroduces
- * file-watch noise: pip writes inside the renamed folder used to fire
- * reload events. This regex sits alongside the glob in the `ignored` array
- * (chokidar accepts strings, RegExp, and functions mixed in one list).
+ * The shared regex from `src/server/shared/anyDotVenvDir.ts` matches both
+ * here and in `server.ts` so a rename/back-up of the venv directory
+ * (`.venv.bak`, `.venv.old`, `.venv-rename`) is filtered out by both
+ * Vite watchlists in lockstep.
  */
-const ANY_DOT_VENV_DIR = /(?:^|[\\/])\.venv(?:[._-][^\\/]+)?(?:[\\/]|$)/;
+void ANY_DOT_VENV_DIR;
 
 export default defineConfig(() => {
   return {

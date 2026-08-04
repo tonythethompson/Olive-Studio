@@ -179,8 +179,7 @@ export function mergeDetectedProviders(input: {
   // Only an explicit `false` from the ORT probe removes the EP from the
   // detected list, unlocking the install-needed branch in the recipe
   // compat layer. Same permissive-to-unknown convention as the RTX gate.
-  const cudaOk =
-    input.cudaLoadable === undefined ? true : input.cudaLoadable === true;
+  const cudaOk = input.cudaLoadable !== false;
   // Default true: callers without compute-cap data must not silently hide
   // the RTX-family EPs (pre-Turing downgrades only fire when we KNOW the SM).
   const tensorRtFamilyCapable = input.nvidiaTensorRtFamilyCapable ?? true;
@@ -307,7 +306,7 @@ function undetectedProviderReason(
       // 2. Pre-Maxwell box: install cannot recover
       if (isPreMaxwellNvidiaBox(gpus)) {
         const names = gpus.map((g) => g.name).join(", ");
-        return `NVIDIA GPU detected (${names}) but every card predates the CUDA 12 toolkit floor (compute capability ≥ ${CUDA_SM_FLOOR}, Maxwell / GeForce RTX 20xx+). Upgrading the toolkit cannot recover this — these cards (Kepler SM 3.x) cannot execute modern CUDA. Use the CPU provider, or upgrade hardware.`;
+        return `NVIDIA GPU detected (${names}) but every card predates the CUDA 12 toolkit floor (compute capability ≥ ${CUDA_SM_FLOOR}, Maxwell / GeForce GTX 750 Ti or GTX 9xx series). Upgrading the toolkit cannot recover this — these cards (Kepler SM 3.x) cannot execute modern CUDA. Use the CPU provider, or upgrade hardware.`;
       }
       // 3. NVIDIA driver OK but onnxruntime-gpu missing in .venv
       const cudaEpUsable = probe.cuda?.loadable === true;

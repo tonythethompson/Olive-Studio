@@ -17,10 +17,10 @@
  *
  * For classic TensorRT (datacenter), see `tensorrt.ts`.
  */
-import { spawn } from "child_process";
 import fs from "fs";
 
 import { execFileAsync } from "../shared/exec.ts";
+import { pipInstall } from "../shared/pipInstall.ts";
 import { ensureVenv } from "../venv/index.ts";
 import { getVenvPython, getVenvPip } from "../venv/paths.ts";
 import {
@@ -30,13 +30,7 @@ import {
   tensorrtRtxInstallArgs,
   tensorrtRtxLabel,
 } from "../../../lib/tensorrtRtxDeps.ts";
-import {
-  ORT_GPU_PROBE_SCRIPT,
-  parseOrtGpuProbe,
-  pinnedOrtGpuInstallArgs,
-  pinnedOrtGpuLabel,
-  PINNED_ORT_GPU_VERSION,
-} from "../../../lib/oliveGpuRuntime.ts";
+import { ensureOnnxRuntimeGpu } from "./cuda.ts";
 
 /**
  * Retrieves the installed TensorRT RTX package version.
@@ -108,7 +102,18 @@ def _register_rtx_ep():
     except Exception as exc:
         return None
     pkg_dir = os.path.dirname(_plug.__file__)
-    dll = os.path.join(pkg_dir, "onnxruntime_providers_nv_tensorrt_rtx.dll")
+    # Pick the platform-appropriate extension: .dll on Windows, .so on
+    # Linux, .dylib on macOS. A hardcoded ".dll" hides the real reason
+    # an import fails on Linux/macOS.
+    import sys
+    if sys.platform == "win32":
+        _ext = ".dll"
+        _libname = "onnxruntime_providers_nv_tensorrt_rtx" + _ext
+    elif sys.platform == "darwin":
+        _libname = "libonnxruntime_providers_nv_tensorrt_rtx.dylib"
+    else:
+        _libname = "libonnxruntime_providers_nv_tensorrt_rtx.so"
+    dll = os.path.join(pkg_dir, _libname)
     if not os.path.isfile(dll):
         return None
     try:
@@ -173,56 +178,14 @@ print("ok:" + tensorrt_rtx.__version__)
   }
 }
 
-/**
- * Installs Python packages with pip and reports process output line by line.
- *
- * @param pip - Path to the pip executable
- * @param args - Arguments specifying the packages and installation options
- * @param onLine - Callback for each captured output line
- * @throws If pip cannot be launched or the installation exits unsuccessfully
- */
-async function pipInstall(pip: string, args: string[], onLine: (line: string) => void): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const proc = spawn(pip, ["install", ...args], { stdio: "pipe" });
-    proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-    proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-    proc.on("error", (err: Error) =>
-      reject(
-        new Error(
-          `Failed to launch ${pip}: ${err.message}. Create the project .venv via Setup runtime first.`,
-        ),
-      ),
-    );
-    proc.on("close", (code: number | null) =>
-      code === 0 ? resolve() : reject(new Error(`pip install ${args.join(" ")} failed (exit ${code})`)),
-    );
-  });
-}
-
-async function ensureOnnxRuntimeGpu(
-  python: string,
-  pip: string,
-  onLine: (line: string) => void,
-): Promise<void> {
-  try {
-    const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT]);
-    const probe = parseOrtGpuProbe(stdout);
-    if (probe.ok) {
-      onLine("[deps] onnxruntime-gpu already installed ✓");
-      return;
-    }
-    if (probe.distVersion || probe.ortVersion) {
-      onLine(
-        `[deps] onnxruntime-gpu ${probe.distVersion ?? probe.ortVersion} installed — need ${PINNED_ORT_GPU_VERSION}, reinstalling...`,
-      );
-    }
-  } catch {
-    /* install below */
-  }
-  onLine(`[deps] Installing ${pinnedOrtGpuLabel()} (required to detect TensorRT RTX)...`);
-  await pipInstall(pip, pinnedOrtGpuInstallArgs(), onLine);
-  onLine(`[deps] ${pinnedOrtGpuLabel()} installed ✓`);
-}
+// `pipInstall` is imported from `../shared/pipInstall.ts` so the same
+// NDJSON line shape + error contract is used by every install route.
+// The local copy was deleted when this was extracted.
+//
+// `ensureOnnxRuntimeGpu` is imported from `./cuda.ts` so the RTX and
+// CUDA paths share one probe-then-install-retry loop; the previous
+// private copy in this file was drifting in subtle ways from the
+// CUDA path's version.
 
 /**
  * Installs the NVIDIA standalone TensorRT-RTX EP-ABI plugin (CUDA-13) from
@@ -265,7 +228,14 @@ export async function ensureTensorRtRtx(
     };
   }
 
-  await ensureOnnxRuntimeGpu(venvPython, pip, onLine);
+  // Reuse the shared CUDA install helper — it probes
+  // `onnxRuntimeProviders` and, on mismatch, pip-installs the pinned
+  // wheel into the same .venv. The .venv-prep work above is idempotent
+  // and fast on a warm venv.
+  const ortGpu = await ensureOnnxRuntimeGpu(onLine);
+  if (!ortGpu.ok) {
+    return { ok: false, error: ortGpu.error };
+  }
 
   const probe = await probeTensorRtRtxLoadable(venvPython);
   if (probe.loadable) {

@@ -20,13 +20,20 @@ import {
   TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY,
   type HardwareProbeResult,
 } from "../../lib/hardwareProbe.ts";
-import { isPreMaxwellNvidiaBox, CUDA_SM_FLOOR } from "../../lib/cudaDeps.ts";
+import {
+  isPreMaxwellNvidiaBox,
+  CUDA_SM_FLOOR,
+  pinnedOrtGpuInstallCommand,
+  pinnedOrtGpuLabel,
+} from "../../lib/cudaDeps.ts";
 import {
   ORT_GPU_PROBE_SCRIPT,
   parseOrtGpuProbe,
 } from "../../lib/oliveGpuRuntime.ts";
 
 const execFileAsync = promisify(execFile);
+
+const ORT_PROBE_TIMEOUT_MS = 30_000;
 
 // ─── GPU probes ────────────────────────────────────────────────────────────
 
@@ -209,16 +216,31 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     // tracked in this same loop.
     if (!cuda) {
       try {
-        const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT]);
+        // Bound the onnxruntime import probe against a hung driver
+        // loader. On any modern dev box the probe finishes in well
+        // under 5 s; a 30 s ceiling still gives slow CI/turbo-boost-down
+        // boxes headroom while keeping the route from stalling the UI
+        // on a broken driver install. On timeout, the existing catch
+        // branch records `cuda.loadable: false` with the probe-failure
+        // detail.
+        const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT], {
+          timeout: ORT_PROBE_TIMEOUT_MS,
+        });
         const probe = parseOrtGpuProbe(stdout);
         if (python === venvPython && probe.ok) cudaVenvLoadable = true;
+        // Use the canonical pinned-version string from `pinnedOrtGpuLabel`
+        // instead of hardcoding "1.26.0". A bump to `oliveGpuRuntime.ts`
+        // then propagates here and to the install hint without drift.
+        const pinnedLabel = pinnedOrtGpuLabel();
+        const requiredVersionMatch = pinnedLabel.match(/==\s*([\d.]+[^\s]*)/);
+        const pinnedVersion = requiredVersionMatch?.[1] ?? pinnedLabel;
         cuda = {
           loadable: probe.ok,
           detail: probe.ok
             ? undefined
             : probe.cudaUsable === false
               ? `onnxruntime-gpu CUDA EP not registered (driver/wheel mismatch — got dist ${probe.distVersion ?? "?"} / ort ${probe.ortVersion ?? "?"})`
-              : `onnxruntime-gpu not at pinned version ${probe.distVersion ?? probe.ortVersion ?? "?"} (required 1.26.0)`,
+              : `onnxruntime-gpu not at pinned version ${probe.distVersion ?? probe.ortVersion ?? "?"} (required ${pinnedVersion})`,
         };
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -273,10 +295,14 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   if (cudaVenvLoadable) {
     notes.push("CUDA execution provider load verified.");
   } else if (nvidia?.gpus.length) {
+    // Derive the install command from the pinned args so a wheel-pin
+    // bump updates this hint and the probe-detail string above in
+    // lockstep.
+    const ortGpuCmd = pinnedOrtGpuInstallCommand();
     notes.push(
       cuda?.detail
-        ? `${cuda.detail}. GPU is compatible — click "Install onnxruntime-gpu" in Hardware (step 02) or run \`pip install onnxruntime-gpu==1.26.0\` to enable CUDA EP.`
-        : "onnxruntime-gpu not in .venv yet. GPU is compatible — click \"Install onnxruntime-gpu\" in Hardware (step 02) or it installs on first CUDA run.",
+        ? `${cuda.detail}. GPU is compatible — click "Install onnxruntime-gpu" in Hardware (step 02) or run \`${ortGpuCmd}\` to enable CUDA EP.`
+        : `${ortGpuCmd} not yet run in .venv. GPU is compatible — click "Install onnxruntime-gpu" in Hardware (step 02) or it installs on first CUDA run.`,
     );
   }
 

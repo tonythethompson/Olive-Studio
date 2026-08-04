@@ -39,10 +39,9 @@ import {
   assessRecipeHardwareCompatibility,
   summarizeRecipeHardwareCompatibility,
 } from "@/lib/recipeHardwareCompatibility";
-import { isNvTensorRtRtxCatalogPath, tensorrtRtxEpAbiLabel } from "@/lib/tensorrtRtxDeps";
+import { isNvTensorRtRtxCatalogPath } from "@/lib/tensorrtRtxDeps";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { navigatePipeline } from "@/lib/pipelineNavigation";
-import { pinnedTensorRtLabel } from "@/lib/tensorrtDeps";
 import { estimateVramForCatalogPreset } from "@/lib/presetVramEstimate";
 import { CompatCountSummary, CompatStatusPill } from "@/components/features/CompatStatus";
 import {
@@ -1102,10 +1101,13 @@ export function InputEnvironmentPanel({
                                           <DownloadCloud className="h-3 w-3 text-amber-400 shrink-0 mt-0.5" />
                                           <div className="flex-1 min-w-0">
                                             <p className="text-[11px] text-amber-300/95 leading-snug">
-                                              {hardware.requiresInstall.kind === "tensorrt-rtx"
-                                                ? `${tensorrtRtxEpAbiLabel()} not in .venv yet — GPU is in the supported family.`
-                                                : `${pinnedTensorRtLabel()} not in .venv yet — GPU is in the supported family.`}
-                                              {" "}
+                                              {/* Use the hint directly so the label and
+                                                  install command always agree — the old
+                                                  code branched on `kind` and only swapped
+                                                  between two hardcoded labels, so the CUDA
+                                                  case silently printed the TensorRT label
+                                                  next to the onnxruntime install command. */}
+                                              {hardware.requiresInstall.hint}{" "}
                                               <button
                                                 type="button"
                                                 onClick={() => navigatePipeline("ihv")}

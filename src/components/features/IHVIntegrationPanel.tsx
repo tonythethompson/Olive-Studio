@@ -1050,7 +1050,7 @@ export function IHVIntegrationPanel({
                                   )}
                                 </>
                               )}
-                              {cudaToolkitMissing && (
+                              {cudaToolkitMissing && cudaEpInVenv && (
                                 <p className="text-[11px] text-amber-500/80 leading-relaxed">
                                   NVIDIA driver + onnxruntime-gpu CUDA EP detected, but the CUDA
                                   Toolkit (<code className="text-slate-400">nvcc</code>) is not

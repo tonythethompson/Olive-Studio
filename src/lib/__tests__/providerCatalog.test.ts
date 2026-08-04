@@ -173,7 +173,7 @@ describe("TensorRT SM floor lockstep (catalog chip ↔ hardware probe)", () => {
     expect(trt.tooltip.requirements).toMatch(/Maxwell|Pascal|Kepler/i);
   });
 
-  it("full TensorRT chip and TRT-RTX chip share the SAME ${floor} string", () => {
+  it(`full TensorRT chip and TRT-RTX chip share the SAME ${floor} string`, () => {
     // Across-the-family lockstep: both halves of the family must cite the
     // exact same numeric constant so a future bump updates both halves
     // atomically. If only one chip gets a new floor, this test fails.

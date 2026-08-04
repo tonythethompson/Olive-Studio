@@ -2,17 +2,8 @@ import express, { Router } from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import fs from "fs";
+import { ANY_DOT_VENV_DIR } from "./src/server/shared/anyDotVenvDir.ts";
 
-/**
- * Catch `.venv.bak`, `.venv.old`, `.venv-rename`, etc. in addition to the
- * canonical `.venv`. Plain glob `'**' + '/.venv/' + '**'` only matches
- * `.venv` as an exact path component, so renaming or backing up the venv
- * directory reintroduces file-watch noise: pip writes inside the renamed
- * folder used to fire reload events. This regex sits alongside the glob in
- * the `ignored` array (chokidar accepts strings, RegExp, and functions
- * mixed).
- */
-const ANY_DOT_VENV_DIR = /(?:^|[\\/])\.venv(?:[._-][^\\/]+)?(?:[\\/]|$)/;
 import { loadStudioEnv } from "./src/server/loadStudioEnv.ts";
 import { mountSystemRoutes, type SystemProbeOptions } from "./src/server/routes/system.ts";
 import { mountGithubRoutes } from "./src/server/routes/github.ts";

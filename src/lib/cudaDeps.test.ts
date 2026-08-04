@@ -56,14 +56,22 @@ describe("isPreMaxwellNvidiaBox", () => {
   });
 
   it("returns false when every card is at or above the floor", () => {
+    // Both cards meet SM ≥ 5.0; the box is fully CUDA-toolkit-supported.
+    expect(
+      isPreMaxwellNvidiaBox([
+        { name: "GTX 750 Ti Maxwell", computeCapability: "5.0" }, // boundary — supported
+        { name: "RTX 3090", computeCapability: "8.6" },
+      ]),
+    ).toBe(false);
+  });
+
+  it("returns true when every card is strictly below the floor", () => {
+    // All Kepler SM 3.x: nothing runs modern CUDA even after install.
     expect(
       isPreMaxwellNvidiaBox([
         { name: "GTX 680", computeCapability: "3.0" },
-        { name: "GTX 750 Ti Maxwell", computeCapability: "5.0" }, // boundary — supported
+        { name: "GT 730", computeCapability: "3.5" },
       ]),
-    ).toBe(false);
-    expect(
-      isPreMaxwellNvidiaBox([{ name: "GT 730", computeCapability: "3.5" }]),
     ).toBe(true);
   });
 
@@ -83,12 +91,29 @@ describe("cudaDownloadUrlForOs", () => {
     expect(cudaDownloadUrlForOs("Windows 11")).toBe(CUDA_DOWNLOAD_LINKS.windows);
   });
 
+  it("does not misroute darwin to the Windows URL via the substring 'win'", () => {
+    // 'darwin' contains the substring 'win' — a loose substring check
+    // previously sent macOS users to the Windows toolkit installer.
+    // Verify the word-boundary regex keeps darwin on its own path.
+    expect(cudaDownloadUrlForOs("darwin 23.4.0")).not.toBe(CUDA_DOWNLOAD_LINKS.windows);
+    expect(cudaDownloadUrlForOs("Darwin arm64")).not.toBe(CUDA_DOWNLOAD_LINKS.windows);
+  });
+
   it("returns the WSL-specific URL when the OS string mentions wsl", () => {
     expect(cudaDownloadUrlForOs("linux wsl2")).toBe(CUDA_DOWNLOAD_LINKS.wsl);
   });
 
   it("returns the Linux-specific URL when the OS string mentions linux (but not wsl)", () => {
     expect(cudaDownloadUrlForOs("linux 5.15.0-91-generic")).toBe(CUDA_DOWNLOAD_LINKS.linux);
+  });
+
+  it("routes macOS (darwin) to the archive landing page instead of Linux", () => {
+    // Apple dropped CUDA toolkit support after CUDA 11.6 (2022); macOS
+    // no longer has a path forward. Sending darwin to the Linux
+    // installer silently misleads users — route to the archive so they
+    // can read that the toolkit is unsupported on their platform.
+    expect(cudaDownloadUrlForOs("darwin 23.4.0")).toBe(CUDA_DOWNLOAD_LINKS.archive);
+    expect(cudaDownloadUrlForOs("Darwin arm64")).toBe(CUDA_DOWNLOAD_LINKS.archive);
   });
 
   it("falls back to the archive landing page for unrecognized / missing OS", () => {

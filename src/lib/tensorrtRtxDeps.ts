@@ -47,12 +47,14 @@ export function tensorrtRtxEpAbiLabel(): string {
 /**
  * Copy-pasteable pip command that installs the EP-ABI plugin (for the
  * fallback hint surfaced to users when the in-app install path fails).
- * Uses `pip install --extra-index-url` so the NVIDIA-only package is
- * fetched from the NVIDIA index while other packages keep coming from
- * PyPI.
+ * Uses `pip install <args>` so the manual command mirrors exactly the
+ * argument string the install route actually passes to `pip install`
+ * (see `tensorrtRtxEpAbiInstallArgs`). Single source of truth = the
+ * args list, so a version/index bump updates both in lockstep without
+ * any drift.
  */
 export function tensorrtRtxEpAbiInstallCommand(): string {
-  return `pip install --extra-index-url ${TENSORRT_RTX_NVIDIA_INDEX_URL} ${TENSORRT_RTX_EP_ABI_PACKAGE}==${TENSORRT_RTX_EP_ABI_VERSION}`;
+  return `pip install ${tensorrtRtxEpAbiInstallArgs().join(" ")}`;
 }
 
 export function isNvTensorRtRtxProvider(provider: string): boolean {

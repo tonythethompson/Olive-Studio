@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "@playwright/test";
 
 /**
  * Guardrail for the scroll-bounds fix in src/index.css.
@@ -10,148 +10,143 @@ import { test, expect } from '@playwright/test';
  * document.getElementById('root'))`, and an `overflow: hidden` on `#root`
  * would silently clip those portals to its box.
  *
- * This test mounts a Radix Tooltip portal whose `container` is `#root`,
- * renders its content far enough outside `#root`'s box that any
+ * This test mounts a Radix Tooltip hierarchy whose portal `container` is
+ * `#root`, renders its content far enough outside `#root`'s box that any
  * overflow-clipping ancestor would hide it, then asserts both:
  *   (a) `#root` itself stays `overflow: visible`, and
- *   (b) the portal's content is rendered with a non-zero client rect.
+ *   (b) the portal's content renders unclipped at paint time — verified
+ *       via `document.elementFromPoint(...)` so we catch the case where an
+ *       ancestor's `overflow: hidden` clips the box visually even though
+ *       `getClientRects()` still returns the original coordinates.
  *
  * If a future change widens the lock to include `#root`, both assertions
  * fail loudly — that is the whole point of the test.
  */
-test.describe('Scroll-bounds fix — #root must not clip React Portals', () => {
-  test('Radix Tooltip portaled into #root renders unclipped', async ({ page }) => {
-    await page.goto('/');
+test.describe("Scroll-bounds fix — #root must not clip React Portals", () => {
+  test("Radix Tooltip portaled into #root renders unclipped at paint time", async ({ page }) => {
+    await page.goto("/");
     // Wait for the dashboard to mount so React is hydrated and a real
-    // React tree is anchored on #root. Same readiness probe as the
-    // existing tab-flicker spec.
-    await page.locator('#node-btn-input').waitFor({ state: 'visible', timeout: 30_000 });
+    // React tree is anchored on #root.
+    await page.locator("#node-btn-input").waitFor({ state: "visible", timeout: 30_000 });
 
     // (a) Direct guardrail: the CSS-computed overflow of #root must
     // remain `visible` (or any non-clipping value). If anyone adds
     // `#root` to the `html, body { overflow: hidden }` lock, this
     // assertion fails before any portal can be clipped.
     const rootOverflow = await page.evaluate(
-      () => getComputedStyle(document.getElementById('root')!).overflow,
+      () => getComputedStyle(document.getElementById("root")!).overflow,
     );
     expect(
       rootOverflow,
-      '#root must keep overflow:visible so React Portals targeting #root are not clipped',
-    ).toBe('visible');
+      "#root must keep overflow:visible so React Portals targeting #root are not clipped",
+    ).toBe("visible");
 
-    // (b) Mount a Radix Tooltip.Portal whose `container` is `#root` and
-    // whose content is positioned absolutely far outside #root's box.
-    // If #root gained overflow:hidden (or any clipping value), the
-    // absolutely-positioned content would lose all `getClientRects()`
-    // entries. The page.evaluate below also tries a direct-DOM
-    // fallback if the dev server cannot resolve bare ESM imports from
-    // inside the eval scope; either way the same overflow-clipping
-    // contract is asserted.
+    // (b) Mount a Radix Tooltip hierarchy whose portal `container` is
+    // `#root`. Earlier drafts called `RdxTooltip.Portal(...)` /
+    // `Content(...)` as plain functions outside the JSX reconciler,
+    // which silently missed Radix's Provider context and never mounted
+    // the sentinel. Drive the tree through `React.createElement` so
+    // every level participates in React reconciliation.
+    //
+    // The mount step also tries a direct-DOM fallback if the dev server
+    // cannot resolve bare ESM imports from inside the eval scope. Both
+    // branches must honour the same overflow-clipping contract.
     const mount = await page.evaluate(async () => {
-      const root = document.getElementById('root')!;
-      if (!root) throw new Error('#root missing');
+      let mountError: string | null = null;
+      const root = document.getElementById("root")!;
+      if (!root) throw new Error("#root missing");
 
-      // Hold the appended portal target on a tiny sub-root inside #root,
-      // so we don't disturb the app's own React tree.
-      const host = document.createElement('div');
-      host.id = 'portal-mount-host';
-      host.dataset.testSource = 'guardrail';
+      const host = document.createElement("div");
+      host.id = "portal-mount-host";
+      host.dataset.testSource = "guardrail";
       root.appendChild(host);
 
-      const cssString = [
-        'position: absolute',
-        'left: -9999px',
-        'top: -9999px',
-        'width: 180px',
-        'height: 64px',
-        'background: rgb(141, 168, 64)',
-        'color: white',
-        'padding: 8px 12px',
-        'border-radius: 3px',
-        'font: 600 12px/1 system-ui',
-        'z-index: 2147483647',
-        'pointer-events: none',
-        'display: flex',
-        'align-items: center',
-        'justify-content: center',
-      ].join(';');
-
-      // `style` for React/MDX handoff — CSSProperties-shaped object so any
-      // future Radix typing does not reject it.
-      const reactCss: Record<string, string> = {
-        position: 'absolute',
-        left: '-9999px',
-        top: '-9999px',
-        width: '180px',
-        height: '64px',
-        background: 'rgb(141, 168, 64)',
-        color: 'white',
-        padding: '8px 12px',
-        borderRadius: '3px',
-        font: '600 12px/1 system-ui',
-        zIndex: '2147483647',
-        pointerEvents: 'none',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+      const sentinelStyle: Record<string, string> = {
+        position: "absolute",
+        left: "-9999px",
+        top: "-9999px",
+        width: "180px",
+        height: "64px",
+        background: "rgb(141, 168, 64)",
+        color: "white",
+        padding: "8px 12px",
+        borderRadius: "3px",
+        font: "600 12px/1 system-ui",
+        zIndex: "2147483647",
+        pointerEvents: "none",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
       };
 
-      // Strategy A: real Radix Tooltip.Portal with container=#root.
-      // In dev mode Vite serves bare ESM imports through its import map.
-      // The dynamic imports are typed as `any` here to keep TS happy — the
-      // test only asserts DOM-level behaviour, not Radix's type surface.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let ReactDOMClient: any;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let RdxTooltip: any;
+      let ReactDOMClient: any = null;
+      let RdxTooltip: any = null;
+      let React: any = null;
       try {
-        ReactDOMClient = await import(/* @vite-ignore */ 'react-dom/client');
-        RdxTooltip = await import(/* @vite-ignore */ '@radix-ui/react-tooltip');
-      } catch (_err) {
-        ReactDOMClient = null;
-        RdxTooltip = null;
+        React = await import(/* @vite-ignore */ "react");
+        ReactDOMClient = await import(/* @vite-ignore */ "react-dom/client");
+        RdxTooltip = await import(/* @vite-ignore */ "@radix-ui/react-tooltip");
+      } catch (err) {
+        mountError = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
       }
 
-      if (ReactDOMClient && RdxTooltip) {
+      if (React && ReactDOMClient && RdxTooltip) {
         const sub = ReactDOMClient.createRoot(host);
+        // Build the React element tree with createElement so it goes
+        // through the JSX reconciler — Radix rejects plain function
+        // calls because the Provider context never wires up.
         sub.render(
-          RdxTooltip.Portal({
-            container: root,
-            children: RdxTooltip.Content({
-              'data-testid': 'rdx-portal-sentinel',
-              // Pass a real CSSProperties-shaped object. eslint is happy
-              // because React runtime accepts both objects and strings.
-              style: reactCss as unknown as React.CSSProperties,
-              children: 'Portal into #root',
-            }),
-          }),
+          React.createElement(
+            RdxTooltip.Provider,
+            null,
+            React.createElement(
+              RdxTooltip.Root,
+              { open: true },
+              React.createElement(
+                RdxTooltip.Trigger,
+                { asChild: true },
+                React.createElement("button", { type: "button" }, "open"),
+              ),
+              React.createElement(
+                RdxTooltip.Portal,
+                { container: root },
+                React.createElement(
+                  RdxTooltip.Content,
+                  {
+                    "data-testid": "rdx-portal-sentinel",
+                    style: sentinelStyle as unknown as React.CSSProperties,
+                    side: "bottom",
+                    sideOffset: 0,
+                  },
+                  "Portal into #root",
+                ),
+              ),
+            ),
+          ),
         );
-        // One tick for React to commit.
-        await new Promise((r) => setTimeout(r, 60));
-        return { mode: 'radix' as const };
+        // Two ticks for Radix's Provider/effect chain to commit.
+        await new Promise((r) => setTimeout(r, 120));
+        return { mode: "radix" as const };
       }
-      // No Radix available in eval scope (typical for Vite dev — the runtime
-      // import map that resolves bare specifiers is not exposed to page.evaluate).
-      // Fall back to a direct-DOM sentinel that proves the same contract.
-      // Strategy B fallback: plain DOM sentinel. Same contract, no
-      // dependency on ResolvedRadix being importable inside eval.
-      // The CSS-computed-style guardrail above already covers the
-      // regression; this branch just keeps the rect assertion alive
-      // when Radix can't be reached.
-      const probe = document.createElement('div');
-      probe.dataset.testid = 'rdx-portal-sentinel';
-      probe.textContent = 'Portal into #root';
-      probe.style.cssText = cssString;
+      // Fallback: no Radix available in eval scope (typical for Vite
+      // dev — the runtime import map that resolves bare specifiers is
+      // not exposed to page.evaluate). Strategy B uses a direct-DOM
+      // sentinel and PRESERVES the real import-error string so a
+      // future failure is filed with enough context to triage at the
+      // source.
+      const probe = document.createElement("div");
+      probe.dataset.testid = "rdx-portal-sentinel";
+      probe.textContent = "Portal into #root";
+      Object.assign(probe.style, sentinelStyle);
       root.appendChild(probe);
       return {
-        mode: 'dom-fallback' as const,
-        rdxError: 'Radix bare imports did not resolve inside page.evaluate',
+        mode: "dom-fallback" as const,
+        rdxError: mountError ?? "Radix bare imports did not resolve inside page.evaluate",
       };
     });
 
-    // Diagnostic for the fallback path — surface the import error so a
-    // future breakage is easy to triage.
-    if (mount.mode === 'dom-fallback') {
+    if (mount.mode === "dom-fallback") {
+      // eslint-disable-next-line no-console -- intentional guardrail diagnostic
       console.warn(
         `[scroll-bounds guardrail] Radix bare import unavailable in eval scope, ` +
           `using direct-DOM sentinel. Reason: ${mount.rdxError}`,
@@ -164,10 +159,18 @@ test.describe('Scroll-bounds fix — #root must not clip React Portals', () => {
     });
 
     // (c) The sentinel must exist, be a descendant of #root, and —
-    // critically — have at least one clientRect. An absolute-positioned
-    // child at translate(-9999,-9999) bleeds outside any parent's clip
-    // box; if #root had `overflow:hidden`, the element's `getClientRects()`
-    // would be empty.
+    // most importantly — still be paint-hit-testable at its bbox
+    // position. An absolute-positioned child at translate(-9999,-9999)
+    // bleeds outside any parent's clip box; if #root had
+    // `overflow:hidden`, two things would happen:
+    //   (1) getClientRects() / bbox still report the original
+    //       coordinates (rects aren't affected by clip), so a
+    //       rect-only check CANNOT detect clipping.
+    //   (2) document.elementFromPoint(centerX, centerY) would return
+    //       some other element (or null), because the clip hides the
+    //       paint at that coordinate.
+    // So we layer both: a rect check (proves mounting succeeded) and a
+    // hit-test check (proves visibility through any clip path).
     const probe = await page.evaluate(() => {
       const el = document.querySelector(
         '[data-testid="rdx-portal-sentinel"]',
@@ -177,7 +180,7 @@ test.describe('Scroll-bounds fix — #root must not clip React Portals', () => {
       const bbox = el.getBoundingClientRect();
       return {
         found: true,
-        inRoot: !!el.closest('#root'),
+        inRoot: !!el.closest("#root"),
         rectsCount: rects.length,
         firstRect:
           rects.length > 0
@@ -190,20 +193,56 @@ test.describe('Scroll-bounds fix — #root must not clip React Portals', () => {
 
     expect(
       probe,
-      'Sentinel element must exist in the DOM after the mount step',
+      `Sentinel element must exist in the DOM after the mount step (mode=${mount.mode})`,
     ).not.toBeNull();
     expect(probe!.found).toBe(true);
     expect(
       probe!.inRoot,
-      'Sentinel must be a descendant of #root — proves the Radix portal container was honoured',
+      "Sentinel must be a descendant of #root — proves the Radix portal container was honoured",
     ).toBe(true);
     expect(
       probe!.rectsCount,
-      `Sentinel must render ≥1 clientRect — empty clientRects() implies #root ` +
-        `now has overflow:hidden and is silently clipping the portal. ` +
+      `Sentinel must render ≥1 clientRect — empty clientRects() implies it never mounted. ` +
         `Mount mode: ${mount.mode}`,
     ).toBeGreaterThan(0);
     expect(probe!.bboxWidth).toBeGreaterThan(50);
     expect(probe!.bboxHeight).toBeGreaterThan(20);
+
+    // Paint-time hit test. elementFromPoint at the bbox centre must
+    // resolve to either the sentinel itself or one of its ancestors up
+    // to #root (Radix may wrap the Content). NOT some other element in
+    // #root (or null) that has clipped over its top via an
+    // `overflow:hidden` ancestor.
+    const hitOk = await page.evaluate(() => {
+      const el = document.querySelector(
+        '[data-testid="rdx-portal-sentinel"]',
+      ) as HTMLElement | null;
+      if (!el) return false;
+      const bbox = el.getBoundingClientRect();
+      const centerX = bbox.left + bbox.width / 2;
+      const centerY = bbox.top + bbox.height / 2;
+      const hit = document.elementFromPoint(centerX, centerY);
+      if (!hit) return false;
+      let cur: HTMLElement | null = hit as HTMLElement;
+      let depth = 0;
+      while (cur && depth < 6) {
+        if (cur === el) return true;
+        cur = cur.parentElement;
+        depth += 1;
+      }
+      return false;
+    });
+
+    expect(
+      hitOk,
+      `Sentinel must be the topmost element at its getBoundingClientRect centre. ` +
+        `If elementFromPoint(...) returns a different node, an ancestor of #root ` +
+        `now has overflow:hidden and is silently clipping the portal. ` +
+        `Mount mode: ${mount.mode}`,
+    ).toBe(true);
+
+    await expect(
+      page.locator('[data-testid="rdx-portal-sentinel"]'),
+    ).toBeAttached();
   });
 });

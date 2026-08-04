@@ -4,7 +4,6 @@
  * parseCudaVersionFromNvidiaSmi and pickCudaTag are the canonical implementations.
  * routes/system.ts was duplicating them — it should import from here instead.
  */
-import { spawn } from "child_process";
 import {
   ORT_GPU_PROBE_SCRIPT,
   parseOrtGpuProbe,
@@ -14,6 +13,7 @@ import {
   isResolvableCudaTag,
 } from "../../../lib/oliveGpuRuntime.ts";
 import { execFileAsync } from "../shared/exec.ts";
+import { pipInstall } from "../shared/pipInstall.ts";
 import { getVenvPython, getVenvPip } from "../venv/paths.ts";
 import { ensureVenv } from "../venv/index.ts";
 import fs from "fs";
@@ -111,34 +111,9 @@ export async function detectCudaTag(preferred: string, onLine: (line: string) =>
 // onnxruntime-gpu install path (mirrors TRT install UX in tensorrt.ts)
 // ─────────────────────────────────────────────────────────────────────────
 
-/**
- * Runs `pip install` and forwards output line-by-line to the provided callback,
- * prepending each line with `[deps]`. Mirrors the helper in tensorrt.ts so the
- * NDJSON stream the UI receives has the same shape across all install paths.
- */
-async function pipInstall(
-  pip: string,
-  args: string[],
-  onLine: (line: string) => void,
-): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const proc = spawn(pip, ["install", ...args], { stdio: "pipe" });
-    proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-    proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-    proc.on("error", (err: Error) =>
-      reject(
-        new Error(
-          `Failed to launch ${pip}: ${err.message}. Create the project .venv via Setup runtime first.`,
-        ),
-      ),
-    );
-    proc.on("close", (code: number | null) =>
-      code === 0
-        ? resolve()
-        : reject(new Error(`pip install ${args.join(" ")} failed (exit ${code})`)),
-    );
-  });
-}
+// `pipInstall` is imported from `../shared/pipInstall.ts` so the same NDJSON
+// line shape + error contract is used by every install route. The local
+// duplicate copy was deleted when this was extracted.
 
 /**
  * Ensures the project virtual environment has the pinned onnxruntime-gpu
@@ -176,8 +151,15 @@ export async function ensureOnnxRuntimeGpu(
     const { stdout } = await execFileAsync(venvPython, ["-c", ORT_GPU_PROBE_SCRIPT]);
     const probe = parseOrtGpuProbe(stdout);
     if (probe.ok) {
-      onLine("[deps] onnxruntime-gpu already installed and CUDA EP registered ✓");
-      return { ok: true };
+      onLine("[deps] onnxruntime-gpu already installed and CUDA EP registered");
+      // The `libsDir` field in the return type carries the path the
+      // caller can prepend to find cuBLAS / cuDNN shared libs for
+      // non-venv subprocesses. We don't compute that here (the
+      // install runs inside .venv where the wheel already shipped its
+      // DLLs alongside the Python module), so explicitly return
+      // `null` rather than leave the field undefined — the caller
+      // distinguishes "ready" from "unknown".
+      return { ok: true, libsDir: null };
     }
     if (probe.distVersion || probe.ortVersion) {
       onLine(
@@ -192,18 +174,19 @@ export async function ensureOnnxRuntimeGpu(
 
   onLine(`[deps] Installing ${pinnedOrtGpuLabel()} (required for CUDA EP)...`);
   await pipInstall(pip, pinnedOrtGpuInstallArgs(), onLine);
-  onLine(`[deps] ${pinnedOrtGpuLabel()} installed ✓`);
+  onLine(`[deps] ${pinnedOrtGpuLabel()} installed`);
 
   // Verify after install — surfaces driver/wheel mismatch as a real error.
   try {
     const { stdout } = await execFileAsync(venvPython, ["-c", ORT_GPU_PROBE_SCRIPT]);
     const probe = parseOrtGpuProbe(stdout);
     if (probe.ok) {
-      onLine("[deps] CUDA execution provider load verified after install ✓");
-      return { ok: true };
+      onLine("[deps] CUDA execution provider load verified after install");
+      return { ok: true, libsDir: null };
     }
     return {
       ok: false,
+      libsDir: null,
       error:
         probe.cudaUsable === false
           ? `${pinnedOrtGpuLabel()} installed but the onnxruntime CUDA EP did not register — likely a driver / CUDA-version mismatch (probe reported: ${probe.distVersion ?? "?"} / ort ${probe.ortVersion ?? "?"}). Refresh the hardware probe and check the NVIDIA driver.`
@@ -213,6 +196,7 @@ export async function ensureOnnxRuntimeGpu(
     const msg = err instanceof Error ? err.message : String(err);
     return {
       ok: false,
+      libsDir: null,
       error: `CUDA EP probe failed after install: ${msg}. Refresh the hardware probe and check the Python venv.`,
     };
   }
