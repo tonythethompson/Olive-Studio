@@ -112,6 +112,33 @@
   :root {
     color-scheme: dark;
   }
+  /*
+   * Lock the document to the viewport so no descendant can push the body
+   * past the screen. Without this, sticky / fixed children or panels with a
+   * pixel-height such as `100vh` can briefly escape `overflow-hidden` on the
+   * React tree, leaving a tall empty band below the app and letting the
+   * browser/WKWebView scroll an empty page forever.
+   *
+   * `overscroll-behavior: none` silences the rubber-band bounce at the very
+   * top/bottom so scroll-chaining can't reach the body either.
+   *
+   * `#root` is intentionally NOT in this rule — React portals in this app
+   * target `document.body` (e.g. modals), and the inner App shell already
+   * clamps with `h-screen overflow-hidden`. Adding `overflow: hidden` on
+   * `#root` would silently clip any future portal that targets it.
+   */
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  html {
+    /* Belt-and-braces: prevent horizontal overscroll as well. */
+    overflow-x: hidden;
+  }
   body {
     @apply bg-slate-950 text-slate-300 font-sans antialiased selection:bg-electric-blue/30;
   }

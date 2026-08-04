@@ -5,11 +5,11 @@
  * install-on-demand via ensureTensorRt matches the TensorRT RTX flow.
  * RTX-specific path is in tensorrt-rtx.ts.
  */
-import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 
 import { execFileAsync } from "../shared/exec.ts";
+import { pipInstall } from "../shared/pipInstall.ts";
 import { ensureVenv } from "../venv/index.ts";
 import { getVenvPython, getVenvPip } from "../venv/paths.ts";
 import { getNativeGpuLibPaths } from "../venv/gpu.ts";
@@ -27,6 +27,10 @@ import {
   pinnedOrtGpuLabel,
   PINNED_ORT_GPU_VERSION,
 } from "../../../lib/oliveGpuRuntime.ts";
+import {
+  tensorrtRtxEpAbiInstallArgs,
+  tensorrtRtxEpAbiLabel,
+} from "../../../lib/tensorrtRtxDeps.ts";
 import { probeTensorRtRtxLoadable } from "./tensorrt-rtx.ts";
 import type { PkgDef } from "./recipe.ts";
 
@@ -75,30 +79,10 @@ function extractTrtFailDetail(text: string): string | undefined {
   return text.slice(idx + TRT_FAIL_MARK.length).trim() || undefined;
 }
 
-/**
- * Installs packages with pip and reports output through the provided callback.
- *
- * @param pip - The pip executable to run
- * @param args - Arguments passed to `pip install`
- * @param onLine - Callback invoked for each output chunk
- */
-async function pipInstall(pip: string, args: string[], onLine: (line: string) => void): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const proc = spawn(pip, ["install", ...args], { stdio: "pipe" });
-    proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-    proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-    proc.on("error", (err: Error) =>
-      reject(
-        new Error(
-          `Failed to launch ${pip}: ${err.message}. Create the project .venv via Setup runtime first.`,
-        ),
-      ),
-    );
-    proc.on("close", (code: number | null) =>
-      code === 0 ? resolve() : reject(new Error(`pip install ${args.join(" ")} failed (exit ${code})`)),
-    );
-  });
-}
+// `pipInstall` is imported from `../shared/pipInstall.ts` so all three
+// install routes (this file, `cuda.ts`, `tensorrt-rtx.ts`) share the
+// same NDJSON line shape + error contract. The local copy that lived
+// here was deleted when the helper was extracted.
 
 /**
  * Ensures the pinned ONNX Runtime GPU package is installed for TensorRT execution.
@@ -356,6 +340,30 @@ export async function ensureDeps(
         onLine(`[deps] ${pkg.label} already installed (${probe.version ?? "ok"}) ✓`);
         continue;
       }
+      // The PyPI `tensorrt-rtx` package alone does NOT make
+      // `NvTensorRTRTXExecutionProvider` appear in
+      // `onnxruntime.get_available_providers()`. The NVIDIA
+      // `onnxruntime-ep-nv-tensorrt-rtx-cu13` plugin package on NVIDIA's
+      // PyPI index ships the ORT op-library DLL that actually registers
+      // the EP. Install it inline so recipes requiring tensorrt_rtx also
+      // get a working EP at runtime, not just a Python module.
+      onLine(
+        `[deps] ${pkg.label} present but EP not loaded by onnxruntime — installing ${tensorrtRtxEpAbiLabel()}...`,
+      );
+      await pipInstall(pip, tensorrtRtxEpAbiInstallArgs(), onLine);
+      const rtProbe = await probeTensorRtRtxLoadable(venvPython);
+      if (rtProbe.loadable) {
+        onLine(`[deps] ${tensorrtRtxEpAbiLabel()} installed — TensorRT RTX EP loadable ✓`);
+        continue;
+      }
+      // ABI plugin installed but the EP still didn't register (driver
+      // mismatch, transform/version mismatch in ORT ABI, etc.). Surface
+      // the detail so the user can diagnose; the surrounding loop will
+      // still install the PyPI `tensorrt-rtx` package below for the
+      // recipe's `import tensorrt_rtx` use case.
+      onLine(
+        `[deps] ${tensorrtRtxEpAbiLabel()} installed but EP still not loadable — ${rtProbe.detail ?? "unknown reason"}`,
+      );
     } else if (pkg.importName.startsWith("nvidia.")) {
       try {
         await execFileAsync(venvPython, [
@@ -398,18 +406,8 @@ export async function ensureDeps(
     }
 
     onLine(`[deps] Installing ${pkg.label}...`);
-    await new Promise<void>((resolve, reject) => {
-      const proc = spawn(pip, ["install", ...pkg.installArgs], {
-        stdio: "pipe",
-      });
-      proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-      proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-      proc.on("error", (err: Error) => reject(new Error(`Failed to launch ${pip}: ${err.message}`)));
-      proc.on("close", (code: number | null) =>
-        code === 0 ? resolve() : reject(new Error(`pip install ${pkg.label} failed (exit ${code})`)),
-      );
-    });
-    onLine(`[deps] ${pkg.label} installed ✓`);
+    await pipInstall(pip, pkg.installArgs, onLine);
+    onLine(`[deps] ${pkg.label} installed`);
   }
 
   return { ok: true };
