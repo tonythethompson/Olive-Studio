@@ -155,7 +155,12 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   if (systemPython) pythonCandidates.push(systemPython);
 
   for (const python of pythonCandidates) {
-    const pyResult = await probePythonRuntime(python);
+    const [pyResult, ov, trt, rtx] = await Promise.all([
+      probePythonRuntime(python),
+      opts.probeOpenVino(python),
+      opts.probeTensorRtLoadable(python),
+      opts.probeTensorRtRtxLoadable(python),
+    ]);
     if (pyResult.onnxRuntimeProviders?.length && !onnxRuntimeProviders?.length) {
       onnxRuntimeProviders = pyResult.onnxRuntimeProviders;
       notes.push(
@@ -163,34 +168,20 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
       );
     }
 
-    const ov = await opts.probeOpenVino(python);
-    if (ov.available) {
+    const hasOpenVinoSignal = Boolean(ov.version || ov.devices?.length || ov.optimumIntel || ov.detail);
+    if (hasOpenVinoSignal || ov.available) {
       if (python === venvPython) {
         openvino = ov;
-        openvinoVenvAvailable = true;
+        openvinoVenvAvailable = ov.available;
       } else if (!openvino) {
         openvino = ov;
       }
     }
 
-    if (!tensorrt?.loadable) {
-      const trt = await opts.probeTensorRtLoadable(python);
-      if (python === venvPython && trt.loadable) {
-        tensorRtVenvLoadable = true;
-      }
-      if (trt.loadable || !tensorrt) {
-        tensorrt = trt;
-      }
-    }
-    if (!tensorRtRtx?.loadable) {
-      const rtx = await opts.probeTensorRtRtxLoadable(python);
-      if (python === venvPython && rtx.loadable) {
-        tensorRtRtxVenvLoadable = true;
-      }
-      if (rtx.loadable || !tensorRtRtx) {
-        tensorRtRtx = rtx;
-      }
-    }
+    if (python === venvPython && trt.loadable) tensorRtVenvLoadable = true;
+    if (trt.loadable || !tensorrt) tensorrt = trt;
+    if (python === venvPython && rtx.loadable) tensorRtRtxVenvLoadable = true;
+    if (rtx.loadable || !tensorRtRtx) tensorRtRtx = rtx;
   }
 
   if (tensorRtRtxVenvLoadable) {
@@ -229,8 +220,8 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   if (openvinoVenvAvailable) {
     const deviceMsg = openvino?.devices?.length ? ` [${openvino.devices.join(", ")}]` : "";
     notes.push(`OpenVINO stack verified${openvino?.version ? ` (${openvino.version})` : ""}${deviceMsg}.`);
-  } else if (openvino?.available) {
-    notes.push(`OpenVINO stack found on system Python but not in .venv — use Install in Hardware.`);
+  } else if (openvino?.version || openvino?.devices?.length || openvino?.optimumIntel) {
+    notes.push("OpenVINO is present but the complete .venv stack is not ready — use Install in Hardware.");
   } else {
     notes.push("OpenVINO Python package not found locally.");
   }

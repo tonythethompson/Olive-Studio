@@ -17,36 +17,13 @@ import { ensureOpenVino } from "./openvino.ts";
 import { fsWriteRateLimit, heavyCommandRateLimit } from "../middleware/rateLimit.ts";
 import { resolveAllowedPythonFile } from "../services/venv/pythonGuard.ts";
 
-/** Serialize TensorRT + TensorRT RTX installs (shared venv / pip). */
-let tensorrtInstallChain: Promise<unknown> = Promise.resolve();
+/** Serialize all stack installs that mutate the shared venv via pip. */
+let venvPipInstallChain: Promise<unknown> = Promise.resolve();
 
-/** Serialize OpenVINO installs (shared venv / pip). */
-let openvinoInstallChain: Promise<unknown> = Promise.resolve();
-
-/**
- * Serializes TensorRT installation operations so that only one runs at a time.
- *
- * @param fn - The asynchronous TensorRT installation operation to run
- * @returns The result of the installation operation
- */
-function withTensorrtInstallMutex<T>(fn: () => Promise<T>): Promise<T> {
-  const run = tensorrtInstallChain.then(fn, fn);
-  tensorrtInstallChain = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return run;
-}
-
-/**
- * Serializes OpenVINO installation operations so that only one runs at a time.
- *
- * @param fn - The asynchronous OpenVINO installation operation to run
- * @returns The result of the installation operation
- */
-function withOpenvinoInstallMutex<T>(fn: () => Promise<T>): Promise<T> {
-  const run = openvinoInstallChain.then(fn, fn);
-  openvinoInstallChain = run.then(
+/** Serialize stack installation operations so that only one shared-venv pip run occurs at a time. */
+function withVenvPipInstallMutex<T>(fn: () => Promise<T>): Promise<T> {
+  const run = venvPipInstallChain.then(fn, fn);
+  venvPipInstallChain = run.then(
     () => undefined,
     () => undefined,
   );
@@ -119,15 +96,15 @@ export function mountEnvRoutes(router: Router): void {
 
   // ─── TensorRT installs (NDJSON stream; creates .venv if needed) ────────
   router.post("/env/install-tensorrt-rtx", heavyCommandRateLimit, async (_req, res) => {
-    await withTensorrtInstallMutex(() => streamNdjsonInstall(res, ensureTensorRtRtx));
+    await withVenvPipInstallMutex(() => streamNdjsonInstall(res, ensureTensorRtRtx));
   });
 
   router.post("/env/install-tensorrt", heavyCommandRateLimit, async (_req, res) => {
-    await withTensorrtInstallMutex(() => streamNdjsonInstall(res, ensureTensorRt));
+    await withVenvPipInstallMutex(() => streamNdjsonInstall(res, ensureTensorRt));
   });
 
   router.post("/env/install-openvino", heavyCommandRateLimit, async (_req, res) => {
-    await withOpenvinoInstallMutex(() => streamNdjsonInstall(res, ensureOpenVino));
+    await withVenvPipInstallMutex(() => streamNdjsonInstall(res, ensureOpenVino));
   });
 
   // ─── Runtime Status ───────────────────────────────────────────────────
