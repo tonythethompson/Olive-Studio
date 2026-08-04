@@ -12,6 +12,8 @@ overrides:
   protobufjs@>=7.5.0 <=7.6.4: '>=7.6.5'
   body-parser@<1.20.6: '>=1.20.6'
   uuid@<11.1.1: '>=11.1.1'
+  # GHSA-7p8r-x3mc-p8w7: fast-uri host confusion via backslash authority (dev: commitlint → ajv).
+  'fast-uri@>=3.0.0 <3.1.5': '>=3.1.5'
   minimatch: '^10.2.5'
   brace-expansion: '>=5.0.9'
   # @huggingface/transformers → onnxruntime-node / sharp (arena local NLP).
