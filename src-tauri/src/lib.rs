@@ -308,6 +308,9 @@ pub fn run() {
         )?;
       }
 
+      // Shell plugin for opening external URLs (GitHub, mailto, etc.)
+      app.handle().plugin(tauri_plugin_shell::init())?;
+
       Ok(())
     })
     .build(tauri::generate_context!())
