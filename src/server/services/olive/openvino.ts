@@ -19,14 +19,11 @@ import type { OpenVinoProbeResult } from "../../../lib/hardwareProbe.ts";
 const OV_MARK = "OLIVE_OV:";
 
 /**
- * Probes a Python environment for the OpenVINO runtime, available devices, and
- * the Optimum-Intel bridge.
- *
- * @param python - Path to the Python interpreter to probe
- * @returns Availability, version, device list, and Optimum-Intel status
+ * Build the one-shot Python script used to interrogate a Python interpreter
+ * for the OpenVINO runtime and the Optimum-Intel bridge.
  */
-export async function probeOpenVino(python: string): Promise<OpenVinoProbeResult> {
-  const script = `
+function buildProbeScript(): string {
+  return `
 import sys
 
 def emit(key, value):
@@ -48,60 +45,83 @@ try:
 except Exception as exc:
     emit("optimum_intel_error", str(exc).replace(chr(10), " "))
 `.trim();
+}
 
-  let version: string | undefined;
-  let devices: string[] | undefined;
-  let optimumIntel: OpenVinoProbeResult["optimumIntel"] | undefined;
-  let detail: string | undefined;
+interface ProbeAccumulator {
+  version?: string;
+  devices?: string[];
+  optimumIntel?: OpenVinoProbeResult["optimumIntel"];
+  detail?: string;
+}
 
+function parseProbeOutput(out: string): ProbeAccumulator {
+  const acc: ProbeAccumulator = {};
+
+  const handlers: Record<string, (value: string) => void> = {
+    version: (value) => {
+      if (value) acc.version = value;
+    },
+    devices: (value) => {
+      acc.devices = value ? value.split(",").filter(Boolean) : [];
+    },
+    optimum_intel_available: () => {
+      acc.optimumIntel = { available: true, ...(acc.optimumIntel?.version ? { version: acc.optimumIntel.version } : {}) };
+    },
+    optimum_intel_version: (value) => {
+      acc.optimumIntel = {
+        ...(acc.optimumIntel ?? { available: false }),
+        available: acc.optimumIntel?.available ?? false,
+        version: value || undefined,
+      };
+    },
+    optimum_intel_error: (value) => {
+      acc.optimumIntel = { available: false, detail: value || "optimum.intel import failed" };
+    },
+    error: (value) => {
+      acc.detail = value || "OpenVINO probe failed";
+    },
+  };
+
+  for (const line of out.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith(OV_MARK)) continue;
+    const payload = trimmed.slice(OV_MARK.length);
+    const idx = payload.indexOf("=");
+    if (idx < 0) continue;
+    const key = payload.slice(0, idx);
+    const value = payload.slice(idx + 1).trim();
+    handlers[key]?.(value);
+  }
+
+  return acc;
+}
+
+/**
+ * Probes a Python environment for the OpenVINO runtime, available devices, and
+ * the Optimum-Intel bridge.
+ *
+ * @param python - Path to the Python interpreter to probe
+ * @returns Availability, version, device list, and Optimum-Intel status
+ */
+export async function probeOpenVino(python: string): Promise<OpenVinoProbeResult> {
   try {
-    const { stdout, stderr } = await execFileAsync(python, ["-c", script]);
-    const out = `${stdout}\n${stderr}`;
-    for (const line of out.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith(OV_MARK)) continue;
-      const payload = trimmed.slice(OV_MARK.length);
-      const idx = payload.indexOf("=");
-      if (idx < 0) continue;
-      const key = payload.slice(0, idx);
-      const value = payload.slice(idx + 1).trim();
-      switch (key) {
-        case "version":
-          version = value || undefined;
-          break;
-        case "devices":
-          devices = value ? value.split(",").filter(Boolean) : [];
-          break;
-        case "optimum_intel_available":
-          optimumIntel = { available: true, ...(optimumIntel?.version ? { version: optimumIntel.version } : {}) };
-          break;
-        case "optimum_intel_version":
-          optimumIntel = { ...(optimumIntel ?? { available: false }), available: optimumIntel?.available ?? false, version: value || undefined };
-          break;
-        case "optimum_intel_error":
-          optimumIntel = { available: false, detail: value || "optimum.intel import failed" };
-          break;
-        case "error":
-          detail = value || "OpenVINO probe failed";
-          break;
-      }
-    }
+    const { stdout, stderr } = await execFileAsync(python, ["-c", buildProbeScript()]);
+    const acc = parseProbeOutput(`${stdout}\n${stderr}`);
+    const available = Boolean(acc.version) && Boolean(acc.optimumIntel?.available);
+    return {
+      available,
+      version: acc.version,
+      devices: acc.devices,
+      optimumIntel: acc.optimumIntel,
+      detail: available ? undefined : (acc.detail ?? "OpenVINO stack not available"),
+    };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     if (/No module named ['"]openvino['"]/i.test(message)) {
       return { available: false, detail: "openvino is not installed in .venv" };
     }
-    detail = message;
+    return { available: false, detail: message };
   }
-
-  const available = Boolean(version) && Boolean(optimumIntel?.available);
-  return {
-    available,
-    version,
-    devices,
-    optimumIntel,
-    detail: available ? undefined : (detail ?? "OpenVINO stack not available"),
-  };
 }
 
 async function pipInstall(pip: string, args: string[], onLine: (line: string) => void): Promise<void> {
@@ -139,9 +159,10 @@ export async function ensureOpenVino(
   const venvPython = getVenvPython();
   const pip = getVenvPip();
   if (!fs.existsSync(venvPython) || !fs.existsSync(pip)) {
+    const missing = !fs.existsSync(pip) ? "pip" : "python";
     return {
       ok: false,
-      error: `Project .venv is incomplete (missing ${!fs.existsSync(pip) ? "pip" : "python"}). Use Setup runtime, then retry.`,
+      error: `Project .venv is incomplete (missing ${missing}). Use Setup runtime, then retry.`,
     };
   }
 
