@@ -5,6 +5,15 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import compression from 'vite-plugin-compression';
+import { ANY_DOT_VENV_DIR } from './src/server/shared/anyDotVenvDir';
+
+/**
+ * The shared regex from `src/server/shared/anyDotVenvDir.ts` matches both
+ * here and in `server.ts` so a rename/back-up of the venv directory
+ * (`.venv.bak`, `.venv.old`, `.venv-rename`) is filtered out by both
+ * Vite watchlists in lockstep.
+ */
+void ANY_DOT_VENV_DIR;
 
 export default defineConfig(() => {
   return {
@@ -64,6 +73,7 @@ export default defineConfig(() => {
         : {
             ignored: [
               '**/.venv/**',
+              ANY_DOT_VENV_DIR,
               '**/node_modules/**',
               '**/models/**',
               '**/.cache/**',
