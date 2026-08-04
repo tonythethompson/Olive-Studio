@@ -57,7 +57,7 @@ const SECRET_PATTERNS: RegExp[] = [
   /gh[ps]_[A-Za-z0-9]{36,}/g,
   // AWS-style keys
   /(?:AKIA|ASIA)[A-Z0-9]{16}/g,
-  // Bearer tokens
+  // Bearer tokens (Authorization header)
   /Bearer\s+[A-Za-z0-9\-._~+/]+=*/g,
   // Generic long hex strings that look like secrets (32+ hex chars)
   /(?:["'\s:=]|^)[0-9a-f]{32,}(?:["'\s]|$)/gi,
