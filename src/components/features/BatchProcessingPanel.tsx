@@ -235,7 +235,13 @@ export function BatchProcessingPanel({
       }
 
       if (haltRequestedRef.current) {
-        let cancelledOk = false;
+        // No SSE yet — apply the cancel endpoint's terminal status (or force
+        // cancelled if cancel fails) so the row cannot stick on "running".
+        type TerminalBatchStatus = "cancelled" | "completed" | "failed";
+        const isTerminal = (s: string | undefined): s is TerminalBatchStatus =>
+          s === "cancelled" || s === "completed" || s === "failed";
+        let terminalStatus: TerminalBatchStatus = "cancelled";
+        let haltLog = "[INFO] Halted before stream started.";
         try {
           const cancelResp = await fetch("/api/olive/cancel", {
             method: "POST",
@@ -243,24 +249,29 @@ export function BatchProcessingPanel({
             body: JSON.stringify({ jobId }),
           });
           const cancelData = (await cancelResp.json().catch(() => ({}))) as { status?: string };
-          cancelledOk = cancelResp.ok && cancelData.status === "cancelled";
+          if (cancelResp.ok && isTerminal(cancelData.status)) {
+            terminalStatus = cancelData.status;
+            if (terminalStatus === "completed") {
+              haltLog = "[INFO] Halt requested after job already completed.";
+            } else if (terminalStatus === "failed") {
+              haltLog = "[INFO] Halt requested after job already failed.";
+            }
+          }
         } catch {
-          cancelledOk = false;
+          /* keep cancelled + default log */
         }
-        if (cancelledOk) {
-          setState({
-            batchJobs: (jobsRef.current ?? []).map((j) =>
-              j.id === job.id
-                ? {
-                    ...j,
-                    oliveJobId: jobId,
-                    status: "cancelled",
-                    logs: [...(j.logs || []), "[INFO] Halted before stream started."],
-                  }
-                : j,
-            ),
-          });
-        }
+        setState({
+          batchJobs: (jobsRef.current ?? []).map((j) =>
+            j.id === job.id
+              ? {
+                  ...j,
+                  oliveJobId: jobId,
+                  status: terminalStatus,
+                  logs: [...(j.logs || []), haltLog],
+                }
+              : j,
+          ),
+        });
         break;
       }
 
