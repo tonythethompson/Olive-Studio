@@ -76,6 +76,7 @@ function parseProbeOutput(out: string): ProbeAccumulator {
     },
     optimum_intel_error: (value) => {
       acc.optimumIntel = { available: false, detail: value || "optimum.intel import failed" };
+      if (!acc.detail) acc.detail = value || "optimum.intel import failed";
     },
     error: (value) => {
       acc.detail = value || "OpenVINO probe failed";

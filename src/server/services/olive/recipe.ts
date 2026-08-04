@@ -122,10 +122,15 @@ export function inferRequiredPackages(recipe: OliveRecipe, cudaTag: string): Pkg
     }
   }
 
-  // OpenVINO runtime + Optimum-Intel bridge (single install action)
+  // OpenVINO runtime + Optimum-Intel bridge
   if (passTypes.some((t) => t.includes("OpenVINO"))) {
     pkgs.push({
       importName: "openvino",
+      installArgs: openvinoStackInstallArgs(),
+      label: openvinoStackLabel(),
+    });
+    pkgs.push({
+      importName: "optimum.intel",
       installArgs: openvinoStackInstallArgs(),
       label: openvinoStackLabel(),
     });

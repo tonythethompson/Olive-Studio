@@ -236,10 +236,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   }
   notes.push("QNN requires Snapdragon/Hexagon dev hardware — not probed on desktop.");
 
-  const hasOpenVinoCompatibleHardware =
-    /Intel|Xeon|Core|Arc|Ultra/i.test(platform.cpuModel) ||
-    platform.arch === "x64" ||
-    platform.arch === "arm64";
+  const hasOpenVinoCompatibleHardware = /Intel|Xeon|Core|Arc|Ultra/i.test(platform.cpuModel);
 
   const detectedProviders = mergeDetectedProviders({
     onnxRuntimeProviders,

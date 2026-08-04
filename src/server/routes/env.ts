@@ -14,7 +14,7 @@ import { writeStudioConfig, addVenvToUserPath } from "../services/venv/config.ts
 import { setRuntimeHfToken, getRuntimeHfToken } from "../services/olive/state.ts";
 import { ensureTensorRtRtx, ensureTensorRt } from "./tensorrt.ts";
 import { ensureOpenVino } from "./openvino.ts";
-import { fsWriteRateLimit } from "../middleware/rateLimit.ts";
+import { fsWriteRateLimit, heavyCommandRateLimit } from "../middleware/rateLimit.ts";
 import { resolveAllowedPythonFile } from "../services/venv/pythonGuard.ts";
 
 /** Serialize TensorRT + TensorRT RTX installs (shared venv / pip). */
@@ -118,15 +118,15 @@ export function mountEnvRoutes(router: Router): void {
   });
 
   // ─── TensorRT installs (NDJSON stream; creates .venv if needed) ────────
-  router.post("/env/install-tensorrt-rtx", async (_req, res) => {
+  router.post("/env/install-tensorrt-rtx", heavyCommandRateLimit, async (_req, res) => {
     await withTensorrtInstallMutex(() => streamNdjsonInstall(res, ensureTensorRtRtx));
   });
 
-  router.post("/env/install-tensorrt", async (_req, res) => {
+  router.post("/env/install-tensorrt", heavyCommandRateLimit, async (_req, res) => {
     await withTensorrtInstallMutex(() => streamNdjsonInstall(res, ensureTensorRt));
   });
 
-  router.post("/env/install-openvino", async (_req, res) => {
+  router.post("/env/install-openvino", heavyCommandRateLimit, async (_req, res) => {
     await withOpenvinoInstallMutex(() => streamNdjsonInstall(res, ensureOpenVino));
   });
 
