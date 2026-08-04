@@ -25,6 +25,20 @@ function Test-Command($Name) {
   return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
+function Test-CommandLineBelongsToRepo {
+  <#
+    Match $Root as a full path token, not a prefix of a sibling checkout
+    (e.g. C:\dev\olive must not match C:\dev\olive-pr-98).
+  #>
+  param(
+    [string]$CommandLine,
+    [string]$RepoRoot
+  )
+  if (-not $CommandLine) { return $false }
+  $pattern = [regex]::Escape($RepoRoot) + '(?:[/\\]|$|[\s"'']|\))'
+  return [bool]([regex]::IsMatch($CommandLine, $pattern))
+}
+
 function Stop-OliveStudioDevStack {
   <#
     Free port 3000 and stop leftover Olive Studio / Tauri processes for this repo
@@ -54,7 +68,7 @@ function Stop-OliveStudioDevStack {
     $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$procId" -ErrorAction SilentlyContinue
     if (-not $processInfo) { continue }
     $commandLine = $processInfo.CommandLine
-    if (-not $commandLine -or $commandLine -notmatch [regex]::Escape($Root)) {
+    if (-not (Test-CommandLineBelongsToRepo -CommandLine $commandLine -RepoRoot $Root)) {
       continue
     }
     $proc = Get-Process -Id $procId -ErrorAction SilentlyContinue
@@ -70,8 +84,7 @@ function Stop-OliveStudioDevStack {
   try {
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
       Where-Object {
-        $_.CommandLine -and
-        $_.CommandLine -match [regex]::Escape($Root) -and
+        (Test-CommandLineBelongsToRepo -CommandLine $_.CommandLine -RepoRoot $Root) -and
         (
           $_.CommandLine -match 'tauri(\.cmd|\.exe)?(\s|$)' -or
           $_.CommandLine -match 'tauri:dev' -or

@@ -32,6 +32,8 @@ export function modelCatalogMembershipLabel(membership: ModelCatalogMembership):
     case "in-catalog":
       return null;
     case "not-in-catalog":
+      // Fallback lists are tiny static defaults; missing there does not mean the id is invalid.
+      if (membership.source !== "live") return null;
       return "Model ID not recognized. Requests may fail.";
     default: {
       const _exhaustive: never = membership;

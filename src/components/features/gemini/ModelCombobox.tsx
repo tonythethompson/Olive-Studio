@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from "react";
 import {
   getModelCatalogMembership,
   modelCatalogMembershipLabel,
@@ -62,12 +62,17 @@ export function ModelCombobox({
       ? null
       : Math.min(highlight, filtered.length - 1);
 
+  const closeList = () => {
+    setOpen(false);
+    setQuery(null);
+    setHighlight(null);
+  };
+
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: MouseEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-        setQuery(null);
+        closeList();
       }
     };
     document.addEventListener("mousedown", onPointerDown);
@@ -76,9 +81,7 @@ export function ModelCombobox({
 
   const pick = (modelId: string) => {
     onChange(modelId);
-    setQuery(null);
-    setHighlight(null);
-    setOpen(false);
+    closeList();
   };
 
   const openList = () => {
@@ -122,10 +125,15 @@ export function ModelCombobox({
       return;
     }
     if (event.key === "Escape") {
-      setOpen(false);
-      setQuery(null);
-      setHighlight(null);
+      event.preventDefault();
+      closeList();
     }
+  };
+
+  const onBlur = (event: FocusEvent<HTMLInputElement>) => {
+    // Options use mousedown.preventDefault so they never steal focus; Tab leaves the root.
+    if (rootRef.current?.contains(event.relatedTarget as Node)) return;
+    closeList();
   };
 
   return (
@@ -150,11 +158,15 @@ export function ModelCombobox({
         onChange={(e) => {
           const next = e.target.value;
           setQuery(next);
-          setHighlight(0);
+          // Do not auto-highlight the first filter match: Enter would overwrite freehand ids
+          // that partially match the catalog (e.g. openai/gpt-4o-my-ft → openai/gpt-4o).
+          // Arrow keys / mouse still set an explicit highlight for intentional commits.
+          setHighlight(null);
           onChange(next);
           setOpen(true);
         }}
         onFocus={openList}
+        onBlur={onBlur}
         onKeyDown={onKeyDown}
         className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
       />

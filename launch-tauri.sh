@@ -52,6 +52,26 @@ stop_olive_studio_dev_stack() {
     return 1
   }
 
+  # True when $ROOT appears as a full path token (not a prefix of a sibling checkout
+  # such as /tmp/olive matching /tmp/olive-pr-98).
+  cmdline_belongs_to_repo() {
+    local cmd="$1"
+    local root="$ROOT"
+    local root_len=${#root}
+    local search="$cmd"
+    local prefix idx after
+    while [[ "$search" == *"$root"* ]]; do
+      prefix="${search%%"$root"*}"
+      idx=${#prefix}
+      after="${search:$((idx + root_len)):1}"
+      if [[ -z "$after" || "$after" == "/" || "$after" == "\\" || "$after" == " " || "$after" == $'\t' || "$after" == '"' || "$after" == "'" ]]; then
+        return 0
+      fi
+      search="${search:$((idx + 1))}"
+    done
+    return 1
+  }
+
   if command -v lsof >/dev/null 2>&1; then
     while read -r pid; do
       [[ -z "$pid" ]] && continue
@@ -61,7 +81,7 @@ stop_olive_studio_dev_stack() {
       local cmd
       cmd="$(ps -p "$pid" -o args= 2>/dev/null || true)"
       # Only stop listeners whose command line belongs to this checkout.
-      if [[ "$cmd" == *"$ROOT"* ]]; then
+      if cmdline_belongs_to_repo "$cmd"; then
         echo "  Port ${port}: stopping Olive Studio PID ${pid}"
         kill "$pid" 2>/dev/null || true
         sleep 0.3
@@ -72,37 +92,36 @@ stop_olive_studio_dev_stack() {
 
   # Repo-scoped leftover tauri / server / desktop processes (avoid nuking unrelated installs).
   # Skip this shell and its parent: absolute-path launchers include $ROOT and "tauri" in argv.
+  # Broad pgrep, then boundary-filter so sibling checkouts are not force-killed.
   if command -v pgrep >/dev/null 2>&1; then
     local match_pids
     match_pids="$(pgrep -f "$ROOT" 2>/dev/null || true)"
     if [[ -n "$match_pids" ]]; then
       local pid cmd
+      local repo_pids=()
       for pid in $match_pids; do
         if is_self_or_parent "$pid"; then
           continue
         fi
         cmd="$(ps -p "$pid" -o args= 2>/dev/null || true)"
+        if ! cmdline_belongs_to_repo "$cmd"; then
+          continue
+        fi
         if [[ "$cmd" == *launch-tauri.sh* || "$cmd" == *launch-tauri.ps1* || "$cmd" == *launch-tauri.cmd* ]]; then
           continue
         fi
         if [[ "$cmd" == *tauri* || "$cmd" == *server.ts* || "$cmd" == *server.mjs* || "$cmd" == *olive-studio* || "$cmd" == *"Olive Studio"* ]]; then
-          echo "  Stopping leftover PID $pid"
-          kill "$pid" 2>/dev/null || true
+          repo_pids+=("$pid")
         fi
       done
+      for pid in "${repo_pids[@]+"${repo_pids[@]}"}"; do
+        echo "  Stopping leftover PID $pid"
+        kill "$pid" 2>/dev/null || true
+      done
       sleep 0.2
-      for pid in $match_pids; do
-        if is_self_or_parent "$pid"; then
-          continue
-        fi
+      for pid in "${repo_pids[@]+"${repo_pids[@]}"}"; do
         if kill -0 "$pid" 2>/dev/null; then
-          cmd="$(ps -p "$pid" -o args= 2>/dev/null || true)"
-          if [[ "$cmd" == *launch-tauri.sh* || "$cmd" == *launch-tauri.ps1* || "$cmd" == *launch-tauri.cmd* ]]; then
-            continue
-          fi
-          if [[ "$cmd" == *tauri* || "$cmd" == *server.ts* || "$cmd" == *server.mjs* || "$cmd" == *olive-studio* || "$cmd" == *"Olive Studio"* ]]; then
-            kill -9 "$pid" 2>/dev/null || true
-          fi
+          kill -9 "$pid" 2>/dev/null || true
         fi
       done
     fi

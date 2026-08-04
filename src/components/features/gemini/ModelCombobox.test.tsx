@@ -92,4 +92,46 @@ describe("ModelCombobox", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it("does not overwrite a freehand id with the first filter match on Enter", () => {
+    const onChange = vi.fn();
+    render(
+      <ModelCombobox
+        value=""
+        options={[
+          { id: "openai/gpt-4o", label: "GPT-4o" },
+          { id: "openai/gpt-4o-mini", label: "GPT-4o mini" },
+        ]}
+        modelsSource="live"
+        onChange={onChange}
+      />,
+    );
+
+    const input = screen.getByRole("combobox");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "openai/gpt-4o-my-ft" } });
+    expect(onChange).toHaveBeenLastCalledWith("openai/gpt-4o-my-ft");
+    onChange.mockClear();
+
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onChange).not.toHaveBeenCalled();
+    expect((input as HTMLInputElement).value).toBe("openai/gpt-4o-my-ft");
+  });
+
+  it("closes the list when focus leaves via Tab", () => {
+    render(
+      <ModelCombobox
+        value="openrouter/openai/gpt-4o"
+        options={options}
+        modelsSource="live"
+        onChange={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByRole("combobox");
+    fireEvent.focus(input);
+    expect(screen.getByRole("listbox")).toBeTruthy();
+    fireEvent.blur(input);
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
 });

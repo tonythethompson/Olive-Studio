@@ -33,7 +33,7 @@ describe("getModelCatalogMembership", () => {
 });
 
 describe("modelCatalogMembershipLabel", () => {
-  it("only warns for unrecognized ids", () => {
+  it("only warns for unrecognized ids against a live catalog", () => {
     expect(modelCatalogMembershipLabel({ status: "in-catalog", source: "live" })).toBeNull();
     expect(modelCatalogMembershipLabel({ status: "in-catalog", source: "fallback" })).toBeNull();
     expect(
@@ -41,7 +41,7 @@ describe("modelCatalogMembershipLabel", () => {
     ).toBe("Model ID not recognized. Requests may fail.");
     expect(
       modelCatalogMembershipLabel({ status: "not-in-catalog", source: "fallback" }),
-    ).toBe("Model ID not recognized. Requests may fail.");
+    ).toBeNull();
     expect(modelCatalogMembershipLabel({ status: "empty" })).toBeNull();
   });
 });
