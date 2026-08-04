@@ -369,10 +369,11 @@ function Dashboard() {
                           </ErrorBoundary>
                         </div>
                       )}
-                      {id === "playground" && (                        <ErrorBoundary label="Playground" onReportError={handleReportError}>
+                      {id === "playground" && (
+                        <ErrorBoundary label="Playground" onReportError={handleReportError}>
                           <Suspense fallback={<PlaygroundPanelFallback />}>
-                              <PlaygroundPanel />
-                            </Suspense>
+                            <PlaygroundPanel />
+                          </Suspense>
                         </ErrorBoundary>
                       )}
                     </section>
