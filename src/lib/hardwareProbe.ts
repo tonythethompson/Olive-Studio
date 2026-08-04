@@ -310,7 +310,7 @@ function undetectedProviderReason(
         return `NVIDIA GPU detected (${names}) but every card predates the CUDA 12 toolkit floor (compute capability ≥ ${CUDA_SM_FLOOR}, Maxwell / GeForce RTX 20xx+). Upgrading the toolkit cannot recover this — these cards (Kepler SM 3.x) cannot execute modern CUDA. Use the CPU provider, or upgrade hardware.`;
       }
       // 3. NVIDIA driver OK but onnxruntime-gpu missing in .venv
-      const cudaEpInVenv = probe.onnxRuntimeProviders?.includes("CUDAExecutionProvider") ?? false;
+      const cudaEpUsable = probe.cuda?.loadable === true;
       const toolkit = nvidia?.cudaToolkit;
       const toolTip =
         toolkit?.available === true
@@ -319,7 +319,7 @@ function undetectedProviderReason(
           : toolkit?.available === false
             ? "toolkit (nvcc) not installed"
             : "toolkit status unknown";
-      if (!cudaEpInVenv) {
+      if (!cudaEpUsable) {
         return `NVIDIA driver detected on ${gpus.map((g) => g.name).join(", ")}; ${toolTip}. The CUDA execution provider is not registered by onnxruntime-gpu in the project .venv — install the pinned wheel with \`${pinnedOrtGpuInstallCommand()}\` (you can also click "Install onnxruntime-gpu" in the Hardware panel).${
           toolkit?.available === false
             ? ` CUDA toolkit is also missing; for native builds grab it from ${CUDA_DOWNLOAD_LINKS.archive}.`

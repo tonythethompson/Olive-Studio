@@ -340,8 +340,7 @@ export function IHVIntegrationPanel({
   //      informational for users who also want native builds).
   const nvidiaGpus = hardwareProbe?.nvidia?.gpus ?? [];
   const isPreMaxwellBox = isPreMaxwellNvidiaBox(nvidiaGpus);
-  const cudaEpInVenv =
-    hardwareProbe?.onnxRuntimeProviders?.includes("CUDAExecutionProvider") ?? false;
+  const cudaEpInVenv = hardwareProbe?.cuda?.loadable === true;
   const cudaNeedsOrtGpuInstall =
     nvidiaGpus.length > 0 && !isPreMaxwellBox && !cudaEpInVenv;
   const cudaToolkitMissing = hardwareProbe?.nvidia?.cudaToolkit?.available === false;
