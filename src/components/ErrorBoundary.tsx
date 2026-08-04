@@ -18,16 +18,17 @@ interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
   frequencyInfo: ErrorFrequencyInfo | null;
+  componentStack: string | null;
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps, context?: unknown) {
     super(props, context);
-    this.state = { hasError: false, error: null, frequencyInfo: null };
+    this.state = { hasError: false, error: null, frequencyInfo: null, componentStack: null };
   }
 
   static getDerivedStateFromError(error: unknown): Partial<ErrorBoundaryState> {
-    return { hasError: true, error: error instanceof Error ? error : new Error(String(error)), frequencyInfo: null };
+    return { hasError: true, error: error instanceof Error ? error : new Error(String(error)), frequencyInfo: null, componentStack: null };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
@@ -37,11 +38,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
     // Track error frequency
     const frequencyInfo = errorFrequency.recordError(label ?? "unknown", error.message);
-    this.setState({ frequencyInfo });
+    this.setState({ frequencyInfo, componentStack: info.componentStack });
   }
 
   handleRetry = (): void => {
-    this.setState({ hasError: false, error: null, frequencyInfo: null });
+    this.setState({ hasError: false, error: null, frequencyInfo: null, componentStack: null });
   };
 
   render(): ReactNode {
@@ -80,7 +81,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                     this.props.onReportError!({
                       error: this.state.error!,
                       label: this.props.label,
-                      componentStack: this.state.error?.stack,
+                      componentStack: this.state.componentStack ?? undefined,
                       frequencyInfo: this.state.frequencyInfo ?? undefined,
                     })
                   }
