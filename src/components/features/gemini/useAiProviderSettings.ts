@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { canActivateWithEnvKey } from "@/lib/envCredentialUi";
 import { PROVIDER_OPTIONS, type ProviderId } from "./aiProviderCatalog";
 import type { ProviderStatus, SidebarTab } from "./types";
 
@@ -171,6 +172,9 @@ export function useAiProviderSettings({
         setSettingsModel(d.model);
         setCustomModel(d.model);
       }
+      if (typeof d.baseUrl === "string" && d.baseUrl.trim()) {
+        setSettingsBaseUrl(d.baseUrl.trim());
+      }
       return d;
     } catch {
       const fallback: ProviderStatus = { source: "none" };
@@ -262,8 +266,9 @@ export function useAiProviderSettings({
   const refreshModels = () =>
     void refreshProviderModels(settingsProvider, {
       force: true,
-      apiKey: settingsApiKey || undefined,
-      baseUrl: settingsBaseUrl || providerOption.baseUrl || undefined,
+      // Omit empty paste so server uses runtime override / Windows+dotenv env keys.
+      apiKey: settingsApiKey.trim() || undefined,
+      baseUrl: settingsBaseUrl.trim() || providerOption.baseUrl || undefined,
     });
 
   /** Re-list models with the key the user just typed (env may already work). */
@@ -438,7 +443,9 @@ export function useAiProviderSettings({
     const model = isCompatMode ? customModel.trim() || settingsModel : settingsModel;
     const resolvedBaseUrl = settingsBaseUrl.trim() || providerOption.baseUrl || undefined;
     const cloudflareAccountId = settingsCloudflareAccountId.trim();
+    const envUsable = canActivateWithEnvKey(providerStatus.envCredentials, settingsProvider);
     const allowEmptyKey =
+      envUsable ||
       settingsProvider === "openai-compat" ||
       (() => {
         if (!resolvedBaseUrl) return false;
@@ -450,11 +457,12 @@ export function useAiProviderSettings({
         }
       })();
     if (settingsProvider === "cloudflare") {
-      if (!key) {
+      // Server marks usable only when token + account id (or synced auth) are enough.
+      if (!key && !envUsable) {
         setProviderSaveError("Enter a Cloudflare API token.");
         return;
       }
-      if (!cloudflareAccountId) {
+      if (!cloudflareAccountId && !envUsable) {
         setProviderSaveError("Enter a Cloudflare account ID (CLOUDFLARE_ACCOUNT_ID).");
         return;
       }
@@ -473,7 +481,8 @@ export function useAiProviderSettings({
     setIsSavingProvider(true);
     setProviderSaveError("");
     try {
-      if (settingsProvider === "cloudflare") {
+      // Paste path: store token+account. Env-usable path skips this and relies on server resolve.
+      if (settingsProvider === "cloudflare" && key && cloudflareAccountId) {
         const credRes = await fetch("/api/cloudflare/login/manual", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

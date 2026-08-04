@@ -9,6 +9,7 @@ import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
 
 import type { IHVProvider } from "../../types.ts";
+import type { GpuMetrics } from "../../lib/gpuMetrics.ts";
 import { validateOliveRecipeStructure } from "../../lib/oliveRecipeSchema.ts";
 import { enrichRecipeMemoryOffloadForRun } from "../../lib/memoryOffload.ts";
 import { isGpuExecutionProvider } from "../../lib/oliveGpuRuntime.ts";
@@ -33,6 +34,16 @@ import { oliveRunRateLimit } from "../middleware/rateLimit.ts";
 
 /** Grace period after SIGTERM before escalating cancel to SIGKILL. */
 export const CANCEL_SIGKILL_GRACE_MS = 10_000;
+
+/** Write a named Server-Sent Event (`event:` + JSON `data:`). */
+export function writeNamedSse(
+  res: { writableEnded?: boolean; write: (chunk: string) => unknown },
+  event: string,
+  data: unknown,
+): void {
+  if (res.writableEnded) return;
+  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
 
 export function mountOliveRoutes(router: Router): void {
   // Reclaim finished jobs + their temp recipe files on a timer.
@@ -206,7 +217,10 @@ export function mountOliveRoutes(router: Router): void {
     if (typeof res.flushHeaders === "function") res.flushHeaders();
 
     for (const line of job.logs) {
-      res.write(`data: ${JSON.stringify({ line })}\n\n`);
+      writeNamedSse(res, "log", { line });
+    }
+    if (job.latestMetrics) {
+      writeNamedSse(res, "metrics", job.latestMetrics);
     }
 
     const isTerminal = () =>
@@ -214,7 +228,7 @@ export function mountOliveRoutes(router: Router): void {
 
     // If the job already finished, flush a terminal event and close immediately.
     if (isTerminal()) {
-      res.write(`data: ${JSON.stringify({ done: true, status: job.status, exitCode: job.exitCode })}\n\n`);
+      writeNamedSse(res, "done", { done: true, status: job.status, exitCode: job.exitCode });
       return res.end();
     }
 
@@ -226,20 +240,27 @@ export function mountOliveRoutes(router: Router): void {
       }
       const subIdx = job.subscribers.indexOf(sub);
       if (subIdx >= 0) job.subscribers.splice(subIdx, 1);
+      const metricIdx = job.metricSubscribers.indexOf(metricSub);
+      if (metricIdx >= 0) job.metricSubscribers.splice(metricIdx, 1);
       const doneIdx = job.doneSubscribers.indexOf(onDone);
       if (doneIdx >= 0) job.doneSubscribers.splice(doneIdx, 1);
     };
 
     const sub = (line: string) => {
-      if (!res.writableEnded) res.write(`data: ${JSON.stringify({ line })}\n\n`);
+      writeNamedSse(res, "log", { line });
     };
     job.subscribers.push(sub);
+
+    const metricSub = (metrics: GpuMetrics) => {
+      writeNamedSse(res, "metrics", metrics);
+    };
+    job.metricSubscribers.push(metricSub);
 
     // Fired the instant the job reaches a terminal state — closes the stream
     // immediately rather than waiting up to one heartbeat interval.
     const onDone = () => {
       if (res.writableEnded) return;
-      res.write(`data: ${JSON.stringify({ done: true, status: job.status, exitCode: job.exitCode })}\n\n`);
+      writeNamedSse(res, "done", { done: true, status: job.status, exitCode: job.exitCode });
       cleanup();
       res.end();
     };

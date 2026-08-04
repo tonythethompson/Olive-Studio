@@ -141,6 +141,8 @@ export function ExecutionWorkspace({
   const [gpuMetrics, setGpuMetrics] = useState<GpuMetrics | null>(null);
   const liveSourceRef = useRef<EventSource | null>(null);
   const runStartTimeRef = useRef<number | null>(null);
+  /** Cancel clicked before /olive/run returned a jobId — fire cancel as soon as id exists. */
+  const pendingCancelRef = useRef(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [recipeView, setRecipeViewRaw] = useState<"graph" | "json">("graph");
   const [visitedRecipeViews, setVisitedRecipeViews] = useState<Set<string>>(new Set(["graph"]));
@@ -582,7 +584,15 @@ ${owrPlatform === "web"
   };
 
   const handleCancelJob = async () => {
-    if (!liveJobId) return;
+    if (!liveJobId) {
+      // Run POST still in flight — mark pending; cancel once jobId arrives.
+      pendingCancelRef.current = true;
+      setExecutionLogs((prev) => [
+        ...prev,
+        "[INFO] Cancel queued — will send as soon as the job id is assigned...",
+      ]);
+      return;
+    }
     try {
       setExecutionLogs((prev) => [...prev, "[INFO] Requesting process cancellation..."]);
       const resp = await fetch("/api/olive/cancel", {
@@ -630,6 +640,7 @@ ${owrPlatform === "web"
       return;
     }
 
+    pendingCancelRef.current = false;
     setIsRunning(true);
     onRunStateChange?.(true);
     setExecutionLogs(["[INFO] Initiating Olive run...\n"]);
@@ -651,12 +662,47 @@ ${owrPlatform === "web"
         setExecutionStatus("failed");
         setIsRunning(false);
         onRunStateChange?.(false);
+        pendingCancelRef.current = false;
         return;
       }
 
       const { jobId } = await resp.json();
       setLiveJobId(jobId);
       setState({ activeJobId: jobId });
+
+      if (pendingCancelRef.current) {
+        pendingCancelRef.current = false;
+        setExecutionLogs((prev) => [
+          ...prev,
+          "[INFO] Applying queued cancel now that the job id is assigned...",
+        ]);
+        try {
+          const cancelResp = await fetch("/api/olive/cancel", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jobId }),
+          });
+          if (cancelResp.ok) {
+            setExecutionLogs((prev) => [...prev, "[INFO] Cancellation signal confirmed by server."]);
+            setExecutionStatus("cancelled");
+            setIsRunning(false);
+            onRunStateChange?.(false);
+            recordJobCompletion(jobId, "cancelled", -1);
+            return;
+          }
+          const errData = await cancelResp.json().catch(() => ({ error: "Failed to cancel" }));
+          setExecutionLogs((prev) => [
+            ...prev,
+            `[ERROR] Queued cancel failed: ${errData.error}. Continuing with stream.`,
+          ]);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          setExecutionLogs((prev) => [
+            ...prev,
+            `[ERROR] Queued cancel failed: ${message}. Continuing with stream.`,
+          ]);
+        }
+      }
 
       // Close any existing SSE connection
       liveSourceRef.current?.close();
@@ -679,16 +725,16 @@ ${owrPlatform === "web"
           reconnectAttempts = 0;
         };
 
-        evtSource.onmessage = (e) => {
+        evtSource.addEventListener("log", (e: MessageEvent) => {
           try {
-            const payload = JSON.parse(e.data);
+            const payload = JSON.parse(String(e.data)) as { line?: string };
             if (payload.line) {
-              setExecutionLogs((prev) => [...prev, payload.line]);
+              setExecutionLogs((prev) => [...prev, payload.line!]);
             }
           } catch {
             /* ignore malformed */
           }
-        };
+        });
 
         evtSource.addEventListener("metrics", (e: MessageEvent) => {
           try {
@@ -702,17 +748,26 @@ ${owrPlatform === "web"
 
         evtSource.addEventListener("done", (e: MessageEvent) => {
           let exitCode = 0;
+          let serverStatus: string | undefined;
           try {
-            exitCode = JSON.parse(e.data)?.exitCode ?? 0;
+            const payload = JSON.parse(e.data) as { exitCode?: number; status?: string };
+            exitCode = payload.exitCode ?? 0;
+            serverStatus = payload.status;
           } catch {
             exitCode = 0;
           }
           // Olive sometimes exits 0 after a pass traceback (e.g. HF task KeyError).
           // Read the mirrored log ref so this updater stays pure (StrictMode-safe).
           const currentLogs = executionLogsRef.current;
-          const failed = exitCode !== 0 || logsIndicateFailure(currentLogs);
-          const finalStatus = failed ? "failed" : "completed";
-          const reportedExit = failed && exitCode === 0 ? 1 : exitCode;
+          let finalStatus: "completed" | "failed" | "cancelled";
+          if (serverStatus === "cancelled") {
+            finalStatus = "cancelled";
+          } else {
+            const failed = exitCode !== 0 || logsIndicateFailure(currentLogs);
+            finalStatus = failed ? "failed" : "completed";
+          }
+          const reportedExit =
+            finalStatus === "cancelled" ? (exitCode ?? 1) : finalStatus === "failed" && exitCode === 0 ? 1 : exitCode;
           setExecutionStatus(finalStatus);
           setExecutionExitCode(reportedExit);
           setIsRunning(false);
@@ -720,7 +775,7 @@ ${owrPlatform === "web"
           onRunStateChange?.(false);
           recordJobCompletion(targetJobId, finalStatus, reportedExit);
           // Auto-diagnose is owned by the executionStatus==="failed" effect below.
-          if (failed) setMcpFixApplied("");
+          if (finalStatus === "failed") setMcpFixApplied("");
           evtSource.close();
           liveSourceRef.current = null;
         });

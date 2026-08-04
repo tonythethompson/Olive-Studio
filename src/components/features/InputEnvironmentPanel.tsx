@@ -128,14 +128,23 @@ export function InputEnvironmentPanel({
   const [downloadName, setDownloadName] = useState<string | null>(null);
 
   // HuggingFace token
-  const [hfTokenStatus, setHfTokenStatus] = useState<"environment" | "user" | "none" | "loading">("loading");
+  const [hfTokenStatus, setHfTokenStatus] = useState<
+    "environment" | "runtime" | "none" | "loading"
+  >("loading");
   const [hfTokenInput, setHfTokenInput] = useState("");
   const [isSubmittingToken, setIsSubmittingToken] = useState(false);
 
   useEffect(() => {
     fetch("/api/env/hf-token-status")
       .then((r) => r.json())
-      .then((d) => setHfTokenStatus(d.source))
+      .then((d) => {
+        const source = d?.source;
+        if (source === "environment" || source === "runtime" || source === "none") {
+          setHfTokenStatus(source);
+        } else {
+          setHfTokenStatus("none");
+        }
+      })
       .catch(() => setHfTokenStatus("none"));
   }, []);
 
@@ -149,7 +158,7 @@ export function InputEnvironmentPanel({
         body: JSON.stringify({ token: hfTokenInput.trim() }),
       });
       if (r.ok) {
-        setHfTokenStatus("user");
+        setHfTokenStatus("runtime");
         setHfTokenInput("");
       }
     } catch {
@@ -1546,10 +1555,10 @@ export function InputEnvironmentPanel({
                           )}
                           {hfTokenStatus === "environment" && (
                             <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono font-semibold">
-                              ✓ Found in Windows env vars
+                              ✓ Found in environment
                             </span>
                           )}
-                          {hfTokenStatus === "user" && (
+                          {hfTokenStatus === "runtime" && (
                             <span className="text-[10px] bg-electric-blue/10 border border-electric-blue/20 text-electric-blue px-2 py-0.5 rounded font-mono font-semibold">
                               ✓ Set for this session
                             </span>
@@ -1583,7 +1592,7 @@ export function InputEnvironmentPanel({
                             >
                               {isSubmittingToken ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
                             </Button>
-                            {hfTokenStatus === "user" && (
+                            {hfTokenStatus === "runtime" && (
                               <Button
                                 type="button"
                                 variant="outline"
@@ -1598,7 +1607,7 @@ export function InputEnvironmentPanel({
 
                         <p className="text-[10px] text-slate-500 leading-relaxed">
                           Stored in server memory only — never written to disk or returned to the client. Set{" "}
-                          <code className="text-slate-400 font-mono">HF_TOKEN</code> in Windows environment
+                          <code className="text-slate-400 font-mono">HF_TOKEN</code> in environment
                           variables for persistent access without re-entering each session.
                         </p>
                       </div>

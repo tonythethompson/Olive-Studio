@@ -7,6 +7,8 @@ export interface KbStatus {
   lastSync?: string | null;
   passCount?: number;
   error?: string;
+  /** Server-side failure class when available is false (missing/unreadable/invalid). */
+  reason?: "missing" | "unreadable" | "invalid";
 }
 
 export interface KbSyncResult {
@@ -74,7 +76,8 @@ export function useKbSync() {
       const data = (await res.json()) as KbStatus;
       setStatus(data);
       if (data.available === false) {
-        setError(data.error ?? "Knowledge base unavailable");
+        const reasonBit = data.reason ? ` (${data.reason})` : "";
+        setError(data.error ? `${data.error}${reasonBit}` : `Knowledge base unavailable${reasonBit}`);
       } else {
         setError(null);
       }

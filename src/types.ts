@@ -64,7 +64,7 @@ export interface BatchJob {
   passes: string[];
   /** recipe JSON string used to launch this job */
   recipeJson?: string;
-  status: "queued" | "running" | "completed" | "failed";
+  status: "queued" | "running" | "completed" | "failed" | "cancelled";
   progress: number;
   /** null = indeterminate progress */
   progressKnown: boolean;

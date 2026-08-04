@@ -4,6 +4,11 @@ import {
   preferredEngineFromBaseUrl,
   type AssistantSettingsMode,
 } from "@/lib/assistantSettingsMode";
+import {
+  activeProviderSourceLabel,
+  canClearActiveProvider,
+  providerEnvCredential,
+} from "@/lib/envCredentialUi";
 import { PROVIDER_OPTIONS } from "./aiProviderCatalog";
 import { LocalAiSetupCard } from "./LocalAiSetupCard";
 import { ManualProviderSetup } from "./ManualProviderSetup";
@@ -21,6 +26,8 @@ interface ActiveProviderCardProps {
  */
 function ActiveProviderCard({ providers }: ActiveProviderCardProps) {
   const { providerStatus } = providers;
+  const sourceLabel = activeProviderSourceLabel(providerStatus);
+  const activeEnv = providerEnvCredential(providerStatus.envCredentials, providerStatus.provider);
   return (
     <div className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl">
       <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold mb-2">
@@ -30,20 +37,26 @@ function ActiveProviderCard({ providers }: ActiveProviderCardProps) {
         <p className="text-xs text-slate-500 italic">No provider. AI features disabled.</p>
       ) : (
         <div className="flex items-center justify-between gap-2">
-          <div>
+          <div className="min-w-0 space-y-1">
             <p className="text-sm font-semibold text-slate-100">
               {PROVIDER_OPTIONS.find((p) => p.id === providerStatus.provider)?.name ??
                 providerStatus.provider}
             </p>
-            <p className="text-[10px] font-mono text-slate-400">
-              {providerStatus.model} · {providerStatus.source === "env" ? "env var" : "session key"}
+            <p className="text-[10px] font-mono text-slate-400 truncate">
+              {providerStatus.model}
+              {sourceLabel ? ` · ${sourceLabel}` : ""}
             </p>
+            {activeEnv?.usable && activeEnv.envVar ? (
+              <p className="text-[10px] font-mono text-emerald-400/90">
+                Using env: {activeEnv.envVar}
+              </p>
+            ) : null}
           </div>
-          {providerStatus.source === "user" && (
+          {canClearActiveProvider(providerStatus.source) && (
             <button
               type="button"
               onClick={() => void providers.clearProvider()}
-              className="text-[10px] text-rose-400 hover:text-rose-200 border border-rose-500/20 rounded px-2 py-1 font-bold transition-all cursor-pointer"
+              className="shrink-0 text-[10px] text-rose-400 hover:text-rose-200 border border-rose-500/20 rounded px-2 py-1 font-bold transition-all cursor-pointer"
             >
               Clear
             </button>

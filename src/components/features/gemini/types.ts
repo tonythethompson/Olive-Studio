@@ -13,12 +13,11 @@ export interface AnalysisResult {
   suggestions: Suggestion[];
 }
 
-export interface ProviderStatus {
-  source: "env" | "user" | "none";
-  provider?: string;
-  model?: string;
-  baseUrl?: string | null;
-}
+export type {
+  EnvCredentialStatus,
+  ProviderStatus,
+  ProviderStatusSource,
+} from "@/lib/envCredentialUi";
 
 /** Which sidebar tab is currently visible. */
 export type SidebarTab = "audit" | "chat" | "settings";

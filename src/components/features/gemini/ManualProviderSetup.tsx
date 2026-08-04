@@ -1,5 +1,6 @@
 import { Check, Key, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
+import { providerEnvCredential } from "@/lib/envCredentialUi";
 import { cn } from "@/lib/utils";
 import { CATEGORY_LABELS, PROVIDER_OPTIONS, type ProviderId } from "./aiProviderCatalog";
 import { CodexAccountPanel } from "./CodexAccountPanel";
@@ -182,12 +183,20 @@ function ApiKeyForm({ providers }: ProvidersProp) {
   const {
     isCompatMode,
     providerOption,
+    providerStatus,
     settingsProvider,
     settingsBaseUrl,
     settingsApiKey,
     settingsCloudflareAccountId,
     isSavingProvider,
   } = providers;
+  const envCred = providerEnvCredential(providerStatus.envCredentials, settingsProvider);
+  const envUsable = Boolean(envCred?.usable && envCred.envVar);
+  const envPresentOnly = Boolean(envCred?.present && envCred.envVar && !envCred.usable);
+  const keyPlaceholder = envUsable
+    ? `Leave blank to use ${envCred!.envVar}`
+    : "Stored in memory only, never persisted to disk";
+
   return (
     <>
       {isCompatMode && (
@@ -214,21 +223,29 @@ function ApiKeyForm({ providers }: ProvidersProp) {
       <div>
         <label
           htmlFor="gemini-settings-api-key"
-          className="text-xs text-slate-400 mb-1 flex items-center gap-1.5"
+          className="text-xs text-slate-400 mb-1 flex flex-wrap items-center gap-1.5"
         >
           <Key className="h-3 w-3" />
           API Key
-          {"keyEnvVar" in providerOption && providerOption.keyEnvVar && (
+          {envUsable ? (
+            <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-semibold">
+              Using env: {envCred!.envVar}
+            </span>
+          ) : envPresentOnly ? (
+            <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-semibold">
+              Found {envCred!.envVar} (incomplete)
+            </span>
+          ) : "keyEnvVar" in providerOption && providerOption.keyEnvVar ? (
             <span className="text-[9px] text-slate-600">
               (or env: <code className="font-mono">{providerOption.keyEnvVar}</code>)
             </span>
-          )}
+          ) : null}
         </label>
         <input
           id="gemini-settings-api-key"
           type="password"
           autoComplete="off"
-          placeholder="Stored in memory only, never persisted to disk"
+          placeholder={keyPlaceholder}
           value={settingsApiKey}
           onChange={(e) => providers.setSettingsApiKey(e.target.value)}
           onBlur={() => providers.refreshModelsForTypedApiKey()}

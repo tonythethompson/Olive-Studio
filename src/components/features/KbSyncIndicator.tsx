@@ -30,8 +30,15 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
             <span className="text-slate-600"> · {status.passCount} passes</span>
           </span>
         ) : (
-          <span className="text-amber-500" title="Local Olive pass catalog could not be loaded">
-            KB unavailable
+          <span
+            className="text-amber-500"
+            title={
+              status?.reason
+                ? `Local Olive pass catalog unavailable (${status.reason})${status.error ? `: ${status.error}` : ""}`
+                : error || "Local Olive pass catalog could not be loaded"
+            }
+          >
+            KB unavailable{status?.reason ? ` · ${status.reason}` : ""}
           </span>
         )}
       </div>

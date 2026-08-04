@@ -1,8 +1,8 @@
 /**
  * Olive Studio Devin subscription client.
  *
- * Devin is not a model — it is a subscription that unlocks multiple models
- * through the Devin chat backend. Auth: browser sign-in + token paste.
+ * Devin is a multi-model subscription for Assistant audit/chat (not a single
+ * model id). Auth: browser sign-in + token paste.
  * Chat: cloud-direct Connect-RPC (adapted from pi-devin-auth / opencode-windsurf-auth, MIT).
  */
 
