@@ -241,10 +241,10 @@ export function buildIssueBody(report: IssueReport): string {
   }
   lines.push("");
 
-  // Description
+  // Description (redacted for security)
   lines.push("### Description");
   lines.push("");
-  lines.push(report.description || "_(no description provided)_");
+  lines.push(redactSecrets(report.description) || "_(no description provided)_");
   lines.push("");
 
   // Telemetry
@@ -298,7 +298,14 @@ export function buildGitHubIssueUrl(report: IssueReport): string {
   params.set("body", body);
   params.set("labels", ["user-report", report.category].join(","));
 
-  return `${REPO_URL}/issues/new?${params.toString()}`;
+  const url = `${REPO_URL}/issues/new?${params.toString()}`;
+  
+  // Warn if URL might be too long (browsers typically limit URLs to ~2000 chars)
+  if (url.length > 2000) {
+    console.warn("[issueReport] GitHub issue URL exceeds 2000 chars; some browsers may truncate it.");
+  }
+  
+  return url;
 }
 
 /**

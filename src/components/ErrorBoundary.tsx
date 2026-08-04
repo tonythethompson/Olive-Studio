@@ -18,17 +18,17 @@ interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
   frequencyInfo: ErrorFrequencyInfo | null;
-  componentStack: string | null;
+  componentStack?: string;
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps, context?: unknown) {
     super(props, context);
-    this.state = { hasError: false, error: null, frequencyInfo: null, componentStack: null };
+    this.state = { hasError: false, error: null, frequencyInfo: null };
   }
 
   static getDerivedStateFromError(error: unknown): Partial<ErrorBoundaryState> {
-    return { hasError: true, error: error instanceof Error ? error : new Error(String(error)), frequencyInfo: null, componentStack: null };
+    return { hasError: true, error: error instanceof Error ? error : new Error(String(error)), frequencyInfo: null };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
@@ -38,11 +38,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
     // Track error frequency
     const frequencyInfo = errorFrequency.recordError(label ?? "unknown", error.message);
-    this.setState({ frequencyInfo, componentStack: info.componentStack });
+    this.setState({ frequencyInfo, componentStack: info.componentStack ?? undefined });
   }
 
   handleRetry = (): void => {
-    this.setState({ hasError: false, error: null, frequencyInfo: null, componentStack: null });
+    this.setState({ hasError: false, error: null, frequencyInfo: null });
   };
 
   render(): ReactNode {
@@ -81,7 +81,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                     this.props.onReportError!({
                       error: this.state.error!,
                       label: this.props.label,
-                      componentStack: this.state.componentStack ?? undefined,
+                      componentStack: this.state.componentStack,
                       frequencyInfo: this.state.frequencyInfo ?? undefined,
                     })
                   }

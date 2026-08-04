@@ -58,10 +58,14 @@ export function ReportIssueModal({
   const [showPreview, setShowPreview] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Reset state when modal opens with new defaults
   useEffect(() => {
     if (open) {
+      setCategory("bug");
+      setSeverity("annoying");
       setArea(defaultArea ?? "other");
       setDescription(defaultDescription ?? "");
+      setSelectedTelemetry(new Set<TelemetryOptionId>(["platform", "hardware"]));
       setShowPreview(false);
       setCopied(false);
     }
@@ -82,14 +86,21 @@ export function ReportIssueModal({
       severity,
       area,
       description,
-      frequencyInfo: frequencyInfo ?? null,
       telemetry: collectTelemetry(Array.from(selectedTelemetry), {
         state,
         hardwareProbe,
         executionLogs,
       }),
+      frequencyInfo: frequencyInfo
+        ? {
+            count: frequencyInfo.count,
+            firstOccurrenceAgo: frequencyInfo.firstOccurrenceAgo,
+            lastOccurrenceAgo: frequencyInfo.lastOccurrenceAgo,
+            frequencyLabel: frequencyInfo.frequencyLabel,
+          }
+        : null,
     }),
-    [category, severity, area, description, frequencyInfo, selectedTelemetry, state, hardwareProbe, executionLogs],
+    [category, severity, area, description, selectedTelemetry, state, hardwareProbe, executionLogs, frequencyInfo],
   );
 
   const { url, fullText } = useMemo(
