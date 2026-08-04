@@ -488,3 +488,34 @@ describe("mergeDetectedProviders OpenVINO", () => {
     expect(detected).not.toContain("OpenVINOExecutionProvider");
   });
 });
+
+describe("mergeDetectedProviders DirectML", () => {
+  it("adds DmlExecutionProvider only when hasDirectMl is true", () => {
+    const without = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      hasDirectMl: false,
+    });
+    expect(without).not.toContain("DmlExecutionProvider");
+
+    const withDml = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      hasDirectMl: true,
+    });
+    expect(withDml).toContain("DmlExecutionProvider");
+  });
+
+  it("maps DmlExecutionProvider from ORT provider list without hasDirectMl", () => {
+    const detected = mergeDetectedProviders({
+      onnxRuntimeProviders: ["CPUExecutionProvider", "DmlExecutionProvider"],
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      hasDirectMl: false,
+    });
+    expect(detected).toContain("DmlExecutionProvider");
+  });
+});

@@ -189,7 +189,7 @@ export function mergeDetectedProviders(input: {
   hasOpenVino: boolean;
   /** True when the local CPU/platform can run the OpenVINO runtime, even if not yet installed. */
   hasOpenVinoCompatibleHardware?: boolean;
-  /** Windows + DirectML ORT / platform support. */
+  /** True when onnxruntime reports DmlExecutionProvider (not merely Windows). */
   hasDirectMl?: boolean;
   tensorRtLoadable?: boolean;
   tensorRtRtxLoadable?: boolean;

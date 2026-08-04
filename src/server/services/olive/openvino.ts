@@ -193,14 +193,22 @@ export async function ensureOpenVino(
 
   invalidateRuntimeStatusCache();
   const retry = await probeOpenVino(venvPython);
-  if (retry.available) {
+  if (retry.available && retry.optimumIntel?.available) {
     const deviceMsg = retry.devices?.length ? ` [${retry.devices.join(", ")}]` : "";
     onLine(`[deps] OpenVINO stack verified after install${retry.version ? ` (${retry.version})` : ""}${deviceMsg} ✓`);
     return { ok: true, probe: retry };
   }
 
+  if (!retry.available) {
+    return {
+      ok: false,
+      error: retry.detail ?? "OpenVINO Python package not loadable after install",
+    };
+  }
   return {
     ok: false,
-    error: retry.detail ?? "OpenVINO Python package not loadable after install",
+    error:
+      retry.optimumIntel?.detail ??
+      "Optimum-Intel bridge not loadable after OpenVINO install",
   };
 }

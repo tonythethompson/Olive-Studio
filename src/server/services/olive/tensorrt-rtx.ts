@@ -79,6 +79,7 @@ export async function getTensorRtRtxLibsDir(python: string): Promise<string | nu
  */
 export async function probeTensorRtRtxLoadable(
   python: string,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<{ loadable: boolean; detail?: string; version?: string }> {
   // Self-diagnostics: every failure case ends in `fail:<detail>` so the
   // outer catch can keep treating missing modules uniformly. We deliberately
@@ -139,7 +140,7 @@ if "NvTensorRTRTXExecutionProvider" not in ort.get_available_providers():
 print("ok:" + tensorrt_rtx.__version__)
 `.trim();
   try {
-    const { stdout } = await execFileAsync(python, ["-c", probeScript]);
+    const { stdout } = await execFileAsync(python, ["-c", probeScript], { env });
     const out = stdout.trim();
     if (/(?:^|\n)ok:/.test(out)) {
       return {
