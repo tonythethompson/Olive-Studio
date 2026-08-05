@@ -211,7 +211,8 @@ describe("abort-aware backoff polling (Tech Debt #16)", () => {
 
     expect(result.ok).toBe(false);
     expect(result.cancelled).toBeUndefined();
-    expect(result.error).toContain("did not become ready");
+    // Platform-specific timeout copy (darwin/win32 vs linux headless serve).
+    expect(result.error).toMatch(/Ollama (serve )?did not (become ready|start)/);
   });
 
   it("returns a cancelled marker for LM Studio setup when the signal aborts", async () => {
