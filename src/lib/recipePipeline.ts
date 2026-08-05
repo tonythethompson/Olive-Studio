@@ -1,5 +1,4 @@
 import { BatchJob, UIState } from "@/types";
-import { buildOliveRecipe } from "@/lib/oliveRecipeBuilder";
 import {
   getPipelineValidation,
   getLocalExecutionIssues,
@@ -34,9 +33,10 @@ export function buildRecipeFromState(
   options?: PipelineValidationOptions,
 ): RecipePipelineResult {
   const sanitized = sanitizePipelineState(state);
-  const recipe = buildOliveRecipe(sanitized);
-  const recipeJson = serializeRecipe(recipe);
   const validation = getPipelineValidation(sanitized, options);
+  // Reuse the recipe getPipelineValidation already built instead of rebuilding.
+  const recipe = validation.recipe as unknown as Record<string, unknown>;
+  const recipeJson = serializeRecipe(recipe);
   const localExecutionIssues = getLocalExecutionIssues(sanitized, true);
   const schema = validateOliveRecipeStructure(recipe);
 
@@ -46,7 +46,8 @@ export function buildRecipeFromState(
     recipeJson,
     validation,
     schema,
-    advisories: getRemainingAdvisories(sanitized),
+    // Same filter as getRemainingAdvisories, without re-running validation.
+    advisories: validation.issues.filter((issue) => issue.severity === "warning" && !issue.autofix),
     localExecutionIssues,
     isRunnable: !validation.isBlocked && localExecutionIssues.length === 0 && schema.valid,
   };

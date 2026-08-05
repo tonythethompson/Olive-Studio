@@ -11,6 +11,20 @@ const GPU_PROVIDERS: IHVProvider[] = [
 const NPU_PROVIDERS: IHVProvider[] = ["QNNExecutionProvider"];
 
 /**
+ * Ordered task-inference rules — first match wins. Order is significant
+ * (embedding models must match before the generic `bert` substring), and
+ * every rule is pinned by the inferHfTask test suite.
+ */
+const HF_TASK_RULES: ReadonlyArray<{ pattern: RegExp; task: string }> = [
+  // Transformers pipeline / Olive HfModel expect this exact task id (not "speech-recognition").
+  { pattern: /whisper/, task: "automatic-speech-recognition" },
+  { pattern: /gte-|bge-|e5-|embedding|sentence-transformers/, task: "feature-extraction" },
+  { pattern: /bert|roberta|deberta/, task: "fill-mask" },
+  { pattern: /t5|bart/, task: "text2text-generation" },
+  { pattern: /vit|clip|resnet|mobilenet/, task: "image-classification" },
+];
+
+/**
  * Infers the Hugging Face task associated with a model identifier.
  *
  * @param modelId - The Hugging Face model identifier to classify
@@ -18,21 +32,8 @@ const NPU_PROVIDERS: IHVProvider[] = ["QNNExecutionProvider"];
  */
 export function inferHfTask(modelId: string): string {
   const id = modelId.toLowerCase();
-  // Transformers pipeline / Olive HfModel expect this exact task id (not "speech-recognition").
-  if (id.includes("whisper")) return "automatic-speech-recognition";
-  if (
-    id.includes("gte-") ||
-    id.includes("bge-") ||
-    id.includes("e5-") ||
-    id.includes("embedding") ||
-    id.includes("sentence-transformers")
-  ) {
-    return "feature-extraction";
-  }
-  if (id.includes("bert") || id.includes("roberta") || id.includes("deberta")) return "fill-mask";
-  if (id.includes("t5") || id.includes("bart")) return "text2text-generation";
-  if (id.includes("vit") || id.includes("clip") || id.includes("resnet") || id.includes("mobilenet")) {
-    return "image-classification";
+  for (const rule of HF_TASK_RULES) {
+    if (rule.pattern.test(id)) return rule.task;
   }
   return "text-generation";
 }
@@ -53,21 +54,31 @@ export function resolveHfTask(state: Pick<UIState, "hfTask" | "hfModelId">): str
 }
 
 /**
+ * Ordered model-type rules — first match wins (e.g. "codellama" → llama,
+ * "mixtral" → mistral). Behavior pinned by the inferModelType test suite.
+ */
+const MODEL_TYPE_RULES: ReadonlyArray<{ pattern: RegExp; modelType: string }> = [
+  { pattern: /llama/, modelType: "llama" },
+  { pattern: /phi/, modelType: "phi" },
+  { pattern: /whisper/, modelType: "whisper" },
+  { pattern: /bert|roberta/, modelType: "bert" },
+  { pattern: /qwen/, modelType: "qwen" },
+  { pattern: /mistral|mixtral/, modelType: "mistral" },
+  { pattern: /falcon/, modelType: "falcon" },
+  { pattern: /t5/, modelType: "t5" },
+  { pattern: /gpt2|gpt-2/, modelType: "gpt2" },
+];
+
+/**
  * Infers the model type from a model identifier.
  *
  * @returns The recognized model type, or `gpt2` when no supported type is identified.
  */
 export function inferModelType(modelId: string): string {
   const id = modelId.toLowerCase();
-  if (id.includes("llama")) return "llama";
-  if (id.includes("phi")) return "phi";
-  if (id.includes("whisper")) return "whisper";
-  if (id.includes("bert") || id.includes("roberta")) return "bert";
-  if (id.includes("qwen")) return "qwen";
-  if (id.includes("mistral") || id.includes("mixtral")) return "mistral";
-  if (id.includes("falcon")) return "falcon";
-  if (id.includes("t5")) return "t5";
-  if (id.includes("gpt2") || id.includes("gpt-2")) return "gpt2";
+  for (const rule of MODEL_TYPE_RULES) {
+    if (rule.pattern.test(id)) return rule.modelType;
+  }
   return "gpt2";
 }
 
@@ -155,12 +166,22 @@ function finalizePasses(
 }
 
 /**
+ * Reference-equality memo: UIState objects are immutable (each store commit
+ * creates a fresh object), so the sanitize loop, buildRecipeFromState, and the
+ * panels that all validate the same commit would otherwise rebuild the recipe
+ * many times over. Callers must treat the returned recipe as read-only.
+ */
+let memoState: UIState | undefined;
+let memoRecipe: Record<string, unknown> | undefined;
+
+/**
  * Builds an Olive optimization recipe from the configured model, execution provider, passes, and evaluation settings.
  *
  * @param state - The UI configuration used to construct the recipe
  * @returns The configured Olive recipe
  */
 export function buildOliveRecipe(state: UIState): Record<string, unknown> {
+  if (state === memoState && memoRecipe) return memoRecipe;
   const recipe: Record<string, unknown> = {
     input_model: {
       type: "PyTorchModel",
@@ -509,5 +530,7 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   // Order: Convert → Optimize → Quantize (ONNX path), then MCP pass overrides
   recipe.passes = finalizePasses(passes, state.passRecipeOverrides, torchQuantActive);
 
+  memoState = state;
+  memoRecipe = recipe;
   return recipe;
 }

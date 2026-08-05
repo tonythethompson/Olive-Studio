@@ -167,6 +167,25 @@ describe("GET /api/olive/stream/:jobId", () => {
     });
   });
 
+  it("announces trimmed history before replaying truncated logs", async () => {
+    const job = seedJob({
+      id: "job-truncated",
+      status: "completed",
+      exitCode: 0,
+      logs: ["tail line"],
+      finishedAt: Date.now(),
+    });
+    job.logsTruncated = true;
+
+    const events = await readSseEvents(`${baseUrl}/api/olive/stream/job-truncated`, {
+      stopWhen: (ev) => ev.some((e) => e.event === "done"),
+    });
+
+    const logs = events.filter((e) => e.event === "log").map((e) => JSON.parse(e.data) as { line: string });
+    expect(logs[0].line).toMatch(/Earlier log lines were trimmed/);
+    expect(logs.map((l) => l.line)).toEqual([logs[0].line, "tail line"]);
+  });
+
   it("forwards live metrics to an open subscriber", async () => {
     const job = seedJob({ id: "job-live-metrics", status: "running" });
 

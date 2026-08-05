@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui";
 import { GraphConflictBanner } from "@/components/features/GraphConflictBanner";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
-import { getRemainingAdvisories, getPipelineValidation } from "@/lib/pipelineValidation";
+import { getPipelineValidation } from "@/lib/pipelineValidation";
 import { UIState } from "@/types";
 import { Info, Plus, Settings, X } from "lucide-react";
 import { getPassToggleBlockReason, isToggleablePass, togglePassInState } from "./graphPassControls";
@@ -35,7 +35,9 @@ export function StepInspector({ state, setState, selectedNodeId, pipelineSteps }
   }, []);
 
   const validation = getPipelineValidation(state, { hardwareProbe });
-  const advisories = getRemainingAdvisories(state);
+  // Derive advisories from the validation already computed above —
+  // getRemainingAdvisories would re-run the entire validation pass.
+  const advisories = validation.issues.filter((issue) => issue.severity === "warning" && !issue.autofix);
   const autofixIssues = validation.issues.filter((issue) => issue.autofix);
 
   const selectedStep = pipelineSteps.find((s) => s.id === selectedNodeId);

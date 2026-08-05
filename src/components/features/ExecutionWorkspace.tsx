@@ -5,6 +5,7 @@ import {
   useLayoutEffect,
   useMemo,
   useCallback,
+  useDeferredValue,
   useTransition,
   Suspense,
   lazy,
@@ -123,6 +124,9 @@ export function ExecutionWorkspace({
   const isControlled = hasState && hasSetState;
   const state = isControlled ? propState : storeState.state;
   const setState = isControlled ? propSetState : storeState.setState;
+  // Defer the expensive recipe/validation derivation so text input stays
+  // responsive; submit handlers rebuild fresh from `state` at click time.
+  const deferredState = useDeferredValue(state);
   // Live execution state
   const [liveJobId, setLiveJobId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -144,6 +148,8 @@ export function ExecutionWorkspace({
   const [gpuMetrics, setGpuMetrics] = useState<GpuMetrics | null>(null);
   const liveSourceRef = useRef<EventSource | null>(null);
   const runStartTimeRef = useRef<number | null>(null);
+  /** Recipe JSON actually submitted for the current run (display may be deferred). */
+  const runRecipeJsonRef = useRef<string | null>(null);
   /** Cancel clicked before /olive/run returned a jobId — fire cancel as soon as id exists. */
   const pendingCancelRef = useRef(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -477,10 +483,9 @@ ${owrPlatform === "web"
     }
   };
 
-  const pipeline = buildRecipeFromState(state, { hardwareProbe });
-  const { recipe, recipeJson, validation, schema, advisories, localExecutionIssues, isRunnable } = pipeline;
+  const pipeline = buildRecipeFromState(deferredState, { hardwareProbe });
+  const { recipe, recipeJson, validation, schema, advisories, isRunnable } = pipeline;
   const schemaErrors = schema.errors ?? [];
-  const localBlockLines = localExecutionIssues.map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`);
   // Local structure/compat checks only. A green badge must not imply Execute Live succeeded.
   const localValidationLabel = !schema.valid
     ? `Schema invalid (${schemaErrors.length} issue${schemaErrors.length === 1 ? "" : "s"})`
@@ -494,18 +499,24 @@ ${owrPlatform === "web"
   const validationTone = runFailed ? "error" : localValidationTone;
 
   const handleQueueJob = () => {
-    if (!isRunnable) {
-      const blockingCount = validation.criticalCount + localExecutionIssues.length;
+    // Rebuild from live state — the deferred display pipeline may lag the latest keystroke.
+    const fresh = buildRecipeFromState(state, { hardwareProbe });
+    if (!fresh.isRunnable) {
+      const blockingCount = fresh.validation.criticalCount + fresh.localExecutionIssues.length;
+      const freshSchemaErrors = fresh.schema.errors ?? [];
+      const freshBlockLines = fresh.localExecutionIssues.map(
+        (issue) => `[BLOCK] ${issue.title}: ${issue.description}`,
+      );
       setExecutionLogs([
-        schema.valid
+        fresh.schema.valid
           ? `[ERROR] Cannot queue batch job: ${blockingCount} blocking issue(s). Resolve in the graph or passes panel.`
-          : `[ERROR] Cannot queue batch job: recipe schema invalid.\n${schemaErrors.map((e) => `[SCHEMA] ${e}`).join("\n")}`,
-        ...(schema.valid
+          : `[ERROR] Cannot queue batch job: recipe schema invalid.\n${freshSchemaErrors.map((e) => `[SCHEMA] ${e}`).join("\n")}`,
+        ...(fresh.schema.valid
           ? [
-            ...validation.issues
+            ...fresh.validation.issues
               .filter((issue) => issue.severity === "critical")
               .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
-            ...localBlockLines,
+            ...freshBlockLines,
           ]
           : []),
       ]);
@@ -537,7 +548,7 @@ ${owrPlatform === "web"
     const recipeJsonForJob = buildRecipeJsonFromState(state);
 
     const newJob = {
-      id: "job-" + Date.now(), // eslint-disable-line react-hooks/purity -- stable in event handler
+      id: "job-" + Date.now(),
       name: jobName,
       modelSource: state.modelSource,
       modelIdentifier: mid,
@@ -585,7 +596,7 @@ ${owrPlatform === "web"
       durationMs: duration,
       passCount: activePassesNames.length,
       passNames: activePassesNames,
-      recipeJson,
+      recipeJson: runRecipeJsonRef.current ?? recipeJson,
     });
   };
 
@@ -633,25 +644,33 @@ ${owrPlatform === "web"
   const handleExecuteLive = async () => {
     if (isRunning) return;
 
-    if (!isRunnable) {
-      const blockingCount = validation.criticalCount + localExecutionIssues.length;
+    // Rebuild from live state — the deferred display pipeline may lag the latest keystroke.
+    const fresh = buildRecipeFromState(state, { hardwareProbe });
+
+    if (!fresh.isRunnable) {
+      const blockingCount = fresh.validation.criticalCount + fresh.localExecutionIssues.length;
+      const freshSchemaErrors = fresh.schema.errors ?? [];
+      const freshBlockLines = fresh.localExecutionIssues.map(
+        (issue) => `[BLOCK] ${issue.title}: ${issue.description}`,
+      );
       setExecutionLogs([
-        schema.valid
+        fresh.schema.valid
           ? `[ERROR] Cannot execute: ${blockingCount} blocking issue(s).`
           : `[ERROR] Cannot execute: recipe schema invalid.`,
-        ...(schema.valid
+        ...(fresh.schema.valid
           ? [
-            ...validation.issues
+            ...fresh.validation.issues
               .filter((issue) => issue.severity === "critical")
               .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
-            ...localBlockLines,
+            ...freshBlockLines,
           ]
-          : schemaErrors.map((e) => `[SCHEMA] ${e}`)),
+          : freshSchemaErrors.map((e) => `[SCHEMA] ${e}`)),
       ]);
       setExecutionStatus("failed");
       return;
     }
 
+    runRecipeJsonRef.current = fresh.recipeJson;
     pendingCancelRef.current = false;
     setLiveJobId(null);
     setState({ activeJobId: null });
@@ -667,7 +686,7 @@ ${owrPlatform === "web"
       const resp = await fetch("/api/olive/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipeJson, cudaVersion: state.cudaVersion ?? "auto" }),
+        body: JSON.stringify({ recipeJson: fresh.recipeJson, cudaVersion: state.cudaVersion ?? "auto" }),
       });
 
       if (!resp.ok) {

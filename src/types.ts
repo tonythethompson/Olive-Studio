@@ -12,9 +12,7 @@ export interface OliveRecipe {
       };
     };
   };
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  systems: Record<string, any>;
-  /* eslint-enable @typescript-eslint/no-explicit-any */
+  systems: Record<string, unknown>;
   evaluators?: Record<string, unknown>;
   passes: Record<string, PassConfig>;
   engine: {
@@ -29,8 +27,7 @@ export interface OliveRecipe {
 
 export interface PassConfig {
   type: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  config: Record<string, any>;
+  config: Record<string, unknown>;
 }
 
 export type IHVProvider =

@@ -1,6 +1,6 @@
 allowBuilds:
   '@google/genai': true
-  '@mendable/firecrawl-js': true
+  '@mendable/firecrawl-js': set this to true or false
   esbuild: true
   onnxruntime-node: false
   protobufjs: true
