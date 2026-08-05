@@ -504,7 +504,7 @@ function getQnnRecipeReadinessIssues(
     state,
     probe,
     ioConfig: extractRecipeIoConfig(recipe),
-    platform: probe
+    platform: probe?.platform
       ? { platform: probe.platform.os, arch: probe.platform.arch }
       : undefined,
   }).map((issue) => ({
