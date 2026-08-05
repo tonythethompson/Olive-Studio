@@ -13,7 +13,6 @@ Create `.cursor/babysit-loop/` if needed. One file per PR so concurrent watches 
   "baseRef": "main",
   "headRef": "cursor/feature-d95f",
   "round": 2,
-  "maxRounds": 8,
   "pollSeconds": 180,
   "startedAt": "2026-08-04T21:00:00Z",
   "updatedAt": "2026-08-04T21:10:00Z",
@@ -51,8 +50,7 @@ Create `.cursor/babysit-loop/` if needed. One file per PR so concurrent watches 
 | Field | Rule |
 | ----- | ---- |
 | `status` | `active` \| `done` \| `blocked` \| `stopped` |
-| `round` | Increment once per full tick (snapshot → act → wait/resume). |
-| `maxRounds` | Default **8**. Stop with BLOCKED summary when reached. |
+| `round` | Increment once per full tick (snapshot → act → wait/resume). No upper bound. |
 | `signaturesSeen` | Dedup key for CI/thread/conflict; same signature twice with no new evidence → escalate. |
 | `blocked` | Human-needed items; when non-empty and no other work, `status=blocked`. |
 | `history` | Append-only; keep last ~50 entries. |

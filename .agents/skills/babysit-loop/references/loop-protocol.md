@@ -23,13 +23,13 @@ count toward the "same signature twice → BLOCKED" rule.
 ## Tick transcript (minimal)
 
 ```text
-Babysit-loop PR #111 — round 3/8
+Babysit-loop PR #111 — round 3
 Primary: review threads (2 open)
 - Fixed DirectML probe gating (thread PRRT_…)
 - Replied false positive on pin comment (thread PRRT_…)
 Pushed: 0e54e10
 Re-triggered: @cursor review
-Resume: /babysit-loop PR 111 round 4/8 state=.cursor/babysit-loop/111.json
+Resume: /babysit-loop PR 111 round 4 state=.cursor/babysit-loop/111.json
 ```
 
 ## Clean checklist

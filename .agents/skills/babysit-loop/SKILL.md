@@ -9,7 +9,7 @@ description: >
 # Babysit Loop
 
 Owns an open PR across repeated ticks until it is merge-ready or blocked on a human
-decision. Expands one-shot babysit with a durable loop: state file, round budget,
+decision. Expands one-shot babysit with a durable loop: state file, uncapped rounds,
 multi-stream triage (CI / review / conflicts), paced waits, and resume prompts.
 
 **Never merges the PR.**
@@ -26,7 +26,7 @@ watch (`fix-ci` / `loop-on-ci` alone), or design debates that need the user firs
 ## Inputs
 
 1. PR number or URL, else open PR for the current branch (`gh pr view`).
-2. Optional: max rounds (default **8**), base branch (default PR base), bots to re-trigger.
+2. Optional: base branch (default PR base), bots to re-trigger.
 
 If there is no PR, stop and tell the user to open one first (do not invent shipping
 scope unless they ask).
@@ -164,7 +164,7 @@ Prefer, in order:
 Resume line format (always when not DONE/BLOCKED):
 
 ```text
-Resume: /babysit-loop PR <n> round <r>/<max> state=.cursor/babysit-loop/<n>.json
+Resume: /babysit-loop PR <n> round <r> state=.cursor/babysit-loop/<n>.json
 ```
 
 On resume, read the state file first, then snapshot again.
@@ -174,8 +174,10 @@ On resume, read the state file first, then snapshot again.
 | Result | When |
 | ------ | ---- |
 | **DONE** | PR open, mergeable, checks green (or only ignored/skippable failing), zero unresolved review threads |
-| **BLOCKED** | Design decision needed, same signature failed **2** consecutive rounds with no new info, permissions missing, or max rounds hit |
+| **BLOCKED** | Design decision needed, same signature failed **2** consecutive rounds with no new info, or permissions missing |
 | **RESUME** | Work remains; wait for CI/review or next wakeup |
+
+No round cap. Keep looping until DONE, BLOCKED, or the user stops the run.
 
 When DONE or BLOCKED, delete or mark `"status":"stopped"` in the state file and
 summarize rounds, fixes, false positives, and PR URL. **Do not merge.**
@@ -188,7 +190,6 @@ summarize rounds, fixes, false positives, and PR URL. **Do not merge.**
 - Never resolve a thread without a reply.
 - Never combine `@cursor` and `@greptile` into one comment.
 - Dedup signatures across ticks (CI name+failure fingerprint; thread id).
-- Cap rounds (default 8). Escalate rather than loop forever.
 - Prefer repo package manager and test commands from project agent docs (`pnpm` here).
 
 ## Related skills
