@@ -33,6 +33,7 @@ export function createMcpCircuitBreaker(
 
   let failures = 0;
   let openedAt: number | null = null;
+  let halfOpenProbeInFlight = false;
 
   function isOpen(): boolean {
     return openedAt !== null && now() - openedAt < cooldownMs;
@@ -41,16 +42,23 @@ export function createMcpCircuitBreaker(
   return {
     isOpen,
     beforeCall(): boolean {
-      return !isOpen();
+      if (openedAt === null) return true;
+      if (isOpen()) return false;
+      // Admit exactly one recovery probe after the cooldown expires.
+      if (halfOpenProbeInFlight) return false;
+      halfOpenProbeInFlight = true;
+      return true;
     },
     recordSuccess(): void {
       failures = 0;
       openedAt = null;
+      halfOpenProbeInFlight = false;
     },
     recordFailure(): void {
       if (openedAt !== null) {
-        // Already open — refresh the cooldown but never grow `failures` past the trip point.
+        // Re-open after a failed recovery probe (or an already-open call).
         openedAt = now();
+        halfOpenProbeInFlight = false;
         return;
       }
       failures += 1;
@@ -61,6 +69,7 @@ export function createMcpCircuitBreaker(
     reset(): void {
       failures = 0;
       openedAt = null;
+      halfOpenProbeInFlight = false;
     },
     status(): { open: boolean; failures: number; openedAt: number | null } {
       return { open: isOpen(), failures, openedAt };
