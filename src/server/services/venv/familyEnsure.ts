@@ -32,6 +32,13 @@ import {
   getLegacyGpuBackupRoot,
 } from "./spec.ts";
 import { invalidateRuntimeStatusCache, listInstalledOrtDistributions } from "./status.ts";
+import { getPythonVersion } from "./systemPython.ts";
+import {
+  isQnnFamilyPythonMinor,
+  PINNED_ONNXRUNTIME_QNN_FAMILY_ORT_VERSION,
+  PINNED_ONNXRUNTIME_QNN_PLUGIN_VERSION,
+  qnnNumpyPinForPythonMinor,
+} from "../../../lib/qnnDeps.ts";
 
 type SetupListener = (line: string) => void;
 
@@ -104,12 +111,58 @@ function buildingPython(family: VenvFamily): string {
  * Build a family into its `.building` root and validate imports.
  * Does not promote — callers promote after peer builds succeed when needed.
  */
+async function assertQnnFamilyPythonGate(
+  systemPython: string,
+  onLine: SetupListener,
+): Promise<{ ok: true; minor: string; numpyPin: string } | { ok: false; error: string }> {
+  if (process.platform !== "win32") {
+    return {
+      ok: false,
+      error:
+        "QNN runtime install is Windows-first in this Studio release (Win ARM64 inference / Win x64 preparation). Other platforms are out of scope before .venvs/qnn.building is created.",
+    };
+  }
+  const arch = process.arch.toLowerCase();
+  if (!["x64", "arm64"].includes(arch)) {
+    return {
+      ok: false,
+      error: `QNN runtime requires Windows x64 or ARM64 (got arch ${process.arch}). Rejected before creating .venvs/qnn.building.`,
+    };
+  }
+  const ver = await getPythonVersion(systemPython);
+  if (!ver) {
+    return { ok: false, error: "Could not probe Python version for QNN family build." };
+  }
+  const minor = `${ver.major}.${ver.minor}`;
+  if (!isQnnFamilyPythonMinor(minor)) {
+    return {
+      ok: false,
+      error: `QNN runtime requires CPython 3.11–3.13 (got ${ver.text}). Python 3.10 is rejected before creating .venvs/qnn.building.`,
+    };
+  }
+  const numpyPin = qnnNumpyPinForPythonMinor(minor);
+  if (!numpyPin) {
+    return { ok: false, error: `No tested NumPy pin for Python ${minor}.` };
+  }
+  onLine(
+    `[setup] QNN family Python gate passed (${ver.text}, win32/${arch}); NumPy pin ${numpyPin}`,
+  );
+  return { ok: true, minor, numpyPin };
+}
+
 async function buildFamilyTree(
   family: VenvFamily,
   systemPython: string,
   onLine: SetupListener,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
+    let qnnNumpyPin: string | undefined;
+    if (family === "qnn") {
+      const gate = await assertQnnFamilyPythonGate(systemPython, onLine);
+      if (!gate.ok) return { ok: false, error: gate.error };
+      qnnNumpyPin = gate.numpyPin;
+    }
+
     clearBuildingRoot(family);
     await createVenvAt(getFamilyBuildingRoot(family), systemPython, onLine);
     const py = buildingPython(family);
@@ -135,7 +188,23 @@ async function buildFamilyTree(
       buildEnv,
       "pip",
     );
-    await execFileAsync(py, ["-c", "import olive, onnxruntime"], {
+
+    if (spec.supplementalInstallArgs?.length) {
+      onLine(`[setup] Installing supplemental packages for ${family}...`);
+      await runPythonModule(
+        py,
+        ["-m", "pip", "install", ...spec.supplementalInstallArgs],
+        onLine,
+        buildEnv,
+        "pip",
+      );
+    }
+
+    const importCheck =
+      family === "qnn"
+        ? "import olive, onnxruntime, onnxruntime_qnn, numpy"
+        : "import olive, onnxruntime";
+    await execFileAsync(py, ["-c", importCheck], {
       env: buildEnv,
       timeout: 30_000,
     });
@@ -145,6 +214,15 @@ async function buildFamilyTree(
       ortDistribution: spec.ortDistribution,
       ortVersionSpec: spec.ortVersionSpec,
       createdAt: new Date().toISOString(),
+      ...(family === "qnn"
+        ? {
+            packages: {
+              onnxruntime: PINNED_ONNXRUNTIME_QNN_FAMILY_ORT_VERSION,
+              onnxruntimeQnn: PINNED_ONNXRUNTIME_QNN_PLUGIN_VERSION,
+              numpy: qnnNumpyPin,
+            },
+          }
+        : {}),
     });
     return { ok: true };
   } catch (err: unknown) {
@@ -184,6 +262,22 @@ async function familyNeedsRebuild(family: VenvFamily): Promise<boolean> {
   if (!dists.includes(spec.ortDistribution)) return true;
   if (conflictingOrtDistributions(spec.ortDistribution).some((c) => dists.includes(c))) {
     return true;
+  }
+  if (family === "qnn") {
+    try {
+      await execFileAsync(py, ["-c", "import onnxruntime_qnn, numpy"], { timeout: 15_000 });
+    } catch {
+      return true;
+    }
+    const packages = manifest.packages;
+    if (
+      !packages?.onnxruntimeQnn ||
+      packages.onnxruntimeQnn !== PINNED_ONNXRUNTIME_QNN_PLUGIN_VERSION ||
+      !packages.onnxruntime ||
+      packages.onnxruntime !== PINNED_ONNXRUNTIME_QNN_FAMILY_ORT_VERSION
+    ) {
+      return true;
+    }
   }
   return false;
 }

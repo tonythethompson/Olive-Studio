@@ -5,9 +5,14 @@
  */
 import type { IHVProvider } from "@/types";
 
-export type VenvFamily = "default" | "cuda" | "openvino";
+export type VenvFamily = "default" | "cuda" | "openvino" | "qnn";
 
-export const VENV_FAMILIES: readonly VenvFamily[] = ["default", "cuda", "openvino"] as const;
+export const VENV_FAMILIES: readonly VenvFamily[] = [
+  "default",
+  "cuda",
+  "openvino",
+  "qnn",
+] as const;
 
 /** Known Olive Studio execution-provider IDs (exhaustive). */
 export const KNOWN_IHV_PROVIDERS: readonly IHVProvider[] = [
@@ -81,6 +86,7 @@ export function emptyFamilyFlags(): RuntimeFamilyFlags {
     default: { cpuUsable: false, prepared: false },
     cuda: { cpuUsable: false, prepared: false },
     openvino: { cpuUsable: false, prepared: false },
+    qnn: { cpuUsable: false, prepared: false },
   };
 }
 
@@ -93,8 +99,9 @@ export function mandatoryFamilyForProvider(provider: IHVProvider): VenvFamily | 
       return "cuda";
     case "OpenVINOExecutionProvider":
       return "openvino";
-    case "DmlExecutionProvider":
     case "QNNExecutionProvider":
+      return "qnn";
+    case "DmlExecutionProvider":
     case "ROCMExecutionProvider":
       return "default";
     case "CPUExecutionProvider":
@@ -121,7 +128,7 @@ export function resolveVenvFamily(
   if (provider === "WebGpuExecutionProvider") return "default";
 
   // CPU: prefer default if CPU-usable; else cuda if CPU-usable; else default (will create).
-  // Do not place CPU jobs on the openvino family.
+  // Do not place CPU jobs on the openvino or qnn families.
   if (flags.default.cpuUsable) return "default";
   if (flags.cuda.cpuUsable) return "cuda";
   return "default";
@@ -155,15 +162,10 @@ export function resolveRequiredFamilies(
       families.add("default");
     } else if (flags.cuda.cpuUsable) {
       families.add("cuda");
-    } else if (families.size > 0) {
-      // Provisionally reuse a family this preflight will create for a non-CPU provider.
-      // Prefer cuda if present (CPU+CUDA → cuda only), else any mandatory family.
-      if (families.has("cuda")) {
-        /* keep cuda only for CPU placement */
-      } else {
-        families.add("default");
-      }
+    } else if (families.has("cuda")) {
+      // CPU+CUDA batch: reuse cuda for CPU placement (do not create default solely for CPU).
     } else {
+      // CPU must not run in openvino/qnn alone; provision default when CUDA isn’t available.
       families.add("default");
     }
   }
@@ -172,6 +174,7 @@ export function resolveRequiredFamilies(
   if (families.has("default")) ordered.push("default");
   if (families.has("cuda")) ordered.push("cuda");
   if (families.has("openvino")) ordered.push("openvino");
+  if (families.has("qnn")) ordered.push("qnn");
   return ordered;
 }
 
@@ -181,6 +184,8 @@ export function humanFamilyLabel(family: VenvFamily): string {
       return "CUDA runtime";
     case "openvino":
       return "OpenVINO runtime";
+    case "qnn":
+      return "QNN runtime";
     case "default":
       return "default runtime";
     default: {
@@ -196,6 +201,8 @@ export function humanFamilyRootHint(family: VenvFamily): string {
       return ".venvs/cuda";
     case "openvino":
       return ".venvs/openvino";
+    case "qnn":
+      return ".venvs/qnn";
     case "default":
       return ".venv";
     default: {

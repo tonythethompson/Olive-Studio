@@ -46,6 +46,10 @@ export type RuntimeFamilyStatus = {
     openvino?: CapabilityStatus;
     tensorrt?: CapabilityStatus;
     tensorrtRtx?: CapabilityStatus;
+    /** Plugin registration + any QNN EpDevice (prep / AOT). */
+    qnnPreparation?: CapabilityStatus;
+    /** Win ARM64 + OrtHardwareDeviceType.NPU (potential inference). */
+    qnnInference?: CapabilityStatus;
   };
 };
 
@@ -59,7 +63,11 @@ export type DualRuntimeStatus = {
 };
 
 const STATUS_TTL_MS = 8_000;
-let cachedStatus: { at: number; value: DualRuntimeStatus } | null = null;
+let cachedStatus: {
+  at: number;
+  value: DualRuntimeStatus;
+  options: { systemPython: string | null; configuredPython: string | null; venvOnUserPath: boolean };
+} | null = null;
 
 export function invalidateRuntimeStatusCache(): void {
   cachedStatus = null;
@@ -89,6 +97,9 @@ out = {
   "tensorrt": None,
   "tensorrt_rtx": None,
   "optimum_intel": None,
+  "onnxruntime_qnn": None,
+  "qnn_ep_any": False,
+  "qnn_ep_npu": False,
 }
 try:
     import olive
@@ -102,8 +113,29 @@ for n in ["onnxruntime", "onnxruntime-directml", "onnxruntime-gpu", "onnxruntime
     except Exception:
         pass
 try:
+    dist = m.distribution("onnxruntime-qnn")
+    out["onnxruntime_qnn"] = dist.version
+except Exception:
+    pass
+try:
     import onnxruntime as ort
     out["providers"] = list(ort.get_available_providers())
+    try:
+        import onnxruntime_qnn  # noqa: F401
+    except Exception:
+        pass
+    try:
+        from olive.common.ort_inference import maybe_register_ep_libraries
+        maybe_register_ep_libraries()
+    except Exception:
+        pass
+    for device in ort.get_ep_devices():
+        if getattr(device, "ep_name", None) != "QNNExecutionProvider":
+            continue
+        out["qnn_ep_any"] = True
+        device_type = getattr(getattr(device, "device", None), "type", None)
+        if device_type == ort.OrtHardwareDeviceType.NPU:
+            out["qnn_ep_npu"] = True
 except Exception as exc:
     out["ort_error"] = str(exc)
 try:
@@ -138,6 +170,9 @@ type ProbeJson = {
   optimum_intel?: string | null;
   tensorrt?: string | null;
   tensorrt_rtx?: string | null;
+  onnxruntime_qnn?: string | null;
+  qnn_ep_any?: boolean;
+  qnn_ep_npu?: boolean;
 };
 
 function missing(detail?: string): CapabilityStatus {
@@ -248,6 +283,39 @@ function buildCapabilities(
     }
   }
 
+  if (family === "qnn") {
+    if (process.platform !== "win32") {
+      caps.qnnPreparation = unsupported(
+        "QNN plugin install/UX is Windows-first in this Studio release",
+      );
+      caps.qnnInference = unsupported(
+        "QNN local HTP inference is Windows ARM64 Snapdragon only in this release",
+      );
+    } else if (!probe?.onnxruntime_qnn) {
+      caps.qnnPreparation = missing("onnxruntime-qnn plugin not installed");
+      caps.qnnInference = missing("onnxruntime-qnn plugin not installed");
+    } else if (!probe.qnn_ep_any && !providers.has("QNNExecutionProvider")) {
+      caps.qnnPreparation = broken(
+        "onnxruntime-qnn installed but no QNN EpDevice registered (Olive native registration)",
+      );
+      caps.qnnInference = broken("QNN EpDevice registration failed");
+    } else {
+      caps.qnnPreparation = usable();
+      const arch = process.arch.toLowerCase();
+      if (arch === "arm64" || arch === "aarch64") {
+        caps.qnnInference = probe.qnn_ep_npu
+          ? usable()
+          : missing(
+              "No QNN OrtEpDevice with OrtHardwareDeviceType.NPU (CPU/emulator devices do not count for inference)",
+            );
+      } else {
+        caps.qnnInference = unsupported(
+          "Windows x64 supports QNN preparation / plugin AOT only (not local HTP inference)",
+        );
+      }
+    }
+  }
+
   return caps;
 }
 
@@ -285,11 +353,16 @@ export async function probeFamilyStatus(family: VenvFamily): Promise<RuntimeFami
             ? {
                 openvino: missing("venv missing"),
               }
-            : {
-                cuda: missing("venv missing"),
-                tensorrt: missing("venv missing"),
-                tensorrtRtx: missing("venv missing"),
-              }),
+            : family === "qnn"
+              ? {
+                  qnnPreparation: missing("venv missing"),
+                  qnnInference: missing("venv missing"),
+                }
+              : {
+                  cuda: missing("venv missing"),
+                  tensorrt: missing("venv missing"),
+                  tensorrtRtx: missing("venv missing"),
+                }),
       },
     };
   }
@@ -343,7 +416,19 @@ export async function getDualRuntimeStatus(opts?: {
   configuredPython?: string | null;
   venvOnUserPath?: boolean;
 }): Promise<DualRuntimeStatus> {
-  if (!opts?.force && cachedStatus && Date.now() - cachedStatus.at < STATUS_TTL_MS) {
+  const options = {
+    systemPython: opts?.systemPython ?? null,
+    configuredPython: opts?.configuredPython ?? null,
+    venvOnUserPath: opts?.venvOnUserPath ?? false,
+  };
+  if (
+    !opts?.force &&
+    cachedStatus &&
+    Date.now() - cachedStatus.at < STATUS_TTL_MS &&
+    cachedStatus.options.systemPython === options.systemPython &&
+    cachedStatus.options.configuredPython === options.configuredPython &&
+    cachedStatus.options.venvOnUserPath === options.venvOnUserPath
+  ) {
     return cachedStatus.value;
   }
 
@@ -355,29 +440,34 @@ export async function getDualRuntimeStatus(opts?: {
   const defaultOk = families.default.integrityHealthy;
   const cudaOk = families.cuda.integrityHealthy;
   const openvinoOk = families.openvino.integrityHealthy;
+  const qnnOk = families.qnn.integrityHealthy;
   const hint = !opts?.systemPython
     ? "No system Python found. Need 3.10–3.13 (3.12 recommended). Set python.exe below or OLIVE_STUDIO_PYTHON."
     : !families.default.exists
       ? "Default runtime (.venv) missing — Install Olive venv now, or first Execute Live will create it."
       : !defaultOk
         ? "Default runtime needs repair (Open Olive runtime / Install Olive venv)."
-        : cudaOk && openvinoOk
-          ? "Default, CUDA, and OpenVINO runtimes ready."
-          : cudaOk
-            ? "Default and CUDA runtimes ready. OpenVINO runtime (.venvs/openvino) is created on first OpenVINO job."
-            : openvinoOk
-              ? "Default and OpenVINO runtimes ready. CUDA runtime will be created on first CUDA/TensorRT job."
-              : "Default runtime ready. CUDA and OpenVINO runtimes are created on first use.";
+        : cudaOk && openvinoOk && qnnOk
+          ? "Default, CUDA, OpenVINO, and QNN runtimes ready."
+          : cudaOk && openvinoOk
+            ? "Default, CUDA, and OpenVINO runtimes ready. QNN runtime (.venvs/qnn) is created on first QNN job."
+            : cudaOk
+              ? "Default and CUDA runtimes ready. OpenVINO / QNN runtimes are created on first use."
+              : openvinoOk
+                ? "Default and OpenVINO runtimes ready. CUDA / QNN runtimes are created on first use."
+                : qnnOk
+                  ? "Default and QNN runtimes ready. CUDA / OpenVINO runtimes are created on first use."
+                  : "Default runtime ready. CUDA, OpenVINO, and QNN runtimes are created on first use.";
 
   const value: DualRuntimeStatus = {
     families,
-    systemPython: opts?.systemPython ?? null,
-    configuredPython: opts?.configuredPython ?? null,
+    systemPython: options.systemPython,
+    configuredPython: options.configuredPython,
     platform: process.platform,
-    venvOnUserPath: opts?.venvOnUserPath ?? false,
+    venvOnUserPath: options.venvOnUserPath,
     hint,
   };
-  cachedStatus = { at: Date.now(), value };
+  cachedStatus = { at: Date.now(), value, options };
   return value;
 }
 
@@ -400,6 +490,9 @@ export function capabilityForProvider(
     case "NvTensorRTRTXExecutionProvider":
       return status.capabilities.tensorrtRtx;
     case "QNNExecutionProvider":
+      // Prefer inference when usable; else preparation (x64 AOT / pre-NPU).
+      if (status.capabilities.qnnInference?.usable) return status.capabilities.qnnInference;
+      return status.capabilities.qnnPreparation;
     case "ROCMExecutionProvider":
     case "WebGpuExecutionProvider":
       return undefined;

@@ -10,8 +10,15 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import type { VenvFamily } from "../../../lib/venvFamily.ts";
-import { getFamilySpec } from "./spec.ts";
+import { ALL_ORT_DISTRIBUTIONS, getFamilySpec, ORT_PLUGIN_PACKAGE_NAMES } from "./spec.ts";
 import { listInstalledOrtDistributions } from "./status.ts";
+
+const ORT_PLUGIN_SET = new Set(
+  ORT_PLUGIN_PACKAGE_NAMES.map((n) => n.toLowerCase().replace(/[_.-]+/g, "-")),
+);
+const ORT_DIST_SET = new Set(
+  ALL_ORT_DISTRIBUTIONS.map((n) => n.toLowerCase().replace(/[_.-]+/g, "-")),
+);
 
 /** Pip flags that take a following value (skip that value when scanning packages). */
 const PIP_FLAGS_WITH_VALUE = new Set([
@@ -61,9 +68,14 @@ export function packageNameFromPipArg(arg: string): string | null {
   return base || null;
 }
 
+/**
+ * Mutually exclusive ORT wheels only. Plugin packages (onnxruntime-qnn 2.x)
+ * are exempt — they install beside standard onnxruntime.
+ */
 function isOrtDistributionName(name: string): boolean {
   const normalized = normalizeDistName(name);
-  return normalized === "onnxruntime" || normalized.startsWith("onnxruntime-");
+  if (ORT_PLUGIN_SET.has(normalized)) return false;
+  return ORT_DIST_SET.has(normalized);
 }
 
 /** Canonical ORT package names allowed by the family's packageConstraints. */
@@ -108,13 +120,19 @@ export function withFamilyPipConstraintArgs(
   family: VenvFamily,
   args: string[],
 ): { args: string[]; cleanup: () => void } {
-  const constraints = getFamilySpec(family).packageConstraints;
-  if (constraints.length === 0) {
+  const spec = getFamilySpec(family);
+  const constraints = [
+    ...spec.packageConstraints,
+    ...(spec.supplementalConstraints ?? []),
+  ];
+  // Deduplicate while preserving order.
+  const unique = Array.from(new Set(constraints));
+  if (unique.length === 0) {
     return { args: [...args], cleanup: () => undefined };
   }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "olive-studio-pip-constraint-"));
   const file = path.join(dir, "constraints.txt");
-  const lines = constraints.filter((c) => c.trim() && !c.trim().startsWith("-"));
+  const lines = unique.filter((c) => c.trim() && !c.trim().startsWith("-"));
   fs.writeFileSync(file, `${lines.join("\n")}\n`, "utf8");
   return {
     args: ["--constraint", file, ...args],

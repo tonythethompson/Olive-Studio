@@ -3,6 +3,7 @@ import {
   computeDirectMlHardwareReady,
   computeDirectMlNeedsInstall,
   computeOpenVinoCompatibleHardware,
+  computeQnnCompatibleHardware,
   getProviderAvailabilityBlock,
   isNvidiaGpuTensorRtFamily,
   mergeDetectedProviders,
@@ -568,5 +569,43 @@ describe("mergeDetectedProviders DirectML", () => {
       hasDirectMl: false,
     });
     expect(detected).toContain("DmlExecutionProvider");
+  });
+});
+
+describe("mergeDetectedProviders QNN", () => {
+  it("does not trust ORT QNN listing alone without host-compatible soft-detect", () => {
+    const detected = mergeDetectedProviders({
+      onnxRuntimeProviders: ["CPUExecutionProvider", "QNNExecutionProvider"],
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+    });
+    expect(detected).not.toContain("QNNExecutionProvider");
+  });
+
+  it("soft-detects QNN on compatible Windows hosts", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      hasQnnCompatibleHardware: true,
+    });
+    expect(detected).toContain("QNNExecutionProvider");
+  });
+
+  it("computeQnnCompatibleHardware is Windows ARM64/x64 only", () => {
+    expect(
+      computeQnnCompatibleHardware({ os: "win32 10.0", arch: "arm64" }),
+    ).toBe(true);
+    expect(computeQnnCompatibleHardware({ os: "win32 10.0", arch: "x64" })).toBe(true);
+    expect(computeQnnCompatibleHardware({ os: "linux 6.8", arch: "x64" })).toBe(false);
+    expect(
+      computeQnnCompatibleHardware({
+        os: "linux 6.8",
+        arch: "x64",
+        qnnLoadable: true,
+        ortReportsQnn: true,
+      }),
+    ).toBe(false);
   });
 });

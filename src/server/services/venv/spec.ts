@@ -11,12 +11,27 @@ import {
   openvinoOrtInstallArgs,
   openvinoPackageConstraints,
 } from "../../../lib/openvinoDeps.ts";
+import {
+  ONNXRUNTIME_QNN_FAMILY_ORT_PACKAGE,
+  PINNED_ONNXRUNTIME_QNN_FAMILY_ORT_VERSION,
+  PINNED_ONNXRUNTIME_QNN_PLUGIN_VERSION,
+  qnnOrtInstallArgs,
+  qnnPackageConstraints,
+  qnnSupplementalConstraints,
+  qnnSupplementalInstallArgs,
+} from "../../../lib/qnnDeps.ts";
 
 export type OrtDistributionName =
   | "onnxruntime"
   | "onnxruntime-directml"
   | "onnxruntime-gpu"
   | "onnxruntime-openvino";
+
+/**
+ * Plugin / support packages that live beside canonical ORT and must not be
+ * treated as mutually exclusive ORT distributions (e.g. onnxruntime-qnn 2.x).
+ */
+export const ORT_PLUGIN_PACKAGE_NAMES = ["onnxruntime-qnn"] as const;
 
 export type VenvFamilySpec = {
   family: VenvFamily;
@@ -26,6 +41,13 @@ export type VenvFamilySpec = {
   ortVersionSpec?: string;
   /** Pip install args for the canonical ORT wheel (no conflicting flavors). */
   ortInstallArgs: string[];
+  /**
+   * Additional family-owned packages installed after canonical ORT
+   * (plugins, bridges, pinned NumPy, etc.).
+   */
+  supplementalInstallArgs?: string[];
+  /** Extra pip constraint lines for supplemental packages (merged into constraints). */
+  supplementalConstraints?: string[];
   /** Pip install args for olive-ai (+ requests) into a fresh family tree. */
   oliveInstallArgs: string[];
   packageConstraints: string[];
@@ -33,7 +55,7 @@ export type VenvFamilySpec = {
 };
 
 /** Bump when pins / layout change so ensure triggers an isolated rebuild. */
-export const VENV_SPEC_VERSION = 3;
+export const VENV_SPEC_VERSION = 4;
 
 /** Pinned olive-ai range for family builds (avoid floating major). */
 export const PINNED_OLIVE_AI_INSTALL = "olive-ai>=0.9.0,<1";
@@ -69,6 +91,8 @@ export function getFamilyRoot(family: VenvFamily): string {
       return path.join(process.cwd(), ".venvs", "cuda");
     case "openvino":
       return path.join(process.cwd(), ".venvs", "openvino");
+    case "qnn":
+      return path.join(process.cwd(), ".venvs", "qnn");
     case "default":
       return path.join(process.cwd(), ".venv");
     default: {
@@ -84,6 +108,8 @@ export function getFamilyBuildingRoot(family: VenvFamily): string {
       return path.join(process.cwd(), ".venvs", "cuda.building");
     case "openvino":
       return path.join(process.cwd(), ".venvs", "openvino.building");
+    case "qnn":
+      return path.join(process.cwd(), ".venvs", "qnn.building");
     case "default":
       return path.join(process.cwd(), ".venv.building");
     default: {
@@ -99,6 +125,8 @@ export function getFamilyBackupRoot(family: VenvFamily, stamp = Date.now()): str
       return path.join(process.cwd(), ".venvs", `cuda.backup-${stamp}`);
     case "openvino":
       return path.join(process.cwd(), ".venvs", `openvino.backup-${stamp}`);
+    case "qnn":
+      return path.join(process.cwd(), ".venvs", `qnn.backup-${stamp}`);
     case "default":
       return path.join(process.cwd(), `.venv.backup-${stamp}`);
     default: {
@@ -138,6 +166,20 @@ export function getFamilySpec(family: VenvFamily): VenvFamilySpec {
         packageConstraints: openvinoPackageConstraints(),
         specVersion: VENV_SPEC_VERSION,
       };
+    case "qnn":
+      return {
+        family: "qnn",
+        root: getFamilyRoot("qnn"),
+        buildingRoot: getFamilyBuildingRoot("qnn"),
+        ortDistribution: ONNXRUNTIME_QNN_FAMILY_ORT_PACKAGE,
+        ortVersionSpec: PINNED_ONNXRUNTIME_QNN_FAMILY_ORT_VERSION,
+        ortInstallArgs: qnnOrtInstallArgs(),
+        supplementalInstallArgs: qnnSupplementalInstallArgs(),
+        supplementalConstraints: qnnSupplementalConstraints(),
+        oliveInstallArgs: [...OLIVE_INSTALL_ARGS],
+        packageConstraints: qnnPackageConstraints(),
+        specVersion: VENV_SPEC_VERSION,
+      };
     case "default": {
       const ort = defaultOrtDistribution();
       return {
@@ -164,7 +206,15 @@ export type VenvManifest = {
   ortDistribution: OrtDistributionName;
   ortVersionSpec?: string;
   createdAt: string;
+  packages?: {
+    onnxruntime?: string;
+    onnxruntimeQnn?: string;
+    numpy?: string;
+  };
 };
+
+/** Exported for tests / ensure logs. */
+export const QNN_FAMILY_PLUGIN_VERSION = PINNED_ONNXRUNTIME_QNN_PLUGIN_VERSION;
 
 export function conflictingOrtDistributions(canonical: OrtDistributionName): OrtDistributionName[] {
   return ALL_ORT_DISTRIBUTIONS.filter((d) => d !== canonical);

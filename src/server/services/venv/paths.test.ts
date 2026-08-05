@@ -25,11 +25,19 @@ describe("venv paths", () => {
     expect(scripts).toContain(".venv");
   });
 
-  it("resolves cuda family under .venvs/cuda", () => {
-    expect(getFamilyRoot("cuda")).toContain(path.join(".venvs", "cuda"));
-    const python = getVenvPython("cuda");
-    expect(python).toContain(".venvs");
-    expect(python).toContain("cuda");
-    expect(getVenvScriptsDir("cuda")).toContain("cuda");
+  it.each(["cuda", "openvino", "qnn"] as const)(
+    "resolves the %s family under .venvs/<family>",
+    (family) => {
+      const segment = path.join(".venvs", family);
+      expect(getFamilyRoot(family)).toContain(segment);
+      const python = getVenvPython(family);
+      expect(python).toContain(segment);
+      expect(python).toMatch(/python(\.exe)?$/);
+      expect(getVenvScriptsDir(family)).toContain(segment);
+    },
+  );
+
+  it("keeps the default family outside .venvs", () => {
+    expect(getFamilyRoot("default")).not.toContain(`.venvs${path.sep}`);
   });
 });

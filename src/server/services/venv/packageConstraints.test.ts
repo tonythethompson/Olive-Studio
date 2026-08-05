@@ -72,6 +72,19 @@ describe("packageConstraints", () => {
     ]);
   });
 
+  it("allows qnn family onnxruntime + onnxruntime-qnn plugin (not a conflicting ORT dist)", () => {
+    expect(findForbiddenOrtInstallArgs("qnn", ["onnxruntime==1.26.0"])).toEqual([]);
+    expect(findForbiddenOrtInstallArgs("qnn", ["onnxruntime-qnn==2.4.0"])).toEqual([]);
+    expect(findForbiddenOrtInstallArgs("qnn", ["onnxruntime-directml"])).toEqual([
+      "onnxruntime-directml",
+    ]);
+    expect(findForbiddenOrtInstallArgs("qnn", ["onnxruntime-gpu"])).toEqual(["onnxruntime-gpu"]);
+    expect(getFamilySpec("qnn").supplementalInstallArgs?.some((a) => a.includes("onnxruntime-qnn"))).toBe(
+      true,
+    );
+    expect(getFamilySpec("qnn").ortDistribution).toBe("onnxruntime");
+  });
+
   it("injects a --constraint file from family packageConstraints", () => {
     const { args, cleanup } = withFamilyPipConstraintArgs("cuda", ["tensorrt"]);
     cleanups.push(cleanup);
@@ -83,6 +96,18 @@ describe("packageConstraints", () => {
     expect(body).toContain(pinnedOrtGpuInstallArgs()[0]!);
     cleanup();
     expect(fs.existsSync(constraintPath)).toBe(false);
+  });
+
+  it("merges supplemental constraints into the qnn constraint file", () => {
+    const { args, cleanup } = withFamilyPipConstraintArgs("qnn", ["olive-ai"]);
+    cleanups.push(cleanup);
+    const body = fs.readFileSync(args[1]!, "utf8");
+    for (const line of getFamilySpec("qnn").supplementalConstraints ?? []) {
+      expect(body).toContain(line);
+    }
+    for (const line of getFamilySpec("qnn").packageConstraints) {
+      expect(body).toContain(line);
+    }
   });
 
   it("skips flag values when scanning for forbidden ORT packages", () => {

@@ -15,6 +15,7 @@ import { mountArenaRoutes } from "./src/server/routes/arena.ts";
 import { probeTensorRtLoadable } from "./src/server/services/olive/tensorrt.ts";
 import { probeTensorRtRtxLoadable } from "./src/server/services/olive/tensorrt-rtx.ts";
 import { probeOpenVino } from "./src/server/services/olive/openvino.ts";
+import { probeQnn } from "./src/server/services/olive/qnn.ts";
 import { staticServeRateLimit } from "./src/server/middleware/rateLimit.ts";
 
 // After imports: hydrate .env / .env.local / Windows User+Machine API keys into process.env.
@@ -102,6 +103,7 @@ const systemProbeOpts: SystemProbeOptions = {
   probeTensorRtLoadable,
   probeTensorRtRtxLoadable,
   probeOpenVino,
+  probeQnn,
 };
 mountSystemRoutes(systemRouter, systemProbeOpts);
 app.use("/api", systemRouter);

@@ -33,25 +33,30 @@ describe("venvFamily policy", () => {
     expect(mandatoryFamilyForProvider("TensorrtExecutionProvider")).toBe("cuda");
     expect(mandatoryFamilyForProvider("DmlExecutionProvider")).toBe("default");
     expect(mandatoryFamilyForProvider("OpenVINOExecutionProvider")).toBe("openvino");
+    expect(mandatoryFamilyForProvider("QNNExecutionProvider")).toBe("qnn");
     expect(mandatoryFamilyForProvider("CPUExecutionProvider")).toBeNull();
   });
 
-  it("labels openvino family", () => {
+  it("labels openvino and qnn families", () => {
     expect(humanFamilyLabel("openvino")).toBe("OpenVINO runtime");
     expect(humanFamilyRootHint("openvino")).toBe(".venvs/openvino");
+    expect(humanFamilyLabel("qnn")).toBe("QNN runtime");
+    expect(humanFamilyRootHint("qnn")).toBe(".venvs/qnn");
   });
 
-  it("resolves single-job CPU with ready-environment reuse (not openvino)", () => {
+  it("resolves single-job CPU with ready-environment reuse (not openvino/qnn)", () => {
     expect(resolveVenvFamily("CPUExecutionProvider")).toBe("default");
     expect(
       resolveVenvFamily("CPUExecutionProvider", {
         default: { cpuUsable: false, prepared: false },
         cuda: { cpuUsable: true, prepared: true },
         openvino: { cpuUsable: true, prepared: true },
+        qnn: { cpuUsable: true, prepared: true },
       }),
     ).toBe("cuda");
     expect(resolveVenvFamily("CUDAExecutionProvider", emptyFamilyFlags())).toBe("cuda");
     expect(resolveVenvFamily("OpenVINOExecutionProvider", emptyFamilyFlags())).toBe("openvino");
+    expect(resolveVenvFamily("QNNExecutionProvider", emptyFamilyFlags())).toBe("qnn");
     expect(resolveVenvFamily("DmlExecutionProvider", emptyFamilyFlags())).toBe("default");
     expect(resolveVenvFamily("WebGpuExecutionProvider", emptyFamilyFlags())).toBe("default");
   });
@@ -75,6 +80,11 @@ describe("venvFamily policy", () => {
     expect(
       resolveRequiredFamilies(["CPUExecutionProvider", "OpenVINOExecutionProvider"]),
     ).toEqual(["default", "openvino"]);
+    expect(resolveRequiredFamilies(["QNNExecutionProvider"])).toEqual(["qnn"]);
+    expect(resolveRequiredFamilies(["CPUExecutionProvider", "QNNExecutionProvider"])).toEqual([
+      "default",
+      "qnn",
+    ]);
     expect(resolveRequiredFamilies(["CUDAExecutionProvider"])).toEqual(["cuda"]);
     expect(resolveRequiredFamilies(["WebGpuExecutionProvider"])).toEqual([]);
     expect(resolveRequiredFamilies([])).toEqual([]);

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  markQnnVenvLoadable,
   markTensorRtVenvLoadable,
   mergeOrtProvidersForDisplay,
   resolveDirectMlDetected,
@@ -73,13 +74,20 @@ describe("systemHardwareProbePolicy", () => {
         ["CPUExecutionProvider"],
         ["CUDAExecutionProvider"],
         ["OpenVINOExecutionProvider"],
+        ["QNNExecutionProvider"],
         ["DmlExecutionProvider"],
       ),
     ).toEqual([
       "CPUExecutionProvider",
       "CUDAExecutionProvider",
       "OpenVINOExecutionProvider",
+      "QNNExecutionProvider",
       "DmlExecutionProvider",
     ]);
+  });
+
+  it("marks QNN loadable only on the qnn family python", () => {
+    expect(markQnnVenvLoadable({ isQnn: true, loadable: true })).toBe(true);
+    expect(markQnnVenvLoadable({ isQnn: false, loadable: true })).toBe(false);
   });
 });

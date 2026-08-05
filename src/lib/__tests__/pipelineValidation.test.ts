@@ -327,6 +327,33 @@ describe("prepareProviderChange", () => {
     expect(result!.passes).toBeDefined();
   });
 
+  it("can skip hardware block for explicit retry / cross-compile selection", () => {
+    const state = baseState({ passes: basePasses({ peft: true }) });
+    const blocked = prepareProviderChange(state, "QNNExecutionProvider", {
+      probedAt: new Date().toISOString(),
+      platform: { os: "linux", arch: "x64", cpuModel: "x86", cpuCores: 8 },
+      detectedProviders: ["CPUExecutionProvider"],
+      recommendedProvider: "CPUExecutionProvider" as IHVProvider,
+      notes: [],
+    });
+    expect(blocked).toBeNull();
+    const allowed = prepareProviderChange(
+      state,
+      "QNNExecutionProvider",
+      {
+        probedAt: new Date().toISOString(),
+        platform: { os: "linux", arch: "x64", cpuModel: "x86", cpuCores: 8 },
+        detectedProviders: ["CPUExecutionProvider"],
+        recommendedProvider: "CPUExecutionProvider" as IHVProvider,
+        notes: [],
+      },
+      { skipHardwareBlock: true },
+    );
+    expect(allowed).not.toBeNull();
+    expect(allowed!.ihvProvider).toBe("QNNExecutionProvider");
+    expect(allowed!.passes?.peft).toBe(false);
+  });
+
   it("picks OpenVINO GPU target from probe devices when switching to OpenVINO", () => {
     const state = baseState();
     const result = prepareProviderChange(state, "OpenVINOExecutionProvider", {
@@ -479,6 +506,54 @@ describe("getPipelineValidation", () => {
     expect(blocked.statusLabel).toMatch(/blocking/);
     const success = getPipelineValidation(baseState({ ihvProvider: "CUDAExecutionProvider" }));
     expect(success.statusLabel).toBe("Local checks passed");
+  });
+
+  it("wires QNN readiness errors into Execute Live blocking", () => {
+    const probe = {
+      probedAt: new Date().toISOString(),
+      platform: { os: "linux", arch: "x64", cpuModel: "Intel", cpuCores: 8 },
+      detectedProviders: ["CPUExecutionProvider", "QNNExecutionProvider"] as IHVProvider[],
+      recommendedProvider: "CPUExecutionProvider" as IHVProvider,
+      notes: [],
+      qnn: {
+        available: false,
+        loadable: false,
+        preparation: false,
+        npuDevice: false,
+        potentialInference: false,
+        verifiedInference: false,
+        hostMode: "out-of-scope" as const,
+      },
+    };
+    const r = getPipelineValidation(baseState({ ihvProvider: "QNNExecutionProvider" }), {
+      hardwareProbe: probe,
+    });
+    expect(r.isBlocked).toBe(true);
+    expect(r.issues.some((i) => i.id === "qnn-readiness-qnn_out_of_scope")).toBe(true);
+  });
+
+  it("blocks QNN when runtime is not loadable on Windows ARM64", () => {
+    const probe = {
+      probedAt: new Date().toISOString(),
+      platform: { os: "win32", arch: "arm64", cpuModel: "Snapdragon", cpuCores: 8 },
+      detectedProviders: ["CPUExecutionProvider", "QNNExecutionProvider"] as IHVProvider[],
+      recommendedProvider: "QNNExecutionProvider" as IHVProvider,
+      notes: [],
+      qnn: {
+        available: true,
+        loadable: false,
+        preparation: true,
+        npuDevice: false,
+        potentialInference: true,
+        verifiedInference: false,
+        hostMode: "local-inference" as const,
+      },
+    };
+    const r = getPipelineValidation(baseState({ ihvProvider: "QNNExecutionProvider" }), {
+      hardwareProbe: probe,
+    });
+    expect(r.isBlocked).toBe(true);
+    expect(r.issues.some((i) => i.id === "qnn-readiness-qnn_runtime_missing")).toBe(true);
   });
 });
 
