@@ -45,6 +45,11 @@ const PIP_FLAGS_WITH_VALUE = new Set([
   "--config-settings",
 ]);
 
+/** PEP 503 normalize: lowercase + collapse runs of `[_.-]+` to `-`. */
+export function normalizeDistName(name: string): string {
+  return name.toLowerCase().replace(/[_.-]+/g, "-");
+}
+
 /**
  * Extract a distribution name from a pip requirement token.
  * Returns null for flags / URLs / empty tokens.
@@ -58,8 +63,8 @@ export function packageNameFromPipArg(arg: string): string | null {
 }
 
 function isOrtDistributionName(name: string): boolean {
-  const lower = name.toLowerCase();
-  return lower === "onnxruntime" || lower.startsWith("onnxruntime-");
+  const normalized = normalizeDistName(name);
+  return normalized === "onnxruntime" || normalized.startsWith("onnxruntime-");
 }
 
 /** Canonical ORT package names allowed by the family's packageConstraints. */
@@ -67,7 +72,7 @@ export function allowedOrtPackageNames(family: VenvFamily): Set<string> {
   const names = new Set<string>();
   for (const constraint of getFamilySpec(family).packageConstraints) {
     const name = packageNameFromPipArg(constraint);
-    if (name) names.add(name.toLowerCase());
+    if (name) names.add(normalizeDistName(name));
   }
   return names;
 }
@@ -88,12 +93,12 @@ export function findForbiddenOrtInstallArgs(family: VenvFamily, args: string[]):
     }
     const name = packageNameFromPipArg(arg);
     if (!name) continue;
-    const lower = name.toLowerCase();
-    if (lower === ONNXRUNTIME_OPENVINO_PIP_PACKAGE) {
+    const normalized = normalizeDistName(name);
+    if (normalized === normalizeDistName(ONNXRUNTIME_OPENVINO_PIP_PACKAGE)) {
       forbidden.push(arg);
       continue;
     }
-    if (isOrtDistributionName(lower) && !allowed.has(lower)) {
+    if (isOrtDistributionName(normalized) && !allowed.has(normalized)) {
       forbidden.push(arg);
     }
   }
@@ -114,7 +119,8 @@ export function withFamilyPipConstraintArgs(
   }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "olive-studio-pip-constraint-"));
   const file = path.join(dir, "constraints.txt");
-  fs.writeFileSync(file, `${constraints.join("\n")}\n`, "utf8");
+  const lines = constraints.filter((c) => c.trim() && !c.trim().startsWith("-"));
+  fs.writeFileSync(file, `${lines.join("\n")}\n`, "utf8");
   return {
     args: ["--constraint", file, ...args],
     cleanup: () => {
@@ -136,15 +142,16 @@ export async function assertFamilyOrtConstraints(
   python: string,
 ): Promise<string | null> {
   const spec = getFamilySpec(family);
-  const dists = await listInstalledOrtDistributions(python);
-  if (dists.includes(ONNXRUNTIME_OPENVINO_PIP_PACKAGE)) {
+  const dists = (await listInstalledOrtDistributions(python)).map(normalizeDistName);
+  const canonical = normalizeDistName(spec.ortDistribution);
+  if (dists.includes(normalizeDistName(ONNXRUNTIME_OPENVINO_PIP_PACKAGE))) {
     return `${ONNXRUNTIME_OPENVINO_PIP_PACKAGE} must not be installed in the ${family} runtime`;
   }
-  if (!dists.includes(spec.ortDistribution)) {
+  if (!dists.includes(canonical)) {
     return `${family} runtime missing canonical ORT (${spec.ortDistribution}); packageConstraints violated`;
   }
   const conflicting = dists.filter(
-    (d) => d !== spec.ortDistribution && isOrtDistributionName(d),
+    (d) => d !== canonical && isOrtDistributionName(d),
   );
   if (conflicting.length > 0) {
     return `${family} runtime has conflicting ORT distributions: ${conflicting.join(", ")} (allowed: ${spec.packageConstraints.join(", ")})`;

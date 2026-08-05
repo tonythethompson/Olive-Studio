@@ -13,6 +13,7 @@ import {
   type VenvManifest,
   VENV_MANIFEST_NAME,
 } from "./spec.ts";
+import { pythonPathForRoot } from "./paths.ts";
 
 export type PromoteResult =
   | { ok: true; backupPath?: string }
@@ -56,7 +57,6 @@ export function promoteBuildingToLive(family: VenvFamily): PromoteResult {
 
   const backup = getFamilyBackupRoot(family);
   let liveMoved = false;
-  let buildingMoved = false;
 
   try {
     if (fs.existsSync(live)) {
@@ -65,15 +65,11 @@ export function promoteBuildingToLive(family: VenvFamily): PromoteResult {
       liveMoved = true;
     }
     renameDir(building, live);
-    buildingMoved = true;
     return { ok: true, backupPath: liveMoved ? backup : undefined };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     // Rollback best-effort
     try {
-      if (buildingMoved && fs.existsSync(live) && !fs.existsSync(building)) {
-        renameDir(live, building);
-      }
       if (liveMoved && fs.existsSync(backup) && !fs.existsSync(live)) {
         renameDir(backup, live);
       }
@@ -130,21 +126,11 @@ export function clearBuildingRoot(family: VenvFamily): void {
 }
 
 export function familyPythonExists(family: VenvFamily): boolean {
-  const root = getFamilyRoot(family);
-  const py =
-    process.platform === "win32"
-      ? path.join(root, "Scripts", "python.exe")
-      : path.join(root, "bin", "python");
-  return fs.existsSync(py);
+  return fs.existsSync(pythonPathForRoot(getFamilyRoot(family)));
 }
 
 export function buildingPythonExists(family: VenvFamily): boolean {
-  const root = getFamilyBuildingRoot(family);
-  const py =
-    process.platform === "win32"
-      ? path.join(root, "Scripts", "python.exe")
-      : path.join(root, "bin", "python");
-  return fs.existsSync(py);
+  return fs.existsSync(pythonPathForRoot(getFamilyBuildingRoot(family)));
 }
 
 export function getSpecForFamily(family: VenvFamily) {

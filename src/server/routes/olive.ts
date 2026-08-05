@@ -79,6 +79,12 @@ export function mountOliveRoutes(router: Router): void {
       });
     }
 
+    // Canonicalize EP token before enrich/serialize so Olive never sees aliases (e.g. trt).
+    const accel = recipe.systems?.local_system?.config?.accelerators?.[0];
+    if (accel && Array.isArray(accel.execution_providers) && accel.execution_providers.length > 0) {
+      accel.execution_providers[0] = provider;
+    }
+
     const jobId = uuidv4();
     const job: OliveJob = {
       id: jobId,

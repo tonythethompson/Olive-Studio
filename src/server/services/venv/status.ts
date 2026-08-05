@@ -203,8 +203,10 @@ function buildCapabilities(
       caps.directml = broken("DmlExecutionProvider absent despite onnxruntime-directml");
     }
 
-    if (probe?.openvino) {
+    if (probe?.openvino && probe?.optimum_intel) {
       caps.openvino = usable();
+    } else if (probe?.openvino && !probe?.optimum_intel) {
+      caps.openvino = missing("openvino installed but optimum-intel bridge missing");
     } else {
       caps.openvino = missing("openvino Python package not installed");
     }
@@ -288,7 +290,8 @@ export async function probeFamilyStatus(family: VenvFamily): Promise<RuntimeFami
   const staleSpec = manifest != null && manifest.specVersion !== VENV_SPEC_VERSION;
   const needsRepair =
     conflicting.length > 0 || !canonicalOrtInstalled || !oliveInstalled || staleSpec || !manifest;
-  const integrityHealthy = oliveInstalled && canonicalOrtInstalled && conflicting.length === 0 && !staleSpec;
+  const integrityHealthy =
+    oliveInstalled && canonicalOrtInstalled && conflicting.length === 0 && !staleSpec && Boolean(manifest);
 
   return {
     family,
@@ -328,9 +331,13 @@ export async function getDualRuntimeStatus(opts?: {
     return cachedStatus.value;
   }
 
+  const [defaultStatus, cudaStatus] = await Promise.all([
+    probeFamilyStatus("default"),
+    probeFamilyStatus("cuda"),
+  ]);
   const families = {
-    default: await probeFamilyStatus("default"),
-    cuda: await probeFamilyStatus("cuda"),
+    default: defaultStatus,
+    cuda: cudaStatus,
   };
 
   const defaultOk = families.default.integrityHealthy;

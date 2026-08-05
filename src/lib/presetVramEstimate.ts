@@ -25,6 +25,8 @@ function catalogDeviceToProvider(device: string): IHVProvider {
       return "OpenVINOExecutionProvider";
     case "QNN":
       return "QNNExecutionProvider";
+    case "WebGPU":
+      return "WebGpuExecutionProvider";
     case "CPU":
     default:
       return "CPUExecutionProvider";

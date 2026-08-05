@@ -171,6 +171,7 @@ function mapExecutionProviderFromRecipe(parsed: any): IHVProvider | undefined {
         if (token.includes("directml") || token.includes("dml")) return "DmlExecutionProvider";
         if (token.includes("qnn")) return "QNNExecutionProvider";
         if (token.includes("openvino")) return "OpenVINOExecutionProvider";
+        if (token.includes("webgpu")) return "WebGpuExecutionProvider";
         if (token.includes("rocm")) return "ROCMExecutionProvider";
       }
     }
@@ -196,6 +197,7 @@ export function getCatalogDeviceFromRecipe(parsed: unknown): string | undefined 
         if (token.includes("cuda")) return "CUDA";
         if (token.includes("qnn")) return "QNN";
         if (token.includes("openvino")) return "OpenVINO";
+        if (token.includes("webgpu")) return "WebGPU";
         if (token.includes("rocm")) return "CUDA";
       }
     }

@@ -9,6 +9,7 @@ import fs from "fs";
 import { execFileAsync } from "../shared/exec.ts";
 import { pipInstallForFamily } from "../shared/pipInstall.ts";
 import { ensureVenvFamily } from "../venv/familyEnsure.ts";
+import { envForFamily } from "../venv/pathIsolation.ts";
 import { getVenvPython } from "../venv/paths.ts";
 import { listInstalledOrtDistributions, invalidateRuntimeStatusCache } from "../venv/status.ts";
 import { assertFamilyOrtConstraints } from "../venv/packageConstraints.ts";
@@ -107,7 +108,10 @@ function parseProbeOutput(out: string): ProbeAccumulator {
  */
 export async function probeOpenVino(python: string): Promise<OpenVinoProbeResult> {
   try {
-    const { stdout, stderr } = await execFileAsync(python, ["-c", buildProbeScript()]);
+    const { stdout, stderr } = await execFileAsync(python, ["-c", buildProbeScript()], {
+      env: envForFamily("default"),
+      timeout: 45_000,
+    });
     const acc = parseProbeOutput(`${stdout}\n${stderr}`);
     const openvinoRuntimeOk = Boolean(acc.version) && acc.devices !== undefined;
     const available = openvinoRuntimeOk;

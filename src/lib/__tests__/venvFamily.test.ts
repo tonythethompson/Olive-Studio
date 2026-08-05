@@ -44,6 +44,7 @@ describe("venvFamily policy", () => {
     ).toBe("cuda");
     expect(resolveVenvFamily("CUDAExecutionProvider", emptyFamilyFlags())).toBe("cuda");
     expect(resolveVenvFamily("DmlExecutionProvider", emptyFamilyFlags())).toBe("default");
+    expect(resolveVenvFamily("WebGpuExecutionProvider", emptyFamilyFlags())).toBe("default");
   });
 
   it("plans required families for batch queues", () => {
@@ -62,5 +63,7 @@ describe("venvFamily policy", () => {
       ]),
     ).toEqual(["default", "cuda"]);
     expect(resolveRequiredFamilies(["CUDAExecutionProvider"])).toEqual(["cuda"]);
+    expect(resolveRequiredFamilies(["WebGpuExecutionProvider"])).toEqual([]);
+    expect(resolveRequiredFamilies([])).toEqual([]);
   });
 });

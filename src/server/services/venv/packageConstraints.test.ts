@@ -25,8 +25,8 @@ describe("packageConstraints", () => {
   });
 
   it("allows canonical default ORT and rejects openvino / gpu wheels", () => {
-    const allowed = [...allowedOrtPackageNames("default")][0];
-    expect(allowed).toBe(getFamilySpec("default").ortDistribution);
+    const allowed = allowedOrtPackageNames("default");
+    expect(allowed.has(getFamilySpec("default").ortDistribution)).toBe(true);
     expect(findForbiddenOrtInstallArgs("default", ["openvino", "optimum-intel[openvino]"])).toEqual(
       [],
     );
@@ -34,9 +34,15 @@ describe("packageConstraints", () => {
       ONNXRUNTIME_OPENVINO_PIP_PACKAGE,
     ]);
     expect(findForbiddenOrtInstallArgs("default", ["onnxruntime-gpu"])).toEqual(["onnxruntime-gpu"]);
+    expect(findForbiddenOrtInstallArgs("default", ["onnxruntime_gpu"])).toEqual(["onnxruntime_gpu"]);
     expect(() =>
       enforcePackageConstraintsOrThrow("default", [ONNXRUNTIME_OPENVINO_PIP_PACKAGE]),
     ).toThrow(/Refusing to install ORT packages/);
+  });
+
+  it("rejects path-like pip tokens and underscore ORT names", () => {
+    expect(packageNameFromPipArg("file:///tmp/onnxruntime_gpu-1.26.0.whl")).toBeNull();
+    expect(packageNameFromPipArg("https://example.com/wheel.whl")).toBeNull();
   });
 
   it("allows pinned onnxruntime-gpu for cuda and rejects DirectML / openvino ORT", () => {

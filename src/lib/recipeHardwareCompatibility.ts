@@ -26,7 +26,7 @@ export type RecipeHardwareCompatTier = "compatible" | "unavailable" | "unknown";
  * counts as hardware-compatible so `hideIncompatibleRecipes` does not drop it.
  */
 export interface RecipeInstallHint {
-  kind: "tensorrt" | "tensorrt-rtx" | "onnxruntime-gpu";
+  kind: "tensorrt" | "tensorrt-rtx" | "onnxruntime-gpu" | "onnxruntime-directml";
   /** Provider the recipe expects once deps land. */
   provider: IHVProvider;
   /** Underlying detail string from the probe (may be empty). */
@@ -67,12 +67,12 @@ function ePInstallHint(args: {
   probe: HardwareProbeResult;
   requiredProvider: IHVProvider;
   kind: RecipeInstallHint["kind"];
-  detailKey: "tensorrt" | "tensorRtRtx" | "cuda";
+  detailKey?: "tensorrt" | "tensorRtRtx" | "cuda";
   depLabel: string;
   installCommand: string;
 }): RecipeInstallHint {
   const gpuHint = args.probe.nvidia?.gpus[0]?.name ?? args.probe.platform.cpuModel;
-  const detail = args.probe[args.detailKey]?.detail;
+  const detail = args.detailKey ? args.probe[args.detailKey]?.detail : undefined;
   return {
     kind: args.kind,
     provider: args.requiredProvider,
@@ -100,6 +100,8 @@ function catalogDeviceToProvider(device: string): IHVProvider | undefined {
       return "QNNExecutionProvider";
     case "CPU":
       return "CPUExecutionProvider";
+    case "WebGPU":
+      return "WebGpuExecutionProvider";
     default:
       return undefined;
   }
@@ -135,11 +137,26 @@ export function assessRecipeHardwareCompatibility(
 
   if (targetDevice === "DirectML") {
     if (isWindowsProbe(probe)) {
+      if (isProviderDetectedLocally("DmlExecutionProvider", probe)) {
+        return {
+          tier: "compatible",
+          targetDevice,
+          reason: "DirectML backend available on Windows.",
+          requiredProvider: "DmlExecutionProvider",
+        };
+      }
       return {
         tier: "compatible",
         targetDevice,
-        reason: "DirectML targets Windows — this host qualifies.",
+        reason: "DirectML targets Windows — install onnxruntime-directml in .venv to run this recipe.",
         requiredProvider: "DmlExecutionProvider",
+        requiresInstall: ePInstallHint({
+          probe,
+          requiredProvider: "DmlExecutionProvider",
+          kind: "onnxruntime-directml",
+          depLabel: "onnxruntime-directml (DirectML EP wheel)",
+          installCommand: "pip install onnxruntime-directml",
+        }),
       };
     }
     return {

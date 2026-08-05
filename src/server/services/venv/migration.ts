@@ -10,6 +10,7 @@ import {
   getLegacyGpuBackupRoot,
   getMigrationJournalPath,
 } from "./spec.ts";
+import { pythonPathForRoot } from "./paths.ts";
 
 export type MigrationPhase =
   | "idle"
@@ -39,11 +40,31 @@ export function withMigrationLock<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
+const KNOWN_MIGRATION_PHASES = new Set<MigrationPhase>([
+  "idle",
+  "building",
+  "cuda_built",
+  "default_built",
+  "legacy_renamed",
+  "cuda_promoted",
+  "default_promoted",
+  "complete",
+]);
+
 export function readMigrationJournal(): RuntimeMigrationState | null {
   const journalPath = getMigrationJournalPath();
   if (!fs.existsSync(journalPath)) return null;
   try {
-    return JSON.parse(fs.readFileSync(journalPath, "utf-8")) as RuntimeMigrationState;
+    const parsed = JSON.parse(fs.readFileSync(journalPath, "utf-8")) as unknown;
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      (parsed as RuntimeMigrationState).version !== 1 ||
+      !KNOWN_MIGRATION_PHASES.has((parsed as RuntimeMigrationState).phase)
+    ) {
+      return null;
+    }
+    return parsed as RuntimeMigrationState;
   } catch {
     return null;
   }
@@ -63,7 +84,7 @@ export function writeMigrationJournal(phase: MigrationPhase, error?: string): vo
 
 export function clearMigrationJournal(): void {
   const journalPath = getMigrationJournalPath();
-  if (fs.existsSync(journalPath)) fs.unlinkSync(journalPath);
+  fs.rmSync(journalPath, { force: true });
 }
 
 /**
@@ -75,10 +96,7 @@ export async function inspectDefaultVenvIntent(
   probeOrtDists: (python: string) => Promise<string[]>,
 ): Promise<"default" | "cuda-contaminated" | "missing" | "unknown"> {
   const root = getFamilyRoot("default");
-  const py =
-    process.platform === "win32"
-      ? path.join(root, "Scripts", "python.exe")
-      : path.join(root, "bin", "python");
+  const py = pythonPathForRoot(root);
   if (!fs.existsSync(py)) return "missing";
   try {
     const dists = await probeOrtDists(py);

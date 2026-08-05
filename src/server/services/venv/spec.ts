@@ -84,7 +84,7 @@ export function getFamilySpec(family: VenvFamily): VenvFamilySpec {
       ortVersionSpec: PINNED_ORT_GPU_VERSION,
       ortInstallArgs: pinnedOrtGpuInstallArgs(),
       oliveInstallArgs: [...OLIVE_INSTALL_ARGS],
-      packageConstraints: pinnedOrtGpuInstallArgs(),
+      packageConstraints: [`onnxruntime-gpu==${PINNED_ORT_GPU_VERSION}`],
       specVersion: VENV_SPEC_VERSION,
     };
   }
@@ -96,7 +96,7 @@ export function getFamilySpec(family: VenvFamily): VenvFamilySpec {
     ortDistribution: ort,
     ortInstallArgs: defaultOrtInstallArgs(),
     oliveInstallArgs: [...OLIVE_INSTALL_ARGS],
-    packageConstraints: defaultOrtInstallArgs(),
+    packageConstraints: [defaultOrtDistribution()],
     specVersion: VENV_SPEC_VERSION,
   };
 }

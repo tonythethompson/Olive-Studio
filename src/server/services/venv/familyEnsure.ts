@@ -8,7 +8,7 @@ import { spawn } from "child_process";
 import type { VenvFamily } from "../../../lib/venvFamily.ts";
 import { execFileAsync } from "../shared/exec.ts";
 import { findSystemPython } from "./systemPython.ts";
-import { getVenvPython } from "./paths.ts";
+import { getVenvPython, pythonPathForRoot } from "./paths.ts";
 import { envForFamily } from "./pathIsolation.ts";
 import {
   clearBuildingRoot,
@@ -85,10 +85,7 @@ async function createVenvAt(root: string, systemPython: string, onLine: SetupLis
 }
 
 function buildingPython(family: VenvFamily): string {
-  const root = getFamilyBuildingRoot(family);
-  return process.platform === "win32"
-    ? path.join(root, "Scripts", "python.exe")
-    : path.join(root, "bin", "python");
+  return pythonPathForRoot(getFamilyBuildingRoot(family));
 }
 
 /**
@@ -119,12 +116,15 @@ async function buildFamilyTree(
     ).catch(() => undefined);
     await runPythonModule(
       py,
-      ["-m", "pip", "install", ...spec.packageConstraints],
+      ["-m", "pip", "install", ...spec.ortInstallArgs],
       onLine,
       buildEnv,
       "pip",
     );
-    await execFileAsync(py, ["-c", "import olive, onnxruntime"], { timeout: 30_000 });
+    await execFileAsync(py, ["-c", "import olive, onnxruntime"], {
+      env: buildEnv,
+      timeout: 30_000,
+    });
     writeVenvManifest(getFamilyBuildingRoot(family), {
       family,
       specVersion: spec.specVersion,
@@ -277,7 +277,15 @@ async function migrateGpuContaminatedVenv(
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (cudaPromoted) {
-        rollbackPromotedFamily("cuda", cudaBackupPath);
+        onLine("[migrate] Migration failed — rolling back CUDA promotion...");
+        const rolled = rollbackPromotedFamily("cuda", cudaBackupPath);
+        if (!rolled.ok) {
+          writeMigrationJournal("cuda_promoted", `${msg}; CUDA rollback also failed: ${rolled.error}`);
+          return {
+            ok: false,
+            error: `${msg}; CUDA rollback also failed: ${rolled.error}`,
+          };
+        }
       }
       clearBuildingRoot("default");
       clearBuildingRoot("cuda");

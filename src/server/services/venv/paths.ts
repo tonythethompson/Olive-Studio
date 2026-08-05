@@ -13,11 +13,16 @@ export function getVenvScriptsDir(family: VenvFamily = "default"): string {
   return process.platform === "win32" ? path.join(root, "Scripts") : path.join(root, "bin");
 }
 
+/** Absolute path to python inside a venv root directory. */
+export function pythonPathForRoot(root: string): string {
+  return process.platform === "win32"
+    ? path.join(root, "Scripts", "python.exe")
+    : path.join(root, "bin", "python");
+}
+
 /** Absolute path to python inside the family venv. */
 export function getVenvPython(family: VenvFamily = "default"): string {
-  return process.platform === "win32"
-    ? path.join(getVenvScriptsDir(family), "python.exe")
-    : path.join(getVenvScriptsDir(family), "python");
+  return pythonPathForRoot(getFamilyRoot(family));
 }
 
 /**

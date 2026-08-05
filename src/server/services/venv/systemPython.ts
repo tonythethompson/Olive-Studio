@@ -2,12 +2,21 @@
  * System Python discovery for creating project venvs.
  * Extracted from index.ts so familyEnsure can import without a cycle.
  */
+import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { execFileAsync, readStudioConfig } from "./config.ts";
 import { PYTHON_MIN, PYTHON_MAX_RECOMMENDED } from "./paths.ts";
 import { isPathPythonCommand, resolveAllowedPythonFile, type PathPythonCommand } from "./pythonGuard.ts";
 
-const PROBE_SCRIPT = path.join(process.cwd(), "scripts", "probe-python-version.mjs");
+function resolveProbeScript(): string {
+  const cwdPath = path.join(process.cwd(), "scripts", "probe-python-version.mjs");
+  if (fs.existsSync(cwdPath)) return cwdPath;
+  const modulePath = fileURLToPath(new URL("../../../../scripts/probe-python-version.mjs", import.meta.url));
+  return modulePath;
+}
+
+const PROBE_SCRIPT = resolveProbeScript();
 
 function parsePythonVersionText(text: string): { major: number; minor: number; text: string } | null {
   const m = text.match(/Python\s+(\d+)\.(\d+)/i);
