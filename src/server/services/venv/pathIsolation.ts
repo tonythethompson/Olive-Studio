@@ -4,8 +4,7 @@
  */
 import fs from "fs";
 import path from "path";
-import type { VenvFamily } from "../../../lib/venvFamily.ts";
-import { VENV_FAMILIES } from "../../../lib/venvFamily.ts";
+import { VENV_FAMILIES, type VenvFamily } from "../../../lib/venvFamily.ts";
 import { envWithPrependedPaths } from "../../../lib/tensorrtDeps.ts";
 import { getVenvScriptsDir } from "./paths.ts";
 import { getFamilyBuildingRoot, getFamilyRoot } from "./spec.ts";
