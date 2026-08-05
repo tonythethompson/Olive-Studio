@@ -25,6 +25,7 @@ import {
   finalizeJob,
 } from "../services/olive/state.ts";
 import { pushLog, startGpuMetricsTimer, stopGpuMetricsTimer } from "../services/olive/gpu.ts";
+import { probeQnn } from "../services/olive/qnn.ts";
 import { getVenvPython } from "../services/venv/paths.ts";
 import {
   ensureProviderCapability,
@@ -34,6 +35,7 @@ import {
 } from "../services/venv/index.ts";
 import type { OliveRecipe, OliveJob } from "../types.ts";
 import { oliveRunRateLimit } from "../middleware/rateLimit.ts";
+import type { HardwareProbeResult } from "../../lib/hardwareProbe.ts";
 
 /** Grace period after SIGTERM before escalating cancel to SIGKILL. */
 export const CANCEL_SIGKILL_GRACE_MS = 10_000;
@@ -163,6 +165,42 @@ export function mountOliveRoutes(router: Router): void {
       }
 
       const venvPython = capResult.python ?? getVenvPython(capResult.family);
+
+      if (provider === "QNNExecutionProvider" && venvPython) {
+        const hostMode = resolveQnnHostMode({ platform: process.platform, arch: process.arch });
+        if (hostMode === "local-inference") {
+          const qnn = await probeQnn(venvPython);
+          const inputModel = recipe.input_model as { io_config?: unknown } | undefined;
+          const probe: HardwareProbeResult = {
+            probedAt: new Date().toISOString(),
+            platform: {
+              os: process.platform,
+              arch: process.arch,
+              cpuModel: "",
+              cpuCores: 0,
+            },
+            detectedProviders: ["QNNExecutionProvider"],
+            recommendedProvider: "QNNExecutionProvider",
+            notes: [],
+            qnn,
+          };
+          const hardFailures = assessQnnRecipeReadiness({
+            state: { ihvProvider: provider, passes: DEFAULT_PASSES },
+            ioConfig: inputModel?.io_config,
+            hostMode,
+            probe,
+          }).filter((issue) => issue.severity === "error");
+          if (hardFailures.length > 0) {
+            const error = hardFailures.map((issue) => issue.message).join("; ");
+            job.status = "failed";
+            pushLog(job, `[error] ${error}`);
+            cleanupJobArtifacts(job);
+            finalizeJob(job);
+            return res.status(400).json({ ok: false, jobId, error });
+          }
+        }
+      }
+
       const env = await buildOliveRunEnvironment(venvPython, provider, process.env, capResult.family);
       if (bailIfCancelled()) return;
 

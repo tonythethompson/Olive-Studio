@@ -325,10 +325,8 @@ export function IHVIntegrationPanel({
   const [installOrtGpuLog, setInstallOrtGpuLog] = useState<string[]>([]);
 
   const hasAutoAppliedRef = useRef(false);
-  const controlledStateRef = useRef(propState);
-  useEffect(() => {
-    controlledStateRef.current = propState;
-  }, [propState]);
+  const latestStateRef = useRef(state);
+  latestStateRef.current = state;
 
   const runHardwareProbe = useCallback(
     async (refresh = false) => {
@@ -341,9 +339,8 @@ export function IHVIntegrationPanel({
         // Auto-apply recommended provider on first probe completion
         if (!hasAutoAppliedRef.current && result.recommendedProvider) {
           hasAutoAppliedRef.current = true;
-          const current = controlledStateRef.current ?? storeState.state;
           setState(
-            prepareProviderChange(current, result.recommendedProvider, result) ?? {
+            prepareProviderChange(latestStateRef.current, result.recommendedProvider, result) ?? {
               ihvProvider: result.recommendedProvider,
             },
           );
@@ -355,7 +352,7 @@ export function IHVIntegrationPanel({
         setProbeLoading(false);
       }
     },
-    [setState, storeState.state],
+    [setState],
   );
 
   // Shared mutex across hardware installs (families differ, but pip UX is serialized).
