@@ -151,7 +151,7 @@ function shouldServeProductionStatic(): boolean {
   if (process.env.OLIVE_DIST_DIR) return true;
   // Back-compat fallback: `pnpm start` / `node dist/server.mjs` without any env set.
   const entry = (process.argv[1] ?? "").replace(/\\/g, "/");
-  return entry.endsWith("server.mjs") || entry.endsWith("server.cjs");
+  return entry.endsWith("dist/server.mjs") || entry.endsWith("dist/server.cjs");
 }
 
 /**
