@@ -4,6 +4,7 @@ import type { Router } from "express";
 import { getCodexAppServer } from "../../../lib/codex/CodexAppServerClient.ts";
 import { codexAsk } from "../../../lib/codex/codexAgent.ts";
 import { authActionRateLimit } from "../../middleware/rateLimit.ts";
+import { parseBody } from "../../middleware/bodyGuard.ts";
 
 export function mountCodexRoutes(router: Router): void {
   router.get("/codex/account", async (_req, res) => {
@@ -35,12 +36,13 @@ export function mountCodexRoutes(router: Router): void {
   });
 
   router.post("/codex/login/cancel", authActionRateLimit, async (req, res) => {
+    const body = parseBody<{ loginId?: string }>(req.body, {
+      loginId: { type: "string", required: false },
+    });
+    if (!body.parsed) return res.status(400).json({ error: body.error });
     try {
       const server = getCodexAppServer();
-      if (server.isReady) {
-        const { loginId } = req.body ?? {};
-        if (loginId) await server.cancelLogin(loginId);
-      }
+      if (server.isReady && body.parsed.loginId) await server.cancelLogin(body.parsed.loginId);
       return res.json({ ok: true });
     } catch {
       return res.json({ ok: true });
@@ -69,10 +71,16 @@ export function mountCodexRoutes(router: Router): void {
   });
 
   router.post("/codex/ask", async (req, res) => {
-    const { prompt, model } = req.body ?? {};
-    if (!prompt) return res.status(400).json({ error: "Missing prompt" });
+    const body = parseBody<{ prompt: string; model?: string }>(req.body, {
+      prompt: { type: "string", message: "Missing prompt" },
+      model: { type: "string", required: false },
+    });
+    if (!body.parsed) return res.status(400).json({ error: body.error });
     try {
-      const reply = await codexAsk(prompt, { workingDirectory: process.cwd(), model: model || undefined });
+      const reply = await codexAsk(body.parsed.prompt, {
+        workingDirectory: process.cwd(),
+        model: body.parsed.model || undefined,
+      });
       return res.json({ reply });
     } catch (err: unknown) {
       return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
