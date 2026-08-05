@@ -10,7 +10,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import type { VenvFamily } from "../../../lib/venvFamily.ts";
-import { ONNXRUNTIME_OPENVINO_PIP_PACKAGE } from "../../../lib/openvinoDeps.ts";
 import { getFamilySpec } from "./spec.ts";
 import { listInstalledOrtDistributions } from "./status.ts";
 
@@ -79,7 +78,7 @@ export function allowedOrtPackageNames(family: VenvFamily): Set<string> {
 
 /**
  * Scan pip install args for ORT packages that violate the family's constraints.
- * Also always treats onnxruntime-openvino as forbidden (never in any family).
+ * Forbidden when an ORT distribution is not in the family's allowed set.
  */
 export function findForbiddenOrtInstallArgs(family: VenvFamily, args: string[]): string[] {
   const allowed = allowedOrtPackageNames(family);
@@ -94,10 +93,6 @@ export function findForbiddenOrtInstallArgs(family: VenvFamily, args: string[]):
     const name = packageNameFromPipArg(arg);
     if (!name) continue;
     const normalized = normalizeDistName(name);
-    if (normalized === normalizeDistName(ONNXRUNTIME_OPENVINO_PIP_PACKAGE)) {
-      forbidden.push(arg);
-      continue;
-    }
     if (isOrtDistributionName(normalized) && !allowed.has(normalized)) {
       forbidden.push(arg);
     }
@@ -144,9 +139,6 @@ export async function assertFamilyOrtConstraints(
   const spec = getFamilySpec(family);
   const dists = (await listInstalledOrtDistributions(python)).map(normalizeDistName);
   const canonical = normalizeDistName(spec.ortDistribution);
-  if (dists.includes(normalizeDistName(ONNXRUNTIME_OPENVINO_PIP_PACKAGE))) {
-    return `${ONNXRUNTIME_OPENVINO_PIP_PACKAGE} must not be installed in the ${family} runtime`;
-  }
   if (!dists.includes(canonical)) {
     return `${family} runtime missing canonical ORT (${spec.ortDistribution}); packageConstraints violated`;
   }

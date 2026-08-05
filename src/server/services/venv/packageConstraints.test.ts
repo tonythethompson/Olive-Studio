@@ -45,6 +45,19 @@ describe("packageConstraints", () => {
     expect(packageNameFromPipArg("https://example.com/wheel.whl")).toBeNull();
   });
 
+  it("allows openvino family onnxruntime-openvino and rejects DirectML / gpu wheels", () => {
+    expect(findForbiddenOrtInstallArgs("openvino", ["onnxruntime-openvino"])).toEqual([]);
+    expect(findForbiddenOrtInstallArgs("openvino", ["onnxruntime-directml"])).toEqual([
+      "onnxruntime-directml",
+    ]);
+    expect(findForbiddenOrtInstallArgs("openvino", ["onnxruntime-gpu"])).toEqual([
+      "onnxruntime-gpu",
+    ]);
+    expect(findForbiddenOrtInstallArgs("openvino", ["openvino", "optimum-intel[openvino]"])).toEqual(
+      [],
+    );
+  });
+
   it("allows pinned onnxruntime-gpu for cuda and rejects DirectML / openvino ORT", () => {
     expect(findForbiddenOrtInstallArgs("cuda", pinnedOrtGpuInstallArgs())).toEqual([]);
     expect(findForbiddenOrtInstallArgs("cuda", ["tensorrt==10.13.3.9"])).toEqual([]);

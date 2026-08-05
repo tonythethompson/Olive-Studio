@@ -111,7 +111,7 @@ async function buildFamilyTree(
     onLine(`[setup] Installing canonical ORT (${spec.ortDistribution})...`);
     await runPythonModule(
       py,
-      ["-m", "pip", "uninstall", "-y", "onnxruntime", "onnxruntime-gpu", "onnxruntime-directml"],
+      ["-m", "pip", "uninstall", "-y", "onnxruntime", "onnxruntime-gpu", "onnxruntime-directml", "onnxruntime-openvino"],
       onLine,
       buildEnv,
       "pip",

@@ -67,7 +67,7 @@ export function invalidateRuntimeStatusCache(): void {
 
 const ORT_DIST_PROBE = `
 import importlib.metadata as m
-names = ["onnxruntime", "onnxruntime-directml", "onnxruntime-gpu"]
+names = ["onnxruntime", "onnxruntime-directml", "onnxruntime-gpu", "onnxruntime-openvino"]
 found = []
 for n in names:
     try:
@@ -95,7 +95,7 @@ try:
     out["olive"] = getattr(olive, "__version__", "unknown")
 except Exception:
     pass
-for n in ["onnxruntime", "onnxruntime-directml", "onnxruntime-gpu"]:
+for n in ["onnxruntime", "onnxruntime-directml", "onnxruntime-gpu", "onnxruntime-openvino"]:
     try:
         m.distribution(n)
         out["ort_dists"].append(n)
@@ -203,12 +203,22 @@ function buildCapabilities(
       caps.directml = broken("DmlExecutionProvider absent despite onnxruntime-directml");
     }
 
-    if (probe?.openvino && probe?.optimum_intel) {
+    caps.openvino = unsupported(
+      "OpenVINO uses the isolated OpenVINO runtime (.venvs/openvino), not the default runtime",
+    );
+  }
+
+  if (family === "openvino") {
+    if (!probe?.ort_dists?.includes("onnxruntime-openvino")) {
+      caps.openvino = missing("onnxruntime-openvino not installed");
+    } else if (!providers.has("OpenVINOExecutionProvider")) {
+      caps.openvino = broken("OpenVINOExecutionProvider absent despite onnxruntime-openvino");
+    } else if (probe?.openvino && probe?.optimum_intel) {
       caps.openvino = usable();
-    } else if (probe?.openvino && !probe?.optimum_intel) {
-      caps.openvino = missing("openvino installed but optimum-intel bridge missing");
-    } else {
+    } else if (!probe?.openvino) {
       caps.openvino = missing("openvino Python package not installed");
+    } else {
+      caps.openvino = missing("openvino installed but optimum-intel bridge missing");
     }
   }
 
@@ -267,13 +277,19 @@ export async function probeFamilyStatus(family: VenvFamily): Promise<RuntimeFami
                 process.platform === "win32"
                   ? missing("venv missing")
                   : unsupported("DirectML requires Windows"),
-              openvino: missing("venv missing"),
+              openvino: unsupported(
+                "OpenVINO uses the isolated OpenVINO runtime (.venvs/openvino)",
+              ),
             }
-          : {
-              cuda: missing("venv missing"),
-              tensorrt: missing("venv missing"),
-              tensorrtRtx: missing("venv missing"),
-            }),
+          : family === "openvino"
+            ? {
+                openvino: missing("venv missing"),
+              }
+            : {
+                cuda: missing("venv missing"),
+                tensorrt: missing("venv missing"),
+                tensorrtRtx: missing("venv missing"),
+              }),
       },
     };
   }
@@ -331,26 +347,27 @@ export async function getDualRuntimeStatus(opts?: {
     return cachedStatus.value;
   }
 
-  const [defaultStatus, cudaStatus] = await Promise.all([
-    probeFamilyStatus("default"),
-    probeFamilyStatus("cuda"),
-  ]);
-  const families = {
-    default: defaultStatus,
-    cuda: cudaStatus,
-  };
+  const familyStatuses = await Promise.all(VENV_FAMILIES.map((family) => probeFamilyStatus(family)));
+  const families = Object.fromEntries(
+    VENV_FAMILIES.map((family, i) => [family, familyStatuses[i]!]),
+  ) as Record<VenvFamily, RuntimeFamilyStatus>;
 
   const defaultOk = families.default.integrityHealthy;
   const cudaOk = families.cuda.integrityHealthy;
+  const openvinoOk = families.openvino.integrityHealthy;
   const hint = !opts?.systemPython
     ? "No system Python found. Need 3.10–3.13 (3.12 recommended). Set python.exe below or OLIVE_STUDIO_PYTHON."
     : !families.default.exists
       ? "Default runtime (.venv) missing — Install Olive venv now, or first Execute Live will create it."
       : !defaultOk
         ? "Default runtime needs repair (Open Olive runtime / Install Olive venv)."
-        : cudaOk
-          ? "Default and CUDA runtimes ready."
-          : "Default runtime ready. CUDA runtime will be created on first CUDA/TensorRT job.";
+        : cudaOk && openvinoOk
+          ? "Default, CUDA, and OpenVINO runtimes ready."
+          : cudaOk
+            ? "Default and CUDA runtimes ready. OpenVINO runtime (.venvs/openvino) is created on first OpenVINO job."
+            : openvinoOk
+              ? "Default and OpenVINO runtimes ready. CUDA runtime will be created on first CUDA/TensorRT job."
+              : "Default runtime ready. CUDA and OpenVINO runtimes are created on first use.";
 
   const value: DualRuntimeStatus = {
     families,

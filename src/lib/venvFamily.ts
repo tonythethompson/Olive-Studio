@@ -5,9 +5,9 @@
  */
 import type { IHVProvider } from "@/types";
 
-export type VenvFamily = "default" | "cuda";
+export type VenvFamily = "default" | "cuda" | "openvino";
 
-export const VENV_FAMILIES: readonly VenvFamily[] = ["default", "cuda"] as const;
+export const VENV_FAMILIES: readonly VenvFamily[] = ["default", "cuda", "openvino"] as const;
 
 /** Known Olive Studio execution-provider IDs (exhaustive). */
 export const KNOWN_IHV_PROVIDERS: readonly IHVProvider[] = [
@@ -80,6 +80,7 @@ export function emptyFamilyFlags(): RuntimeFamilyFlags {
   return {
     default: { cpuUsable: false, prepared: false },
     cuda: { cpuUsable: false, prepared: false },
+    openvino: { cpuUsable: false, prepared: false },
   };
 }
 
@@ -90,8 +91,9 @@ export function mandatoryFamilyForProvider(provider: IHVProvider): VenvFamily | 
     case "TensorrtExecutionProvider":
     case "NvTensorRTRTXExecutionProvider":
       return "cuda";
-    case "DmlExecutionProvider":
     case "OpenVINOExecutionProvider":
+      return "openvino";
+    case "DmlExecutionProvider":
     case "QNNExecutionProvider":
     case "ROCMExecutionProvider":
       return "default";
@@ -119,6 +121,7 @@ export function resolveVenvFamily(
   if (provider === "WebGpuExecutionProvider") return "default";
 
   // CPU: prefer default if CPU-usable; else cuda if CPU-usable; else default (will create).
+  // Do not place CPU jobs on the openvino family.
   if (flags.default.cpuUsable) return "default";
   if (flags.cuda.cpuUsable) return "cuda";
   return "default";
@@ -168,13 +171,36 @@ export function resolveRequiredFamilies(
   const ordered: VenvFamily[] = [];
   if (families.has("default")) ordered.push("default");
   if (families.has("cuda")) ordered.push("cuda");
+  if (families.has("openvino")) ordered.push("openvino");
   return ordered;
 }
 
 export function humanFamilyLabel(family: VenvFamily): string {
-  return family === "cuda" ? "CUDA runtime" : "default runtime";
+  switch (family) {
+    case "cuda":
+      return "CUDA runtime";
+    case "openvino":
+      return "OpenVINO runtime";
+    case "default":
+      return "default runtime";
+    default: {
+      const _exhaustive: never = family;
+      return _exhaustive;
+    }
+  }
 }
 
 export function humanFamilyRootHint(family: VenvFamily): string {
-  return family === "cuda" ? ".venvs/cuda" : ".venv";
+  switch (family) {
+    case "cuda":
+      return ".venvs/cuda";
+    case "openvino":
+      return ".venvs/openvino";
+    case "default":
+      return ".venv";
+    default: {
+      const _exhaustive: never = family;
+      return _exhaustive;
+    }
+  }
 }

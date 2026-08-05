@@ -1,8 +1,8 @@
 /**
  * OpenVINO probe, install, and dependency helpers.
  *
- * Installs openvino + optimum-intel[openvino] into the default family without
- * swapping ORT wheels (no onnxruntime-openvino).
+ * Targets the isolated openvino venv family (.venvs/openvino): olive-ai +
+ * onnxruntime-openvino (OpenVINOExecutionProvider) + openvino + optimum-intel.
  */
 import fs from "fs";
 
@@ -11,7 +11,7 @@ import { pipInstallForFamily } from "../shared/pipInstall.ts";
 import { ensureVenvFamily } from "../venv/familyEnsure.ts";
 import { envForFamily } from "../venv/pathIsolation.ts";
 import { getVenvPython } from "../venv/paths.ts";
-import { listInstalledOrtDistributions, invalidateRuntimeStatusCache } from "../venv/status.ts";
+import { invalidateRuntimeStatusCache } from "../venv/status.ts";
 import { assertFamilyOrtConstraints } from "../venv/packageConstraints.ts";
 import { openvinoStackInstallArgs, openvinoStackLabel } from "../../../lib/openvinoDeps.ts";
 import type { OpenVinoProbeResult } from "../../../lib/hardwareProbe.ts";
@@ -46,6 +46,14 @@ try:
     emit("optimum_intel_version", getattr(optimum.intel, "__version__", "unknown"))
 except Exception as exc:
     emit("optimum_intel_error", str(exc).replace(chr(10), " "))
+
+try:
+    import onnxruntime as ort
+    providers = list(ort.get_available_providers())
+    emit("ort_providers", ",".join(providers))
+    emit("openvino_ep", "1" if "OpenVINOExecutionProvider" in providers else "0")
+except Exception as exc:
+    emit("ort_error", str(exc).replace(chr(10), " "))
 `.trim();
 }
 
@@ -53,6 +61,7 @@ interface ProbeAccumulator {
   version?: string;
   devices?: string[];
   optimumIntel?: OpenVinoProbeResult["optimumIntel"];
+  openvinoExecutionProvider?: boolean;
   detail?: string;
 }
 
@@ -83,6 +92,12 @@ function parseProbeOutput(out: string): ProbeAccumulator {
       acc.optimumIntel = { available: false, detail: value || "optimum.intel import failed" };
       if (!acc.detail) acc.detail = value || "optimum.intel import failed";
     },
+    openvino_ep: (value) => {
+      acc.openvinoExecutionProvider = value === "1";
+    },
+    ort_error: (value) => {
+      if (!acc.detail) acc.detail = value || "onnxruntime probe failed";
+    },
     error: (value) => {
       acc.detail = value || "OpenVINO probe failed";
     },
@@ -102,26 +117,45 @@ function parseProbeOutput(out: string): ProbeAccumulator {
   return acc;
 }
 
+function stackReady(acc: ProbeAccumulator): boolean {
+  return Boolean(
+    acc.openvinoExecutionProvider &&
+      acc.version &&
+      acc.devices !== undefined &&
+      acc.optimumIntel?.available,
+  );
+}
+
 /**
- * Probes a Python environment for the OpenVINO runtime and Optimum-Intel.
- * Availability is based on the Python `openvino` package (not ORT EP).
+ * Probes a Python environment for the OpenVINO runtime stack and ORT EP.
  */
-export async function probeOpenVino(python: string): Promise<OpenVinoProbeResult> {
+export async function probeOpenVino(
+  python: string,
+  family: "openvino" | "default" = "openvino",
+): Promise<OpenVinoProbeResult> {
   try {
     const { stdout, stderr } = await execFileAsync(python, ["-c", buildProbeScript()], {
-      env: envForFamily("default"),
+      env: envForFamily(family),
       timeout: 45_000,
     });
     const acc = parseProbeOutput(`${stdout}\n${stderr}`);
-    const openvinoRuntimeOk = Boolean(acc.version) && acc.devices !== undefined;
-    const available = openvinoRuntimeOk;
+    const available = stackReady(acc);
     return {
       available,
       version: acc.version,
       devices: acc.devices,
       optimumIntel: acc.optimumIntel,
-      openvinoExecutionProvider: undefined,
-      detail: available ? undefined : (acc.detail ?? "OpenVINO runtime not available"),
+      openvinoExecutionProvider: acc.openvinoExecutionProvider,
+      detail: available
+        ? undefined
+        : (acc.detail ??
+          (!acc.openvinoExecutionProvider
+            ? "OpenVINOExecutionProvider not registered in ORT"
+            : !acc.version
+              ? "openvino Python package not loadable"
+              : !acc.optimumIntel?.available
+                ? "optimum-intel bridge missing"
+                : "OpenVINO stack not ready")),
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -132,47 +166,38 @@ export async function probeOpenVino(python: string): Promise<OpenVinoProbeResult
   }
 }
 
-async function assertDefaultOrtPreserved(python: string): Promise<string | null> {
-  // Keep an explicit onnxruntime-openvino check for clearer install errors, then
-  // fall through to shared family packageConstraints assertion.
-  const dists = await listInstalledOrtDistributions(python);
-  if (dists.includes("onnxruntime-openvino")) {
-    return "onnxruntime-openvino must not be installed in the default runtime (conflicts with DirectML/CPU ORT)";
-  }
-  return assertFamilyOrtConstraints("default", python);
-}
-
 /**
- * Ensures the default family has a loadable OpenVINO Python stack without
- * replacing the family's canonical ORT wheel.
+ * Ensures the openvino family has onnxruntime-openvino + openvino + optimum-intel.
  */
 export async function ensureOpenVino(
   onLine: (line: string) => void,
 ): Promise<{ ok: boolean; error?: string; probe?: OpenVinoProbeResult }> {
-  const venvResult = await ensureVenvFamily("default", onLine);
+  const venvResult = await ensureVenvFamily("openvino", onLine);
   if (!venvResult.ok) {
     return {
       ok: false,
-      error: venvResult.error ?? "Failed to create or prepare the default runtime",
+      error: venvResult.error ?? "Failed to create or prepare the OpenVINO runtime",
     };
   }
 
-  const venvPython = getVenvPython("default");
+  const venvPython = getVenvPython("openvino");
   if (!fs.existsSync(venvPython)) {
     return {
       ok: false,
-      error: "Default runtime is incomplete (missing python). Use Setup runtime, then retry.",
+      error: "OpenVINO runtime is incomplete (missing python). Use Setup runtime, then retry.",
     };
   }
 
-  const probe = await probeOpenVino(venvPython);
-  if (probe.available && probe.optimumIntel?.available) {
+  const probe = await probeOpenVino(venvPython, "openvino");
+  if (probe.available) {
     const deviceMsg = probe.devices?.length ? ` [${probe.devices.join(", ")}]` : "";
     onLine(`[deps] OpenVINO stack verified${probe.version ? ` (${probe.version})` : ""}${deviceMsg} ✓`);
     return { ok: true, probe };
   }
 
-  if (!probe.version) {
+  if (!probe.openvinoExecutionProvider) {
+    onLine("[deps] OpenVINOExecutionProvider missing — verifying openvino family ORT...");
+  } else if (!probe.version) {
     onLine(`[deps] Installing ${openvinoStackLabel()} (may take a few minutes)...`);
   } else if (!probe.optimumIntel?.available) {
     onLine(`[deps] OpenVINO present but Optimum-Intel bridge missing — installing ${openvinoStackLabel()}...`);
@@ -180,39 +205,29 @@ export async function ensureOpenVino(
     onLine(`[deps] OpenVINO stack present but not loadable — reinstalling ${openvinoStackLabel()}...`);
   }
 
-  onLine("[deps] Installing OpenVINO Python packages without swapping ORT wheels.");
-
   try {
-    await pipInstallForFamily("default", venvPython, openvinoStackInstallArgs(), onLine);
+    await pipInstallForFamily("openvino", venvPython, openvinoStackInstallArgs(), onLine);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, error: msg };
   }
   onLine(`[deps] ${openvinoStackLabel()} installed ✓`);
 
-  const ortError = await assertDefaultOrtPreserved(venvPython);
+  const ortError = await assertFamilyOrtConstraints("openvino", venvPython);
   if (ortError) {
     return { ok: false, error: ortError };
   }
 
   invalidateRuntimeStatusCache();
-  const retry = await probeOpenVino(venvPython);
-  if (retry.available && retry.optimumIntel?.available) {
+  const retry = await probeOpenVino(venvPython, "openvino");
+  if (retry.available) {
     const deviceMsg = retry.devices?.length ? ` [${retry.devices.join(", ")}]` : "";
     onLine(`[deps] OpenVINO stack verified after install${retry.version ? ` (${retry.version})` : ""}${deviceMsg} ✓`);
     return { ok: true, probe: retry };
   }
 
-  if (!retry.available) {
-    return {
-      ok: false,
-      error: retry.detail ?? "OpenVINO Python package not loadable after install",
-    };
-  }
   return {
     ok: false,
-    error:
-      retry.optimumIntel?.detail ??
-      "Optimum-Intel bridge not loadable after OpenVINO install",
+    error: retry.detail ?? "OpenVINO stack not loadable after install",
   };
 }
