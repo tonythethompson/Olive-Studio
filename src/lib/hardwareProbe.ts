@@ -189,6 +189,20 @@ export function computeDirectMlHardwareReady(input: { os: string }): boolean {
 }
 
 /**
+ * True when Hardware should offer DirectML one-click install: DX12-class host
+ * and DmlExecutionProvider not yet registered in the probe.
+ */
+export function computeDirectMlNeedsInstall(
+  probe: HardwareProbeResult | null | undefined,
+): boolean {
+  if (!probe?.platform?.os) return false;
+  return (
+    computeDirectMlHardwareReady({ os: probe.platform.os }) &&
+    !isProviderDetectedLocally("DmlExecutionProvider", probe)
+  );
+}
+
+/**
  * Combines ONNX Runtime providers and hardware probe results into the locally detected provider list.
  *
  * @param input - Provider and hardware detection results, including runtime loadability for TensorRT variants

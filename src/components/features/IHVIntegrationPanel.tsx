@@ -30,6 +30,7 @@ import {
   fetchHardwareProbe,
   getSelectableProviders,
   isProviderDetectedLocally,
+  computeDirectMlNeedsInstall,
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
 import {
@@ -377,11 +378,7 @@ export function IHVIntegrationPanel({
     Boolean(hardwareProbe) &&
     isProviderDetectedLocally("OpenVINOExecutionProvider", hardwareProbe) &&
     hardwareProbe?.openvino?.loadable !== true;
-  const isWindowsHost = Boolean(hardwareProbe?.platform.os.toLowerCase().includes("win"));
-  const directMlNeedsInstall =
-    isWindowsHost &&
-    Boolean(hardwareProbe) &&
-    !isProviderDetectedLocally("DmlExecutionProvider", hardwareProbe);
+  const directMlNeedsInstall = computeDirectMlNeedsInstall(hardwareProbe);
 
   // CUDA install / toolkit-link gating (from PR #106).
   const nvidiaGpus = hardwareProbe?.nvidia?.gpus ?? [];

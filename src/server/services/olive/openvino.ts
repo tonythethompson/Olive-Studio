@@ -197,10 +197,16 @@ export async function ensureOpenVino(
   }
 
   const stackArgs = openvinoStackInstallArgs();
-  // Missing EP means the family ORT wheel is absent or broken — install the
-  // pinned onnxruntime-openvino args together with the Python stack.
+  // Missing EP means the family ORT wheel is absent or broken — force-reinstall
+  // the pinned onnxruntime-openvino args together with the Python stack (mirrors
+  // DirectML missing-EP recovery).
   const installArgs = !probe.openvinoExecutionProvider
-    ? [...getFamilySpec("openvino").ortInstallArgs, ...stackArgs]
+    ? [
+        "--upgrade",
+        "--force-reinstall",
+        ...getFamilySpec("openvino").ortInstallArgs,
+        ...stackArgs,
+      ]
     : stackArgs;
 
   if (!probe.openvinoExecutionProvider) {

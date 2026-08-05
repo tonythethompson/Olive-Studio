@@ -46,14 +46,14 @@ export function envForVenvRoot(
   const sep = process.platform === "win32" ? ";" : ":";
   const strip = new Set(allFamilyScriptsDirs().map(normalizeDir));
 
-  let inherited = "";
+  let inherited: string | undefined;
   for (const [key, value] of Object.entries(base)) {
     if (key.toLowerCase() === "path" && typeof value === "string") {
       inherited = value;
       break;
     }
   }
-  if (!inherited) {
+  if (inherited === undefined) {
     inherited = process.env[pathKey] ?? process.env.PATH ?? process.env.Path ?? "";
   }
 

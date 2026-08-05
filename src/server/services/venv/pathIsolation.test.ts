@@ -110,4 +110,31 @@ describe("pathIsolation", () => {
       fs.rmSync(tmp, { recursive: true, force: true });
     }
   });
+
+  it("preserves an explicitly empty PATH without falling back to process.env", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "olive-pathiso-empty-"));
+    const prevCwd = process.cwd();
+    const pathKey = process.platform === "win32" ? "Path" : "PATH";
+    const sep = process.platform === "win32" ? ";" : ":";
+    const ambient = path.join(tmp, "ambient-from-process-env");
+    const prevPath = process.env[pathKey];
+    try {
+      process.chdir(tmp);
+      const root = getFamilyBuildingRoot("default");
+      const scripts = process.platform === "win32"
+        ? path.join(root, "Scripts")
+        : path.join(root, "bin");
+      fs.mkdirSync(scripts, { recursive: true });
+      process.env[pathKey] = ambient;
+      const env = envForVenvRoot(root, { PATH: "" });
+      const parts = (env[pathKey] ?? "").split(sep).filter(Boolean);
+      expect(parts).not.toContain(ambient);
+      expect(path.resolve(parts[0]!).toLowerCase()).toBe(path.resolve(scripts).toLowerCase());
+    } finally {
+      if (prevPath === undefined) delete process.env[pathKey];
+      else process.env[pathKey] = prevPath;
+      process.chdir(prevCwd);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
 });

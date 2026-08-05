@@ -74,8 +74,11 @@ export async function createVenvAt(root: string, systemPython: string, onLine: S
     fs.rmSync(root, { recursive: true, force: true });
   }
   onLine(`[setup] Creating virtual environment at ${root}...`);
+  // Isolate from ambient live/building family Scripts so systemPython -m venv
+  // does not inherit a contaminated PATH / VIRTUAL_ENV.
+  const createEnv = envForVenvRoot(root, { ...process.env });
   await new Promise<void>((resolve, reject) => {
-    const proc = spawn(systemPython, ["-m", "venv", root], { stdio: "pipe" });
+    const proc = spawn(systemPython, ["-m", "venv", root], { stdio: "pipe", env: createEnv });
     let settled = false;
     const settle = (action: () => void) => {
       if (settled) return;

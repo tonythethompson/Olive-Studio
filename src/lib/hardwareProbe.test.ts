@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeDirectMlHardwareReady,
+  computeDirectMlNeedsInstall,
   computeOpenVinoCompatibleHardware,
   getProviderAvailabilityBlock,
   isNvidiaGpuTensorRtFamily,
@@ -408,6 +409,46 @@ describe("computeDirectMlHardwareReady", () => {
     expect(computeDirectMlHardwareReady({ os: "Windows_NT" })).toBe(true);
     expect(computeDirectMlHardwareReady({ os: "linux 6.8" })).toBe(false);
     expect(computeDirectMlHardwareReady({ os: "darwin" })).toBe(false);
+  });
+});
+
+describe("computeDirectMlNeedsInstall", () => {
+  const baseProbe = {
+    probedAt: "now",
+    platform: { cpuModel: "Test", cpuCores: 8, os: "win32 10.0", arch: "x64" },
+    detectedProviders: ["CPUExecutionProvider"] as const,
+    recommendedProvider: "CPUExecutionProvider" as const,
+    notes: [] as string[],
+  };
+
+  it("offers DirectML install on Windows when EP is missing", () => {
+    expect(
+      computeDirectMlNeedsInstall({
+        ...baseProbe,
+        platform: { ...baseProbe.platform, os: "win32 10.0" },
+        detectedProviders: ["CPUExecutionProvider"],
+      }),
+    ).toBe(true);
+  });
+
+  it("does not offer DirectML install on macOS (darwin must not match win)", () => {
+    // HardwareProviderCard gates its DirectML CTA on this boolean.
+    expect(
+      computeDirectMlNeedsInstall({
+        ...baseProbe,
+        platform: { ...baseProbe.platform, os: "darwin 24.0" },
+        detectedProviders: ["CPUExecutionProvider"],
+      }),
+    ).toBe(false);
+  });
+
+  it("omits the install CTA when DmlExecutionProvider is already detected", () => {
+    expect(
+      computeDirectMlNeedsInstall({
+        ...baseProbe,
+        detectedProviders: ["CPUExecutionProvider", "DmlExecutionProvider"],
+      }),
+    ).toBe(false);
   });
 });
 
