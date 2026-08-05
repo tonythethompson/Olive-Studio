@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { detectEnvProvider, ALLOWED_AI_PROVIDERS } from "./detect.ts";
 
 // Mock readEnvApiKey
-vi.mock("../../../lib/aiResponse.ts", () => ({
+vi.mock("./env.ts", () => ({
   readEnvApiKey: vi.fn(),
+  matchedEnvApiKeyName: vi.fn(),
 }));
 
 // Cloudflare auth reads a local credential file and bypasses readEnvApiKey —
@@ -16,7 +16,8 @@ vi.mock("../../../lib/cloudflare/client.ts", async (importOriginal) => {
   };
 });
 
-import { readEnvApiKey } from "../../../lib/aiResponse.ts";
+import { readEnvApiKey } from "./env.ts";
+import { detectEnvProvider, ALLOWED_AI_PROVIDERS } from "./detect.ts";
 
 describe("detectEnvProvider", () => {
   beforeEach(() => {
