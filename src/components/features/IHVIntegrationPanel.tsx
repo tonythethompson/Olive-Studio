@@ -325,7 +325,9 @@ export function IHVIntegrationPanel({
 
   const hasAutoAppliedRef = useRef(false);
   const controlledStateRef = useRef(propState);
-  controlledStateRef.current = propState;
+  useEffect(() => {
+    controlledStateRef.current = propState;
+  }, [propState]);
 
   const runHardwareProbe = useCallback(
     async (refresh = false) => {
