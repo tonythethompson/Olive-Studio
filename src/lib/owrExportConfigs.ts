@@ -94,7 +94,7 @@ export function buildWebInitCode(opts: {
   const executionProviders = vramMode === "performance" ? '["webgpu", "wasm"]' : '["wasm"]';
   return `// ONNX Runtime Web (OWR) Service-Worker / App Loader
 // Configured dynamically for: ${modelName} (${architecture})
-// Execute: npm install onnxruntime-web
+// Execute: pnpm add onnxruntime-web
 
 import * as ort from "onnxruntime-web";
 
