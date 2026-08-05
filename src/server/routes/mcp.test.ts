@@ -9,9 +9,15 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import express from "express";
 import type { Server } from "http";
 import fs from "fs";
+import { execFile } from "child_process";
 
 import { mountMcpRoutes } from "./mcp.ts";
 import { setKbStatusCache } from "../services/mcp/state.ts";
+import mcpBreaker, { resetMcpBreaker } from "../services/mcp/breaker.ts";
+
+// The tool-proxy tests assert that an open breaker short-circuits before any
+// Python subprocess is spawned; the KB tests never touch child_process.
+vi.mock("child_process", () => ({ execFile: vi.fn() }));
 
 const VALID_KB = JSON.stringify({
   version: "2.0",
@@ -60,6 +66,7 @@ afterAll(async () => {
 
 beforeEach(() => {
   setKbStatusCache(null);
+  resetMcpBreaker();
 });
 
 afterEach(() => {
@@ -149,5 +156,27 @@ describe("POST /api/mcp/sync-kb", () => {
     const body = await res.json();
     expect(body).toMatchObject({ ok: false, reason: "missing" });
     expect(body.error).toBe("Knowledge base has not been generated yet.");
+  });
+});
+
+describe("POST /api/mcp/tool", () => {
+  it("short-circuits with 503 when the breaker is open", async () => {
+    const execFileMock = vi.mocked(execFile);
+    // Trip the process-wide singleton breaker without spawning anything.
+    mcpBreaker.recordFailure();
+    mcpBreaker.recordFailure();
+    mcpBreaker.recordFailure();
+
+    const res = await fetch(`${baseUrl}/api/mcp/tool`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toolName: "x", args: {} }),
+    });
+
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body).toEqual({ available: false, error: expect.any(String) });
+    // The short-circuit must not spawn a Python subprocess.
+    expect(execFileMock).not.toHaveBeenCalled();
   });
 });

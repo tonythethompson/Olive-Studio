@@ -13,7 +13,7 @@ import {
   isKbSyncInProgress,
   setKbSyncInProgress,
 } from "../services/mcp/state.ts";
-import { callOliveMcpTool } from "../services/mcp/client.ts";
+import { callOliveMcpTool, MCP_UNAVAILABLE_ERROR } from "../services/mcp/client.ts";
 import { kbStatusRateLimit, kbSyncRateLimit } from "../middleware/rateLimit.ts";
 import { readStudioConfig, writeStudioConfig } from "../config.ts";
 import type { KbStatusCache } from "../types.ts";
@@ -200,6 +200,9 @@ export function mountMcpRoutes(router: Router): void {
     }
     try {
       const out = await callOliveMcpTool(toolName, args ?? {});
+      if (out.unavailable) {
+        return res.status(503).json({ available: false, error: out.error ?? MCP_UNAVAILABLE_ERROR });
+      }
       if (out.error) {
         return res.status(500).json({ error: out.error });
       }
