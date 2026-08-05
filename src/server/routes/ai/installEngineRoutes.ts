@@ -30,9 +30,7 @@ export function mountInstallEngineRoutes(router: Router): void {
     try {
       if (engine === "ollama") {
         send({ type: "step", message: "Ensuring Ollama is installed…", percent: 0 });
-        // The first caller's disconnect aborts the shared ensure; later callers
-        // consume progress but never cancel it.
-        const result = await ensureOllamaReady((evt) => send(evt), guard.signal);
+        const result = await ensureOllamaReady((evt) => send(evt));
         if (guard.disconnected()) {
           guard.endOnce();
           return;
@@ -44,9 +42,7 @@ export function mountInstallEngineRoutes(router: Router): void {
         endNdjson(res, { type: "done", ok: true, message: "Ollama is ready.", percent: 100 });
       } else {
         send({ type: "step", message: "Ensuring LM Studio is installed…", percent: 0 });
-        // The first caller's disconnect aborts the shared ensure; later callers
-        // consume progress but never cancel it.
-        const result = await ensureLmsReady((evt) => send(evt), guard.signal);
+        const result = await ensureLmsReady((evt) => send(evt));
         if (guard.disconnected()) {
           guard.endOnce();
           return;

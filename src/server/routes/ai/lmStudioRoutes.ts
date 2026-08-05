@@ -154,9 +154,7 @@ export function mountLmStudioRoutes(router: Router): void {
       }
 
       localEngineRuntime.lmsPullBusyTag = tag;
-      // The first caller's disconnect aborts the shared ensure; later callers
-      // consume progress but never cancel it.
-      const ready = await ensureLmsReady((evt) => send(evt), guard.signal);
+      const ready = await ensureLmsReady((evt) => send(evt));
       if (guard.disconnected()) {
         releaseBusy();
         guard.endOnce();
