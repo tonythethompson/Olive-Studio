@@ -47,13 +47,18 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
       }),
       signal: controller.signal,
     })
-      .then((r) => r.json())
-      .then((data: McpPassParamsResponse) => {
-        if (!controller.signal.aborted) {
-          setParams(data);
+      .then(async (r) => {
+        const data: McpPassParamsResponse = await r.json();
+        if (controller.signal.aborted) return;
+        if (!r.ok || data.error) {
+          setParams(null);
           setHasFetched(true);
-          setNetworkError(false);
+          setNetworkError(true);
+          return;
         }
+        setParams(data);
+        setHasFetched(true);
+        setNetworkError(false);
       })
       .catch((err) => {
         if (err.name === "AbortError") return;

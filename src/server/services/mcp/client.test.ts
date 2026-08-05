@@ -116,4 +116,52 @@ describe("callOliveMcpTools circuit-breaker integration", () => {
     expect(out).toEqual({ error: MCP_UNAVAILABLE_ERROR, unavailable: true });
     expect(mocks.calls).toHaveLength(0);
   });
+
+  it("marks non-array JSON output as an unavailable infra failure", async () => {
+    mockExecFileResolve('{"not":"an array"}');
+
+    const out = await callOliveMcpTools([{ toolName: "x", args: {} }]);
+
+    expect(out).toEqual([{ error: "MCP batch returned non-array JSON", unavailable: true }]);
+    expect(mcpBreaker.status()).toMatchObject({ open: false, failures: 1 });
+    expect(mocks.calls).toHaveLength(1);
+  });
+
+  it("closes the breaker after a successful half-open probe", async () => {
+    vi.useFakeTimers();
+    try {
+      mockExecFileReject("spawn python ENOENT");
+      await callOliveMcpTools([{ toolName: "x", args: {} }]);
+      await callOliveMcpTools([{ toolName: "x", args: {} }]);
+      await callOliveMcpTools([{ toolName: "x", args: {} }]);
+      expect(mcpBreaker.status()).toMatchObject({ open: true, failures: 3 });
+
+      // Advance past the cooldown — the breaker is half-open and admits a probe.
+      vi.advanceTimersByTime(30_000);
+      expect(mcpBreaker.status().open).toBe(false);
+
+      mockExecFileResolve('[{"tool":"x","result":{"ok":true}}]');
+      const out = await callOliveMcpTools([{ toolName: "x", args: {} }]);
+
+      expect(out).toEqual([{ result: { ok: true } }]);
+      expect(mcpBreaker.status()).toEqual({ open: false, failures: 0, openedAt: null });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not inflate the failures counter while the breaker is open", async () => {
+    mockExecFileReject("spawn python ENOENT");
+    await callOliveMcpTools([{ toolName: "x", args: {} }]);
+    await callOliveMcpTools([{ toolName: "x", args: {} }]);
+    await callOliveMcpTools([{ toolName: "x", args: {} }]);
+    expect(mcpBreaker.status().open).toBe(true);
+
+    const failuresBefore = mcpBreaker.status().failures;
+    const out = await callOliveMcpTool("x", {});
+
+    expect(out).toEqual({ error: MCP_UNAVAILABLE_ERROR, unavailable: true });
+    expect(mcpBreaker.status().failures).toBe(failuresBefore);
+    expect(mocks.calls).toHaveLength(3);
+  });
 });

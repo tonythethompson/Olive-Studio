@@ -134,10 +134,11 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
         mcpBreaker.recordFailure();
         return requests.map(() => ({ error: "MCP batch returned non-array JSON", unavailable: true }));
       }
-      mcpBreaker.recordSuccess();
-      return requests.map((req, i) => {
+      const results = requests.map((req, i) => {
         const row = parsed[i];
-        if (!isObjectRecord(row)) return { error: `MCP tool ${req.toolName} missing from batch` };
+        if (!isObjectRecord(row)) {
+          return { error: `MCP tool ${req.toolName} missing from batch`, unavailable: true };
+        }
         if (typeof row.error === "string" && row.error) return { error: row.error };
         const inner = row.result;
         if (isObjectRecord(inner) && typeof inner.error === "string" && inner.error) {
@@ -145,6 +146,13 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
         }
         return { result: inner };
       });
+      if (results.some((r) => r.unavailable === true)) {
+        // A missing row is a protocol/contract violation — infra failure, like non-array JSON.
+        mcpBreaker.recordFailure();
+      } else {
+        mcpBreaker.recordSuccess();
+      }
+      return results;
     } catch {
       mcpBreaker.recordFailure();
       return requests.map((req) => ({

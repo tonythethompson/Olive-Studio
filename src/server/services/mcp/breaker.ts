@@ -27,7 +27,9 @@ export function createMcpCircuitBreaker(
 ): McpCircuitBreaker {
   const failureThreshold = options.failureThreshold ?? 3;
   const cooldownMs = options.cooldownMs ?? 30_000;
-  const now = options.now ?? Date.now;
+  // Resolve Date.now through the global at call time so fake timers (vitest)
+  // can control the default clock; explicit `now` injectables are unaffected.
+  const now = options.now ?? (() => Date.now());
 
   let failures = 0;
   let openedAt: number | null = null;
@@ -46,11 +48,13 @@ export function createMcpCircuitBreaker(
       openedAt = null;
     },
     recordFailure(): void {
-      failures += 1;
       if (openedAt !== null) {
-        // A half-open probe failed — refresh the cooldown instead of re-checking the threshold.
+        // Already open — refresh the cooldown but never grow `failures` past the trip point.
         openedAt = now();
-      } else if (failures >= failureThreshold) {
+        return;
+      }
+      failures += 1;
+      if (failures >= failureThreshold) {
         openedAt = now();
       }
     },
