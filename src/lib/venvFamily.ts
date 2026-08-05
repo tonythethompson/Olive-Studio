@@ -162,18 +162,10 @@ export function resolveRequiredFamilies(
       families.add("default");
     } else if (flags.cuda.cpuUsable) {
       families.add("cuda");
-    } else if (families.size > 0) {
-      // Provisionally reuse a family this preflight will create for a non-CPU provider.
-      // Prefer cuda if present (CPU+CUDA → cuda only), else any mandatory family
-      // except specialized EP-only families (openvino / qnn).
-      if (families.has("cuda")) {
-        /* keep cuda only for CPU placement */
-      } else if (![...families].every((f) => f === "openvino" || f === "qnn")) {
-        families.add("default");
-      } else {
-        families.add("default");
-      }
+    } else if (families.has("cuda")) {
+      // CPU+CUDA batch: reuse cuda for CPU placement (do not create default solely for CPU).
     } else {
+      // CPU must not run in openvino/qnn alone; provision default when CUDA isn’t available.
       families.add("default");
     }
   }

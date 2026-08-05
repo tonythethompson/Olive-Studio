@@ -100,6 +100,14 @@ describe("qnnReadiness", () => {
     expect(isQnnSnapdragonReleaseGatePassed()).toBe(false);
   });
 
+  it("does not treat missing NPU as an error when no probe is supplied", () => {
+    const issues = assessQnnRecipeReadiness({
+      state: { ihvProvider: "QNNExecutionProvider", passes: basePasses },
+      hostMode: "local-inference",
+    });
+    expect(issues.some((i) => i.code === "qnn_npu_missing")).toBe(false);
+  });
+
   it("keeps UI label below NPU ready until release gate", () => {
     expect(qnnRuntimeUiLabel(probe())).toBe("QNN runtime installed (NPU device)");
     expect(qnnExplicitRetryProviders()).toEqual([

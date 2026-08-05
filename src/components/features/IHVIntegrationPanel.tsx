@@ -45,7 +45,6 @@ import { runNdjsonInstall } from "@/lib/ndjsonInstall";
 import {
   OPEN_VINO_TARGET_DEVICES,
   isOpenVinoTargetAvailable,
-  pickOpenVinoTargetFromDevices,
   type OpenVinoTargetDevice,
 } from "@/lib/openvinoDeps";
 import {

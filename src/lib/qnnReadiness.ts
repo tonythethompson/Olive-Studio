@@ -143,14 +143,17 @@ export function assessQnnRecipeReadiness(input: {
   }
 
   if (mode === "local-inference") {
-    if (!input.probe?.qnn?.npuDevice) {
+    if (input.probe && !input.probe.qnn?.npuDevice) {
       issues.push({
         severity: "error",
         code: "qnn_npu_missing",
         message:
           "No QNN OrtEpDevice with OrtHardwareDeviceType.NPU. CPU/emulator QNN devices do not satisfy inference readiness.",
       });
-    } else if (!isQnnSnapdragonReleaseGatePassed() || !input.probe.qnn.verifiedInference) {
+    } else if (
+      input.probe?.qnn?.npuDevice &&
+      (!isQnnSnapdragonReleaseGatePassed() || !input.probe.qnn.verifiedInference)
+    ) {
       issues.push({
         severity: "warning",
         code: "qnn_npu_unverified",
