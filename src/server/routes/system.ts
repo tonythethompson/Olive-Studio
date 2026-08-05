@@ -43,7 +43,7 @@ import {
   markQnnVenvLoadable,
   markTensorRtVenvLoadable,
   mergeOrtProvidersForDisplay,
-  resolveDirectMlHardwareReady,
+  resolveDirectMlEpDetected,
 } from "./systemHardwareProbePolicy.ts";
 
 const execFileAsync = promisify(execFile);
@@ -551,10 +551,10 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     hasRocmGpu: Boolean(rocm?.gpus.length),
     hasOpenVino: Boolean(openvino?.available),
     hasOpenVinoCompatibleHardware,
-    // Hardware readiness (Windows / DX12 class) lists DirectML as selectable;
-    // EP registration remains separate for install CTAs (directMlNeedsInstall).
-    hasDirectMl: resolveDirectMlHardwareReady({
-      os: platform.os,
+    // Hardware readiness (Windows / DX12 class) is separate from EP registration.
+    // hasDirectMl must reflect ORT reporting DmlExecutionProvider so install CTAs stay accurate.
+    hasDirectMl: resolveDirectMlEpDetected({
+      defaultProviders: onnxRuntimeProviders,
     }),
     hasQnnCompatibleHardware,
     qnnLoadable: qnnVenvLoadable,

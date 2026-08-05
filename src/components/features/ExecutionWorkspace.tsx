@@ -58,6 +58,7 @@ import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipe
 import { buildOwrConfigs } from "@/lib/owrExportConfigs";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { qnnExplicitRetryProviders } from "@/lib/qnnReadiness";
+import { prepareProviderChange } from "@/lib/pipelineValidation";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { GpuMetricsBar } from "@/components/features/GpuMetricsBar";
 import { parseGpuMetrics, type GpuMetrics } from "@/lib/gpuMetrics";
@@ -1570,7 +1571,10 @@ ${owrPlatform === "web"
                           key={provider}
                           type="button"
                           onClick={() => {
-                            setState({ ihvProvider: provider });
+                            const patch = prepareProviderChange(state, provider, hardwareProbe, {
+                              skipHardwareBlock: true,
+                            });
+                            setState(patch ?? { ihvProvider: provider });
                             setExecutionLogs((prev) => [
                               ...prev,
                               `[INFO] Switched target to ${provider} (explicit retry — QNN does not auto-fallback). Rebuild/refresh the recipe, then Execute Live again.`,

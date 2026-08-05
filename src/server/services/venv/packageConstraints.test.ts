@@ -98,6 +98,18 @@ describe("packageConstraints", () => {
     expect(fs.existsSync(constraintPath)).toBe(false);
   });
 
+  it("merges supplemental constraints into the qnn constraint file", () => {
+    const { args, cleanup } = withFamilyPipConstraintArgs("qnn", ["olive-ai"]);
+    cleanups.push(cleanup);
+    const body = fs.readFileSync(args[1]!, "utf8");
+    for (const line of getFamilySpec("qnn").supplementalConstraints ?? []) {
+      expect(body).toContain(line);
+    }
+    for (const line of getFamilySpec("qnn").packageConstraints) {
+      expect(body).toContain(line);
+    }
+  });
+
   it("skips flag values when scanning for forbidden ORT packages", () => {
     expect(
       findForbiddenOrtInstallArgs("default", [

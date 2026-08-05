@@ -278,8 +278,9 @@ export function prepareProviderChange(
   state: UIState,
   providerId: IHVProvider,
   probe?: HardwareProbeResult | null,
+  options?: { skipHardwareBlock?: boolean },
 ): Partial<UIState> | null {
-  if (getProviderHardwareBlock(providerId, probe)) {
+  if (!options?.skipHardwareBlock && getProviderHardwareBlock(providerId, probe)) {
     return null;
   }
 

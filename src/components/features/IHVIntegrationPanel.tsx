@@ -326,7 +326,9 @@ export function IHVIntegrationPanel({
 
   const hasAutoAppliedRef = useRef(false);
   const latestStateRef = useRef(state);
-  latestStateRef.current = state;
+  useEffect(() => {
+    latestStateRef.current = state;
+  }, [state]);
 
   const runHardwareProbe = useCallback(
     async (refresh = false) => {
@@ -999,45 +1001,19 @@ export function IHVIntegrationPanel({
                               onClick={() => {
                                 // Allow selecting undetected providers for cross-compile / remote targets
                                 const detected = detectedProviders.includes(p.id);
-                                if (!detected) {
-                                  setState({
-                                    ihvProvider: p.id,
-                                    ...(p.id === "OpenVINOExecutionProvider"
-                                      ? {
-                                          openvinoTargetDevice: pickOpenVinoTargetFromDevices(
-                                            hardwareProbe?.openvino?.devices,
-                                          ),
-                                        }
-                                      : {}),
-                                  });
-                                  return;
-                                }
-                                const patch = prepareProviderChange(state, p.id, hardwareProbe);
-                                if (patch) {
-                                  setState(patch);
-                                }
+                                const patch = prepareProviderChange(state, p.id, hardwareProbe, {
+                                  skipHardwareBlock: !detected,
+                                });
+                                if (patch) setState(patch);
                               }}
                               onKeyDown={(e) => {
                                 if (e.key !== "Enter" && e.key !== " ") return;
                                 e.preventDefault();
                                 const detected = detectedProviders.includes(p.id);
-                                if (!detected) {
-                                  setState({
-                                    ihvProvider: p.id,
-                                    ...(p.id === "OpenVINOExecutionProvider"
-                                      ? {
-                                          openvinoTargetDevice: pickOpenVinoTargetFromDevices(
-                                            hardwareProbe?.openvino?.devices,
-                                          ),
-                                        }
-                                      : {}),
-                                  });
-                                  return;
-                                }
-                                const patch = prepareProviderChange(state, p.id, hardwareProbe);
-                                if (patch) {
-                                  setState(patch);
-                                }
+                                const patch = prepareProviderChange(state, p.id, hardwareProbe, {
+                                  skipHardwareBlock: !detected,
+                                });
+                                if (patch) setState(patch);
                               }}
                               className={`p-2 px-1 text-center cursor-pointer transition-all relative select-none ${
                                 isSelectedProvider

@@ -327,6 +327,33 @@ describe("prepareProviderChange", () => {
     expect(result!.passes).toBeDefined();
   });
 
+  it("can skip hardware block for explicit retry / cross-compile selection", () => {
+    const state = baseState({ passes: basePasses({ peft: true }) });
+    const blocked = prepareProviderChange(state, "QNNExecutionProvider", {
+      probedAt: new Date().toISOString(),
+      platform: { os: "linux", arch: "x64", cpuModel: "x86", cpuCores: 8 },
+      detectedProviders: ["CPUExecutionProvider"],
+      recommendedProvider: "CPUExecutionProvider" as IHVProvider,
+      notes: [],
+    });
+    expect(blocked).toBeNull();
+    const allowed = prepareProviderChange(
+      state,
+      "QNNExecutionProvider",
+      {
+        probedAt: new Date().toISOString(),
+        platform: { os: "linux", arch: "x64", cpuModel: "x86", cpuCores: 8 },
+        detectedProviders: ["CPUExecutionProvider"],
+        recommendedProvider: "CPUExecutionProvider" as IHVProvider,
+        notes: [],
+      },
+      { skipHardwareBlock: true },
+    );
+    expect(allowed).not.toBeNull();
+    expect(allowed!.ihvProvider).toBe("QNNExecutionProvider");
+    expect(allowed!.passes?.peft).toBe(false);
+  });
+
   it("picks OpenVINO GPU target from probe devices when switching to OpenVINO", () => {
     const state = baseState();
     const result = prepareProviderChange(state, "OpenVINOExecutionProvider", {
