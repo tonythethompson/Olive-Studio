@@ -13,6 +13,7 @@ import { envForFamily } from "../venv/pathIsolation.ts";
 import { getVenvPython } from "../venv/paths.ts";
 import { invalidateRuntimeStatusCache } from "../venv/status.ts";
 import { assertFamilyOrtConstraints } from "../venv/packageConstraints.ts";
+import { getFamilySpec } from "../venv/spec.ts";
 import { openvinoStackInstallArgs, openvinoStackLabel } from "../../../lib/openvinoDeps.ts";
 import type { OpenVinoProbeResult } from "../../../lib/hardwareProbe.ts";
 
@@ -195,8 +196,15 @@ export async function ensureOpenVino(
     return { ok: true, probe };
   }
 
+  const stackArgs = openvinoStackInstallArgs();
+  // Missing EP means the family ORT wheel is absent or broken — install the
+  // pinned onnxruntime-openvino args together with the Python stack.
+  const installArgs = !probe.openvinoExecutionProvider
+    ? [...getFamilySpec("openvino").ortInstallArgs, ...stackArgs]
+    : stackArgs;
+
   if (!probe.openvinoExecutionProvider) {
-    onLine("[deps] OpenVINOExecutionProvider missing — verifying openvino family ORT...");
+    onLine("[deps] OpenVINOExecutionProvider missing — installing openvino family ORT + stack...");
   } else if (!probe.version) {
     onLine(`[deps] Installing ${openvinoStackLabel()} (may take a few minutes)...`);
   } else if (!probe.optimumIntel?.available) {
@@ -206,7 +214,7 @@ export async function ensureOpenVino(
   }
 
   try {
-    await pipInstallForFamily("openvino", venvPython, openvinoStackInstallArgs(), onLine);
+    await pipInstallForFamily("openvino", venvPython, installArgs, onLine);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, error: msg };

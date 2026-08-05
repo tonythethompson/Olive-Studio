@@ -3,16 +3,30 @@ import {
   markTensorRtVenvLoadable,
   mergeOrtProvidersForDisplay,
   resolveDirectMlDetected,
+  resolveDirectMlEpDetected,
+  resolveDirectMlHardwareReady,
 } from "./systemHardwareProbePolicy.ts";
 
 describe("systemHardwareProbePolicy", () => {
-  it("hasDirectMl is true only when default runtime reports DML", () => {
-    // System Python may report DML; it must not influence project detection.
+  it("DirectML hardware readiness is Windows / DX12 class, not EP registration", () => {
+    expect(resolveDirectMlHardwareReady({ os: "win32 10.0" })).toBe(true);
+    expect(resolveDirectMlHardwareReady({ os: "Windows_NT" })).toBe(true);
+    expect(resolveDirectMlHardwareReady({ os: "linux 6.8" })).toBe(false);
+    expect(resolveDirectMlHardwareReady({})).toBe(false);
+  });
+
+  it("DirectML EP detection stays on default-runtime providers for install guidance", () => {
     expect(
-      resolveDirectMlDetected({
+      resolveDirectMlEpDetected({
         defaultProviders: ["CPUExecutionProvider"],
       }),
     ).toBe(false);
+    expect(
+      resolveDirectMlEpDetected({
+        defaultProviders: ["CPUExecutionProvider", "DmlExecutionProvider"],
+      }),
+    ).toBe(true);
+    // Legacy alias retained for EP-based checks.
     expect(
       resolveDirectMlDetected({
         defaultProviders: ["CPUExecutionProvider", "DmlExecutionProvider"],

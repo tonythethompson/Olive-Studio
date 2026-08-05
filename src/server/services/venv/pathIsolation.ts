@@ -45,12 +45,28 @@ export function envForVenvRoot(
   const pathKey = process.platform === "win32" ? "Path" : "PATH";
   const sep = process.platform === "win32" ? ";" : ":";
   const strip = new Set(allFamilyScriptsDirs().map(normalizeDir));
-  const existing = (base[pathKey] ?? process.env[pathKey] ?? "")
+
+  let inherited = "";
+  for (const [key, value] of Object.entries(base)) {
+    if (key.toLowerCase() === "path" && typeof value === "string") {
+      inherited = value;
+      break;
+    }
+  }
+  if (!inherited) {
+    inherited = process.env[pathKey] ?? process.env.PATH ?? process.env.Path ?? "";
+  }
+
+  const existing = inherited
     .split(sep)
     .filter(Boolean)
     .filter((p) => !strip.has(normalizeDir(p)));
 
-  const env: NodeJS.ProcessEnv = { ...base, [pathKey]: existing.join(sep) };
+  const env: NodeJS.ProcessEnv = { ...base };
+  for (const key of Object.keys(env)) {
+    if (key.toLowerCase() === "path") delete env[key];
+  }
+  env[pathKey] = existing.join(sep);
   delete env.PYTHONPATH;
   delete env.PYTHONHOME;
   env.VIRTUAL_ENV = root;

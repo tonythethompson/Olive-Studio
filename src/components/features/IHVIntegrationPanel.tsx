@@ -324,6 +324,8 @@ export function IHVIntegrationPanel({
   const [installOrtGpuLog, setInstallOrtGpuLog] = useState<string[]>([]);
 
   const hasAutoAppliedRef = useRef(false);
+  const controlledStateRef = useRef(propState);
+  controlledStateRef.current = propState;
 
   const runHardwareProbe = useCallback(
     async (refresh = false) => {
@@ -336,7 +338,7 @@ export function IHVIntegrationPanel({
         // Auto-apply recommended provider on first probe completion
         if (!hasAutoAppliedRef.current && result.recommendedProvider) {
           hasAutoAppliedRef.current = true;
-          const current = usePipelineStore.getState().state;
+          const current = controlledStateRef.current ?? usePipelineStore.getState().state;
           setState(
             prepareProviderChange(current, result.recommendedProvider, result) ?? {
               ihvProvider: result.recommendedProvider,

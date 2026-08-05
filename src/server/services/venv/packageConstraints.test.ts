@@ -8,7 +8,7 @@ import {
   withFamilyPipConstraintArgs,
 } from "./packageConstraints.ts";
 import { getFamilySpec } from "./spec.ts";
-import { ONNXRUNTIME_OPENVINO_PIP_PACKAGE } from "../../../lib/openvinoDeps.ts";
+import { ONNXRUNTIME_OPENVINO_PIP_PACKAGE, openvinoOrtInstallArgs, openvinoPackageConstraints } from "../../../lib/openvinoDeps.ts";
 import { pinnedOrtGpuInstallArgs } from "../../../lib/oliveGpuRuntime.ts";
 
 describe("packageConstraints", () => {
@@ -47,6 +47,7 @@ describe("packageConstraints", () => {
 
   it("allows openvino family onnxruntime-openvino and rejects DirectML / gpu wheels", () => {
     expect(findForbiddenOrtInstallArgs("openvino", ["onnxruntime-openvino"])).toEqual([]);
+    expect(findForbiddenOrtInstallArgs("openvino", openvinoOrtInstallArgs())).toEqual([]);
     expect(findForbiddenOrtInstallArgs("openvino", ["onnxruntime-directml"])).toEqual([
       "onnxruntime-directml",
     ]);
@@ -56,6 +57,8 @@ describe("packageConstraints", () => {
     expect(findForbiddenOrtInstallArgs("openvino", ["openvino", "optimum-intel[openvino]"])).toEqual(
       [],
     );
+    expect(getFamilySpec("openvino").packageConstraints).toEqual(openvinoPackageConstraints());
+    expect(getFamilySpec("openvino").ortInstallArgs).toEqual(openvinoOrtInstallArgs());
   });
 
   it("allows pinned onnxruntime-gpu for cuda and rejects DirectML / openvino ORT", () => {

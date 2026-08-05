@@ -5,6 +5,12 @@
 import path from "path";
 import type { VenvFamily } from "../../../lib/venvFamily.ts";
 import { PINNED_ORT_GPU_VERSION, pinnedOrtGpuInstallArgs } from "../../../lib/oliveGpuRuntime.ts";
+import {
+  ONNXRUNTIME_OPENVINO_PIP_PACKAGE,
+  PINNED_ONNXRUNTIME_OPENVINO_VERSION,
+  openvinoOrtInstallArgs,
+  openvinoPackageConstraints,
+} from "../../../lib/openvinoDeps.ts";
 
 export type OrtDistributionName =
   | "onnxruntime"
@@ -27,7 +33,7 @@ export type VenvFamilySpec = {
 };
 
 /** Bump when pins / layout change so ensure triggers an isolated rebuild. */
-export const VENV_SPEC_VERSION = 2;
+export const VENV_SPEC_VERSION = 3;
 
 /** Pinned olive-ai range for family builds (avoid floating major). */
 export const PINNED_OLIVE_AI_INSTALL = "olive-ai>=0.9.0,<1";
@@ -125,10 +131,11 @@ export function getFamilySpec(family: VenvFamily): VenvFamilySpec {
         family: "openvino",
         root: getFamilyRoot("openvino"),
         buildingRoot: getFamilyBuildingRoot("openvino"),
-        ortDistribution: "onnxruntime-openvino",
-        ortInstallArgs: ["onnxruntime-openvino"],
+        ortDistribution: ONNXRUNTIME_OPENVINO_PIP_PACKAGE,
+        ortVersionSpec: PINNED_ONNXRUNTIME_OPENVINO_VERSION,
+        ortInstallArgs: openvinoOrtInstallArgs(),
         oliveInstallArgs: [...OLIVE_INSTALL_ARGS],
-        packageConstraints: ["onnxruntime-openvino"],
+        packageConstraints: openvinoPackageConstraints(),
         specVersion: VENV_SPEC_VERSION,
       };
     case "default": {

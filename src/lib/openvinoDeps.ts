@@ -80,6 +80,18 @@ export function pickOpenVinoTargetFromDevices(
 export const ONNXRUNTIME_OPENVINO_PIP_PACKAGE = "onnxruntime-openvino";
 
 /**
+ * Tested OpenVINO family pin set (ORT OpenVINO EP ↔ openvino ↔ optimum-intel).
+ * Keep `openvinoOrtInstallArgs`, `openvinoPackageConstraints`, and
+ * `openvinoStackInstallArgs` in lockstep when bumping.
+ *
+ * @see https://onnxruntime.ai/docs/execution-providers/OpenVINO-ExecutionProvider.html
+ */
+export const PINNED_ONNXRUNTIME_OPENVINO_VERSION = "1.24.1";
+export const PINNED_OPENVINO_VERSION = "2025.4.1";
+/** Pip version specifier for optimum-intel (extras applied in install args). */
+export const PINNED_OPTIMUM_INTEL_SPEC = ">=1.23.0,<2";
+
+/**
  * ORT distributions that would conflict if `onnxruntime-openvino` were installed
  * alongside them in the same venv.
  */
@@ -97,6 +109,20 @@ export const OPEN_VINO_GPU_DRIVER_URL =
 export const OPEN_VINO_NPU_DRIVER_URL =
   "https://docs.openvino.ai/2026/get-started/install-openvino/configurations/configurations-intel-npu.html";
 
+/** Canonical ORT wheel pin for the isolated openvino family. */
+export function openvinoOrtInstallArgs(): string[] {
+  return [`${ONNXRUNTIME_OPENVINO_PIP_PACKAGE}==${PINNED_ONNXRUNTIME_OPENVINO_VERSION}`];
+}
+
+/** Pip `--constraint` lines for the openvino family (no extras syntax). */
+export function openvinoPackageConstraints(): string[] {
+  return [
+    `${ONNXRUNTIME_OPENVINO_PIP_PACKAGE}==${PINNED_ONNXRUNTIME_OPENVINO_VERSION}`,
+    `${OPEN_VINO_PIP_PACKAGE}==${PINNED_OPENVINO_VERSION}`,
+    `optimum-intel${PINNED_OPTIMUM_INTEL_SPEC}`,
+  ];
+}
+
 /**
  * Pip install args for the OpenVINO Python stack (no ORT wheel swap here —
  * onnxruntime-openvino is installed via the openvino family ensure).
@@ -110,11 +136,11 @@ export function openvinoStackInstallArgs(): string[] {
     "--upgrade",
     "--upgrade-strategy",
     "eager",
-    OPEN_VINO_PIP_PACKAGE,
-    OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE,
+    `${OPEN_VINO_PIP_PACKAGE}==${PINNED_OPENVINO_VERSION}`,
+    `${OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE}${PINNED_OPTIMUM_INTEL_SPEC}`,
   ];
 }
 
 export function openvinoStackLabel(): string {
-  return `${OPEN_VINO_PIP_PACKAGE} + ${OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE}`;
+  return `${OPEN_VINO_PIP_PACKAGE}==${PINNED_OPENVINO_VERSION} + ${OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE}${PINNED_OPTIMUM_INTEL_SPEC}`;
 }

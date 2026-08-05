@@ -9,6 +9,7 @@ import {
   TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY,
   type HardwareProbeResult,
   isProviderDetectedLocally,
+  computeDirectMlHardwareReady,
 } from "@/lib/hardwareProbe";
 import {
   CUDA_TOOLKIT_MIN_COMPUTE_CAPABILITY,
@@ -51,18 +52,6 @@ export interface RecipeHardwareCompatResult {
   requiresInstall?: RecipeInstallHint;
 }
 
-function isWindowsProbe(probe: HardwareProbeResult): boolean {
-  return probe.platform.os.toLowerCase().includes("win");
-}
-
-/**
- * Builds an install hint for an execution provider on a GPU that supports it
- * but where the matching Python runtime isn't loaded in `.venv` yet. Used
- * for the TensorRT family (kind: "tensorrt" / "tensorrt-rtx") and now also
- * for the CUDA case (kind: "onnxruntime-gpu") — the CUDA branch used to
- * inline this object and dropped the probe's `detail` string, so a real
- * "driver/wheel mismatch" message never made it back to the UI.
- */
 function ePInstallHint(args: {
   probe: HardwareProbeResult;
   requiredProvider: IHVProvider;
@@ -139,7 +128,9 @@ export function assessRecipeHardwareCompatibility(
   }
 
   if (targetDevice === "DirectML") {
-    if (isWindowsProbe(probe)) {
+    // Hardware readiness (Windows / DX12 class) gates compatible vs unavailable.
+    // EP registration separately drives the install hint.
+    if (computeDirectMlHardwareReady({ os: probe.platform.os })) {
       if (isProviderDetectedLocally("DmlExecutionProvider", probe)) {
         return {
           tier: "compatible",

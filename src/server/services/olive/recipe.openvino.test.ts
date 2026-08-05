@@ -26,10 +26,17 @@ describe("inferRequiredPackages OpenVINO", () => {
     const ort = pkgs.find((p) => p.importName === "onnxruntime");
     expect(ort).toBeDefined();
     expect(ort!.installArgs).toEqual(getFamilySpec("openvino").ortInstallArgs);
-    expect(ort!.installArgs).toContain(ONNXRUNTIME_OPENVINO_PIP_PACKAGE);
+    expect(ort!.installArgs.some((a) => a.startsWith(ONNXRUNTIME_OPENVINO_PIP_PACKAGE))).toBe(
+      true,
+    );
 
+    const stackArgs = openvinoStackInstallArgs();
     const ov = pkgs.find((p) => p.importName === "openvino");
     expect(ov).toBeDefined();
-    expect(ov!.installArgs).toEqual(openvinoStackInstallArgs());
+    expect(ov!.installArgs).toEqual(stackArgs);
+
+    const optimum = pkgs.find((p) => p.importName === "optimum.intel");
+    expect(optimum).toBeDefined();
+    expect(optimum!.installArgs).toEqual(stackArgs);
   });
 });

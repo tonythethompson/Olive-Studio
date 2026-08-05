@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeDirectMlHardwareReady,
   computeOpenVinoCompatibleHardware,
   getProviderAvailabilityBlock,
   isNvidiaGpuTensorRtFamily,
@@ -398,6 +399,15 @@ describe("getProviderAvailabilityBlock — CUDA 4-state branching", () => {
     });
     const block = getProviderAvailabilityBlock("CUDAExecutionProvider", probe);
     expect(block?.reason).toContain(cudaSmFloor);
+  });
+});
+
+describe("computeDirectMlHardwareReady", () => {
+  it("treats Windows hosts as DirectX 12 / DirectML capable", () => {
+    expect(computeDirectMlHardwareReady({ os: "win32 10.0" })).toBe(true);
+    expect(computeDirectMlHardwareReady({ os: "Windows_NT" })).toBe(true);
+    expect(computeDirectMlHardwareReady({ os: "linux 6.8" })).toBe(false);
+    expect(computeDirectMlHardwareReady({ os: "darwin" })).toBe(false);
   });
 });
 

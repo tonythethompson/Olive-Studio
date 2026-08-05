@@ -36,7 +36,7 @@ import {
 import {
   markTensorRtVenvLoadable,
   mergeOrtProvidersForDisplay,
-  resolveDirectMlDetected,
+  resolveDirectMlHardwareReady,
 } from "./systemHardwareProbePolicy.ts";
 
 const execFileAsync = promisify(execFile);
@@ -167,7 +167,7 @@ async function probePythonRuntime(
     const { stdout } = await execFileAsync(
       python,
       ["-c", "import openvino; print(openvino.__version__)"],
-      { env },
+      { env, timeout: ORT_PROBE_TIMEOUT_MS },
     );
     const version = stdout.trim();
     if (version) result.openvino = { available: true, version };
@@ -179,7 +179,7 @@ async function probePythonRuntime(
     const { stdout } = await execFileAsync(
       python,
       ["-c", "import onnxruntime as ort; print(','.join(ort.get_available_providers()))"],
-      { env },
+      { env, timeout: ORT_PROBE_TIMEOUT_MS },
     );
     const providers = stdout.trim().split(",").filter(Boolean);
     if (providers.length > 0) result.onnxRuntimeProviders = providers;
@@ -475,10 +475,10 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     hasRocmGpu: Boolean(rocm?.gpus.length),
     hasOpenVino: Boolean(openvino?.available),
     hasOpenVinoCompatibleHardware,
-    // Gate on a loadable DirectML EP (not Windows alone) so the UI does not
-    // treat DML as detected when onnxruntime-directml is missing.
-    hasDirectMl: resolveDirectMlDetected({
-      defaultProviders: defaultOrtProviders,
+    // Hardware readiness (Windows / DX12 class) lists DirectML as selectable;
+    // EP registration remains separate for install CTAs (directMlNeedsInstall).
+    hasDirectMl: resolveDirectMlHardwareReady({
+      os: platform.os,
     }),
     tensorRtLoadable: tensorRtVenvLoadable,
     tensorRtRtxLoadable: tensorRtRtxVenvLoadable,

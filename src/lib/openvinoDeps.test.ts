@@ -4,8 +4,13 @@ import {
   OPEN_VINO_PIP_PACKAGE,
   OPENVINO_CONFLICTING_ORT_PACKAGES,
   OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE,
+  PINNED_ONNXRUNTIME_OPENVINO_VERSION,
+  PINNED_OPENVINO_VERSION,
+  PINNED_OPTIMUM_INTEL_SPEC,
   isOpenVinoTargetAvailable,
   normalizeOpenVinoTargetDevice,
+  openvinoOrtInstallArgs,
+  openvinoPackageConstraints,
   openvinoStackInstallArgs,
   openvinoStackLabel,
   openvinoTargetToOliveDevice,
@@ -13,13 +18,13 @@ import {
 } from "./openvinoDeps.ts";
 
 describe("openvinoStackInstallArgs", () => {
-  it("returns openvino + optimum-intel without onnxruntime-openvino", () => {
+  it("returns pinned openvino + optimum-intel without onnxruntime-openvino", () => {
     expect(openvinoStackInstallArgs()).toEqual([
       "--upgrade",
       "--upgrade-strategy",
       "eager",
-      OPEN_VINO_PIP_PACKAGE,
-      OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE,
+      `${OPEN_VINO_PIP_PACKAGE}==${PINNED_OPENVINO_VERSION}`,
+      `${OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE}${PINNED_OPTIMUM_INTEL_SPEC}`,
     ]);
     expect(openvinoStackInstallArgs()).not.toContain(ONNXRUNTIME_OPENVINO_PIP_PACKAGE);
   });
@@ -27,8 +32,7 @@ describe("openvinoStackInstallArgs", () => {
   it("does not split the bracketed extra into a bare token", () => {
     const args = openvinoStackInstallArgs();
     expect(args.some((a) => a.startsWith("["))).toBe(false);
-    expect(args).toContain(OPEN_VINO_PIP_PACKAGE);
-    expect(args).toContain(OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE);
+    expect(args.some((a) => a.startsWith(`${OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE}`))).toBe(true);
   });
 
   it("labels the Python OpenVINO stack without the ORT OpenVINO EP wheel", () => {
@@ -41,6 +45,25 @@ describe("openvinoStackInstallArgs", () => {
     expect(OPENVINO_CONFLICTING_ORT_PACKAGES).toContain("onnxruntime");
     expect(OPENVINO_CONFLICTING_ORT_PACKAGES).toContain("onnxruntime-gpu");
     expect(OPENVINO_CONFLICTING_ORT_PACKAGES).toContain("onnxruntime-directml");
+  });
+
+  it("keeps ORT / openvino / optimum-intel pins aligned across install and constraints", () => {
+    const constraints = openvinoPackageConstraints();
+    const ortArgs = openvinoOrtInstallArgs();
+    const stackArgs = openvinoStackInstallArgs();
+
+    expect(ortArgs).toEqual([
+      `${ONNXRUNTIME_OPENVINO_PIP_PACKAGE}==${PINNED_ONNXRUNTIME_OPENVINO_VERSION}`,
+    ]);
+    expect(constraints).toContain(
+      `${ONNXRUNTIME_OPENVINO_PIP_PACKAGE}==${PINNED_ONNXRUNTIME_OPENVINO_VERSION}`,
+    );
+    expect(constraints).toContain(`${OPEN_VINO_PIP_PACKAGE}==${PINNED_OPENVINO_VERSION}`);
+    expect(constraints).toContain(`optimum-intel${PINNED_OPTIMUM_INTEL_SPEC}`);
+    expect(stackArgs).toContain(`${OPEN_VINO_PIP_PACKAGE}==${PINNED_OPENVINO_VERSION}`);
+    expect(stackArgs).toContain(
+      `${OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE}${PINNED_OPTIMUM_INTEL_SPEC}`,
+    );
   });
 });
 

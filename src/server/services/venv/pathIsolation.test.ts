@@ -74,4 +74,40 @@ describe("pathIsolation", () => {
       fs.rmSync(tmp, { recursive: true, force: true });
     }
   });
+
+  it("reads uppercase PATH from base and keeps a single canonical path key", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "olive-pathiso-case-"));
+    const prevCwd = process.cwd();
+    try {
+      process.chdir(tmp);
+      const root = getFamilyBuildingRoot("cuda");
+      const scripts = process.platform === "win32"
+        ? path.join(root, "Scripts")
+        : path.join(root, "bin");
+      fs.mkdirSync(scripts, { recursive: true });
+      const sep = process.platform === "win32" ? ";" : ":";
+      const pathKey = process.platform === "win32" ? "Path" : "PATH";
+      const strayFamilyScripts = allFamilyScriptsDirs()[0]!;
+      const base = {
+        PATH: [strayFamilyScripts, "/usr/bin"].join(sep),
+        Path: "/legacy-path-key-should-drop",
+      } as NodeJS.ProcessEnv;
+      const env = envForVenvRoot(root, base);
+      const pathKeys = Object.keys(env).filter((k) => k.toLowerCase() === "path");
+      expect(pathKeys).toEqual([pathKey]);
+      const parts = (env[pathKey] ?? "").split(sep).filter(Boolean);
+      expect(path.resolve(parts[0]!).toLowerCase()).toBe(path.resolve(scripts).toLowerCase());
+      expect(parts).toContain("/usr/bin");
+      expect(
+        parts.some(
+          (p) =>
+            path.resolve(p).toLowerCase() === path.resolve(strayFamilyScripts).toLowerCase() ||
+            p.includes("legacy-path-key"),
+        ),
+      ).toBe(false);
+    } finally {
+      process.chdir(prevCwd);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
 });

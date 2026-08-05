@@ -177,6 +177,18 @@ export function computeOpenVinoCompatibleHardware(input: {
 }
 
 /**
+ * Whether the host is DirectML / DirectX 12 class capable for recipe gating.
+ * Windows 10+ ships DX12; we do not probe adapter creation here. EP registration
+ * (`DmlExecutionProvider` in ORT) remains separate for install guidance.
+ *
+ * Matches win32 / Windows / Windows_NT tokens without treating "darwin" as Windows.
+ */
+export function computeDirectMlHardwareReady(input: { os: string }): boolean {
+  const os = input.os.toLowerCase();
+  return /\bwin(?:dows(?:_nt)?|32|64)?\b/.test(os) || os.includes("win32") || os.includes("windows");
+}
+
+/**
  * Combines ONNX Runtime providers and hardware probe results into the locally detected provider list.
  *
  * @param input - Provider and hardware detection results, including runtime loadability for TensorRT variants

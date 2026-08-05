@@ -9,7 +9,7 @@ import type { VenvFamily } from "../../../lib/venvFamily.ts";
 import { execFileAsync } from "../shared/exec.ts";
 import { findSystemPython } from "./systemPython.ts";
 import { getVenvPython, pythonPathForRoot } from "./paths.ts";
-import { envForFamily, envForVenvRoot } from "./pathIsolation.ts";
+import { envForVenvRoot } from "./pathIsolation.ts";
 import {
   clearBuildingRoot,
   familyPythonExists,
@@ -68,7 +68,7 @@ function runPythonModule(
   });
 }
 
-async function createVenvAt(root: string, systemPython: string, onLine: SetupListener): Promise<void> {
+export async function createVenvAt(root: string, systemPython: string, onLine: SetupListener): Promise<void> {
   fs.mkdirSync(path.dirname(root), { recursive: true });
   if (fs.existsSync(root)) {
     fs.rmSync(root, { recursive: true, force: true });
@@ -76,10 +76,19 @@ async function createVenvAt(root: string, systemPython: string, onLine: SetupLis
   onLine(`[setup] Creating virtual environment at ${root}...`);
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(systemPython, ["-m", "venv", root], { stdio: "pipe" });
+    let settled = false;
+    const settle = (action: () => void) => {
+      if (settled) return;
+      settled = true;
+      action();
+    };
     proc.stdout.on("data", (d: Buffer) => onLine("[setup] " + d.toString().trim()));
     proc.stderr.on("data", (d: Buffer) => onLine("[setup] " + d.toString().trim()));
+    proc.on("error", (err: Error) => settle(() => reject(err)));
     proc.on("close", (code) =>
-      code === 0 ? resolve() : reject(new Error(`venv creation failed (exit ${code})`)),
+      settle(() =>
+        code === 0 ? resolve() : reject(new Error(`venv creation failed (exit ${code})`)),
+      ),
     );
   });
 }
@@ -382,6 +391,11 @@ export function ensureVenvFamily(
 
 export function detachFamilyVenvListener(family: VenvFamily, onLine: SetupListener): void {
   familyInFlight.get(family)?.listeners.delete(onLine);
+}
+
+/** @internal Whether a family ensure is currently in flight (tests). */
+export function isFamilyEnsureInFlight(family: VenvFamily): boolean {
+  return familyInFlight.has(family);
 }
 
 /** Detach from any in-flight family setup (cancel during setup). */

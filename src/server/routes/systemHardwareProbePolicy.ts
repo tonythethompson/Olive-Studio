@@ -3,10 +3,28 @@
  * Extracted for unit testing (system route probe loop).
  */
 
-export function resolveDirectMlDetected(input: {
+import { computeDirectMlHardwareReady } from "../../lib/hardwareProbe.ts";
+
+/** Host-level DirectML readiness (Windows / DirectX 12 class), not EP registration. */
+export function resolveDirectMlHardwareReady(input: { os?: string }): boolean {
+  return Boolean(input.os && computeDirectMlHardwareReady({ os: input.os }));
+}
+
+/** Default-family ORT reports DmlExecutionProvider (install / load guidance). */
+export function resolveDirectMlEpDetected(input: {
   defaultProviders?: string[];
 }): boolean {
   return Boolean(input.defaultProviders?.includes("DmlExecutionProvider"));
+}
+
+/**
+ * @deprecated Prefer resolveDirectMlHardwareReady for detectedProviders listing.
+ * Kept as an alias of EP detection for older call sites / tests.
+ */
+export function resolveDirectMlDetected(input: {
+  defaultProviders?: string[];
+}): boolean {
+  return resolveDirectMlEpDetected(input);
 }
 
 export function markTensorRtVenvLoadable(input: {
