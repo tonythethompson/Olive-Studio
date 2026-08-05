@@ -1,5 +1,9 @@
 node_modules/
 .venv/
+.venvs/
+.venv.building/
+.venv.backup-*/
+.venv.legacy-*/
 .olive-studio/
 build/
 dist/

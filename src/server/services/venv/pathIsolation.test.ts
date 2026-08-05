@@ -1,0 +1,140 @@
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { describe, expect, it } from "vitest";
+import { allFamilyScriptsDirs, envForFamily, envForVenvRoot } from "./pathIsolation.ts";
+import { getVenvScriptsDir } from "./paths.ts";
+import { getFamilyBuildingRoot } from "./spec.ts";
+
+describe("pathIsolation", () => {
+  it("lists both family Scripts dirs", () => {
+    const dirs = allFamilyScriptsDirs();
+    expect(dirs.some((d) => d.includes(".venv") && !d.includes(".venvs"))).toBe(true);
+    expect(dirs.some((d) => d.includes("cuda"))).toBe(true);
+  });
+
+  it("strips default Scripts from inherited PATH when selecting cuda", () => {
+    const sep = process.platform === "win32" ? ";" : ":";
+    const pathKey = process.platform === "win32" ? "Path" : "PATH";
+    const dirs = allFamilyScriptsDirs();
+    const defaultScripts = getVenvScriptsDir("default");
+    const base = {
+      ...process.env,
+      [pathKey]: [...dirs, "/usr/bin"].join(sep),
+      PYTHONPATH: "/should/be/cleared",
+      PYTHONHOME: "/also/cleared",
+    };
+    const env = envForFamily("cuda", base);
+    const parts = (env[pathKey] ?? "").split(sep).filter(Boolean);
+    expect(
+      parts.some((p) => path.resolve(p).toLowerCase() === path.resolve(defaultScripts).toLowerCase()),
+    ).toBe(false);
+    expect(parts).toContain("/usr/bin");
+    expect(env.PYTHONPATH).toBeUndefined();
+    expect(env.PYTHONHOME).toBeUndefined();
+    expect(env.VIRTUAL_ENV).toBeTruthy();
+  });
+
+  it("prepends selected family Scripts when the directory exists", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "olive-pathiso-"));
+    const prevCwd = process.cwd();
+    try {
+      process.chdir(tmp);
+      const scripts = getVenvScriptsDir("default");
+      fs.mkdirSync(scripts, { recursive: true });
+      const sep = process.platform === "win32" ? ";" : ":";
+      const pathKey = process.platform === "win32" ? "Path" : "PATH";
+      const env = envForFamily("default", { ...process.env, [pathKey]: "/usr/bin" });
+      const parts = (env[pathKey] ?? "").split(sep).filter(Boolean);
+      expect(path.resolve(parts[0]!).toLowerCase()).toBe(path.resolve(scripts).toLowerCase());
+    } finally {
+      process.chdir(prevCwd);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("uses the building root for VIRTUAL_ENV and first PATH entry", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "olive-pathiso-build-"));
+    const prevCwd = process.cwd();
+    try {
+      process.chdir(tmp);
+      const buildingRoot = getFamilyBuildingRoot("default");
+      const scripts = process.platform === "win32"
+        ? path.join(buildingRoot, "Scripts")
+        : path.join(buildingRoot, "bin");
+      fs.mkdirSync(scripts, { recursive: true });
+      const sep = process.platform === "win32" ? ";" : ":";
+      const pathKey = process.platform === "win32" ? "Path" : "PATH";
+      const env = envForVenvRoot(buildingRoot, { ...process.env, [pathKey]: "/usr/bin" });
+      const parts = (env[pathKey] ?? "").split(sep).filter(Boolean);
+      expect(env.VIRTUAL_ENV).toBe(buildingRoot);
+      expect(path.resolve(parts[0]!).toLowerCase()).toBe(path.resolve(scripts).toLowerCase());
+    } finally {
+      process.chdir(prevCwd);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("reads uppercase PATH from base and keeps a single canonical path key", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "olive-pathiso-case-"));
+    const prevCwd = process.cwd();
+    try {
+      process.chdir(tmp);
+      const root = getFamilyBuildingRoot("cuda");
+      const scripts = process.platform === "win32"
+        ? path.join(root, "Scripts")
+        : path.join(root, "bin");
+      fs.mkdirSync(scripts, { recursive: true });
+      const sep = process.platform === "win32" ? ";" : ":";
+      const pathKey = process.platform === "win32" ? "Path" : "PATH";
+      const strayFamilyScripts = allFamilyScriptsDirs()[0]!;
+      const base = {
+        PATH: [strayFamilyScripts, "/usr/bin"].join(sep),
+        Path: "/legacy-path-key-should-drop",
+      } as NodeJS.ProcessEnv;
+      const env = envForVenvRoot(root, base);
+      const pathKeys = Object.keys(env).filter((k) => k.toLowerCase() === "path");
+      expect(pathKeys).toEqual([pathKey]);
+      const parts = (env[pathKey] ?? "").split(sep).filter(Boolean);
+      expect(path.resolve(parts[0]!).toLowerCase()).toBe(path.resolve(scripts).toLowerCase());
+      expect(parts).toContain("/usr/bin");
+      expect(
+        parts.some(
+          (p) =>
+            path.resolve(p).toLowerCase() === path.resolve(strayFamilyScripts).toLowerCase() ||
+            p.includes("legacy-path-key"),
+        ),
+      ).toBe(false);
+    } finally {
+      process.chdir(prevCwd);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves an explicitly empty PATH without falling back to process.env", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "olive-pathiso-empty-"));
+    const prevCwd = process.cwd();
+    const pathKey = process.platform === "win32" ? "Path" : "PATH";
+    const sep = process.platform === "win32" ? ";" : ":";
+    const ambient = path.join(tmp, "ambient-from-process-env");
+    const prevPath = process.env[pathKey];
+    try {
+      process.chdir(tmp);
+      const root = getFamilyBuildingRoot("default");
+      const scripts = process.platform === "win32"
+        ? path.join(root, "Scripts")
+        : path.join(root, "bin");
+      fs.mkdirSync(scripts, { recursive: true });
+      process.env[pathKey] = ambient;
+      const env = envForVenvRoot(root, { PATH: "" });
+      const parts = (env[pathKey] ?? "").split(sep).filter(Boolean);
+      expect(parts).not.toContain(ambient);
+      expect(path.resolve(parts[0]!).toLowerCase()).toBe(path.resolve(scripts).toLowerCase());
+    } finally {
+      if (prevPath === undefined) delete process.env[pathKey];
+      else process.env[pathKey] = prevPath;
+      process.chdir(prevCwd);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});

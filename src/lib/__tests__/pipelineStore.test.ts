@@ -61,6 +61,7 @@ describe("pipelineStore", () => {
       hfModelId: "",
       hfDataset: "",
       ihvProvider: "CUDAExecutionProvider" as const,
+      openvinoTargetDevice: "CPU" as const,
       memoryOffload: "gpu_only" as const,
       cudaVersion: "cu121" as const,
       cacheDir: "/tmp/cache",

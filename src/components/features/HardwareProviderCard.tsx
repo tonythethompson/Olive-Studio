@@ -9,6 +9,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui";
 import type { OpenVinoInstallState } from "@/components/features/useOpenVinoInstall";
+import type { DirectMlInstallState } from "@/components/features/useDirectMlInstall";
+import type { QnnInstallState } from "@/components/features/useQnnInstall";
+import {
+  QNN_ADVANCED_QAIRT_DOCS_URL,
+  isQnnSnapdragonReleaseGatePassed,
+} from "@/lib/qnnDeps";
+import { qnnRuntimeUiLabel } from "@/lib/qnnReadiness";
 import {
   applyProviderConflictAutofixes,
   getProviderConflicts,
@@ -18,6 +25,7 @@ import {
 } from "@/lib/pipelineValidation";
 import {
   isProviderDetectedLocally,
+  computeDirectMlHardwareReady,
   type GpuInfo,
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
@@ -25,6 +33,7 @@ import type { ProviderCatalogEntry } from "@/lib/providerCatalog";
 import {
   OPEN_VINO_GPU_DRIVER_URL,
   OPEN_VINO_NPU_DRIVER_URL,
+  pickOpenVinoTargetFromDevices,
 } from "@/lib/openvinoDeps";
 import {
   CUDA_DOWNLOAD_LINKS,
@@ -64,6 +73,15 @@ export interface HardwareProviderCardProps {
   onInstallTensorRt: () => void;
   openvinoInstall: {
     state: OpenVinoInstallState;
+    install: () => Promise<void>;
+  };
+  qnnInstall: {
+    state: QnnInstallState;
+    install: () => Promise<void>;
+    testNpu: () => Promise<void>;
+  };
+  directMlInstall: {
+    state: DirectMlInstallState;
     install: () => Promise<void>;
   };
   isPreMaxwellBox: boolean;
@@ -218,6 +236,11 @@ function hardwareDetailFor(
       : "";
     return `OpenVINO ${hardwareProbe.openvino.version}${devices}`.trim();
   }
+  if (providerId === "QNNExecutionProvider" && hardwareProbe) {
+    const label = qnnRuntimeUiLabel(hardwareProbe);
+    const ver = hardwareProbe.qnn?.pluginVersion ? ` · plugin ${hardwareProbe.qnn.pluginVersion}` : "";
+    return `${label}${ver}`;
+  }
   if (providerId === "CPUExecutionProvider" && hardwareProbe) {
     return hardwareProbe.platform.cpuModel;
   }
@@ -239,7 +262,14 @@ function selectProvider(
   }
   const detected = detectedProviders.includes(providerId);
   if (!detected) {
-    setState({ ihvProvider: providerId });
+    setState({
+      ihvProvider: providerId,
+      ...(providerId === "OpenVINOExecutionProvider"
+        ? {
+            openvinoTargetDevice: pickOpenVinoTargetFromDevices(hardwareProbe?.openvino?.devices),
+          }
+        : {}),
+    });
     return;
   }
   const patch = prepareProviderChange(state, providerId, hardwareProbe);
@@ -316,6 +346,8 @@ function ProviderPluginInstalls({
   installTrtLog,
   onInstallTensorRt,
   openvinoInstall,
+  qnnInstall,
+  directMlInstall,
   isPreMaxwellBox,
   cudaNeedsOrtGpuInstall,
   cudaToolkitMissingAndEpWorks,
@@ -342,6 +374,8 @@ function ProviderPluginInstalls({
   installTrtLog: string[];
   onInstallTensorRt: () => void;
   openvinoInstall: HardwareProviderCardProps["openvinoInstall"];
+  qnnInstall: HardwareProviderCardProps["qnnInstall"];
+  directMlInstall: HardwareProviderCardProps["directMlInstall"];
   isPreMaxwellBox: boolean;
   cudaNeedsOrtGpuInstall: boolean;
   cudaToolkitMissingAndEpWorks: boolean;
@@ -401,21 +435,116 @@ function ProviderPluginInstalls({
       <PluginInstallBlock
         description={
           <>
-            OpenVINOExecutionProvider not ready in the project{" "}
-            <code className="text-slate-400">.venv</code>. Install installs{" "}
-            <code className="text-slate-400">onnxruntime-openvino</code> (replaces{" "}
-            <code className="text-slate-400">onnxruntime-gpu</code> in this venv) plus OpenVINO and
-            Optimum-Intel.
+            OpenVINOExecutionProvider is not ready. Install prepares the isolated{" "}
+            <code className="text-slate-400">.venvs/openvino</code> runtime with{" "}
+            <code className="text-slate-400">onnxruntime-openvino</code>,{" "}
+            <code className="text-slate-400">openvino</code>, and{" "}
+            <code className="text-slate-400">optimum-intel[openvino]</code>. Default and CUDA
+            runtimes keep their own ORT wheels.
           </>
         }
         detail={hardwareProbe?.openvino?.detail}
         busy={hardwareInstallBusy}
         installing={openvinoInstall.state.installing}
-        installLabel="Install OpenVINO stack into .venv"
-        installingLabel="Installing OpenVINO stack…"
+        installLabel="Install OpenVINO runtime (.venvs/openvino)"
+        installingLabel="Installing OpenVINO runtime…"
         onInstall={() => void openvinoInstall.install()}
         error={openvinoInstall.state.error}
         log={openvinoInstall.state.log}
+      />
+    );
+  }
+  const qnnNeedsInstall =
+    Boolean(hardwareProbe) &&
+    isProviderDetectedLocally("QNNExecutionProvider", hardwareProbe) &&
+    hardwareProbe?.qnn?.loadable !== true;
+  const qnnShowTestNpu =
+    providerId === "QNNExecutionProvider" &&
+    hardwareProbe?.qnn?.hostMode === "local-inference" &&
+    hardwareProbe?.qnn?.loadable === true;
+  const directMlNeedsInstall =
+    computeDirectMlHardwareReady({ os: hardwareProbe?.platform.os ?? "" }) &&
+    Boolean(hardwareProbe) &&
+    !isProviderDetectedLocally("DmlExecutionProvider", hardwareProbe);
+
+  if (providerId === "QNNExecutionProvider" && (qnnNeedsInstall || qnnShowTestNpu)) {
+    const mode = hardwareProbe?.qnn?.hostMode;
+    const prepOnly = mode === "preparation";
+    return (
+      <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
+        {qnnNeedsInstall ? (
+          <PluginInstallBlock
+            description={
+              <>
+                Install prepares isolated <code className="text-slate-400">.venvs/qnn</code> with{" "}
+                <code className="text-slate-400">onnxruntime==1.26.0</code> +{" "}
+                <code className="text-slate-400">onnxruntime-qnn==2.4.0</code>
+                {prepOnly
+                  ? ". Windows x64: preparation / plugin AOT only (not local HTP inference)."
+                  : ". Windows ARM64: runtime install first; “QNN NPU ready” waits on the Snapdragon release gate."}
+                {!isQnnSnapdragonReleaseGatePassed()
+                  ? " UI will show “QNN runtime installed”, not “QNN NPU ready”, until that gate passes."
+                  : ""}
+              </>
+            }
+            detail={hardwareProbe?.qnn?.detail}
+            busy={hardwareInstallBusy || qnnInstall.state.testing}
+            installing={qnnInstall.state.installing}
+            installLabel="Install QNN runtime (.venvs/qnn)"
+            installingLabel="Installing QNN runtime…"
+            onInstall={() => void qnnInstall.install()}
+            error={qnnInstall.state.error}
+            log={qnnInstall.state.log}
+          />
+        ) : null}
+        {qnnShowTestNpu ? (
+          <button
+            type="button"
+            disabled={hardwareInstallBusy || qnnInstall.state.installing || qnnInstall.state.testing}
+            onClick={() => void qnnInstall.testNpu()}
+            className="h-7 px-3 rounded border border-slate-600 text-slate-300 bg-slate-800/60 hover:bg-slate-800 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {qnnInstall.state.testing ? (
+              <>
+                <RefreshCw className="h-3 w-3 animate-spin" />
+                Testing QNN NPU…
+              </>
+            ) : (
+              "Test QNN NPU (cached HTP diagnostic)"
+            )}
+          </button>
+        ) : null}
+        <a
+          href={QNN_ADVANCED_QAIRT_DOCS_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-300"
+          onClick={(e) => e.stopPropagation()}
+        >
+          Advanced QAIRT / SDK tooling <ExternalLink className="h-3 w-3" />
+        </a>
+      </div>
+    );
+  }
+  if (providerId === "DmlExecutionProvider" && directMlNeedsInstall) {
+    return (
+      <PluginInstallBlock
+        description={
+          <>
+            DirectML EP not registered in the default Windows runtime. Install{" "}
+            <code className="text-slate-400">onnxruntime-directml</code> into{" "}
+            <code className="text-slate-400">.venv</code> so{" "}
+            <code className="text-slate-400">DmlExecutionProvider</code> loads for recipes and
+            live runs.
+          </>
+        }
+        busy={hardwareInstallBusy}
+        installing={directMlInstall.state.installing}
+        installLabel="Install onnxruntime-directml into .venv"
+        installingLabel="Installing onnxruntime-directml…"
+        onInstall={() => void directMlInstall.install()}
+        error={directMlInstall.state.error}
+        log={directMlInstall.state.log}
       />
     );
   }
@@ -597,6 +726,8 @@ export function HardwareProviderCard({
   installTrtLog,
   onInstallTensorRt,
   openvinoInstall,
+  qnnInstall,
+  directMlInstall,
   isPreMaxwellBox,
   cudaNeedsOrtGpuInstall,
   cudaToolkitMissingAndEpWorks,
@@ -621,10 +752,20 @@ export function HardwareProviderCard({
   const showSwitchAssist = pConflicts.length > 0 && (isSelected || !cardBlocked);
   const detectedLocally = isProviderDetectedLocally(p.id, hardwareProbe);
   const isWebGpuTarget = p.id === "WebGpuExecutionProvider";
+  const qnnNeedsInstall =
+    Boolean(hardwareProbe) &&
+    isProviderDetectedLocally("QNNExecutionProvider", hardwareProbe) &&
+    hardwareProbe?.qnn?.loadable !== true;
+  const directMlNeedsInstall =
+    computeDirectMlHardwareReady({ os: hardwareProbe?.platform.os ?? "" }) &&
+    Boolean(hardwareProbe) &&
+    !isProviderDetectedLocally("DmlExecutionProvider", hardwareProbe);
   const needsPluginInstall =
     (p.id === "NvTensorRTRTXExecutionProvider" && trtRtxNeedsInstall) ||
     (p.id === "TensorrtExecutionProvider" && trtNeedsInstall) ||
     (p.id === "OpenVINOExecutionProvider" && openvinoNeedsInstall) ||
+    (p.id === "QNNExecutionProvider" && qnnNeedsInstall) ||
+    (p.id === "DmlExecutionProvider" && directMlNeedsInstall) ||
     (p.id === "CUDAExecutionProvider" && cudaNeedsOrtGpuInstall);
 
   const { cardClasses, badgeText, BadgeIcon, badgeColor } = resolveCardChrome({
@@ -718,6 +859,8 @@ export function HardwareProviderCard({
             installTrtLog={installTrtLog}
             onInstallTensorRt={onInstallTensorRt}
             openvinoInstall={openvinoInstall}
+            qnnInstall={qnnInstall}
+            directMlInstall={directMlInstall}
             isPreMaxwellBox={isPreMaxwellBox}
             cudaNeedsOrtGpuInstall={cudaNeedsOrtGpuInstall}
             cudaToolkitMissingAndEpWorks={cudaToolkitMissingAndEpWorks}
@@ -739,7 +882,7 @@ export function HardwareProviderCard({
               Chrome or Edge 113+.
             </p>
           ) : null}
-          {!detectedLocally && !probeLoading && !isWebGpuTarget ? (
+          {!detectedLocally && !probeLoading && !isWebGpuTarget && !needsPluginInstall ? (
             <p className="text-[11px] text-slate-600">
               {p.id === "CPUExecutionProvider"
                 ? "Hardware detection unavailable — CPU status is unknown."

@@ -1,8 +1,5 @@
 /**
- * CUDA version detection helpers.
- *
- * parseCudaVersionFromNvidiaSmi and pickCudaTag are the canonical implementations.
- * routes/system.ts was duplicating them — it should import from here instead.
+ * CUDA version detection helpers + onnxruntime-gpu install into the cuda family.
  */
 import {
   ORT_GPU_PROBE_SCRIPT,
@@ -13,9 +10,11 @@ import {
   isResolvableCudaTag,
 } from "../../../lib/oliveGpuRuntime.ts";
 import { execFileAsync } from "../shared/exec.ts";
-import { pipInstall } from "../shared/pipInstall.ts";
-import { getVenvPython, getVenvPip } from "../venv/paths.ts";
-import { ensureVenv } from "../venv/index.ts";
+import { pipInstallForFamily } from "../shared/pipInstall.ts";
+import { getVenvPython } from "../venv/paths.ts";
+import { ensureVenvFamily } from "../venv/familyEnsure.ts";
+import { envForFamily } from "../venv/pathIsolation.ts";
+import { invalidateRuntimeStatusCache } from "../venv/status.ts";
 import fs from "fs";
 
 /** Parse CUDA version from nvidia-smi output. */
@@ -29,14 +28,6 @@ export function parseCudaVersionFromNvidiaSmi(
   return { cudaVersion, cudaTag };
 }
 
-/**
- * Selects the newest resolvable PyTorch wheel tag for a CUDA version.
- * CUDA 13+ maps to cu128 (highest tag with ORT 1.26 + nvidia-*-cu12 pins).
- *
- * @param major - The CUDA major version
- * @param minor - The CUDA minor version
- * @returns The compatible CUDA wheel tag, or `"cpu"` when the version is below CUDA 11.8
- */
 export function pickCudaTag(major: number, minor: number): string {
   const tiers = [
     { major: 12, minor: 8, tag: "cu128" },
@@ -45,7 +36,6 @@ export function pickCudaTag(major: number, minor: number): string {
     { major: 12, minor: 1, tag: "cu121" },
     { major: 11, minor: 8, tag: "cu118" },
   ];
-  // Driver CUDA 13.x can run cu128 wheels; cu130/cu132 are not resolvable yet.
   if (major >= 13) return "cu128";
   for (const t of tiers) {
     if (major > t.major || (major === t.major && minor >= t.minor)) return t.tag;
@@ -53,15 +43,6 @@ export function pickCudaTag(major: number, minor: number): string {
   return "cpu";
 }
 
-/**
- * Determine the CUDA tag (or "cpu") to use for PyTorch wheel selection.
- *
- * Order of precedence:
- *   1. Explicit `preferred` override (unless "auto")
- *   2. Existing torch CUDA version in venv
- *   3. nvidia-smi auto-detection
- *   4. Fallback to "cpu"
- */
 export async function detectCudaTag(preferred: string, onLine: (line: string) => void): Promise<string> {
   if (preferred && preferred !== "auto") {
     if (preferred === "cpu" || isResolvableCudaTag(preferred)) {
@@ -73,8 +54,7 @@ export async function detectCudaTag(preferred: string, onLine: (line: string) =>
     );
   }
 
-  // Check existing torch in venv first — avoids reinstall when already correct
-  const venvPython = getVenvPython();
+  const venvPython = getVenvPython("cuda");
   try {
     const { stdout } = await execFileAsync(venvPython, [
       "-c",
@@ -83,7 +63,7 @@ export async function detectCudaTag(preferred: string, onLine: (line: string) =>
     const existing = stdout.trim();
     if (existing !== "NONE" && existing) {
       const parts = existing.split(".");
-      const tag = pickCudaTag(parseInt(parts[0]), parseInt(parts[1] ?? "0"));
+      const tag = pickCudaTag(parseInt(parts[0], 10), parseInt(parts[1] ?? "0", 10));
       onLine(`[deps] Existing torch CUDA ${existing} → using ${tag}`);
       return tag;
     }
@@ -91,7 +71,6 @@ export async function detectCudaTag(preferred: string, onLine: (line: string) =>
     /* torch not installed */
   }
 
-  // Auto-detect via nvidia-smi
   try {
     const { stdout } = await execFileAsync("nvidia-smi", []);
     const parsed = parseCudaVersionFromNvidiaSmi(stdout);
@@ -100,65 +79,42 @@ export async function detectCudaTag(preferred: string, onLine: (line: string) =>
       return parsed.cudaTag;
     }
   } catch {
-    /* no GPU or nvidia-smi not in PATH */
+    /* no GPU */
   }
 
   onLine(`[deps] No GPU detected → CPU torch`);
   return "cpu";
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// onnxruntime-gpu install path (mirrors TRT install UX in tensorrt.ts)
-// ─────────────────────────────────────────────────────────────────────────
-
-// `pipInstall` is imported from `../shared/pipInstall.ts` so the same NDJSON
-// line shape + error contract is used by every install route. The local
-// duplicate copy was deleted when this was extracted.
-
 /**
- * Ensures the project virtual environment has the pinned onnxruntime-gpu
- * wheel with a usable CUDA execution provider. The probe script
- * `ORT_GPU_PROBE_SCRIPT` checks both the wheel version AND that the CUDA EP
- * is actually registered, so a successful run means the user can pick
- * CUDA as their IHV provider without further config.
- *
- * Returns `{ ok, error? }`; on success, `libsDir` carries the path the
- * caller can prepend so subsequent `pip install` invocations find cuBLAS /
- * cuDNN shared libs.
- *
- * @param onLine - Receives install + verification messages for the NDJSON stream
+ * Ensures the cuda-family venv has the pinned onnxruntime-gpu wheel with a
+ * usable CUDA execution provider.
  */
 export async function ensureOnnxRuntimeGpu(
   onLine: (line: string) => void,
 ): Promise<{ ok: boolean; error?: string; libsDir?: string | null }> {
-  const venvResult = await ensureVenv(onLine);
+  const venvResult = await ensureVenvFamily("cuda", onLine);
   if (!venvResult.ok) {
     return {
       ok: false,
-      error: venvResult.error ?? "Failed to create or prepare the project .venv",
+      error: venvResult.error ?? "Failed to create or prepare the CUDA runtime",
     };
   }
-  const venvPython = getVenvPython();
-  const pip = getVenvPip();
-  if (!fs.existsSync(venvPython) || !fs.existsSync(pip)) {
+  const venvPython = getVenvPython("cuda");
+  if (!fs.existsSync(venvPython)) {
     return {
       ok: false,
-      error: `Project .venv is incomplete (missing ${!fs.existsSync(pip) ? "pip" : "python"}). Use Setup runtime, then retry.`,
+      error: "CUDA runtime is incomplete (missing python). Use Setup runtime, then retry.",
     };
   }
 
+  const env = envForFamily("cuda");
+
   try {
-    const { stdout } = await execFileAsync(venvPython, ["-c", ORT_GPU_PROBE_SCRIPT]);
+    const { stdout } = await execFileAsync(venvPython, ["-c", ORT_GPU_PROBE_SCRIPT], { env });
     const probe = parseOrtGpuProbe(stdout);
     if (probe.ok) {
       onLine("[deps] onnxruntime-gpu already installed and CUDA EP registered");
-      // The `libsDir` field in the return type carries the path the
-      // caller can prepend to find cuBLAS / cuDNN shared libs for
-      // non-venv subprocesses. We don't compute that here (the
-      // install runs inside .venv where the wheel already shipped its
-      // DLLs alongside the Python module), so explicitly return
-      // `null` rather than leave the field undefined — the caller
-      // distinguishes "ready" from "unknown".
       return { ok: true, libsDir: null };
     }
     if (probe.distVersion || probe.ortVersion) {
@@ -173,12 +129,18 @@ export async function ensureOnnxRuntimeGpu(
   }
 
   onLine(`[deps] Installing ${pinnedOrtGpuLabel()} (required for CUDA EP)...`);
-  await pipInstall(pip, pinnedOrtGpuInstallArgs(), onLine);
+  try {
+    await pipInstallForFamily("cuda", venvPython, pinnedOrtGpuInstallArgs(), onLine);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, libsDir: null, error: msg };
+  }
   onLine(`[deps] ${pinnedOrtGpuLabel()} installed`);
 
-  // Verify after install — surfaces driver/wheel mismatch as a real error.
+  invalidateRuntimeStatusCache();
+
   try {
-    const { stdout } = await execFileAsync(venvPython, ["-c", ORT_GPU_PROBE_SCRIPT]);
+    const { stdout } = await execFileAsync(venvPython, ["-c", ORT_GPU_PROBE_SCRIPT], { env });
     const probe = parseOrtGpuProbe(stdout);
     if (probe.ok) {
       onLine("[deps] CUDA execution provider load verified after install");

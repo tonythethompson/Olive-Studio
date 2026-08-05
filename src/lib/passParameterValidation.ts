@@ -47,10 +47,16 @@ function hardwareLabel(provider: IHVProvider): string {
       return "NVIDIA TensorRT RTX";
     case "ROCMExecutionProvider":
       return "AMD ROCm";
+    case "DmlExecutionProvider":
+      return "Windows DirectML";
+    case "WebGpuExecutionProvider":
+      return "WebGPU";
     case "CPUExecutionProvider":
       return "CPU";
-    default:
-      return provider;
+    default: {
+      const _exhaustive: never = provider;
+      return _exhaustive;
+    }
   }
 }
 

@@ -1,23 +1,99 @@
 /**
- * OpenVINO + Optimum-Intel + ORT OpenVINO EP installation metadata.
+ * OpenVINO + Optimum-Intel installation metadata for the openvino venv family.
  *
- * Installs the PyPI OpenVINO runtime, the Hugging Face Optimum-Intel bridge
- * (openvino extra), and `onnxruntime-openvino` (supplies OpenVINOExecutionProvider)
- * into the project .venv. Used by the Hardware panel install button and by
- * recipe-required-package inference.
- *
- * Olive maps OpenVINOExecutionProvider → onnxruntime-openvino
- * (see microsoft/Olive olive/hardware/constants.py). Plain `openvino` /
- * `optimum-intel` alone do not register the ORT execution provider.
+ * `onnxruntime-openvino` is installed only in `.venvs/openvino` (registers
+ * OpenVINOExecutionProvider). It is forbidden on default and cuda families.
+ * The Python `openvino` package and optimum-intel bridge are also installed
+ * into the openvino family for Olive passes.
  */
+import type { OpenVinoTargetDevice } from "@/types";
+
+export type { OpenVinoTargetDevice };
+
 export const OPEN_VINO_PIP_PACKAGE = "openvino";
 export const OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE = "optimum-intel[openvino]";
-/** ORT wheel that bundles OpenVINOExecutionProvider (mutually exclusive with onnxruntime-gpu). */
+
+/** OpenVINOExecutionProvider silicon target (maps to Olive accelerator.device). */
+export const OPEN_VINO_TARGET_DEVICES: readonly OpenVinoTargetDevice[] = [
+  "CPU",
+  "GPU",
+  "NPU",
+] as const;
+
+/** Olive LocalSystem accelerator.device for an OpenVINO target. */
+export function openvinoTargetToOliveDevice(
+  target: OpenVinoTargetDevice,
+): "cpu" | "gpu" | "npu" {
+  switch (target) {
+    case "GPU":
+      return "gpu";
+    case "NPU":
+      return "npu";
+    case "CPU":
+      return "cpu";
+    default: {
+      const _exhaustive: never = target;
+      return _exhaustive;
+    }
+  }
+}
+
+/** Normalize free-form device tokens from probes / recipes. */
+export function normalizeOpenVinoTargetDevice(raw: unknown): OpenVinoTargetDevice | null {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  const token = raw.trim().toUpperCase();
+  if (token === "CPU" || token.startsWith("CPU.")) return "CPU";
+  if (token === "GPU" || token.startsWith("GPU.") || token === "GPU_FP16" || token === "GPU_FP32") {
+    return "GPU";
+  }
+  if (token === "NPU" || token.startsWith("NPU.")) return "NPU";
+  return null;
+}
+
+/** True when probe-reported OpenVINO devices include the requested target. */
+export function isOpenVinoTargetAvailable(
+  target: OpenVinoTargetDevice,
+  devices: string[] | undefined | null,
+): boolean {
+  if (target === "CPU") return true;
+  if (!devices?.length) return false;
+  const re = target === "GPU" ? /GPU/i : /NPU/i;
+  return devices.some((d) => re.test(d));
+}
+
+/**
+ * Prefer GPU, then NPU, then CPU from an OpenVINO device list.
+ * Falls back to CPU when the probe has not reported devices yet.
+ */
+export function pickOpenVinoTargetFromDevices(
+  devices: string[] | undefined | null,
+): OpenVinoTargetDevice {
+  if (isOpenVinoTargetAvailable("GPU", devices)) return "GPU";
+  if (isOpenVinoTargetAvailable("NPU", devices)) return "NPU";
+  return "CPU";
+}
+
+/**
+ * ORT wheel for the isolated openvino family. Mutually exclusive with other ORT
+ * wheels — must not be installed into default or cuda runtimes.
+ */
 export const ONNXRUNTIME_OPENVINO_PIP_PACKAGE = "onnxruntime-openvino";
 
 /**
- * ORT distributions that conflict with `onnxruntime-openvino` on the same
- * import path. Uninstall these before installing the OpenVINO ORT wheel.
+ * Tested OpenVINO family pin set (ORT OpenVINO EP ↔ openvino ↔ optimum-intel).
+ * Keep `openvinoOrtInstallArgs`, `openvinoPackageConstraints`, and
+ * `openvinoStackInstallArgs` in lockstep when bumping.
+ *
+ * @see https://onnxruntime.ai/docs/execution-providers/OpenVINO-ExecutionProvider.html
+ */
+export const PINNED_ONNXRUNTIME_OPENVINO_VERSION = "1.24.1";
+export const PINNED_OPENVINO_VERSION = "2025.4.1";
+/** Pip version specifier for optimum-intel (extras applied in install args). */
+export const PINNED_OPTIMUM_INTEL_SPEC = ">=1.23.0,<2";
+
+/**
+ * ORT distributions that would conflict if `onnxruntime-openvino` were installed
+ * alongside them in the same venv.
  */
 export const OPENVINO_CONFLICTING_ORT_PACKAGES = [
   "onnxruntime",
@@ -33,8 +109,23 @@ export const OPEN_VINO_GPU_DRIVER_URL =
 export const OPEN_VINO_NPU_DRIVER_URL =
   "https://docs.openvino.ai/2026/get-started/install-openvino/configurations/configurations-intel-npu.html";
 
+/** Canonical ORT wheel pin for the isolated openvino family. */
+export function openvinoOrtInstallArgs(): string[] {
+  return [`${ONNXRUNTIME_OPENVINO_PIP_PACKAGE}==${PINNED_ONNXRUNTIME_OPENVINO_VERSION}`];
+}
+
+/** Pip `--constraint` lines for the openvino family (no extras syntax). */
+export function openvinoPackageConstraints(): string[] {
+  return [
+    `${ONNXRUNTIME_OPENVINO_PIP_PACKAGE}==${PINNED_ONNXRUNTIME_OPENVINO_VERSION}`,
+    `${OPEN_VINO_PIP_PACKAGE}==${PINNED_OPENVINO_VERSION}`,
+    `optimum-intel${PINNED_OPTIMUM_INTEL_SPEC}`,
+  ];
+}
+
 /**
- * Returns the pip install arguments for the OpenVINO stack.
+ * Pip install args for the OpenVINO Python stack (no ORT wheel swap here —
+ * onnxruntime-openvino is installed via the openvino family ensure).
  *
  * `--upgrade` is required for `--upgrade-strategy eager` to take effect so
  * already-installed OpenVINO packages (and their deps) are upgraded when
@@ -45,12 +136,11 @@ export function openvinoStackInstallArgs(): string[] {
     "--upgrade",
     "--upgrade-strategy",
     "eager",
-    OPEN_VINO_PIP_PACKAGE,
-    OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE,
-    ONNXRUNTIME_OPENVINO_PIP_PACKAGE,
+    `${OPEN_VINO_PIP_PACKAGE}==${PINNED_OPENVINO_VERSION}`,
+    `${OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE}${PINNED_OPTIMUM_INTEL_SPEC}`,
   ];
 }
 
 export function openvinoStackLabel(): string {
-  return `${OPEN_VINO_PIP_PACKAGE} + ${OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE} + ${ONNXRUNTIME_OPENVINO_PIP_PACKAGE}`;
+  return `${OPEN_VINO_PIP_PACKAGE}==${PINNED_OPENVINO_VERSION} + ${OPTIMUM_INTEL_OPEN_VINO_PIP_PACKAGE}${PINNED_OPTIMUM_INTEL_SPEC}`;
 }

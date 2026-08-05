@@ -1,5 +1,6 @@
-import { IHVProvider, UIState } from "@/types";
+import { IHVProvider, UIState, OpenVinoTargetDevice } from "@/types";
 import { buildHfLoadKwargs, buildPeftOffloadConfig, isMemoryOffloadActive } from "@/lib/memoryOffload";
+import { openvinoTargetToOliveDevice } from "@/lib/openvinoDeps";
 
 const GPU_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
@@ -7,6 +8,7 @@ const GPU_PROVIDERS: IHVProvider[] = [
   "TensorrtExecutionProvider",
   "ROCMExecutionProvider",
   "WebGpuExecutionProvider",
+  "DmlExecutionProvider",
 ];
 const NPU_PROVIDERS: IHVProvider[] = ["QNNExecutionProvider"];
 
@@ -71,10 +73,19 @@ export function inferModelType(modelId: string): string {
   return "gpt2";
 }
 
-export function providerToAccelerator(provider: IHVProvider): {
+export function providerToAccelerator(
+  provider: IHVProvider,
+  openvinoTargetDevice: OpenVinoTargetDevice = "CPU",
+): {
   device: string;
   execution_providers: string[];
 } {
+  if (provider === "OpenVINOExecutionProvider") {
+    return {
+      device: openvinoTargetToOliveDevice(openvinoTargetDevice),
+      execution_providers: [provider],
+    };
+  }
   const device = GPU_PROVIDERS.includes(provider) ? "gpu" : NPU_PROVIDERS.includes(provider) ? "npu" : "cpu";
   return { device, execution_providers: [provider] };
 }
@@ -170,7 +181,7 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
       local_system: {
         type: "LocalSystem",
         config: {
-          accelerators: [providerToAccelerator(state.ihvProvider)],
+          accelerators: [providerToAccelerator(state.ihvProvider, state.openvinoTargetDevice)],
         },
       },
     },

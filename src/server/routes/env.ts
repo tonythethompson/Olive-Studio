@@ -9,12 +9,15 @@ import {
   ensureVenv,
   getPythonVersion,
   isSupportedOlivePython,
+  invalidateRuntimeStatusCache,
 } from "../services/venv/index.ts";
 import { writeStudioConfig, addVenvToUserPath } from "../services/venv/config.ts";
 import { setRuntimeHfToken, getRuntimeHfToken } from "../services/olive/state.ts";
 import { ensureTensorRtRtx, ensureTensorRt } from "./tensorrt.ts";
 import { ensureOpenVino } from "../services/olive/openvino.ts";
 import { ensureOnnxRuntimeGpu } from "../services/olive/cuda.ts";
+import { ensureDirectMl } from "../services/olive/directml.ts";
+import { ensureQnn, runQnnHtpDiagnostic } from "../services/olive/qnn.ts";
 import { fsWriteRateLimit, heavyCommandRateLimit } from "../middleware/rateLimit.ts";
 import { resolveAllowedPythonFile } from "../services/venv/pythonGuard.ts";
 
@@ -108,9 +111,21 @@ export function mountEnvRoutes(router: Router): void {
     await withVenvPipInstallMutex(() => streamNdjsonInstall(res, ensureOpenVino));
   });
 
-  // Pip-installs the pinned onnxruntime-gpu wheel into `.venv` and verifies
+  router.post("/env/install-qnn", heavyCommandRateLimit, async (_req, res) => {
+    await withVenvPipInstallMutex(() => streamNdjsonInstall(res, ensureQnn));
+  });
+
+  router.post("/env/test-qnn-npu", heavyCommandRateLimit, async (_req, res) => {
+    await withVenvPipInstallMutex(() => streamNdjsonInstall(res, runQnnHtpDiagnostic));
+  });
+
+  router.post("/env/install-directml", heavyCommandRateLimit, async (_req, res) => {
+    await withVenvPipInstallMutex(() => streamNdjsonInstall(res, ensureDirectMl));
+  });
+
+  // Pip-installs the pinned onnxruntime-gpu wheel into the CUDA family and verifies
   // the CUDA execution provider registers. Shares the venv pip mutex with
-  // TensorRT / OpenVINO installs.
+  // TensorRT / OpenVINO / DirectML installs.
   router.post("/env/install-onnxruntime-gpu", heavyCommandRateLimit, async (_req, res) => {
     await withVenvPipInstallMutex(() => streamNdjsonInstall(res, ensureOnnxRuntimeGpu));
   });
@@ -148,12 +163,14 @@ export function mountEnvRoutes(router: Router): void {
     }
     writeStudioConfig({ systemPython: resolved });
     process.env.OLIVE_STUDIO_PYTHON = resolved;
+    invalidateRuntimeStatusCache();
     return res.json({ ok: true, ...(await getRuntimeEnvStatus()) });
   });
 
   router.delete("/env/python-path", async (_req, res) => {
     writeStudioConfig({ systemPython: undefined });
     delete process.env.OLIVE_STUDIO_PYTHON;
+    invalidateRuntimeStatusCache();
     return res.json({ ok: true, ...(await getRuntimeEnvStatus()) });
   });
 

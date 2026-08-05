@@ -39,7 +39,14 @@ import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { HardwareProviderCard } from "@/components/features/HardwareProviderCard";
 import { useOpenVinoInstall } from "@/components/features/useOpenVinoInstall";
+import { useQnnInstall } from "@/components/features/useQnnInstall";
+import { useDirectMlInstall } from "@/components/features/useDirectMlInstall";
 import { runNdjsonInstall } from "@/lib/ndjsonInstall";
+import {
+  OPEN_VINO_TARGET_DEVICES,
+  isOpenVinoTargetAvailable,
+  type OpenVinoTargetDevice,
+} from "@/lib/openvinoDeps";
 import {
   Settings2,
   AlertTriangle,
@@ -317,6 +324,10 @@ export function IHVIntegrationPanel({
   const [installOrtGpuLog, setInstallOrtGpuLog] = useState<string[]>([]);
 
   const hasAutoAppliedRef = useRef(false);
+  const latestStateRef = useRef(state);
+  useEffect(() => {
+    latestStateRef.current = state;
+  }, [state]);
 
   const runHardwareProbe = useCallback(
     async (refresh = false) => {
@@ -329,7 +340,11 @@ export function IHVIntegrationPanel({
         // Auto-apply recommended provider on first probe completion
         if (!hasAutoAppliedRef.current && result.recommendedProvider) {
           hasAutoAppliedRef.current = true;
-          setState({ ihvProvider: result.recommendedProvider });
+          setState(
+            prepareProviderChange(latestStateRef.current, result.recommendedProvider, result) ?? {
+              ihvProvider: result.recommendedProvider,
+            },
+          );
         }
       } catch (err) {
         setProbeError(err instanceof Error ? err.message : "Hardware probe failed.");
@@ -341,9 +356,30 @@ export function IHVIntegrationPanel({
     [setState],
   );
 
+  // Shared mutex across hardware installs (families differ, but pip UX is serialized).
   const openvinoInstall = useOpenVinoInstall({
     onProbeRefresh: runHardwareProbe,
     isInstallBusy: installingTrt || installingTrtRtx || installingOrtGpu,
+  });
+
+  const qnnInstall = useQnnInstall({
+    onProbeRefresh: runHardwareProbe,
+    isInstallBusy:
+      installingTrt ||
+      installingTrtRtx ||
+      installingOrtGpu ||
+      openvinoInstall.state.installing,
+  });
+
+  const directMlInstall = useDirectMlInstall({
+    onProbeRefresh: runHardwareProbe,
+    isInstallBusy:
+      installingTrt ||
+      installingTrtRtx ||
+      installingOrtGpu ||
+      openvinoInstall.state.installing ||
+      qnnInstall.state.installing ||
+      qnnInstall.state.testing,
   });
 
   const trtRtxNeedsInstall =
@@ -354,7 +390,6 @@ export function IHVIntegrationPanel({
     Boolean(hardwareProbe) &&
     isProviderDetectedLocally("OpenVINOExecutionProvider", hardwareProbe) &&
     hardwareProbe?.openvino?.loadable !== true;
-
   // CUDA install / toolkit-link gating (from PR #106).
   const nvidiaGpus = hardwareProbe?.nvidia?.gpus ?? [];
   const isPreMaxwellBox = isPreMaxwellNvidiaBox(nvidiaGpus);
@@ -364,9 +399,15 @@ export function IHVIntegrationPanel({
   const cudaToolkitMissingAndEpWorks =
     nvidiaGpus.length > 0 && !isPreMaxwellBox && cudaEpInVenv && cudaToolkitMissing;
 
-  // Shared mutex: TRT / TRT RTX / OrtGpu / OpenVINO all mutate the same .venv.
+  // Shared mutex across hardware installs (families differ, but pip UX is serialized).
   const hardwareInstallBusy =
-    installingTrt || installingTrtRtx || installingOrtGpu || openvinoInstall.state.installing;
+    installingTrt ||
+    installingTrtRtx ||
+    installingOrtGpu ||
+    openvinoInstall.state.installing ||
+    qnnInstall.state.installing ||
+    qnnInstall.state.testing ||
+    directMlInstall.state.installing;
 
   const handleInstallTensorRtRtx = async () => {
     if (hardwareInstallBusy) return;
@@ -550,7 +591,15 @@ export function IHVIntegrationPanel({
                       {state.ihvProvider !== hardwareProbe.recommendedProvider && (
                         <button
                           type="button"
-                          onClick={() => setState({ ihvProvider: hardwareProbe.recommendedProvider })}
+                          onClick={() =>
+                            setState(
+                              prepareProviderChange(
+                                state,
+                                hardwareProbe.recommendedProvider,
+                                hardwareProbe,
+                              ) ?? { ihvProvider: hardwareProbe.recommendedProvider },
+                            )
+                          }
                           className="ml-2 text-xs text-electric-blue hover:text-white cursor-pointer"
                         >
                           Apply
@@ -670,6 +719,8 @@ export function IHVIntegrationPanel({
                     installTrtLog={installTrtLog}
                     onInstallTensorRt={() => void handleInstallTensorRt()}
                     openvinoInstall={openvinoInstall}
+                    qnnInstall={qnnInstall}
+                    directMlInstall={directMlInstall}
                     isPreMaxwellBox={isPreMaxwellBox}
                     cudaNeedsOrtGpuInstall={cudaNeedsOrtGpuInstall}
                     cudaToolkitMissingAndEpWorks={cudaToolkitMissingAndEpWorks}
@@ -711,7 +762,15 @@ export function IHVIntegrationPanel({
                         !isGpuProvider(state.ihvProvider) && (
                           <button
                             type="button"
-                            onClick={() => setState({ ihvProvider: hardwareProbe.recommendedProvider })}
+                            onClick={() =>
+                            setState(
+                              prepareProviderChange(
+                                state,
+                                hardwareProbe.recommendedProvider,
+                                hardwareProbe,
+                              ) ?? { ihvProvider: hardwareProbe.recommendedProvider },
+                            )
+                          }
                             className="ml-2 text-electric-blue hover:text-white cursor-pointer underline underline-offset-2"
                           >
                             Switch to{" "}
@@ -941,27 +1000,19 @@ export function IHVIntegrationPanel({
                               onClick={() => {
                                 // Allow selecting undetected providers for cross-compile / remote targets
                                 const detected = detectedProviders.includes(p.id);
-                                if (!detected) {
-                                  setState({ ihvProvider: p.id });
-                                  return;
-                                }
-                                const patch = prepareProviderChange(state, p.id, hardwareProbe);
-                                if (patch) {
-                                  setState(patch);
-                                }
+                                const patch = prepareProviderChange(state, p.id, hardwareProbe, {
+                                  skipHardwareBlock: !detected,
+                                });
+                                if (patch) setState(patch);
                               }}
                               onKeyDown={(e) => {
                                 if (e.key !== "Enter" && e.key !== " ") return;
                                 e.preventDefault();
                                 const detected = detectedProviders.includes(p.id);
-                                if (!detected) {
-                                  setState({ ihvProvider: p.id });
-                                  return;
-                                }
-                                const patch = prepareProviderChange(state, p.id, hardwareProbe);
-                                if (patch) {
-                                  setState(patch);
-                                }
+                                const patch = prepareProviderChange(state, p.id, hardwareProbe, {
+                                  skipHardwareBlock: !detected,
+                                });
+                                if (patch) setState(patch);
                               }}
                               className={`p-2 px-1 text-center cursor-pointer transition-all relative select-none ${
                                 isSelectedProvider
@@ -1434,16 +1485,34 @@ export function IHVIntegrationPanel({
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="openvino-target-device">Target Device</Label>
-                      <p className="text-xs text-slate-500">CPU, GPU, NPU</p>
+                      <p className="text-xs text-slate-500">
+                        OpenVINO silicon target (CPU, Intel GPU, or NPU)
+                      </p>
                     </div>
                     <Select
                       id="openvino-target-device"
                       aria-label="Target Device"
                       className="w-full max-w-[150px]"
+                      value={state.openvinoTargetDevice}
+                      onChange={(e) => {
+                        const next = e.target.value as OpenVinoTargetDevice;
+                        if (OPEN_VINO_TARGET_DEVICES.includes(next)) {
+                          setState({ openvinoTargetDevice: next });
+                        }
+                      }}
                     >
-                      <option>NPU</option>
-                      <option>CPU</option>
-                      <option>GPU</option>
+                      {OPEN_VINO_TARGET_DEVICES.map((device) => {
+                        const available = isOpenVinoTargetAvailable(
+                          device,
+                          hardwareProbe?.openvino?.devices,
+                        );
+                        return (
+                          <option key={device} value={device} disabled={!available && Boolean(hardwareProbe)}>
+                            {device}
+                            {!available && hardwareProbe ? " (not detected)" : ""}
+                          </option>
+                        );
+                      })}
                     </Select>
                   </div>
                 </>

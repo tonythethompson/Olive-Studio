@@ -86,6 +86,7 @@ describe("collectTelemetry", () => {
     const state = {
       hfModelId: "bert-base-uncased",
       ihvProvider: "CUDAExecutionProvider",
+    openvinoTargetDevice: "CPU",
       modelSource: "huggingface" as const,
       passes: { conversion: true, quantization: false, pruning: false, onnxTransforms: false },
     } as BuildReportOptions["state"];

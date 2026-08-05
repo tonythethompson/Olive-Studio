@@ -9,12 +9,15 @@ import {
   TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY,
   type HardwareProbeResult,
   isProviderDetectedLocally,
+  computeDirectMlHardwareReady,
+  computeQnnCompatibleHardware,
 } from "@/lib/hardwareProbe";
 import {
   CUDA_TOOLKIT_MIN_COMPUTE_CAPABILITY,
   isPreMaxwellNvidiaBox,
   pinnedOrtGpuInstallCommand,
 } from "@/lib/cudaDeps";
+import { qnnStackInstallCommand, resolveQnnHostMode } from "@/lib/qnnDeps";
 import type { IHVProvider } from "@/types";
 
 export type RecipeHardwareCompatTier = "compatible" | "unavailable" | "unknown";
@@ -26,7 +29,12 @@ export type RecipeHardwareCompatTier = "compatible" | "unavailable" | "unknown";
  * counts as hardware-compatible so `hideIncompatibleRecipes` does not drop it.
  */
 export interface RecipeInstallHint {
-  kind: "tensorrt" | "tensorrt-rtx" | "onnxruntime-gpu";
+  kind:
+    | "tensorrt"
+    | "tensorrt-rtx"
+    | "onnxruntime-gpu"
+    | "onnxruntime-directml"
+    | "onnxruntime-qnn";
   /** Provider the recipe expects once deps land. */
   provider: IHVProvider;
   /** Underlying detail string from the probe (may be empty). */
@@ -51,35 +59,26 @@ export interface RecipeHardwareCompatResult {
   requiresInstall?: RecipeInstallHint;
 }
 
-function isWindowsProbe(probe: HardwareProbeResult): boolean {
-  return probe.platform.os.toLowerCase().includes("win");
-}
-
-/**
- * Builds an install hint for an execution provider on a GPU that supports it
- * but where the matching Python runtime isn't loaded in `.venv` yet. Used
- * for the TensorRT family (kind: "tensorrt" / "tensorrt-rtx") and now also
- * for the CUDA case (kind: "onnxruntime-gpu") — the CUDA branch used to
- * inline this object and dropped the probe's `detail` string, so a real
- * "driver/wheel mismatch" message never made it back to the UI.
- */
 function ePInstallHint(args: {
   probe: HardwareProbeResult;
   requiredProvider: IHVProvider;
   kind: RecipeInstallHint["kind"];
-  detailKey: "tensorrt" | "tensorRtRtx" | "cuda";
+  detailKey?: "tensorrt" | "tensorRtRtx" | "cuda" | "qnn";
   depLabel: string;
   installCommand: string;
+  /** Override the "supported family" label (defaults to NVIDIA GPU or CPU model). */
+  deviceLabel?: string;
 }): RecipeInstallHint {
-  const gpuHint = args.probe.nvidia?.gpus[0]?.name ?? args.probe.platform.cpuModel;
-  const detail = args.probe[args.detailKey]?.detail;
+  const gpuHint =
+    args.deviceLabel ?? args.probe.nvidia?.gpus[0]?.name ?? args.probe.platform.cpuModel;
+  const detail = args.detailKey ? args.probe[args.detailKey]?.detail : undefined;
   return {
     kind: args.kind,
     provider: args.requiredProvider,
     detail,
     hint: detail
-      ? `${args.depLabel} not in .venv (${detail}). GPU is in the supported family (${gpuHint}) — install in Hardware then retry.`
-      : `${args.depLabel} not in .venv yet. GPU is in the supported family (${gpuHint}) — install in Hardware (step 02) to run this recipe.`,
+      ? `${args.depLabel} not in .venv (${detail}). Hardware is in the supported family (${gpuHint}) — install in Hardware then retry.`
+      : `${args.depLabel} not in .venv yet. Hardware is in the supported family (${gpuHint}) — install in Hardware (step 02) to run this recipe.`,
     installCommand: args.installCommand,
   };
 }
@@ -88,6 +87,8 @@ function catalogDeviceToProvider(device: string): IHVProvider | undefined {
   switch (device) {
     case "CUDA":
       return "CUDAExecutionProvider";
+    case "DirectML":
+      return "DmlExecutionProvider";
     case "TensorRT":
       return "TensorrtExecutionProvider";
     case "TensorRT RTX":
@@ -98,6 +99,8 @@ function catalogDeviceToProvider(device: string): IHVProvider | undefined {
       return "QNNExecutionProvider";
     case "CPU":
       return "CPUExecutionProvider";
+    case "WebGPU":
+      return "WebGpuExecutionProvider";
     default:
       return undefined;
   }
@@ -132,33 +135,101 @@ export function assessRecipeHardwareCompatibility(
   }
 
   if (targetDevice === "DirectML") {
-    if (isWindowsProbe(probe)) {
+    // Hardware readiness (Windows / DX12 class) gates compatible vs unavailable.
+    // EP registration separately drives the install hint.
+    if (computeDirectMlHardwareReady({ os: probe.platform.os })) {
+      if (isProviderDetectedLocally("DmlExecutionProvider", probe)) {
+        return {
+          tier: "compatible",
+          targetDevice,
+          reason: "DirectML backend available on Windows.",
+          requiredProvider: "DmlExecutionProvider",
+        };
+      }
       return {
         tier: "compatible",
         targetDevice,
-        reason: "DirectML targets Windows — this host qualifies.",
+        reason: "DirectML targets Windows — install onnxruntime-directml in .venv to run this recipe.",
+        requiredProvider: "DmlExecutionProvider",
+        requiresInstall: ePInstallHint({
+          probe,
+          requiredProvider: "DmlExecutionProvider",
+          kind: "onnxruntime-directml",
+          depLabel: "onnxruntime-directml (DirectML EP wheel)",
+          installCommand: "pip install onnxruntime-directml",
+          deviceLabel: "Windows DirectX 12 adapter",
+        }),
       };
     }
     return {
       tier: "unavailable",
       targetDevice,
       reason: "DirectML recipes require Windows. This host is not Windows.",
+      requiredProvider: "DmlExecutionProvider",
     };
   }
 
   if (targetDevice === "QNN") {
-    if (isProviderDetectedLocally("QNNExecutionProvider", probe)) {
+    const hostMode = resolveQnnHostMode({
+      platform: computeDirectMlHardwareReady({ os: probe.platform.os }) ? "win32" : "linux",
+      arch: probe.platform.arch,
+    });
+    const qnnCompatible = computeQnnCompatibleHardware({
+      os: probe.platform.os,
+      arch: probe.platform.arch,
+      qnnLoadable: probe.qnn?.loadable === true,
+      ortReportsQnn: probe.onnxRuntimeProviders?.includes("QNNExecutionProvider"),
+    });
+    if (isProviderDetectedLocally("QNNExecutionProvider", probe) || qnnCompatible) {
+      if (probe.qnn?.loadable === true) {
+        return {
+          tier: "compatible",
+          targetDevice,
+          reason:
+            hostMode === "preparation"
+              ? "QNN runtime installed for Windows x64 preparation / plugin AOT (not local HTP inference)."
+              : probe.qnn.npuDevice
+                ? "QNN runtime installed with NPU EpDevice (verified “QNN NPU ready” gated separately)."
+                : "QNN runtime installed (.venvs/qnn).",
+          requiredProvider: "QNNExecutionProvider",
+        };
+      }
+      if (hostMode === "out-of-scope") {
+        return {
+          tier: "unavailable",
+          targetDevice,
+          reason:
+            "QNN plugin install/UX is Windows-first in this Studio release (Win ARM64 inference / Win x64 preparation).",
+          requiredProvider: "QNNExecutionProvider",
+        };
+      }
       return {
         tier: "compatible",
         targetDevice,
-        reason: "Qualcomm QNN / Hexagon NPU detected.",
+        reason:
+          hostMode === "preparation"
+            ? "Windows x64 can prepare QNN plugin / AOT recipes — install .venvs/qnn first."
+            : "Windows ARM64 Snapdragon host can run QNN — install .venvs/qnn first.",
         requiredProvider: "QNNExecutionProvider",
+        requiresInstall: ePInstallHint({
+          probe,
+          requiredProvider: "QNNExecutionProvider",
+          kind: "onnxruntime-qnn",
+          detailKey: "qnn",
+          depLabel: "QNN runtime (onnxruntime + onnxruntime-qnn plugin in .venvs/qnn)",
+          installCommand: qnnStackInstallCommand(),
+          deviceLabel:
+            hostMode === "preparation"
+              ? "Windows x64 (preparation / AOT)"
+              : "Windows ARM64 Snapdragon NPU",
+        }),
       };
     }
     return {
       tier: "unavailable",
       targetDevice,
-      reason: "QNN requires Snapdragon / Hexagon dev hardware (not detected on this desktop).",
+      reason:
+        "QNN requires Windows ARM64 (Snapdragon NPU inference) or Windows x64 (plugin preparation). Not detected on this host.",
       requiredProvider: "QNNExecutionProvider",
     };
   }

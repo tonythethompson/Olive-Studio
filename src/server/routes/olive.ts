@@ -8,11 +8,14 @@ import path from "path";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
 
-import type { IHVProvider } from "../../types.ts";
 import type { GpuMetrics } from "../../lib/gpuMetrics.ts";
 import { validateOliveRecipeStructure } from "../../lib/oliveRecipeSchema.ts";
 import { enrichRecipeMemoryOffloadForRun } from "../../lib/memoryOffload.ts";
 import { isGpuExecutionProvider } from "../../lib/oliveGpuRuntime.ts";
+import { normalizeIhvProvider } from "../../lib/venvFamily.ts";
+import { resolveQnnHostMode } from "../../lib/qnnDeps.ts";
+import { assessQnnRecipeReadiness } from "../../lib/qnnReadiness.ts";
+import { DEFAULT_PASSES } from "../../lib/defaultPasses.ts";
 
 import {
   jobRegistry,
@@ -22,15 +25,17 @@ import {
   finalizeJob,
 } from "../services/olive/state.ts";
 import { pushLog, startGpuMetricsTimer, stopGpuMetricsTimer } from "../services/olive/gpu.ts";
+import { probeQnn } from "../services/olive/qnn.ts";
 import { getVenvPython } from "../services/venv/paths.ts";
 import {
-  ensureVenv,
+  ensureProviderCapability,
   buildOliveRunEnvironment,
   resolveOliveCommand,
   detachVenvListener,
 } from "../services/venv/index.ts";
 import type { OliveRecipe, OliveJob } from "../types.ts";
 import { oliveRunRateLimit } from "../middleware/rateLimit.ts";
+import type { HardwareProbeResult } from "../../lib/hardwareProbe.ts";
 
 /** Grace period after SIGTERM before escalating cancel to SIGKILL. */
 export const CANCEL_SIGKILL_GRACE_MS = 10_000;
@@ -68,6 +73,40 @@ export function mountOliveRoutes(router: Router): void {
       return res.status(400).json({ ok: false, error: validation.errors.join("; ") });
     }
 
+    const providerRaw =
+      recipe.systems?.local_system?.config?.accelerators?.[0]?.execution_providers?.[0] ??
+      "CPUExecutionProvider";
+    const provider = normalizeIhvProvider(providerRaw);
+    if (!provider) {
+      return res.status(400).json({
+        ok: false,
+        error: `Unknown execution provider: ${String(providerRaw)}`,
+      });
+    }
+
+    if (provider === "QNNExecutionProvider") {
+      const inputModel = recipe.input_model as { io_config?: unknown } | undefined;
+      const hostMode = resolveQnnHostMode({ platform: process.platform, arch: process.arch });
+      const hardFailures = assessQnnRecipeReadiness({
+        state: { ihvProvider: provider, passes: DEFAULT_PASSES },
+        ioConfig: inputModel?.io_config,
+        hostMode,
+        platform: { platform: process.platform, arch: process.arch },
+      }).filter((issue) => issue.severity === "error");
+      if (hardFailures.length > 0) {
+        return res.status(400).json({
+          ok: false,
+          error: hardFailures.map((issue) => issue.message).join("; "),
+        });
+      }
+    }
+
+    // Canonicalize EP token before enrich/serialize so Olive never sees aliases (e.g. trt).
+    const accel = recipe.systems?.local_system?.config?.accelerators?.[0];
+    if (accel && Array.isArray(accel.execution_providers) && accel.execution_providers.length > 0) {
+      accel.execution_providers[0] = provider;
+    }
+
     const jobId = uuidv4();
     const job: OliveJob = {
       id: jobId,
@@ -86,9 +125,6 @@ export function mountOliveRoutes(router: Router): void {
     };
     jobRegistry.set(jobId, job);
 
-    const provider = (recipe.systems?.local_system?.config?.accelerators?.[0]?.execution_providers?.[0] ??
-      "CPUExecutionProvider") as IHVProvider;
-
     // Cancellation can arrive during the long setup awaits below, before a
     // process exists. Bail out (and respond) instead of spawning Olive anyway.
     const bailIfCancelled = (): boolean => {
@@ -104,21 +140,68 @@ export function mountOliveRoutes(router: Router): void {
       // Retain the listener so /olive/cancel can detach it if setup is pending.
       const venvListener = (line: string) => pushLog(job, line);
       job.venvListener = venvListener;
-      const venvResult = await ensureVenv(venvListener);
+      const capResult = await ensureProviderCapability(
+        provider,
+        venvListener,
+        provider === "QNNExecutionProvider"
+          ? {
+              usage:
+                resolveQnnHostMode({ platform: process.platform, arch: process.arch }) ===
+                "local-inference"
+                  ? "inference"
+                  : "preparation",
+            }
+          : undefined,
+      );
       // Setup finished for this caller — the listener is no longer registered.
       job.venvListener = undefined;
       if (bailIfCancelled()) return;
-      if (!venvResult.ok) {
+      if (!capResult.ok) {
         job.status = "failed";
-        // Log before finalizeJob so the error reaches any stream before it drains.
-        pushLog(job, `[error] ${venvResult.error}`);
+        pushLog(job, `[error] ${capResult.error}`);
         cleanupJobArtifacts(job);
         finalizeJob(job);
-        return res.status(500).json({ ok: false, jobId, error: venvResult.error });
+        return res.status(500).json({ ok: false, jobId, error: capResult.error });
       }
 
-      const venvPython = getVenvPython();
-      const env = await buildOliveRunEnvironment(venvPython, provider, process.env);
+      const venvPython = capResult.python ?? getVenvPython(capResult.family);
+
+      if (provider === "QNNExecutionProvider" && venvPython) {
+        const hostMode = resolveQnnHostMode({ platform: process.platform, arch: process.arch });
+        if (hostMode === "local-inference") {
+          const qnn = await probeQnn(venvPython);
+          const inputModel = recipe.input_model as { io_config?: unknown } | undefined;
+          const probe: HardwareProbeResult = {
+            probedAt: new Date().toISOString(),
+            platform: {
+              os: process.platform,
+              arch: process.arch,
+              cpuModel: "",
+              cpuCores: 0,
+            },
+            detectedProviders: ["QNNExecutionProvider"],
+            recommendedProvider: "QNNExecutionProvider",
+            notes: [],
+            qnn,
+          };
+          const hardFailures = assessQnnRecipeReadiness({
+            state: { ihvProvider: provider, passes: DEFAULT_PASSES },
+            ioConfig: inputModel?.io_config,
+            hostMode,
+            probe,
+          }).filter((issue) => issue.severity === "error");
+          if (hardFailures.length > 0) {
+            const error = hardFailures.map((issue) => issue.message).join("; ");
+            job.status = "failed";
+            pushLog(job, `[error] ${error}`);
+            cleanupJobArtifacts(job);
+            finalizeJob(job);
+            return res.status(400).json({ ok: false, jobId, error });
+          }
+        }
+      }
+
+      const env = await buildOliveRunEnvironment(venvPython, provider, process.env, capResult.family);
       if (bailIfCancelled()) return;
 
       if (cudaVersion !== "auto") {
@@ -141,7 +224,7 @@ export function mountOliveRoutes(router: Router): void {
       pushLog(job, "[setup] Starting Olive optimization...");
       job.status = "running";
 
-      const { executable, args } = resolveOliveCommand(provider, configPath, false);
+      const { executable, args } = resolveOliveCommand(provider, configPath, false, capResult.family);
       const proc = spawn(executable, args, { stdio: "pipe", env });
       job.process = proc;
 
@@ -189,8 +272,8 @@ export function mountOliveRoutes(router: Router): void {
 
       return res.json({ ok: true, jobId });
     } catch (err: unknown) {
-      // Preserve intentional cancellation — e.g. ensureVenv/buildOliveRunEnvironment
-      // rejecting after /olive/cancel already stamped "cancelled".
+      // Preserve intentional cancellation — e.g. ensureProviderCapability /
+      // buildOliveRunEnvironment rejecting after /olive/cancel already stamped "cancelled".
       if (job.status !== "cancelled") {
         job.status = "failed";
       }

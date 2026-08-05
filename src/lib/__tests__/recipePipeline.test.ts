@@ -20,17 +20,18 @@ function baseState(overrides?: Partial<UIState>): UIState {
     hfModelId: "meta-llama/Meta-Llama-3-8B",
     hfDataset: "",
     ihvProvider: "CUDAExecutionProvider" as IHVProvider,
+    openvinoTargetDevice: "CPU",
     memoryOffload: "gpu_only",
     cudaVersion: "auto",
     cacheDir: "",
     azureStr: "",
     distributedCaching: false,
     activeJobId: null,
+    ...overrides,
     passes: {
       ...DEFAULT_PASSES,
       ...overrides?.passes,
     },
-    ...overrides,
   };
 }
 
@@ -63,6 +64,7 @@ describe("buildRecipeFromState", () => {
   it("sanitizes the state before building the recipe", () => {
     const state = baseState({
       ihvProvider: "CPUExecutionProvider" as IHVProvider,
+    openvinoTargetDevice: "CPU",
       passes: { ...DEFAULT_PASSES, conversion: true, conversionFormat: "openvino" },
     });
     const result = buildRecipeFromState(state);

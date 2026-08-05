@@ -1,12 +1,14 @@
 import { describe, it, expect } from "vitest";
+import path from "path";
 import { getVenvPython, getVenvPip, getVenvScriptsDir, VENV_DIR } from "./paths.ts";
+import { getFamilyRoot } from "./spec.ts";
 
 describe("venv paths", () => {
   it("defines VENV_DIR relative to cwd", () => {
     expect(VENV_DIR).toContain(".venv");
   });
 
-  it("getVenvPython returns a path inside VENV_DIR", () => {
+  it("getVenvPython returns a path inside VENV_DIR by default", () => {
     const python = getVenvPython();
     expect(python).toContain(".venv");
     expect(python).toMatch(/python(\.exe)?$/);
@@ -21,5 +23,21 @@ describe("venv paths", () => {
   it("getVenvScriptsDir returns a path inside VENV_DIR", () => {
     const scripts = getVenvScriptsDir();
     expect(scripts).toContain(".venv");
+  });
+
+  it.each(["cuda", "openvino", "qnn"] as const)(
+    "resolves the %s family under .venvs/<family>",
+    (family) => {
+      const segment = path.join(".venvs", family);
+      expect(getFamilyRoot(family)).toContain(segment);
+      const python = getVenvPython(family);
+      expect(python).toContain(segment);
+      expect(python).toMatch(/python(\.exe)?$/);
+      expect(getVenvScriptsDir(family)).toContain(segment);
+    },
+  );
+
+  it("keeps the default family outside .venvs", () => {
+    expect(getFamilyRoot("default")).not.toContain(`.venvs${path.sep}`);
   });
 });

@@ -11,6 +11,7 @@ const IHV_PROVIDERS = new Set<string>([
   "CUDAExecutionProvider",
   "TensorrtExecutionProvider",
   "NvTensorRTRTXExecutionProvider",
+  "DmlExecutionProvider",
   "OpenVINOExecutionProvider",
   "QNNExecutionProvider",
   "ROCMExecutionProvider",

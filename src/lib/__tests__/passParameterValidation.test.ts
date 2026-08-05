@@ -11,6 +11,7 @@ function baseState(overrides?: Partial<UIState>): UIState {
     hfModelId: "mistralai/Mistral-7B-v0.1",
     hfDataset: "",
     ihvProvider: "CUDAExecutionProvider",
+    openvinoTargetDevice: "CPU",
     memoryOffload: "gpu_only",
     cudaVersion: "auto",
     cacheDir: "",
