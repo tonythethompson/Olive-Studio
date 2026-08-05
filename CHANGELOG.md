@@ -6,6 +6,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **Tech-debt passes 1–6** (see `docs/Tech Debt & Issues.md` for the full status table):
+  - Validation pipeline: `buildOliveRecipe` memoized; `buildRecipeFromState` reuses the recipe built during validation; recipe-builder UI defers validation display and rebuilds fresh at Execute/Queue time.
+  - `CROSS_PASS_RULES` is now the single rule table driving both pass coercion and cross-pass validation issues; HF task / model-type inference uses explicit ordered lookup tables.
+  - Job logs are capped at 1,000 lines with a trim marker on SSE reconnect replay; `/olive/status` reports `logsTruncated`.
+  - `routes/ai.ts` (2,120 lines) split into `routes/ai/` sub-modules; local-engine runtime state moved to `services/ai/localEngineState.ts` with a test reset hook.
+  - `OLIVE_SERVE_STATIC` env switch for static serving; vite loaded dynamically in dev and moved to devDependencies; `QueryClient` scoped inside `App`; recipe/system types off `any`.
+
+### Removed
+
+- Dead `@mendable/firecrawl-js` dependency (no imports anywhere in the codebase).
+
+---
+
 ## [0.2.0] — 2026-07-25
 
 ### Added

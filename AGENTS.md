@@ -98,7 +98,9 @@ Out of scope for this list: Microsoft 365 Agents / Copilot Studio agents (channe
 
 ## CI Pipeline
 
-`.github/workflows/ci.yml` runs: lint → unit tests → server tests → integration tests → component tests → recipe validation → build → artifact assert → prod smoke → CodeQL. A separate `python-tests` job runs pytest for the MCP server.
+`.github/workflows/ci.yml` runs: lint → unit tests → server tests → integration tests → component tests → recipe validation → build → artifact assert → prod smoke → CodeQL. A separate `python-tests` job runs pytest for the MCP server, and `docker-build` builds + smoke-runs the MCP server image.
+
+**GitHub Actions is the gate of record for PRs.** The full suites are very slow on WSL/drive-mounted checkouts (tens of minutes to hours); push the branch and let CI verify instead of running the full suites locally. Locally, prefer fast targeted checks (single-file lint or one small test file) when needed.
 
 ## MCP Server Setup
 
