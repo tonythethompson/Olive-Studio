@@ -195,7 +195,9 @@ export async function probeQnn(python: string): Promise<QnnProbeResult> {
     const acc = parseProbeOutput(`${stdout}\n${stderr}`);
     const pluginInstalled = Boolean(acc.pluginVersion || acc.pluginImport);
     const preparation =
-      pluginInstalled && (acc.anyQnnDevice === true || acc.qnnEpListed === true);
+      mode !== "out-of-scope" &&
+      pluginInstalled &&
+      (acc.anyQnnDevice === true || acc.qnnEpListed === true);
     const potentialInference = mode === "local-inference" && acc.npuDevice === true;
     const verifiedInference =
       potentialInference && htp.status === "passed" && isQnnSnapdragonReleaseGatePassed();
@@ -387,10 +389,12 @@ finally:
     }
     const detail = combined.trim().split(/\r?\n/).slice(-3).join(" ") || "HTP diagnostic failed";
     writeQnnHtpDiagnosticCache({ status: "failed", detail });
+    invalidateRuntimeStatusCache();
     return { ok: false, error: detail, probe: await probeQnn(python) };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     writeQnnHtpDiagnosticCache({ status: "failed", detail: msg });
+    invalidateRuntimeStatusCache();
     return { ok: false, error: msg, probe: await probeQnn(python) };
   }
 }

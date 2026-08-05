@@ -171,7 +171,7 @@ export function assessRecipeHardwareCompatibility(
 
   if (targetDevice === "QNN") {
     const hostMode = resolveQnnHostMode({
-      platform: /^win(?:32|64)?$/i.test(probe.platform.os.trim()) ? "win32" : "linux",
+      platform: computeDirectMlHardwareReady({ os: probe.platform.os }) ? "win32" : "linux",
       arch: probe.platform.arch,
     });
     const qnnCompatible = computeQnnCompatibleHardware({

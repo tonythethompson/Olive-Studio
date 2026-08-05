@@ -5,6 +5,7 @@ import {
   isPreMaxwellNvidiaBox,
   pinnedOrtGpuInstallCommand,
 } from "@/lib/cudaDeps";
+import { resolveQnnHostMode } from "@/lib/qnnDeps";
 
 /**
  * Compute capability is reported as `"<major>.<minor>"` (e.g. `"8.9"` for
@@ -174,8 +175,8 @@ const ORT_PROVIDER_MAP: Record<string, IHVProvider> = {
 };
 
 /**
- * Windows-first QNN host soft-compat: Win ARM64 (inference) or Win x64 (preparation),
- * or ORT already reporting QNNExecutionProvider / qnn.loadable.
+ * Windows-first QNN host soft-compat: Win ARM64 (inference) or Win x64 (preparation).
+ * Runtime signals (loadable / ORT-reported QNN) never override an out-of-scope host.
  */
 export function computeQnnCompatibleHardware(input: {
   os: string;
@@ -183,13 +184,12 @@ export function computeQnnCompatibleHardware(input: {
   qnnLoadable?: boolean;
   ortReportsQnn?: boolean;
 }): boolean {
-  if (input.qnnLoadable || input.ortReportsQnn) return true;
-  const os = input.os.toLowerCase();
-  const isWin =
-    /\bwin(?:dows(?:_nt)?|32|64)?\b/.test(os) || os.includes("win32") || os.includes("windows");
-  if (!isWin) return false;
-  const arch = input.arch.toLowerCase();
-  return arch === "arm64" || arch === "aarch64" || arch === "x64" || arch === "x86_64" || arch === "amd64";
+  const hostMode = resolveQnnHostMode({
+    platform: computeDirectMlHardwareReady({ os: input.os }) ? "win32" : "linux",
+    arch: input.arch,
+  });
+  if (hostMode === "out-of-scope") return false;
+  return true;
 }
 
 export function mapOrtProvidersToIhv(providers: string[]): IHVProvider[] {
@@ -278,6 +278,10 @@ export function mergeDetectedProviders(input: {
 
   if (input.onnxRuntimeProviders?.length) {
     for (const provider of mapOrtProvidersToIhv(input.onnxRuntimeProviders)) {
+      if (provider === "QNNExecutionProvider") {
+        // Host-boundary soft-detect below owns QNN; do not trust ORT listing alone.
+        continue;
+      }
       if (provider === "TensorrtExecutionProvider" && !tensorRtOk) {
         continue;
       }
@@ -314,7 +318,7 @@ export function mergeDetectedProviders(input: {
   if (input.hasDirectMl) {
     detected.add("DmlExecutionProvider");
   }
-  if (input.qnnLoadable || input.hasQnnCompatibleHardware) {
+  if (input.hasQnnCompatibleHardware) {
     detected.add("QNNExecutionProvider");
   }
 

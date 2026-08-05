@@ -573,14 +573,14 @@ describe("mergeDetectedProviders DirectML", () => {
 });
 
 describe("mergeDetectedProviders QNN", () => {
-  it("maps QNNExecutionProvider from ORT provider list", () => {
+  it("does not trust ORT QNN listing alone without host-compatible soft-detect", () => {
     const detected = mergeDetectedProviders({
       onnxRuntimeProviders: ["CPUExecutionProvider", "QNNExecutionProvider"],
       hasNvidiaGpu: false,
       hasRocmGpu: false,
       hasOpenVino: false,
     });
-    expect(detected).toContain("QNNExecutionProvider");
+    expect(detected).not.toContain("QNNExecutionProvider");
   });
 
   it("soft-detects QNN on compatible Windows hosts", () => {
@@ -599,5 +599,13 @@ describe("mergeDetectedProviders QNN", () => {
     ).toBe(true);
     expect(computeQnnCompatibleHardware({ os: "win32 10.0", arch: "x64" })).toBe(true);
     expect(computeQnnCompatibleHardware({ os: "linux 6.8", arch: "x64" })).toBe(false);
+    expect(
+      computeQnnCompatibleHardware({
+        os: "linux 6.8",
+        arch: "x64",
+        qnnLoadable: true,
+        ortReportsQnn: true,
+      }),
+    ).toBe(false);
   });
 });

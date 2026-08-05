@@ -47,7 +47,8 @@ function qnnCapabilityForUsage(
   usage: ProviderCapabilityUsage,
 ): CapabilityStatus | undefined {
   if (usage === "preparation") return status.capabilities.qnnPreparation;
-  return status.capabilities.qnnInference ?? status.capabilities.qnnPreparation;
+  // Fail-closed: inference must not fall back to preparation capability.
+  return status.capabilities.qnnInference;
 }
 
 /**

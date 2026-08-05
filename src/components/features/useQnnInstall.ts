@@ -4,7 +4,7 @@
  * Streams NDJSON from POST /api/env/install-qnn and refreshes the
  * hardware probe on success. Optional Test QNN NPU hits /api/env/test-qnn-npu.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { runNdjsonInstall } from "@/lib/ndjsonInstall";
 
 export interface UseQnnInstallOptions {
@@ -34,9 +34,12 @@ export function useQnnInstall({
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
+  /** Synchronous busy guard so same-tick double clicks cannot start two requests. */
+  const busyRef = useRef(false);
 
   const install = useCallback(async () => {
-    if (isInstallBusy || installing || testing) return;
+    if (isInstallBusy || busyRef.current) return;
+    busyRef.current = true;
     setInstalling(true);
     setError(null);
     setLog([]);
@@ -51,12 +54,14 @@ export function useQnnInstall({
           : msg,
       );
     } finally {
+      busyRef.current = false;
       setInstalling(false);
     }
-  }, [isInstallBusy, installing, testing, onProbeRefresh]);
+  }, [isInstallBusy, onProbeRefresh]);
 
   const testNpu = useCallback(async () => {
-    if (isInstallBusy || installing || testing) return;
+    if (isInstallBusy || busyRef.current) return;
+    busyRef.current = true;
     setTesting(true);
     setError(null);
     setLog([]);
@@ -71,9 +76,10 @@ export function useQnnInstall({
           : msg,
       );
     } finally {
+      busyRef.current = false;
       setTesting(false);
     }
-  }, [isInstallBusy, installing, testing, onProbeRefresh]);
+  }, [isInstallBusy, onProbeRefresh]);
 
   return {
     state: { installing, testing, error, log },

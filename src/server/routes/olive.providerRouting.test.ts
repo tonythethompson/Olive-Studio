@@ -42,9 +42,18 @@ vi.mock("../../lib/oliveRecipeSchema.ts", () => ({
   validateOliveRecipeStructure: () => ({ valid: true, errors: [] }),
 }));
 
+vi.mock("../../lib/qnnDeps.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/qnnDeps.ts")>();
+  return {
+    ...actual,
+    resolveQnnHostMode: vi.fn(() => "preparation" as const),
+  };
+});
+
 const { mountOliveRoutes } = await import("./olive.ts");
 const { jobRegistry } = await import("../services/olive/state.ts");
 const venv = await import("../services/venv/index.ts");
+const qnnDeps = await import("../../lib/qnnDeps.ts");
 
 let server: Server;
 let baseUrl: string;
@@ -140,6 +149,7 @@ describe("POST /olive/run provider routing", () => {
   });
 
   it("routes QNN recipes with preparation/inference usage based on host mode", async () => {
+    vi.mocked(qnnDeps.resolveQnnHostMode).mockReturnValue("preparation");
     vi.mocked(venv.ensureProviderCapability).mockResolvedValue({
       ok: true,
       family: "qnn",
@@ -160,9 +170,23 @@ describe("POST /olive/run provider routing", () => {
     expect(venv.ensureProviderCapability).toHaveBeenCalledWith(
       "QNNExecutionProvider",
       expect.any(Function),
-      {
-        usage: process.platform === "win32" && process.arch === "arm64" ? "inference" : "preparation",
-      },
+      { usage: "preparation" },
     );
+  });
+
+  it("rejects QNN recipes on out-of-scope hosts before capability setup", async () => {
+    vi.mocked(qnnDeps.resolveQnnHostMode).mockReturnValue("out-of-scope");
+    const res = await fetch(`${baseUrl}/api/olive/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipeJson: JSON.stringify(recipeWithProvider("QNNExecutionProvider")),
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { ok: boolean; error?: string };
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/Windows-first/i);
+    expect(venv.ensureProviderCapability).not.toHaveBeenCalled();
   });
 });

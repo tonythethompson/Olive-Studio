@@ -14,6 +14,8 @@ import { enrichRecipeMemoryOffloadForRun } from "../../lib/memoryOffload.ts";
 import { isGpuExecutionProvider } from "../../lib/oliveGpuRuntime.ts";
 import { normalizeIhvProvider } from "../../lib/venvFamily.ts";
 import { resolveQnnHostMode } from "../../lib/qnnDeps.ts";
+import { assessQnnRecipeReadiness } from "../../lib/qnnReadiness.ts";
+import { DEFAULT_PASSES } from "../../lib/defaultPasses.ts";
 
 import {
   jobRegistry,
@@ -78,6 +80,23 @@ export function mountOliveRoutes(router: Router): void {
         ok: false,
         error: `Unknown execution provider: ${String(providerRaw)}`,
       });
+    }
+
+    if (provider === "QNNExecutionProvider") {
+      const inputModel = recipe.input_model as { io_config?: unknown } | undefined;
+      const hostMode = resolveQnnHostMode({ platform: process.platform, arch: process.arch });
+      const hardFailures = assessQnnRecipeReadiness({
+        state: { ihvProvider: provider, passes: DEFAULT_PASSES },
+        ioConfig: inputModel?.io_config,
+        hostMode,
+        platform: { platform: process.platform, arch: process.arch },
+      }).filter((issue) => issue.severity === "error");
+      if (hardFailures.length > 0) {
+        return res.status(400).json({
+          ok: false,
+          error: hardFailures.map((issue) => issue.message).join("; "),
+        });
+      }
     }
 
     // Canonicalize EP token before enrich/serialize so Olive never sees aliases (e.g. trt).

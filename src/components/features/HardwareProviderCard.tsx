@@ -25,6 +25,7 @@ import {
 } from "@/lib/pipelineValidation";
 import {
   isProviderDetectedLocally,
+  computeDirectMlHardwareReady,
   type GpuInfo,
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
@@ -462,7 +463,7 @@ function ProviderPluginInstalls({
     hardwareProbe?.qnn?.hostMode === "local-inference" &&
     hardwareProbe?.qnn?.loadable === true;
   const directMlNeedsInstall =
-    /^win(?:32|64)?$/i.test(hardwareProbe?.platform.os.trim() ?? "") &&
+    computeDirectMlHardwareReady({ os: hardwareProbe?.platform.os ?? "" }) &&
     Boolean(hardwareProbe) &&
     !isProviderDetectedLocally("DmlExecutionProvider", hardwareProbe);
 
@@ -756,7 +757,7 @@ export function HardwareProviderCard({
     isProviderDetectedLocally("QNNExecutionProvider", hardwareProbe) &&
     hardwareProbe?.qnn?.loadable !== true;
   const directMlNeedsInstall =
-    /^win(?:32|64)?$/i.test(hardwareProbe?.platform.os.trim() ?? "") &&
+    computeDirectMlHardwareReady({ os: hardwareProbe?.platform.os ?? "" }) &&
     Boolean(hardwareProbe) &&
     !isProviderDetectedLocally("DmlExecutionProvider", hardwareProbe);
   const needsPluginInstall =
