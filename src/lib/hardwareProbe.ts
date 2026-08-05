@@ -5,6 +5,7 @@ import {
   isPreMaxwellNvidiaBox,
   pinnedOrtGpuInstallCommand,
 } from "@/lib/cudaDeps";
+import { resolveQnnHostMode } from "@/lib/qnnDeps";
 
 /**
  * Compute capability is reported as `"<major>.<minor>"` (e.g. `"8.9"` for
@@ -73,6 +74,30 @@ export interface OpenVinoProbeResult {
   detail?: string;
 }
 
+/** QNN 2.x plugin probe (isolated `.venvs/qnn`). */
+export interface QnnProbeResult {
+  available: boolean;
+  /** True when preparation capability is usable (plugin + QNN EpDevice). */
+  loadable?: boolean;
+  pluginVersion?: string;
+  pluginRegistered?: boolean;
+  preparation?: boolean;
+  /** OrtHardwareDeviceType.NPU filter (not CPU/emulator). */
+  npuDevice?: boolean;
+  potentialInference?: boolean;
+  /** Only true after Snapdragon release gate + cached HTP diagnostic. */
+  verifiedInference?: boolean;
+  htpSmoke?: {
+    status: "not_run" | "passed" | "failed";
+    detail?: string;
+    at?: string;
+  };
+  hostMode?: "local-inference" | "preparation" | "out-of-scope";
+  providers?: string[];
+  deviceTypes?: string[];
+  detail?: string;
+}
+
 export interface HardwareProbeResult {
   probedAt: string;
   platform: {
@@ -105,6 +130,7 @@ export interface HardwareProbeResult {
     gpus: GpuInfo[];
   };
   openvino?: OpenVinoProbeResult;
+  qnn?: QnnProbeResult;
   tensorrt?: {
     loadable: boolean;
     detail?: string;
@@ -141,10 +167,30 @@ const ORT_PROVIDER_MAP: Record<string, IHVProvider> = {
   TensorrtExecutionProvider: "TensorrtExecutionProvider",
   NvTensorRTRTXExecutionProvider: "NvTensorRTRTXExecutionProvider",
   NvTensorRtRtxExecutionProvider: "NvTensorRTRTXExecutionProvider",
+  DmlExecutionProvider: "DmlExecutionProvider",
   OpenVINOExecutionProvider: "OpenVINOExecutionProvider",
+  QNNExecutionProvider: "QNNExecutionProvider",
   ROCMExecutionProvider: "ROCMExecutionProvider",
   WebGpuExecutionProvider: "WebGpuExecutionProvider",
 };
+
+/**
+ * Windows-first QNN host soft-compat: Win ARM64 (inference) or Win x64 (preparation).
+ * Runtime signals (loadable / ORT-reported QNN) never override an out-of-scope host.
+ */
+export function computeQnnCompatibleHardware(input: {
+  os: string;
+  arch: string;
+  qnnLoadable?: boolean;
+  ortReportsQnn?: boolean;
+}): boolean {
+  const hostMode = resolveQnnHostMode({
+    platform: computeDirectMlHardwareReady({ os: input.os }) ? "win32" : "linux",
+    arch: input.arch,
+  });
+  if (hostMode === "out-of-scope") return false;
+  return true;
+}
 
 export function mapOrtProvidersToIhv(providers: string[]): IHVProvider[] {
   const found = new Set<IHVProvider>();
@@ -176,6 +222,32 @@ export function computeOpenVinoCompatibleHardware(input: {
 }
 
 /**
+ * Whether the host is DirectML / DirectX 12 class capable for recipe gating.
+ * Windows 10+ ships DX12; we do not probe adapter creation here. EP registration
+ * (`DmlExecutionProvider` in ORT) remains separate for install guidance.
+ *
+ * Matches win32 / Windows / Windows_NT tokens without treating "darwin" as Windows.
+ */
+export function computeDirectMlHardwareReady(input: { os: string }): boolean {
+  const os = input.os.toLowerCase();
+  return /\bwin(?:dows(?:_nt)?|32|64)?\b/.test(os) || os.includes("win32") || os.includes("windows");
+}
+
+/**
+ * True when Hardware should offer DirectML one-click install: DX12-class host
+ * and DmlExecutionProvider not yet registered in the probe.
+ */
+export function computeDirectMlNeedsInstall(
+  probe: HardwareProbeResult | null | undefined,
+): boolean {
+  if (!probe?.platform?.os) return false;
+  return (
+    computeDirectMlHardwareReady({ os: probe.platform.os }) &&
+    !isProviderDetectedLocally("DmlExecutionProvider", probe)
+  );
+}
+
+/**
  * Combines ONNX Runtime providers and hardware probe results into the locally detected provider list.
  *
  * @param input - Provider and hardware detection results, including runtime loadability for TensorRT variants
@@ -188,54 +260,37 @@ export function mergeDetectedProviders(input: {
   hasOpenVino: boolean;
   /** True when the local CPU/platform can run the OpenVINO runtime, even if not yet installed. */
   hasOpenVinoCompatibleHardware?: boolean;
+  /** True when onnxruntime reports DmlExecutionProvider (not merely Windows). */
+  hasDirectMl?: boolean;
+  /** Soft-detect QNN on Windows ARM64/x64 or when the qnn family is loadable. */
+  hasQnnCompatibleHardware?: boolean;
+  qnnLoadable?: boolean;
   tensorRtLoadable?: boolean;
   tensorRtRtxLoadable?: boolean;
-  /**
-   * Pre-computed by the route handler from `nvidia.gpus[].computeCapability`.
-   * When `true`, at least one NVIDIA GPU meets the TensorRT-family floor
-   * (SM 7.5 / Turing+). Defaults to `true` for backwards compatibility with
-   * callers that did not supply the GPU detail; routes that have it should
-   * always pass it explicitly.
-   */
   nvidiaTensorRtFamilyCapable?: boolean;
-  /**
-   * Pre-computed from the ORT CUDA EP probe (`ORT_GPU_PROBE_SCRIPT`).
-   * When explicitly `false`, the CUDA execution provider is not loadable in
-   * this environment (e.g. onnxruntime-gpu wheel missing, driver/wheel
-   * mismatch) and `mergeDetectedProviders` strips `CUDAExecutionProvider`
-   * from the detected list. Defaults to `true` for callers that don't probe
-   * the EP — same permissive-to-unknown convention as TensorRT.
-   */
   cudaLoadable?: boolean;
 }): IHVProvider[] {
   const detected = new Set<IHVProvider>(["CPUExecutionProvider"]);
   const tensorRtOk = input.tensorRtLoadable === true;
   const tensorRtRtxOk = input.tensorRtRtxLoadable === true;
-  // Treat `undefined` as "we don't know yet" → permissive (don't strip CUDA).
-  // Only an explicit `false` from the ORT probe removes the EP from the
-  // detected list, unlocking the install-needed branch in the recipe
-  // compat layer. Same permissive-to-unknown convention as the RTX gate.
   const cudaOk = input.cudaLoadable !== false;
-  // Default true: callers without compute-cap data must not silently hide
-  // the RTX-family EPs (pre-Turing downgrades only fire when we KNOW the SM).
   const tensorRtFamilyCapable = input.nvidiaTensorRtFamilyCapable ?? true;
 
   if (input.onnxRuntimeProviders?.length) {
     for (const provider of mapOrtProvidersToIhv(input.onnxRuntimeProviders)) {
+      if (provider === "QNNExecutionProvider") {
+        // Host-boundary soft-detect below owns QNN; do not trust ORT listing alone.
+        continue;
+      }
       if (provider === "TensorrtExecutionProvider" && !tensorRtOk) {
         continue;
       }
       if (provider === "NvTensorRTRTXExecutionProvider" && !tensorRtRtxOk) {
         continue;
       }
-      // Gate RTX-family EPs even when ORT reports them — nvidia-smi SM ≥ 7.5
-      // is the real floor; without it the EP load is a lie.
       if (provider === "TensorrtExecutionProvider" || provider === "NvTensorRTRTXExecutionProvider") {
         if (!tensorRtFamilyCapable) continue;
       }
-      // Mirror the RTX gate: if the CUDA EP is not actually loadable in
-      // this environment, strip it from ORT's reported list even when ORT
-      // reports it (e.g. wheel installed but EP failed to register).
       if (provider === "CUDAExecutionProvider" && !cudaOk) {
         continue;
       }
@@ -243,11 +298,7 @@ export function mergeDetectedProviders(input: {
     }
   }
 
-  // nvidia-smi / rocm-smi / openvino fill gaps when the installed ORT wheel lacks GPU EPs.
   if (input.hasNvidiaGpu) {
-    // Only fill CUDA from nvidia-smi when the ORT probe confirms the EP loads.
-    // Falls back to the onnxRuntimeProviders branch when probe hasn't run yet
-    // (caller didn't pass cudaLoadable, defaults to permissive).
     if (cudaOk) {
       detected.add("CUDAExecutionProvider");
     }
@@ -264,6 +315,12 @@ export function mergeDetectedProviders(input: {
   if (input.hasOpenVino || input.hasOpenVinoCompatibleHardware) {
     detected.add("OpenVINOExecutionProvider");
   }
+  if (input.hasDirectMl) {
+    detected.add("DmlExecutionProvider");
+  }
+  if (input.hasQnnCompatibleHardware) {
+    detected.add("QNNExecutionProvider");
+  }
 
   return Array.from(detected);
 }
@@ -277,16 +334,23 @@ export function mergeDetectedProviders(input: {
  */
 export function pickRecommendedProvider(
   detected: IHVProvider[],
-  opts?: { tensorRtRtxLoadable?: boolean; tensorRtLoadable?: boolean; openvinoLoadable?: boolean },
+  opts?: {
+    tensorRtRtxLoadable?: boolean;
+    tensorRtLoadable?: boolean;
+    openvinoLoadable?: boolean;
+    qnnLoadable?: boolean;
+  },
 ): IHVProvider {
   // Prefer installed acceleration stacks; otherwise CUDA is the safe NVIDIA default.
   const priority: IHVProvider[] = [
     ...(opts?.tensorRtRtxLoadable ? (["NvTensorRTRTXExecutionProvider"] as const) : []),
     ...(opts?.tensorRtLoadable ? (["TensorrtExecutionProvider"] as const) : []),
+    ...(opts?.qnnLoadable ? (["QNNExecutionProvider"] as const) : []),
     "CUDAExecutionProvider",
     "NvTensorRTRTXExecutionProvider",
     "TensorrtExecutionProvider",
     "ROCMExecutionProvider",
+    "DmlExecutionProvider",
     ...(opts?.openvinoLoadable ? (["OpenVINOExecutionProvider"] as const) : []),
     "WebGpuExecutionProvider",
     "CPUExecutionProvider",
@@ -323,8 +387,25 @@ function undetectedProviderReason(
   probe?: HardwareProbeResult | null,
 ): string {
   switch (provider) {
-    case "QNNExecutionProvider":
-      return "Qualcomm QNN requires Snapdragon / Hexagon NPU hardware on this machine.";
+    case "QNNExecutionProvider": {
+      if (!probe) {
+        return "Qualcomm QNN requires Windows ARM64 (Snapdragon NPU inference) or Windows x64 (plugin preparation).";
+      }
+      const mode = probe.qnn?.hostMode;
+      if (mode === "out-of-scope") {
+        return "QNN plugin install/UX is Windows-first in this Studio release (Win ARM64 inference / Win x64 preparation).";
+      }
+      if (probe.qnn?.loadable === true) {
+        return "QNN runtime is installed but not listed as selectable yet — refresh the hardware probe.";
+      }
+      if (mode === "preparation") {
+        return "Windows x64 QNN preparation: install the QNN runtime (.venvs/qnn with onnxruntime + onnxruntime-qnn) from Hardware. Local HTP inference is not claimed on x64.";
+      }
+      if (mode === "local-inference") {
+        return "Windows ARM64 Snapdragon: install the QNN runtime (.venvs/qnn) from Hardware. “QNN NPU ready” requires the Snapdragon release gate + HTP diagnostic.";
+      }
+      return "Qualcomm QNN requires Windows ARM64 (Snapdragon NPU) or Windows x64 (plugin preparation). Install from Hardware when this host is in scope.";
+    }
     case "ROCMExecutionProvider":
       return "AMD ROCm was not detected (no ROCm GPU or ROCm runtime on this machine).";
     case "OpenVINOExecutionProvider":
@@ -376,6 +457,8 @@ function undetectedProviderReason(
     }
     case "WebGpuExecutionProvider":
       return "WebGPU is a browser deploy target (ONNX Runtime Web), not a local Python EP. Select it to build web-oriented recipes, then run Browser Test / WebGPU benchmark in Recipe & run (Chrome 113+ / Edge 113+).";
+    case "DmlExecutionProvider":
+      return "Windows DirectML was not detected (requires Windows + onnxruntime-directml in the default .venv). Use Install in Hardware.";
     case "CPUExecutionProvider":
       return "";
     default: {

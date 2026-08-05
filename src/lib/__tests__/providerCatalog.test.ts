@@ -44,6 +44,7 @@ describe("PROVIDER_CATALOG", () => {
     expect(ids).toContain("NvTensorRTRTXExecutionProvider");
     expect(ids).toContain("CPUExecutionProvider");
     expect(ids).toContain("OpenVINOExecutionProvider");
+    expect(ids).toContain("DmlExecutionProvider");
     expect(ids).toContain("ROCMExecutionProvider");
     expect(ids).toContain("QNNExecutionProvider");
     expect(ids).toContain("WebGpuExecutionProvider");

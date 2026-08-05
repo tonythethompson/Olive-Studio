@@ -20,6 +20,7 @@ const baseState: UIState = {
   hfModelId: "meta-llama/Llama-3-8B",
   hfDataset: "",
   ihvProvider: "CUDAExecutionProvider",
+  openvinoTargetDevice: "CPU",
   memoryOffload: "gpu_only",
   cudaVersion: "auto",
   cacheDir: "",
@@ -217,5 +218,36 @@ assert.deepEqual(
   ["CPUExecutionProvider", "CUDAExecutionProvider"],
   "selectable providers must match probe detection"
 );
+
+for (const [target, device] of [
+  ["CPU", "cpu"],
+  ["GPU", "gpu"],
+  ["NPU", "npu"],
+] as const) {
+  const ovPipeline = buildRecipeFromState({
+    ...baseState,
+    ihvProvider: "OpenVINOExecutionProvider",
+    openvinoTargetDevice: target,
+    passes: {
+      ...DEFAULT_PASSES,
+      conversion: true,
+      conversionFormat: "onnx",
+      quantization: true,
+      quantMethod: "ptq",
+      quantPrecision: "int8",
+    },
+  });
+  assert.equal(ovPipeline.validation.isBlocked, false, `OpenVINO ${target} recipe must not block`);
+  const systems = ovPipeline.recipe.systems as {
+    local_system?: { config?: { accelerators?: Array<{ device?: string; execution_providers?: string[] }> } };
+  };
+  const accelerator = systems.local_system?.config?.accelerators?.[0];
+  assert.equal(accelerator?.device, device, `OpenVINO ${target} must export Olive device "${device}"`);
+  assert.deepEqual(
+    accelerator?.execution_providers,
+    ["OpenVINOExecutionProvider"],
+    `OpenVINO ${target} must keep OpenVINOExecutionProvider`,
+  );
+}
 
 console.log("validate-recipe-builder: ok");

@@ -499,4 +499,5 @@ const GPU_PROVIDERS = new Set([
   "NvTensorRTRTXExecutionProvider",
   "TensorrtExecutionProvider",
   "ROCMExecutionProvider",
+  "DmlExecutionProvider",
 ]);

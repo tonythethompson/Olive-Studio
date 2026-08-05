@@ -58,6 +58,8 @@ import { cn } from "@/lib/utils";
 import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
 import { buildOwrConfigs } from "@/lib/owrExportConfigs";
 import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
+import { qnnExplicitRetryProviders } from "@/lib/qnnReadiness";
+import { prepareProviderChange } from "@/lib/pipelineValidation";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { GpuMetricsBar } from "@/components/features/GpuMetricsBar";
 import { parseGpuMetrics, type GpuMetrics } from "@/lib/gpuMetrics";
@@ -1584,6 +1586,28 @@ ${owrPlatform === "web"
                         <Bug className="h-3 w-3" /> Report
                       </button>
                     )}
+                    {executionStatus === "failed" &&
+                      state.ihvProvider === "QNNExecutionProvider" &&
+                      qnnExplicitRetryProviders().map((provider) => (
+                        <button
+                          key={provider}
+                          type="button"
+                          onClick={() => {
+                            const patch = prepareProviderChange(state, provider, hardwareProbe, {
+                              skipHardwareBlock: true,
+                            });
+                            setState(patch ?? { ihvProvider: provider });
+                            setExecutionLogs((prev) => [
+                              ...prev,
+                              `[INFO] Switched target to ${provider} (explicit retry — QNN does not auto-fallback). Rebuild/refresh the recipe, then Execute Live again.`,
+                            ]);
+                          }}
+                          title={`Explicit retry with ${provider} (no automatic EP fallback)`}
+                          className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded border border-slate-600/50 bg-slate-800/60 text-slate-300 hover:bg-slate-700/60 transition-all cursor-pointer"
+                        >
+                          Retry with {provider === "DmlExecutionProvider" ? "DirectML" : "CPU"}
+                        </button>
+                      ))}
                   </div>
                 </div>
               )}

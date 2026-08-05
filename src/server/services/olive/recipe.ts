@@ -7,6 +7,7 @@ import { recipeUsesMemoryOffload } from "../../../lib/memoryOffload.ts";
 import { resolveCudaTag, RESOLVABLE_CUDA_TAGS } from "../../../lib/oliveGpuRuntime.ts";
 import { tensorrtRtxInstallArgs, tensorrtRtxLabel } from "../../../lib/tensorrtRtxDeps.ts";
 import { openvinoStackInstallArgs, openvinoStackLabel } from "../../../lib/openvinoDeps.ts";
+import { getFamilySpec } from "../venv/spec.ts";
 
 /** Olive recipe shape (subset needed for inference). */
 export interface OliveRecipe {
@@ -103,13 +104,14 @@ export function inferRequiredPackages(recipe: OliveRecipe, cudaTag: string): Pkg
     getRecipeIhvProvider(recipe) === "OpenVINOExecutionProvider" ||
     passTypes.some((t) => t.includes("OpenVINO"));
 
-  // ONNX Runtime — OpenVINO EP needs onnxruntime-openvino (not the CUDA wheel).
+  // ONNX Runtime — OpenVINO recipes use the isolated openvino-family ORT wheel.
   if (passTypes.some((t) => t.includes("Onnx") || t.includes("ORT") || t.includes("Transformers")) || wantsOpenVinoEp) {
     if (wantsOpenVinoEp) {
+      const openvinoOrtArgs = getFamilySpec("openvino").ortInstallArgs;
       pkgs.push({
         importName: "onnxruntime",
-        installArgs: openvinoStackInstallArgs(),
-        label: openvinoStackLabel(),
+        installArgs: openvinoOrtArgs,
+        label: openvinoOrtArgs.join(" "),
       });
     } else if (isGpu && resolved) {
       pkgs.push({
@@ -132,7 +134,7 @@ export function inferRequiredPackages(recipe: OliveRecipe, cudaTag: string): Pkg
     }
   }
 
-  // OpenVINO runtime + Optimum-Intel bridge (+ ORT OpenVINO EP via stack args)
+  // OpenVINO Python stack + Optimum-Intel (installed into the openvino family)
   if (wantsOpenVinoEp) {
     pkgs.push({
       importName: "openvino",

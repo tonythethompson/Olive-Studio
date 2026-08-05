@@ -2,7 +2,9 @@ import { IHVProvider, UIState, OliveRecipe } from "@/types";
 import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
 import { getProviderAvailabilityBlock, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { buildOliveRecipe, isPyTorchNativeQuantMethod } from "@/lib/oliveRecipeBuilder";
+import { assessQnnRecipeReadiness, type QnnReadinessIssue } from "@/lib/qnnReadiness";
 import { isKnownPass, getPassSchema } from "@/lib/schemaEngine";
+import { pickOpenVinoTargetFromDevices } from "@/lib/openvinoDeps";
 
 export type PipelineValidationOptions = {
   hardwareProbe?: HardwareProbeResult | null;
@@ -276,22 +278,26 @@ export function prepareProviderChange(
   state: UIState,
   providerId: IHVProvider,
   probe?: HardwareProbeResult | null,
+  options?: { skipHardwareBlock?: boolean },
 ): Partial<UIState> | null {
-  if (getProviderHardwareBlock(providerId, probe)) {
+  if (!options?.skipHardwareBlock && getProviderHardwareBlock(providerId, probe)) {
     return null;
   }
 
   const conflicts = getProviderConflicts(providerId, state.passes);
   const hasCritical = conflicts.some((c) => c.severity === "critical");
 
-  if (hasCritical) {
-    return {
-      ihvProvider: providerId,
-      passes: applyProviderConflictAutofixes(providerId, state.passes),
-    };
-  }
-
-  return { ihvProvider: providerId };
+  return {
+    ihvProvider: providerId,
+    ...(providerId === "OpenVINOExecutionProvider"
+      ? {
+          openvinoTargetDevice: pickOpenVinoTargetFromDevices(probe?.openvino?.devices),
+        }
+      : {}),
+    ...(hasCritical
+      ? { passes: applyProviderConflictAutofixes(providerId, state.passes) }
+      : {}),
+  };
 }
 
 function passesNeedOnnxGraph(passes: UIState["passes"]): boolean {
@@ -483,6 +489,53 @@ function getProviderHardwareIssues(state: UIState, probe?: HardwareProbeResult |
       autofix: { ihvProvider: probe.recommendedProvider },
     },
   ];
+}
+
+function qnnReadinessSeverityToPipeline(severity: QnnReadinessIssue["severity"]): IssueSeverity {
+  switch (severity) {
+    case "error":
+      return "critical";
+    case "warning":
+      return "warning";
+    case "info":
+      return "info";
+    default: {
+      const _exhaustive: never = severity;
+      return _exhaustive;
+    }
+  }
+}
+
+function extractRecipeIoConfig(recipe: OliveRecipe): unknown {
+  const inputModel = recipe.input_model as { io_config?: unknown } | undefined;
+  return inputModel?.io_config;
+}
+
+/**
+ * Maps QNN HTP / host-mode readiness into pipeline issues so Execute Live
+ * and recipe validation honor fail-closed + dynamic-shape gates.
+ */
+function getQnnRecipeReadinessIssues(
+  state: UIState,
+  recipe: OliveRecipe,
+  probe?: HardwareProbeResult | null,
+): PipelineIssue[] {
+  if (state.ihvProvider !== "QNNExecutionProvider") return [];
+
+  return assessQnnRecipeReadiness({
+    state,
+    probe,
+    ioConfig: extractRecipeIoConfig(recipe),
+    platform: probe?.platform
+      ? { platform: probe.platform.os, arch: probe.platform.arch }
+      : undefined,
+  }).map((issue) => ({
+    id: `qnn-readiness-${issue.code}`,
+    severity: qnnReadinessSeverityToPipeline(issue.severity),
+    title: `QNN readiness: ${issue.code.replace(/_/g, " ")}`,
+    description: issue.message,
+    affectedPasses: ["provider"],
+  }));
 }
 
 function inputModelFormats(inputModel: { type?: string }): string[] {
@@ -700,6 +753,7 @@ export function getPipelineValidation(
     ...getCrossPassIssues(state),
     ...getProviderIssues(state),
     ...getProviderHardwareIssues(state, options?.hardwareProbe),
+    ...getQnnRecipeReadinessIssues(state, recipe, options?.hardwareProbe),
     ...getLocalExecutionIssues(state, options?.forLocalExecution),
     ...getAdvisoryIssues(state),
     ...getRecipeRuntimeIssues(state, recipe),
@@ -794,8 +848,16 @@ export function coercePassFields(passes: UIState["passes"], provider: IHVProvide
 }
 
 export function sanitizePipelineState(state: UIState): UIState {
+  const openvinoTargetDevice =
+    state.openvinoTargetDevice === "CPU" ||
+    state.openvinoTargetDevice === "GPU" ||
+    state.openvinoTargetDevice === "NPU"
+      ? state.openvinoTargetDevice
+      : "CPU";
+
   let current: UIState = {
     ...state,
+    openvinoTargetDevice,
     memoryOffload:
       state.memoryOffload === "auto" && !isMemoryOffloadAvailable(state) ? "gpu_only" : state.memoryOffload,
     passes: coercePassFields(state.passes, state.ihvProvider),

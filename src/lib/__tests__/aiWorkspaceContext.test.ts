@@ -16,6 +16,7 @@ function baseState(overrides?: Partial<UIState>): UIState {
     hfModelId: "Qwen/Qwen2.5-1.5B-Instruct",
     hfDataset: "wikitext",
     ihvProvider: "CUDAExecutionProvider" as IHVProvider,
+    openvinoTargetDevice: "CPU",
     memoryOffload: "auto",
     cudaVersion: "cu124",
     cacheDir: "~/.cache/olive",

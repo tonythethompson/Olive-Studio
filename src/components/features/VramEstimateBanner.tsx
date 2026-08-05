@@ -338,7 +338,10 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
 
       <p className="text-[11px] text-slate-600 mt-2 leading-relaxed">
         Heuristic from model size and active passes — not profiled.{" "}
-        {!isGpuProvider(state.ihvProvider) && "CPU/OpenVINO/QNN targets use host memory, not discrete VRAM."}
+        {!isGpuProvider(state.ihvProvider) &&
+          (state.ihvProvider === "OpenVINOExecutionProvider"
+            ? "OpenVINO targets use host / shared Intel graphics memory, not NVIDIA VRAM."
+            : "CPU/OpenVINO/QNN targets use host memory, not discrete VRAM.")}
       </p>
     </div>
   );

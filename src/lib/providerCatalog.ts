@@ -106,6 +106,20 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     },
   },
   {
+    id: "DmlExecutionProvider",
+    name: "Windows DirectML",
+    shortName: "DirectML",
+    desc: "GPU acceleration on Windows via DirectML (onnxruntime-directml).",
+    icon: Layers,
+    tooltip: {
+      requirements:
+        "Windows 10/11 with a DirectX 12 capable GPU. Uses onnxruntime-directml in the default project runtime.",
+      quantMethods: "PTQ INT8 (recommended), limited INT4 depending on operator support.",
+      recommendation:
+        "Prefer INT8 PTQ for broad DirectML coverage. Keep CUDA/TensorRT workloads on the separate CUDA runtime.",
+    },
+  },
+  {
     id: "QNNExecutionProvider",
     name: "Qualcomm QNN (Snapdragon)",
     shortName: "QNN",
