@@ -70,16 +70,19 @@ function ePInstallHint(args: {
   detailKey?: "tensorrt" | "tensorRtRtx" | "cuda";
   depLabel: string;
   installCommand: string;
+  /** Override the "supported family" label (defaults to NVIDIA GPU or CPU model). */
+  deviceLabel?: string;
 }): RecipeInstallHint {
-  const gpuHint = args.probe.nvidia?.gpus[0]?.name ?? args.probe.platform.cpuModel;
+  const gpuHint =
+    args.deviceLabel ?? args.probe.nvidia?.gpus[0]?.name ?? args.probe.platform.cpuModel;
   const detail = args.detailKey ? args.probe[args.detailKey]?.detail : undefined;
   return {
     kind: args.kind,
     provider: args.requiredProvider,
     detail,
     hint: detail
-      ? `${args.depLabel} not in .venv (${detail}). GPU is in the supported family (${gpuHint}) — install in Hardware then retry.`
-      : `${args.depLabel} not in .venv yet. GPU is in the supported family (${gpuHint}) — install in Hardware (step 02) to run this recipe.`,
+      ? `${args.depLabel} not in .venv (${detail}). Hardware is in the supported family (${gpuHint}) — install in Hardware then retry.`
+      : `${args.depLabel} not in .venv yet. Hardware is in the supported family (${gpuHint}) — install in Hardware (step 02) to run this recipe.`,
     installCommand: args.installCommand,
   };
 }
@@ -156,6 +159,7 @@ export function assessRecipeHardwareCompatibility(
           kind: "onnxruntime-directml",
           depLabel: "onnxruntime-directml (DirectML EP wheel)",
           installCommand: "pip install onnxruntime-directml",
+          deviceLabel: "Windows DirectX 12 adapter",
         }),
       };
     }

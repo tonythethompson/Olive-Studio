@@ -39,6 +39,7 @@ import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { HardwareProviderCard } from "@/components/features/HardwareProviderCard";
 import { useOpenVinoInstall } from "@/components/features/useOpenVinoInstall";
+import { useDirectMlInstall } from "@/components/features/useDirectMlInstall";
 import { runNdjsonInstall } from "@/lib/ndjsonInstall";
 import {
   Settings2,
@@ -341,9 +342,16 @@ export function IHVIntegrationPanel({
     [setState],
   );
 
+  // Shared mutex across hardware installs (families differ, but pip UX is serialized).
   const openvinoInstall = useOpenVinoInstall({
     onProbeRefresh: runHardwareProbe,
     isInstallBusy: installingTrt || installingTrtRtx || installingOrtGpu,
+  });
+
+  const directMlInstall = useDirectMlInstall({
+    onProbeRefresh: runHardwareProbe,
+    isInstallBusy:
+      installingTrt || installingTrtRtx || installingOrtGpu || openvinoInstall.state.installing,
   });
 
   const trtRtxNeedsInstall =
@@ -354,6 +362,11 @@ export function IHVIntegrationPanel({
     Boolean(hardwareProbe) &&
     isProviderDetectedLocally("OpenVINOExecutionProvider", hardwareProbe) &&
     hardwareProbe?.openvino?.loadable !== true;
+  const isWindowsHost = Boolean(hardwareProbe?.platform.os.toLowerCase().includes("win"));
+  const directMlNeedsInstall =
+    isWindowsHost &&
+    Boolean(hardwareProbe) &&
+    !isProviderDetectedLocally("DmlExecutionProvider", hardwareProbe);
 
   // CUDA install / toolkit-link gating (from PR #106).
   const nvidiaGpus = hardwareProbe?.nvidia?.gpus ?? [];
@@ -364,9 +377,13 @@ export function IHVIntegrationPanel({
   const cudaToolkitMissingAndEpWorks =
     nvidiaGpus.length > 0 && !isPreMaxwellBox && cudaEpInVenv && cudaToolkitMissing;
 
-  // Shared mutex: TRT / TRT RTX / OrtGpu / OpenVINO all mutate the same .venv.
+  // Shared mutex across hardware installs (families differ, but pip UX is serialized).
   const hardwareInstallBusy =
-    installingTrt || installingTrtRtx || installingOrtGpu || openvinoInstall.state.installing;
+    installingTrt ||
+    installingTrtRtx ||
+    installingOrtGpu ||
+    openvinoInstall.state.installing ||
+    directMlInstall.state.installing;
 
   const handleInstallTensorRtRtx = async () => {
     if (hardwareInstallBusy) return;
@@ -660,6 +677,7 @@ export function IHVIntegrationPanel({
                     trtRtxNeedsInstall={trtRtxNeedsInstall}
                     trtNeedsInstall={trtNeedsInstall}
                     openvinoNeedsInstall={openvinoNeedsInstall}
+                    directMlNeedsInstall={directMlNeedsInstall}
                     hardwareInstallBusy={hardwareInstallBusy}
                     installingTrtRtx={installingTrtRtx}
                     installTrtRtxError={installTrtRtxError}
@@ -670,6 +688,7 @@ export function IHVIntegrationPanel({
                     installTrtLog={installTrtLog}
                     onInstallTensorRt={() => void handleInstallTensorRt()}
                     openvinoInstall={openvinoInstall}
+                    directMlInstall={directMlInstall}
                     isPreMaxwellBox={isPreMaxwellBox}
                     cudaNeedsOrtGpuInstall={cudaNeedsOrtGpuInstall}
                     cudaToolkitMissingAndEpWorks={cudaToolkitMissingAndEpWorks}

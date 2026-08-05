@@ -9,6 +9,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui";
 import type { OpenVinoInstallState } from "@/components/features/useOpenVinoInstall";
+import type { DirectMlInstallState } from "@/components/features/useDirectMlInstall";
 import {
   applyProviderConflictAutofixes,
   getProviderConflicts,
@@ -53,6 +54,7 @@ export interface HardwareProviderCardProps {
   trtRtxNeedsInstall: boolean;
   trtNeedsInstall: boolean;
   openvinoNeedsInstall: boolean;
+  directMlNeedsInstall: boolean;
   hardwareInstallBusy: boolean;
   installingTrtRtx: boolean;
   installTrtRtxError: string | null;
@@ -64,6 +66,10 @@ export interface HardwareProviderCardProps {
   onInstallTensorRt: () => void;
   openvinoInstall: {
     state: OpenVinoInstallState;
+    install: () => Promise<void>;
+  };
+  directMlInstall: {
+    state: DirectMlInstallState;
     install: () => Promise<void>;
   };
   isPreMaxwellBox: boolean;
@@ -306,6 +312,7 @@ function ProviderPluginInstalls({
   trtRtxNeedsInstall,
   trtNeedsInstall,
   openvinoNeedsInstall,
+  directMlNeedsInstall,
   hardwareInstallBusy,
   installingTrtRtx,
   installTrtRtxError,
@@ -316,6 +323,7 @@ function ProviderPluginInstalls({
   installTrtLog,
   onInstallTensorRt,
   openvinoInstall,
+  directMlInstall,
   isPreMaxwellBox,
   cudaNeedsOrtGpuInstall,
   cudaToolkitMissingAndEpWorks,
@@ -332,6 +340,7 @@ function ProviderPluginInstalls({
   trtRtxNeedsInstall: boolean;
   trtNeedsInstall: boolean;
   openvinoNeedsInstall: boolean;
+  directMlNeedsInstall: boolean;
   hardwareInstallBusy: boolean;
   installingTrtRtx: boolean;
   installTrtRtxError: string | null;
@@ -342,6 +351,7 @@ function ProviderPluginInstalls({
   installTrtLog: string[];
   onInstallTensorRt: () => void;
   openvinoInstall: HardwareProviderCardProps["openvinoInstall"];
+  directMlInstall: HardwareProviderCardProps["directMlInstall"];
   isPreMaxwellBox: boolean;
   cudaNeedsOrtGpuInstall: boolean;
   cudaToolkitMissingAndEpWorks: boolean;
@@ -401,21 +411,44 @@ function ProviderPluginInstalls({
       <PluginInstallBlock
         description={
           <>
-            OpenVINOExecutionProvider not ready in the project{" "}
-            <code className="text-slate-400">.venv</code>. Install installs{" "}
-            <code className="text-slate-400">openvino</code> +{" "}
-            <code className="text-slate-400">optimum-intel[openvino]</code> without replacing the
-            default ORT wheel.
+            OpenVINOExecutionProvider is not ready. Install prepares the isolated{" "}
+            <code className="text-slate-400">.venvs/openvino</code> runtime with{" "}
+            <code className="text-slate-400">onnxruntime-openvino</code>,{" "}
+            <code className="text-slate-400">openvino</code>, and{" "}
+            <code className="text-slate-400">optimum-intel[openvino]</code>. Default and CUDA
+            runtimes keep their own ORT wheels.
           </>
         }
         detail={hardwareProbe?.openvino?.detail}
         busy={hardwareInstallBusy}
         installing={openvinoInstall.state.installing}
-        installLabel="Install OpenVINO stack into .venv"
-        installingLabel="Installing OpenVINO stack…"
+        installLabel="Install OpenVINO runtime (.venvs/openvino)"
+        installingLabel="Installing OpenVINO runtime…"
         onInstall={() => void openvinoInstall.install()}
         error={openvinoInstall.state.error}
         log={openvinoInstall.state.log}
+      />
+    );
+  }
+  if (providerId === "DmlExecutionProvider" && directMlNeedsInstall) {
+    return (
+      <PluginInstallBlock
+        description={
+          <>
+            DirectML EP not registered in the default Windows runtime. Install{" "}
+            <code className="text-slate-400">onnxruntime-directml</code> into{" "}
+            <code className="text-slate-400">.venv</code> so{" "}
+            <code className="text-slate-400">DmlExecutionProvider</code> loads for recipes and
+            live runs.
+          </>
+        }
+        busy={hardwareInstallBusy}
+        installing={directMlInstall.state.installing}
+        installLabel="Install onnxruntime-directml into .venv"
+        installingLabel="Installing onnxruntime-directml…"
+        onInstall={() => void directMlInstall.install()}
+        error={directMlInstall.state.error}
+        log={directMlInstall.state.log}
       />
     );
   }
@@ -587,6 +620,7 @@ export function HardwareProviderCard({
   trtRtxNeedsInstall,
   trtNeedsInstall,
   openvinoNeedsInstall,
+  directMlNeedsInstall,
   hardwareInstallBusy,
   installingTrtRtx,
   installTrtRtxError,
@@ -597,6 +631,7 @@ export function HardwareProviderCard({
   installTrtLog,
   onInstallTensorRt,
   openvinoInstall,
+  directMlInstall,
   isPreMaxwellBox,
   cudaNeedsOrtGpuInstall,
   cudaToolkitMissingAndEpWorks,
@@ -625,6 +660,7 @@ export function HardwareProviderCard({
     (p.id === "NvTensorRTRTXExecutionProvider" && trtRtxNeedsInstall) ||
     (p.id === "TensorrtExecutionProvider" && trtNeedsInstall) ||
     (p.id === "OpenVINOExecutionProvider" && openvinoNeedsInstall) ||
+    (p.id === "DmlExecutionProvider" && directMlNeedsInstall) ||
     (p.id === "CUDAExecutionProvider" && cudaNeedsOrtGpuInstall);
 
   const { cardClasses, badgeText, BadgeIcon, badgeColor } = resolveCardChrome({
@@ -708,6 +744,7 @@ export function HardwareProviderCard({
             trtRtxNeedsInstall={trtRtxNeedsInstall}
             trtNeedsInstall={trtNeedsInstall}
             openvinoNeedsInstall={openvinoNeedsInstall}
+            directMlNeedsInstall={directMlNeedsInstall}
             hardwareInstallBusy={hardwareInstallBusy}
             installingTrtRtx={installingTrtRtx}
             installTrtRtxError={installTrtRtxError}
@@ -718,6 +755,7 @@ export function HardwareProviderCard({
             installTrtLog={installTrtLog}
             onInstallTensorRt={onInstallTensorRt}
             openvinoInstall={openvinoInstall}
+            directMlInstall={directMlInstall}
             isPreMaxwellBox={isPreMaxwellBox}
             cudaNeedsOrtGpuInstall={cudaNeedsOrtGpuInstall}
             cudaToolkitMissingAndEpWorks={cudaToolkitMissingAndEpWorks}
@@ -739,7 +777,7 @@ export function HardwareProviderCard({
               Chrome or Edge 113+.
             </p>
           ) : null}
-          {!detectedLocally && !probeLoading && !isWebGpuTarget ? (
+          {!detectedLocally && !probeLoading && !isWebGpuTarget && !needsPluginInstall ? (
             <p className="text-[11px] text-slate-600">
               {p.id === "CPUExecutionProvider"
                 ? "Hardware detection unavailable — CPU status is unknown."
