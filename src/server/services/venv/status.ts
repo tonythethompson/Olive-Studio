@@ -63,7 +63,11 @@ export type DualRuntimeStatus = {
 };
 
 const STATUS_TTL_MS = 8_000;
-let cachedStatus: { at: number; value: DualRuntimeStatus } | null = null;
+let cachedStatus: {
+  at: number;
+  value: DualRuntimeStatus;
+  options: { systemPython: string | null; configuredPython: string | null; venvOnUserPath: boolean };
+} | null = null;
 
 export function invalidateRuntimeStatusCache(): void {
   cachedStatus = null;
@@ -129,7 +133,8 @@ try:
         if getattr(device, "ep_name", None) != "QNNExecutionProvider":
             continue
         out["qnn_ep_any"] = True
-        if device.device.type == ort.OrtHardwareDeviceType.NPU:
+        device_type = getattr(getattr(device, "device", None), "type", None)
+        if device_type == ort.OrtHardwareDeviceType.NPU:
             out["qnn_ep_npu"] = True
 except Exception as exc:
     out["ort_error"] = str(exc)
@@ -411,7 +416,19 @@ export async function getDualRuntimeStatus(opts?: {
   configuredPython?: string | null;
   venvOnUserPath?: boolean;
 }): Promise<DualRuntimeStatus> {
-  if (!opts?.force && cachedStatus && Date.now() - cachedStatus.at < STATUS_TTL_MS) {
+  const options = {
+    systemPython: opts?.systemPython ?? null,
+    configuredPython: opts?.configuredPython ?? null,
+    venvOnUserPath: opts?.venvOnUserPath ?? false,
+  };
+  if (
+    !opts?.force &&
+    cachedStatus &&
+    Date.now() - cachedStatus.at < STATUS_TTL_MS &&
+    cachedStatus.options.systemPython === options.systemPython &&
+    cachedStatus.options.configuredPython === options.configuredPython &&
+    cachedStatus.options.venvOnUserPath === options.venvOnUserPath
+  ) {
     return cachedStatus.value;
   }
 
@@ -444,13 +461,13 @@ export async function getDualRuntimeStatus(opts?: {
 
   const value: DualRuntimeStatus = {
     families,
-    systemPython: opts?.systemPython ?? null,
-    configuredPython: opts?.configuredPython ?? null,
+    systemPython: options.systemPython,
+    configuredPython: options.configuredPython,
     platform: process.platform,
-    venvOnUserPath: opts?.venvOnUserPath ?? false,
+    venvOnUserPath: options.venvOnUserPath,
     hint,
   };
-  cachedStatus = { at: Date.now(), value };
+  cachedStatus = { at: Date.now(), value, options };
   return value;
 }
 
