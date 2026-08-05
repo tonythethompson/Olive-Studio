@@ -119,7 +119,7 @@ export class CodexAppServerClient extends EventEmitter {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(
-        `Failed to start Codex app-server (${msg}). Install the Codex CLI (npm i -g @openai/codex) and ensure it is on PATH.`,
+        `Failed to start Codex app-server (${msg}). Install the Codex CLI (pnpm add -g @openai/codex) and ensure it is on PATH.`,
       );
     }
 
