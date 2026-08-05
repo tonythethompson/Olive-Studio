@@ -900,21 +900,24 @@ ${owrPlatform === "web"
   };
 
   const _handleCopy = () => {
-    navigator.clipboard.writeText(JSON.stringify(recipe, null, 2));
+    // Rebuild from live state — the displayed (deferred) recipe may lag the latest keystroke.
+    navigator.clipboard.writeText(buildRecipeJsonFromState(state));
     setIsCopied(true);
     if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
     copiedTimerRef.current = setTimeout(() => setIsCopied(false), 2000);
   };
 
   const handleExportCopy = () => {
-    navigator.clipboard.writeText(JSON.stringify(recipe, null, 2));
+    // Rebuild from live state — the displayed (deferred) recipe may lag the latest keystroke.
+    navigator.clipboard.writeText(buildRecipeJsonFromState(state));
     setIsExportCopied(true);
     if (exportCopiedTimerRef.current) clearTimeout(exportCopiedTimerRef.current);
     exportCopiedTimerRef.current = setTimeout(() => setIsExportCopied(false), 2000);
   };
 
   const handleExportDownload = () => {
-    const jsonString = JSON.stringify(recipe, null, 2);
+    // Rebuild from live state — the displayed (deferred) recipe may lag the latest keystroke.
+    const jsonString = buildRecipeJsonFromState(state);
     const blob = new Blob([jsonString], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
