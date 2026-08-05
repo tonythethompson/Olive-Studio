@@ -65,4 +65,13 @@ describe("migration journal", () => {
     });
     expect(intent).toBe("unknown");
   });
+
+  it("reports default when ORT probe finds a non-GPU wheel (post-migration fast-path)", async () => {
+    const root = getFamilyRoot("default");
+    const py = defaultPythonPath(root);
+    fs.mkdirSync(path.dirname(py), { recursive: true });
+    fs.writeFileSync(py, "");
+    const intent = await inspectDefaultVenvIntent(async () => ["onnxruntime"]);
+    expect(intent).toBe("default");
+  });
 });

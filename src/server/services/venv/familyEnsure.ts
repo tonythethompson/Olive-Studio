@@ -189,12 +189,27 @@ async function familyNeedsRebuild(family: VenvFamily): Promise<boolean> {
  * Migrate a GPU-contaminated `.venv` into dual-family layout.
  * Builds into `.building` trees first; promotes only after both peers validate
  * so a failed default rebuild does not leave a half-applied CUDA promote.
+ *
+ * Concurrent callers (e.g. default + cuda ensure) serialize on `withMigrationLock`.
+ * Re-check contamination under the lock so a second queued migration fast-paths
+ * when the first already promoted a clean default — otherwise it would rewrite
+ * the journal to "building" and rebuild for minutes, risking a stale partial
+ * journal if interrupted.
  */
 async function migrateGpuContaminatedVenv(
   systemPython: string,
   onLine: SetupListener,
 ): Promise<{ ok: boolean; error?: string }> {
   return withMigrationLock(async () => {
+    // Fresh probe under the lock: a prior migration may have already cleaned default.
+    const intent = await inspectDefaultVenvIntent(listInstalledOrtDistributions);
+    if (intent === "default") {
+      onLine(
+        "[migrate] Default runtime already free of onnxruntime-gpu — skipping GPU migration.",
+      );
+      return { ok: true };
+    }
+
     let cudaBackupPath: string | undefined;
     let cudaPromoted = false;
     try {
