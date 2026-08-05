@@ -11,6 +11,7 @@ import { ensureOpenVino } from "../olive/openvino.ts";
 import { ensureOnnxRuntimeGpu } from "../olive/cuda.ts";
 import { ensureTensorRt } from "../olive/tensorrt.ts";
 import { ensureTensorRtRtx } from "../olive/tensorrt-rtx.ts";
+import { ensureQnn } from "../olive/qnn.ts";
 import { ensureVenvFamily } from "./familyEnsure.ts";
 import { getVenvPython } from "./paths.ts";
 import {
@@ -19,9 +20,20 @@ import {
   getDualRuntimeStatus,
   invalidateRuntimeStatusCache,
   probeFamilyStatus,
+  type CapabilityStatus,
 } from "./status.ts";
 
 type SetupListener = (line: string) => void;
+
+export type ProviderCapabilityUsage = "inference" | "preparation";
+
+export type EnsureProviderCapabilityOptions = {
+  /**
+   * QNN splits preparation (plugin AOT / x64) vs inference (Win ARM64 NPU).
+   * Other providers ignore this today.
+   */
+  usage?: ProviderCapabilityUsage;
+};
 
 export type EnsureProviderCapabilityResult = {
   ok: boolean;
@@ -30,6 +42,14 @@ export type EnsureProviderCapabilityResult = {
   python: string | null;
 };
 
+function qnnCapabilityForUsage(
+  status: Awaited<ReturnType<typeof probeFamilyStatus>>,
+  usage: ProviderCapabilityUsage,
+): CapabilityStatus | undefined {
+  if (usage === "preparation") return status.capabilities.qnnPreparation;
+  return status.capabilities.qnnInference ?? status.capabilities.qnnPreparation;
+}
+
 /**
  * Ensure the correct venv family exists and the requested provider capability
  * is usable. Callers must have already normalized the provider ID.
@@ -37,6 +57,7 @@ export type EnsureProviderCapabilityResult = {
 export async function ensureProviderCapability(
   provider: IHVProvider,
   onLine: SetupListener,
+  opts?: EnsureProviderCapabilityOptions,
 ): Promise<EnsureProviderCapabilityResult> {
   const dual = await getDualRuntimeStatus({ force: true });
   const flags = familyFlagsFromStatus(dual.families);
@@ -60,15 +81,15 @@ export async function ensureProviderCapability(
 
   invalidateRuntimeStatusCache();
   const status = await probeFamilyStatus(family);
-  const cap = capabilityForProvider(status, provider);
+  const usage = opts?.usage ?? "inference";
+  const cap =
+    provider === "QNNExecutionProvider"
+      ? qnnCapabilityForUsage(status, usage)
+      : capabilityForProvider(status, provider);
 
-  // Providers without a capability slot (QNN/ROCm/WebGPU) only need the family base.
+  // Providers without a capability slot (ROCm/WebGPU) only need the family base.
   if (cap === undefined) {
-    if (
-      provider === "QNNExecutionProvider" ||
-      provider === "ROCMExecutionProvider" ||
-      provider === "WebGpuExecutionProvider"
-    ) {
+    if (provider === "ROCMExecutionProvider" || provider === "WebGpuExecutionProvider") {
       return { ok: true, family, python: getVenvPython(family) };
     }
     return {
@@ -100,10 +121,14 @@ async function installCapabilityPackages(
     switch (provider) {
       case "CPUExecutionProvider":
       case "DmlExecutionProvider":
-      case "QNNExecutionProvider":
       case "ROCMExecutionProvider":
       case "WebGpuExecutionProvider":
         return { ok: true };
+
+      case "QNNExecutionProvider": {
+        const result = await ensureQnn(onLine);
+        return result.ok ? { ok: true } : { ok: false, error: result.error };
+      }
 
       case "OpenVINOExecutionProvider": {
         const result = await ensureOpenVino(onLine);

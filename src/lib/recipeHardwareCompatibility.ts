@@ -10,12 +10,14 @@ import {
   type HardwareProbeResult,
   isProviderDetectedLocally,
   computeDirectMlHardwareReady,
+  computeQnnCompatibleHardware,
 } from "@/lib/hardwareProbe";
 import {
   CUDA_TOOLKIT_MIN_COMPUTE_CAPABILITY,
   isPreMaxwellNvidiaBox,
   pinnedOrtGpuInstallCommand,
 } from "@/lib/cudaDeps";
+import { qnnStackInstallCommand, resolveQnnHostMode } from "@/lib/qnnDeps";
 import type { IHVProvider } from "@/types";
 
 export type RecipeHardwareCompatTier = "compatible" | "unavailable" | "unknown";
@@ -27,7 +29,12 @@ export type RecipeHardwareCompatTier = "compatible" | "unavailable" | "unknown";
  * counts as hardware-compatible so `hideIncompatibleRecipes` does not drop it.
  */
 export interface RecipeInstallHint {
-  kind: "tensorrt" | "tensorrt-rtx" | "onnxruntime-gpu" | "onnxruntime-directml";
+  kind:
+    | "tensorrt"
+    | "tensorrt-rtx"
+    | "onnxruntime-gpu"
+    | "onnxruntime-directml"
+    | "onnxruntime-qnn";
   /** Provider the recipe expects once deps land. */
   provider: IHVProvider;
   /** Underlying detail string from the probe (may be empty). */
@@ -56,7 +63,7 @@ function ePInstallHint(args: {
   probe: HardwareProbeResult;
   requiredProvider: IHVProvider;
   kind: RecipeInstallHint["kind"];
-  detailKey?: "tensorrt" | "tensorRtRtx" | "cuda";
+  detailKey?: "tensorrt" | "tensorRtRtx" | "cuda" | "qnn";
   depLabel: string;
   installCommand: string;
   /** Override the "supported family" label (defaults to NVIDIA GPU or CPU model). */
@@ -163,18 +170,66 @@ export function assessRecipeHardwareCompatibility(
   }
 
   if (targetDevice === "QNN") {
-    if (isProviderDetectedLocally("QNNExecutionProvider", probe)) {
+    const hostMode = resolveQnnHostMode({
+      platform: probe.platform.os.toLowerCase().includes("win") ? "win32" : "linux",
+      arch: probe.platform.arch,
+    });
+    const qnnCompatible = computeQnnCompatibleHardware({
+      os: probe.platform.os,
+      arch: probe.platform.arch,
+      qnnLoadable: probe.qnn?.loadable === true,
+      ortReportsQnn: probe.onnxRuntimeProviders?.includes("QNNExecutionProvider"),
+    });
+    if (isProviderDetectedLocally("QNNExecutionProvider", probe) || qnnCompatible) {
+      if (probe.qnn?.loadable === true) {
+        return {
+          tier: "compatible",
+          targetDevice,
+          reason:
+            hostMode === "preparation"
+              ? "QNN runtime installed for Windows x64 preparation / plugin AOT (not local HTP inference)."
+              : probe.qnn.npuDevice
+                ? "QNN runtime installed with NPU EpDevice (verified “QNN NPU ready” gated separately)."
+                : "QNN runtime installed (.venvs/qnn).",
+          requiredProvider: "QNNExecutionProvider",
+        };
+      }
+      if (hostMode === "out-of-scope") {
+        return {
+          tier: "unavailable",
+          targetDevice,
+          reason:
+            "QNN plugin install/UX is Windows-first in this Studio release (Win ARM64 inference / Win x64 preparation).",
+          requiredProvider: "QNNExecutionProvider",
+        };
+      }
       return {
         tier: "compatible",
         targetDevice,
-        reason: "Qualcomm QNN / Hexagon NPU detected.",
+        reason:
+          hostMode === "preparation"
+            ? "Windows x64 can prepare QNN plugin / AOT recipes — install .venvs/qnn first."
+            : "Windows ARM64 Snapdragon host can run QNN — install .venvs/qnn first.",
         requiredProvider: "QNNExecutionProvider",
+        requiresInstall: ePInstallHint({
+          probe,
+          requiredProvider: "QNNExecutionProvider",
+          kind: "onnxruntime-qnn",
+          detailKey: "qnn",
+          depLabel: "QNN runtime (onnxruntime + onnxruntime-qnn plugin in .venvs/qnn)",
+          installCommand: qnnStackInstallCommand(),
+          deviceLabel:
+            hostMode === "preparation"
+              ? "Windows x64 (preparation / AOT)"
+              : "Windows ARM64 Snapdragon NPU",
+        }),
       };
     }
     return {
       tier: "unavailable",
       targetDevice,
-      reason: "QNN requires Snapdragon / Hexagon dev hardware (not detected on this desktop).",
+      reason:
+        "QNN requires Windows ARM64 (Snapdragon NPU inference) or Windows x64 (plugin preparation). Not detected on this host.",
       requiredProvider: "QNNExecutionProvider",
     };
   }

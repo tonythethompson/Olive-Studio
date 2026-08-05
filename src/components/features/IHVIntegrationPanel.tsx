@@ -40,6 +40,7 @@ import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { HardwareProviderCard } from "@/components/features/HardwareProviderCard";
 import { useOpenVinoInstall } from "@/components/features/useOpenVinoInstall";
+import { useQnnInstall } from "@/components/features/useQnnInstall";
 import { useDirectMlInstall } from "@/components/features/useDirectMlInstall";
 import { runNdjsonInstall } from "@/lib/ndjsonInstall";
 import {
@@ -364,10 +365,24 @@ export function IHVIntegrationPanel({
     isInstallBusy: installingTrt || installingTrtRtx || installingOrtGpu,
   });
 
+  const qnnInstall = useQnnInstall({
+    onProbeRefresh: runHardwareProbe,
+    isInstallBusy:
+      installingTrt ||
+      installingTrtRtx ||
+      installingOrtGpu ||
+      openvinoInstall.state.installing,
+  });
+
   const directMlInstall = useDirectMlInstall({
     onProbeRefresh: runHardwareProbe,
     isInstallBusy:
-      installingTrt || installingTrtRtx || installingOrtGpu || openvinoInstall.state.installing,
+      installingTrt ||
+      installingTrtRtx ||
+      installingOrtGpu ||
+      openvinoInstall.state.installing ||
+      qnnInstall.state.installing ||
+      qnnInstall.state.testing,
   });
 
   const trtRtxNeedsInstall =
@@ -378,6 +393,10 @@ export function IHVIntegrationPanel({
     Boolean(hardwareProbe) &&
     isProviderDetectedLocally("OpenVINOExecutionProvider", hardwareProbe) &&
     hardwareProbe?.openvino?.loadable !== true;
+  const qnnNeedsInstall =
+    Boolean(hardwareProbe) &&
+    isProviderDetectedLocally("QNNExecutionProvider", hardwareProbe) &&
+    hardwareProbe?.qnn?.loadable !== true;
   const directMlNeedsInstall = computeDirectMlNeedsInstall(hardwareProbe);
 
   // CUDA install / toolkit-link gating (from PR #106).
@@ -395,6 +414,8 @@ export function IHVIntegrationPanel({
     installingTrtRtx ||
     installingOrtGpu ||
     openvinoInstall.state.installing ||
+    qnnInstall.state.installing ||
+    qnnInstall.state.testing ||
     directMlInstall.state.installing;
 
   const handleInstallTensorRtRtx = async () => {
@@ -697,6 +718,7 @@ export function IHVIntegrationPanel({
                     trtRtxNeedsInstall={trtRtxNeedsInstall}
                     trtNeedsInstall={trtNeedsInstall}
                     openvinoNeedsInstall={openvinoNeedsInstall}
+                    qnnNeedsInstall={qnnNeedsInstall}
                     directMlNeedsInstall={directMlNeedsInstall}
                     hardwareInstallBusy={hardwareInstallBusy}
                     installingTrtRtx={installingTrtRtx}
@@ -708,6 +730,7 @@ export function IHVIntegrationPanel({
                     installTrtLog={installTrtLog}
                     onInstallTensorRt={() => void handleInstallTensorRt()}
                     openvinoInstall={openvinoInstall}
+                    qnnInstall={qnnInstall}
                     directMlInstall={directMlInstall}
                     isPreMaxwellBox={isPreMaxwellBox}
                     cudaNeedsOrtGpuInstall={cudaNeedsOrtGpuInstall}

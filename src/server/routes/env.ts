@@ -17,6 +17,7 @@ import { ensureTensorRtRtx, ensureTensorRt } from "./tensorrt.ts";
 import { ensureOpenVino } from "../services/olive/openvino.ts";
 import { ensureOnnxRuntimeGpu } from "../services/olive/cuda.ts";
 import { ensureDirectMl } from "../services/olive/directml.ts";
+import { ensureQnn, runQnnHtpDiagnostic } from "../services/olive/qnn.ts";
 import { fsWriteRateLimit, heavyCommandRateLimit } from "../middleware/rateLimit.ts";
 import { resolveAllowedPythonFile } from "../services/venv/pythonGuard.ts";
 
@@ -108,6 +109,14 @@ export function mountEnvRoutes(router: Router): void {
 
   router.post("/env/install-openvino", heavyCommandRateLimit, async (_req, res) => {
     await withVenvPipInstallMutex(() => streamNdjsonInstall(res, ensureOpenVino));
+  });
+
+  router.post("/env/install-qnn", heavyCommandRateLimit, async (_req, res) => {
+    await withVenvPipInstallMutex(() => streamNdjsonInstall(res, ensureQnn));
+  });
+
+  router.post("/env/test-qnn-npu", heavyCommandRateLimit, async (_req, res) => {
+    await withVenvPipInstallMutex(() => streamNdjsonInstall(res, runQnnHtpDiagnostic));
   });
 
   router.post("/env/install-directml", heavyCommandRateLimit, async (_req, res) => {

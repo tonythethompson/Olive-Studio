@@ -134,7 +134,35 @@ describe("POST /olive/run provider routing", () => {
     expect(venv.ensureProviderCapability).toHaveBeenCalledWith(
       "CUDAExecutionProvider",
       expect.any(Function),
+      undefined,
     );
     expect(spawnSpy).toHaveBeenCalled();
+  });
+
+  it("routes QNN recipes with preparation/inference usage based on host mode", async () => {
+    vi.mocked(venv.ensureProviderCapability).mockResolvedValue({
+      ok: true,
+      family: "qnn",
+      python: "/tmp/mock-qnn-python",
+    });
+    spawnSpy.mockImplementation(() => mockSpawnProcess() as never);
+
+    const res = await fetch(`${baseUrl}/api/olive/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipeJson: JSON.stringify(recipeWithProvider("QNNExecutionProvider")),
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; jobId?: string };
+    expect(body.ok).toBe(true);
+    expect(venv.ensureProviderCapability).toHaveBeenCalledWith(
+      "QNNExecutionProvider",
+      expect.any(Function),
+      {
+        usage: process.platform === "win32" && process.arch === "arm64" ? "inference" : "preparation",
+      },
+    );
   });
 });

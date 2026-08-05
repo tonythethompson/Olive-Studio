@@ -13,6 +13,7 @@ import { validateOliveRecipeStructure } from "../../lib/oliveRecipeSchema.ts";
 import { enrichRecipeMemoryOffloadForRun } from "../../lib/memoryOffload.ts";
 import { isGpuExecutionProvider } from "../../lib/oliveGpuRuntime.ts";
 import { normalizeIhvProvider } from "../../lib/venvFamily.ts";
+import { resolveQnnHostMode } from "../../lib/qnnDeps.ts";
 
 import {
   jobRegistry,
@@ -118,7 +119,19 @@ export function mountOliveRoutes(router: Router): void {
       // Retain the listener so /olive/cancel can detach it if setup is pending.
       const venvListener = (line: string) => pushLog(job, line);
       job.venvListener = venvListener;
-      const capResult = await ensureProviderCapability(provider, venvListener);
+      const capResult = await ensureProviderCapability(
+        provider,
+        venvListener,
+        provider === "QNNExecutionProvider"
+          ? {
+              usage:
+                resolveQnnHostMode({ platform: process.platform, arch: process.arch }) ===
+                "local-inference"
+                  ? "inference"
+                  : "preparation",
+            }
+          : undefined,
+      );
       // Setup finished for this caller — the listener is no longer registered.
       job.venvListener = undefined;
       if (bailIfCancelled()) return;

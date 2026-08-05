@@ -480,6 +480,58 @@ describe("assessRecipeHardwareCompatibility — pre-Turing drift-guard (recipe-c
   });
 });
 
+describe("assessRecipeHardwareCompatibility — QNN install hint", () => {
+  it("returns compatible with onnxruntime-qnn install hint on Windows x64 preparation hosts", () => {
+    const probe = makeProbe({
+      platform: { os: "win32 10.0", arch: "x64", cpuModel: "Test CPU", cpuCores: 8 },
+      detectedProviders: ["CPUExecutionProvider", "QNNExecutionProvider"],
+      qnn: {
+        available: false,
+        loadable: false,
+        preparation: false,
+        npuDevice: false,
+        potentialInference: false,
+        verifiedInference: false,
+        hostMode: "preparation",
+      },
+    });
+    const result = assessRecipeHardwareCompatibility("QNN", probe);
+    expect(result.tier).toBe("compatible");
+    expect(result.requiresInstall?.kind).toBe("onnxruntime-qnn");
+    expect(result.requiresInstall?.installCommand).toContain("onnxruntime-qnn==2.4.0");
+    expect(result.reason).toMatch(/preparation|AOT/i);
+  });
+
+  it("omits install hint when QNN runtime is already loadable", () => {
+    const probe = makeProbe({
+      platform: { os: "win32 10.0", arch: "arm64", cpuModel: "Snapdragon", cpuCores: 8 },
+      detectedProviders: ["CPUExecutionProvider", "QNNExecutionProvider"],
+      qnn: {
+        available: true,
+        loadable: true,
+        preparation: true,
+        npuDevice: true,
+        potentialInference: true,
+        verifiedInference: false,
+        hostMode: "local-inference",
+      },
+    });
+    const result = assessRecipeHardwareCompatibility("QNN", probe);
+    expect(result.tier).toBe("compatible");
+    expect(result.requiresInstall).toBeUndefined();
+  });
+
+  it("marks QNN unavailable on non-Windows hosts", () => {
+    const probe = makeProbe({
+      platform: { os: "linux 6.8", arch: "x64", cpuModel: "Intel Xeon", cpuCores: 32 },
+      detectedProviders: ["CPUExecutionProvider"],
+    });
+    const result = assessRecipeHardwareCompatibility("QNN", probe);
+    expect(result.tier).toBe("unavailable");
+    expect(result.requiresInstall).toBeUndefined();
+  });
+});
+
 describe("assessRecipeHardwareCompatibility — DirectML install hint", () => {
   it("returns compatible with an onnxruntime-directml install hint on Windows when DML EP is missing", () => {
     const probe = makeProbe({

@@ -39,7 +39,7 @@ export function markTensorRtVenvLoadable(input: {
   );
 }
 
-/** Merge ORT provider lists with stable order: default → cuda → openvino → system. */
+/** Merge ORT provider lists with stable order: default → cuda → openvino → qnn → system. */
 export function mergeOrtProvidersForDisplay(
   ...lists: Array<string[] | undefined>
 ): string[] | undefined {
@@ -55,4 +55,12 @@ export function mergeOrtProvidersForDisplay(
     }
   }
   return out.length > 0 ? out : undefined;
+}
+
+/** Prefer qnn-family python for QNN EP readiness notes. */
+export function markQnnVenvLoadable(input: {
+  isQnn: boolean;
+  loadable: boolean;
+}): boolean {
+  return input.isQnn && input.loadable;
 }

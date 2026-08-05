@@ -16,13 +16,19 @@ import { envForFamily } from "../services/venv/pathIsolation.ts";
 import { parseCudaVersionFromNvidiaSmi } from "../services/olive/cuda.ts";
 import {
   computeOpenVinoCompatibleHardware,
+  computeQnnCompatibleHardware,
   isNvidiaGpuTensorRtFamily,
   mergeDetectedProviders,
   pickRecommendedProvider,
   TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY,
   type HardwareProbeResult,
   type OpenVinoProbeResult,
+  type QnnProbeResult,
 } from "../../lib/hardwareProbe.ts";
+import {
+  isQnnSnapdragonReleaseGatePassed,
+  resolveQnnHostMode,
+} from "../../lib/qnnDeps.ts";
 import {
   isPreMaxwellNvidiaBox,
   CUDA_SM_FLOOR,
@@ -34,6 +40,7 @@ import {
   parseOrtGpuProbe,
 } from "../../lib/oliveGpuRuntime.ts";
 import {
+  markQnnVenvLoadable,
   markTensorRtVenvLoadable,
   mergeOrtProvidersForDisplay,
   resolveDirectMlHardwareReady,
@@ -210,6 +217,7 @@ export interface SystemProbeOptions {
     env?: NodeJS.ProcessEnv,
   ) => Promise<{ loadable: boolean; detail?: string; version?: string }>;
   probeOpenVino: (python: string) => Promise<OpenVinoProbeResult>;
+  probeQnn: (python: string) => Promise<QnnProbeResult>;
 }
 
 /**
@@ -237,9 +245,12 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
 
   let openvino: OpenVinoProbeResult | undefined;
   let openvinoVenvAvailable = false;
+  let qnn: QnnProbeResult | undefined;
+  let qnnVenvLoadable = false;
   let defaultOrtProviders: string[] | undefined;
   let cudaOrtProviders: string[] | undefined;
   let openvinoOrtProviders: string[] | undefined;
+  let qnnOrtProviders: string[] | undefined;
   let systemOrtProviders: string[] | undefined;
   let tensorrt: HardwareProbeResult["tensorrt"];
   let tensorRtRtx: HardwareProbeResult["tensorRtRtx"];
@@ -251,12 +262,15 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   const defaultPython = getVenvPython("default");
   const cudaPython = getVenvPython("cuda");
   const openvinoPython = getVenvPython("openvino");
+  const qnnPython = getVenvPython("qnn");
   const cudaPythonExists = fs.existsSync(cudaPython);
   const openvinoPythonExists = fs.existsSync(openvinoPython);
+  const qnnPythonExists = fs.existsSync(qnnPython);
   const pythonCandidates: string[] = [];
   if (fs.existsSync(defaultPython)) pythonCandidates.push(defaultPython);
   if (cudaPythonExists) pythonCandidates.push(cudaPython);
   if (openvinoPythonExists) pythonCandidates.push(openvinoPython);
+  if (qnnPythonExists) pythonCandidates.push(qnnPython);
   const systemPython = await findSystemPython();
   if (systemPython) pythonCandidates.push(systemPython);
 
@@ -264,28 +278,46 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     const isDefault = python === defaultPython;
     const isCuda = python === cudaPython;
     const isOpenvino = python === openvinoPython;
+    const isQnn = python === qnnPython;
     const familyEnv = isCuda
       ? envForFamily("cuda")
       : isOpenvino
         ? envForFamily("openvino")
-        : isDefault
-          ? envForFamily("default")
-          : process.env;
-    const [pyResult, ov] = await Promise.all([
+        : isQnn
+          ? envForFamily("qnn")
+          : isDefault
+            ? envForFamily("default")
+            : process.env;
+    const [pyResult, ov, qnnProbe] = await Promise.all([
       probePythonRuntime(python, familyEnv),
       isOpenvino
         ? opts.probeOpenVino(python)
         : Promise.resolve({ available: false } as OpenVinoProbeResult),
+      isQnn
+        ? opts.probeQnn(python)
+        : Promise.resolve({ available: false } as QnnProbeResult),
     ]);
     const hasOpenVinoSignal = Boolean(ov.version || ov.devices?.length || ov.optimumIntel || ov.detail);
     if (isOpenvino && (hasOpenVinoSignal || ov.available)) {
       openvino = ov;
       openvinoVenvAvailable = ov.available;
     }
+    if (isQnn && (qnnProbe.available || qnnProbe.detail || qnnProbe.pluginVersion)) {
+      qnn = qnnProbe;
+      if (
+        markQnnVenvLoadable({
+          isQnn: true,
+          loadable: Boolean(qnnProbe.loadable || qnnProbe.preparation),
+        })
+      ) {
+        qnnVenvLoadable = true;
+      }
+    }
     if (pyResult.onnxRuntimeProviders?.length) {
       if (isDefault) defaultOrtProviders = pyResult.onnxRuntimeProviders;
       else if (isCuda) cudaOrtProviders = pyResult.onnxRuntimeProviders;
       else if (isOpenvino) openvinoOrtProviders = pyResult.onnxRuntimeProviders;
+      else if (isQnn) qnnOrtProviders = pyResult.onnxRuntimeProviders;
       else systemOrtProviders = pyResult.onnxRuntimeProviders;
     }
     // CUDA / TRT probes prefer the cuda-family python, with PATH isolation so
@@ -358,6 +390,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     defaultOrtProviders,
     cudaOrtProviders,
     openvinoOrtProviders,
+    qnnOrtProviders,
     systemOrtProviders,
   );
   if (defaultOrtProviders?.length) {
@@ -366,6 +399,8 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     notes.push("ONNX Runtime providers probed via CUDA runtime.");
   } else if (openvinoOrtProviders?.length) {
     notes.push("ONNX Runtime providers probed via OpenVINO runtime.");
+  } else if (qnnOrtProviders?.length) {
+    notes.push("ONNX Runtime providers probed via QNN runtime.");
   } else if (systemOrtProviders?.length) {
     notes.push("ONNX Runtime providers probed via system Python.");
   }
@@ -430,7 +465,39 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   } else {
     notes.push("OpenVINO Python stack not found locally (needs openvino + optimum-intel).");
   }
-  notes.push("QNN requires Snapdragon/Hexagon dev hardware — not probed on desktop.");
+  const qnnHostMode = resolveQnnHostMode({ platform: process.platform, arch: platform.arch });
+  if (qnnVenvLoadable) {
+    if (qnn?.verifiedInference && isQnnSnapdragonReleaseGatePassed()) {
+      notes.push(
+        `QNN NPU ready${qnn.pluginVersion ? ` (plugin ${qnn.pluginVersion})` : ""} — fail-closed HTP diagnostic passed.`,
+      );
+    } else if (qnnHostMode === "preparation") {
+      notes.push(
+        `QNN runtime installed${qnn?.pluginVersion ? ` (${qnn.pluginVersion})` : ""} — Windows x64 preparation / plugin AOT only (not local HTP inference).`,
+      );
+    } else if (qnn?.npuDevice) {
+      notes.push(
+        `QNN runtime installed with NPU EpDevice${qnn.pluginVersion ? ` (${qnn.pluginVersion})` : ""}. “QNN NPU ready” waits on the Snapdragon release gate` +
+          (qnn.htpSmoke?.status === "passed" ? " (HTP diagnostic already cached)." : " + Test QNN NPU."),
+      );
+    } else {
+      notes.push(
+        `QNN runtime installed${qnn?.pluginVersion ? ` (${qnn.pluginVersion})` : ""} — plugin registration ok; NPU device not filtered yet.`,
+      );
+    }
+  } else if (qnnHostMode === "local-inference" || qnnHostMode === "preparation") {
+    notes.push(
+      qnn?.detail
+        ? `QNN stack not ready (${qnn.detail}). Use Install QNN runtime in Hardware (.venvs/qnn).`
+        : qnnHostMode === "preparation"
+          ? "Windows x64: install QNN runtime for plugin preparation / AOT (not local HTP inference)."
+          : "Windows ARM64: install QNN runtime (.venvs/qnn) for Snapdragon NPU workflows.",
+    );
+  } else {
+    notes.push(
+      "QNN plugin install/UX is Windows-first in this release (Win ARM64 inference / Win x64 preparation).",
+    );
+  }
 
   // Surface pre-Maxwell NVIDIA boxes (every detected GPU below the CUDA 12
   // toolkit floor) so the IHV panel / recipe compat layer can suppress the
@@ -469,6 +536,15 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     openvinoDevices: openvino?.devices,
   });
 
+  const hasQnnCompatibleHardware = computeQnnCompatibleHardware({
+    os: platform.os,
+    arch: platform.arch,
+    qnnLoadable: qnnVenvLoadable,
+    ortReportsQnn: Boolean(
+      onnxRuntimeProviders?.includes("QNNExecutionProvider") || qnnOrtProviders?.includes("QNNExecutionProvider"),
+    ),
+  });
+
   const detectedProviders = mergeDetectedProviders({
     onnxRuntimeProviders,
     hasNvidiaGpu: Boolean(nvidia?.gpus.length),
@@ -480,6 +556,8 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     hasDirectMl: resolveDirectMlHardwareReady({
       os: platform.os,
     }),
+    hasQnnCompatibleHardware,
+    qnnLoadable: qnnVenvLoadable,
     tensorRtLoadable: tensorRtVenvLoadable,
     tensorRtRtxLoadable: tensorRtRtxVenvLoadable,
     nvidiaTensorRtFamilyCapable,
@@ -494,6 +572,37 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     openvino: openvino
       ? { ...openvino, available: openvinoVenvAvailable, loadable: openvinoVenvAvailable }
       : undefined,
+    qnn: qnn
+      ? {
+          ...qnn,
+          available: qnnVenvLoadable,
+          loadable: qnnVenvLoadable,
+          hostMode: qnn.hostMode ?? qnnHostMode,
+        }
+      : qnnHostMode !== "out-of-scope"
+        ? {
+            available: false,
+            loadable: false,
+            preparation: false,
+            npuDevice: false,
+            potentialInference: false,
+            verifiedInference: false,
+            hostMode: qnnHostMode,
+            detail:
+              qnnHostMode === "preparation"
+                ? "QNN runtime not installed (.venvs/qnn) — Windows x64 preparation / plugin AOT only"
+                : "QNN runtime not installed (.venvs/qnn)",
+          }
+        : {
+            available: false,
+            loadable: false,
+            preparation: false,
+            npuDevice: false,
+            potentialInference: false,
+            verifiedInference: false,
+            hostMode: qnnHostMode,
+            detail: "QNN plugin install/UX is Windows-first in this release",
+          },
     // UI consumers (IHV panel) read `.loadable`; keep it aligned with .venv readiness.
     tensorrt: tensorrt ? { ...tensorrt, loadable: tensorRtVenvLoadable } : tensorrt,
     tensorRtRtx: tensorRtRtx ? { ...tensorRtRtx, loadable: tensorRtRtxVenvLoadable } : tensorRtRtx,
@@ -504,6 +613,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
       tensorRtRtxLoadable: tensorRtRtxVenvLoadable,
       tensorRtLoadable: tensorRtVenvLoadable,
       openvinoLoadable: openvinoVenvAvailable,
+      qnnLoadable: qnnVenvLoadable,
     }),
     notes,
   };
