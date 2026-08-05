@@ -301,7 +301,7 @@ export function mountOliveRoutes(router: Router): void {
 
     if (job.logsTruncated) {
       writeNamedSse(res, "log", {
-        line: `[info] Earlier log lines were trimmed to bound memory (retaining last ${MAX_JOB_LOG_LINES}).`,
+        line: `[info] Earlier log lines were trimmed to bound memory (retaining ${job.logs.length} lines).`,
       });
     }
     for (const line of job.logs) {
