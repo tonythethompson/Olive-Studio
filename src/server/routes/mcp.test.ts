@@ -2,16 +2,59 @@
  * Route-level coverage for the MCP KB endpoints: the failure taxonomy
  * (missing / unreadable / invalid JSON / schema-invalid), sanitized client
  * error messages, caching of a successful status, and the non-2xx sync failure.
+ * Also covers the tool proxy: the open-breaker 503 short-circuit and a
+ * successful proxied call that spawns (mocked) Python.
  *
  * `fs.readFileSync` is stubbed per-test so no real KB file is required.
+ * `child_process.execFile` is mocked with a `promisify.custom` handler (the
+ * same pattern as services/mcp/client.test.ts) so `promisify(execFile)` in the
+ * client resolves `{ stdout, stderr }` instead of hanging forever callback-style.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import express from "express";
 import type { Server } from "http";
 import fs from "fs";
+import { execFile } from "child_process";
 
 import { mountMcpRoutes } from "./mcp.ts";
 import { setKbStatusCache } from "../services/mcp/state.ts";
+import mcpBreaker, { resetMcpBreaker } from "../services/mcp/breaker.ts";
+
+const mcpToolMocks = vi.hoisted(() => ({
+  execFileImpl: null as null | ((...args: unknown[]) => unknown),
+  calls: [] as unknown[][],
+}));
+
+// The KB tests never touch child_process; the tool-proxy tests drive execFile
+// through the client's promisified handle, so the mock must expose the custom
+// promisify symbol or the promise would never settle.
+vi.mock("child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("child_process")>();
+  const customSymbol = Symbol.for("nodejs.util.promisify.custom");
+
+  const mockExecFile = vi.fn((...execArgs: unknown[]) => {
+    // Callback-style callers get an instant empty result.
+    const lastArg = execArgs[execArgs.length - 1];
+    if (typeof lastArg === "function") {
+      lastArg(null, "", "");
+      return undefined;
+    }
+    return (actual.execFile as unknown as (...a: unknown[]) => unknown)(...execArgs);
+  });
+
+  // util.promisify(execFile) prefers this when present (mirrors real Node's
+  // execFile, which resolves { stdout, stderr }).
+  (mockExecFile as unknown as Record<symbol, unknown>)[customSymbol] = (...args: unknown[]) => {
+    mcpToolMocks.calls.push(args);
+    if (mcpToolMocks.execFileImpl) return mcpToolMocks.execFileImpl(...args);
+    return Promise.resolve({ stdout: "", stderr: "" });
+  };
+
+  return {
+    ...actual,
+    execFile: mockExecFile as unknown as typeof actual.execFile,
+  };
+});
 
 const VALID_KB = JSON.stringify({
   version: "2.0",
@@ -60,6 +103,9 @@ afterAll(async () => {
 
 beforeEach(() => {
   setKbStatusCache(null);
+  resetMcpBreaker();
+  mcpToolMocks.execFileImpl = null;
+  mcpToolMocks.calls.length = 0;
 });
 
 afterEach(() => {
@@ -149,5 +195,46 @@ describe("POST /api/mcp/sync-kb", () => {
     const body = await res.json();
     expect(body).toMatchObject({ ok: false, reason: "missing" });
     expect(body.error).toBe("Knowledge base has not been generated yet.");
+  });
+});
+
+describe("POST /api/mcp/tool", () => {
+  it("short-circuits with 503 when the breaker is open", async () => {
+    const execFileMock = vi.mocked(execFile);
+    // Trip the process-wide singleton breaker without spawning anything.
+    mcpBreaker.recordFailure();
+    mcpBreaker.recordFailure();
+    mcpBreaker.recordFailure();
+
+    const res = await fetch(`${baseUrl}/api/mcp/tool`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toolName: "x", args: {} }),
+    });
+
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body).toEqual({ available: false, error: expect.any(String) });
+    // The short-circuit must not spawn a Python subprocess.
+    expect(execFileMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 200 with the tool result when the closed breaker proxies valid JSON", async () => {
+    mcpToolMocks.execFileImpl = () =>
+      Promise.resolve({ stdout: '[{"tool":"x","result":{"ok":true}}]', stderr: "" });
+
+    const res = await fetch(`${baseUrl}/api/mcp/tool`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toolName: "x", args: {} }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Clients expect the tool payload at the top level, not wrapped in `result`.
+    expect(body).toEqual({ ok: true });
+    // The client's promisified execFile (custom-symbol handler) was actually
+    // invoked and settled — exercising the path that used to hang forever.
+    expect(mcpToolMocks.calls).toHaveLength(1);
   });
 });

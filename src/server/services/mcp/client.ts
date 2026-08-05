@@ -7,8 +7,13 @@ import { existsSync } from "fs";
 import { promisify } from "util";
 import path from "path";
 import { getVenvPython } from "../venv/paths.ts";
+import mcpBreaker from "./breaker.ts";
 
 const execFileAsync = promisify(execFile);
+
+/** Client-safe message returned when the MCP server is short-circuited or down. */
+export const MCP_UNAVAILABLE_ERROR =
+  "MCP server unavailable — verify the Olive MCP server is installed before retrying.";
 
 /** Resolves the Python executable used to run MCP tools.
 
@@ -23,7 +28,7 @@ export function getMcpPython(): string {
   return getVenvPython();
 }
 
-export type McpToolCallResult = { result?: unknown; error?: string };
+export type McpToolCallResult = { result?: unknown; error?: string; unavailable?: boolean };
 
 /**
  * Removes characters that are not supported in an MCP tool name.
@@ -91,6 +96,10 @@ export type McpToolRequest = { toolName: string; args?: Record<string, unknown> 
 export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<McpToolCallResult[]> {
   if (requests.length === 0) return [];
 
+  if (!mcpBreaker.beforeCall()) {
+    return requests.map(() => ({ error: MCP_UNAVAILABLE_ERROR, unavailable: true }));
+  }
+
   const payload = requests.map((r) => ({
     tool: sanitizeToolName(r.toolName),
     args: r.args ?? {},
@@ -122,11 +131,14 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
     try {
       const parsed = JSON.parse(output);
       if (!Array.isArray(parsed)) {
-        return requests.map(() => ({ error: "MCP batch returned non-array JSON" }));
+        mcpBreaker.recordFailure();
+        return requests.map(() => ({ error: "MCP batch returned non-array JSON", unavailable: true }));
       }
-      return requests.map((req, i) => {
+      const results = requests.map((req, i) => {
         const row = parsed[i];
-        if (!isObjectRecord(row)) return { error: `MCP tool ${req.toolName} missing from batch` };
+        if (!isObjectRecord(row)) {
+          return { error: `MCP tool ${req.toolName} missing from batch`, unavailable: true };
+        }
         if (typeof row.error === "string" && row.error) return { error: row.error };
         const inner = row.result;
         if (isObjectRecord(inner) && typeof inner.error === "string" && inner.error) {
@@ -134,17 +146,28 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
         }
         return { result: inner };
       });
+      if (results.some((r) => r.unavailable === true)) {
+        // A missing row is a protocol/contract violation — infra failure, like non-array JSON.
+        mcpBreaker.recordFailure();
+      } else {
+        mcpBreaker.recordSuccess();
+      }
+      return results;
     } catch {
+      mcpBreaker.recordFailure();
       return requests.map((req) => ({
         error: output
           ? `MCP tool ${sanitizeToolName(req.toolName)} returned non-JSON: ${output.slice(0, 300)}`
           : `MCP tool ${sanitizeToolName(req.toolName)} returned empty output`,
+        unavailable: true,
       }));
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
+    mcpBreaker.recordFailure();
     return requests.map((req) => ({
       error: msg || `MCP tool ${sanitizeToolName(req.toolName)} failed`,
+      unavailable: true,
     }));
   }
 }

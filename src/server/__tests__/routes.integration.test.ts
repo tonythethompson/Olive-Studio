@@ -7,10 +7,11 @@
  * All external dependencies (Python, AI providers, LM Studio, Ollama) are
  * mocked via `setup.integration.ts` so these tests run reliably in CI.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import type { Server } from "http";
 
 import { stubGlobalFetch, restoreGlobalFetch } from "./setup.integration.ts";
+import { resetMcpBreaker } from "../services/mcp/breaker.ts";
 import { app, markServerReady } from "../../../server.ts";
 
 let server: Server;
@@ -45,6 +46,12 @@ afterAll(async () => {
   if (server) {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+});
+
+// The MCP circuit breaker is a process-wide singleton; reset it per test so
+// infra-level failures from one test never short-circuit another.
+beforeEach(() => {
+  resetMcpBreaker();
 });
 
 describe("Route integration tests", () => {
@@ -460,8 +467,8 @@ describe("Route integration tests", () => {
     });
 
     it("returns SSE error when LM Studio CLI is not installed", async () => {
-      // findLmsCli() uses execSync("where lms") which fails on systems
-      // without LM Studio. The handler streams NDJSON (or legacy SSE) events.
+      // findLmsCli() probes via execFileAsync("where lms") which the setup mock
+      // resolves to empty output (CLI missing). The handler streams NDJSON events.
       const res = await fetch(`${baseUrl}/api/ai/local-pull`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

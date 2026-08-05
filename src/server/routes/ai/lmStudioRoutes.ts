@@ -76,7 +76,7 @@ export function mountLmStudioRoutes(router: Router): void {
 
   router.get("/ai/local-health", async (_req, res) => {
     const healthy = await isLmsServerRunning();
-    const lmsCli = findLmsCli();
+    const lmsCli = await findLmsCli();
     return res.json({ healthy, lmsInstalled: !!lmsCli });
   });
 
@@ -154,7 +154,9 @@ export function mountLmStudioRoutes(router: Router): void {
       }
 
       localEngineRuntime.lmsPullBusyTag = tag;
-      const ready = await ensureLmsReady((evt) => send(evt));
+      // The first caller's disconnect aborts the shared ensure; later callers
+      // consume progress but never cancel it.
+      const ready = await ensureLmsReady((evt) => send(evt), guard.signal);
       if (guard.disconnected()) {
         releaseBusy();
         guard.endOnce();
@@ -170,7 +172,7 @@ export function mountLmStudioRoutes(router: Router): void {
         guard.endOnce();
         return;
       }
-      const lmsCli = findLmsCli();
+      const lmsCli = await findLmsCli();
       if (!lmsCli) {
         send({
           type: "error",
