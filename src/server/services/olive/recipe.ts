@@ -104,14 +104,14 @@ export function inferRequiredPackages(recipe: OliveRecipe, cudaTag: string): Pkg
     getRecipeIhvProvider(recipe) === "OpenVINOExecutionProvider" ||
     passTypes.some((t) => t.includes("OpenVINO"));
 
-  // ONNX Runtime — OpenVINO uses the default-family ORT wheel (not onnxruntime-openvino).
+  // ONNX Runtime — OpenVINO recipes use the isolated openvino-family ORT wheel.
   if (passTypes.some((t) => t.includes("Onnx") || t.includes("ORT") || t.includes("Transformers")) || wantsOpenVinoEp) {
     if (wantsOpenVinoEp) {
-      const defaultOrtArgs = getFamilySpec("default").ortInstallArgs;
+      const openvinoOrtArgs = getFamilySpec("openvino").ortInstallArgs;
       pkgs.push({
         importName: "onnxruntime",
-        installArgs: defaultOrtArgs,
-        label: defaultOrtArgs.join(" "),
+        installArgs: openvinoOrtArgs,
+        label: openvinoOrtArgs.join(" "),
       });
     } else if (isGpu && resolved) {
       pkgs.push({
@@ -134,7 +134,7 @@ export function inferRequiredPackages(recipe: OliveRecipe, cudaTag: string): Pkg
     }
   }
 
-  // OpenVINO runtime + Optimum-Intel bridge (no ORT wheel swap)
+  // OpenVINO Python stack + Optimum-Intel (installed into the openvino family)
   if (wantsOpenVinoEp) {
     pkgs.push({
       importName: "openvino",

@@ -21,16 +21,15 @@ function openvinoRecipe() {
 }
 
 describe("inferRequiredPackages OpenVINO", () => {
-  it("uses default-family ORT and openvino stack without onnxruntime-openvino", () => {
+  it("uses openvino-family ORT (onnxruntime-openvino) plus openvino stack", () => {
     const pkgs = inferRequiredPackages(openvinoRecipe(), "cpu");
     const ort = pkgs.find((p) => p.importName === "onnxruntime");
     expect(ort).toBeDefined();
-    expect(ort!.installArgs).toEqual(getFamilySpec("default").ortInstallArgs);
-    expect(ort!.installArgs).not.toContain(ONNXRUNTIME_OPENVINO_PIP_PACKAGE);
+    expect(ort!.installArgs).toEqual(getFamilySpec("openvino").ortInstallArgs);
+    expect(ort!.installArgs).toContain(ONNXRUNTIME_OPENVINO_PIP_PACKAGE);
 
     const ov = pkgs.find((p) => p.importName === "openvino");
     expect(ov).toBeDefined();
     expect(ov!.installArgs).toEqual(openvinoStackInstallArgs());
-    expect(ov!.installArgs).not.toContain(ONNXRUNTIME_OPENVINO_PIP_PACKAGE);
   });
 });

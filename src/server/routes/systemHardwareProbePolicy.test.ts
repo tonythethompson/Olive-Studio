@@ -7,10 +7,10 @@ import {
 
 describe("systemHardwareProbePolicy", () => {
   it("hasDirectMl is true only when default runtime reports DML", () => {
+    // System Python may report DML; it must not influence project detection.
     expect(
       resolveDirectMlDetected({
         defaultProviders: ["CPUExecutionProvider"],
-        systemProviders: ["CPUExecutionProvider", "DmlExecutionProvider"],
       }),
     ).toBe(false);
     expect(

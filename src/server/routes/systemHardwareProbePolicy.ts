@@ -5,7 +5,6 @@
 
 export function resolveDirectMlDetected(input: {
   defaultProviders?: string[];
-  systemProviders?: string[];
 }): boolean {
   return Boolean(input.defaultProviders?.includes("DmlExecutionProvider"));
 }

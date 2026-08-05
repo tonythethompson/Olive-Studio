@@ -480,7 +480,6 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     // treat DML as detected when onnxruntime-directml is missing.
     hasDirectMl: resolveDirectMlDetected({
       defaultProviders: defaultOrtProviders,
-      systemProviders: systemOrtProviders,
     }),
     tensorRtLoadable: tensorRtVenvLoadable,
     tensorRtRtxLoadable: tensorRtRtxVenvLoadable,
