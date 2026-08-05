@@ -1,65 +1,88 @@
 # State file schema
 
-Path (repo-relative): `.cursor/babysit-loop/<pr-number>.json`
+## Session (required)
 
-Create `.cursor/babysit-loop/` if needed. One file per PR so concurrent watches do not collide.
+Path: `.cursor/babysit-loop/session.json`
+
+Created after intake. One active session at a time unless the user starts a
+fresh run (`fresh` / `reset`).
 
 ```json
 {
   "version": 1,
   "status": "active",
-  "pr": 111,
-  "prUrl": "https://github.com/org/repo/pull/111",
-  "baseRef": "main",
-  "headRef": "cursor/feature-d95f",
-  "round": 2,
-  "pollSeconds": 180,
-  "startedAt": "2026-08-04T21:00:00Z",
-  "updatedAt": "2026-08-04T21:10:00Z",
-  "lastHeadSha": "abc1234",
-  "lastPrimaryStream": "ci",
-  "lastAction": "Fixed lint in src/foo.ts; pushed abc1234",
-  "lastCiConclusion": "failure",
-  "signaturesSeen": [
-    "ci:lint:eslint-max-warnings",
-    "thread:PRRT_kwDO...:path:file.ts"
+  "prs": [111, 113],
+  "wait": {
+    "raw": "5 minutes",
+    "seconds": 300
+  },
+  "batch": 2,
+  "batchPosition": 0,
+  "startedAt": "2026-08-05T00:00:00Z",
+  "updatedAt": "2026-08-05T00:20:00Z",
+  "lastBatchFinishedAt": "2026-08-05T00:18:00Z",
+  "blocked": [
+    {
+      "pr": 113,
+      "reason": "Needs product decision on API shape (thread PRRT_…)"
+    }
   ],
-  "streams": {
-    "conflicts": { "open": false },
-    "ci": { "open": true, "note": "lint job failing" },
-    "review": { "open": true, "unresolved": 3 }
-  },
-  "blocked": [],
-  "bots": {
-    "cursorReview": true,
-    "greptile": false
-  },
   "history": [
     {
-      "at": "2026-08-04T21:10:00Z",
-      "round": 2,
-      "action": "fix",
-      "detail": "Fixed lint; pushed abc1234"
+      "at": "2026-08-05T00:18:00Z",
+      "batch": 2,
+      "action": "batch-complete",
+      "detail": "111 clean; 113 CI still pending after push"
     }
   ]
 }
 ```
 
-## Field rules
-
 | Field | Rule |
 | ----- | ---- |
-| `status` | `active` \| `done` \| `blocked` \| `stopped` |
-| `round` | Increment once per full tick (snapshot → act → wait/resume). No upper bound. |
-| `signaturesSeen` | Dedup key for CI/thread/conflict; same signature twice with no new evidence → escalate. |
-| `blocked` | Human-needed items; when non-empty and no other work, `status=blocked`. |
+| `status` | `active` \| `waiting` \| `done` \| `blocked` \| `stopped` |
+| `prs` | Ordered list from intake; process consecutively each batch. |
+| `wait.seconds` | Full interval between batches. No default unless user asks for one (then 300). |
+| `batch` | Increment after each completed pass over all PRs (before wait). |
+| `batchPosition` | Index into `prs` for mid-batch resume (0-based). |
+| `blocked` | Human-needed items; session may stay active if other PRs still actionable. |
 | `history` | Append-only; keep last ~50 entries. |
-| `streams.*.open` | Cache only; always re-snapshot from `gh` before acting. |
+
+## Per-PR cache (optional)
+
+Path: `.cursor/babysit-loop/<pr-number>.json`
+
+```json
+{
+  "version": 1,
+  "pr": 111,
+  "prUrl": "https://github.com/org/repo/pull/111",
+  "baseRef": "main",
+  "headRef": "cursor/feature-d95f",
+  "lastHeadSha": "abc1234",
+  "lastPrimaryStream": "ci",
+  "lastAction": "Fixed lint; pushed abc1234",
+  "lastCiConclusion": "success",
+  "signaturesSeen": [
+    "ci:lint:eslint-max-warnings",
+    "thread:PRRT_kwDO..."
+  ],
+  "streams": {
+    "reviews": { "open": false, "unresolved": 0 },
+    "conflicts": { "open": false },
+    "ci": { "open": false }
+  },
+  "clean": true
+}
+```
+
+Per-PR files are caches. Always re-snapshot with `gh` before acting.
 
 ## Resume
 
-On skill start, if state exists for the PR:
-
-1. Load JSON.
-2. Refresh live PR/CI/review/conflict signals (state is a cache, not truth).
-3. Continue from `round + 1` unless the user said `fresh` / `reset`.
+1. Load `session.json` (required).
+2. Load per-PR caches if present.
+3. Refresh live PR/CI/review/conflict signals.
+4. If `status` is `waiting` and the interval has elapsed, set `status` to
+   `active`, increment `batch`, set `batchPosition` to `0`, continue.
+5. `fresh` / `reset` in the prompt: archive or delete state and re-run intake.
