@@ -12,7 +12,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui";
 import { IHVProvider, UIState } from "@/types";
-import { usePipelineState, usePipelineStore } from "@/lib/stores/pipelineStore";
+import { usePipelineState } from "@/lib/stores/pipelineStore";
 import {
   applyProviderConflictAutofixes,
   getProviderConflicts,
@@ -30,7 +30,6 @@ import {
   fetchHardwareProbe,
   getSelectableProviders,
   isProviderDetectedLocally,
-  computeDirectMlNeedsInstall,
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
 import {
@@ -342,7 +341,7 @@ export function IHVIntegrationPanel({
         // Auto-apply recommended provider on first probe completion
         if (!hasAutoAppliedRef.current && result.recommendedProvider) {
           hasAutoAppliedRef.current = true;
-          const current = controlledStateRef.current ?? usePipelineStore.getState().state;
+          const current = controlledStateRef.current ?? storeState.state;
           setState(
             prepareProviderChange(current, result.recommendedProvider, result) ?? {
               ihvProvider: result.recommendedProvider,
@@ -356,7 +355,7 @@ export function IHVIntegrationPanel({
         setProbeLoading(false);
       }
     },
-    [setState],
+    [setState, storeState.state],
   );
 
   // Shared mutex across hardware installs (families differ, but pip UX is serialized).
@@ -393,12 +392,6 @@ export function IHVIntegrationPanel({
     Boolean(hardwareProbe) &&
     isProviderDetectedLocally("OpenVINOExecutionProvider", hardwareProbe) &&
     hardwareProbe?.openvino?.loadable !== true;
-  const qnnNeedsInstall =
-    Boolean(hardwareProbe) &&
-    isProviderDetectedLocally("QNNExecutionProvider", hardwareProbe) &&
-    hardwareProbe?.qnn?.loadable !== true;
-  const directMlNeedsInstall = computeDirectMlNeedsInstall(hardwareProbe);
-
   // CUDA install / toolkit-link gating (from PR #106).
   const nvidiaGpus = hardwareProbe?.nvidia?.gpus ?? [];
   const isPreMaxwellBox = isPreMaxwellNvidiaBox(nvidiaGpus);
@@ -718,8 +711,6 @@ export function IHVIntegrationPanel({
                     trtRtxNeedsInstall={trtRtxNeedsInstall}
                     trtNeedsInstall={trtNeedsInstall}
                     openvinoNeedsInstall={openvinoNeedsInstall}
-                    qnnNeedsInstall={qnnNeedsInstall}
-                    directMlNeedsInstall={directMlNeedsInstall}
                     hardwareInstallBusy={hardwareInstallBusy}
                     installingTrtRtx={installingTrtRtx}
                     installTrtRtxError={installTrtRtxError}

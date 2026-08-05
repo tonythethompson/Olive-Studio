@@ -61,8 +61,6 @@ export interface HardwareProviderCardProps {
   trtRtxNeedsInstall: boolean;
   trtNeedsInstall: boolean;
   openvinoNeedsInstall: boolean;
-  qnnNeedsInstall: boolean;
-  directMlNeedsInstall: boolean;
   hardwareInstallBusy: boolean;
   installingTrtRtx: boolean;
   installTrtRtxError: string | null;
@@ -337,8 +335,6 @@ function ProviderPluginInstalls({
   trtRtxNeedsInstall,
   trtNeedsInstall,
   openvinoNeedsInstall,
-  qnnNeedsInstall,
-  directMlNeedsInstall,
   hardwareInstallBusy,
   installingTrtRtx,
   installTrtRtxError,
@@ -367,8 +363,6 @@ function ProviderPluginInstalls({
   trtRtxNeedsInstall: boolean;
   trtNeedsInstall: boolean;
   openvinoNeedsInstall: boolean;
-  qnnNeedsInstall: boolean;
-  directMlNeedsInstall: boolean;
   hardwareInstallBusy: boolean;
   installingTrtRtx: boolean;
   installTrtRtxError: string | null;
@@ -459,6 +453,15 @@ function ProviderPluginInstalls({
       />
     );
   }
+  const qnnNeedsInstall =
+    Boolean(hardwareProbe) &&
+    isProviderDetectedLocally("QNNExecutionProvider", hardwareProbe) &&
+    hardwareProbe?.qnn?.loadable !== true;
+  const directMlNeedsInstall =
+    /^win(?:32|64)?$/i.test(hardwareProbe?.platform.os.trim() ?? "") &&
+    Boolean(hardwareProbe) &&
+    !isProviderDetectedLocally("DmlExecutionProvider", hardwareProbe);
+
   if (providerId === "QNNExecutionProvider" && qnnNeedsInstall) {
     const mode = hardwareProbe?.qnn?.hostMode;
     const prepOnly = mode === "preparation";
@@ -706,8 +709,6 @@ export function HardwareProviderCard({
   trtRtxNeedsInstall,
   trtNeedsInstall,
   openvinoNeedsInstall,
-  qnnNeedsInstall,
-  directMlNeedsInstall,
   hardwareInstallBusy,
   installingTrtRtx,
   installTrtRtxError,
@@ -744,6 +745,14 @@ export function HardwareProviderCard({
   const showSwitchAssist = pConflicts.length > 0 && (isSelected || !cardBlocked);
   const detectedLocally = isProviderDetectedLocally(p.id, hardwareProbe);
   const isWebGpuTarget = p.id === "WebGpuExecutionProvider";
+  const qnnNeedsInstall =
+    Boolean(hardwareProbe) &&
+    isProviderDetectedLocally("QNNExecutionProvider", hardwareProbe) &&
+    hardwareProbe?.qnn?.loadable !== true;
+  const directMlNeedsInstall =
+    /^win(?:32|64)?$/i.test(hardwareProbe?.platform.os.trim() ?? "") &&
+    Boolean(hardwareProbe) &&
+    !isProviderDetectedLocally("DmlExecutionProvider", hardwareProbe);
   const needsPluginInstall =
     (p.id === "NvTensorRTRTXExecutionProvider" && trtRtxNeedsInstall) ||
     (p.id === "TensorrtExecutionProvider" && trtNeedsInstall) ||
@@ -833,8 +842,6 @@ export function HardwareProviderCard({
             trtRtxNeedsInstall={trtRtxNeedsInstall}
             trtNeedsInstall={trtNeedsInstall}
             openvinoNeedsInstall={openvinoNeedsInstall}
-            qnnNeedsInstall={qnnNeedsInstall}
-            directMlNeedsInstall={directMlNeedsInstall}
             hardwareInstallBusy={hardwareInstallBusy}
             installingTrtRtx={installingTrtRtx}
             installTrtRtxError={installTrtRtxError}
