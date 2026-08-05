@@ -17,6 +17,22 @@ import {
 } from "../venv/packageConstraints.ts";
 import { conflictingOrtDistributions, getFamilySpec } from "../venv/spec.ts";
 
+/** Per-family async mutex: serialize assert → install → heal → re-assert. */
+const familyPipInstallChains = new Map<VenvFamily, Promise<unknown>>();
+
+function withFamilyPipInstallMutex<T>(family: VenvFamily, fn: () => Promise<T>): Promise<T> {
+  const prev = familyPipInstallChains.get(family) ?? Promise.resolve();
+  const run = prev.then(fn, fn);
+  familyPipInstallChains.set(
+    family,
+    run.then(
+      () => undefined,
+      () => undefined,
+    ),
+  );
+  return run;
+}
+
 export async function pipInstallViaPython(
   python: string,
   args: string[],
@@ -76,31 +92,33 @@ export async function pipInstallForFamily(
   args: string[],
   onLine: (line: string) => void,
 ): Promise<void> {
-  enforcePackageConstraintsOrThrow(family, args);
-  const initialOrtError = await assertFamilyOrtConstraints(family, python);
-  if (initialOrtError) throw new Error(initialOrtError);
-  const constrained = withFamilyPipConstraintArgs(family, args);
-  const env = envForFamily(family);
-  try {
-    await pipInstallViaPython(python, constrained.args, onLine, env);
-  } finally {
-    constrained.cleanup();
-  }
-  let ortError = await assertFamilyOrtConstraints(family, python);
-  if (!ortError) return;
+  return withFamilyPipInstallMutex(family, async () => {
+    enforcePackageConstraintsOrThrow(family, args);
+    const initialOrtError = await assertFamilyOrtConstraints(family, python);
+    if (initialOrtError) throw new Error(initialOrtError);
+    const constrained = withFamilyPipConstraintArgs(family, args);
+    const env = envForFamily(family);
+    try {
+      await pipInstallViaPython(python, constrained.args, onLine, env);
+    } finally {
+      constrained.cleanup();
+    }
+    let ortError = await assertFamilyOrtConstraints(family, python);
+    if (!ortError) return;
 
-  onLine(
-    `[deps] ORT constraints violated after install — healing ${family} runtime once (${ortError})...`,
-  );
-  const spec = getFamilySpec(family);
-  const conflicts = conflictingOrtDistributions(spec.ortDistribution);
-  await pipUninstallViaPython(python, [...conflicts], onLine, env);
-  await pipInstallViaPython(python, [...spec.packageConstraints], onLine, env);
-  ortError = await assertFamilyOrtConstraints(family, python);
-  if (ortError) {
-    throw new Error(`ORT constraints still violated after heal: ${ortError}`);
-  }
-  onLine(`[deps] ${family} runtime ORT constraints restored after heal`);
+    onLine(
+      `[deps] ORT constraints violated after install — healing ${family} runtime once (${ortError})...`,
+    );
+    const spec = getFamilySpec(family);
+    const conflicts = conflictingOrtDistributions(spec.ortDistribution);
+    await pipUninstallViaPython(python, [...conflicts], onLine, env);
+    await pipInstallViaPython(python, [...spec.packageConstraints], onLine, env);
+    ortError = await assertFamilyOrtConstraints(family, python);
+    if (ortError) {
+      throw new Error(`ORT constraints still violated after heal: ${ortError}`);
+    }
+    onLine(`[deps] ${family} runtime ORT constraints restored after heal`);
+  });
 }
 
 /** @deprecated Prefer pipInstallViaPython with envForFamily. */

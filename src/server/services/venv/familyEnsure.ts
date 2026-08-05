@@ -233,17 +233,20 @@ async function migrateGpuContaminatedVenv(
 
       const defPromote = promoteBuildingToLive("default");
       if (!defPromote.ok) {
-        writeMigrationJournal("default_promoted", defPromote.error);
+        // Do not write "default_promoted" on failure — that phase means success.
+        // If CUDA was already live and rollback fails, leave journal at
+        // "cuda_promoted" (actual state). After a successful CUDA rollback,
+        // return to "building" so recovery knows neither promote finished.
         if (cudaPromoted) {
           onLine("[migrate] Default promote failed — rolling back CUDA promotion...");
           const rolled = rollbackPromotedFamily("cuda", cudaBackupPath);
           if (!rolled.ok) {
-            return {
-              ok: false,
-              error: `${defPromote.error}; CUDA rollback also failed: ${rolled.error}`,
-            };
+            const err = `${defPromote.error}; CUDA rollback also failed: ${rolled.error}`;
+            writeMigrationJournal("cuda_promoted", err);
+            return { ok: false, error: err };
           }
         }
+        writeMigrationJournal("building", defPromote.error);
         clearBuildingRoot("default");
         return { ok: false, error: defPromote.error };
       }

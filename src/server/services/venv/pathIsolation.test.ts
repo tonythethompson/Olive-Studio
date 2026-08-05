@@ -2,8 +2,9 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
-import { allFamilyScriptsDirs, envForFamily } from "./pathIsolation.ts";
+import { allFamilyScriptsDirs, envForFamily, envForVenvRoot } from "./pathIsolation.ts";
 import { getVenvScriptsDir } from "./paths.ts";
+import { getFamilyBuildingRoot } from "./spec.ts";
 
 describe("pathIsolation", () => {
   it("lists both family Scripts dirs", () => {
@@ -45,6 +46,28 @@ describe("pathIsolation", () => {
       const pathKey = process.platform === "win32" ? "Path" : "PATH";
       const env = envForFamily("default", { ...process.env, [pathKey]: "/usr/bin" });
       const parts = (env[pathKey] ?? "").split(sep).filter(Boolean);
+      expect(path.resolve(parts[0]!).toLowerCase()).toBe(path.resolve(scripts).toLowerCase());
+    } finally {
+      process.chdir(prevCwd);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("uses the building root for VIRTUAL_ENV and first PATH entry", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "olive-pathiso-build-"));
+    const prevCwd = process.cwd();
+    try {
+      process.chdir(tmp);
+      const buildingRoot = getFamilyBuildingRoot("default");
+      const scripts = process.platform === "win32"
+        ? path.join(buildingRoot, "Scripts")
+        : path.join(buildingRoot, "bin");
+      fs.mkdirSync(scripts, { recursive: true });
+      const sep = process.platform === "win32" ? ";" : ":";
+      const pathKey = process.platform === "win32" ? "Path" : "PATH";
+      const env = envForVenvRoot(buildingRoot, { ...process.env, [pathKey]: "/usr/bin" });
+      const parts = (env[pathKey] ?? "").split(sep).filter(Boolean);
+      expect(env.VIRTUAL_ENV).toBe(buildingRoot);
       expect(path.resolve(parts[0]!).toLowerCase()).toBe(path.resolve(scripts).toLowerCase());
     } finally {
       process.chdir(prevCwd);

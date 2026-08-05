@@ -404,13 +404,12 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     );
   }
 
+  // List merged providers for display only. Do not infer CUDA readiness from
+  // this combined list — default/DirectML/OpenVINO entries would falsely trip
+  // a CUDA-missing warning. CUDA install/loadability notes above already gate
+  // on `cudaVenvLoadable` / the cuda-family probe.
   if (onnxRuntimeProviders?.length) {
     notes.push(`ORT execution providers: ${onnxRuntimeProviders.join(", ")}`);
-    if (nvidia && !onnxRuntimeProviders.includes("CUDAExecutionProvider")) {
-      notes.push(
-        "NVIDIA GPU detected but ONNX Runtime CUDA EP is not installed in Python (try onnxruntime-gpu in .venv).",
-      );
-    }
   } else if (nvidia) {
     notes.push("ONNX Runtime not installed in Python — NVIDIA GPU inferred from nvidia-smi.");
   }
