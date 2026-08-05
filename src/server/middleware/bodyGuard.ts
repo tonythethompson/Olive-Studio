@@ -40,7 +40,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 const TYPE_CHECKERS: Record<BodyFieldType, (value: unknown) => boolean> = {
   string: (value) => typeof value === "string",
-  number: (value) => typeof value === "number",
+  number: (value) => typeof value === "number" && Number.isFinite(value),
   boolean: (value) => typeof value === "boolean",
   object: (value) => isPlainObject(value),
   string[]: (value) =>
@@ -61,10 +61,10 @@ const TYPE_DESCRIPTIONS: Record<BodyFieldType, string> = {
   unknown: "a value",
 };
 
-/** Undefined, null, and (for strings) the empty string all count as absent. */
+/** Undefined, null, and empty strings for string-like fields count as absent. */
 function isFieldMissing(spec: BodyFieldSpec, value: unknown): boolean {
   if (value === undefined || value === null) return true;
-  return spec.type === "string" && value === "";
+  return (spec.type === "string" || spec.type === "json") && value === "";
 }
 
 export function parseBody<T extends Record<string, unknown>>(
