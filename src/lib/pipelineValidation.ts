@@ -2,6 +2,7 @@ import { IHVProvider, UIState, OliveRecipe } from "@/types";
 import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
 import { getProviderAvailabilityBlock, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { buildOliveRecipe, isPyTorchNativeQuantMethod } from "@/lib/oliveRecipeBuilder";
+import { assessQnnRecipeReadiness, type QnnReadinessIssue } from "@/lib/qnnReadiness";
 import { isKnownPass, getPassSchema } from "@/lib/schemaEngine";
 import { pickOpenVinoTargetFromDevices } from "@/lib/openvinoDeps";
 
@@ -467,6 +468,53 @@ function getProviderHardwareIssues(state: UIState, probe?: HardwareProbeResult |
   ];
 }
 
+function qnnReadinessSeverityToPipeline(severity: QnnReadinessIssue["severity"]): IssueSeverity {
+  switch (severity) {
+    case "error":
+      return "critical";
+    case "warning":
+      return "warning";
+    case "info":
+      return "info";
+    default: {
+      const _exhaustive: never = severity;
+      return _exhaustive;
+    }
+  }
+}
+
+function extractRecipeIoConfig(recipe: OliveRecipe): unknown {
+  const inputModel = recipe.input_model as { io_config?: unknown } | undefined;
+  return inputModel?.io_config;
+}
+
+/**
+ * Maps QNN HTP / host-mode readiness into pipeline issues so Execute Live
+ * and recipe validation honor fail-closed + dynamic-shape gates.
+ */
+function getQnnRecipeReadinessIssues(
+  state: UIState,
+  recipe: OliveRecipe,
+  probe?: HardwareProbeResult | null,
+): PipelineIssue[] {
+  if (state.ihvProvider !== "QNNExecutionProvider") return [];
+
+  return assessQnnRecipeReadiness({
+    state,
+    probe,
+    ioConfig: extractRecipeIoConfig(recipe),
+    platform: probe
+      ? { platform: probe.platform.os, arch: probe.platform.arch }
+      : undefined,
+  }).map((issue) => ({
+    id: `qnn-readiness-${issue.code}`,
+    severity: qnnReadinessSeverityToPipeline(issue.severity),
+    title: `QNN readiness: ${issue.code.replace(/_/g, " ")}`,
+    description: issue.message,
+    affectedPasses: ["provider"],
+  }));
+}
+
 function inputModelFormats(inputModel: { type?: string }): string[] {
   switch (inputModel.type) {
     case "HfModel":
@@ -682,6 +730,7 @@ export function getPipelineValidation(
     ...getCrossPassIssues(state),
     ...getProviderIssues(state),
     ...getProviderHardwareIssues(state, options?.hardwareProbe),
+    ...getQnnRecipeReadinessIssues(state, recipe, options?.hardwareProbe),
     ...getLocalExecutionIssues(state, options?.forLocalExecution),
     ...getAdvisoryIssues(state),
     ...getRecipeRuntimeIssues(state, recipe),

@@ -160,7 +160,7 @@ export function assessQnnRecipeReadiness(input: {
     }
   }
 
-  if (input.probe?.qnn?.loadable !== true) {
+  if (input.probe && input.probe.qnn?.loadable !== true) {
     issues.push({
       severity: "error",
       code: "qnn_runtime_missing",

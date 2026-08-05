@@ -457,40 +457,46 @@ function ProviderPluginInstalls({
     Boolean(hardwareProbe) &&
     isProviderDetectedLocally("QNNExecutionProvider", hardwareProbe) &&
     hardwareProbe?.qnn?.loadable !== true;
+  const qnnShowTestNpu =
+    providerId === "QNNExecutionProvider" &&
+    hardwareProbe?.qnn?.hostMode === "local-inference" &&
+    hardwareProbe?.qnn?.loadable === true;
   const directMlNeedsInstall =
     /^win(?:32|64)?$/i.test(hardwareProbe?.platform.os.trim() ?? "") &&
     Boolean(hardwareProbe) &&
     !isProviderDetectedLocally("DmlExecutionProvider", hardwareProbe);
 
-  if (providerId === "QNNExecutionProvider" && qnnNeedsInstall) {
+  if (providerId === "QNNExecutionProvider" && (qnnNeedsInstall || qnnShowTestNpu)) {
     const mode = hardwareProbe?.qnn?.hostMode;
     const prepOnly = mode === "preparation";
     return (
       <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
-        <PluginInstallBlock
-          description={
-            <>
-              Install prepares isolated <code className="text-slate-400">.venvs/qnn</code> with{" "}
-              <code className="text-slate-400">onnxruntime==1.26.0</code> +{" "}
-              <code className="text-slate-400">onnxruntime-qnn==2.4.0</code>
-              {prepOnly
-                ? ". Windows x64: preparation / plugin AOT only (not local HTP inference)."
-                : ". Windows ARM64: runtime install first; “QNN NPU ready” waits on the Snapdragon release gate."}
-              {!isQnnSnapdragonReleaseGatePassed()
-                ? " UI will show “QNN runtime installed”, not “QNN NPU ready”, until that gate passes."
-                : ""}
-            </>
-          }
-          detail={hardwareProbe?.qnn?.detail}
-          busy={hardwareInstallBusy || qnnInstall.state.testing}
-          installing={qnnInstall.state.installing}
-          installLabel="Install QNN runtime (.venvs/qnn)"
-          installingLabel="Installing QNN runtime…"
-          onInstall={() => void qnnInstall.install()}
-          error={qnnInstall.state.error}
-          log={qnnInstall.state.log}
-        />
-        {mode === "local-inference" && hardwareProbe?.qnn?.loadable ? (
+        {qnnNeedsInstall ? (
+          <PluginInstallBlock
+            description={
+              <>
+                Install prepares isolated <code className="text-slate-400">.venvs/qnn</code> with{" "}
+                <code className="text-slate-400">onnxruntime==1.26.0</code> +{" "}
+                <code className="text-slate-400">onnxruntime-qnn==2.4.0</code>
+                {prepOnly
+                  ? ". Windows x64: preparation / plugin AOT only (not local HTP inference)."
+                  : ". Windows ARM64: runtime install first; “QNN NPU ready” waits on the Snapdragon release gate."}
+                {!isQnnSnapdragonReleaseGatePassed()
+                  ? " UI will show “QNN runtime installed”, not “QNN NPU ready”, until that gate passes."
+                  : ""}
+              </>
+            }
+            detail={hardwareProbe?.qnn?.detail}
+            busy={hardwareInstallBusy || qnnInstall.state.testing}
+            installing={qnnInstall.state.installing}
+            installLabel="Install QNN runtime (.venvs/qnn)"
+            installingLabel="Installing QNN runtime…"
+            onInstall={() => void qnnInstall.install()}
+            error={qnnInstall.state.error}
+            log={qnnInstall.state.log}
+          />
+        ) : null}
+        {qnnShowTestNpu ? (
           <button
             type="button"
             disabled={hardwareInstallBusy || qnnInstall.state.installing || qnnInstall.state.testing}

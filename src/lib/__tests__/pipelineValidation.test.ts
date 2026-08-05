@@ -480,6 +480,54 @@ describe("getPipelineValidation", () => {
     const success = getPipelineValidation(baseState({ ihvProvider: "CUDAExecutionProvider" }));
     expect(success.statusLabel).toBe("Local checks passed");
   });
+
+  it("wires QNN readiness errors into Execute Live blocking", () => {
+    const probe = {
+      probedAt: new Date().toISOString(),
+      platform: { os: "linux", arch: "x64", cpuModel: "Intel", cpuCores: 8 },
+      detectedProviders: ["CPUExecutionProvider", "QNNExecutionProvider"] as IHVProvider[],
+      recommendedProvider: "CPUExecutionProvider" as IHVProvider,
+      notes: [],
+      qnn: {
+        available: false,
+        loadable: false,
+        preparation: false,
+        npuDevice: false,
+        potentialInference: false,
+        verifiedInference: false,
+        hostMode: "out-of-scope" as const,
+      },
+    };
+    const r = getPipelineValidation(baseState({ ihvProvider: "QNNExecutionProvider" }), {
+      hardwareProbe: probe,
+    });
+    expect(r.isBlocked).toBe(true);
+    expect(r.issues.some((i) => i.id === "qnn-readiness-qnn_out_of_scope")).toBe(true);
+  });
+
+  it("blocks QNN when runtime is not loadable on Windows ARM64", () => {
+    const probe = {
+      probedAt: new Date().toISOString(),
+      platform: { os: "win32", arch: "arm64", cpuModel: "Snapdragon", cpuCores: 8 },
+      detectedProviders: ["CPUExecutionProvider", "QNNExecutionProvider"] as IHVProvider[],
+      recommendedProvider: "QNNExecutionProvider" as IHVProvider,
+      notes: [],
+      qnn: {
+        available: true,
+        loadable: false,
+        preparation: true,
+        npuDevice: false,
+        potentialInference: true,
+        verifiedInference: false,
+        hostMode: "local-inference" as const,
+      },
+    };
+    const r = getPipelineValidation(baseState({ ihvProvider: "QNNExecutionProvider" }), {
+      hardwareProbe: probe,
+    });
+    expect(r.isBlocked).toBe(true);
+    expect(r.issues.some((i) => i.id === "qnn-readiness-qnn_runtime_missing")).toBe(true);
+  });
 });
 
 // ─── sanitizePipelineState ────────────────────────────────────
