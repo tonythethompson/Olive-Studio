@@ -460,8 +460,8 @@ describe("Route integration tests", () => {
     });
 
     it("returns SSE error when LM Studio CLI is not installed", async () => {
-      // findLmsCli() uses execSync("where lms") which fails on systems
-      // without LM Studio. The handler streams NDJSON (or legacy SSE) events.
+      // findLmsCli() probes via execFileAsync("where lms") which the setup mock
+      // resolves to empty output (CLI missing). The handler streams NDJSON events.
       const res = await fetch(`${baseUrl}/api/ai/local-pull`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

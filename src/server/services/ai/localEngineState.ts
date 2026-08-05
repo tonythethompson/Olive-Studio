@@ -1,8 +1,8 @@
 /** Progress event emitted while ensuring a local engine is installed/running. */
 export type EnsureProgressEvt = { type: string; message: string; percent?: number };
 
-export type OllamaEnsureResult = { ok: boolean; error?: string; steps: string[] };
-export type LmsEnsureResult = { ok: boolean; error?: string; openedUrl?: string; steps: string[] };
+export type OllamaEnsureResult = { ok: boolean; error?: string; steps: string[]; cancelled?: boolean };
+export type LmsEnsureResult = { ok: boolean; error?: string; openedUrl?: string; steps: string[]; cancelled?: boolean };
 
 export interface LocalEngineRuntime {
   /** Cached `lms` CLI path (`undefined` = not probed yet, `null` = probed, missing). */
