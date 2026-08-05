@@ -22,6 +22,7 @@ export function createMockUIState(partial?: Partial<UIState>): UIState {
     hfTask: "",
     hfDataset: "",
     ihvProvider: "CPUExecutionProvider",
+    openvinoTargetDevice: "CPU",
     memoryOffload: "gpu_only",
     cudaVersion: "auto",
     cacheDir: "",

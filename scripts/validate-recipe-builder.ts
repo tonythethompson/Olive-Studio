@@ -20,6 +20,7 @@ const baseState: UIState = {
   hfModelId: "meta-llama/Llama-3-8B",
   hfDataset: "",
   ihvProvider: "CUDAExecutionProvider",
+  openvinoTargetDevice: "CPU",
   memoryOffload: "gpu_only",
   cudaVersion: "auto",
   cacheDir: "",

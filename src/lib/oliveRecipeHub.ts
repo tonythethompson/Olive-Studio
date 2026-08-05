@@ -1,6 +1,7 @@
-import { UIState, IHVProvider } from "@/types";
+import { UIState, IHVProvider, OpenVinoTargetDevice } from "@/types";
 import { createInactivePasses, DEFAULT_PASSES } from "@/lib/defaultPasses";
 import { memoryOffloadFromRecipe } from "@/lib/memoryOffload";
+import { normalizeOpenVinoTargetDevice } from "@/lib/openvinoDeps";
 
 export const OLIVE_RECIPES_REPO = "microsoft/olive-recipes";
 export const OLIVE_RECIPES_BRANCH_DEFAULT = "main";
@@ -174,6 +175,25 @@ function mapExecutionProviderFromRecipe(parsed: any): IHVProvider | undefined {
         if (token.includes("webgpu")) return "WebGpuExecutionProvider";
         if (token.includes("rocm")) return "ROCMExecutionProvider";
       }
+    }
+  }
+  return undefined;
+}
+
+function mapOpenVinoTargetFromRecipe(parsed: unknown): OpenVinoTargetDevice | undefined {
+  const systems = (parsed as { systems?: Record<string, unknown> })?.systems;
+  if (!systems || typeof systems !== "object") return undefined;
+  for (const system of Object.values(systems)) {
+    const config = (system as { config?: { accelerators?: unknown[] }; accelerators?: unknown[] })?.config;
+    const accelerators = config?.accelerators ?? (system as { accelerators?: unknown[] })?.accelerators;
+    if (!Array.isArray(accelerators)) continue;
+    for (const accelerator of accelerators) {
+      const providers = (accelerator as { execution_providers?: unknown[] })?.execution_providers;
+      if (!Array.isArray(providers) || providers.length === 0) continue;
+      const token = String(providers[0]).toLowerCase();
+      if (!token.includes("openvino")) continue;
+      const device = (accelerator as { device?: unknown })?.device;
+      return normalizeOpenVinoTargetDevice(device) ?? "CPU";
     }
   }
   return undefined;
@@ -493,6 +513,9 @@ export function deriveUiStateFromOliveRecipe(parsed: any, options?: DeriveUiStat
   const provider = mapExecutionProviderFromRecipe(parsed);
   if (provider) {
     incomingState.ihvProvider = provider;
+  }
+  if (provider === "OpenVINOExecutionProvider") {
+    incomingState.openvinoTargetDevice = mapOpenVinoTargetFromRecipe(parsed) ?? "CPU";
   }
 
   const offloadMode = memoryOffloadFromRecipe(parsed);

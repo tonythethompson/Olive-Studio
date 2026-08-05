@@ -97,6 +97,7 @@ export function buildUiStateSketchFromCatalogItem(item: RecipeCatalogItem): UISt
     hfModelId: inferCatalogModelId(item),
     hfDataset: "",
     ihvProvider: catalogDeviceToProvider(item.device),
+    openvinoTargetDevice: "CPU",
     memoryOffload: "gpu_only",
     cudaVersion: "auto",
     cacheDir: "",

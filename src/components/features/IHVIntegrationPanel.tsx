@@ -12,7 +12,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui";
 import { IHVProvider, UIState } from "@/types";
-import { usePipelineState } from "@/lib/stores/pipelineStore";
+import { usePipelineState, usePipelineStore } from "@/lib/stores/pipelineStore";
 import {
   applyProviderConflictAutofixes,
   getProviderConflicts,
@@ -41,6 +41,12 @@ import { HardwareProviderCard } from "@/components/features/HardwareProviderCard
 import { useOpenVinoInstall } from "@/components/features/useOpenVinoInstall";
 import { useDirectMlInstall } from "@/components/features/useDirectMlInstall";
 import { runNdjsonInstall } from "@/lib/ndjsonInstall";
+import {
+  OPEN_VINO_TARGET_DEVICES,
+  isOpenVinoTargetAvailable,
+  pickOpenVinoTargetFromDevices,
+  type OpenVinoTargetDevice,
+} from "@/lib/openvinoDeps";
 import {
   Settings2,
   AlertTriangle,
@@ -330,7 +336,12 @@ export function IHVIntegrationPanel({
         // Auto-apply recommended provider on first probe completion
         if (!hasAutoAppliedRef.current && result.recommendedProvider) {
           hasAutoAppliedRef.current = true;
-          setState({ ihvProvider: result.recommendedProvider });
+          const current = usePipelineStore.getState().state;
+          setState(
+            prepareProviderChange(current, result.recommendedProvider, result) ?? {
+              ihvProvider: result.recommendedProvider,
+            },
+          );
         }
       } catch (err) {
         setProbeError(err instanceof Error ? err.message : "Hardware probe failed.");
@@ -567,7 +578,15 @@ export function IHVIntegrationPanel({
                       {state.ihvProvider !== hardwareProbe.recommendedProvider && (
                         <button
                           type="button"
-                          onClick={() => setState({ ihvProvider: hardwareProbe.recommendedProvider })}
+                          onClick={() =>
+                            setState(
+                              prepareProviderChange(
+                                state,
+                                hardwareProbe.recommendedProvider,
+                                hardwareProbe,
+                              ) ?? { ihvProvider: hardwareProbe.recommendedProvider },
+                            )
+                          }
                           className="ml-2 text-xs text-electric-blue hover:text-white cursor-pointer"
                         >
                           Apply
@@ -730,7 +749,15 @@ export function IHVIntegrationPanel({
                         !isGpuProvider(state.ihvProvider) && (
                           <button
                             type="button"
-                            onClick={() => setState({ ihvProvider: hardwareProbe.recommendedProvider })}
+                            onClick={() =>
+                            setState(
+                              prepareProviderChange(
+                                state,
+                                hardwareProbe.recommendedProvider,
+                                hardwareProbe,
+                              ) ?? { ihvProvider: hardwareProbe.recommendedProvider },
+                            )
+                          }
                             className="ml-2 text-electric-blue hover:text-white cursor-pointer underline underline-offset-2"
                           >
                             Switch to{" "}
@@ -961,7 +988,16 @@ export function IHVIntegrationPanel({
                                 // Allow selecting undetected providers for cross-compile / remote targets
                                 const detected = detectedProviders.includes(p.id);
                                 if (!detected) {
-                                  setState({ ihvProvider: p.id });
+                                  setState({
+                                    ihvProvider: p.id,
+                                    ...(p.id === "OpenVINOExecutionProvider"
+                                      ? {
+                                          openvinoTargetDevice: pickOpenVinoTargetFromDevices(
+                                            hardwareProbe?.openvino?.devices,
+                                          ),
+                                        }
+                                      : {}),
+                                  });
                                   return;
                                 }
                                 const patch = prepareProviderChange(state, p.id, hardwareProbe);
@@ -974,7 +1010,16 @@ export function IHVIntegrationPanel({
                                 e.preventDefault();
                                 const detected = detectedProviders.includes(p.id);
                                 if (!detected) {
-                                  setState({ ihvProvider: p.id });
+                                  setState({
+                                    ihvProvider: p.id,
+                                    ...(p.id === "OpenVINOExecutionProvider"
+                                      ? {
+                                          openvinoTargetDevice: pickOpenVinoTargetFromDevices(
+                                            hardwareProbe?.openvino?.devices,
+                                          ),
+                                        }
+                                      : {}),
+                                  });
                                   return;
                                 }
                                 const patch = prepareProviderChange(state, p.id, hardwareProbe);
@@ -1453,16 +1498,34 @@ export function IHVIntegrationPanel({
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="openvino-target-device">Target Device</Label>
-                      <p className="text-xs text-slate-500">CPU, GPU, NPU</p>
+                      <p className="text-xs text-slate-500">
+                        OpenVINO silicon target (CPU, Intel GPU, or NPU)
+                      </p>
                     </div>
                     <Select
                       id="openvino-target-device"
                       aria-label="Target Device"
                       className="w-full max-w-[150px]"
+                      value={state.openvinoTargetDevice}
+                      onChange={(e) => {
+                        const next = e.target.value as OpenVinoTargetDevice;
+                        if (OPEN_VINO_TARGET_DEVICES.includes(next)) {
+                          setState({ openvinoTargetDevice: next });
+                        }
+                      }}
                     >
-                      <option>NPU</option>
-                      <option>CPU</option>
-                      <option>GPU</option>
+                      {OPEN_VINO_TARGET_DEVICES.map((device) => {
+                        const available = isOpenVinoTargetAvailable(
+                          device,
+                          hardwareProbe?.openvino?.devices,
+                        );
+                        return (
+                          <option key={device} value={device} disabled={!available && Boolean(hardwareProbe)}>
+                            {device}
+                            {!available && hardwareProbe ? " (not detected)" : ""}
+                          </option>
+                        );
+                      })}
                     </Select>
                   </div>
                 </>

@@ -44,6 +44,9 @@ export type IHVProvider =
   | "ROCMExecutionProvider"
   | "WebGpuExecutionProvider";
 
+/** OpenVINOExecutionProvider silicon target (maps to Olive accelerator.device). */
+export type OpenVinoTargetDevice = "CPU" | "GPU" | "NPU";
+
 /**
  * Extra fields applied to a generated Olive pass when building a recipe.
  * Populated by MCP "Apply Fix" from nested `updated_config.passes` entries.
@@ -90,6 +93,11 @@ export interface UIState {
   /** Explicit HF pipeline task; empty/omitted means infer from model id. */
   hfTask?: string;
   ihvProvider: IHVProvider;
+  /**
+   * OpenVINOExecutionProvider silicon target (CPU / Intel GPU / NPU).
+   * Ignored unless `ihvProvider` is OpenVINOExecutionProvider.
+   */
+  openvinoTargetDevice: OpenVinoTargetDevice;
   /** Hugging Face load_kwargs device_map — GPU + host RAM when auto. */
   memoryOffload: "gpu_only" | "auto";
   /**

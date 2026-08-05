@@ -11,6 +11,7 @@ const defaultState: UIState = {
   hfTask: "",
   hfDataset: "",
   ihvProvider: "CPUExecutionProvider",
+  openvinoTargetDevice: "CPU",
   memoryOffload: "gpu_only",
   cudaVersion: "auto",
   cacheDir: "",

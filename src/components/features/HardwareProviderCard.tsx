@@ -26,6 +26,7 @@ import type { ProviderCatalogEntry } from "@/lib/providerCatalog";
 import {
   OPEN_VINO_GPU_DRIVER_URL,
   OPEN_VINO_NPU_DRIVER_URL,
+  pickOpenVinoTargetFromDevices,
 } from "@/lib/openvinoDeps";
 import {
   CUDA_DOWNLOAD_LINKS,
@@ -245,7 +246,14 @@ function selectProvider(
   }
   const detected = detectedProviders.includes(providerId);
   if (!detected) {
-    setState({ ihvProvider: providerId });
+    setState({
+      ihvProvider: providerId,
+      ...(providerId === "OpenVINOExecutionProvider"
+        ? {
+            openvinoTargetDevice: pickOpenVinoTargetFromDevices(hardwareProbe?.openvino?.devices),
+          }
+        : {}),
+    });
     return;
   }
   const patch = prepareProviderChange(state, providerId, hardwareProbe);

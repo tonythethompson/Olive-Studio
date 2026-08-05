@@ -38,17 +38,18 @@ function baseState(overrides?: Partial<UIState>): UIState {
     hfModelId: "meta-llama/Meta-Llama-3-8B",
     hfDataset: "",
     ihvProvider: "CPUExecutionProvider" as IHVProvider,
+    openvinoTargetDevice: "CPU",
     memoryOffload: "gpu_only",
     cudaVersion: "auto",
     cacheDir: "",
     azureStr: "",
     distributedCaching: false,
     activeJobId: null,
+    ...overrides,
     passes: {
       ...DEFAULT_PASSES,
       ...overrides?.passes,
     },
-    ...overrides,
   };
 }
 
@@ -324,6 +325,22 @@ describe("prepareProviderChange", () => {
     const result = prepareProviderChange(state, "CPUExecutionProvider");
     expect(result).not.toBeNull();
     expect(result!.passes).toBeDefined();
+  });
+
+  it("picks OpenVINO GPU target from probe devices when switching to OpenVINO", () => {
+    const state = baseState();
+    const result = prepareProviderChange(state, "OpenVINOExecutionProvider", {
+      probedAt: new Date().toISOString(),
+      platform: { os: "linux", arch: "x64", cpuModel: "Intel Core Ultra", cpuCores: 16 },
+      openvino: { available: true, loadable: true, version: "2025.1", devices: ["CPU", "GPU", "NPU"] },
+      detectedProviders: ["CPUExecutionProvider", "OpenVINOExecutionProvider"],
+      recommendedProvider: "OpenVINOExecutionProvider" as IHVProvider,
+      notes: [],
+    });
+    expect(result).toEqual({
+      ihvProvider: "OpenVINOExecutionProvider",
+      openvinoTargetDevice: "GPU",
+    });
   });
 });
 
