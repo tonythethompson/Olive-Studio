@@ -4,6 +4,8 @@
  */
 import type { Router } from "express";
 
+import { parseBody } from "../../middleware/bodyGuard.ts";
+
 import { callAI } from "../../services/ai/index.ts";
 import {
   buildOliveAssistantSystemPrompt,
@@ -20,11 +22,25 @@ import {
 import { CHAT_JSON_RESPONSE_CONTRACT, parseChatStructuredReply } from "../../../lib/chatActions.ts";
 import { getChatScopeBlock } from "../../../lib/chatScope.ts";
 import { validateOliveRecipeStructure } from "../../../lib/oliveRecipeSchema.ts";
+import type { UIState } from "../../../types.ts";
 
 export function mountChatRoutes(router: Router): void {
   router.post("/ai/chat", async (req, res) => {
-    const { message, chatHistory, workspaceContext, state } = req.body ?? {};
-    if (!message || typeof message !== "string") return res.status(400).json({ error: "Missing message" });
+    const body = parseBody<{
+      message: string;
+      chatHistory?: unknown;
+      workspaceContext?: unknown;
+      state?: UIState;
+    }>(req.body, {
+      message: { type: "string", message: "Missing message" },
+      // Optional context fields are lenient by design: the handler ignores
+      // malformed values, so pass them through unvalidated (unknown).
+      chatHistory: { type: "unknown", required: false },
+      workspaceContext: { type: "unknown", required: false },
+      state: { type: "unknown", required: false },
+    });
+    if (!body.parsed) return res.status(400).json({ error: body.error });
+    const { message, chatHistory, workspaceContext, state } = body.parsed;
     try {
       const scopeBlock = getChatScopeBlock(message);
       if (scopeBlock) {
@@ -82,8 +98,11 @@ export function mountChatRoutes(router: Router): void {
   // ─── Pipeline Validation & Analysis ──────────────────────────────────────
 
   router.post("/ai/validate", async (req, res) => {
-    const { recipe } = req.body ?? {};
-    if (!recipe) return res.status(400).json({ error: "Missing recipe" });
+    const body = parseBody<{ recipe: unknown }>(req.body, {
+      recipe: { type: "json", message: "Missing recipe" },
+    });
+    if (!body.parsed) return res.status(400).json({ error: body.error });
+    const { recipe } = body.parsed;
     try {
       const validation = validateOliveRecipeStructure(
         typeof recipe === "string" ? JSON.parse(recipe) : recipe,
@@ -105,8 +124,11 @@ export function mountChatRoutes(router: Router): void {
   });
 
   router.post("/ai/analyze-state", async (req, res) => {
-    const { state } = req.body ?? {};
-    if (!state) return res.status(400).json({ error: "Missing state" });
+    const body = parseBody<{ state: UIState }>(req.body, {
+      state: { type: "object", message: "Missing state" },
+    });
+    if (!body.parsed) return res.status(400).json({ error: body.error });
+    const { state } = body.parsed;
     try {
       const ctx = buildAiWorkspaceContext(state);
       // Cap context so small models still have room for full-sentence JSON.

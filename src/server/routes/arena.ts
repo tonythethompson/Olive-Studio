@@ -5,6 +5,7 @@
 import type { Request, Response, Router } from "express";
 import fs from "node:fs";
 import { resolveCloudTimeoutMs, ARENA_PROMPT_MAX_CHARS } from "../../lib/arenaConstants.ts";
+import { parseBody } from "../middleware/bodyGuard.ts";
 import { arenaLocalOnly, arenaStrictLocalOnly } from "../middleware/localOnly.ts";
 import { arenaProxyRateLimit } from "../middleware/rateLimit.ts";
 import {
@@ -94,21 +95,28 @@ export function mountArenaRoutes(router: Router): void {
   // Local-first access boundary (loopback) before rate limit / proxy work.
   // Override with OLIVE_ARENA_ALLOW_REMOTE=true when intentionally exposing the API.
   router.post("/arena/cloud-inference", arenaLocalOnly, arenaProxyRateLimit, async (req, res) => {
-    const { endpointUrl, apiKey, modelId, prompt, timeoutMs } = req.body ?? {};
+    const body = parseBody<{
+      endpointUrl: string;
+      prompt: string;
+      apiKey?: string;
+      modelId?: string;
+      timeoutMs?: unknown;
+    }>(req.body, {
+      endpointUrl: { type: "string", message: "endpointUrl is required" },
+      prompt: { type: "string", message: "prompt is required" },
+      apiKey: { type: "string", required: false },
+      modelId: { type: "string", required: false },
+      // Lenient by design: resolveCloudTimeoutMs clamps any raw value below.
+      timeoutMs: { type: "unknown", required: false },
+    });
+    if (!body.parsed) return res.status(400).json({ error: body.error });
+    const { endpointUrl, apiKey, modelId, prompt } = body.parsed;
 
-    if (!endpointUrl || typeof endpointUrl !== "string")
-      return res.status(400).json({ error: "endpointUrl is required" });
-    if (!prompt || typeof prompt !== "string")
-      return res.status(400).json({ error: "prompt is required" });
     if (prompt.length > ARENA_PROMPT_MAX_CHARS) {
       return res.status(400).json({
         error: `prompt must be at most ${ARENA_PROMPT_MAX_CHARS} characters`,
       });
     }
-    if (apiKey !== undefined && apiKey !== null && typeof apiKey !== "string")
-      return res.status(400).json({ error: "apiKey must be a string" });
-    if (modelId !== undefined && modelId !== null && typeof modelId !== "string")
-      return res.status(400).json({ error: "modelId must be a string" });
 
     let targetUrl: URL;
     try {
@@ -131,7 +139,7 @@ export function mountArenaRoutes(router: Router): void {
     // CodeQL js/resource-exhaustion treats any setTimeout/setInterval delay derived from
     // request body as tainted even after clamp; schedule with a fixed literal tick and
     // compare against a Date.now() deadline so the sink is not user-controlled.
-    const resolvedTimeoutMs = resolveCloudTimeoutMs(timeoutMs);
+    const resolvedTimeoutMs = resolveCloudTimeoutMs(body.parsed.timeoutMs);
     const ac = new AbortController();
     const timer = armCloudAbort(() => {
       if (!ac.signal.aborted) ac.abort();

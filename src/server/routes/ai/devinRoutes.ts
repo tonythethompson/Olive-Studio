@@ -9,6 +9,7 @@ import {
   logoutDevin,
 } from "../../../lib/devin/client.ts";
 import { authActionRateLimit } from "../../middleware/rateLimit.ts";
+import { parseBody } from "../../middleware/bodyGuard.ts";
 
 export function mountDevinRoutes(router: Router): void {
   router.get("/devin/account", (_req, res) => {
@@ -21,10 +22,12 @@ export function mountDevinRoutes(router: Router): void {
   });
 
   router.post("/devin/login/complete", authActionRateLimit, async (req, res) => {
-    const { token } = req.body ?? {};
-    if (!token) return res.status(400).json({ ok: false, error: "Missing token" });
+    const body = parseBody<{ token: string }>(req.body, {
+      token: { type: "string", message: "Missing token" },
+    });
+    if (!body.parsed) return res.status(400).json({ error: body.error });
     try {
-      const result = await finishDevinLogin(token);
+      const result = await finishDevinLogin(body.parsed.token);
       return res.json({ ok: true, ...result });
     } catch (err: unknown) {
       return res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
