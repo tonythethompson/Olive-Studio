@@ -32,7 +32,9 @@ export type BodySpec<T extends Record<string, unknown>> = {
   [K in keyof T]: BodyFieldSpec;
 };
 
-export type ParseBodyResult<T> = { parsed: T } | { error: string };
+export type ParseBodyResult<T> =
+  | { parsed: T; error?: never }
+  | { error: string; parsed?: never };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -43,7 +45,7 @@ const TYPE_CHECKERS: Record<BodyFieldType, (value: unknown) => boolean> = {
   number: (value) => typeof value === "number" && Number.isFinite(value),
   boolean: (value) => typeof value === "boolean",
   object: (value) => isPlainObject(value),
-  string[]: (value) =>
+  "string[]": (value) =>
     Array.isArray(value) && value.every((item) => typeof item === "string"),
   // Recipes arrive either pre-parsed or as a JSON string.
   json: (value) => typeof value === "string" || isPlainObject(value),
@@ -56,7 +58,7 @@ const TYPE_DESCRIPTIONS: Record<BodyFieldType, string> = {
   number: "a number",
   boolean: "a boolean",
   object: "an object",
-  string[]: "an array of strings",
+  "string[]": "an array of strings",
   json: "a string or JSON object",
   unknown: "a value",
 };

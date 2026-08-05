@@ -130,7 +130,7 @@ export function mountArenaRoutes(router: Router): void {
       headers["Authorization"] = `Bearer ${apiKey}`;
     }
 
-    const body = JSON.stringify({
+    const requestBody = JSON.stringify({
       model: typeof modelId === "string" && modelId.length > 0 ? modelId : undefined,
       messages: [{ role: "user", content: prompt }],
     });
@@ -168,7 +168,7 @@ export function mountArenaRoutes(router: Router): void {
       const upstream = await pinnedFetch(targetUrl, {
         method: "POST",
         headers,
-        body,
+        body: requestBody,
         signal: ac.signal,
       });
 
