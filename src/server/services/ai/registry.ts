@@ -1,5 +1,5 @@
 import type { ProviderConfig, AIChatMessage } from "../../types.ts";
-import { matchedEnvApiKeyName, readEnvApiKey } from "../../../lib/aiResponse.ts";
+import { matchedEnvApiKeyName, readEnvApiKey } from "./env.ts";
 import type { EnvCredentialStatus } from "../../../lib/envCredentialUi.ts";
 import { resolveCloudflareAuth } from "../../../lib/cloudflare/client.ts";
 import { cloudflareAiBaseUrl } from "../../../lib/cloudflare/credentials.ts";

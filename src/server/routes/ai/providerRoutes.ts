@@ -13,7 +13,7 @@ import {
 import { listEnvCredentialStatus } from "../../services/ai/registry.ts";
 import { sanitizeProviderBaseUrl, isLoopbackHostname } from "../../services/ai/security.ts";
 import { ALLOWED_AI_PROVIDERS } from "../../services/ai/detect.ts";
-import { readEnvApiKey } from "../../../lib/aiResponse.ts";
+import { readEnvApiKey } from "../../services/ai/env.ts";
 import { resolveCloudflareAuth, listCloudflareModels } from "../../../lib/cloudflare/client.ts";
 import { cloudflareAiBaseUrl, isValidCloudflareAccountId } from "../../../lib/cloudflare/credentials.ts";
 import { getCodexAppServer } from "../../../lib/codex/CodexAppServerClient.ts";
