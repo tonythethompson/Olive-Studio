@@ -20,7 +20,7 @@ export function resolveDirectMlEpDetected(input: {
 /**
  * @deprecated Prefer resolveDirectMlEpDetected for EP / install-guidance callers.
  * Kept as an alias of EP detection for older call sites / tests.
- * Host readiness for detectedProviders listing uses resolveDirectMlHardwareReady.
+ * Host readiness uses resolveDirectMlHardwareReady; do not pass that into hasDirectMl.
  */
 export function resolveDirectMlDetected(input: {
   defaultProviders?: string[];
