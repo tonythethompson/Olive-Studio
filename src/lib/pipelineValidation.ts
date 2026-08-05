@@ -3,6 +3,7 @@ import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
 import { getProviderAvailabilityBlock, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { buildOliveRecipe, isPyTorchNativeQuantMethod } from "@/lib/oliveRecipeBuilder";
 import { isKnownPass, getPassSchema } from "@/lib/schemaEngine";
+import { pickOpenVinoTargetFromDevices } from "@/lib/openvinoDeps";
 
 export type PipelineValidationOptions = {
   hardwareProbe?: HardwareProbeResult | null;
@@ -284,14 +285,17 @@ export function prepareProviderChange(
   const conflicts = getProviderConflicts(providerId, state.passes);
   const hasCritical = conflicts.some((c) => c.severity === "critical");
 
-  if (hasCritical) {
-    return {
-      ihvProvider: providerId,
-      passes: applyProviderConflictAutofixes(providerId, state.passes),
-    };
-  }
-
-  return { ihvProvider: providerId };
+  return {
+    ihvProvider: providerId,
+    ...(providerId === "OpenVINOExecutionProvider"
+      ? {
+          openvinoTargetDevice: pickOpenVinoTargetFromDevices(probe?.openvino?.devices),
+        }
+      : {}),
+    ...(hasCritical
+      ? { passes: applyProviderConflictAutofixes(providerId, state.passes) }
+      : {}),
+  };
 }
 
 function passesNeedOnnxGraph(passes: UIState["passes"]): boolean {
@@ -780,8 +784,16 @@ export function coercePassFields(passes: UIState["passes"], provider: IHVProvide
 }
 
 export function sanitizePipelineState(state: UIState): UIState {
+  const openvinoTargetDevice =
+    state.openvinoTargetDevice === "CPU" ||
+    state.openvinoTargetDevice === "GPU" ||
+    state.openvinoTargetDevice === "NPU"
+      ? state.openvinoTargetDevice
+      : "CPU";
+
   let current: UIState = {
     ...state,
+    openvinoTargetDevice,
     memoryOffload:
       state.memoryOffload === "auto" && !isMemoryOffloadAvailable(state) ? "gpu_only" : state.memoryOffload,
     passes: coercePassFields(state.passes, state.ihvProvider),

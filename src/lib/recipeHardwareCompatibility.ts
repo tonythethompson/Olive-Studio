@@ -9,6 +9,7 @@ import {
   TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY,
   type HardwareProbeResult,
   isProviderDetectedLocally,
+  computeDirectMlHardwareReady,
 } from "@/lib/hardwareProbe";
 import {
   CUDA_TOOLKIT_MIN_COMPUTE_CAPABILITY,
@@ -26,7 +27,7 @@ export type RecipeHardwareCompatTier = "compatible" | "unavailable" | "unknown";
  * counts as hardware-compatible so `hideIncompatibleRecipes` does not drop it.
  */
 export interface RecipeInstallHint {
-  kind: "tensorrt" | "tensorrt-rtx" | "onnxruntime-gpu";
+  kind: "tensorrt" | "tensorrt-rtx" | "onnxruntime-gpu" | "onnxruntime-directml";
   /** Provider the recipe expects once deps land. */
   provider: IHVProvider;
   /** Underlying detail string from the probe (may be empty). */
@@ -51,35 +52,26 @@ export interface RecipeHardwareCompatResult {
   requiresInstall?: RecipeInstallHint;
 }
 
-function isWindowsProbe(probe: HardwareProbeResult): boolean {
-  return probe.platform.os.toLowerCase().includes("win");
-}
-
-/**
- * Builds an install hint for an execution provider on a GPU that supports it
- * but where the matching Python runtime isn't loaded in `.venv` yet. Used
- * for the TensorRT family (kind: "tensorrt" / "tensorrt-rtx") and now also
- * for the CUDA case (kind: "onnxruntime-gpu") — the CUDA branch used to
- * inline this object and dropped the probe's `detail` string, so a real
- * "driver/wheel mismatch" message never made it back to the UI.
- */
 function ePInstallHint(args: {
   probe: HardwareProbeResult;
   requiredProvider: IHVProvider;
   kind: RecipeInstallHint["kind"];
-  detailKey: "tensorrt" | "tensorRtRtx" | "cuda";
+  detailKey?: "tensorrt" | "tensorRtRtx" | "cuda";
   depLabel: string;
   installCommand: string;
+  /** Override the "supported family" label (defaults to NVIDIA GPU or CPU model). */
+  deviceLabel?: string;
 }): RecipeInstallHint {
-  const gpuHint = args.probe.nvidia?.gpus[0]?.name ?? args.probe.platform.cpuModel;
-  const detail = args.probe[args.detailKey]?.detail;
+  const gpuHint =
+    args.deviceLabel ?? args.probe.nvidia?.gpus[0]?.name ?? args.probe.platform.cpuModel;
+  const detail = args.detailKey ? args.probe[args.detailKey]?.detail : undefined;
   return {
     kind: args.kind,
     provider: args.requiredProvider,
     detail,
     hint: detail
-      ? `${args.depLabel} not in .venv (${detail}). GPU is in the supported family (${gpuHint}) — install in Hardware then retry.`
-      : `${args.depLabel} not in .venv yet. GPU is in the supported family (${gpuHint}) — install in Hardware (step 02) to run this recipe.`,
+      ? `${args.depLabel} not in .venv (${detail}). Hardware is in the supported family (${gpuHint}) — install in Hardware then retry.`
+      : `${args.depLabel} not in .venv yet. Hardware is in the supported family (${gpuHint}) — install in Hardware (step 02) to run this recipe.`,
     installCommand: args.installCommand,
   };
 }
@@ -88,6 +80,8 @@ function catalogDeviceToProvider(device: string): IHVProvider | undefined {
   switch (device) {
     case "CUDA":
       return "CUDAExecutionProvider";
+    case "DirectML":
+      return "DmlExecutionProvider";
     case "TensorRT":
       return "TensorrtExecutionProvider";
     case "TensorRT RTX":
@@ -98,6 +92,8 @@ function catalogDeviceToProvider(device: string): IHVProvider | undefined {
       return "QNNExecutionProvider";
     case "CPU":
       return "CPUExecutionProvider";
+    case "WebGPU":
+      return "WebGpuExecutionProvider";
     default:
       return undefined;
   }
@@ -132,17 +128,37 @@ export function assessRecipeHardwareCompatibility(
   }
 
   if (targetDevice === "DirectML") {
-    if (isWindowsProbe(probe)) {
+    // Hardware readiness (Windows / DX12 class) gates compatible vs unavailable.
+    // EP registration separately drives the install hint.
+    if (computeDirectMlHardwareReady({ os: probe.platform.os })) {
+      if (isProviderDetectedLocally("DmlExecutionProvider", probe)) {
+        return {
+          tier: "compatible",
+          targetDevice,
+          reason: "DirectML backend available on Windows.",
+          requiredProvider: "DmlExecutionProvider",
+        };
+      }
       return {
         tier: "compatible",
         targetDevice,
-        reason: "DirectML targets Windows — this host qualifies.",
+        reason: "DirectML targets Windows — install onnxruntime-directml in .venv to run this recipe.",
+        requiredProvider: "DmlExecutionProvider",
+        requiresInstall: ePInstallHint({
+          probe,
+          requiredProvider: "DmlExecutionProvider",
+          kind: "onnxruntime-directml",
+          depLabel: "onnxruntime-directml (DirectML EP wheel)",
+          installCommand: "pip install onnxruntime-directml",
+          deviceLabel: "Windows DirectX 12 adapter",
+        }),
       };
     }
     return {
       tier: "unavailable",
       targetDevice,
       reason: "DirectML recipes require Windows. This host is not Windows.",
+      requiredProvider: "DmlExecutionProvider",
     };
   }
 

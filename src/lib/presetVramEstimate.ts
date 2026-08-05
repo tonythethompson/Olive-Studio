@@ -14,8 +14,9 @@ import { IHVProvider, UIState } from "@/types";
 function catalogDeviceToProvider(device: string): IHVProvider {
   switch (device) {
     case "CUDA":
-    case "DirectML":
       return "CUDAExecutionProvider";
+    case "DirectML":
+      return "DmlExecutionProvider";
     case "TensorRT":
       return "TensorrtExecutionProvider";
     case "TensorRT RTX":
@@ -24,6 +25,8 @@ function catalogDeviceToProvider(device: string): IHVProvider {
       return "OpenVINOExecutionProvider";
     case "QNN":
       return "QNNExecutionProvider";
+    case "WebGPU":
+      return "WebGpuExecutionProvider";
     case "CPU":
     default:
       return "CPUExecutionProvider";
@@ -94,6 +97,7 @@ export function buildUiStateSketchFromCatalogItem(item: RecipeCatalogItem): UISt
     hfModelId: inferCatalogModelId(item),
     hfDataset: "",
     ihvProvider: catalogDeviceToProvider(item.device),
+    openvinoTargetDevice: "CPU",
     memoryOffload: "gpu_only",
     cudaVersion: "auto",
     cacheDir: "",

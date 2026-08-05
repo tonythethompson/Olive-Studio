@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeDirectMlHardwareReady,
+  computeDirectMlNeedsInstall,
   computeOpenVinoCompatibleHardware,
   getProviderAvailabilityBlock,
   isNvidiaGpuTensorRtFamily,
@@ -401,6 +403,55 @@ describe("getProviderAvailabilityBlock — CUDA 4-state branching", () => {
   });
 });
 
+describe("computeDirectMlHardwareReady", () => {
+  it("treats Windows hosts as DirectX 12 / DirectML capable", () => {
+    expect(computeDirectMlHardwareReady({ os: "win32 10.0" })).toBe(true);
+    expect(computeDirectMlHardwareReady({ os: "Windows_NT" })).toBe(true);
+    expect(computeDirectMlHardwareReady({ os: "linux 6.8" })).toBe(false);
+    expect(computeDirectMlHardwareReady({ os: "darwin" })).toBe(false);
+  });
+});
+
+describe("computeDirectMlNeedsInstall", () => {
+  const baseProbe = {
+    probedAt: "now",
+    platform: { cpuModel: "Test", cpuCores: 8, os: "win32 10.0", arch: "x64" },
+    detectedProviders: ["CPUExecutionProvider"] as const,
+    recommendedProvider: "CPUExecutionProvider" as const,
+    notes: [] as string[],
+  };
+
+  it("offers DirectML install on Windows when EP is missing", () => {
+    expect(
+      computeDirectMlNeedsInstall({
+        ...baseProbe,
+        platform: { ...baseProbe.platform, os: "win32 10.0" },
+        detectedProviders: ["CPUExecutionProvider"],
+      }),
+    ).toBe(true);
+  });
+
+  it("does not offer DirectML install on macOS (darwin must not match win)", () => {
+    // HardwareProviderCard gates its DirectML CTA on this boolean.
+    expect(
+      computeDirectMlNeedsInstall({
+        ...baseProbe,
+        platform: { ...baseProbe.platform, os: "darwin 24.0" },
+        detectedProviders: ["CPUExecutionProvider"],
+      }),
+    ).toBe(false);
+  });
+
+  it("omits the install CTA when DmlExecutionProvider is already detected", () => {
+    expect(
+      computeDirectMlNeedsInstall({
+        ...baseProbe,
+        detectedProviders: ["CPUExecutionProvider", "DmlExecutionProvider"],
+      }),
+    ).toBe(false);
+  });
+});
+
 describe("computeOpenVinoCompatibleHardware", () => {
   it("detects Intel CPU by vendor qualifiers", () => {
     expect(
@@ -486,5 +537,36 @@ describe("mergeDetectedProviders OpenVINO", () => {
       hasOpenVinoCompatibleHardware: false,
     });
     expect(detected).not.toContain("OpenVINOExecutionProvider");
+  });
+});
+
+describe("mergeDetectedProviders DirectML", () => {
+  it("adds DmlExecutionProvider only when hasDirectMl is true", () => {
+    const without = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      hasDirectMl: false,
+    });
+    expect(without).not.toContain("DmlExecutionProvider");
+
+    const withDml = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      hasDirectMl: true,
+    });
+    expect(withDml).toContain("DmlExecutionProvider");
+  });
+
+  it("maps DmlExecutionProvider from ORT provider list without hasDirectMl", () => {
+    const detected = mergeDetectedProviders({
+      onnxRuntimeProviders: ["CPUExecutionProvider", "DmlExecutionProvider"],
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      hasDirectMl: false,
+    });
+    expect(detected).toContain("DmlExecutionProvider");
   });
 });

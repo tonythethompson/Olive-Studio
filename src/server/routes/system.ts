@@ -12,6 +12,7 @@ import fs from "fs";
 
 import { getVenvPython } from "../services/venv/paths.ts";
 import { findSystemPython } from "../services/venv/index.ts";
+import { envForFamily } from "../services/venv/pathIsolation.ts";
 import { parseCudaVersionFromNvidiaSmi } from "../services/olive/cuda.ts";
 import {
   computeOpenVinoCompatibleHardware,
@@ -32,6 +33,11 @@ import {
   ORT_GPU_PROBE_SCRIPT,
   parseOrtGpuProbe,
 } from "../../lib/oliveGpuRuntime.ts";
+import {
+  markTensorRtVenvLoadable,
+  mergeOrtProvidersForDisplay,
+  resolveDirectMlHardwareReady,
+} from "./systemHardwareProbePolicy.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -153,11 +159,16 @@ async function probeIntelGpuNames(): Promise<string[]> {
 
 async function probePythonRuntime(
   python: string,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<Pick<HardwareProbeResult, "openvino" | "onnxRuntimeProviders">> {
   const result: Pick<HardwareProbeResult, "openvino" | "onnxRuntimeProviders"> = {};
 
   try {
-    const { stdout } = await execFileAsync(python, ["-c", "import openvino; print(openvino.__version__)"]);
+    const { stdout } = await execFileAsync(
+      python,
+      ["-c", "import openvino; print(openvino.__version__)"],
+      { env, timeout: ORT_PROBE_TIMEOUT_MS },
+    );
     const version = stdout.trim();
     if (version) result.openvino = { available: true, version };
   } catch {
@@ -165,10 +176,11 @@ async function probePythonRuntime(
   }
 
   try {
-    const { stdout } = await execFileAsync(python, [
-      "-c",
-      "import onnxruntime as ort; print(','.join(ort.get_available_providers()))",
-    ]);
+    const { stdout } = await execFileAsync(
+      python,
+      ["-c", "import onnxruntime as ort; print(','.join(ort.get_available_providers()))"],
+      { env, timeout: ORT_PROBE_TIMEOUT_MS },
+    );
     const providers = stdout.trim().split(",").filter(Boolean);
     if (providers.length > 0) result.onnxRuntimeProviders = providers;
   } catch {
@@ -189,9 +201,13 @@ async function probePythonRuntime(
  * dependency and keeps the route module self-contained.
  */
 export interface SystemProbeOptions {
-  probeTensorRtLoadable: (python: string) => Promise<{ loadable: boolean; detail?: string }>;
+  probeTensorRtLoadable: (
+    python: string,
+    env?: NodeJS.ProcessEnv,
+  ) => Promise<{ loadable: boolean; detail?: string }>;
   probeTensorRtRtxLoadable: (
     python: string,
+    env?: NodeJS.ProcessEnv,
   ) => Promise<{ loadable: boolean; detail?: string; version?: string }>;
   probeOpenVino: (python: string) => Promise<OpenVinoProbeResult>;
 }
@@ -221,7 +237,10 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
 
   let openvino: OpenVinoProbeResult | undefined;
   let openvinoVenvAvailable = false;
-  let onnxRuntimeProviders: string[] | undefined;
+  let defaultOrtProviders: string[] | undefined;
+  let cudaOrtProviders: string[] | undefined;
+  let openvinoOrtProviders: string[] | undefined;
+  let systemOrtProviders: string[] | undefined;
   let tensorrt: HardwareProbeResult["tensorrt"];
   let tensorRtRtx: HardwareProbeResult["tensorRtRtx"];
   let cuda: HardwareProbeResult["cuda"] | undefined;
@@ -229,55 +248,57 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   let tensorRtRtxVenvLoadable = false;
   let cudaVenvLoadable = false;
 
-  const venvPython = getVenvPython();
+  const defaultPython = getVenvPython("default");
+  const cudaPython = getVenvPython("cuda");
+  const openvinoPython = getVenvPython("openvino");
+  const cudaPythonExists = fs.existsSync(cudaPython);
+  const openvinoPythonExists = fs.existsSync(openvinoPython);
   const pythonCandidates: string[] = [];
-  if (fs.existsSync(venvPython)) pythonCandidates.push(venvPython);
+  if (fs.existsSync(defaultPython)) pythonCandidates.push(defaultPython);
+  if (cudaPythonExists) pythonCandidates.push(cudaPython);
+  if (openvinoPythonExists) pythonCandidates.push(openvinoPython);
   const systemPython = await findSystemPython();
   if (systemPython) pythonCandidates.push(systemPython);
 
   for (const python of pythonCandidates) {
+    const isDefault = python === defaultPython;
+    const isCuda = python === cudaPython;
+    const isOpenvino = python === openvinoPython;
+    const familyEnv = isCuda
+      ? envForFamily("cuda")
+      : isOpenvino
+        ? envForFamily("openvino")
+        : isDefault
+          ? envForFamily("default")
+          : process.env;
     const [pyResult, ov] = await Promise.all([
-      probePythonRuntime(python),
-      opts.probeOpenVino(python),
+      probePythonRuntime(python, familyEnv),
+      isOpenvino
+        ? opts.probeOpenVino(python)
+        : Promise.resolve({ available: false } as OpenVinoProbeResult),
     ]);
     const hasOpenVinoSignal = Boolean(ov.version || ov.devices?.length || ov.optimumIntel || ov.detail);
-    if (hasOpenVinoSignal || ov.available) {
-      if (python === venvPython) {
-        openvino = ov;
-        openvinoVenvAvailable = ov.available;
-      } else if (!openvino) {
-        openvino = ov;
-      }
+    if (isOpenvino && (hasOpenVinoSignal || ov.available)) {
+      openvino = ov;
+      openvinoVenvAvailable = ov.available;
     }
-    if (pyResult.onnxRuntimeProviders?.length && !onnxRuntimeProviders?.length) {
-      onnxRuntimeProviders = pyResult.onnxRuntimeProviders;
-      notes.push(
-        `ONNX Runtime providers probed via ${python === venvPython ? ".venv Python" : "system Python"}.`,
-      );
+    if (pyResult.onnxRuntimeProviders?.length) {
+      if (isDefault) defaultOrtProviders = pyResult.onnxRuntimeProviders;
+      else if (isCuda) cudaOrtProviders = pyResult.onnxRuntimeProviders;
+      else if (isOpenvino) openvinoOrtProviders = pyResult.onnxRuntimeProviders;
+      else systemOrtProviders = pyResult.onnxRuntimeProviders;
     }
-    // Probe whether the CUDA execution provider actually loads in this
-    // python environment. Distinct from `onnxRuntimeProviders` (which just
-    // reports what ORT sees) — this checks the pinned wheel version AND the
-    // CUDA EP usability, so a driver/wheel mismatch surfaces as not-loadable
-    // with the right error detail. Mirrors how `tensorRtVenvLoadable` is
-    // tracked in this same loop.
-    if (!cuda) {
+    // CUDA / TRT probes prefer the cuda-family python, with PATH isolation so
+    // sibling family Scripts dirs cannot skew EP discovery.
+    if (!cuda && (isCuda || (!cudaPythonExists && isDefault))) {
       try {
-        // Bound the onnxruntime import probe against a hung driver
-        // loader. On any modern dev box the probe finishes in well
-        // under 5 s; a 30 s ceiling still gives slow CI/turbo-boost-down
-        // boxes headroom while keeping the route from stalling the UI
-        // on a broken driver install. On timeout, the existing catch
-        // branch records `cuda.loadable: false` with the probe-failure
-        // detail.
         const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT], {
           timeout: ORT_PROBE_TIMEOUT_MS,
+          env: familyEnv,
         });
         const probe = parseOrtGpuProbe(stdout);
-        if (python === venvPython && probe.ok) cudaVenvLoadable = true;
-        // Use the canonical pinned-version string from `pinnedOrtGpuLabel`
-        // instead of hardcoding "1.26.0". A bump to `oliveGpuRuntime.ts`
-        // then propagates here and to the install hint without drift.
+        if (isCuda && probe.ok) cudaVenvLoadable = true;
+        if (isDefault && !cudaPythonExists && probe.ok) cudaVenvLoadable = true;
         const pinnedLabel = pinnedOrtGpuLabel();
         const requiredVersionMatch = pinnedLabel.match(/==\s*([\d.]+[^\s]*)/);
         const pinnedVersion = requiredVersionMatch?.[1] ?? pinnedLabel;
@@ -294,29 +315,59 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
         cuda = {
           loadable: false,
           detail: /No module named ['"]onnxruntime['"]/i.test(msg)
-            ? "onnxruntime (CPU/GPU) not installed in .venv"
+            ? "onnxruntime (CPU/GPU) not installed in CUDA runtime"
             : `onnxruntime-gpu probe failed: ${msg.split(/\r?\n/, 1)[0] ?? msg}`,
         };
       }
     }
-    if (!tensorrt?.loadable) {
-      const trt = await opts.probeTensorRtLoadable(python);
-      if (python === venvPython && trt.loadable) {
+    if (!tensorrt?.loadable && (isCuda || (!cudaPythonExists && isDefault))) {
+      const trt = await opts.probeTensorRtLoadable(python, familyEnv);
+      if (
+        markTensorRtVenvLoadable({
+          isCuda,
+          isDefault,
+          cudaPythonExists,
+          loadable: trt.loadable,
+        })
+      ) {
         tensorRtVenvLoadable = true;
       }
       if (trt.loadable || !tensorrt) {
         tensorrt = trt;
       }
     }
-    if (!tensorRtRtx?.loadable) {
-      const rtx = await opts.probeTensorRtRtxLoadable(python);
-      if (python === venvPython && rtx.loadable) {
+    if (!tensorRtRtx?.loadable && (isCuda || (!cudaPythonExists && isDefault))) {
+      const rtx = await opts.probeTensorRtRtxLoadable(python, familyEnv);
+      if (
+        markTensorRtVenvLoadable({
+          isCuda,
+          isDefault,
+          cudaPythonExists,
+          loadable: rtx.loadable,
+        })
+      ) {
         tensorRtRtxVenvLoadable = true;
       }
       if (rtx.loadable || !tensorRtRtx) {
         tensorRtRtx = rtx;
       }
     }
+  }
+
+  const onnxRuntimeProviders = mergeOrtProvidersForDisplay(
+    defaultOrtProviders,
+    cudaOrtProviders,
+    openvinoOrtProviders,
+    systemOrtProviders,
+  );
+  if (defaultOrtProviders?.length) {
+    notes.push("ONNX Runtime providers probed via default runtime.");
+  } else if (cudaOrtProviders?.length) {
+    notes.push("ONNX Runtime providers probed via CUDA runtime.");
+  } else if (openvinoOrtProviders?.length) {
+    notes.push("ONNX Runtime providers probed via OpenVINO runtime.");
+  } else if (systemOrtProviders?.length) {
+    notes.push("ONNX Runtime providers probed via system Python.");
   }
 
   if (tensorRtRtxVenvLoadable) {
@@ -353,13 +404,12 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     );
   }
 
+  // List merged providers for display only. Do not infer CUDA readiness from
+  // this combined list — default/DirectML/OpenVINO entries would falsely trip
+  // a CUDA-missing warning. CUDA install/loadability notes above already gate
+  // on `cudaVenvLoadable` / the cuda-family probe.
   if (onnxRuntimeProviders?.length) {
     notes.push(`ORT execution providers: ${onnxRuntimeProviders.join(", ")}`);
-    if (nvidia && !onnxRuntimeProviders.includes("CUDAExecutionProvider")) {
-      notes.push(
-        "NVIDIA GPU detected but ONNX Runtime CUDA EP is not installed in Python (try onnxruntime-gpu in .venv).",
-      );
-    }
   } else if (nvidia) {
     notes.push("ONNX Runtime not installed in Python — NVIDIA GPU inferred from nvidia-smi.");
   }
@@ -369,16 +419,16 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   if (openvinoVenvAvailable) {
     const deviceMsg = openvino?.devices?.length ? ` [${openvino.devices.join(", ")}]` : "";
     notes.push(
-      `OpenVINO stack verified${openvino?.version ? ` (${openvino.version})` : ""}${deviceMsg} (OpenVINOExecutionProvider).`,
+      `OpenVINO stack verified${openvino?.version ? ` (${openvino.version})` : ""}${deviceMsg}.`,
     );
-  } else if (openvino?.version || openvino?.devices?.length || openvino?.optimumIntel || openvino?.openvinoExecutionProvider === false) {
+  } else if (openvino?.version || openvino?.devices?.length || openvino?.optimumIntel) {
     notes.push(
       openvino?.detail
-        ? `OpenVINO stack not ready (${openvino.detail}). Use Install in Hardware (installs onnxruntime-openvino).`
-        : "OpenVINO is present but OpenVINOExecutionProvider is not ready — use Install in Hardware.",
+        ? `OpenVINO stack not ready (${openvino.detail}). Use Install in Hardware (openvino + optimum-intel).`
+        : "OpenVINO packages are incomplete — use Install in Hardware.",
     );
   } else {
-    notes.push("OpenVINO Python stack not found locally (needs openvino + onnxruntime-openvino).");
+    notes.push("OpenVINO Python stack not found locally (needs openvino + optimum-intel).");
   }
   notes.push("QNN requires Snapdragon/Hexagon dev hardware — not probed on desktop.");
 
@@ -425,6 +475,11 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     hasRocmGpu: Boolean(rocm?.gpus.length),
     hasOpenVino: Boolean(openvino?.available),
     hasOpenVinoCompatibleHardware,
+    // Hardware readiness (Windows / DX12 class) lists DirectML as selectable;
+    // EP registration remains separate for install CTAs (directMlNeedsInstall).
+    hasDirectMl: resolveDirectMlHardwareReady({
+      os: platform.os,
+    }),
     tensorRtLoadable: tensorRtVenvLoadable,
     tensorRtRtxLoadable: tensorRtRtxVenvLoadable,
     nvidiaTensorRtFamilyCapable,

@@ -1,25 +1,20 @@
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { envWithPrependedPaths } from "../../../lib/tensorrtDeps.ts";
 import { getVenvPython, getVenvPip, getVenvScriptsDir } from "./paths.ts";
-import { appConfig } from "../../config.ts";
 import { execFileAsync } from "../shared/exec.ts";
+import { envWithDefaultVenvOnPath } from "./pathIsolation.ts";
 
 // Re-export the shared helper so existing importers keep working.
 export { execFileAsync };
 
-/** Prepend project .venv Scripts/bin (and optional python dir) so Olive works without system PATH. */
+/**
+ * Shell / run convenience: prepend default-family Scripts only.
+ * Strips both known family Script dirs first (see pathIsolation).
+ * Do not use this for CUDA-family job routing (PR2).
+ */
 export function envWithVenvOnPath(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  const dirs: string[] = [];
-  const scripts = getVenvScriptsDir();
-  if (fs.existsSync(scripts)) dirs.push(scripts);
-  const cfgPy = appConfig.systemPython;
-  if (cfgPy) {
-    const dir = path.dirname(cfgPy);
-    if (fs.existsSync(dir)) dirs.push(dir);
-  }
-  return envWithPrependedPaths(base, dirs);
+  return envWithDefaultVenvOnPath(base);
 }
 
 /** Permanently prepend project .venv Scripts/bin to the current user's PATH. */

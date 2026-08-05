@@ -20,6 +20,7 @@ function baseState(overrides?: Partial<UIState>): UIState {
     hfModelId: "meta-llama/Meta-Llama-3-8B",
     hfDataset: "",
     ihvProvider: "CPUExecutionProvider" as IHVProvider,
+    openvinoTargetDevice: "CPU",
     memoryOffload: "gpu_only",
     cudaVersion: "auto",
     cacheDir: "",
@@ -165,9 +166,21 @@ describe("providerToAccelerator", () => {
     expect(result.execution_providers).toEqual(["QNNExecutionProvider"]);
   });
 
-  it("maps CPU and OpenVINO to cpu device", () => {
+  it("maps CPU and OpenVINO default target to cpu device", () => {
     expect(providerToAccelerator("CPUExecutionProvider").device).toBe("cpu");
     expect(providerToAccelerator("OpenVINOExecutionProvider").device).toBe("cpu");
+    expect(providerToAccelerator("OpenVINOExecutionProvider", "CPU").device).toBe("cpu");
+  });
+
+  it("maps OpenVINO GPU and NPU targets to Olive accelerator devices", () => {
+    expect(providerToAccelerator("OpenVINOExecutionProvider", "GPU")).toEqual({
+      device: "gpu",
+      execution_providers: ["OpenVINOExecutionProvider"],
+    });
+    expect(providerToAccelerator("OpenVINOExecutionProvider", "NPU")).toEqual({
+      device: "npu",
+      execution_providers: ["OpenVINOExecutionProvider"],
+    });
   });
 
   it("returns execution_providers array containing the provider string", () => {
@@ -366,12 +379,47 @@ describe("buildOliveRecipe", () => {
   it("creates OpenVINOConversion pass when format is openvino", () => {
     const state = baseState({
       ihvProvider: "OpenVINOExecutionProvider",
+      openvinoTargetDevice: "GPU",
       passes: { ...DEFAULT_PASSES, conversion: true, conversionFormat: "openvino" },
     });
     const recipe = buildOliveRecipe(state);
     const passes = recipe.passes as Record<string, unknown>;
     expect(passes.conversion).toBeDefined();
     expect((passes.conversion as Record<string, unknown>).type).toBe("OpenVINOConversion");
+    const systems = recipe.systems as {
+      local_system: { config: { accelerators: Array<{ device: string; execution_providers: string[] }> } };
+    };
+    expect(systems.local_system.config.accelerators[0]).toEqual({
+      device: "gpu",
+      execution_providers: ["OpenVINOExecutionProvider"],
+    });
+  });
+
+  it("imports OpenVINO accelerator device into openvinoTargetDevice", () => {
+    const recipe = {
+      input_model: { type: "HfModel", config: { model_path: "intel/bert" } },
+      systems: {
+        local_system: {
+          type: "LocalSystem",
+          config: {
+            accelerators: [
+              { device: "npu", execution_providers: ["OpenVINOExecutionProvider"] },
+            ],
+          },
+        },
+      },
+      passes: {},
+      engine: {
+        search_strategy: false,
+        host: "local_system",
+        target: "local_system",
+        cache_dir: "~/.cache/olive",
+        output_dir: "./models/optimized",
+      },
+    };
+    const imported = deriveUiStateFromOliveRecipe(recipe, { replacePasses: true });
+    expect(imported.ihvProvider).toBe("OpenVINOExecutionProvider");
+    expect(imported.openvinoTargetDevice).toBe("NPU");
   });
 
   it("creates AutoAWQQuantizer for AWQ method", () => {

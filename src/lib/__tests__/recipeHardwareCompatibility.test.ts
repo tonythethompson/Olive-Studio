@@ -479,3 +479,42 @@ describe("assessRecipeHardwareCompatibility — pre-Turing drift-guard (recipe-c
     expect(rtx.reason.toLowerCase()).toMatch(/maxwell\/pascal\/kepler/);
   });
 });
+
+describe("assessRecipeHardwareCompatibility — DirectML install hint", () => {
+  it("returns compatible with an onnxruntime-directml install hint on Windows when DML EP is missing", () => {
+    const probe = makeProbe({
+      platform: { os: "win32 10.0", arch: "x64", cpuModel: "AMD Ryzen 7", cpuCores: 16 },
+      detectedProviders: ["CPUExecutionProvider"],
+    });
+
+    const result = assessRecipeHardwareCompatibility("DirectML", probe);
+    expect(result.tier).toBe("compatible");
+    expect(result.requiredProvider).toBe("DmlExecutionProvider");
+    expect(result.requiresInstall?.kind).toBe("onnxruntime-directml");
+    expect(result.requiresInstall?.installCommand).toBe("pip install onnxruntime-directml");
+    expect(result.requiresInstall?.hint).toContain("Windows DirectX 12 adapter");
+    expect(result.requiresInstall?.hint).not.toMatch(/AMD Ryzen|NVIDIA|GeForce/i);
+  });
+
+  it("marks DirectML unavailable on non-Windows hosts", () => {
+    const probe = makeProbe({
+      platform: { os: "linux 6.8", arch: "x64", cpuModel: "Intel Xeon", cpuCores: 32 },
+      detectedProviders: ["CPUExecutionProvider"],
+    });
+
+    const result = assessRecipeHardwareCompatibility("DirectML", probe);
+    expect(result.tier).toBe("unavailable");
+    expect(result.requiresInstall).toBeUndefined();
+  });
+
+  it("omits the install hint when DmlExecutionProvider is already detected", () => {
+    const probe = makeProbe({
+      platform: { os: "win32 10.0", arch: "x64", cpuModel: "Test CPU", cpuCores: 8 },
+      detectedProviders: ["CPUExecutionProvider", "DmlExecutionProvider"],
+    });
+
+    const result = assessRecipeHardwareCompatibility("DirectML", probe);
+    expect(result.tier).toBe("compatible");
+    expect(result.requiresInstall).toBeUndefined();
+  });
+});

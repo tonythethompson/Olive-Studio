@@ -36,6 +36,7 @@ const basePasses = {
 const state = {
   passes: basePasses,
   ihvProvider: "NvTensorRTRTXExecutionProvider" as const,
+  openvinoTargetDevice: "CPU" as const,
 };
 
 describe("canonicalizeAutofixPass", () => {
