@@ -39,17 +39,18 @@ export function lmStudioFetchInit(signal?: AbortSignal): RequestInit {
 }
 
 export async function isLmsServerRunning(): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2000);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
     const response = await fetch(
       `http://127.0.0.1:${LM_STUDIO_PORT}/v1/models`,
       lmStudioFetchInit(controller.signal),
     );
-    clearTimeout(timeout);
     return response.status > 0;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -80,14 +81,15 @@ function spawnLmsServerDetached(lms: string, args: string[]): Promise<number | n
 }
 
 export async function isOllamaRunning(): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2000);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
     const response = await fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/tags`, { signal: controller.signal });
-    clearTimeout(timeout);
     return response.ok;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
