@@ -38,7 +38,6 @@ start-server.bat
 /.claude/
 .review-threads.json
 /dogfood-output/
-.olive-studio/
 
 # Local Olive optimization outputs (ONNX, footprints, run history)
 /models/
@@ -57,9 +56,6 @@ bun.lock
 .clineignore
 .devinignore
 .env.example
-
-
-.serena/
 .storybook/
 .air/
 .kiro/

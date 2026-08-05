@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 
 // ── Mock readEnvApiKey BEFORE any registry imports ──────────────────────────
-vi.mock("../../../lib/aiResponse.ts", () => ({
+vi.mock("./env.ts", () => ({
   readEnvApiKey: vi.fn(),
-  isPlaceholderEnvValue: vi.fn((v: string) => !v || v.startsWith("my_")),
+  matchedEnvApiKeyName: vi.fn(),
 }));
 
 // Cloudflare auth reads a local credential file and bypasses readEnvApiKey —
@@ -30,7 +30,7 @@ import {
 } from "./registry.ts";
 import type { AiProviderPlugin } from "./registry.ts";
 import type { ProviderConfig, AIChatMessage } from "../../types.ts";
-import { readEnvApiKey } from "../../../lib/aiResponse.ts";
+import { readEnvApiKey } from "./env.ts";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

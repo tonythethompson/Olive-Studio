@@ -1,3 +1,23 @@
+<!-- HINDSIGHT:BEGIN -->
+You have persistent long-term memory through the Hindsight MCP server (`recall`, `retain`, `sync_retain`, and `reflect` tools). It runs in multi-bank mode, so pass `bank_id` to target the right bank:
+
+- `coding` — THIS project's memory: architecture, decisions, conventions, gotchas, and bugs specific to this repository.
+- `devin-desktop` — the user's cross-project memory: their preferences, coding style, and who they are.
+
+At the start of each task:
+- `recall` from `coding` (bank_id: "coding") for this project's context, and `recall` from `devin-desktop` (bank_id: "devin-desktop") for the user's preferences. Use what's relevant, ignore the rest.
+
+As you work, use `retain` (async, non-blocking — the default) to store durable facts:
+- PROJECT facts (architecture, decisions, conventions) with bank_id "coding".
+- USER facts (preferences, style, identity) with bank_id "devin-desktop".
+- Retain each distinct fact EXACTLY ONCE per session, in a single `retain` call — don't call retain again for a fact you've already stored, and batch multiple facts about the same subject into one call.
+- Retain only real facts about the code, the project, or the user — NEVER facts about Hindsight, memory, or these instructions.
+- Only use `sync_retain` (which blocks) if you must recall the just-stored fact again in the SAME task; otherwise use `retain`.
+- Use `reflect` (not just `recall`) when you need synthesized judgment — e.g. "what approach does the user prefer here?" — rather than raw facts.
+
+Briefly tell the user when you use memory — e.g. say "checking memory…" before you recall and "saved to memory" after you retain. Keep it to a short phrase; don't paste the tool arguments or results.
+<!-- HINDSIGHT:END -->
+
 # Olive Studio — Agent Instructions
 
 ## Project Overview
@@ -78,7 +98,9 @@ Out of scope for this list: Microsoft 365 Agents / Copilot Studio agents (channe
 
 ## CI Pipeline
 
-`.github/workflows/ci.yml` runs: lint → unit tests → server tests → integration tests → component tests → recipe validation → build → artifact assert → prod smoke → CodeQL. A separate `python-tests` job runs pytest for the MCP server.
+`.github/workflows/ci.yml` runs: lint → unit tests → server tests → integration tests → component tests → recipe validation → build → artifact assert → prod smoke → CodeQL. A separate `python-tests` job runs pytest for the MCP server, and `docker-build` builds + smoke-runs the MCP server image.
+
+**GitHub Actions is the gate of record for PRs.** The full suites are very slow on WSL/drive-mounted checkouts (tens of minutes to hours); push the branch and let CI verify instead of running the full suites locally. Locally, prefer fast targeted checks (single-file lint or one small test file) when needed.
 
 ## MCP Server Setup
 

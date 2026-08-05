@@ -310,118 +310,140 @@ function passesNeedOnnxGraph(passes: UIState["passes"]): boolean {
   return Boolean(passes.quantization || passes.onnxTransforms || passes.splitting);
 }
 
+/**
+ * Single source of truth for cross-pass compatibility. Each rule describes one
+ * invalid pass combination and the patch that resolves it. Rules with
+ * `autoCoerce` are silently fixed on every state commit (`coercePassFields`);
+ * every rule also surfaces as an issue when the state still violates it
+ * (`getCrossPassIssues`), so coercion and validation cannot drift apart.
+ *
+ * Rule order is significant: sanitizePipelineState fixes the first fixable
+ * critical issue, and coercions apply in table order.
+ */
+interface CrossPassRule {
+  id: string;
+  /** True while the invalid combination exists. */
+  applies: (passes: UIState["passes"], provider: IHVProvider) => boolean;
+  /** Pass patch that resolves the conflict (also used as the issue autofix). */
+  fix: Partial<UIState["passes"]>;
+  /** True: silently applied at commit time. False: the user decides. */
+  autoCoerce: boolean;
+  severity: IssueSeverity;
+  title: string;
+  description: string;
+  affectedTabs: string[];
+  affectedPasses: string[];
+  actionLabel: string;
+}
+
+const CROSS_PASS_RULES: CrossPassRule[] = [
+  {
+    id: "onnx-pipeline-missing-conversion",
+    applies: (passes) => passesNeedOnnxGraph(passes) && !passes.conversion,
+    fix: { conversion: true, conversionFormat: "onnx" },
+    autoCoerce: false,
+    severity: "critical",
+    title: "ONNX conversion required",
+    description:
+      "ORT graph transforms and ONNX quantization operate on an ONNX graph. Enable Graph Conversion before these passes, especially for QNN and OpenVINO deployment targets.",
+    affectedTabs: ["conversion", "transforms", "quantization"],
+    affectedPasses: ["conversion", "transformer_opt", "quantization", "provider"],
+    actionLabel: "Enable ONNX conversion",
+  },
+  {
+    id: "peft-lora-quant",
+    applies: (passes) =>
+      passes.peft && passes.quantization && passes.quantPrecision !== "fp16" && passes.peftMethod === "lora",
+    fix: { peftMethod: "qlora" },
+    autoCoerce: true,
+    severity: "critical",
+    title: "LoRA Adapters active with base Quantization",
+    description:
+      "Standard LoRA expects floating-point base parameters to optimize. If you use integers (INT4/INT8), you must select QLoRA's double-quantized parameters.",
+    affectedTabs: ["quantization", "peft"],
+    affectedPasses: ["peft", "quantization"],
+    actionLabel: "Enable QLoRA Mode",
+  },
+  {
+    id: "pruning-int4-collapse",
+    applies: (passes) => passes.pruning && passes.quantization && passes.quantPrecision === "int4",
+    fix: { quantPrecision: "int8" },
+    autoCoerce: true,
+    severity: "warning",
+    title: "INT4 & Sparsity Double Compress",
+    description:
+      "Applying both sparsity pruning and aggressive INT4 quantization leads to extreme mathematical precision decline and accuracy degradation.",
+    affectedTabs: ["quantization", "compression"],
+    affectedPasses: ["pruning", "quantization"],
+    actionLabel: "Increase Quant to INT8",
+  },
+  {
+    id: "openvino-onnx-transforms-clash",
+    applies: (passes) => passes.conversion && passes.conversionFormat === "openvino" && passes.onnxTransforms,
+    fix: { onnxTransforms: false },
+    autoCoerce: true,
+    severity: "warning",
+    title: "Redundant Transforms with OpenVINO IR",
+    description:
+      "Manual ONNX graph layout transforms are redundant and can clash during subsequent compilation into OpenVINO XML representation.",
+    affectedTabs: ["conversion", "transforms"],
+    affectedPasses: ["conversion", "transformer_opt"],
+    actionLabel: "Deactivate ONNX Transforms",
+  },
+  {
+    id: "splitting-qat-conflict",
+    applies: (passes) => passes.splitting && passes.quantization && passes.quantMethod === "qat",
+    fix: { splitting: false },
+    autoCoerce: true,
+    severity: "critical",
+    title: "Splitting + QAT Incompatibility",
+    description:
+      "Model splitting breaks the weights dictionary across boundary subroutines. QAT fine-tuning requires unbroken parameters.",
+    affectedTabs: ["conversion", "quantization"],
+    affectedPasses: ["splitting", "quantization"],
+    actionLabel: "Disable Model Splitting",
+  },
+  {
+    id: "cpu-qlora-mismatch",
+    applies: (passes, provider) =>
+      passes.peft && passes.peftMethod === "qlora" && provider === "CPUExecutionProvider",
+    fix: { peftMethod: "lora" },
+    autoCoerce: false,
+    severity: "warning",
+    title: "Inefficient PEFT Stage: QLoRA on CPU",
+    description:
+      "QLoRA gradients expect specialized GPU CUDA kernels. Training adapters on standard CPU threads is highly inefficient and slow.",
+    affectedTabs: ["peft"],
+    affectedPasses: ["peft"],
+    actionLabel: "Revert PEFT to floating-point LoRA",
+  },
+  {
+    id: "openvino-ep-mismatch",
+    applies: (passes, provider) =>
+      passes.conversion && passes.conversionFormat === "openvino" && provider !== "OpenVINOExecutionProvider",
+    fix: { conversionFormat: "onnx" },
+    autoCoerce: false,
+    severity: "critical",
+    title: "OpenVINO IR with incompatible execution provider",
+    description:
+      "OpenVINO conversion format is selected, but the target hardware is not Intel OpenVINO. Pipeline execution will fail.",
+    affectedTabs: ["conversion"],
+    affectedPasses: ["conversion", "provider"],
+    actionLabel: "Switch conversion to ONNX",
+  },
+];
+
 function getCrossPassIssues(state: UIState): PipelineIssue[] {
-  const { passes } = state;
-  const issues: PipelineIssue[] = [];
-
-  if (passesNeedOnnxGraph(passes) && !passes.conversion) {
-    issues.push({
-      id: "onnx-pipeline-missing-conversion",
-      severity: "critical",
-      title: "ONNX conversion required",
-      description:
-        "ORT graph transforms and ONNX quantization operate on an ONNX graph. Enable Graph Conversion before these passes, especially for QNN and OpenVINO deployment targets.",
-      affectedTabs: ["conversion", "transforms", "quantization"],
-      affectedPasses: ["conversion", "transformer_opt", "quantization", "provider"],
-      actionLabel: "Enable ONNX conversion",
-      autofix: { passes: { ...passes, conversion: true, conversionFormat: "onnx" } },
-    });
-  }
-
-  if (
-    passes.peft &&
-    passes.quantization &&
-    passes.quantPrecision !== "fp16" &&
-    passes.peftMethod === "lora"
-  ) {
-    issues.push({
-      id: "peft-lora-quant",
-      severity: "critical",
-      title: "LoRA Adapters active with base Quantization",
-      description:
-        "Standard LoRA expects floating-point base parameters to optimize. If you use integers (INT4/INT8), you must select QLoRA's double-quantized parameters.",
-      affectedTabs: ["quantization", "peft"],
-      affectedPasses: ["peft", "quantization"],
-      actionLabel: "Enable QLoRA Mode",
-      autofix: { passes: { ...passes, peftMethod: "qlora" } },
-    });
-  }
-
-  if (passes.pruning && passes.quantization && passes.quantPrecision === "int4") {
-    issues.push({
-      id: "pruning-int4-collapse",
-      severity: "warning",
-      title: "INT4 & Sparsity Double Compress",
-      description:
-        "Applying both sparsity pruning and aggressive INT4 quantization leads to extreme mathematical precision decline and accuracy degradation.",
-      affectedTabs: ["quantization", "compression"],
-      affectedPasses: ["pruning", "quantization"],
-      actionLabel: "Increase Quant to INT8",
-      autofix: { passes: { ...passes, quantPrecision: "int8" } },
-    });
-  }
-
-  if (passes.conversion && passes.conversionFormat === "openvino" && passes.onnxTransforms) {
-    issues.push({
-      id: "openvino-onnx-transforms-clash",
-      severity: "warning",
-      title: "Redundant Transforms with OpenVINO IR",
-      description:
-        "Manual ONNX graph layout transforms are redundant and can clash during subsequent compilation into OpenVINO XML representation.",
-      affectedTabs: ["conversion", "transforms"],
-      affectedPasses: ["conversion", "transformer_opt"],
-      actionLabel: "Deactivate ONNX Transforms",
-      autofix: { passes: { ...passes, onnxTransforms: false } },
-    });
-  }
-
-  if (passes.splitting && passes.quantization && passes.quantMethod === "qat") {
-    issues.push({
-      id: "splitting-qat-conflict",
-      severity: "critical",
-      title: "Splitting + QAT Incompatibility",
-      description:
-        "Model splitting breaks the weights dictionary across boundary subroutines. QAT fine-tuning requires unbroken parameters.",
-      affectedTabs: ["conversion", "quantization"],
-      affectedPasses: ["splitting", "quantization"],
-      actionLabel: "Disable Model Splitting",
-      autofix: { passes: { ...passes, splitting: false } },
-    });
-  }
-
-  if (passes.peft && passes.peftMethod === "qlora" && state.ihvProvider === "CPUExecutionProvider") {
-    issues.push({
-      id: "cpu-qlora-mismatch",
-      severity: "warning",
-      title: "Inefficient PEFT Stage: QLoRA on CPU",
-      description:
-        "QLoRA gradients expect specialized GPU CUDA kernels. Training adapters on standard CPU threads is highly inefficient and slow.",
-      affectedTabs: ["peft"],
-      affectedPasses: ["peft"],
-      actionLabel: "Revert PEFT to floating-point LoRA",
-      autofix: { passes: { ...passes, peftMethod: "lora" } },
-    });
-  }
-
-  if (
-    passes.conversion &&
-    passes.conversionFormat === "openvino" &&
-    state.ihvProvider !== "OpenVINOExecutionProvider"
-  ) {
-    issues.push({
-      id: "openvino-ep-mismatch",
-      severity: "critical",
-      title: "OpenVINO IR with incompatible execution provider",
-      description:
-        "OpenVINO conversion format is selected, but the target hardware is not Intel OpenVINO. Pipeline execution will fail.",
-      affectedTabs: ["conversion"],
-      affectedPasses: ["conversion", "provider"],
-      actionLabel: "Switch conversion to ONNX",
-      autofix: { passes: { ...passes, conversionFormat: "onnx" } },
-    });
-  }
-
-  return issues;
+  return CROSS_PASS_RULES.filter((rule) => rule.applies(state.passes, state.ihvProvider)).map((rule) => ({
+    id: rule.id,
+    severity: rule.severity,
+    title: rule.title,
+    description: rule.description,
+    affectedTabs: rule.affectedTabs,
+    affectedPasses: rule.affectedPasses,
+    actionLabel: rule.actionLabel,
+    autofix: { passes: { ...state.passes, ...rule.fix } },
+  }));
 }
 
 const PASS_KEY_TO_NODE: Record<string, string> = {
@@ -814,20 +836,12 @@ export function coercePassFields(passes: UIState["passes"], provider: IHVProvide
     next.peftMethod = "lora";
   }
 
-  if (next.peft && next.quantization && next.quantPrecision !== "fp16" && next.peftMethod === "lora") {
-    next.peftMethod = "qlora";
-  }
-
-  if (next.splitting && next.quantization && next.quantMethod === "qat") {
-    next.splitting = false;
-  }
-
-  if (next.conversion && next.conversionFormat === "openvino" && next.onnxTransforms) {
-    next.onnxTransforms = false;
-  }
-
-  if (next.pruning && next.quantization && next.quantPrecision === "int4") {
-    next.quantPrecision = "int8";
+  // Cross-pass coercions come from the shared CROSS_PASS_RULES table so they
+  // cannot drift from the issues getCrossPassIssues surfaces.
+  for (const rule of CROSS_PASS_RULES) {
+    if (rule.autoCoerce && rule.applies(next, provider)) {
+      Object.assign(next, rule.fix);
+    }
   }
 
   return next;

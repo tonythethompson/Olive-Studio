@@ -174,7 +174,7 @@ export function isPlaceholderEnvValue(value: string): boolean {
  */
 export function readEnvApiKey(...names: string[]): string | undefined {
   for (const name of names) {
-    const value = process.env[name]?.trim();
+    const value = import.meta.env[name]?.trim();
     if (value && !isPlaceholderEnvValue(value)) {
       return value;
     }
@@ -190,7 +190,7 @@ export function readEnvApiKey(...names: string[]): string | undefined {
  */
 export function matchedEnvApiKeyName(...names: string[]): string | undefined {
   for (const name of names) {
-    const value = process.env[name]?.trim();
+    const value = import.meta.env[name]?.trim();
     if (value && !isPlaceholderEnvValue(value)) {
       return name;
     }

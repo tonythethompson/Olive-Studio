@@ -53,8 +53,6 @@ function PlaygroundPanelFallback() {
   );
 }
 
-const queryClient = new QueryClient();
-
 type ActiveView = PipelineViewId;
 
 const SECTIONS: { id: ActiveView; step: string; label: string; desc: string; icon: typeof BrainCircuit }[] = [
@@ -420,6 +418,9 @@ function Dashboard() {
 }
 
 export default function App() {
+  // Lazy initializer keeps a single client per App instance without leaking
+  // a module-level singleton between test runs.
+  const [queryClient] = useState(() => new QueryClient());
   return (
     <QueryClientProvider client={queryClient}>
       <Dashboard />

@@ -24,7 +24,7 @@ import {
   startJobRegistrySweeper,
   finalizeJob,
 } from "../services/olive/state.ts";
-import { pushLog, startGpuMetricsTimer, stopGpuMetricsTimer } from "../services/olive/gpu.ts";
+import { pushLog, startGpuMetricsTimer, stopGpuMetricsTimer, MAX_JOB_LOG_LINES } from "../services/olive/gpu.ts";
 import { probeQnn } from "../services/olive/qnn.ts";
 import { getVenvPython } from "../services/venv/paths.ts";
 import {
@@ -299,6 +299,11 @@ export function mountOliveRoutes(router: Router): void {
     res.setHeader("X-Accel-Buffering", "no");
     if (typeof res.flushHeaders === "function") res.flushHeaders();
 
+    if (job.logsTruncated) {
+      writeNamedSse(res, "log", {
+        line: `[info] Earlier log lines were trimmed to bound memory (retaining last ${MAX_JOB_LOG_LINES}).`,
+      });
+    }
     for (const line of job.logs) {
       writeNamedSse(res, "log", { line });
     }
@@ -377,6 +382,7 @@ export function mountOliveRoutes(router: Router): void {
       status: job.status,
       exitCode: job.exitCode,
       logs: job.logs,
+      logsTruncated: Boolean(job.logsTruncated),
       latestMetrics: job.latestMetrics,
     });
   });

@@ -1,0 +1,69 @@
+/**
+ * Engine installation route: POST /ai/install-engine (streams setup progress
+ * for LM Studio or Ollama).
+ */
+import type { Router } from "express";
+import rateLimit from "express-rate-limit";
+
+import { ensureOllamaReady, ensureLmsReady } from "./localEngines.ts";
+import { beginNdjsonStream, endNdjson, trackStreamClient } from "./streamHelpers.ts";
+
+const installEngineRateLimiter = rateLimit({
+  windowMs: 5 * 60_000,
+  max: 2,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "Too many engine install requests. Please wait 5 minutes and try again." },
+});
+
+export function mountInstallEngineRoutes(router: Router): void {
+  router.post("/ai/install-engine", installEngineRateLimiter, async (req, res) => {
+    const { engine } = req.body ?? {};
+    if (engine !== "lms" && engine !== "ollama")
+      return res.status(400).json({ error: "engine must be 'lms' or 'ollama'" });
+    const guard = trackStreamClient(req, res);
+    const rawSend = beginNdjsonStream(res);
+    const send = (evt: Record<string, unknown>) => {
+      if (guard.disconnected()) return;
+      rawSend(evt);
+    };
+    try {
+      if (engine === "ollama") {
+        send({ type: "step", message: "Ensuring Ollama is installed…", percent: 0 });
+        // Shared ensure continues for other clients; stop writing if this client disconnects.
+        const result = await ensureOllamaReady((evt) => send(evt));
+        if (guard.disconnected()) {
+          guard.endOnce();
+          return;
+        }
+        if (!result.ok) {
+          endNdjson(res, { type: "error", error: result.error });
+          return;
+        }
+        endNdjson(res, { type: "done", ok: true, message: "Ollama is ready.", percent: 100 });
+      } else {
+        send({ type: "step", message: "Ensuring LM Studio is installed…", percent: 0 });
+        const result = await ensureLmsReady((evt) => send(evt));
+        if (guard.disconnected()) {
+          guard.endOnce();
+          return;
+        }
+        if (!result.ok) {
+          endNdjson(res, {
+            type: "error",
+            error: result.error,
+            openedUrl: result.openedUrl ?? "https://lmstudio.ai",
+          });
+          return;
+        }
+        endNdjson(res, { type: "done", ok: true, message: "LM Studio is ready.", percent: 100 });
+      }
+    } catch (err: unknown) {
+      if (!guard.disconnected()) {
+        endNdjson(res, { type: "error", error: err instanceof Error ? err.message : String(err) });
+      } else {
+        guard.endOnce();
+      }
+    }
+  });
+}

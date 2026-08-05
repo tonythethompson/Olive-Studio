@@ -1,13 +1,12 @@
 import express, { Router } from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import fs from "fs";
 import { ANY_DOT_VENV_DIR } from "./src/server/shared/anyDotVenvDir.ts";
 
 import { loadStudioEnv } from "./src/server/loadStudioEnv.ts";
 import { mountSystemRoutes, type SystemProbeOptions } from "./src/server/routes/system.ts";
 import { mountGithubRoutes } from "./src/server/routes/github.ts";
-import { mountAiRoutes } from "./src/server/routes/ai.ts";
+import { mountAiRoutes } from "./src/server/routes/ai/index.ts";
 import { mountMcpRoutes, performKbSync } from "./src/server/routes/mcp.ts";
 import { mountEnvRoutes } from "./src/server/routes/env.ts";
 import { mountOliveRoutes } from "./src/server/routes/olive.ts";
@@ -141,19 +140,20 @@ app.use("/api", (_req, res) => {
  * Only `pnpm dev` (tsx server.ts) should use Vite middleware.
  * Do not rely solely on NODE_ENV — Windows/`pnpm start` often leave it unset.
  * ESM format is required: packages like @openai/codex-sdk are ESM-only (no CJS export).
+ *
+ * Precedence: `OLIVE_SERVE_STATIC` (explicit, testable) → `NODE_ENV` →
+ * `OLIVE_DIST_DIR` → entry-script fallback for a bare `node dist/server.mjs`.
  */
 function shouldServeProductionStatic(): boolean {
+  const explicit = process.env.OLIVE_SERVE_STATIC;
+  if (explicit === "true" || explicit === "1") return true;
+  if (explicit === "false" || explicit === "0") return false;
   if (process.env.NODE_ENV === "production") return true;
   if (process.env.NODE_ENV === "development") return false;
   if (process.env.OLIVE_DIST_DIR) return true;
+  // Back-compat fallback: `pnpm start` / `node dist/server.mjs` without any env set.
   const entry = (process.argv[1] ?? "").replace(/\\/g, "/");
-  return (
-    entry.endsWith("/dist/server.mjs") ||
-    entry.endsWith("server.mjs") ||
-    // legacy CJS bundle name (older builds)
-    entry.endsWith("/dist/server.cjs") ||
-    entry.endsWith("server.cjs")
-  );
+  return entry.endsWith("dist/server.mjs") || entry.endsWith("dist/server.cjs");
 }
 
 /**
@@ -161,6 +161,9 @@ function shouldServeProductionStatic(): boolean {
  */
 async function startServer() {
   if (!shouldServeProductionStatic()) {
+    // Dynamic import keeps vite (a devDependency) out of the production
+    // runtime path — the static branch never loads it.
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: {
         middlewareMode: true,

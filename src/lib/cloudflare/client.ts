@@ -5,7 +5,7 @@
  * Chat: OpenAI-compatible `…/ai/v1/chat/completions`.
  */
 
-import { readEnvApiKey } from "../aiResponse.ts";
+import { readEnvApiKey } from "../../server/services/ai/env.ts";
 import {
   clearCloudflareCredentials,
   cloudflareAiBaseUrl,

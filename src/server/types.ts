@@ -126,6 +126,8 @@ export interface OliveJob {
   status: "setting_up" | "running" | "completed" | "failed" | "cancelled";
   exitCode: number | null;
   logs: string[];
+  /** True once older lines were trimmed from `logs` to bound memory. */
+  logsTruncated?: boolean;
   subscribers: Array<(line: string) => void>;
   metricSubscribers: Array<(metrics: GpuMetrics) => void>;
   process: import("child_process").ChildProcess | null;
