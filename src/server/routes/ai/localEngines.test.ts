@@ -136,17 +136,18 @@ describe("abort-aware backoff polling (Tech Debt #16)", () => {
   it("returns ok once the server responds during backoff polling", async () => {
     vi.useFakeTimers();
     mocks.execFileImpl = async () => probeHit;
-    let fetches = 0;
+    let serverReady = false;
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
-        fetches++;
-        if (fetches <= 2) throw new Error("ECONNREFUSED");
+        if (!serverReady) throw new Error("ECONNREFUSED");
         return { ok: true };
       }),
     );
 
     const pending = ensureOllamaReady();
+    await vi.advanceTimersByTimeAsync(500);
+    serverReady = true;
     await vi.advanceTimersByTimeAsync(1000);
     const result = await pending;
 
@@ -185,12 +186,11 @@ describe("abort-aware backoff polling (Tech Debt #16)", () => {
   it("does not cancel shared ensure when a late joiner's signal aborts", async () => {
     vi.useFakeTimers();
     mocks.execFileImpl = async () => probeHit;
-    let fetches = 0;
+    let serverReady = false;
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
-        fetches++;
-        if (fetches <= 2) throw new Error("ECONNREFUSED");
+        if (!serverReady) throw new Error("ECONNREFUSED");
         return { ok: true };
       }),
     );
@@ -200,6 +200,7 @@ describe("abort-aware backoff polling (Tech Debt #16)", () => {
     const joined = ensureOllamaReady(undefined, lateJoiner.signal);
     await vi.advanceTimersByTimeAsync(200);
     lateJoiner.abort();
+    serverReady = true;
 
     await vi.advanceTimersByTimeAsync(1000);
     const [first, second] = await Promise.all([initiator, joined]);

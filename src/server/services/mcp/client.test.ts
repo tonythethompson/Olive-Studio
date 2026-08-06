@@ -6,6 +6,8 @@
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
+import { callOliveMcpTools, callOliveMcpTool, MCP_UNAVAILABLE_ERROR } from "./client.ts";
+import mcpBreaker, { resetMcpBreaker } from "./breaker.ts";
 import {
   childProcessVitestMockFactory,
   createChildProcessTestHandles,
@@ -14,9 +16,6 @@ import {
 const mocks = vi.hoisted(() => createChildProcessTestHandles());
 
 vi.mock("child_process", childProcessVitestMockFactory(mocks));
-
-import { callOliveMcpTools, callOliveMcpTool, MCP_UNAVAILABLE_ERROR } from "./client.ts";
-import mcpBreaker, { resetMcpBreaker } from "./breaker.ts";
 
 /** Makes the next execFile call resolve with the given stdout/stderr. */
 function mockExecFileResolve(stdout: string, stderr = ""): void {

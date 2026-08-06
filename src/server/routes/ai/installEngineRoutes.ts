@@ -2,10 +2,9 @@
  * Engine installation route: POST /ai/install-engine (streams setup progress
  * for LM Studio or Ollama).
  *
- * Concurrent install requests share one in-flight `ensure*` setup. Only the
- * request that **started** the shared work can cancel it (via `guard.signal`);
- * a later client's tab close stops their NDJSON stream but does not abort setup
- * another client may be waiting on. See `ensureOllamaReady` / `ensureLmsReady`.
+ * Concurrent install requests share one in-flight `ensure*` setup. Shared work
+ * is cancelled only when every waiting client disconnects; a late client's tab
+ * close does not abort setup others are still waiting on.
  */
 import type { Router } from "express";
 import rateLimit from "express-rate-limit";

@@ -2,21 +2,7 @@
  * Ollama local model routes: /ai/ollama-models, /ai/ollama-model-sizes,
  * /ai/ollama-health, /ai/ollama-pull, /ai/ollama-load, /ai/ollama-unload.
  */
-import type { Router } from "express";
-
-import { isValidLocalModelTag } from "../../../lib/localModelTag.ts";
-import { gateLocalPullDiskSpace } from "../../../lib/localEngineDisk.ts";
-import { heavyCommandRateLimit } from "../../middleware/rateLimit.ts";
-import { localEngineRuntime } from "../../services/ai/localEngineState.ts";
-import {
-  OLLAMA_PORT,
-  isOllamaRunning,
-  ensureOllamaReady,
-  listOllamaInstalledNames,
-  verifyInstalledAfterPull,
-  OLLAMA_PULL_MAX_MS,
-} from "./localEngines.ts";
-import { trackStreamClient, beginPullSse } from "./streamHelpers.ts";
+import { bodyGuard } from "../middleware/bodyGuard.ts";
 
 export function mountOllamaRoutes(router: Router): void {
   router.get("/ai/ollama-models", async (_req, res) => {
@@ -102,8 +88,8 @@ export function mountOllamaRoutes(router: Router): void {
 
       localEngineRuntime.ollamaPullBusyTag = tag;
       ownsBusy = true;
-      // Initiator-only abort: if another pull already started ensure*, this
-      // request joins it; only that initiator's disconnect cancels shared setup.
+      // Waiter-based abort: disconnect removes this client; shared ensure continues
+      // while other clients are still waiting.
       const ready = await ensureOllamaReady((evt) => send(evt), guard.signal);
       if (guard.disconnected()) {
         releaseBusy();

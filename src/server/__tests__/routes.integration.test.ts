@@ -12,6 +12,7 @@ import type { Server } from "http";
 
 import { stubGlobalFetch, restoreGlobalFetch } from "./setup.integration.ts";
 import { resetMcpBreaker } from "../services/mcp/breaker.ts";
+import { resetLocalEngineRuntime } from "../services/ai/localEngineState.ts";
 import { app, markServerReady } from "../../../server.ts";
 
 let server: Server;
@@ -48,10 +49,10 @@ afterAll(async () => {
   }
 });
 
-// The MCP circuit breaker is a process-wide singleton; reset it per test so
-// infra-level failures from one test never short-circuit another.
+// Process-wide singletons; reset per test so state never leaks across cases.
 beforeEach(() => {
   resetMcpBreaker();
+  resetLocalEngineRuntime();
 });
 
 describe("Route integration tests", () => {

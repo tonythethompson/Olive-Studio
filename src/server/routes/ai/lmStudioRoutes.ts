@@ -27,6 +27,34 @@ import {
   LMS_GET_MAX_MS,
 } from "./localEngines.ts";
 import { trackStreamClient, beginPullSse } from "./streamHelpers.ts";
+import { bodyGuard } from "../middleware/bodyGuard.ts";
+
+import type { Router } from "express";
+import { spawn } from "child_process";
+
+import { isValidLocalModelTag } from "../../../lib/localModelTag.ts";
+import {
+  hintForLmsPullFailure,
+  mapLmsDownloadPercent,
+  parseLmsGetPercent,
+  splitCliLines,
+} from "../../../lib/lmsPullProgress.ts";
+import { gateLocalPullDiskSpace } from "../../../lib/localEngineDisk.ts";
+import { heavyCommandRateLimit } from "../../middleware/rateLimit.ts";
+import { localEngineRuntime } from "../../services/ai/localEngineState.ts";
+import {
+  LM_STUDIO_PORT,
+  lmStudioFetchInit,
+  isLmsServerRunning,
+  findLmsCli,
+  listLmsInstalledModelKeys,
+  ensureLmsReady,
+  starterMetaForTag,
+  verifyInstalledAfterPull,
+  LMS_GET_MAX_MS,
+} from "./localEngines.ts";
+import { trackStreamClient, beginPullSse } from "./streamHelpers.ts";
+import { bodyGuard } from "../middleware/bodyGuard.ts";
 
 export function mountLmStudioRoutes(router: Router): void {
   router.get("/ai/local-models", async (_req, res) => {
@@ -80,9 +108,16 @@ export function mountLmStudioRoutes(router: Router): void {
     return res.json({ healthy, lmsInstalled: !!lmsCli });
   });
 
-  router.post("/ai/local-load", async (req, res) => {
-    const { modelTag } = req.body ?? {};
-    if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
+  router.post(
+    "/ai/local-load",
+    bodyGuard<{ modelTag: string }>({
+      modelTag: { type: "string", required: true },
+    }),
+    async (req, res) => {
+      const guardResult = req.body;
+      if ("error" in guardResult) return res.status(400).json({ error: guardResult.error });
+      const { modelTag } = guardResult.parsed;
+      if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
     try {
       const r = await fetch(`http://127.0.0.1:${LM_STUDIO_PORT}/v1/models/load`, {
         method: "POST",
@@ -154,7 +189,7 @@ export function mountLmStudioRoutes(router: Router): void {
       }
 
       localEngineRuntime.lmsPullBusyTag = tag;
-      // Initiator-only abort: late joiners get progress but cannot cancel shared setup.
+      // Waiter-based abort: shared ensure continues while other clients wait.
       const ready = await ensureLmsReady((evt) => send(evt), guard.signal);
       if (guard.disconnected()) {
         releaseBusy();

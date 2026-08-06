@@ -399,19 +399,25 @@ const OLLAMA_START_COOLDOWN_MS = 45_000;
 /**
  * Ensure Ollama is installed and its HTTP server is reachable.
  *
- * Concurrent callers share one in-flight setup. Only the **first** caller's
- * `signal` can abort the shared work (e.g. client disconnect on /install-engine
- * or /ollama-pull when that request started setup). Late joiners receive progress
- * on their `onProgress` callback but their `signal` does not cancel the shared
- * operation — matching `trackStreamClient`, which stops streaming to a disconnected
- * client without tearing down setup other requests may be waiting on. Pull routes
- * still honour a late joiner's disconnect after ensure completes (they skip the
- * download) without cancelling the shared ensure for the initiator.
+ * Concurrent callers share one in-flight setup. Each caller registers as a
+ * waiter; shared work uses an internal `AbortController` and is aborted only
+ * when the last waiter leaves (client disconnect via `signal` or promise
+ * settlement). Late joiners do not cancel setup started by an earlier client.
  */
 export async function ensureOllamaReady(
   onProgress?: (evt: EnsureProgressEvt) => void,
   signal?: AbortSignal,
 ): Promise<OllamaEnsureResult> {
+  let released = false;
+  const releaseWaiter = () => {
+    if (released) return;
+    released = true;
+    localEngineRuntime.ollamaEnsureWaiters -= 1;
+    if (localEngineRuntime.ollamaEnsureWaiters === 0) {
+      localEngineRuntime.ollamaEnsureAbort?.abort();
+    }
+  };
+
   if (onProgress) {
     localEngineRuntime.ollamaProgressSubscribers.add(onProgress);
     if (localEngineRuntime.ollamaEnsureInFlight) {
@@ -419,7 +425,8 @@ export async function ensureOllamaReady(
     }
   }
   if (!localEngineRuntime.ollamaEnsureInFlight) {
-    // Initiator-only: first caller's signal governs the shared operation.
+    const ac = new AbortController();
+    localEngineRuntime.ollamaEnsureAbort = ac;
     localEngineRuntime.ollamaEnsureInFlight = ensureOllamaReadyImpl(
       (evt) => {
         for (const sub of localEngineRuntime.ollamaProgressSubscribers) {
@@ -430,15 +437,23 @@ export async function ensureOllamaReady(
           }
         }
       },
-      signal,
+      ac.signal,
     ).finally(() => {
       localEngineRuntime.ollamaEnsureInFlight = null;
+      localEngineRuntime.ollamaEnsureAbort = null;
     });
+  }
+
+  localEngineRuntime.ollamaEnsureWaiters += 1;
+  if (signal) {
+    if (signal.aborted) releaseWaiter();
+    else signal.addEventListener("abort", releaseWaiter, { once: true });
   }
   try {
     return await localEngineRuntime.ollamaEnsureInFlight;
   } finally {
     if (onProgress) localEngineRuntime.ollamaProgressSubscribers.delete(onProgress);
+    releaseWaiter();
   }
 }
 
@@ -471,12 +486,15 @@ async function ensureOllamaReadyImpl(
         note("brew install failed", 12);
       }
     }
-    const installedCli = await pollUntil(
-      async () => (await findOllamaCli()) !== null,
+    await pollUntil(
+      async () => {
+        const found = await findOllamaCli();
+        if (found) ollama = found;
+        return found !== null;
+      },
       OLLAMA_INSTALL_MAX_WAIT_MS,
       signal,
     );
-    if (installedCli) ollama = await findOllamaCli();
     // Installer often auto-starts the tray app; give it a moment before we launch anything.
     const autoStarted = await pollUntil(isOllamaRunning, OLLAMA_POST_INSTALL_MAX_WAIT_MS, signal, true);
     if (autoStarted) {
@@ -578,14 +596,23 @@ export async function listOllamaInstalledNames(): Promise<string[] | null> {
 }
 
 /**
- * Ensure LM Studio CLI/server is available. Same single-flight and signal rules
- * as {@link ensureOllamaReady}: only the initiating caller's `signal` aborts the
- * shared setup; late joiners' disconnect signals do not.
+ * Ensure LM Studio CLI/server is available. Same single-flight and waiter-based
+ * abort rules as {@link ensureOllamaReady}.
  */
 export async function ensureLmsReady(
   onProgress?: (evt: EnsureProgressEvt) => void,
   signal?: AbortSignal,
 ): Promise<LmsEnsureResult> {
+  let released = false;
+  const releaseWaiter = () => {
+    if (released) return;
+    released = true;
+    localEngineRuntime.lmsEnsureWaiters -= 1;
+    if (localEngineRuntime.lmsEnsureWaiters === 0) {
+      localEngineRuntime.lmsEnsureAbort?.abort();
+    }
+  };
+
   if (onProgress) {
     localEngineRuntime.lmsProgressSubscribers.add(onProgress);
     if (localEngineRuntime.lmsEnsureInFlight) {
@@ -593,7 +620,8 @@ export async function ensureLmsReady(
     }
   }
   if (!localEngineRuntime.lmsEnsureInFlight) {
-    // Initiator-only: first caller's signal governs the shared operation.
+    const ac = new AbortController();
+    localEngineRuntime.lmsEnsureAbort = ac;
     localEngineRuntime.lmsEnsureInFlight = ensureLmsReadyImpl(
       (evt) => {
         for (const sub of localEngineRuntime.lmsProgressSubscribers) {
@@ -604,15 +632,23 @@ export async function ensureLmsReady(
           }
         }
       },
-      signal,
+      ac.signal,
     ).finally(() => {
       localEngineRuntime.lmsEnsureInFlight = null;
+      localEngineRuntime.lmsEnsureAbort = null;
     });
+  }
+
+  localEngineRuntime.lmsEnsureWaiters += 1;
+  if (signal) {
+    if (signal.aborted) releaseWaiter();
+    else signal.addEventListener("abort", releaseWaiter, { once: true });
   }
   try {
     return await localEngineRuntime.lmsEnsureInFlight;
   } finally {
     if (onProgress) localEngineRuntime.lmsProgressSubscribers.delete(onProgress);
+    releaseWaiter();
   }
 }
 
@@ -649,15 +685,16 @@ async function ensureLmsReadyImpl(
       note("No package-manager install path for this Linux host. Install LM Studio manually if needed.", 8);
     }
 
-    const installedCli = await pollUntil(
+    await pollUntil(
       async () => {
         resetLmsCliCache();
-        return (await findLmsCli()) !== null;
+        const found = await findLmsCli();
+        if (found) lms = found;
+        return found !== null;
       },
       LMS_INSTALL_MAX_WAIT_MS,
       signal,
     );
-    if (installedCli) lms = await findLmsCli();
   }
 
   if (signal?.aborted) return cancelled();
