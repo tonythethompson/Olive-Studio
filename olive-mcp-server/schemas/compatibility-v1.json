@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Olive Compatibility Matrix",
-  "description": "Schema for olive-mcp-server knowledge_base/compatibility_matrix.json",
+  "description": "Schema for olive-mcp-server knowledge_base/compatibility_matrix.json. Every pass claim must name a canonical olive_pass and nonempty provenance evidence.",
   "type": "object",
   "required": ["version", "last_updated", "models"],
   "properties": {
@@ -71,7 +71,7 @@
     },
     "pass_compat": {
       "type": "object",
-      "required": ["support"],
+      "required": ["support", "olive_pass", "evidence"],
       "properties": {
         "support": {
           "type": "string",
@@ -82,6 +82,44 @@
         },
         "typical_accuracy_drop": {
           "type": "string"
+        },
+        "olive_pass": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Canonical Olive pass identifier as registered in passes.json / the Olive pass registry"
+        },
+        "evidence": {
+          "$ref": "#/$defs/pass_evidence",
+          "description": "Provenance backing this compatibility claim"
+        }
+      }
+    },
+    "pass_evidence": {
+      "type": "object",
+      "required": ["reference", "type", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "reference": {
+          "type": "string",
+          "minLength": 1,
+          "description": "URL or citation reference supporting this compatibility claim"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "olive_docs",
+            "ort_docs",
+            "github",
+            "availability",
+            "benchmark",
+            "release_notes"
+          ],
+          "description": "Kind of provenance backing the claim"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Olive or source version the evidence applies to (e.g. 0.8.0)"
         }
       }
     }

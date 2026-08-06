@@ -1,8 +1,8 @@
 /**
  * MCP (Model Compatibility Protocol) route handlers.
- * Tool proxy, KB status, KB sync.
+ * Tool proxy, KB status, KB sync, and loopback-only studio-recipe bridge.
  */
-import type { Router } from "express";
+import type { NextFunction, Request, Response, Router } from "express";
 import path from "path";
 import fs from "fs";
 
@@ -14,9 +14,41 @@ import {
   setKbSyncInProgress,
 } from "../services/mcp/state.ts";
 import { callOliveMcpTool } from "../services/mcp/client.ts";
-import { kbStatusRateLimit, kbSyncRateLimit } from "../middleware/rateLimit.ts";
+import { evaluateStudioRecipeBridge } from "../services/mcp/studioRecipeBridge.ts";
+import {
+  hasProxyForwardingHeaders,
+  isLoopbackRemoteAddress,
+} from "../middleware/localOnly.ts";
+import {
+  kbStatusRateLimit,
+  kbSyncRateLimit,
+  studioRecipeRateLimit,
+} from "../middleware/rateLimit.ts";
 import { readStudioConfig, writeStudioConfig } from "../config.ts";
 import type { KbStatusCache } from "../types.ts";
+
+/**
+ * Strict loopback gate for the private studio-recipe bridge.
+ * Rejects reverse-proxy hops and non-loopback clients. Never honors
+ * OLIVE_ARENA_ALLOW_REMOTE — this bridge is local MCP ↔ Studio only.
+ */
+function studioRecipeLocalOnly(req: Request, res: Response, next: NextFunction): void {
+  if (hasProxyForwardingHeaders(req)) {
+    res.status(403).json({
+      ok: false,
+      error: "Studio recipe bridge is only available from loopback (not via reverse proxy)",
+    });
+    return;
+  }
+  if (isLoopbackRemoteAddress(req.socket.remoteAddress)) {
+    next();
+    return;
+  }
+  res.status(403).json({
+    ok: false,
+    error: "Studio recipe bridge is only available from loopback",
+  });
+}
 
 /**
  * Determines whether a value is a non-null object with string keys.
@@ -187,7 +219,10 @@ export function performKbSync():
 }
 
 /**
- * Registers MCP tool proxy, knowledge-base status, and knowledge-base synchronization routes on a router.
+ * Registers MCP tool proxy, studio-recipe bridge, knowledge-base status,
+ * and knowledge-base synchronization routes on a router.
+ *
+ * Paths are relative to the `/api` mount (e.g. `/mcp/tool` → `/api/mcp/tool`).
  *
  * @param router - The router on which to register the MCP routes
  */
@@ -210,6 +245,28 @@ export function mountMcpRoutes(router: Router): void {
       return res.status(500).json({ error: msg });
     }
   });
+
+  // ─── Studio recipe bridge (loopback-only, no Olive execution) ─────────
+  // Separate from the Python-MCP tool proxy. Pure UIState → recipe/validation.
+  router.post(
+    "/mcp/studio-recipe",
+    studioRecipeLocalOnly,
+    studioRecipeRateLimit,
+    (req, res) => {
+      try {
+        const result = evaluateStudioRecipeBridge(req.body);
+        if (!result.ok) {
+          // Bad input from bridge (invalid_body | invalid_ui_state | invalid_passes).
+          return res.status(400).json(result);
+        }
+        return res.json(result);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[mcp] studio-recipe bridge failed: ${msg}`);
+        return res.status(500).json({ ok: false, error: "Studio recipe evaluation failed" });
+      }
+    },
+  );
 
   // ─── KB Status ────────────────────────────────────────────────────────
   router.get("/mcp/kb-status", kbStatusRateLimit, (_req, res) => {

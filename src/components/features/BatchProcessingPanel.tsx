@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, Button, Label, Input, Select } from "@/components/ui";
-import { UIState, BatchJob, IHVProvider, ModelSource } from "@/types";
+import {
+  UIState,
+  BatchJob,
+  IHVProvider,
+  ModelSource,
+  type McpTroubleshootFeedbackRating,
+} from "@/types";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";
 import { applyMcpDiagnosticToUiState, canApplyMcpDiagnostic } from "@/lib/mcpConfigMapping";
@@ -68,6 +74,15 @@ export function BatchProcessingPanel({
     errors: batchDiagnoseErrors,
   } = useMcpDiagnosticKeyed();
   const [appliedFixJobId, setAppliedFixJobId] = useAutoClearError(3000);
+
+  /** Card self-submits feedback; parent hook is optional analytics — keep diagnosis UI unchanged. */
+  const handleFeedbackSubmitted = useCallback(
+    (payload: { matched_entry: string; rating: McpTroubleshootFeedbackRating }) => {
+      // No UI mutation after thumbs (batch diagnostics stay keyed by job id).
+      void payload.matched_entry;
+    },
+    [],
+  );
 
   // Custom job creation states
   const [newModelName, setNewModelName] = useState("");
@@ -926,7 +941,7 @@ export function BatchProcessingPanel({
                   </div>
                 )}
 
-                {/* MCP Diagnostic for failed jobs */}
+                {/* MCP Diagnostic for failed jobs (matched_entry from keyed MCP parse enables thumbs) */}
                 {selectedJob.status === "failed" && (
                   <MCPDiagnosticCard
                     diagnostic={batchDiagnostics[selectedJob.id] ?? null}
@@ -961,6 +976,7 @@ export function BatchProcessingPanel({
                       }
                     }}
                     onRunDiagnosis={() => fetchKeyedDiagnostic(selectedJob.id, selectedJob.logs)}
+                    onFeedbackSubmitted={handleFeedbackSubmitted}
                   />
                 )}
 

@@ -1,9 +1,60 @@
-"""Expand knowledge base files to target counts for production coverage."""
+"""Expand knowledge base files to target counts for production coverage.
 
+Emits deterministic refresh metadata (source timestamp, generator version,
+changed files) for CI/PR workflows. Does not embed wall-clock timestamps in
+KB content — no-op runs produce no file diffs.
+"""
+
+from __future__ import annotations
+
+import hashlib
 import json
 from pathlib import Path
+from typing import Any
 
 KB_DIR = Path(__file__).parent.parent / "olive_mcp_server" / "knowledge_base"
+GENERATOR_NAME = "expand_kb"
+REFRESH_METADATA_NAME = "refresh_metadata.json"
+KB_REL_PREFIX = "olive_mcp_server/knowledge_base"
+
+# Track files touched during this run for refresh metadata.
+_CHANGED_FILES: list[str] = []
+
+
+def _generator_version() -> str:
+    """Return the package/generator version used in refresh metadata."""
+    try:
+        # Package root is on path when installed; fall back when run as script.
+        import sys
+
+        mcp_dir = Path(__file__).resolve().parent.parent
+        if str(mcp_dir) not in sys.path:
+            sys.path.insert(0, str(mcp_dir))
+        from olive_mcp_server import __version__
+
+        return str(__version__)
+    except Exception:  # noqa: BLE001
+        return "0.1.0"
+
+
+def _canonical_json(data: Any) -> str:
+    """Serialize data to a stable JSON string for hashing and comparisons."""
+    return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _content_fingerprint(data: Any) -> str:
+    """SHA-256 hex digest of canonical JSON for content-addressed identity."""
+    return hashlib.sha256(_canonical_json(data).encode("utf-8")).hexdigest()
+
+
+def _dump_json_text(data: Any) -> str:
+    """Pretty-print JSON with a trailing newline (stable formatting)."""
+    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+
+def _kb_rel(name: str) -> str:
+    """Repo-relative path for a knowledge_base file (workflow-friendly)."""
+    return f"{KB_REL_PREFIX}/{name}"
 
 
 def load(name: str) -> dict:
@@ -12,8 +63,24 @@ def load(name: str) -> dict:
 
 
 def save(name: str, data: dict) -> None:
-    with open(KB_DIR / name, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+    """Write KB JSON only when semantic content differs (no no-op diffs).
+
+    Compares canonical JSON so formatting-only differences do not rewrite
+    tracked KB files or inflate changed_files on a no-op refresh.
+    """
+    path = KB_DIR / name
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+            if _canonical_json(existing) == _canonical_json(data):
+                return
+        except (OSError, json.JSONDecodeError):
+            pass
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_dump_json_text(data), encoding="utf-8")
+    rel = _kb_rel(name)
+    if rel not in _CHANGED_FILES:
+        _CHANGED_FILES.append(rel)
 
 
 def expand_passes():
@@ -671,11 +738,152 @@ def expand_troubleshooting():
     print(f"troubleshooting.json now has {len(data['entries'])} entries")
 
 
+def _load_refresh_metadata(path: Path) -> dict[str, Any]:
+    """Load existing refresh metadata or return an empty scaffold."""
+    if not path.exists():
+        return {"schema_version": 1, "runs": {}}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"schema_version": 1, "runs": {}}
+    if not isinstance(data, dict):
+        return {"schema_version": 1, "runs": {}}
+    runs = data.get("runs")
+    if not isinstance(runs, dict):
+        data["runs"] = {}
+    data.setdefault("schema_version", 1)
+    return data
+
+
+def _source_timestamp_from_kb() -> str:
+    """Derive a deterministic source stamp from existing KB last_updated fields.
+
+    expand_kb has no external fetch; the catalog embedded in this script plus
+    current KB dates are the source. Prefer max YYYY-MM-DD from KB roots;
+    fall back to a content fingerprint of the three target files' identity keys.
+    """
+    dates: list[str] = []
+    for name in ("passes.json", "hardware_profiles.json", "troubleshooting.json"):
+        path = KB_DIR / name
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        last = data.get("last_updated")
+        if isinstance(last, str) and len(last) >= 10:
+            dates.append(last[:10])
+    if dates:
+        return max(dates)
+    return f"content:{_content_fingerprint({'generator': GENERATOR_NAME})}"
+
+
+def _write_refresh_metadata(
+    *,
+    generator_version: str,
+    source_timestamp: str,
+    source_fingerprint: str,
+    changed_files: list[str],
+) -> None:
+    """Merge expand_kb run metadata into knowledge_base/refresh_metadata.json."""
+    metadata_path = KB_DIR / REFRESH_METADATA_NAME
+    existing = _load_refresh_metadata(metadata_path)
+
+    run_meta: dict[str, Any] = {
+        "generator": GENERATOR_NAME,
+        "generator_version": generator_version,
+        "source_timestamp": source_timestamp,
+        "source_fingerprint": source_fingerprint,
+        "changed_files": list(changed_files),
+        "success": True,
+    }
+
+    runs = dict(existing.get("runs") or {})
+    runs[GENERATOR_NAME] = run_meta
+
+    all_changed: list[str] = []
+    seen: set[str] = set()
+    for name in sorted(runs):
+        run = runs[name]
+        if not isinstance(run, dict):
+            continue
+        for path in run.get("changed_files") or []:
+            if isinstance(path, str) and path not in seen:
+                seen.add(path)
+                all_changed.append(path)
+
+    stamps = [source_timestamp]
+    for run in runs.values():
+        if isinstance(run, dict) and isinstance(run.get("source_timestamp"), str):
+            stamps.append(run["source_timestamp"])
+    iso_stamps = [s for s in stamps if not str(s).startswith("content:")]
+    aggregate_ts = max(iso_stamps) if iso_stamps else source_timestamp
+
+    metadata: dict[str, Any] = {
+        "schema_version": 1,
+        "generator_version": generator_version,
+        "source_timestamp": aggregate_ts,
+        "changed_files": all_changed,
+        "runs": runs,
+    }
+
+    # Sidecar only — never list refresh_metadata.json in changed_files (avoids
+    # self-referential churn). Workflows read this file for the file list.
+    new_text = _dump_json_text(metadata)
+    if metadata_path.exists():
+        try:
+            if metadata_path.read_text(encoding="utf-8") == new_text:
+                print(f"Refresh metadata unchanged at {metadata_path}")
+                return
+        except OSError:
+            pass
+
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    metadata_path.write_text(new_text, encoding="utf-8")
+    print(f"Refresh metadata written to {metadata_path}")
+
+
 def main():
     """Expand the knowledge base with pass, hardware profile, and troubleshooting entries."""
+    global _CHANGED_FILES
+    _CHANGED_FILES = []
+
+    generator_version = _generator_version()
+    # Fingerprint of expansion outcome targets (post-run content identity).
+    # Computed after expansions so it reflects final KB state.
     expand_passes()
     expand_hardware_profiles()
     expand_troubleshooting()
+
+    outcome: dict[str, Any] = {}
+    for name in ("passes.json", "hardware_profiles.json", "troubleshooting.json"):
+        path = KB_DIR / name
+        if path.exists():
+            try:
+                outcome[name] = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                outcome[name] = None
+
+    source_fingerprint = _content_fingerprint(
+        {
+            "generator": GENERATOR_NAME,
+            "generator_version": generator_version,
+            "outcome": outcome,
+        }
+    )
+    source_timestamp = _source_timestamp_from_kb()
+
+    _write_refresh_metadata(
+        generator_version=generator_version,
+        source_timestamp=source_timestamp,
+        source_fingerprint=source_fingerprint,
+        changed_files=list(_CHANGED_FILES),
+    )
+    print(
+        f"expand_kb metadata: generator_version={generator_version} "
+        f"source_timestamp={source_timestamp} changed_files={list(_CHANGED_FILES)}"
+    )
 
 
 if __name__ == "__main__":

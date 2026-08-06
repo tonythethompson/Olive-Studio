@@ -69,6 +69,7 @@ import { JobHistoryModal } from "@/components/features/JobHistoryModal";
 import { ReportIssueModal } from "@/components/ReportIssueModal";
 import { Bug } from "lucide-react";
 import type { ReportArea } from "@/lib/issueReport";
+import type { McpTroubleshootFeedbackRating } from "@/types";
 
 const RecipeGraphView = lazy(() => import("./RecipeGraphView").then((m) => ({ default: m.RecipeGraphView })));
 
@@ -193,12 +194,33 @@ export function ExecutionWorkspace({
   const [diagnosisHistory, setDiagnosisHistory] = useState<DiagnosisEntry[]>([]);
   const [activeHistoryIndex, setActiveHistoryIndex] = useState(-1);
 
+  // Browse older history entries on the card (matched_entry + thumbs); index 0 / none = live MCP result.
+  const viewingHistoricalDiagnosis =
+    activeHistoryIndex > 0 && activeHistoryIndex < diagnosisHistory.length;
+  const displayedDiagnostic = viewingHistoricalDiagnosis
+    ? diagnosisHistory[activeHistoryIndex]!.diagnostic
+    : mcpDiagnostic;
+  const displayedFixApplied = viewingHistoricalDiagnosis
+    ? diagnosisHistory[activeHistoryIndex]!.fixApplied
+      ? "applied"
+      : ""
+    : mcpFixApplied;
+
   // Log line selection state for manual diagnosis
   const [selectedLogIndices, setSelectedLogIndices] = useState<Set<number>>(new Set());
   const lastClickedIndexRef = useRef<number | null>(null);
 
+  /** Card self-submits feedback; parent hook is optional analytics / future history annotation. */
+  const handleFeedbackSubmitted = useCallback(
+    (payload: { matched_entry: string; rating: McpTroubleshootFeedbackRating }) => {
+      // No UI mutation — diagnosis display and history stay as-is after thumbs.
+      void payload.matched_entry;
+    },
+    [],
+  );
+
   const handleApplyMcpFix = () => {
-    if (!mcpDiagnostic || !canApplyMcpDiagnostic(mcpDiagnostic)) {
+    if (!displayedDiagnostic || !canApplyMcpDiagnostic(displayedDiagnostic)) {
       setExecutionLogs((prev) => [
         ...prev,
         "[MCP FIX] Nothing auto-applyable — follow Recommended Fix / Known Quirks manually.",
@@ -206,13 +228,20 @@ export function ExecutionWorkspace({
       return;
     }
 
-    if (isStudioHfTaskSpeechFix(mcpDiagnostic)) {
+    if (isStudioHfTaskSpeechFix(displayedDiagnostic)) {
       setState({ hfTask: "automatic-speech-recognition" });
       setExecutionLogs((prev) => [
         ...prev,
         "[FIX] Hugging Face task corrected to `automatic-speech-recognition` for Whisper. Rebuild/refresh the recipe, then run Execute Live again.",
       ]);
       setMcpFixApplied("applied");
+      // Mark the history row that matches the applied diagnostic (live = index 0).
+      const historyIdx = viewingHistoricalDiagnosis ? activeHistoryIndex : 0;
+      if (historyIdx >= 0 && historyIdx < diagnosisHistory.length) {
+        setDiagnosisHistory((prev) =>
+          prev.map((entry, idx) => (idx === historyIdx ? { ...entry, fixApplied: true } : entry)),
+        );
+      }
       return;
     }
 
@@ -221,7 +250,7 @@ export function ExecutionWorkspace({
       logs,
       appliedQuirks,
       notedQuirks: _notedQuirks,
-    } = applyMcpDiagnosticToUiState(mcpDiagnostic, state.passes, state.passRecipeOverrides);
+    } = applyMcpDiagnosticToUiState(displayedDiagnostic, state.passes, state.passRecipeOverrides);
 
     const hasPatches = Object.keys(patches).length > 0;
     if (!hasPatches && logs.length === 0) {
@@ -259,7 +288,16 @@ export function ExecutionWorkspace({
         : "[MCP FIX] Logged notes only — no UI fields changed.",
     ]);
     // Gate success UI state on actual applied quirks/patches only, not noted quirks
-    setMcpFixApplied(hasPatches || appliedQuirks.length > 0 ? "applied" : "");
+    const applied = hasPatches || appliedQuirks.length > 0;
+    setMcpFixApplied(applied ? "applied" : "");
+    if (applied) {
+      const historyIdx = viewingHistoricalDiagnosis ? activeHistoryIndex : 0;
+      if (historyIdx >= 0 && historyIdx < diagnosisHistory.length) {
+        setDiagnosisHistory((prev) =>
+          prev.map((entry, idx) => (idx === historyIdx ? { ...entry, fixApplied: true } : entry)),
+        );
+      }
+    }
   };
 
   // Clear log selection when logs change (new run starts)
@@ -1657,15 +1695,16 @@ ${owrPlatform === "web"
             />
           </div>
 
-          {/* MCP Diagnostic & Auto-Fix Card */}
+          {/* MCP Diagnostic & Auto-Fix Card (matched_entry from MCP/local parsers enables thumbs) */}
           {executionStatus === "failed" && (
             <MCPDiagnosticCard
-              diagnostic={mcpDiagnostic}
+              diagnostic={displayedDiagnostic}
               isDiagnosing={isDiagnosing}
-              fixApplied={mcpFixApplied}
+              fixApplied={displayedFixApplied}
               onApplyFix={handleApplyMcpFix}
               onRunDiagnosis={handleDiagnose}
               error={diagnoseError}
+              onFeedbackSubmitted={handleFeedbackSubmitted}
             />
           )}
         </CardContent>

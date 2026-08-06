@@ -3,6 +3,7 @@ import {
   getPipelineValidation,
   getLocalExecutionIssues,
   getRemainingAdvisories,
+  PipelineIssue,
   PipelineValidationResult,
   PipelineValidationOptions,
   sanitizePipelineState,
@@ -18,6 +19,35 @@ export interface RecipePipelineResult {
   advisories: ReturnType<typeof getRemainingAdvisories>;
   /** Local-only blockers (e.g. WebGPU Execute Live) not covered by graph validation alone. */
   localExecutionIssues: ReturnType<typeof getLocalExecutionIssues>;
+  isRunnable: boolean;
+}
+
+/**
+ * JSON-safe UIState recipe evaluation for the MCP / studio-recipe bridge.
+ * Plain data only — safe to `JSON.stringify` without custom replacers.
+ */
+export interface UiStateRecipeEvaluation {
+  /** Sanitized state after coerce/autofix (same as `buildRecipeFromState().state`). */
+  effectiveState: UIState;
+  /** Built Olive recipe object. */
+  recipe: Record<string, unknown>;
+  /** Structural schema validation errors (empty when valid). */
+  schemaErrors: string[];
+  /** Full pipeline issue list from validation. */
+  pipelineIssues: PipelineIssue[];
+  /** Count of critical pipeline issues. */
+  criticalCount: number;
+  /** Count of warning-severity pipeline issues. */
+  warningCount: number;
+  /** Whether the pipeline has critical blockers. */
+  isBlocked: boolean;
+  /** Remaining advisories (warning severity, no autofix). */
+  advisories: PipelineIssue[];
+  /** Local-only execution blockers (e.g. WebGPU Execute Live). */
+  localExecutionIssues: PipelineIssue[];
+  /** All warning-severity pipeline issues (includes autofixable warnings). */
+  warnings: PipelineIssue[];
+  /** True when schema is valid, pipeline is not blocked, and no local-execution issues. */
   isRunnable: boolean;
 }
 
@@ -50,6 +80,43 @@ export function buildRecipeFromState(
     advisories: validation.issues.filter((issue) => issue.severity === "warning" && !issue.autofix),
     localExecutionIssues,
     isRunnable: !validation.isBlocked && localExecutionIssues.length === 0 && schema.valid,
+  };
+}
+
+/**
+ * Project UIState into a stable, JSON-safe recipe evaluation payload for the
+ * MCP / studio-recipe bridge. Wraps {@link buildRecipeFromState}; pure — no I/O,
+ * temp files, or Olive execution.
+ *
+ * @param state - The UI state to evaluate
+ * @param options - Optional pipeline validation settings (e.g. hardware probe)
+ */
+export function projectUiStateToRecipeEvaluation(
+  state: UIState,
+  options?: PipelineValidationOptions,
+): UiStateRecipeEvaluation {
+  const {
+    state: effectiveState,
+    recipe,
+    validation,
+    schema,
+    advisories,
+    localExecutionIssues,
+    isRunnable,
+  } = buildRecipeFromState(state, options);
+
+  return {
+    effectiveState,
+    recipe,
+    schemaErrors: [...schema.errors],
+    pipelineIssues: [...validation.issues],
+    criticalCount: validation.criticalCount,
+    warningCount: validation.warningCount,
+    isBlocked: validation.isBlocked,
+    advisories: [...advisories],
+    localExecutionIssues: [...localExecutionIssues],
+    warnings: validation.issues.filter((issue) => issue.severity === "warning"),
+    isRunnable,
   };
 }
 

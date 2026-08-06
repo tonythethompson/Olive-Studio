@@ -32,6 +32,9 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "diagnose_error": (".troubleshooting", "diagnose_error"),
     "get_error_frequency_summary": (".troubleshooting", "get_error_frequency_summary"),
     "get_context_for_pipeline": (".passive_context", "get_context_for_pipeline"),
+    "validate_ui_state_recipe": (".studio_recipe", "validate_ui_state_recipe"),
+    "get_recipe_for_ui_state": (".studio_recipe", "get_recipe_for_ui_state"),
+    "record_troubleshoot_feedback": (".feedback", "record_troubleshoot_feedback"),
 }
 
 
@@ -176,6 +179,9 @@ __all__ = [
     "diagnose_error",
     "get_error_frequency_summary",
     "get_context_for_pipeline",
+    "validate_ui_state_recipe",
+    "get_recipe_for_ui_state",
+    "record_troubleshoot_feedback",
     "KB_DIR",
     "load_json",
     "load_passes",

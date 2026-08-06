@@ -23,6 +23,7 @@ from .embeddings import (
     cosine_similarity_scores,
     encode_query,
 )
+from .feedback import FEEDBACK_MAX_ADJUSTMENT, feedback_score_delta
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,9 @@ _KEYWORD_WEIGHT = 0.4
 # Extra ranking boost per pattern alternative hit (OR list multi-evidence).
 _HIT_RANK_BONUS = 0.05
 _HIT_RANK_BONUS_CAP = 5
+# Aggregate feedback may nudge rank by at most FEEDBACK_MAX_ADJUSTMENT (0.05):
+# enough to break close ties, never enough to invent a match or overturn a
+# clear keyword hit (_KEYWORD_WEIGHT = 0.4).
 
 # ---------------------------------------------------------------------------
 # Error frequency tracker (module-level, lives for the process lifetime)
@@ -383,6 +387,22 @@ def _best_match(
         hybrid = _score(
             entry, error_message, pass_name, config_context, semantic_score=sem
         )
+        # Bounded feedback adjustment after semantic/keyword hybrid score.
+        # Cap: |delta| <= FEEDBACK_MAX_ADJUSTMENT (0.05). Positive net votes
+        # slightly boost / break close ties; negative slightly demote.
+        # Only applied when hybrid > 0 so zero-score (no keyword/semantic
+        # evidence) stays a no-match and cannot be promoted by thumbs alone.
+        if hybrid > 0:
+            eid = entry.get("id")
+            if isinstance(eid, str) and eid:
+                delta = feedback_score_delta(eid)
+                # feedback_score_delta already caps; clamp again so the local
+                # rank bound stays obvious at the call site.
+                if delta > FEEDBACK_MAX_ADJUSTMENT:
+                    delta = FEEDBACK_MAX_ADJUSTMENT
+                elif delta < -FEEDBACK_MAX_ADJUSTMENT:
+                    delta = -FEEDBACK_MAX_ADJUSTMENT
+                hybrid = hybrid + delta
         hits = _pattern_hit_count(entry, keyword_text)
         scored.append((entry, hybrid, hits))
     scored.sort(key=lambda x: (x[1], x[2]), reverse=True)

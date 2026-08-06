@@ -6,6 +6,12 @@ import numpy as np
 import pytest
 
 from olive_mcp_server.tools import troubleshooting as ts
+from olive_mcp_server.tools.feedback import (
+    FEEDBACK_MAX_ADJUSTMENT,
+    record_troubleshoot_feedback,
+    reset_feedback_store,
+    set_feedback_path,
+)
 from olive_mcp_server.tools.troubleshooting import (
     reset_frequency_store,
     troubleshoot_olive_error,
@@ -13,12 +19,17 @@ from olive_mcp_server.tools.troubleshooting import (
 
 
 @pytest.fixture(autouse=True)
-def _clean_state():
+def _clean_state(tmp_path):
     reset_frequency_store()
+    # Isolate feedback store so ranking tests do not leak across the suite.
+    set_feedback_path(tmp_path / "troubleshoot_feedback.json")
+    reset_feedback_store()
     # Clear embedding index cache between tests
     ts._ts_index_cache = {}
     yield
     reset_frequency_store()
+    reset_feedback_store()
+    set_feedback_path(None)
     ts._ts_index_cache = {}
 
 
@@ -377,3 +388,113 @@ def test_real_minilm_paraphrased_oom_optional():
         pass_name="OnnxQuantization",
     )
     assert result["matched_entry"] == "oom-quantization"
+
+
+# ---------------------------------------------------------------------------
+# Bounded feedback ranking (applied only when hybrid > 0)
+# ---------------------------------------------------------------------------
+
+
+def test_feedback_cannot_invent_match_from_zero_hybrid(monkeypatch: pytest.MonkeyPatch):
+    """Negative: thumbs-up alone must not promote a zero-evidence entry."""
+    # Arrange — heavy positive feedback on oom, but no keyword/semantic evidence
+    for _ in range(10):
+        record_troubleshoot_feedback("oom-quantization", "thumbs-up")
+    _mock_embeddings(monkeypatch, default_score=0.0)
+
+    # Act
+    result = troubleshoot_olive_error(
+        error_message="Some random unique unknown failure message 12345",
+    )
+
+    # Assert — still unmatched; feedback only applies when hybrid > 0
+    assert result["matched_entry"] is None
+    assert result["title"] == "No exact match found"
+
+
+def test_feedback_breaks_close_tie_toward_boosted_entry(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Positive: capped feedback can break a near-tie toward the boosted entry."""
+    # Arrange — identical mild semantic scores; only feedback differs.
+    def fake_delta(eid: str) -> float:
+        if eid == "ep-fallback-cpu":
+            return FEEDBACK_MAX_ADJUSTMENT  # +0.05
+        return 0.0
+
+    monkeypatch.setattr(ts, "feedback_score_delta", fake_delta)
+    _mock_embeddings(
+        monkeypatch,
+        scores_by_entry_id={
+            "ep-fallback-cpu": 0.50,
+            "openvino-fallback": 0.50,
+        },
+        default_score=0.05,
+    )
+
+    # Act — wording avoids exact pattern tokens (fallback, CPUExecutionProvider, …)
+    result = troubleshoot_olive_error(
+        error_message="provider silently switched execution to host device path xyz",
+    )
+
+    # Assert
+    assert result["matched_entry"] == "ep-fallback-cpu"
+
+
+def test_feedback_adjustment_clamped_in_best_match(monkeypatch: pytest.MonkeyPatch):
+    """Negative: even an over-cap delta is clamped before ranking in _best_match."""
+    # Arrange — return an illegally large delta; production must clamp to ±0.05
+    monkeypatch.setattr(ts, "feedback_score_delta", lambda eid: 99.0)
+    _mock_embeddings(
+        monkeypatch,
+        scores_by_entry_id={"ep-fallback-cpu": 0.40},
+        default_score=0.0,
+    )
+    entries = [
+        {
+            "id": "ep-fallback-cpu",
+            "patterns": ["never-matches-zzz"],
+            "title": "t",
+            "root_cause": "r",
+            "solution": "s",
+            "updated_config": {},
+        }
+    ]
+
+    # Act
+    best, score = ts._best_match(
+        entries,
+        error_message="neutral wording with no pattern hits",
+        pass_name="",
+        config_context="",
+    )
+
+    # Assert — hybrid = 0.6 * 0.40 + clamped(99→0.05)
+    assert best is not None
+    assert best["id"] == "ep-fallback-cpu"
+    expected = 0.6 * 0.40 + FEEDBACK_MAX_ADJUSTMENT
+    assert score == pytest.approx(expected, abs=1e-6)
+    assert score <= expected + 1e-6
+
+
+def test_strong_keyword_not_overturned_by_negative_feedback(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Negative: max demote (0.05) cannot overturn a clear keyword hit (0.4+)."""
+    # Arrange — bury the correct entry with max thumbs-down; mild semantic noise elsewhere
+    for _ in range(20):
+        record_troubleshoot_feedback("onnx-export-external-data", "thumbs-down")
+    _mock_embeddings(
+        monkeypatch,
+        scores_by_entry_id={"ep-fallback-cpu": 0.40},
+        default_score=0.0,
+    )
+
+    # Act
+    result = troubleshoot_olive_error(
+        error_message="The ONNX model is larger than 2GB",
+        pass_name="OnnxConversion",
+    )
+
+    # Assert — keyword OR=1.0 hybrid (~0.4+) minus 0.05 still beats mild semantic
+    assert result["matched_entry"] == "onnx-export-external-data"

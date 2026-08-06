@@ -9,17 +9,25 @@ concurrency:
   group: kb-update
   cancel-in-progress: false
 
+# Job-level permissions below are least-privilege for PR creation.
+permissions: {}
+
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
+    permissions:
+      contents: write # push chore/kb-refresh branch only
+      pull-requests: write # open/update one labeled refresh PR
     defaults:
       run:
         working-directory: olive-mcp-server
     steps:
       - uses: actions/checkout@v7
         with:
-          persist-credentials: false
+          # Credentials required so the refresh-PR step can push the bot branch.
+          persist-credentials: true
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v7
         with:
@@ -28,17 +36,33 @@ jobs:
           cache-dependency-path: olive-mcp-server/pyproject.toml
 
       - name: Install dependencies
-        run: pip install -e . "mcp<2"
+        run: pip install -e ".[dev]" "mcp<2"
 
       - name: Run KB update
         run: python scripts/update_kb.py
 
+      - name: Run KB expand
+        run: python scripts/expand_kb.py
+
+      - name: Compatibility matrix validation
+        run: |
+          set -euo pipefail
+          if [ -f tests/test_compatibility_matrix.py ]; then
+            python -m pytest tests/test_compatibility_matrix.py -q --tb=short
+          else
+            echo "tests/test_compatibility_matrix.py not found; running lightweight matrix sanity checks"
+            python -c "from pathlib import Path; import json; kb=Path('olive_mcp_server/knowledge_base'); matrix=json.loads((kb/'compatibility_matrix.json').read_text(encoding='utf-8')); passes_doc=json.loads((kb/'passes.json').read_text(encoding='utf-8')); pass_names={p['name'] for p in passes_doc.get('passes', []) if isinstance(p, dict) and isinstance(p.get('name'), str)}; assert pass_names, 'passes.json has no passes'; models=matrix.get('models'); assert isinstance(models, list) and models, 'compatibility_matrix.json has no models'; print(f'OK: {len(models)} models, {len(pass_names)} canonical passes')"
+          fi
+
+      - name: Python MCP tests
+        run: python -m pytest tests -q --tb=short
+
       - name: Check PyPI for new olive-ai versions
+        id: pypi
         run: |
           LATEST=$(python -c "import urllib.request, json; data = json.loads(urllib.request.urlopen('https://pypi.org/pypi/olive-ai/json', timeout=15).read()); print(data['info']['version'])")
           echo "Latest olive-ai on PyPI: $LATEST"
           echo "olive_latest_version=$LATEST" >> "$GITHUB_OUTPUT"
-        id: pypi
 
       - name: Upload report
         if: ${{ !cancelled() }}
@@ -48,4 +72,140 @@ jobs:
           path: |
             olive-mcp-server/olive_mcp_server/knowledge_base/update_report.json
             olive-mcp-server/olive_mcp_server/knowledge_base/candidate_quirks.json
+            olive-mcp-server/olive_mcp_server/knowledge_base/refresh_metadata.json
+          if-no-files-found: warn
           retention-days: 30
+
+      - name: Detect KB output changes
+        id: kb_changes
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          KB_DIR="olive-mcp-server/olive_mcp_server/knowledge_base"
+          CHANGED_TRACKED="$(git diff --name-only HEAD -- "$KB_DIR" || true)"
+          CHANGED_UNTRACKED="$(git ls-files --others --exclude-standard -- "$KB_DIR" || true)"
+          if [ -z "${CHANGED_TRACKED}" ] && [ -z "${CHANGED_UNTRACKED}" ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No tracked KB output changes (clean generated diff — no PR)"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "KB paths changed:"
+            printf '%s\n' "${CHANGED_TRACKED}" "${CHANGED_UNTRACKED}" | sed '/^$/d'
+          fi
+
+      # Creates or updates at most one PR (head: chore/kb-refresh, label: kb-refresh).
+      # Never auto-merges. Skips force-updating when the branch has human commits.
+      # Does not rewrite an existing PR title/body (gh pr create only when absent).
+      - name: Create or update labeled refresh PR
+        if: steps.kb_changes.outputs.has_changes == 'true'
+        working-directory: ${{ github.workspace }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: chore/kb-refresh
+          LABEL: kb-refresh
+          BOT_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OLIVE_PYPI: ${{ steps.pypi.outputs.olive_latest_version }}
+        run: |
+          set -euo pipefail
+          KB_DIR="olive-mcp-server/olive_mcp_server/knowledge_base"
+          DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "${BOT_EMAIL}"
+
+          # Idempotent label for the single refresh PR.
+          gh label create "${LABEL}" \
+            --description "Automated MCP knowledge-base refresh (review required; never auto-merged)" \
+            --color "0E8A16" \
+            --force
+
+          # Preserve human edits: refuse to rebuild/force-push if non-bot commits exist.
+          if git ls-remote --exit-code origin "refs/heads/${BRANCH}" >/dev/null 2>&1; then
+            git fetch origin "${BRANCH}" --depth=50
+            git fetch origin "${DEFAULT_BRANCH}" --depth=50
+            HUMAN="$(
+              git log --format='%ae' "origin/${DEFAULT_BRANCH}..origin/${BRANCH}" 2>/dev/null \
+                | grep -vF "${BOT_EMAIL}" \
+                | grep -v '^$' \
+              || true
+            )"
+            if [ -n "${HUMAN}" ]; then
+              echo "Refresh branch has human commits; skipping automatic update."
+              PR_NUM="$(gh pr list --head "${BRANCH}" --state open --json number --jq '.[0].number // empty')"
+              if [ -n "${PR_NUM}" ]; then
+                BODY_FILE="$(mktemp)"
+                {
+                  echo "⚠️ Scheduled **KB Auto-Update** found new generated knowledge-base changes, but \`${BRANCH}\` contains human commits."
+                  echo ""
+                  echo "Automatic branch update was **skipped** so your edits are preserved."
+                  echo ""
+                  echo "Please merge or close PR #${PR_NUM}, then re-run [this workflow run](${RUN_URL})."
+                } >"${BODY_FILE}"
+                gh pr comment "${PR_NUM}" --body-file "${BODY_FILE}"
+                rm -f "${BODY_FILE}"
+              fi
+              exit 0
+            fi
+          fi
+
+          # Snapshot generated KB outputs, then rebuild branch from default tip.
+          # -f discards the dirty generator worktree after the snapshot copy.
+          TMP_KB="$(mktemp -d)"
+          cp -a "${KB_DIR}/." "${TMP_KB}/"
+
+          git fetch origin "${DEFAULT_BRANCH}"
+          git checkout -f -B "${BRANCH}" "origin/${DEFAULT_BRANCH}"
+
+          mkdir -p "${KB_DIR}"
+          cp -a "${TMP_KB}/." "${KB_DIR}/"
+          rm -rf "${TMP_KB}"
+
+          git add -- "${KB_DIR}"
+          if git diff --cached --quiet; then
+            echo "No commit-able KB changes after rebasing onto ${DEFAULT_BRANCH}; skipping PR"
+            exit 0
+          fi
+
+          git commit -m "chore(kb): refresh knowledge base"
+          # Bot-owned branch: safe to replace tip when only bot commits were present.
+          git push -u origin "HEAD:refs/heads/${BRANCH}" --force-with-lease
+
+          EXISTING="$(gh pr list --head "${BRANCH}" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "${EXISTING}" ]; then
+            echo "Updated existing refresh PR #${EXISTING} (title/body left unchanged; not merged)"
+            exit 0
+          fi
+
+          BODY_FILE="$(mktemp)"
+          {
+            echo "## Automated knowledge base refresh"
+            echo ""
+            echo "Opened by the **KB Auto-Update** workflow (Monday 06:00 UTC schedule or \`workflow_dispatch\`)."
+            echo ""
+            echo "**Not auto-merged** — human review is required before merge."
+            echo ""
+            echo "### Review checklist"
+            echo "- [ ] Diff is intentional (no noisy timestamp-only churn)"
+            echo "- [ ] \`refresh_metadata.json\` provenance looks correct"
+            echo "- [ ] Compatibility validation and Python MCP tests passed on the workflow run"
+            echo "- [ ] Candidate quirks reviewed when present"
+            echo ""
+            echo "### Provenance"
+            echo "- Workflow run: ${RUN_URL}"
+            echo "- Artifact: \`kb-update-report\` (update report, candidate quirks, refresh metadata)"
+            echo "- Latest \`olive-ai\` on PyPI (informational): ${OLIVE_PYPI:-unknown}"
+            echo ""
+            echo "### Policy"
+            echo "- At most **one** open PR uses head branch \`${BRANCH}\` and label \`${LABEL}\`."
+            echo "- Subsequent scheduled runs update this branch only when generated KB outputs change."
+            echo "- Human commits on \`${BRANCH}\` block automatic updates until the PR is merged or closed."
+          } >"${BODY_FILE}"
+          gh pr create \
+            --base "${DEFAULT_BRANCH}" \
+            --head "${BRANCH}" \
+            --title "chore(kb): scheduled knowledge base refresh" \
+            --label "${LABEL}" \
+            --body-file "${BODY_FILE}"
+          rm -f "${BODY_FILE}"

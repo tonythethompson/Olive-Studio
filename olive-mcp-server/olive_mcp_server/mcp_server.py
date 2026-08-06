@@ -46,6 +46,18 @@ _TOOL_IMPORTS: dict[str, tuple[str, str]] = {
         "olive_mcp_server.tools.passive_context",
         "get_context_for_pipeline",
     ),
+    "validate_ui_state_recipe": (
+        "olive_mcp_server.tools.studio_recipe",
+        "validate_ui_state_recipe",
+    ),
+    "get_recipe_for_ui_state": (
+        "olive_mcp_server.tools.studio_recipe",
+        "get_recipe_for_ui_state",
+    ),
+    "record_troubleshoot_feedback": (
+        "olive_mcp_server.tools.feedback",
+        "record_troubleshoot_feedback",
+    ),
 }
 
 _mcp_instance: Any | None = None

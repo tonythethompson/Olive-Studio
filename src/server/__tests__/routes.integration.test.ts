@@ -12,6 +12,7 @@ import type { Server } from "http";
 
 import { stubGlobalFetch, restoreGlobalFetch } from "./setup.integration.ts";
 import { app, markServerReady } from "../../../server.ts";
+import { jobRegistry } from "../services/olive/state.ts";
 
 let server: Server;
 let baseUrl: string;
@@ -229,6 +230,266 @@ describe("Route integration tests", () => {
 
       expect(typeof body.hint).toBe("string");
       expect(body.hint.length).toBeGreaterThan(0);
+    });
+  });
+
+  // ─── POST /api/mcp/studio-recipe (loopback bridge, no Olive) ─────────────
+
+  describe("POST /api/mcp/studio-recipe", () => {
+    /** Minimal valid partial UIState for a clean CPU conversion recipe. */
+    const validUiState = {
+      modelSource: "huggingface",
+      hfModelId: "meta-llama/Meta-Llama-3-8B",
+      ihvProvider: "CPUExecutionProvider",
+      passes: {
+        conversion: true,
+        conversionFormat: "onnx",
+        quantization: false,
+      },
+    };
+
+    // ✅ Positive: valid UIState returns recipe + validation payload
+    it("returns 200 with recipe and validation fields for a valid uiState", async () => {
+      // Arrange
+      const jobsBefore = jobRegistry.size;
+
+      // Act
+      const res = await fetch(`${baseUrl}/api/mcp/studio-recipe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uiState: validUiState }),
+      });
+
+      // Assert
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("application/json");
+      const body = await res.json();
+      expect(body.ok).toBe(true);
+      expect(body).toHaveProperty("recipe");
+      expect(body.recipe).toHaveProperty("input_model");
+      expect(body.recipe).toHaveProperty("engine");
+      expect(body.recipe).toHaveProperty("passes");
+      expect(body.recipe).toHaveProperty("systems");
+      expect(body).toHaveProperty("effectiveState");
+      expect(body).toHaveProperty("schemaErrors");
+      expect(body).toHaveProperty("pipelineIssues");
+      expect(body).toHaveProperty("criticalCount");
+      expect(body).toHaveProperty("warningCount");
+      expect(body).toHaveProperty("isBlocked");
+      expect(body).toHaveProperty("advisories");
+      expect(body).toHaveProperty("localExecutionIssues");
+      expect(body).toHaveProperty("warnings");
+      expect(body).toHaveProperty("isRunnable");
+      expect(typeof body.isRunnable).toBe("boolean");
+      expect(Array.isArray(body.pipelineIssues)).toBe(true);
+      expect(Array.isArray(body.schemaErrors)).toBe(true);
+      // Loopback tests must not hit 403
+      expect(res.status).not.toBe(403);
+      // No Olive job side effects
+      expect(jobRegistry.size).toBe(jobsBefore);
+    });
+
+    // ✅ Positive: bare partial UIState (without uiState wrapper) is accepted
+    it("accepts a direct partial UIState object (Python-optional shape)", async () => {
+      // Arrange / Act
+      const res = await fetch(`${baseUrl}/api/mcp/studio-recipe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validUiState),
+      });
+
+      // Assert
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.ok).toBe(true);
+      expect(body.recipe).toBeDefined();
+      expect(body.effectiveState.ihvProvider).toBe("CPUExecutionProvider");
+    });
+
+    // ✅ Positive: empty object merges defaults and still evaluates
+    it("evaluates empty body against default pipeline state", async () => {
+      // Arrange / Act
+      const res = await fetch(`${baseUrl}/api/mcp/studio-recipe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      // Assert
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.ok).toBe(true);
+      expect(body.effectiveState).toBeDefined();
+      expect(body.recipe).toBeDefined();
+    });
+
+    // ✅ Positive / blocked: incompatible config returns recipe + structured issues (not 400)
+    it("returns recipe and structured issues for a blocked pipeline (HTTP 200)", async () => {
+      // Arrange — Whisper + wrong HF task → critical pipeline issue after projection
+      const blockedUiState = {
+        modelSource: "huggingface",
+        hfModelId: "openai/whisper-tiny",
+        hfTask: "text-generation",
+        ihvProvider: "CPUExecutionProvider",
+      };
+      const jobsBefore = jobRegistry.size;
+
+      // Act
+      const res = await fetch(`${baseUrl}/api/mcp/studio-recipe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uiState: blockedUiState }),
+      });
+
+      // Assert — validation payload, not a client error
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.ok).toBe(true);
+      expect(body.isBlocked).toBe(true);
+      expect(body.isRunnable).toBe(false);
+      expect(body.criticalCount).toBeGreaterThan(0);
+      expect(Array.isArray(body.pipelineIssues)).toBe(true);
+      expect(body.pipelineIssues.some((i: { severity?: string }) => i.severity === "critical")).toBe(
+        true,
+      );
+      expect(body.pipelineIssues.some((i: { id?: string }) => i.id === "hf-task-whisper-mismatch")).toBe(
+        true,
+      );
+      expect(body.recipe).toHaveProperty("input_model");
+      expect(body.recipe).toHaveProperty("passes");
+      // Still no Olive execution
+      expect(jobRegistry.size).toBe(jobsBefore);
+      expect(body).not.toHaveProperty("jobId");
+      expect(body).not.toHaveProperty("oliveJobId");
+    });
+
+    // ❌ Negative: non-object JSON body → 400 invalid_body
+    it("returns 400 invalid_body when body is a JSON array", async () => {
+      // Arrange / Act
+      const res = await fetch(`${baseUrl}/api/mcp/studio-recipe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([{ hfModelId: "x" }]),
+      });
+
+      // Assert
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.ok).toBe(false);
+      expect(body.code).toBe("invalid_body");
+      expect(body.error).toMatch(/JSON object/i);
+    });
+
+    // ❌ Negative: uiState must be an object
+    it("returns 400 invalid_ui_state when uiState is not an object", async () => {
+      // Arrange / Act
+      const res = await fetch(`${baseUrl}/api/mcp/studio-recipe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uiState: "not-an-object" }),
+      });
+
+      // Assert
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.ok).toBe(false);
+      expect(body.code).toBe("invalid_ui_state");
+      expect(body.error).toMatch(/uiState/i);
+    });
+
+    // ❌ Negative: passes must be a plain object when present
+    it("returns 400 invalid_passes when passes is an array", async () => {
+      // Arrange / Act
+      const res = await fetch(`${baseUrl}/api/mcp/studio-recipe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uiState: {
+            hfModelId: "meta-llama/Meta-Llama-3-8B",
+            passes: ["conversion"],
+          },
+        }),
+      });
+
+      // Assert
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.ok).toBe(false);
+      expect(body.code).toBe("invalid_passes");
+      expect(body.error).toMatch(/passes/i);
+    });
+
+    // ❌ Negative: bridge never reaches /olive/run and creates no jobs
+    it("never creates Olive jobs or requires /olive/run (no-execution guarantee)", async () => {
+      // Arrange
+      jobRegistry.clear();
+      const payloads = [
+        { uiState: validUiState },
+        {
+          uiState: {
+            modelSource: "huggingface",
+            hfModelId: "openai/whisper-tiny",
+            hfTask: "text-generation",
+            ihvProvider: "CPUExecutionProvider",
+          },
+        },
+        {
+          uiState: {
+            ihvProvider: "WebGpuExecutionProvider",
+            hfModelId: "microsoft/resnet-50",
+          },
+        },
+      ];
+
+      // Act — multiple bridge evaluations
+      for (const payload of payloads) {
+        const res = await fetch(`${baseUrl}/api/mcp/studio-recipe`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.ok).toBe(true);
+        // Evaluation-only contract: no job identifiers
+        expect(body.jobId).toBeUndefined();
+        expect(body.oliveJobId).toBeUndefined();
+        expect(body.activeJobId).toBeUndefined();
+      }
+
+      // Assert — job registry untouched; unknown job still 404
+      expect(jobRegistry.size).toBe(0);
+      const statusRes = await fetch(`${baseUrl}/api/olive/status/studio-recipe-should-not-exist`);
+      expect(statusRes.status).toBe(404);
+    });
+
+    // ❌ Negative: dangerous keys are ignored (not applied as server config)
+    it("ignores dangerous keys such as batchJobs and activeJobId", async () => {
+      // Arrange / Act
+      const res = await fetch(`${baseUrl}/api/mcp/studio-recipe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uiState: {
+            ...validUiState,
+            batchJobs: [{ id: "evil", status: "running" }],
+            activeJobId: "should-not-stick",
+            userScript: "import os; os.system('echo pwned')",
+            passRecipeOverrides: { OnnxConversion: { config: { evil: true } } },
+          },
+        }),
+      });
+
+      // Assert
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.ok).toBe(true);
+      // Defaults win for rejected keys — no attacker-controlled job linkage
+      expect(body.effectiveState.activeJobId == null || body.effectiveState.activeJobId === null).toBe(
+        true,
+      );
+      expect(body.effectiveState.batchJobs).toBeUndefined();
+      expect(jobRegistry.size).toBe(0);
     });
   });
 
