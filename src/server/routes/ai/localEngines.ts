@@ -396,6 +396,16 @@ function startOllamaOnce(cliPath: string): Promise<{ mode: "app" | "serve"; deta
 
 const OLLAMA_START_COOLDOWN_MS = 45_000;
 
+/**
+ * Ensure Ollama is installed and its HTTP server is reachable.
+ *
+ * Concurrent callers share one in-flight setup. Only the **first** caller's
+ * `signal` can abort the shared work (e.g. client disconnect on /install-engine
+ * or /ollama-pull). Late joiners receive progress on their `onProgress` callback
+ * but their `signal` does not cancel the shared operation — matching
+ * `trackStreamClient`, which stops streaming to a disconnected client without
+ * tearing down setup other requests may be waiting on.
+ */
 export async function ensureOllamaReady(
   onProgress?: (evt: EnsureProgressEvt) => void,
   signal?: AbortSignal,
@@ -407,8 +417,7 @@ export async function ensureOllamaReady(
     }
   }
   if (!localEngineRuntime.ollamaEnsureInFlight) {
-    // The initiating caller's signal governs the shared operation; later
-    // callers' signals only control how long they consume progress.
+    // Initiator-only: first caller's signal governs the shared operation.
     localEngineRuntime.ollamaEnsureInFlight = ensureOllamaReadyImpl(
       (evt) => {
         for (const sub of localEngineRuntime.ollamaProgressSubscribers) {
@@ -566,6 +575,11 @@ export async function listOllamaInstalledNames(): Promise<string[] | null> {
   }
 }
 
+/**
+ * Ensure LM Studio CLI/server is available. Same single-flight and signal rules
+ * as {@link ensureOllamaReady}: only the initiating caller's `signal` aborts the
+ * shared setup; late joiners' disconnect signals do not.
+ */
 export async function ensureLmsReady(
   onProgress?: (evt: EnsureProgressEvt) => void,
   signal?: AbortSignal,
@@ -577,8 +591,7 @@ export async function ensureLmsReady(
     }
   }
   if (!localEngineRuntime.lmsEnsureInFlight) {
-    // The initiating caller's signal governs the shared operation; later
-    // callers' signals only control how long they consume progress.
+    // Initiator-only: first caller's signal governs the shared operation.
     localEngineRuntime.lmsEnsureInFlight = ensureLmsReadyImpl(
       (evt) => {
         for (const sub of localEngineRuntime.lmsProgressSubscribers) {

@@ -6,9 +6,6 @@
  * successful proxied call that spawns (mocked) Python.
  *
  * `fs.readFileSync` is stubbed per-test so no real KB file is required.
- * `child_process.execFile` is mocked with a `promisify.custom` handler (the
- * same pattern as services/mcp/client.test.ts) so `promisify(execFile)` in the
- * client resolves `{ stdout, stderr }` instead of hanging forever callback-style.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import express from "express";
@@ -16,45 +13,17 @@ import type { Server } from "http";
 import fs from "fs";
 import { execFile } from "child_process";
 
+import {
+  childProcessVitestMockFactory,
+  createChildProcessTestHandles,
+} from "../__tests__/childProcessTestMocks.ts";
 import { mountMcpRoutes } from "./mcp.ts";
 import { setKbStatusCache } from "../services/mcp/state.ts";
 import mcpBreaker, { resetMcpBreaker } from "../services/mcp/breaker.ts";
 
-const mcpToolMocks = vi.hoisted(() => ({
-  execFileImpl: null as null | ((...args: unknown[]) => unknown),
-  calls: [] as unknown[][],
-}));
+const mcpToolMocks = vi.hoisted(() => createChildProcessTestHandles());
 
-// The KB tests never touch child_process; the tool-proxy tests drive execFile
-// through the client's promisified handle, so the mock must expose the custom
-// promisify symbol or the promise would never settle.
-vi.mock("child_process", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("child_process")>();
-  const customSymbol = Symbol.for("nodejs.util.promisify.custom");
-
-  const mockExecFile = vi.fn((...execArgs: unknown[]) => {
-    // Callback-style callers get an instant empty result.
-    const lastArg = execArgs[execArgs.length - 1];
-    if (typeof lastArg === "function") {
-      lastArg(null, "", "");
-      return undefined;
-    }
-    return (actual.execFile as unknown as (...a: unknown[]) => unknown)(...execArgs);
-  });
-
-  // util.promisify(execFile) prefers this when present (mirrors real Node's
-  // execFile, which resolves { stdout, stderr }).
-  (mockExecFile as unknown as Record<symbol, unknown>)[customSymbol] = (...args: unknown[]) => {
-    mcpToolMocks.calls.push(args);
-    if (mcpToolMocks.execFileImpl) return mcpToolMocks.execFileImpl(...args);
-    return Promise.resolve({ stdout: "", stderr: "" });
-  };
-
-  return {
-    ...actual,
-    execFile: mockExecFile as unknown as typeof actual.execFile,
-  };
-});
+vi.mock("child_process", childProcessVitestMockFactory(mcpToolMocks, { trackExecFileCalls: true }));
 
 const VALID_KB = JSON.stringify({
   version: "2.0",
@@ -105,7 +74,7 @@ beforeEach(() => {
   setKbStatusCache(null);
   resetMcpBreaker();
   mcpToolMocks.execFileImpl = null;
-  mcpToolMocks.calls.length = 0;
+  mcpToolMocks.execFileCalls.length = 0;
 });
 
 afterEach(() => {
@@ -202,9 +171,9 @@ describe("POST /api/mcp/tool", () => {
   it("short-circuits with 503 when the breaker is open", async () => {
     const execFileMock = vi.mocked(execFile);
     // Trip the process-wide singleton breaker without spawning anything.
-    mcpBreaker.recordFailure();
-    mcpBreaker.recordFailure();
-    mcpBreaker.recordFailure();
+    mcpBreaker.recordFailure(0);
+    mcpBreaker.recordFailure(0);
+    mcpBreaker.recordFailure(0);
 
     const res = await fetch(`${baseUrl}/api/mcp/tool`, {
       method: "POST",
@@ -235,6 +204,6 @@ describe("POST /api/mcp/tool", () => {
     expect(body).toEqual({ ok: true });
     // The client's promisified execFile (custom-symbol handler) was actually
     // invoked and settled — exercising the path that used to hang forever.
-    expect(mcpToolMocks.calls).toHaveLength(1);
+    expect(mcpToolMocks.execFileCalls).toHaveLength(1);
   });
 });

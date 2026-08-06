@@ -96,9 +96,11 @@ export type McpToolRequest = { toolName: string; args?: Record<string, unknown> 
 export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<McpToolCallResult[]> {
   if (requests.length === 0) return [];
 
-  if (!mcpBreaker.beforeCall()) {
+  const admission = mcpBreaker.beforeCall();
+  if (!admission) {
     return requests.map(() => ({ error: MCP_UNAVAILABLE_ERROR, unavailable: true }));
   }
+  const { epoch } = admission;
 
   const payload = requests.map((r) => ({
     tool: sanitizeToolName(r.toolName),
@@ -131,7 +133,7 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
     try {
       const parsed = JSON.parse(output);
       if (!Array.isArray(parsed)) {
-        mcpBreaker.recordFailure();
+        mcpBreaker.recordFailure(epoch);
         return requests.map(() => ({ error: "MCP batch returned non-array JSON", unavailable: true }));
       }
       const results = requests.map((req, i) => {
@@ -148,13 +150,13 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
       });
       if (results.some((r) => r.unavailable === true)) {
         // A missing row is a protocol/contract violation — infra failure, like non-array JSON.
-        mcpBreaker.recordFailure();
+        mcpBreaker.recordFailure(epoch);
       } else {
-        mcpBreaker.recordSuccess();
+        mcpBreaker.recordSuccess(epoch);
       }
       return results;
     } catch {
-      mcpBreaker.recordFailure();
+      mcpBreaker.recordFailure(epoch);
       return requests.map((req) => ({
         error: output
           ? `MCP tool ${sanitizeToolName(req.toolName)} returned non-JSON: ${output.slice(0, 300)}`
@@ -164,7 +166,7 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    mcpBreaker.recordFailure();
+    mcpBreaker.recordFailure(epoch);
     return requests.map((req) => ({
       error: msg || `MCP tool ${sanitizeToolName(req.toolName)} failed`,
       unavailable: true,

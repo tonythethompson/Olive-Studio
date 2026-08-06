@@ -154,7 +154,7 @@ export function mountLmStudioRoutes(router: Router): void {
       }
 
       localEngineRuntime.lmsPullBusyTag = tag;
-      const ready = await ensureLmsReady((evt) => send(evt));
+      const ready = await ensureLmsReady((evt) => send(evt), guard.signal);
       if (guard.disconnected()) {
         releaseBusy();
         guard.endOnce();

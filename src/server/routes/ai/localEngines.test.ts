@@ -2,70 +2,20 @@
  * Unit tests for the local AI engine setup internals (Tech Debt #16):
  *  - async `where/which` CLI probing with single-flight and TTL caching
  *  - abort-aware capped backoff polling in ensureOllamaReady / ensureLmsReady
- *
- * child_process.execFile is mocked with a `promisify.custom` handler so
- * `execFileAsync` (util.promisify(execFile)) resolves the same
- * `{ stdout, stderr }` shape as real Node's execFile promisification.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { EventEmitter } from "events";
 import fs from "fs";
 
+import {
+  childProcessVitestMockFactory,
+  createChildProcessTestHandles,
+} from "../../__tests__/childProcessTestMocks.ts";
 import { findLmsCli, ensureOllamaReady, ensureLmsReady } from "./localEngines.ts";
 import { localEngineRuntime, resetLocalEngineRuntime } from "../../services/ai/localEngineState.ts";
 
-// ── Configurable child_process mocks ───────────────────────────────────────
+const mocks = vi.hoisted(() => createChildProcessTestHandles());
 
-const mocks = vi.hoisted(() => ({
-  execFileImpl: null as null | ((...args: unknown[]) => unknown),
-  spawnImpl: null as null | ((...args: unknown[]) => unknown),
-}));
-
-vi.mock("child_process", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("child_process")>();
-  const customSymbol = Symbol.for("nodejs.util.promisify.custom");
-
-  function mockExecFile(...execArgs: unknown[]): unknown {
-    // Callback-style callers get an instant empty result.
-    const lastArg = execArgs[execArgs.length - 1];
-    if (typeof lastArg === "function") {
-      lastArg(null, "", "");
-      return undefined;
-    }
-    return (actual.execFile as unknown as (...a: unknown[]) => unknown)(...execArgs);
-  }
-
-  // util.promisify(execFile) prefers this when present (mirrors real Node's
-  // execFile, which resolves { stdout, stderr }). Tests stub execFileImpl to
-  // resolve that exact shape.
-  (mockExecFile as unknown as Record<symbol, unknown>)[customSymbol] = (...args: unknown[]) => {
-    if (mocks.execFileImpl) return mocks.execFileImpl(...args);
-    return Promise.resolve({ stdout: "", stderr: "" });
-  };
-
-  function mockSpawn(...spawnArgs: unknown[]): ReturnType<typeof actual.spawn> {
-    if (mocks.spawnImpl) return mocks.spawnImpl(...spawnArgs) as ReturnType<typeof actual.spawn>;
-    const proc = new EventEmitter() as unknown as ReturnType<typeof actual.spawn>;
-    proc.stdout = new EventEmitter() as unknown as ReturnType<typeof actual.spawn>["stdout"];
-    proc.stderr = new EventEmitter() as unknown as ReturnType<typeof actual.spawn>["stderr"];
-    proc.stdin = new EventEmitter() as unknown as ReturnType<typeof actual.spawn>["stdin"];
-    (proc as unknown as Record<string, unknown>).pid = 99999;
-    (proc as unknown as Record<string, unknown>).unref = () => {};
-    (proc as unknown as Record<string, unknown>).kill = () => true;
-    // Emit "spawn" (startOllamaOnce resolves on it), "exit" (spawnLmsServerDetached
-    // resolves on it), then "close" via process.nextTick, which fake timers do not touch.
-    process.nextTick(() => proc.emit("spawn"));
-    process.nextTick(() => proc.emit("exit", 0));
-    process.nextTick(() => proc.emit("close", 0));
-    return proc;
-  }
-
-  return {
-    ...actual,
-    execFile: mockExecFile as unknown as typeof actual.execFile,
-    spawn: mockSpawn as unknown as typeof actual.spawn,
-  };
-});
+vi.mock("child_process", childProcessVitestMockFactory(mocks, { includeSpawn: true }));
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -82,6 +32,7 @@ describe("findLmsCli async probing", () => {
     resetLocalEngineRuntime();
     mocks.execFileImpl = null;
     mocks.spawnImpl = null;
+    mocks.execFileCalls.length = 0;
     stubExistsSyncOnlyForExecPath();
   });
 
@@ -227,5 +178,32 @@ describe("abort-aware backoff polling (Tech Debt #16)", () => {
 
     expect(result.ok).toBe(false);
     expect(result.cancelled).toBe(true);
+  });
+
+  it("does not cancel shared ensure when a late joiner's signal aborts", async () => {
+    vi.useFakeTimers();
+    mocks.execFileImpl = async () => probeHit;
+    let fetches = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        fetches++;
+        if (fetches <= 2) throw new Error("ECONNREFUSED");
+        return { ok: true };
+      }),
+    );
+
+    const initiator = ensureOllamaReady();
+    const lateJoiner = new AbortController();
+    const joined = ensureOllamaReady(undefined, lateJoiner.signal);
+    await vi.advanceTimersByTimeAsync(200);
+    lateJoiner.abort();
+
+    await vi.advanceTimersByTimeAsync(1000);
+    const [first, second] = await Promise.all([initiator, joined]);
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    expect(second.cancelled).toBeUndefined();
   });
 });
