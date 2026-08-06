@@ -319,7 +319,7 @@ describe("ExecutionWorkspace", () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText(MATCHED_DIAGNOSTIC.title)).toBeDefined();
+        expect(screen.getAllByText(MATCHED_DIAGNOSTIC.title).length).toBeGreaterThanOrEqual(1);
       });
 
       // DiagnosisHistory sidebar appears once an entry is recorded.

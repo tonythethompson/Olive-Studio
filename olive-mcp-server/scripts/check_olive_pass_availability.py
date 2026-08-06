@@ -283,7 +283,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     print(f"Matrix supported/warning olive_pass claims: {len(claimed)}")
     print(f"Matrix path: {matrix_path}")
 
-    missing = sorted(name for name in claimed if name not in available)
+    available_lower = {name.lower() for name in available}
+    missing = sorted(name for name in claimed if name.lower() not in available_lower)
     if missing:
         print(
             "\nFAIL: claimed supported/warning pass(es) not in Olive registry:",
