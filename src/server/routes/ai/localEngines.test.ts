@@ -12,12 +12,13 @@ import {
   childProcessVitestMockFactory,
   createChildProcessTestHandles,
 } from "../../__tests__/childProcessTestMocks.ts";
-import { findLmsCli, ensureOllamaReady, ensureLmsReady } from "./localEngines.ts";
-import { localEngineRuntime, resetLocalEngineRuntime } from "../../services/ai/localEngineState.ts";
 
 const mocks = vi.hoisted(() => createChildProcessTestHandles());
 
 vi.mock("child_process", childProcessVitestMockFactory(mocks, { includeSpawn: true }));
+
+import { findLmsCli, ensureOllamaReady, ensureLmsReady } from "./localEngines.ts";
+import { localEngineRuntime, resetLocalEngineRuntime } from "../../services/ai/localEngineState.ts";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

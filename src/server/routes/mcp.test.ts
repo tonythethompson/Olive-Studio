@@ -10,22 +10,24 @@
  * `child_process` is mocked via `src/server/__tests__/childProcessTestMocks.ts`.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
-import express from "express";
-import type { Server } from "http";
-import fs from "fs";
-import { execFile } from "child_process";
 
 import {
   childProcessVitestMockFactory,
   createChildProcessTestHandles,
 } from "../__tests__/childProcessTestMocks.ts";
-import { mountMcpRoutes } from "./mcp.ts";
-import { setKbStatusCache } from "../services/mcp/state.ts";
-import mcpBreaker, { resetMcpBreaker } from "../services/mcp/breaker.ts";
 
 const mcpToolMocks = vi.hoisted(() => createChildProcessTestHandles());
 
 vi.mock("child_process", childProcessVitestMockFactory(mcpToolMocks, { trackExecFileCalls: true }));
+
+import express from "express";
+import type { Server } from "http";
+import fs from "fs";
+import { execFile } from "child_process";
+
+import { mountMcpRoutes } from "./mcp.ts";
+import { setKbStatusCache } from "../services/mcp/state.ts";
+import mcpBreaker, { resetMcpBreaker } from "../services/mcp/breaker.ts";
 
 const VALID_KB = JSON.stringify({
   version: "2.0",
