@@ -25,11 +25,18 @@ vi.mock("child_process", async (importOriginal) => {
 import express from "express";
 import type { Server } from "http";
 import fs from "fs";
-import { execFile } from "child_process";
 
 import { mountMcpRoutes } from "./mcp.ts";
 import { setKbStatusCache } from "../services/mcp/state.ts";
 import mcpBreaker, { resetMcpBreaker } from "../services/mcp/breaker.ts";
+
+function tripMcpBreaker(): void {
+  for (let i = 0; i < 3; i += 1) {
+    const admission = mcpBreaker.beforeCall();
+    if (!admission) return;
+    mcpBreaker.recordFailure(admission.epoch);
+  }
+}
 
 const VALID_KB = JSON.stringify({
   version: "2.0",
@@ -175,11 +182,7 @@ describe("POST /api/mcp/sync-kb", () => {
 
 describe("POST /api/mcp/tool", () => {
   it("short-circuits with 503 when the breaker is open", async () => {
-    const execFileMock = vi.mocked(execFile);
-    // Trip the process-wide singleton breaker without spawning anything.
-    mcpBreaker.recordFailure(0);
-    mcpBreaker.recordFailure(0);
-    mcpBreaker.recordFailure(0);
+    tripMcpBreaker();
 
     const res = await fetch(`${baseUrl}/api/mcp/tool`, {
       method: "POST",
@@ -191,7 +194,7 @@ describe("POST /api/mcp/tool", () => {
     const body = await res.json();
     expect(body).toEqual({ available: false, error: expect.any(String) });
     // The short-circuit must not spawn a Python subprocess.
-    expect(execFileMock).not.toHaveBeenCalled();
+    expect(mcpToolMocks.execFileCalls).toHaveLength(0);
   });
 
   it("returns 200 with the tool result when the closed breaker proxies valid JSON", async () => {

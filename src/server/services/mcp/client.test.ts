@@ -20,6 +20,15 @@ vi.mock("child_process", async (importOriginal) => {
 import { callOliveMcpTools, callOliveMcpTool, MCP_UNAVAILABLE_ERROR } from "./client.ts";
 import mcpBreaker, { resetMcpBreaker } from "./breaker.ts";
 
+/** Trip the process-wide breaker using the current admission epoch (safe after reset()). */
+function tripMcpBreaker(): void {
+  for (let i = 0; i < 3; i += 1) {
+    const admission = mcpBreaker.beforeCall();
+    if (!admission) return;
+    mcpBreaker.recordFailure(admission.epoch);
+  }
+}
+
 /** Makes the next execFile call resolve with the given stdout/stderr. */
 function mockExecFileResolve(stdout: string, stderr = ""): void {
   mocks.execFileImpl = (...args: unknown[]) => {
@@ -85,7 +94,7 @@ describe("callOliveMcpTools circuit-breaker integration", () => {
   });
 
   it("single-tool calls inherit the unavailable short-circuit", async () => {
-    for (let i = 0; i < 3; i += 1) mcpBreaker.recordFailure(0);
+    tripMcpBreaker();
 
     const out = await callOliveMcpTool("x", {});
 
@@ -136,6 +145,7 @@ describe("callOliveMcpTools circuit-breaker integration", () => {
     mockExecFileReject("spawn python ENOENT");
     await callOliveMcpTools([{ toolName: "x", args: {} }]);
     await callOliveMcpTools([{ toolName: "x", args: {} }]);
+    await callOliveMcpTools([{ toolName: "x", args: {} }]);
     expect(mcpBreaker.status().open).toBe(true);
 
     resolveExec!({ stdout: '[{"tool":"x","result":{"ok":true}}]', stderr: "" });
@@ -155,6 +165,7 @@ describe("callOliveMcpTools circuit-breaker integration", () => {
 
       const slow = callOliveMcpTools([{ toolName: "x", args: {} }]);
       mockExecFileReject("spawn python ENOENT");
+      await callOliveMcpTools([{ toolName: "x", args: {} }]);
       await callOliveMcpTools([{ toolName: "x", args: {} }]);
       await callOliveMcpTools([{ toolName: "x", args: {} }]);
       expect(mcpBreaker.status().open).toBe(true);
