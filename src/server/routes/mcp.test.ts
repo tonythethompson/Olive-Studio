@@ -11,14 +11,16 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 
-import {
-  childProcessVitestMockFactory,
-  createChildProcessTestHandles,
-} from "../__tests__/childProcessTestMocks.ts";
+const mcpToolMocks = vi.hoisted(() => ({
+  execFileImpl: null as null | ((...args: unknown[]) => unknown),
+  spawnImpl: null as null | ((...args: unknown[]) => unknown),
+  execFileCalls: [] as unknown[][],
+}));
 
-const mcpToolMocks = vi.hoisted(() => createChildProcessTestHandles());
-
-vi.mock("child_process", childProcessVitestMockFactory(mcpToolMocks, { trackExecFileCalls: true }));
+vi.mock("child_process", async (importOriginal) => {
+  const { childProcessVitestMockFactory } = await import("../__tests__/childProcessTestMocks.ts");
+  return childProcessVitestMockFactory(mcpToolMocks, { trackExecFileCalls: true })(importOriginal);
+});
 
 import express from "express";
 import type { Server } from "http";

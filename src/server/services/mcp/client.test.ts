@@ -5,14 +5,17 @@
  * `child_process` is mocked via `src/server/__tests__/childProcessTestMocks.ts`.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import {
-  childProcessVitestMockFactory,
-  createChildProcessTestHandles,
-} from "../../__tests__/childProcessTestMocks.ts";
 
-const mocks = vi.hoisted(() => createChildProcessTestHandles());
+const mocks = vi.hoisted(() => ({
+  execFileImpl: null as null | ((...args: unknown[]) => unknown),
+  spawnImpl: null as null | ((...args: unknown[]) => unknown),
+  execFileCalls: [] as unknown[][],
+}));
 
-vi.mock("child_process", childProcessVitestMockFactory(mocks));
+vi.mock("child_process", async (importOriginal) => {
+  const { childProcessVitestMockFactory } = await import("../../__tests__/childProcessTestMocks.ts");
+  return childProcessVitestMockFactory(mocks)(importOriginal);
+});
 
 import { callOliveMcpTools, callOliveMcpTool, MCP_UNAVAILABLE_ERROR } from "./client.ts";
 import mcpBreaker, { resetMcpBreaker } from "./breaker.ts";
