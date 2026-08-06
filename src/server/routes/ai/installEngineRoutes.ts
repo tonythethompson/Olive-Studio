@@ -1,6 +1,10 @@
 /**
  * Engine installation route: POST /ai/install-engine (streams setup progress
  * for LM Studio or Ollama).
+ *
+ * Concurrent install requests share one in-flight `ensure*` setup. Shared work
+ * is cancelled only when every waiting client disconnects; a late client's tab
+ * close does not abort setup others are still waiting on.
  */
 import type { Router } from "express";
 import rateLimit from "express-rate-limit";
@@ -35,7 +39,7 @@ export function mountInstallEngineRoutes(router: Router): void {
     try {
       if (engine === "ollama") {
         send({ type: "step", message: "Ensuring Ollama is installed…", percent: 0 });
-        const result = await ensureOllamaReady((evt) => send(evt));
+        const result = await ensureOllamaReady((evt) => send(evt), guard.signal);
         if (guard.disconnected()) {
           guard.endOnce();
           return;
@@ -47,7 +51,7 @@ export function mountInstallEngineRoutes(router: Router): void {
         endNdjson(res, { type: "done", ok: true, message: "Ollama is ready.", percent: 100 });
       } else {
         send({ type: "step", message: "Ensuring LM Studio is installed…", percent: 0 });
-        const result = await ensureLmsReady((evt) => send(evt));
+        const result = await ensureLmsReady((evt) => send(evt), guard.signal);
         if (guard.disconnected()) {
           guard.endOnce();
           return;

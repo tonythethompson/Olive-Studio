@@ -24,7 +24,8 @@ export function endNdjson(res: import("express").Response, final: Record<string,
 
 /**
  * Track client disconnect for long-running NDJSON streams.
- * Does not cancel shared ensure* single-flight work used by other requests.
+ * Pass `guard.signal` to `ensure*` so disconnect removes this client as a waiter.
+ * Shared setup aborts only when no waiters remain (see ensure* JSDoc).
  */
 export function trackStreamClient(
   req: import("express").Request,

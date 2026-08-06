@@ -21,6 +21,11 @@ export interface LocalEngineRuntime {
   ollamaPullBusyTag: string | null;
   ollamaProgressSubscribers: Set<(evt: EnsureProgressEvt) => void>;
   lmsProgressSubscribers: Set<(evt: EnsureProgressEvt) => void>;
+  /** Aborts shared Ollama setup when the last waiter disconnects. */
+  ollamaEnsureAbort: AbortController | null;
+  lmsEnsureAbort: AbortController | null;
+  ollamaEnsureWaiters: number;
+  lmsEnsureWaiters: number;
 }
 
 function createLocalEngineRuntime(): LocalEngineRuntime {
@@ -34,6 +39,10 @@ function createLocalEngineRuntime(): LocalEngineRuntime {
     ollamaPullBusyTag: null,
     ollamaProgressSubscribers: new Set(),
     lmsProgressSubscribers: new Set(),
+    ollamaEnsureAbort: null,
+    lmsEnsureAbort: null,
+    ollamaEnsureWaiters: 0,
+    lmsEnsureWaiters: 0,
   };
 }
 
