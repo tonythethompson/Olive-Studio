@@ -45,14 +45,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-const TYPE_CHECKERS: Record<BodyFieldType, (value: unknown) => boolean> = {
-  string: (value) => typeof value === "string",
-  number: (value) => typeof value === "number" && Number.isFinite(value),
-  boolean: (value) => typeof value === "boolean",
-  object: (value) => isPlainObject(value),
-  "string[]": (value) =>
-    Array.isArray(value) && value.every((item) => typeof item === "string"),
-  // Recipes arrive either pre-parsed or as a JSON string.
 function isJsonString(value: string): boolean {
   try {
     JSON.parse(value);
@@ -63,6 +55,13 @@ function isJsonString(value: string): boolean {
 }
 
 const TYPE_CHECKERS: Record<BodyFieldType, (value: unknown) => boolean> = {
+  string: (value) => typeof value === "string",
+  number: (value) => typeof value === "number" && Number.isFinite(value),
+  boolean: (value) => typeof value === "boolean",
+  object: (value) => isPlainObject(value),
+  "string[]": (value) =>
+    Array.isArray(value) && value.every((item) => typeof item === "string"),
+  // Recipes arrive either pre-parsed or as a JSON string.
   json: (value) => isPlainObject(value) || (typeof value === "string" && isJsonString(value)),
   // Pass-through fields with their own lenient handling downstream (e.g. clamps).
   // Does not narrow the parsed generic — callers must treat these as `unknown`.
