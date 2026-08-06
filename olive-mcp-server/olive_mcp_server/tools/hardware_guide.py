@@ -3,7 +3,7 @@
 from typing import Any
 
 from . import load_hardware_profiles
-from .normalization import normalize_hardware
+from .normalization import parse_hardware_target
 
 
 def get_hardware_optimization_guide(
@@ -22,9 +22,15 @@ def get_hardware_optimization_guide(
 
     Returns:
         Recommended pass chain, execution provider, speedup, and calibration.
+        Includes ``openvino_device`` (CPU|GPU|NPU) when the target selected an
+        OpenVINO path. Returns ``{"error": ...}`` for invalid OV device tokens.
     """
+    parsed = parse_hardware_target(target_hardware)
+    if parsed.error:
+        return {"error": parsed.error}
+
     profiles = {p["target"]: p for p in load_hardware_profiles()}
-    key = normalize_hardware(target_hardware)
+    key = parsed.profile
     profile = profiles.get(key)
     if not profile:
         available = sorted(profiles.keys())
@@ -43,7 +49,7 @@ def get_hardware_optimization_guide(
     calibration_size = int(profile["calibration_size"] * factor["calibration_factor"])
     batch_size = max(1, int(profile["optimal_batch_size"] * factor["batch_factor"]))
 
-    return {
+    result: dict[str, Any] = {
         "target_hardware": profile["target"],
         "accelerator": profile["accelerator"],
         "execution_providers": profile["execution_providers"],
@@ -59,3 +65,6 @@ def get_hardware_optimization_guide(
         "throughput_goal": throughput_goal,
         "model_size": model_size,
     }
+    if parsed.openvino_device is not None:
+        result["openvino_device"] = parsed.openvino_device
+    return result

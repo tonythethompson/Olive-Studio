@@ -4,21 +4,17 @@ import re
 from typing import Any
 
 from . import load_quirks
-from .normalization import normalize_hardware as _normalize_hardware_base
+from .normalization import HardwareTarget, parse_hardware_target
 
 
-def _normalize_hardware(target: str) -> str:
-    """Normalize hardware to category (nvidia/intel/qualcomm/etc) for strategy selection.
+def _hardware_category(profile: str) -> str:
+    """Map a canonical profile name to a strategy category.
 
     Order matters: webgpu and directml must be checked before generic nvidia/intel
     so WebGPU does not collapse into nvidia and DirectML stays its own path.
+    Apple/CoreML before intel: bare "core" must not steal "CoreML".
     """
-    # Use the base normalization first
-    normalized = _normalize_hardware_base(target)
-
-    # Map to strategy categories (most specific first).
-    # Apple/CoreML before intel: bare "core" must not steal "CoreML".
-    n = normalized.lower()
+    n = profile.lower()
     if "webgpu" in n or "web gpu" in n:
         return "webgpu"
     if "directml" in n or n == "dml" or "windows directml" in n:
@@ -78,14 +74,23 @@ def get_quantization_strategy(
 
     Returns:
         Recommended algorithm, calibration strategy, expected outcomes, and risks.
+        Returns ``{"error": ...}`` when the hardware target has an invalid
+        OpenVINO device token.
     """
-    hw = _normalize_hardware(target_hardware)
+    parsed: HardwareTarget = parse_hardware_target(target_hardware)
+    if parsed.error:
+        return {"error": parsed.error}
+
+    hw = _hardware_category(parsed.profile)
+    # Prefer structured OV device; also honor the canonical NPU profile name
+    # when callers pass it directly (no loose "npu" substring sniffing).
+    is_openvino_npu = (
+        parsed.openvino_device == "NPU"
+        or parsed.profile == "Intel Core Ultra NPU (OpenVINO)"
+    )
     mt = _normalize_model_type(model_type)
     latency_rank_val = _latency_rank(latency_budget)
     quirks = load_quirks()
-
-    # Base name after profile normalize (for NPU device notes, etc.).
-    hw_base = _normalize_hardware_base(target_hardware).lower()
 
     # Base recommendations.
     if mt == "llm":
@@ -141,7 +146,7 @@ def get_quantization_strategy(
                 "Mistral/GQA attention patterns may not map cleanly to CoreML.",
             ]
             pass_chain = ["OnnxConversion", "OnnxModelOptimizer", "OnnxStaticQuantization"]
-        elif hw == "intel" and "npu" in hw_base:
+        elif hw == "intel" and is_openvino_npu:
             algorithm = "OpenVINO weight compression / INT8 with device=NPU"
             calibration = "100 representative samples; OpenVINO NPU driver required"
             expected = {
@@ -232,7 +237,7 @@ def get_quantization_strategy(
                 "CoreML requires fixed input shapes; dynamic batch is not supported.",
             ]
             pass_chain = ["OnnxConversion", "OnnxModelOptimizer", "OnnxStaticQuantization"]
-        elif hw == "intel" and "npu" in hw_base:
+        elif hw == "intel" and is_openvino_npu:
             algorithm = "OpenVINO INT8 / IR path with device=NPU"
             calibration = "100-200 samples; OpenVINO NPU plugin required"
             expected = {
@@ -320,7 +325,7 @@ def get_quantization_strategy(
     candidates = quirks.get("quantization", [])[:2] + quirks.get("pass_ordering", [])[:1]
     relevant_quirks = [title for q in candidates if (title := q.get("title", ""))]
 
-    return {
+    result: dict[str, Any] = {
         "model_type": mt,
         "target_hardware": hw,
         "latency_budget": latency_budget,
@@ -332,3 +337,6 @@ def get_quantization_strategy(
         "pass_chain": pass_chain,
         "relevant_quirks": relevant_quirks,
     }
+    if parsed.openvino_device is not None:
+        result["openvino_device"] = parsed.openvino_device
+    return result

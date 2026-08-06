@@ -3,7 +3,7 @@
 from typing import Any
 
 from . import load_compatibility_matrix, load_passes
-from .normalization import normalize_framework, normalize_hardware, normalize_model
+from .normalization import normalize_framework, normalize_model, parse_hardware_target
 
 
 def get_model_compatibility(
@@ -24,6 +24,7 @@ def get_model_compatibility(
     Returns:
         dict[str, Any]: Compatibility details, supported passes and workflow suggestions for
             unknown models, or hardware-specific compatibility and warnings when requested.
+            Includes ``openvino_device`` when the hardware target selected an OpenVINO path.
     """
     models = load_compatibility_matrix()
     key = normalize_model(model_name)
@@ -57,7 +58,12 @@ def get_model_compatibility(
     }
 
     if hardware_target:
-        target = normalize_hardware(hardware_target)
+        parsed = parse_hardware_target(hardware_target)
+        if parsed.error:
+            result["error"] = parsed.error
+            return result
+
+        target = parsed.profile
         if target in hardware_matrix:
             hw_compat = hardware_matrix[target]
             result["selected_hardware"] = target
@@ -76,5 +82,8 @@ def get_model_compatibility(
             result["hardware_compatibility"] = {}
             result["compatibility_warnings"] = []
             result["hardware_note"] = f"No compatibility data for {target}"
+
+        if parsed.openvino_device is not None:
+            result["openvino_device"] = parsed.openvino_device
 
     return result
