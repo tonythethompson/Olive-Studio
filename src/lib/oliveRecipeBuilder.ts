@@ -283,7 +283,7 @@ function buildOnnxConversion(state: UIState): PassSpec {
   };
 }
 
-const CONVERSION_BUILDERS: Partial<Record<ConversionFormat, (state: UIState) => PassSpec>> = {
+const CONVERSION_BUILDERS: Record<ConversionFormat, (state: UIState) => PassSpec> = {
   onnx: buildOnnxConversion,
   qnn: () => ({ type: "QNNConversion", config: {} }),
   tensorrt: () => ({ type: "TensorRTConversion", config: {} }),
@@ -292,7 +292,7 @@ const CONVERSION_BUILDERS: Partial<Record<ConversionFormat, (state: UIState) => 
 
 function buildConversionPass(state: UIState): PassSpec | undefined {
   if (!state.passes.conversion) return undefined;
-  return (CONVERSION_BUILDERS[state.passes.conversionFormat] ?? buildOpenVinoConversion)(state);
+  return CONVERSION_BUILDERS[state.passes.conversionFormat](state);
 }
 
 // ─── Quantization ─────────────────────────────────────────────────────
