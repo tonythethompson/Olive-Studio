@@ -55,6 +55,7 @@ const TYPE_CHECKERS: Record<BodyFieldType, (value: unknown) => boolean> = {
   // Recipes arrive either pre-parsed or as a JSON string.
   json: (value) => typeof value === "string" || isPlainObject(value),
   // Pass-through fields with their own lenient handling downstream (e.g. clamps).
+  // Does not narrow the parsed generic — callers must treat these as `unknown`.
   unknown: () => true,
 };
 

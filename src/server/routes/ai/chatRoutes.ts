@@ -30,7 +30,7 @@ export function mountChatRoutes(router: Router): void {
       message: string;
       chatHistory?: unknown;
       workspaceContext?: unknown;
-      state?: UIState;
+      state?: unknown;
     }>(req.body, {
       message: { type: "string", message: "Missing message" },
       // Optional context fields are lenient by design: the handler ignores
@@ -58,7 +58,7 @@ export function mountChatRoutes(router: Router): void {
         if (workspaceContext && typeof workspaceContext === "object") {
           workspace = workspaceContext as AiWorkspaceContext;
         } else if (state && typeof state === "object") {
-          workspace = buildAiWorkspaceContext(state);
+          workspace = buildAiWorkspaceContext(state as UIState);
         }
         workspaceBlock = workspace ? formatAiWorkspaceContextForPrompt(workspace) : null;
       } catch {

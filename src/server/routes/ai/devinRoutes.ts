@@ -25,7 +25,7 @@ export function mountDevinRoutes(router: Router): void {
     const body = parseBody<{ token: string }>(req.body, {
       token: { type: "string", message: "Missing token" },
     });
-    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    if (isParseBodyError(body)) return res.status(400).json({ ok: false, error: body.error });
     try {
       const result = await finishDevinLogin(body.parsed.token);
       return res.json({ ok: true, ...result });
