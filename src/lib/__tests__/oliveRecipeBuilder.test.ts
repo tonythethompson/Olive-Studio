@@ -521,6 +521,53 @@ describe("buildOliveRecipe", () => {
     expect((q.config as Record<string, unknown>).quant_mode).toBe("static");
   });
 
+  it("uses HQQ for CPU targets", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider: "CPUExecutionProvider",
+        passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "hqq", quantPrecision: "int4" },
+      }),
+    );
+    const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
+    expect(quantization).toEqual({ type: "OnnxHqqQuantization", config: { precision: "int4" } });
+  });
+
+  it("falls back to QNN quantization when HQQ is unavailable", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider: "QNNExecutionProvider",
+        passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "hqq" },
+      }),
+    );
+    const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
+    expect(quantization).toEqual({ type: "QNNQuantization", config: {} });
+  });
+
+  it("uses RTN for CUDA targets", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider: "CUDAExecutionProvider",
+        passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "rtn", quantPrecision: "int4" },
+      }),
+    );
+    const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
+    expect(quantization).toEqual({
+      type: "OnnxBlockWiseRtnQuantization",
+      config: { bits: 4, block_size: 128, is_symmetric: true },
+    });
+  });
+
+  it("uses OpenVINO quantization for PTQ", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider: "OpenVINOExecutionProvider",
+        passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "ptq", quantPrecision: "int8" },
+      }),
+    );
+    const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
+    expect(quantization).toEqual({ type: "OpenVINOQuantization", config: {} });
+  });
+
   it("adds user_script to quantization config when provided", () => {
     const state = baseState({
       userScript: "/path/to/script.py",
