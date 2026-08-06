@@ -196,7 +196,7 @@ describe("BatchProcessingPanel", () => {
         } as Response);
       }
       return Promise.reject(new Error("Unexpected fetch"));
-    });
+    }) as unknown as typeof fetch;
 
     // Mock EventSource for the valid job's stream. Capture the "done"
     // listener so the test can immediately signal a successful run,
@@ -298,7 +298,7 @@ describe("BatchProcessingPanel", () => {
         } as Response);
       }
       return Promise.reject(new Error(`Unexpected fetch: ${String(url)}`));
-    });
+    }) as unknown as typeof fetch;
 
     const eventSourceCtor = vi.fn(function EventSourceMock() {
       return { addEventListener: vi.fn(), close: vi.fn(), onerror: null };

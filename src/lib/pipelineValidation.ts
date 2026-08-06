@@ -796,7 +796,10 @@ export function applyIssueAutofix(state: UIState, issue: PipelineIssue): Partial
   return next;
 }
 
-export function mergeUiState(state: UIState, patch: Partial<UIState>): UIState {
+/** Partial UIState merge patch; nested `passes` keys are shallow-merged at runtime. */
+export type UiStatePatch = Partial<Omit<UIState, "passes">> & { passes?: Partial<UIState["passes"]> };
+
+export function mergeUiState(state: UIState, patch: UiStatePatch): UIState {
   // Replace (do not deep-merge) when the key is present so recipe loads can
   // clear stale MCP overrides with `passRecipeOverrides: {}`. Callers that need
   // incremental accumulation (MCP Apply Fix) must merge onto current overrides

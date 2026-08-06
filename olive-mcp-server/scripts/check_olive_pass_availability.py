@@ -72,8 +72,45 @@ def claimed_passes(matrix: dict[str, Any]) -> dict[str, set[str]]:
     return claimed
 
 
+def _olive_config_json_path() -> Path | None:
+    """Locate olive_config.json without importing olive (avoids heavy transitive deps on CI)."""
+    try:
+        from importlib.metadata import files
+
+        cfg = files("olive").joinpath("olive_config.json")
+        path = Path(str(cfg))
+        if path.is_file():
+            return path
+    except Exception:  # noqa: BLE001 — try site-packages walk
+        pass
+
+    try:
+        import site
+
+        search_roots = [*site.getsitepackages(), site.getusersitepackages()]
+        for root in search_roots:
+            candidate = Path(root) / "olive" / "olive_config.json"
+            if candidate.is_file():
+                return candidate
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def _names_from_installed_config_json() -> set[str] | None:
+    """Read pass keys from the installed olive_config.json (Olive 0.12.x default)."""
+    path = _olive_config_json_path()
+    if path is None:
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return _pass_keys_from_mapping(raw.get("passes") if isinstance(raw, dict) else None)
+
+
 def _names_from_pass_registry_class() -> set[str] | None:
-    """Preferred path: olive.passes.PassRegistry (same API as scripts/sync-pass-catalog.mjs)."""
+    """Newer olive-ai: olive.passes.PassRegistry (scripts/sync-pass-catalog.mjs)."""
     try:
         from olive.passes import PassRegistry  # type: ignore
     except ImportError:
@@ -94,6 +131,17 @@ def _names_from_pass_registry_class() -> set[str] | None:
         if isinstance(names, (set, list, tuple)):
             out = {str(x) for x in names}
             return out or None
+    return None
+
+
+def _names_from_pass_registry_module() -> set[str] | None:
+    """Olive 0.12.x: REGISTRY alias on olive.passes (Pass.registry)."""
+    try:
+        from olive.passes import REGISTRY  # type: ignore
+    except ImportError:
+        return None
+    if isinstance(REGISTRY, dict) and REGISTRY:
+        return {str(k) for k in REGISTRY.keys()}
     return None
 
 
@@ -184,7 +232,9 @@ def _names_from_registry_attrs() -> set[str] | None:
 def enumerate_olive_pass_names() -> set[str]:
     """Return pass type names available in the installed Olive package."""
     for loader in (
+        _names_from_installed_config_json,
         _names_from_pass_registry_class,
+        _names_from_pass_registry_module,
         _names_from_package_config,
         _names_from_olive_config_json,
         _names_from_registry_attrs,

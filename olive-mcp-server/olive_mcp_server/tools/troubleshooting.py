@@ -356,6 +356,8 @@ def _best_match(
     error_message: str,
     pass_name: str,
     config_context: str,
+    *,
+    require_keyword: bool = False,
 ) -> tuple[dict[str, Any] | None, float]:
     """Select the highest-scoring troubleshooting entry (hybrid semantic+keyword).
 
@@ -406,8 +408,10 @@ def _best_match(
         hits = _pattern_hit_count(entry, keyword_text)
         scored.append((entry, hybrid, hits))
     scored.sort(key=lambda x: (x[1], x[2]), reverse=True)
-    best_entry, best_score, _hits = scored[0]
+    best_entry, best_score, hits = scored[0]
     if best_score <= 0:
+        return None, 0.0
+    if require_keyword and hits == 0:
         return None, 0.0
     return best_entry, best_score
 
@@ -516,7 +520,13 @@ def troubleshoot_olive_error(
             matched_domain = "studio"
     else:
         pool = _pool_for_domain(resolved)
-        hit, score = _best_match(pool, error_message, pass_name, config_context)
+        hit, score = _best_match(
+            pool,
+            error_message,
+            pass_name,
+            config_context,
+            require_keyword=True,
+        )
         if hit is not None and score > 0:
             best = hit
             matched_domain = str(hit.get("domain") or resolved)

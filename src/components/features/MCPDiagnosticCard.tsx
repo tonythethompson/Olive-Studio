@@ -49,7 +49,9 @@ function DiagnosticFeedbackButtons({
   const statusRef = useRef<FeedbackStatus>(status);
   const abortRef = useRef<AbortController | null>(null);
 
-  statusRef.current = status;
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   // Reset when the diagnosis target changes (new match or history navigation).
   useEffect(() => {

@@ -11,7 +11,7 @@
  */
 import type { IHVProvider, ModelSource, OpenVinoTargetDevice, UIState } from "../../../types.ts";
 import { coercePassValue } from "../../../lib/auditAutofix.ts";
-import { mergeUiState } from "../../../lib/pipelineValidation.ts";
+import { mergeUiState, type UiStatePatch } from "../../../lib/pipelineValidation.ts";
 import {
   projectUiStateToRecipeEvaluation,
   type UiStateRecipeEvaluation,
@@ -99,7 +99,7 @@ export function mergeBridgeUiState(
   defaults: UIState,
   raw: Record<string, unknown>,
 ): { ok: true; state: UIState } | StudioRecipeBridgeError {
-  const partial: Partial<UIState> = {};
+  const partial: UiStatePatch = {};
 
   if (typeof raw.modelSource === "string" && MODEL_SOURCES.has(raw.modelSource)) {
     partial.modelSource = raw.modelSource as ModelSource;
