@@ -235,7 +235,7 @@
     {
       "target": "Windows DirectML GPU",
       "accelerator": "gpu",
-      "execution_providers": ["DmlExecutionProvider"],
+      "execution_providers": ["DmlExecutionProvider", "DirectMLExecutionProvider"],
       "recommended_passes": ["OnnxConversion", "OnnxStaticQuantization", "OnnxModelOptimizer"],
       "typical_speedup": "2-5x",
       "calibration_size": 128,
