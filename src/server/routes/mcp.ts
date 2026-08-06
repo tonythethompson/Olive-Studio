@@ -23,6 +23,7 @@ import {
   kbStatusRateLimit,
   kbSyncRateLimit,
   studioRecipeRateLimit,
+  mcpToolRateLimit,
 } from "../middleware/rateLimit.ts";
 import { readStudioConfig, writeStudioConfig } from "../config.ts";
 import type { KbStatusCache } from "../types.ts";
@@ -32,6 +33,14 @@ import type { KbStatusCache } from "../types.ts";
  * Rejects reverse-proxy hops and non-loopback clients. Never honors
  * OLIVE_ARENA_ALLOW_REMOTE — this bridge is local MCP ↔ Studio only.
  */
+function mcpToolLocalOnly(req: Request, res: Response, next: NextFunction): void {
+  if (hasProxyForwardingHeaders(req) || !isLoopbackRemoteAddress(req.socket.remoteAddress)) {
+    res.status(403).json({ error: "MCP tool proxy is only available from loopback" });
+    return;
+  }
+  next();
+}
+
 function studioRecipeLocalOnly(req: Request, res: Response, next: NextFunction): void {
   if (hasProxyForwardingHeaders(req)) {
     res.status(403).json({
@@ -228,7 +237,7 @@ export function performKbSync():
  */
 export function mountMcpRoutes(router: Router): void {
   // ─── MCP Tool Proxy ───────────────────────────────────────────────────
-  router.post("/mcp/tool", async (req, res) => {
+  router.post("/mcp/tool", mcpToolLocalOnly, mcpToolRateLimit, async (req, res) => {
     const { toolName, args } = req.body as { toolName?: string; args?: Record<string, unknown> };
     if (!toolName) {
       return res.status(400).json({ error: "Missing toolName" });
