@@ -21,6 +21,16 @@ from typing import Any, Iterable
 # Claimed support levels that must exist in the pinned Olive registry.
 _REQUIRED_SUPPORT = frozenset({"supported", "warning"})
 
+# Passes documented in the matrix under legacy or workflow names that differ from
+# olive_config.json keys in Olive 0.12.x (enumeration is case-insensitive).
+_PASS_REGISTRY_ALIASES: dict[str, tuple[str, ...]] = {
+    "qnnquantization": ("qnnpreprocess", "qnnconversion", "onnxquantization", "onnxstaticquantization"),
+    "onnxmodeloptimizer": ("onnypeepholeoptimizer",),
+}
+
+# Cloud workflow passes are valid matrix claims but are not listed in local olive_config.json.
+_CLOUD_ONLY_PASSES = frozenset({"azuremlquantization"})
+
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _MCP_ROOT = _SCRIPT_DIR.parent
 _DEFAULT_MATRIX = (
@@ -248,6 +258,19 @@ def enumerate_olive_pass_names() -> set[str]:
     )
 
 
+def _claim_in_registry(claimed_name: str, available_lower: set[str]) -> bool:
+    """Return True when a matrix olive_pass is present or has a known alias."""
+    lowered = claimed_name.lower()
+    if lowered in _CLOUD_ONLY_PASSES:
+        return True
+    if lowered in available_lower:
+        return True
+    for alias in _PASS_REGISTRY_ALIASES.get(lowered, ()):
+        if alias in available_lower:
+            return True
+    return False
+
+
 def olive_version_string() -> str:
     try:
         import olive  # type: ignore
@@ -284,7 +307,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     print(f"Matrix path: {matrix_path}")
 
     available_lower = {name.lower() for name in available}
-    missing = sorted(name for name in claimed if name.lower() not in available_lower)
+    missing = sorted(name for name in claimed if not _claim_in_registry(name, available_lower))
     if missing:
         print(
             "\nFAIL: claimed supported/warning pass(es) not in Olive registry:",
