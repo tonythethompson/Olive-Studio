@@ -102,7 +102,7 @@ export function mountOllamaRoutes(router: Router): void {
 
       localEngineRuntime.ollamaPullBusyTag = tag;
       ownsBusy = true;
-      const ready = await ensureOllamaReady((evt) => send(evt));
+      const ready = await ensureOllamaReady((evt) => send(evt), guard.signal);
       if (guard.disconnected()) {
         releaseBusy();
         guard.endOnce();
