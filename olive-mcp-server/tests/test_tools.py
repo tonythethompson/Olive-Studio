@@ -302,3 +302,12 @@ def test_get_integration_recipe_bert_webgpu_fp16():
     assert "error" not in result
     assert result["recipe_id"] == "bert_webgpu_fp16"
     assert "WebGpuExecutionProvider" in _recipe_execution_providers(result)
+
+
+def test_get_integration_recipe_llama3_rocm():
+    result = get_integration_recipe(recipe_id="llama3_rocm_gptq")
+    assert "error" not in result
+    assert result["recipe_id"] == "llama3_rocm_gptq"
+    assert "ROCMExecutionProvider" in _recipe_execution_providers(result)
+    pass_types = {p["type"] for p in result["recipe"]["passes"].values()}
+    assert "GptqQuantizer" in pass_types

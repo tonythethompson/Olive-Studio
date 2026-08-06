@@ -15,7 +15,7 @@ knowledge base with Olive + Olive Studio domains.
 - 34 Olive troubleshooting entries in `troubleshooting.json` (`domain: olive`)
 - 12 Studio troubleshooting entries in `studio_troubleshooting.json` (`domain: studio`)
 - Evidence-backed model entries in `compatibility_matrix.json`
-- 14 integration recipes in `integration_recipes.json`
+- 15 integration recipes in `integration_recipes.json`
 - 6 quirk categories in `quirks.json` (includes `studio`)
 - pytest covers domain routing (`auto` / `olive` / `studio`), bridge tools, feedback, and Apply flags
 

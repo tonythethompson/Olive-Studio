@@ -80,6 +80,9 @@ def test_hardware_guide_invalid_ov_device_errors() -> None:
         ("Windows DirectML GPU", "vision", "directml", "DirectML"),
         ("openvino npu", "LLM", "intel", "OpenVINO"),
         ("NVIDIA TensorRT RTX", "LLM", "nvidia", "AWQ"),
+        ("AMD MI300X / ROCm", "LLM", "rocm", "GPTQ"),
+        ("ROCMExecutionProvider", "CNN", "rocm", "INT8"),
+        ("mi250", "speech", "rocm", "INT8"),
     ],
 )
 def test_quantization_strategy_new_categories(
@@ -94,6 +97,14 @@ def test_quantization_strategy_new_categories(
     assert algo_substr.lower() in result["recommended_algorithm"].lower()
     assert result["pass_chain"]
 
+
+def test_amd_epyc_is_not_rocm_category() -> None:
+    """Bare AMD EPYC / amd CPU strings must not map to the ROCm strategy bucket."""
+    for query in ("AMD EPYC CPU", "amd epyc", "AMD EPYC"):
+        result = get_quantization_strategy(model_type="LLM", target_hardware=query)
+        assert "error" not in result, result
+        assert result["target_hardware"] != "rocm", f"{query!r} incorrectly mapped to rocm"
+        assert "rocm" not in result["recommended_algorithm"].lower()
 
 def test_quantization_strategy_openvino_npu_uses_device_not_string_sniff() -> None:
     result = get_quantization_strategy(model_type="LLM", target_hardware="openvino:npu")

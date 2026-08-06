@@ -11,7 +11,7 @@ from urllib.error import HTTPError, URLError
 
 import pytest
 
-from olive_mcp_server.tools import studio_recipe
+from olive_mcp_server.tools import studio_loopback, studio_recipe
 from olive_mcp_server.tools.studio_recipe import (
     BRIDGE_PATH,
     ENV_API_URL,
@@ -78,13 +78,13 @@ def _mock_response(payload: dict[str, Any] | bytes | str, *, status: int = 200) 
 
 
 def _patch_opener(monkeypatch: pytest.MonkeyPatch, side_effect=None, return_value=None):
-    """Replace studio_recipe._OPENER.open at the HTTP boundary."""
+    """Replace studio_loopback._OPENER.open at the HTTP boundary."""
     opener = MagicMock()
     if side_effect is not None:
         opener.open.side_effect = side_effect
     else:
         opener.open.return_value = return_value
-    monkeypatch.setattr(studio_recipe, "_OPENER", opener)
+    monkeypatch.setattr(studio_loopback, "_OPENER", opener)
     return opener
 
 

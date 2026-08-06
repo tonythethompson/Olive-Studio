@@ -23,6 +23,7 @@ def test_server_lists_all_tools():
     # Studio UIState recipe bridge tools (HTTP to local Studio; no Olive)
     assert "validate_ui_state_recipe" in names
     assert "get_recipe_for_ui_state" in names
+    assert "get_runtime_ep_hints" in names
 
 
 def test_get_olive_passes_via_server():

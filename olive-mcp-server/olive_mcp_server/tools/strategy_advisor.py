@@ -19,6 +19,9 @@ def _hardware_category(profile: str) -> str:
         return "webgpu"
     if "directml" in n or n == "dml" or "windows directml" in n:
         return "directml"
+    # ROCm before generic nvidia/intel; do NOT match bare "amd" (EPYC CPU stays non-ROCm).
+    if "rocm" in n or "mi300" in n or "mi250" in n or "mi210" in n:
+        return "rocm"
     if "nvidia" in n or "rtx" in n or "tesla" in n or "t4" in n or "cuda" in n or "tensorrt" in n:
         return "nvidia"
     if "apple" in n or "coreml" in n or "m2" in n or "m3" in n:
@@ -133,6 +136,20 @@ def get_quantization_strategy(
                 "INT8 support varies by browser/GPU; prefer FP16 export recipes.",
             ]
             pass_chain = ["OnnxConversion", "OnnxFloatToFloat16"]
+        elif hw == "rocm":
+            algorithm = "GPTQ weight-only int4 for ROCm (prefer over AWQ)"
+            calibration = "128 samples (GPTQ); AWQ has limited ROCm support"
+            expected = {
+                "size_reduction": "70-80%",
+                "latency_speedup": "4-10x on MI300X-class HBM",
+                "accuracy_drop": "2-4%",
+            }
+            risks = [
+                "Operator coverage lags CUDA; verify the graph on ROCMExecutionProvider.",
+                "Requires onnxruntime-rocm (or ROCm ORT build) and a working ROCm stack.",
+                "MI300X has large HBM — prefer external data format for multi-GB weights.",
+            ]
+            pass_chain = ["OnnxConversion", "GptqQuantizer", "OnnxModelOptimizer"]
         elif hw == "apple":
             algorithm = "CoreML INT8 static quantization (QDQ)"
             calibration = "100-200 representative samples, symmetric per-channel"
@@ -212,6 +229,23 @@ def get_quantization_strategy(
                 "INT8 support varies by browser/GPU.",
             ]
             pass_chain = ["OnnxConversion", "OnnxFloatToFloat16", "OnnxModelOptimizer"]
+        elif hw == "rocm":
+            algorithm = "INT8 static PTQ + optional FP16 for ROCm EP"
+            calibration = "100-300 ImageNet-like samples; whitelist ops for ROCMExecutionProvider"
+            expected = {
+                "size_reduction": "65-75%",
+                "latency_speedup": "2-6x on ROCm GPU",
+                "accuracy_drop": "<2%",
+            }
+            risks = [
+                "ROCm op coverage lags CUDA; verify unsupported ops on the target GPU.",
+                "Requires onnxruntime-rocm / ROCm drivers matched to the host stack.",
+            ]
+            pass_chain = [
+                "OnnxConversion",
+                "OnnxStaticQuantization",
+                "OnnxFloatToFloat16",
+            ]
         elif hw == "qualcomm":
             algorithm = "QNN INT8 per-channel symmetric quantization"
             calibration = "128-256 representative samples, symmetric per-channel"
@@ -286,6 +320,19 @@ def get_quantization_strategy(
             }
             risks = [
                 "Windows DirectML only; validate dynamic sequence lengths on target GPU.",
+            ]
+            pass_chain = ["OnnxConversion", "OnnxModelOptimizer", "OnnxStaticQuantization"]
+        elif hw == "rocm":
+            algorithm = "ONNX Runtime static INT8 (QDQ) for ROCm"
+            calibration = "100-300 representative samples"
+            expected = {
+                "size_reduction": "65-75%",
+                "latency_speedup": "2-5x on ROCm GPU",
+                "accuracy_drop": "1-3%",
+            }
+            risks = [
+                "ROCm op coverage lags CUDA; validate dynamic sequence lengths on target GPU.",
+                "Requires onnxruntime-rocm / ROCm stack; prefer GPTQ for large LLMs instead of INT8 QDQ.",
             ]
             pass_chain = ["OnnxConversion", "OnnxModelOptimizer", "OnnxStaticQuantization"]
         else:

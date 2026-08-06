@@ -54,6 +54,10 @@ _TOOL_IMPORTS: dict[str, tuple[str, str]] = {
         "olive_mcp_server.tools.studio_recipe",
         "get_recipe_for_ui_state",
     ),
+    "get_runtime_ep_hints": (
+        "olive_mcp_server.tools.runtime_ep_hints",
+        "get_runtime_ep_hints",
+    ),
     "record_troubleshoot_feedback": (
         "olive_mcp_server.tools.feedback",
         "record_troubleshoot_feedback",

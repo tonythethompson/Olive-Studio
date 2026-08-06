@@ -1,5 +1,5 @@
 {
-  "version": "0.3.2",
+  "version": "0.3.3",
   "last_updated": "2026-08-06",
   "olive_version_support": {
     "min": "0.12.0",
@@ -994,6 +994,52 @@
             "support": "supported",
             "olive_pass": "OnnxModelOptimizer",
             "note": "Post-export graph optimization for NvTensorRTRTXExecutionProvider deployment.",
+            "typical_accuracy_drop": "n/a",
+            "evidence": {
+              "reference": "https://microsoft.github.io/Olive/0.12.1/reference/pass.html",
+              "type": "olive_docs",
+              "version": "0.12.1"
+            }
+          }
+        },
+        "AMD MI300X / ROCm": {
+          "OnnxConversion": {
+            "support": "supported",
+            "olive_pass": "OnnxConversion",
+            "note": "Export with dynamic_axes and external data; ROCMExecutionProvider path.",
+            "typical_accuracy_drop": "n/a",
+            "evidence": {
+              "reference": "https://microsoft.github.io/Olive/0.12.1/reference/pass.html",
+              "type": "olive_docs",
+              "version": "0.12.1"
+            }
+          },
+          "GptqQuantizer": {
+            "support": "supported",
+            "olive_pass": "GptqQuantizer",
+            "note": "Preferred int4 path on ROCm (llama3_rocm_gptq recipe); AWQ support is limited.",
+            "typical_accuracy_drop": "<3%",
+            "evidence": {
+              "reference": "https://microsoft.github.io/Olive/0.12.1/reference/pass.html",
+              "type": "olive_docs",
+              "version": "0.12.1"
+            }
+          },
+          "OnnxFloatToFloat16": {
+            "support": "supported",
+            "olive_pass": "OnnxFloatToFloat16",
+            "note": "FP16 post-export for ROCm memory bandwidth; validate NaN/Inf on target GPU.",
+            "typical_accuracy_drop": "<1%",
+            "evidence": {
+              "reference": "https://onnxruntime.ai/docs/performance/model-optimizations/float16.html",
+              "type": "ort_docs",
+              "version": "1.19"
+            }
+          },
+          "OnnxModelOptimizer": {
+            "support": "supported",
+            "olive_pass": "OnnxModelOptimizer",
+            "note": "Graph optimizer after conversion for ROCm deploy.",
             "typical_accuracy_drop": "n/a",
             "evidence": {
               "reference": "https://microsoft.github.io/Olive/0.12.1/reference/pass.html",
@@ -2332,6 +2378,39 @@
             "typical_accuracy_drop": "<3%",
             "evidence": {
               "reference": "https://microsoft.github.io/Olive/0.12.1/reference/pass.html",
+              "type": "olive_docs",
+              "version": "0.12.1"
+            }
+          },
+          "OnnxFloatToFloat16": {
+            "support": "supported",
+            "olive_pass": "OnnxFloatToFloat16",
+            "note": "FP16 halves weight bandwidth on MI300X; keep I/O float32 when needed.",
+            "typical_accuracy_drop": "<1%",
+            "evidence": {
+              "reference": "https://onnxruntime.ai/docs/performance/model-optimizations/float16.html",
+              "type": "ort_docs",
+              "version": "1.19"
+            }
+          },
+          "OnnxModelOptimizer": {
+            "support": "supported",
+            "olive_pass": "OnnxModelOptimizer",
+            "note": "Post-export graph optimization before ROCMExecutionProvider deploy.",
+            "typical_accuracy_drop": "n/a",
+            "evidence": {
+              "reference": "https://microsoft.github.io/Olive/0.12.1/reference/pass.html",
+              "type": "olive_docs",
+              "version": "0.12.1"
+            }
+          },
+          "AutoAWQQuantizer": {
+            "support": "warning",
+            "olive_pass": "AutoAWQQuantizer",
+            "note": "AWQ has limited ROCm support; prefer GptqQuantizer on AMD ROCm hosts.",
+            "typical_accuracy_drop": "varies",
+            "evidence": {
+              "reference": "https://microsoft.github.io/Olive/0.12.1/reference/options.html",
               "type": "olive_docs",
               "version": "0.12.1"
             }

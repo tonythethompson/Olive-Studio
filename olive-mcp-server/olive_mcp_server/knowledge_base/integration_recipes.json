@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.2.1",
   "last_updated": "2026-08-06",
   "source": "https://microsoft.github.io/Olive/",
   "recipes": [
@@ -260,6 +260,93 @@
         }
       },
       "notes": "Requires AWQ support and significant GPU memory. Replace model_path with your Llama checkpoint."
+    },
+    {
+      "id": "llama3_rocm_gptq",
+      "name": "Llama-3 GPTQ INT4 ROCm",
+      "description": "GPTQ int4 path for Llama-3-class LLMs on AMD ROCm (MI300X class).",
+      "model_type": ["LLM", "Transformer"],
+      "target_hardware": ["AMD MI300X / ROCm"],
+      "source_format": "HuggingFace",
+      "passes": ["OnnxConversion", "GptqQuantizer", "OnnxModelOptimizer"],
+      "recipe": {
+        "input_model": {
+          "type": "HuggingfaceModel",
+          "config": {
+            "model_path": "meta-llama/Meta-Llama-3-8B",
+            "task": "text-generation",
+            "load_kwargs": {
+              "torch_dtype": "float16"
+            }
+          }
+        },
+        "systems": {
+          "local_system": {
+            "type": "LocalSystem",
+            "config": {
+              "accelerators": [
+                {
+                  "device": "gpu",
+                  "execution_providers": ["ROCMExecutionProvider"]
+                }
+              ]
+            }
+          }
+        },
+        "data_configs": [
+          {
+            "name": "wikitext2",
+            "type": "HuggingfaceContainer",
+            "params_config": {
+              "data_path": "wikitext",
+              "subset": "wikitext-2-raw-v1",
+              "split": "train",
+              "batch_size": 1,
+              "max_seq_len": 2048
+            }
+          }
+        ],
+        "passes": {
+          "gptq": {
+            "type": "GptqQuantizer",
+            "config": {
+              "bits": 4,
+              "group_size": 128,
+              "desc_act": false,
+              "data_config": "wikitext2"
+            }
+          },
+          "convert": {
+            "type": "OnnxConversion",
+            "config": {
+              "target_opset": 14
+            }
+          },
+          "optimize": {
+            "type": "OnnxModelOptimizer"
+          }
+        },
+        "evaluators": {
+          "common_eval": {
+            "metrics": [
+              {
+                "name": "perplexity",
+                "type": "perplexity",
+                "data_config": "wikitext2"
+              }
+            ]
+          }
+        },
+        "engine": {
+          "search_strategy": false,
+          "host": "local_system",
+          "target": "local_system",
+          "evaluator": "common_eval",
+          "cache_dir": ".cache",
+          "output_dir": "outputs/llama3_rocm_gptq"
+        }
+      },
+      "notes": "Requires onnxruntime ROCm build + ROCm drivers. Op coverage lags CUDA; prefer GPTQ over AWQ on ROCm."
     },
     {
       "id": "llama_nvidia_int4",

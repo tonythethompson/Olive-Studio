@@ -7,19 +7,26 @@ HTTP(S) only). Never shells out to or runs Olive.
 
 from __future__ import annotations
 
-import ipaddress
-import json
-import os
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
-from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-ENV_API_URL = "OLIVE_STUDIO_API_URL"
+from .studio_loopback import (
+    DEFAULT_TIMEOUT_SECONDS,
+    ENV_API_URL,
+    err as _err,
+    resolve_studio_base,
+    studio_request,
+)
+
 BRIDGE_PATH = "/api/mcp/studio-recipe"
-DEFAULT_TIMEOUT_SECONDS = 5.0
 
-_LOOPBACK_HOSTNAMES = frozenset({"localhost", "127.0.0.1", "::1"})
+# Re-export for tests that import these symbols from studio_recipe.
+__all__ = [
+    "BRIDGE_PATH",
+    "DEFAULT_TIMEOUT_SECONDS",
+    "ENV_API_URL",
+    "get_recipe_for_ui_state",
+    "validate_ui_state_recipe",
+]
 
 # TS camelCase → snake_case aliases accepted on bridge payloads.
 _FIELD_ALIASES: dict[str, str] = {
@@ -39,89 +46,12 @@ _FIELD_ALIASES: dict[str, str] = {
 _REQUIRED_SUCCESS = ("effectiveState", "recipe", "isRunnable")
 
 
-class _NoRedirect(HTTPRedirectHandler):
-    """Refuse redirects so a loopback URL cannot bounce off-host (SSRF)."""
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
-        return None
-
-
-_OPENER = build_opener(_NoRedirect)
-
-
-def _err(code: str, message: str, *, detail: str | None = None) -> dict[str, Any]:
-    out: dict[str, Any] = {"error": code, "message": message}
-    if detail:
-        out["detail"] = detail
-    return out
-
-
-def _studio_unavailable(message: str, *, detail: str | None = None) -> dict[str, Any]:
-    return _err("studio_unavailable", message, detail=detail)
-
-
-def _normalize_host(host: str | None) -> str:
-    if not host:
-        return ""
-    h = host.strip().lower()
-    if h.startswith("[") and h.endswith("]"):
-        h = h[1:-1]
-    return h
-
-
-def _is_loopback_host(host: str | None) -> bool:
-    """Allow localhost, 127.0.0.1, ::1, and any IP with is_loopback=True."""
-    h = _normalize_host(host)
-    if not h:
-        return False
-    if h in _LOOPBACK_HOSTNAMES:
-        return True
-    try:
-        return ipaddress.ip_address(h).is_loopback
-    except ValueError:
-        return False
-
-
 def _resolve_bridge_endpoint() -> tuple[str | None, dict[str, Any] | None]:
-    """Read only ``OLIVE_STUDIO_API_URL``; never accept a caller-supplied URL."""
-    raw = os.environ.get(ENV_API_URL, "").strip()
-    if not raw:
-        return None, _studio_unavailable(
-            f"{ENV_API_URL} is not set. Start Olive Studio and point "
-            f"{ENV_API_URL} at its loopback base URL (e.g. http://127.0.0.1:3000)."
-        )
-
-    parsed = urlparse(raw)
-    if parsed.scheme not in ("http", "https"):
-        return None, _studio_unavailable(
-            f"{ENV_API_URL} must be an http(s) loopback URL.",
-            detail=f"scheme={parsed.scheme!r}",
-        )
-    if parsed.username is not None or parsed.password is not None:
-        return None, _studio_unavailable(
-            f"{ENV_API_URL} must not include credentials.",
-        )
-    if not _is_loopback_host(parsed.hostname):
-        return None, _studio_unavailable(
-            f"{ENV_API_URL} must target a loopback host "
-            "(127.0.0.1, localhost, or ::1).",
-            detail=f"host={parsed.hostname!r}",
-        )
-    return raw.rstrip("/") + BRIDGE_PATH, None
-
-
-def _parse_json_body(raw: bytes | str) -> Any | None:
-    try:
-        text = raw.decode("utf-8") if isinstance(raw, bytes) else raw
-        return json.loads(text)
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return None
-
-
-def _is_timeout_reason(reason: Any) -> bool:
-    if isinstance(reason, TimeoutError):
-        return True
-    return "timed out" in str(reason).lower()
+    """Compose the fixed Studio recipe-bridge URL from the validated base."""
+    base, err = resolve_studio_base()
+    if err is not None:
+        return None, err
+    return f"{base}{BRIDGE_PATH}", None
 
 
 def _request_studio_recipe(
@@ -130,72 +60,12 @@ def _request_studio_recipe(
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """POST ui_state to the fixed Studio bridge; failures → studio_unavailable."""
-    endpoint, err = _resolve_bridge_endpoint()
-    if err is not None:
-        return err
-
-    request = Request(
-        endpoint,  # type: ignore[arg-type]
-        data=json.dumps({"uiState": ui_state}).encode("utf-8"),
-        method="POST",
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
+    return studio_request(
+        "POST",
+        BRIDGE_PATH,
+        body={"uiState": ui_state},
+        timeout=timeout,
     )
-
-    try:
-        # URL is restricted to validated loopback http(s) only (SSRF guard).
-        # Redirects disabled so the request cannot leave loopback.
-        with _OPENER.open(request, timeout=timeout) as response:  # noqa: S310
-            status = getattr(response, "status", None) or response.getcode()
-            raw = response.read()
-    except HTTPError as exc:
-        try:
-            body = exc.read() or b""
-        except Exception:  # noqa: BLE001 — best-effort body read
-            body = b""
-        parsed = _parse_json_body(body)
-        if isinstance(parsed, dict) and (
-            "error" in parsed or _has_required_success_keys(parsed)
-        ):
-            return parsed
-        return _studio_unavailable(
-            "Olive Studio bridge returned an HTTP error.",
-            detail=f"status={exc.code}",
-        )
-    except URLError as exc:
-        reason = getattr(exc, "reason", exc)
-        if _is_timeout_reason(reason):
-            return _studio_unavailable(
-                "Olive Studio bridge timed out.",
-                detail=f"timeout_seconds={timeout}",
-            )
-        return _studio_unavailable(
-            "Olive Studio bridge is not reachable.",
-            detail=str(reason),
-        )
-    except TimeoutError:
-        return _studio_unavailable(
-            "Olive Studio bridge timed out.",
-            detail=f"timeout_seconds={timeout}",
-        )
-    except OSError as exc:
-        return _studio_unavailable(
-            "Olive Studio bridge request failed.",
-            detail=str(exc),
-        )
-
-    if status is not None and int(status) >= 400:
-        return _studio_unavailable(
-            "Olive Studio bridge returned an HTTP error.",
-            detail=f"status={status}",
-        )
-
-    parsed = _parse_json_body(raw)
-    if not isinstance(parsed, dict):
-        return _err(
-            "invalid_bridge_response",
-            "Olive Studio bridge returned a non-object JSON payload.",
-        )
-    return parsed
 
 
 def _get(payload: dict[str, Any], camel: str, default: Any = None) -> Any:
@@ -223,8 +93,13 @@ def _is_error_payload(payload: dict[str, Any]) -> bool:
 def _check_success_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
     """Return an error dict if payload is not a successful bridge result."""
     if not _has_required_success_keys(payload):
-        missing = [k for k in _REQUIRED_SUCCESS if _get(payload, k) is None
-                   and k not in payload and _FIELD_ALIASES.get(k, k) not in payload]
+        missing = [
+            k
+            for k in _REQUIRED_SUCCESS
+            if _get(payload, k) is None
+            and k not in payload
+            and _FIELD_ALIASES.get(k, k) not in payload
+        ]
         return _err(
             "invalid_bridge_response",
             "Olive Studio bridge payload missing required fields.",
