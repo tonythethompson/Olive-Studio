@@ -8,14 +8,24 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 import { callOliveMcpTools, callOliveMcpTool, MCP_UNAVAILABLE_ERROR } from "./client.ts";
 import mcpBreaker, { resetMcpBreaker } from "./breaker.ts";
-import {
-  childProcessVitestMockFactory,
-  createChildProcessTestHandles,
-} from "../../__tests__/childProcessTestMocks.ts";
 
-const mocks = vi.hoisted(() => createChildProcessTestHandles());
+const mocks = vi.hoisted(() => ({
+  execFileImpl: null as null | ((...args: unknown[]) => unknown),
+  spawnImpl: null as null | ((...args: unknown[]) => unknown),
+  execFileCalls: [] as unknown[][],
+}));
 
-vi.mock("child_process", childProcessVitestMockFactory(mocks));
+vi.mock("child_process", async (importOriginal) => {
+  const { childProcessVitestMockFactory } = await import("../../__tests__/childProcessTestMocks.ts");
+  return childProcessVitestMockFactory(mocks)(importOriginal);
+});
+
+function tripMcpBreaker(): void {
+  for (let i = 0; i < 3; i += 1) {
+    const admission = mcpBreaker.beforeCall();
+    if (admission) mcpBreaker.recordFailure(admission.epoch);
+  }
+}
 
 /** Makes the next execFile call resolve with the given stdout/stderr. */
 function mockExecFileResolve(stdout: string, stderr = ""): void {
@@ -82,7 +92,7 @@ describe("callOliveMcpTools circuit-breaker integration", () => {
   });
 
   it("single-tool calls inherit the unavailable short-circuit", async () => {
-    for (let i = 0; i < 3; i += 1) mcpBreaker.recordFailure(0);
+    tripMcpBreaker();
 
     const out = await callOliveMcpTool("x", {});
 
@@ -133,6 +143,7 @@ describe("callOliveMcpTools circuit-breaker integration", () => {
     mockExecFileReject("spawn python ENOENT");
     await callOliveMcpTools([{ toolName: "x", args: {} }]);
     await callOliveMcpTools([{ toolName: "x", args: {} }]);
+    await callOliveMcpTools([{ toolName: "x", args: {} }]);
     expect(mcpBreaker.status().open).toBe(true);
 
     resolveExec!({ stdout: '[{"tool":"x","result":{"ok":true}}]', stderr: "" });
@@ -152,6 +163,7 @@ describe("callOliveMcpTools circuit-breaker integration", () => {
 
       const slow = callOliveMcpTools([{ toolName: "x", args: {} }]);
       mockExecFileReject("spawn python ENOENT");
+      await callOliveMcpTools([{ toolName: "x", args: {} }]);
       await callOliveMcpTools([{ toolName: "x", args: {} }]);
       await callOliveMcpTools([{ toolName: "x", args: {} }]);
       expect(mcpBreaker.status().open).toBe(true);
