@@ -194,9 +194,41 @@ type RecipeBuildContext = {
   useMemoryOffload: boolean;
 };
 
-type PassKey = "conversion" | "transformer_opt" | "quantization" | "splitting" | "peft" | "pruning";
-
 type PassBuilder = (state: UIState, ctx: RecipeBuildContext) => PassSpec | undefined;
+
+type IntQuantPrecision = Extract<UIState["passes"]["quantPrecision"], "int4" | "int8">;
+
+/** Builders that only distinguish int4 vs wider int quant collapse fp16 onto int8. */
+function asIntQuantPrecision(precision: UIState["passes"]["quantPrecision"]): IntQuantPrecision {
+  return precision === "int4" ? "int4" : "int8";
+}
+
+const INT_QUANT_SPECS = {
+  int4: {
+    bits: 4,
+    precision: "int4",
+    openVinoPassType: "OpenVINOWeightCompression",
+    tensorRtPassType: "Nvfp4Quantizer",
+  },
+  int8: {
+    bits: 8,
+    precision: "int8",
+    openVinoPassType: "OpenVINOQuantization",
+    tensorRtPassType: "OnnxQuantization",
+  },
+} as const satisfies Record<
+  IntQuantPrecision,
+  {
+    bits: 4 | 8;
+    precision: IntQuantPrecision;
+    openVinoPassType: string;
+    tensorRtPassType: string;
+  }
+>;
+
+function intQuantSpec(precision: UIState["passes"]["quantPrecision"]) {
+  return INT_QUANT_SPECS[asIntQuantPrecision(precision)];
+}
 
 type QuantMethodBuilder = {
   gate?: (state: UIState) => boolean;
@@ -266,11 +298,12 @@ function buildConversionPass(state: UIState): PassSpec | undefined {
 // ─── Quantization ─────────────────────────────────────────────────────
 
 function buildAwqQuantizer(state: UIState): PassSpec {
+  const quant = intQuantSpec(state.passes.quantPrecision);
   return {
     type: "AutoAWQQuantizer",
     config: withCalibrationData(
       {
-        bits: state.passes.quantPrecision === "int4" ? 4 : 8,
+        bits: quant.bits,
         input_model_dtype: state.passes.conversionInputTargetTypes || "fp16",
         group_size: state.passes.awqGroupSize,
         damp_percent: state.passes.awqDampPercent,
@@ -282,11 +315,12 @@ function buildAwqQuantizer(state: UIState): PassSpec {
 }
 
 function buildGptqQuantizer(state: UIState): PassSpec {
+  const quant = intQuantSpec(state.passes.quantPrecision);
   return {
     type: "GptqQuantizer",
     config: withCalibrationData(
       {
-        bits: state.passes.quantPrecision === "int4" ? 4 : 8,
+        bits: quant.bits,
         input_model_dtype: state.passes.conversionInputTargetTypes || "fp16",
         block_size: state.passes.gptqBlockSize,
         group_size: state.passes.gptqGroupSize,
@@ -313,10 +347,11 @@ function buildQatQuantizer(state: UIState): PassSpec {
 
 // Docs: https://microsoft.github.io/Olive/0.12.1/reference/options.html -> OnnxHqqQuantization
 function buildHqqQuantizer(state: UIState): PassSpec {
+  const quant = intQuantSpec(state.passes.quantPrecision);
   return {
     type: "OnnxHqqQuantization",
     config: withCalibrationData(
-      { precision: state.passes.quantPrecision === "int4" ? "int4" : "int8" },
+      { precision: quant.precision },
       state,
     ),
   };
@@ -324,11 +359,12 @@ function buildHqqQuantizer(state: UIState): PassSpec {
 
 // Docs: https://microsoft.github.io/Olive/0.12.1/reference/options.html -> OnnxBlockWiseRtnQuantization
 function buildRtnQuantizer(state: UIState): PassSpec {
+  const quant = intQuantSpec(state.passes.quantPrecision);
   return {
     type: "OnnxBlockWiseRtnQuantization",
     config: withCalibrationData(
       {
-        bits: state.passes.quantPrecision === "int4" ? 4 : 8,
+        bits: quant.bits,
         block_size: 128,
         is_symmetric: true,
       },
@@ -368,7 +404,7 @@ const QUANT_METHOD_BUILDERS: Partial<Record<QuantMethod, QuantMethodBuilder>> = 
 
 function buildOpenVinoQuantization(state: UIState): PassSpec {
   return {
-    type: state.passes.quantPrecision === "int4" ? "OpenVINOWeightCompression" : "OpenVINOQuantization",
+    type: intQuantSpec(state.passes.quantPrecision).openVinoPassType,
     config: withCalibrationData({}, state),
   };
 }
@@ -379,7 +415,7 @@ function buildQnnQuantization(state: UIState): PassSpec {
 
 function buildTensorRtQuantization(state: UIState): PassSpec {
   return {
-    type: state.passes.quantPrecision === "int4" ? "Nvfp4Quantizer" : "OnnxQuantization",
+    type: intQuantSpec(state.passes.quantPrecision).tensorRtPassType,
     config: withCalibrationData({}, state),
   };
 }
@@ -495,16 +531,18 @@ function buildPruningPass(state: UIState): PassSpec | undefined {
 /**
  * Per-pass builder registry. buildOliveRecipe invokes every builder with the
  * shared context; a builder returns undefined when its pass is inactive.
- * Registering a new pass type is one entry here plus its key in PassKey.
+ * Registering a new pass type is a single entry in this object.
  */
-const PASS_BUILDERS: Record<PassKey, PassBuilder> = {
+const PASS_BUILDERS = {
   conversion: buildConversionPass,
   transformer_opt: buildTransformerOptPass,
   quantization: buildQuantizationPass,
   splitting: buildSplittingPass,
   peft: buildPeftPass,
   pruning: buildPruningPass,
-};
+} satisfies Record<string, PassBuilder>;
+
+type PassKey = keyof typeof PASS_BUILDERS;
 
 /**
  * Reference-equality memo: UIState objects are immutable (each store commit
