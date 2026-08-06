@@ -8,16 +8,19 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
 
-import {
-  childProcessVitestMockFactory,
-  createChildProcessTestHandles,
-} from "../../__tests__/childProcessTestMocks.ts";
 import { findLmsCli, ensureOllamaReady, ensureLmsReady } from "./localEngines.ts";
 import { localEngineRuntime, resetLocalEngineRuntime } from "../../services/ai/localEngineState.ts";
 
-const mocks = vi.hoisted(() => createChildProcessTestHandles());
+const mocks = vi.hoisted(() => ({
+  execFileImpl: null as null | ((...args: unknown[]) => unknown),
+  spawnImpl: null as null | ((...args: unknown[]) => unknown),
+  execFileCalls: [] as unknown[][],
+}));
 
-vi.mock("child_process", childProcessVitestMockFactory(mocks, { includeSpawn: true }));
+vi.mock("child_process", async (importOriginal) => {
+  const { childProcessVitestMockFactory } = await import("../../__tests__/childProcessTestMocks.ts");
+  return childProcessVitestMockFactory(mocks, { includeSpawn: true })(importOriginal);
+});
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

@@ -7,6 +7,11 @@ import { createMcpCircuitBreaker } from "./breaker.ts";
 const FAILURE_THRESHOLD = 3;
 const COOLDOWN_MS = 30_000;
 
+function requireAdmission(admission: false | { epoch: number }): { epoch: number } {
+  if (admission === false) throw new Error("expected admission");
+  return admission;
+}
+
 describe("createMcpCircuitBreaker", () => {
   it("allows calls while closed", () => {
     const breaker = createMcpCircuitBreaker({ now: () => 0 });
@@ -133,15 +138,15 @@ describe("createMcpCircuitBreaker", () => {
       now: () => 0,
     });
 
-    const first = breaker.beforeCall();
+    const first = requireAdmission(breaker.beforeCall());
     expect(first).toEqual({ epoch: 0 });
 
-    breaker.recordFailure(0);
-    breaker.recordFailure(0);
+    breaker.recordFailure(first.epoch);
+    breaker.recordFailure(first.epoch);
     expect(breaker.isOpen()).toBe(true);
 
     // Late success from the pre-open admission must not close the breaker.
-    breaker.recordSuccess(first!.epoch);
+    breaker.recordSuccess(first.epoch);
     expect(breaker.isOpen()).toBe(true);
     expect(breaker.beforeCall()).toBe(false);
   });
@@ -154,18 +159,18 @@ describe("createMcpCircuitBreaker", () => {
       now: () => t,
     });
 
-    const stale = breaker.beforeCall();
-    breaker.recordFailure(stale!.epoch);
+    const stale = requireAdmission(breaker.beforeCall());
+    breaker.recordFailure(stale.epoch);
     expect(breaker.isOpen()).toBe(true);
 
     t += COOLDOWN_MS;
-    const probe = breaker.beforeCall();
+    const probe = requireAdmission(breaker.beforeCall());
     expect(probe).toEqual({ epoch: 1 });
-    breaker.recordFailure(probe!.epoch);
+    breaker.recordFailure(probe.epoch);
     expect(breaker.isOpen()).toBe(true);
 
     // Stale success from the original closed-state call must not clear the breaker.
-    breaker.recordSuccess(stale!.epoch);
+    breaker.recordSuccess(stale.epoch);
     expect(breaker.isOpen()).toBe(true);
     expect(breaker.beforeCall()).toBe(false);
   });
@@ -178,7 +183,7 @@ describe("createMcpCircuitBreaker", () => {
       now: () => t,
     });
 
-    const stale = breaker.beforeCall();
+    const stale = requireAdmission(breaker.beforeCall());
     expect(stale).toEqual({ epoch: 0 });
 
     breaker.recordFailure(0);
@@ -187,16 +192,16 @@ describe("createMcpCircuitBreaker", () => {
     expect(breaker.isOpen()).toBe(true);
 
     t += COOLDOWN_MS;
-    const probe = breaker.beforeCall();
+    const probe = requireAdmission(breaker.beforeCall());
     expect(probe).toEqual({ epoch: 1 });
 
     // Late success from the pre-open admission must not clear half-open state.
-    breaker.recordSuccess(stale!.epoch);
-    expect(breaker.isOpen()).toBe(true);
+    breaker.recordSuccess(stale.epoch);
+    expect(breaker.isOpen()).toBe(false);
     expect(breaker.beforeCall()).toBe(false);
 
     // The actual recovery probe failure must still reopen the breaker.
-    breaker.recordFailure(probe!.epoch);
+    breaker.recordFailure(probe.epoch);
     expect(breaker.isOpen()).toBe(true);
     expect(breaker.beforeCall()).toBe(false);
   });
