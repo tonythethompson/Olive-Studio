@@ -140,6 +140,38 @@ describe("callOliveMcpTools circuit-breaker integration", () => {
     expect(mcpBreaker.status().open).toBe(true);
   });
 
+  it("does not let a pre-open success cancel a half-open recovery probe", async () => {
+    vi.useFakeTimers();
+    try {
+      let resolveExec: ((value: { stdout: string; stderr: string }) => void) | undefined;
+      mocks.execFileImpl = () =>
+        new Promise<{ stdout: string; stderr: string }>((resolve) => {
+          resolveExec = resolve;
+        });
+
+      const slow = callOliveMcpTools([{ toolName: "x", args: {} }]);
+      mockExecFileReject("spawn python ENOENT");
+      await callOliveMcpTools([{ toolName: "x", args: {} }]);
+      await callOliveMcpTools([{ toolName: "x", args: {} }]);
+      expect(mcpBreaker.status().open).toBe(true);
+
+      vi.advanceTimersByTime(30_000);
+      const probe = callOliveMcpTools([{ toolName: "x", args: {} }]);
+
+      resolveExec!({ stdout: '[{"tool":"x","result":{"ok":true}}]', stderr: "" });
+      await slow;
+
+      mockExecFileReject("spawn python ENOENT");
+      const probeOut = await probe;
+
+      expect(probeOut).toEqual([{ error: "spawn python ENOENT", unavailable: true }]);
+      expect(mcpBreaker.status().open).toBe(true);
+      expect(mocks.execFileCalls).toHaveLength(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not inflate the failures counter while the breaker is open", async () => {
     mockExecFileReject("spawn python ENOENT");
     await callOliveMcpTools([{ toolName: "x", args: {} }]);

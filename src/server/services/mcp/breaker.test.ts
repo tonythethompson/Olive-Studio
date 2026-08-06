@@ -169,4 +169,35 @@ describe("createMcpCircuitBreaker", () => {
     expect(breaker.isOpen()).toBe(true);
     expect(breaker.beforeCall()).toBe(false);
   });
+
+  it("does not let a pre-open success cancel an in-flight recovery probe", () => {
+    let t = 0;
+    const breaker = createMcpCircuitBreaker({
+      failureThreshold: FAILURE_THRESHOLD,
+      cooldownMs: COOLDOWN_MS,
+      now: () => t,
+    });
+
+    const stale = breaker.beforeCall();
+    expect(stale).toEqual({ epoch: 0 });
+
+    breaker.recordFailure(0);
+    breaker.recordFailure(0);
+    breaker.recordFailure(0);
+    expect(breaker.isOpen()).toBe(true);
+
+    t += COOLDOWN_MS;
+    const probe = breaker.beforeCall();
+    expect(probe).toEqual({ epoch: 1 });
+
+    // Late success from the pre-open admission must not clear half-open state.
+    breaker.recordSuccess(stale!.epoch);
+    expect(breaker.isOpen()).toBe(true);
+    expect(breaker.beforeCall()).toBe(false);
+
+    // The actual recovery probe failure must still reopen the breaker.
+    breaker.recordFailure(probe!.epoch);
+    expect(breaker.isOpen()).toBe(true);
+    expect(breaker.beforeCall()).toBe(false);
+  });
 });
