@@ -5,7 +5,7 @@
 import type { Request, Response, Router } from "express";
 import fs from "node:fs";
 import { resolveCloudTimeoutMs, ARENA_PROMPT_MAX_CHARS } from "../../lib/arenaConstants.ts";
-import { parseBody } from "../middleware/bodyGuard.ts";
+import { parseBody, isParseBodyError } from "../middleware/bodyGuard.ts";
 import { arenaLocalOnly, arenaStrictLocalOnly } from "../middleware/localOnly.ts";
 import { arenaProxyRateLimit } from "../middleware/rateLimit.ts";
 import {
@@ -109,7 +109,7 @@ export function mountArenaRoutes(router: Router): void {
       // Lenient by design: resolveCloudTimeoutMs clamps any raw value below.
       timeoutMs: { type: "unknown", required: false },
     });
-    if (!body.parsed) return res.status(400).json({ error: body.error });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
     const { endpointUrl, apiKey, modelId, prompt } = body.parsed;
 
     if (prompt.length > ARENA_PROMPT_MAX_CHARS) {

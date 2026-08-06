@@ -7,7 +7,7 @@ import rateLimit from "express-rate-limit";
 
 import { ensureOllamaReady, ensureLmsReady } from "./localEngines.ts";
 import { beginNdjsonStream, endNdjson, trackStreamClient } from "./streamHelpers.ts";
-import { parseBody } from "../../middleware/bodyGuard.ts";
+import { parseBody, isParseBodyError } from "../../middleware/bodyGuard.ts";
 
 const installEngineRateLimiter = rateLimit({
   windowMs: 5 * 60_000,
@@ -22,7 +22,7 @@ export function mountInstallEngineRoutes(router: Router): void {
     const body = parseBody<{ engine: string }>(req.body, {
       engine: { type: "string", message: "engine must be 'lms' or 'ollama'" },
     });
-    if (!body.parsed) return res.status(400).json({ error: body.error });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
     const { engine } = body.parsed;
     if (engine !== "lms" && engine !== "ollama")
       return res.status(400).json({ error: "engine must be 'lms' or 'ollama'" });

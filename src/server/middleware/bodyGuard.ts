@@ -36,6 +36,11 @@ export type ParseBodyResult<T> =
   | { parsed: T; error?: never }
   | { error: string; parsed?: never };
 
+/** Narrows a `parseBody` result to the error branch for safe early returns. */
+export function isParseBodyError<T>(result: ParseBodyResult<T>): result is { error: string } {
+  return "error" in result;
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

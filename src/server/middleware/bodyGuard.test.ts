@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { parseBody } from "./bodyGuard.ts";
+import { parseBody, isParseBodyError } from "./bodyGuard.ts";
 
 describe("parseBody", () => {
   it("treats an empty string as missing for required json fields", () => {
@@ -33,5 +33,13 @@ describe("parseBody", () => {
     });
 
     expect(result).toEqual({ parsed: {} });
+  });
+
+  it("narrows error results with isParseBodyError", () => {
+    const result = parseBody<{ token: string }>({}, { token: { type: "string" } });
+    expect(isParseBodyError(result)).toBe(true);
+    if (isParseBodyError(result)) {
+      expect(result.error).toContain("token is required");
+    }
   });
 });

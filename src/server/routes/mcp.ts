@@ -15,7 +15,7 @@ import {
 } from "../services/mcp/state.ts";
 import { callOliveMcpTool, MCP_UNAVAILABLE_ERROR } from "../services/mcp/client.ts";
 import { kbStatusRateLimit, kbSyncRateLimit } from "../middleware/rateLimit.ts";
-import { parseBody } from "../middleware/bodyGuard.ts";
+import { parseBody, isParseBodyError } from "../middleware/bodyGuard.ts";
 import { readStudioConfig, writeStudioConfig } from "../config.ts";
 import type { KbStatusCache } from "../types.ts";
 
@@ -199,7 +199,7 @@ export function mountMcpRoutes(router: Router): void {
       toolName: { type: "string", message: "Missing toolName" },
       args: { type: "object", required: false },
     });
-    if (!body.parsed) return res.status(400).json({ error: body.error });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
     try {
       const out = await callOliveMcpTool(body.parsed.toolName, body.parsed.args ?? {});
       if (out.unavailable) {

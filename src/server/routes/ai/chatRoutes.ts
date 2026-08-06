@@ -4,7 +4,7 @@
  */
 import type { Router } from "express";
 
-import { parseBody } from "../../middleware/bodyGuard.ts";
+import { parseBody, isParseBodyError } from "../../middleware/bodyGuard.ts";
 
 import { callAI } from "../../services/ai/index.ts";
 import {
@@ -39,7 +39,7 @@ export function mountChatRoutes(router: Router): void {
       workspaceContext: { type: "unknown", required: false },
       state: { type: "unknown", required: false },
     });
-    if (!body.parsed) return res.status(400).json({ error: body.error });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
     const { message, chatHistory, workspaceContext, state } = body.parsed;
     try {
       const scopeBlock = getChatScopeBlock(message);
@@ -101,7 +101,7 @@ export function mountChatRoutes(router: Router): void {
     const body = parseBody<{ recipe: unknown }>(req.body, {
       recipe: { type: "json", message: "Missing recipe" },
     });
-    if (!body.parsed) return res.status(400).json({ error: body.error });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
     const { recipe } = body.parsed;
     try {
       const validation = validateOliveRecipeStructure(
@@ -127,7 +127,7 @@ export function mountChatRoutes(router: Router): void {
     const body = parseBody<{ state: UIState }>(req.body, {
       state: { type: "object", message: "Missing state" },
     });
-    if (!body.parsed) return res.status(400).json({ error: body.error });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
     const { state } = body.parsed;
     try {
       const ctx = buildAiWorkspaceContext(state);

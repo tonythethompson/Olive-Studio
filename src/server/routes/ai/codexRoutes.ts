@@ -4,7 +4,7 @@ import type { Router } from "express";
 import { getCodexAppServer } from "../../../lib/codex/CodexAppServerClient.ts";
 import { codexAsk } from "../../../lib/codex/codexAgent.ts";
 import { authActionRateLimit } from "../../middleware/rateLimit.ts";
-import { parseBody } from "../../middleware/bodyGuard.ts";
+import { parseBody, isParseBodyError } from "../../middleware/bodyGuard.ts";
 
 export function mountCodexRoutes(router: Router): void {
   router.get("/codex/account", async (_req, res) => {
@@ -39,7 +39,7 @@ export function mountCodexRoutes(router: Router): void {
     const body = parseBody<{ loginId?: string }>(req.body, {
       loginId: { type: "string", required: false },
     });
-    if (!body.parsed) return res.status(400).json({ error: body.error });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
     try {
       const server = getCodexAppServer();
       if (server.isReady && body.parsed.loginId) await server.cancelLogin(body.parsed.loginId);
@@ -75,7 +75,7 @@ export function mountCodexRoutes(router: Router): void {
       prompt: { type: "string", message: "Missing prompt" },
       model: { type: "string", required: false },
     });
-    if (!body.parsed) return res.status(400).json({ error: body.error });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
     try {
       const reply = await codexAsk(body.parsed.prompt, {
         workingDirectory: process.cwd(),
