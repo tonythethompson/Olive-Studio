@@ -102,6 +102,8 @@ export function mountOllamaRoutes(router: Router): void {
 
       localEngineRuntime.ollamaPullBusyTag = tag;
       ownsBusy = true;
+      // Initiator-only abort: if another pull already started ensure*, this
+      // request joins it; only that initiator's disconnect cancels shared setup.
       const ready = await ensureOllamaReady((evt) => send(evt), guard.signal);
       if (guard.disconnected()) {
         releaseBusy();

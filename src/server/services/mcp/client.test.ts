@@ -1,6 +1,8 @@
 /**
  * Unit tests for the Olive MCP tool client's circuit-breaker integration.
  * No real Python subprocess is ever spawned.
+ *
+ * `child_process` is mocked via `src/server/__tests__/childProcessTestMocks.ts`.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 

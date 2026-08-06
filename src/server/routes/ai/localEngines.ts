@@ -401,10 +401,12 @@ const OLLAMA_START_COOLDOWN_MS = 45_000;
  *
  * Concurrent callers share one in-flight setup. Only the **first** caller's
  * `signal` can abort the shared work (e.g. client disconnect on /install-engine
- * or /ollama-pull). Late joiners receive progress on their `onProgress` callback
- * but their `signal` does not cancel the shared operation — matching
- * `trackStreamClient`, which stops streaming to a disconnected client without
- * tearing down setup other requests may be waiting on.
+ * or /ollama-pull when that request started setup). Late joiners receive progress
+ * on their `onProgress` callback but their `signal` does not cancel the shared
+ * operation — matching `trackStreamClient`, which stops streaming to a disconnected
+ * client without tearing down setup other requests may be waiting on. Pull routes
+ * still honour a late joiner's disconnect after ensure completes (they skip the
+ * download) without cancelling the shared ensure for the initiator.
  */
 export async function ensureOllamaReady(
   onProgress?: (evt: EnsureProgressEvt) => void,

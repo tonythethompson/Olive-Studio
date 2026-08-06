@@ -6,6 +6,8 @@
  * successful proxied call that spawns (mocked) Python.
  *
  * `fs.readFileSync` is stubbed per-test so no real KB file is required.
+ *
+ * `child_process` is mocked via `src/server/__tests__/childProcessTestMocks.ts`.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import express from "express";

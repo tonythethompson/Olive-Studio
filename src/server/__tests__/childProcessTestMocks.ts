@@ -1,6 +1,15 @@
 /**
  * Shared Vitest mock for `child_process.execFile` (with promisify.custom) and
  * optional `spawn`. Keeps the promisify shape identical across server unit tests.
+ *
+ * Usage:
+ * ```ts
+ * const mocks = vi.hoisted(() => createChildProcessTestHandles());
+ * vi.mock("child_process", childProcessVitestMockFactory(mocks, { includeSpawn: true }));
+ * // In tests: mocks.execFileImpl = async () => ({ stdout: "…", stderr: "" });
+ * ```
+ *
+ * Used by MCP client/route tests and local engine setup tests in this PR.
  */
 import { EventEmitter } from "events";
 import type { ChildProcess } from "child_process";

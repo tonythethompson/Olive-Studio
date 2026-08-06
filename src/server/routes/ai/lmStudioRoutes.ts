@@ -154,6 +154,7 @@ export function mountLmStudioRoutes(router: Router): void {
       }
 
       localEngineRuntime.lmsPullBusyTag = tag;
+      // Initiator-only abort: late joiners get progress but cannot cancel shared setup.
       const ready = await ensureLmsReady((evt) => send(evt), guard.signal);
       if (guard.disconnected()) {
         releaseBusy();

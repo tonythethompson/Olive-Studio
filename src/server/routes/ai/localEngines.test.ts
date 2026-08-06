@@ -2,6 +2,8 @@
  * Unit tests for the local AI engine setup internals (Tech Debt #16):
  *  - async `where/which` CLI probing with single-flight and TTL caching
  *  - abort-aware capped backoff polling in ensureOllamaReady / ensureLmsReady
+ *
+ * `child_process` is mocked via `src/server/__tests__/childProcessTestMocks.ts`.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
