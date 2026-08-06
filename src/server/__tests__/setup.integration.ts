@@ -8,9 +8,10 @@
  *   - services/ai/index.ts callAI               → instantly rejects
  *   - globalThis.fetch for LM Studio/Ollama     → mock local model responses
  *
- * `execSync` and `spawnSync` remain unmocked — callers that need them
- * (e.g. `findLmsCli` for `where lms`) run real commands that fail fast
- * on systems without those tools.
+ * `spawnSync` remains unmocked — callers that need it run real commands
+ * that fail fast on systems without those tools. CLI discovery (`findLmsCli`)
+ * is async (`execFileAsync` → `where lms`/`which lms`) and resolves through
+ * the mocked execFile to empty output, i.e. a cache-miss without real I/O.
  */
 import { EventEmitter } from "events";
 import { vi } from "vitest";

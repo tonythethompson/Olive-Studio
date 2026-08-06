@@ -102,8 +102,9 @@ export function mountOllamaRoutes(router: Router): void {
 
       localEngineRuntime.ollamaPullBusyTag = tag;
       ownsBusy = true;
-      // Shared ensure continues for other clients; this request just stops consuming progress.
-      const ready = await ensureOllamaReady((evt) => send(evt));
+      // Waiter-based abort: disconnect removes this client; shared ensure continues
+      // while other clients are still waiting.
+      const ready = await ensureOllamaReady((evt) => send(evt), guard.signal);
       if (guard.disconnected()) {
         releaseBusy();
         guard.endOnce();

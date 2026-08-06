@@ -76,13 +76,15 @@ export function mountLmStudioRoutes(router: Router): void {
 
   router.get("/ai/local-health", async (_req, res) => {
     const healthy = await isLmsServerRunning();
-    const lmsCli = findLmsCli();
+    const lmsCli = await findLmsCli();
     return res.json({ healthy, lmsInstalled: !!lmsCli });
   });
 
   router.post("/ai/local-load", async (req, res) => {
     const { modelTag } = req.body ?? {};
-    if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
+    if (typeof modelTag !== "string" || !modelTag) {
+      return res.status(400).json({ error: "Missing modelTag" });
+    }
     try {
       const r = await fetch(`http://127.0.0.1:${LM_STUDIO_PORT}/v1/models/load`, {
         method: "POST",
@@ -154,7 +156,8 @@ export function mountLmStudioRoutes(router: Router): void {
       }
 
       localEngineRuntime.lmsPullBusyTag = tag;
-      const ready = await ensureLmsReady((evt) => send(evt));
+      // Waiter-based abort: shared ensure continues while other clients wait.
+      const ready = await ensureLmsReady((evt) => send(evt), guard.signal);
       if (guard.disconnected()) {
         releaseBusy();
         guard.endOnce();
@@ -170,7 +173,7 @@ export function mountLmStudioRoutes(router: Router): void {
         guard.endOnce();
         return;
       }
-      const lmsCli = findLmsCli();
+      const lmsCli = await findLmsCli();
       if (!lmsCli) {
         send({
           type: "error",
