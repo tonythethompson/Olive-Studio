@@ -104,9 +104,7 @@ export function mountChatRoutes(router: Router): void {
     if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
     const { recipe } = body.parsed;
     try {
-      const validation = validateOliveRecipeStructure(
-        typeof recipe === "string" ? JSON.parse(recipe) : recipe,
-      );
+      const validation = validateOliveRecipeStructure(recipe);
       if (!validation.valid) return res.json({ valid: false, errors: validation.errors });
       const system =
         "You are an Olive model optimization validator. Review the recipe and return JSON: { valid: boolean, warnings: string[], suggestions: string[] }";

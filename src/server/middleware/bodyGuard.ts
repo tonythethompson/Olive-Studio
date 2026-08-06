@@ -74,7 +74,7 @@ const TYPE_DESCRIPTIONS: Record<BodyFieldType, string> = {
   boolean: "a boolean",
   object: "an object",
   "string[]": "an array of strings",
-  json: "a string or JSON object",
+  json: "valid JSON",
   unknown: "a value",
 };
 
@@ -109,7 +109,7 @@ export function parseBody<T extends Record<string, unknown>>(
     if (!TYPE_CHECKERS[fieldSpec.type](value)) {
       return { error: `${field} must be ${TYPE_DESCRIPTIONS[fieldSpec.type]}` };
     }
-    parsed[field] = value;
+    parsed[field] = fieldSpec.type === "json" && typeof value === "string" ? JSON.parse(value) : value;
   }
 
   return { parsed: parsed as T };

@@ -24,7 +24,7 @@ describe("parseBody", () => {
       recipe: { type: "json" },
     });
 
-    expect(result).toEqual({ parsed: { recipe: '{"passes":{}}' } });
+    expect(result).toEqual({ parsed: { recipe: { passes: {} } } });
   });
 
   it("omits optional json fields when the value is an empty string", () => {
