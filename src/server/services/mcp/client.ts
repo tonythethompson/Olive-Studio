@@ -129,7 +129,14 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
         if (!isObjectRecord(row)) return { error: `MCP tool ${req.toolName} missing from batch` };
         if (typeof row.error === "string" && row.error) return { error: row.error };
         const inner = row.result;
-        if (isObjectRecord(inner) && typeof inner.error === "string" && inner.error) {
+        // Tool payloads may intentionally use { status: "error", error, message }
+        // for user-facing validation failures; only unwrap proxy error envelopes.
+        if (
+          isObjectRecord(inner) &&
+          typeof inner.error === "string" &&
+          inner.error &&
+          inner.status !== "error"
+        ) {
           return { error: String(inner.error) };
         }
         return { result: inner };
