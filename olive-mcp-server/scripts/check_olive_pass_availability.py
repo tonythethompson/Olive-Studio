@@ -25,7 +25,7 @@ _REQUIRED_SUPPORT = frozenset({"supported", "warning"})
 # olive_config.json keys in Olive 0.12.x (enumeration is case-insensitive).
 _PASS_REGISTRY_ALIASES: dict[str, tuple[str, ...]] = {
     "qnnquantization": ("qnnpreprocess", "qnnconversion", "onnxquantization", "onnxstaticquantization"),
-    "onnxmodeloptimizer": ("onnypeepholeoptimizer",),
+    "onnxmodeloptimizer": ("onnxpeepholeoptimizer",),
 }
 
 # Cloud workflow passes are valid matrix claims but are not listed in local olive_config.json.
