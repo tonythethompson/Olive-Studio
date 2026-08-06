@@ -211,13 +211,13 @@ export function ExecutionWorkspace({
   const lastClickedIndexRef = useRef<number | null>(null);
 
   /** Card self-submits feedback; parent hook is optional analytics / future history annotation. */
-  const handleFeedbackSubmitted = useCallback(
-    (payload: { matched_entry: string; rating: McpTroubleshootFeedbackRating }) => {
-      // No UI mutation — diagnosis display and history stay as-is after thumbs.
-      void payload.matched_entry;
-    },
-    [],
-  );
+  const handleFeedbackSubmitted = (payload: {
+    matched_entry: string;
+    rating: McpTroubleshootFeedbackRating;
+  }) => {
+    // No UI mutation — diagnosis display and history stay as-is after thumbs.
+    void payload.matched_entry;
+  };
 
   const handleApplyMcpFix = () => {
     if (!displayedDiagnostic || !canApplyMcpDiagnostic(displayedDiagnostic)) {
