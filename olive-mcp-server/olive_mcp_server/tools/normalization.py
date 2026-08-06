@@ -79,13 +79,41 @@ _EXECUTION_PROVIDER_TO_TARGET = {
     "CPUExecutionProvider": "Intel Core i9 CPU",
     "CUDAExecutionProvider": "NVIDIA RTX 4090",
     "TensorrtExecutionProvider": "NVIDIA RTX 4090",
-    "NvTensorRTRTXExecutionProvider": "NVIDIA RTX 4090",
-    "OpenVINOExecutionProvider": "Intel Core i9 CPU",
+    "NvTensorRTRTXExecutionProvider": "NVIDIA TensorRT RTX",
+    "OpenVINOExecutionProvider": "Intel Core i9 CPU",  # default CPU/OV; NPU via aliases
     "QNNExecutionProvider": "Qualcomm Snapdragon NPU",
     "ROCMExecutionProvider": "AMD MI300X / ROCm",
+    "DmlExecutionProvider": "Windows DirectML GPU",
+    "DirectMLExecutionProvider": "Windows DirectML GPU",  # passes.json spelling
+    "WebGpuExecutionProvider": "WebGPU (Browser)",
+}
+
+# Exact lowercase keys only (full stripped input). Applied after EP map, before
+# profile exact/substring match. Do not use loose substrings (e.g. bare "rtx").
+_HARDWARE_ALIASES = {
+    "tensorrt rtx": "NVIDIA TensorRT RTX",
+    "trt rtx": "NVIDIA TensorRT RTX",
+    "nvtensorrtrtx": "NVIDIA TensorRT RTX",
+    "tensorrt-rtx": "NVIDIA TensorRT RTX",
+    "openvino npu": "Intel Core Ultra NPU (OpenVINO)",
+    "intel npu": "Intel Core Ultra NPU (OpenVINO)",
+    "core ultra npu": "Intel Core Ultra NPU (OpenVINO)",
+    "openvinoexecutionprovider:npu": "Intel Core Ultra NPU (OpenVINO)",
+    "openvino+npu": "Intel Core Ultra NPU (OpenVINO)",
+    "directml": "Windows DirectML GPU",
+    "dml": "Windows DirectML GPU",
+    "webgpu": "WebGPU (Browser)",
+    "web gpu": "WebGPU (Browser)",
+    "ort web": "WebGPU (Browser)",
 }
 
 _hardware_profiles_cache: list[dict] | None = None
+
+
+def clear_hardware_profiles_cache() -> None:
+    """Drop the module-level hardware profile cache (tests / reload)."""
+    global _hardware_profiles_cache
+    _hardware_profiles_cache = None
 
 
 def _get_hardware_profiles() -> list[dict]:
@@ -146,6 +174,12 @@ def normalize_hardware(target_hardware: str) -> str:
         name = _EXECUTION_PROVIDER_TO_TARGET[name]
         lower = name.lower()
 
+    # Exact alias match on the full lowercased input (after EP map).
+    alias_target = _HARDWARE_ALIASES.get(lower)
+    if alias_target is not None:
+        name = alias_target
+        lower = name.lower()
+
     profiles = _get_hardware_profiles()
 
     # Exact match
@@ -162,6 +196,8 @@ def normalize_hardware(target_hardware: str) -> str:
 
     # Reverse substring: input is contained in a profile target
     # (e.g. "RTX 4090" in "NVIDIA RTX 4090").
+    # Shortest match first so bare "npu" stays Qualcomm Snapdragon NPU
+    # (shorter than "Intel Core Ultra NPU (OpenVINO)").
     reverse = [p for p in profiles if lower in p["target"].lower()]
     if reverse:
         reverse.sort(key=lambda p: len(p["target"]))

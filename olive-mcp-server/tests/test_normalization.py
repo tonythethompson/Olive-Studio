@@ -77,6 +77,18 @@ def test_normalize_model_no_false_substring_match() -> None:
         ("T4", "NVIDIA T4"),
         ("Azure ML N-series", "Azure ML N-series"),
         ("azure ml", "Azure ML N-series"),
+        ("NvTensorRTRTXExecutionProvider", "NVIDIA TensorRT RTX"),
+        ("DmlExecutionProvider", "Windows DirectML GPU"),
+        ("DirectMLExecutionProvider", "Windows DirectML GPU"),
+        ("WebGpuExecutionProvider", "WebGPU (Browser)"),
+        ("tensorrt rtx", "NVIDIA TensorRT RTX"),
+        ("openvino npu", "Intel Core Ultra NPU (OpenVINO)"),
+        ("intel npu", "Intel Core Ultra NPU (OpenVINO)"),
+        ("directml", "Windows DirectML GPU"),
+        ("webgpu", "WebGPU (Browser)"),
+        ("npu", "Qualcomm Snapdragon NPU"),
+        ("OpenVINOExecutionProvider", "Intel Core i9 CPU"),
+        ("RTX 4090", "NVIDIA RTX 4090"),
     ],
 )
 def test_normalize_hardware(input: str, expected: str) -> None:

@@ -397,7 +397,7 @@ def test_matrix_file_exists() -> None:
 def test_real_matrix_has_required_top_level_fields(matrix: dict[str, Any]) -> None:
     # Arrange — fixture loads real matrix
     # Act / Assert
-    assert matrix.get("version") == "0.3.0"
+    assert matrix.get("version") == "0.3.1"
     assert _MATRIX_VERSION_RE.fullmatch(matrix["version"])
     assert _DATE_RE.fullmatch(matrix["last_updated"])
     assert isinstance(matrix["models"], list) and len(matrix["models"]) >= 1
@@ -417,7 +417,7 @@ def test_real_matrix_passes_full_validation(
 
 
 def test_real_matrix_claim_count_matches_expansion(matrix: dict[str, Any]) -> None:
-    """v0.3.0 expansion annotated 169 evidence-backed claims (subtask 10)."""
+    """v0.3.x expansion annotated 169+ evidence-backed claims (subtask 10 + EP gaps)."""
     # Arrange / Act
     claims = list(_iter_claims(matrix))
     # Assert — allow growth; never shrink below the evidence-backed baseline

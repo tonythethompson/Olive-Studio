@@ -269,6 +269,12 @@ _ENTRY_QUIRK_CATEGORIES: dict[str, list[str]] = {
     "studio-tensorrt-pip-invalid-requirement": ["studio", "hardware"],
     "studio-recipe-not-parsed": ["studio"],
     "studio-unique-cache-dir": ["studio", "pass_ordering"],
+    "studio-tensorrt-rtx-missing": ["studio", "hardware"],
+    "studio-directml-missing": ["studio", "hardware"],
+    "studio-webgpu-local-blocked": ["studio", "hardware"],
+    "studio-openvino-npu-device": ["studio", "hardware"],
+    "olive-directml-ep-missing": ["hardware"],
+    "olive-webgpu-not-server-ort": ["hardware"],
 }
 
 _QUIRK_CATEGORY_ORDER: tuple[str, ...] = (

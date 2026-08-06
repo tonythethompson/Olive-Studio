@@ -1,6 +1,6 @@
 {
-  "version": "0.1.0",
-  "last_updated": "2026-07-31",
+  "version": "0.2.0",
+  "last_updated": "2026-08-06",
   "entries": [
     {
       "id": "studio-pytorch-hf-config",
@@ -111,6 +111,70 @@
         }
       },
       "applyable": true
+    },
+    {
+      "id": "studio-tensorrt-rtx-missing",
+      "domain": "studio",
+      "patterns": [
+        "NvTensorRTRTXExecutionProvider",
+        "tensorrt-rtx",
+        "TensorRT RTX",
+        "TensorRT RTX not registered",
+        "NvTensorRTRTX"
+      ],
+      "title": "TensorRT RTX execution provider not registered",
+      "root_cause": "Consumer TensorRT RTX path needs the tensorrt-rtx package (and matching ORT EP plugin), not the full nvinfer TensorRT SDK. Missing install or SM < 7.5 leaves NvTensorRTRTXExecutionProvider unregistered.",
+      "solution": "Hardware → Install TensorRT RTX, or pip install tensorrt-rtx in the app venv. Requires NVIDIA GPU SM ≥ 7.5 (Turing+). Prefer AWQ INT4 (NVModelOpt) over PTQ INT8/QDQ for this EP. Restart the app after install.",
+      "updated_config": {},
+      "applyable": false
+    },
+    {
+      "id": "studio-directml-missing",
+      "domain": "studio",
+      "patterns": [
+        "DmlExecutionProvider",
+        "DirectMLExecutionProvider",
+        "onnxruntime-directml",
+        "DirectML",
+        "DirectML EP"
+      ],
+      "title": "DirectML execution provider missing or wrong venv",
+      "root_cause": "DirectML requires Windows 10/11 + DirectX 12 and onnxruntime-directml in the default-family venv. CUDA/GPU ORT wheels do not expose DmlExecutionProvider.",
+      "solution": "On Windows, install onnxruntime-directml into the Olive Studio default venv (Hardware → DirectML or pip). Do not mix CUDA/TRT packages into the DirectML EP path. Non-Windows hosts cannot run DirectML.",
+      "updated_config": {},
+      "applyable": false
+    },
+    {
+      "id": "studio-webgpu-local-blocked",
+      "domain": "studio",
+      "patterns": [
+        "WebGpuExecutionProvider",
+        "WebGPU",
+        "localExecutionIssues",
+        "webgpu",
+        "isRunnable"
+      ],
+      "title": "WebGPU is browser-only — local Execute Live blocked",
+      "root_cause": "WebGpuExecutionProvider targets ONNX Runtime Web in the browser. Olive Studio marks WebGPU recipes non-runnable locally (isRunnable: false / localExecutionIssues).",
+      "solution": "Use Export recipe / download ONNX for in-browser ORT Web WebGPU. Prefer FP16 (OnnxFloatToFloat16). Do not expect Execute Live or local Olive CLI to run WebGPU.",
+      "updated_config": {},
+      "applyable": false
+    },
+    {
+      "id": "studio-openvino-npu-device",
+      "domain": "studio",
+      "patterns": [
+        "openvinoTargetDevice",
+        "OpenVINO NPU",
+        "device NPU",
+        "OpenVINOExecutionProvider",
+        "Core Ultra NPU"
+      ],
+      "title": "OpenVINO NPU needs target device NPU (not EP rename)",
+      "root_cause": "Intel NPU still uses OpenVINOExecutionProvider. The device is selected separately via openvinoTargetDevice (or equivalent). Without device=NPU and the OpenVINO NPU driver, work stays on CPU.",
+      "solution": "In Olive Studio set OpenVINO target device to NPU. Install the OpenVINO NPU driver on Intel Core Ultra / Meteor Lake+. Prefer OpenVINO weight-compression or INT8 paths; verify unsupported ops are not silently falling back to CPU.",
+      "updated_config": {},
+      "applyable": false
     }
   ]
 }

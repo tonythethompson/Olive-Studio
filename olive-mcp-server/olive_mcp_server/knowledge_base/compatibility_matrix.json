@@ -1,6 +1,6 @@
 {
-  "version": "0.3.0",
-  "last_updated": "2026-08-05",
+  "version": "0.3.1",
+  "last_updated": "2026-08-06",
   "olive_version_support": {
     "min": "0.12.0",
     "max": "0.12.1"
@@ -229,6 +229,41 @@
               "version": "0.12.1"
             }
           }
+        },
+        "NVIDIA TensorRT RTX": {
+          "OnnxConversion": {
+            "support": "supported",
+            "olive_pass": "OnnxConversion",
+            "note": "Export for consumer NvTensorRTRTXExecutionProvider (tensorrt-rtx), distinct from full nvinfer TensorRT.",
+            "typical_accuracy_drop": "n/a",
+            "evidence": {
+              "reference": "https://microsoft.github.io/Olive/0.12.1/reference/pass.html",
+              "type": "olive_docs",
+              "version": "0.12.1"
+            }
+          },
+          "NVModelOptQuantization": {
+            "support": "supported",
+            "olive_pass": "NVModelOptQuantization",
+            "note": "Prefer AWQ INT4 for tensorrt-rtx; PTQ INT8/QDQ is a poor fit on this EP.",
+            "typical_accuracy_drop": "<2%",
+            "evidence": {
+              "reference": "https://microsoft.github.io/Olive/0.12.1/reference/pass.html",
+              "type": "olive_docs",
+              "version": "0.12.1"
+            }
+          },
+          "AutoAWQQuantizer": {
+            "support": "supported",
+            "olive_pass": "AutoAWQQuantizer",
+            "note": "PyTorch-side AWQ before ONNX export; aligns with Olive Studio TRT RTX catalog guidance.",
+            "typical_accuracy_drop": "<2%",
+            "evidence": {
+              "reference": "https://microsoft.github.io/Olive/0.12.1/reference/options.html",
+              "type": "olive_docs",
+              "version": "0.12.1"
+            }
+          }
         }
       }
     },
@@ -363,6 +398,89 @@
               "reference": "https://onnxruntime.ai/docs/performance/model-optimizations/float16.html",
               "type": "ort_docs",
               "version": "1.19"
+            }
+          }
+        },
+        "Windows DirectML GPU": {
+          "OnnxConversion": {
+            "support": "supported",
+            "olive_pass": "OnnxConversion",
+            "note": "ONNX export for DmlExecutionProvider on Windows DirectX 12 GPUs.",
+            "typical_accuracy_drop": "n/a",
+            "evidence": {
+              "reference": "https://onnxruntime.ai/docs/execution-providers/DirectML-ExecutionProvider.html",
+              "type": "ort_docs",
+              "version": "1.19"
+            }
+          },
+          "OnnxStaticQuantization": {
+            "support": "supported",
+            "olive_pass": "OnnxStaticQuantization",
+            "note": "INT8 PTQ is the preferred DirectML path for CNNs; validate op coverage vs CUDA.",
+            "typical_accuracy_drop": "<1%",
+            "evidence": {
+              "reference": "https://onnxruntime.ai/docs/performance/model-optimizations/quantization.html",
+              "type": "ort_docs",
+              "version": "1.19"
+            }
+          }
+        },
+        "WebGPU (Browser)": {
+          "OnnxConversion": {
+            "support": "supported",
+            "olive_pass": "OnnxConversion",
+            "note": "Export ONNX for in-browser ORT Web WebGPU; not a local Olive CLI run target.",
+            "typical_accuracy_drop": "n/a",
+            "evidence": {
+              "reference": "https://onnxruntime.ai/docs/execution-providers/WebGPU-ExecutionProvider.html",
+              "type": "ort_docs",
+              "version": "1.19"
+            }
+          },
+          "OnnxFloatToFloat16": {
+            "support": "supported",
+            "olive_pass": "OnnxFloatToFloat16",
+            "note": "Prefer FP16 for browser WebGPU; INT8 support varies by browser/GPU.",
+            "typical_accuracy_drop": "<0.5%",
+            "evidence": {
+              "reference": "https://onnxruntime.ai/docs/performance/model-optimizations/float16.html",
+              "type": "ort_docs",
+              "version": "1.19"
+            }
+          }
+        },
+        "Intel Core Ultra NPU (OpenVINO)": {
+          "OnnxConversion": {
+            "support": "supported",
+            "olive_pass": "OnnxConversion",
+            "note": "Convert then target OpenVINO EP with device=NPU (openvinoTargetDevice).",
+            "typical_accuracy_drop": "n/a",
+            "evidence": {
+              "reference": "https://onnxruntime.ai/docs/execution-providers/OpenVINO-ExecutionProvider.html",
+              "type": "ort_docs",
+              "version": "1.19"
+            }
+          },
+          "OpenVINOConversion": {
+            "support": "supported",
+            "olive_pass": "OpenVINOConversion",
+            "note": "OpenVINO IR path for Intel NPU; requires NPU driver on Core Ultra / Meteor Lake+.",
+            "typical_accuracy_drop": "n/a",
+            "evidence": {
+              "reference": "https://microsoft.github.io/Olive/0.12.1/reference/pass.html",
+              "type": "olive_docs",
+              "version": "0.12.1"
+            }
+          },
+          "OpenVINOQuantization": {
+            "support": "supported",
+            "olive_pass": "OpenVINOQuantization",
+            "note": "OpenVINO INT8 for vision CNNs on NPU; unsupported ops may fall back to CPU.",
+            "typical_accuracy_drop": "<0.5%",
+            "evidence": {
+              "reference": "https://microsoft.github.io/Olive/0.12.1/reference/pass.html",
+              "type": "olive_docs",
+              "version": "0.12.1"
             }
           }
         }
@@ -1119,6 +1237,41 @@
             "support": "warning",
             "olive_pass": "OnnxStaticQuantization",
             "note": "VAE quantization can produce artifacts; validate visually.",
+            "typical_accuracy_drop": "3-5%",
+            "evidence": {
+              "reference": "https://onnxruntime.ai/docs/performance/model-optimizations/quantization.html",
+              "type": "ort_docs",
+              "version": "1.19"
+            }
+          }
+        },
+        "Windows DirectML GPU": {
+          "OnnxConversion": {
+            "support": "supported",
+            "olive_pass": "OnnxConversion",
+            "note": "Olive DirectML stable_diffusion example converts UNet/VAE/text encoder separately for DmlExecutionProvider.",
+            "typical_accuracy_drop": "n/a",
+            "evidence": {
+              "reference": "https://github.com/microsoft/Olive/tree/main/examples/directml/stable_diffusion",
+              "type": "github",
+              "version": "0.12.1"
+            }
+          },
+          "OnnxFloatToFloat16": {
+            "support": "supported",
+            "olive_pass": "OnnxFloatToFloat16",
+            "note": "FP16 is the standard DirectML path for SD UNet on Windows GPUs.",
+            "typical_accuracy_drop": "<1%",
+            "evidence": {
+              "reference": "https://onnxruntime.ai/docs/performance/model-optimizations/float16.html",
+              "type": "ort_docs",
+              "version": "1.19"
+            }
+          },
+          "OnnxStaticQuantization": {
+            "support": "warning",
+            "olive_pass": "OnnxStaticQuantization",
+            "note": "INT8 UNet on DirectML can cause artifacts; validate visually like other SD INT8 paths.",
             "typical_accuracy_drop": "3-5%",
             "evidence": {
               "reference": "https://onnxruntime.ai/docs/performance/model-optimizations/quantization.html",
