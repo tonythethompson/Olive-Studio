@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act, waitFor } from "@testing-library/react";
+import { screen, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
+import { createMockUIState, useFetchRoutesMock, renderWithProviders as render } from "./__tests__/testUtils";
 import type { UIState, BatchJob, McpDiagnostic } from "@/types";
 import { BatchProcessingPanel } from "./BatchProcessingPanel";
 

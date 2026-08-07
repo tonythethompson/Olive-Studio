@@ -2,10 +2,40 @@ import typegpu from 'unplugin-typegpu/vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import compression from 'vite-plugin-compression';
 import { ANY_DOT_VENV_DIR } from './src/server/shared/anyDotVenvDir';
+
+/**
+ * onnxruntime-web's wasm binaries are never loaded from our own origin — every
+ * call site (ArenaPanel, InBrowserValidation, WebGpuBenchmarkPanel) points
+ * `env.wasm.wasmPaths` at the jsdelivr CDN so the browser fetches them from
+ * there instead. Vite still copies the ~50MB of .wasm into dist as an asset
+ * because ort's JS references them; drop them from the bundle so they never
+ * ship — and never get compressed, unlike a post-hoc delete would allow.
+ *
+ * Removes them in `generateBundle`, not `closeBundle`: closeBundle is a
+ * parallel hook, so a file-based delete there could race with
+ * vite-plugin-compression's own closeBundle and either miss files it hasn't
+ * written yet or delete files out from under it mid-write.
+ * `generateBundle` runs before anything is written to disk, so pulling the
+ * assets out of the in-memory bundle here means compression's later hook
+ * never sees them to begin with — no race possible.
+ */
+function stripUnusedOrtWasm(): Plugin {
+  return {
+    name: 'strip-unused-ort-wasm',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      for (const fileName of Object.keys(bundle)) {
+        if (fileName.endsWith('.wasm')) {
+          delete bundle[fileName];
+        }
+      }
+    },
+  };
+}
 
 /**
  * The shared regex from `src/server/shared/anyDotVenvDir.ts` matches both
@@ -38,6 +68,7 @@ export default defineConfig(() => {
         ext: '.gz',
         threshold: 1024,
       }),
+      stripUnusedOrtWasm(),
       // Brotli compression (additional ~15-20% over gzip, enabled separately)
       // Disabled by default — uncomment when deploying to a server that
       // prefers .br files and vite-plugin-compression confirms Vite 8/Rolldown
@@ -91,10 +122,6 @@ export default defineConfig(() => {
             // Radix UI primitives
             if (id.includes('@radix-ui')) {
               return 'vendor-radix';
-            }
-            // Charting — heavy, separate from app code
-            if (id.includes('recharts')) {
-              return 'vendor-charts';
             }
             // Animation engine (handles both POSIX / and Windows \ separators)
             if (id.includes('motion') && (id.includes('node_modules'))) {

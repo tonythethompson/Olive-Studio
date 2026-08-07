@@ -46,12 +46,11 @@ import {
   FileText,
   Bug,
 } from "lucide-react";
-import JSZip from "jszip";
 import { cn } from "@/lib/utils";
 
 import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
 import { buildOwrConfigs } from "@/lib/owrExportConfigs";
-import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
+import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { qnnExplicitRetryProviders } from "@/lib/qnnReadiness";
 import { prepareProviderChange } from "@/lib/pipelineValidation";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
@@ -349,13 +348,7 @@ export function ExecutionWorkspace({
     "ort_config.json" | "web_init.js" | "mobile_init.kt" | "onnx_model_manifest.json"
   >("ort_config.json");
 
-  const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
-
-  useEffect(() => {
-    fetchHardwareProbe()
-      .then(setHardwareProbe)
-      .catch(() => setHardwareProbe(null));
-  }, []);
+  const { data: hardwareProbe = null } = useHardwareProbe();
 
   useEffect(() => {
     if (!moreToolsOpen) return;
@@ -390,7 +383,14 @@ export function ExecutionWorkspace({
 
   const handleDownloadOwrBundle = async () => {
     const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = owrConfigs;
-    const zip = new JSZip();
+    let zip: InstanceType<typeof import("jszip")>;
+    try {
+      const { default: JSZip } = await import("jszip");
+      zip = new JSZip();
+    } catch (e) {
+      console.error("Failed to load ZIP module", e);
+      return;
+    }
 
     zip.file("ort_config.json", JSON.stringify(ortConfig, null, 2));
     zip.file("onnx_model_manifest.json", JSON.stringify(manifestConfig, null, 2));

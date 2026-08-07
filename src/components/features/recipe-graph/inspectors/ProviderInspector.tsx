@@ -1,11 +1,7 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { Label, Select } from "@/components/ui";
-import {
-  fetchHardwareProbe,
-  getProviderAvailabilityBlock,
-  getSelectableProviders,
-  type HardwareProbeResult,
-} from "@/lib/hardwareProbe";
+import { getProviderAvailabilityBlock, getSelectableProviders } from "@/lib/hardwareProbe";
+import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { prepareProviderChange } from "@/lib/pipelineValidation";
 import {
   navigatePipeline,
@@ -25,17 +21,7 @@ import type { InspectorProps } from "./types";
  * @param setState - Applies updates to the interface state.
  */
 export function ProviderInspector({ state, setState }: InspectorProps) {
-  const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
-  const [probeLoading, setProbeLoading] = useState(true);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: on-mount hardware probe
-    setProbeLoading(true);
-    fetchHardwareProbe()
-      .then(setHardwareProbe)
-      .catch(() => setHardwareProbe(null))
-      .finally(() => setProbeLoading(false));
-  }, []);
+  const { data: hardwareProbe = null, isLoading: probeLoading } = useHardwareProbe();
 
   const selectableProviders = useMemo(
     () => PROVIDER_CATALOG.filter((provider) => getSelectableProviders(hardwareProbe).includes(provider.id)),

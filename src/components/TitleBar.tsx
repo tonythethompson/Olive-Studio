@@ -64,7 +64,13 @@ export function TitleBar() {
       data-tauri-drag-region
     >
       <div className="flex items-center gap-2 pl-3 min-w-0" data-tauri-drag-region>
-        <img src="/assets/logo.png" alt="" className="h-4 w-4 rounded object-contain pointer-events-none" />
+        <img
+          src="/assets/logo.png"
+          alt=""
+          width={16}
+          height={16}
+          className="h-4 w-4 rounded object-contain pointer-events-none"
+        />
         <span className="text-[11px] font-semibold text-slate-200 truncate pointer-events-none">
           Olive Studio
         </span>

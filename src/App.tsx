@@ -200,6 +200,8 @@ function Dashboard() {
                 <img
                   src="/assets/logo.png"
                   alt="Olive Studio"
+                  width={32}
+                  height={32}
                   className="h-8 w-8 shrink-0 rounded object-contain"
                 />
                 <div className="min-w-0 hidden wide:block">

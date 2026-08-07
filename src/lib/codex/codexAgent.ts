@@ -51,7 +51,17 @@ function loadCodexSdk(): Promise<CodexSdkModule> {
 async function getCodex(): Promise<CodexClient> {
   if (!codexSingleton) {
     codexModulePromise ??= loadCodexSdk();
-    const { Codex } = await codexModulePromise;
+    let Codex: CodexSdkModule["Codex"];
+    try {
+      ({ Codex } = await codexModulePromise);
+    } catch (err) {
+      // Reset so a later install doesn't require a server restart.
+      codexModulePromise = null;
+      throw new Error(
+        "Codex provider unavailable: @openai/codex-sdk (optionalDependencies) is not installed. Run `pnpm add @openai/codex-sdk` to enable it.",
+        { cause: err },
+      );
+    }
     codexSingleton = new Codex({
       codexPathOverride: process.env.CODEX_PATH || undefined,
     });

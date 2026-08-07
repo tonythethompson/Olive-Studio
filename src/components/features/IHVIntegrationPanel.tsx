@@ -17,12 +17,8 @@ import {
 } from "@/lib/pipelineValidation";
 import { isMemoryOffloadAvailable, hasHuggingFaceModel } from "@/lib/memoryOffload";
 import { isGpuProvider, formatMemoryGb } from "@/lib/vramEstimate";
-import {
-  fetchHardwareProbe,
-  getSelectableProviders,
-  isProviderDetectedLocally,
-  type HardwareProbeResult,
-} from "@/lib/hardwareProbe";
+import { getSelectableProviders, isProviderDetectedLocally } from "@/lib/hardwareProbe";
+import { useHardwareProbe, useRefreshHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { getProviderRuntimeKind } from "@/lib/providerRuntimeKind";
 import {
   isPreMaxwellNvidiaBox,
@@ -86,9 +82,15 @@ export function IHVIntegrationPanel({
   const [selectedCategory, setSelectedCategory] = useState<
     "All" | "Conversion" | "Quantization" | "Compression" | "PEFT"
   >("All");
-  const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
-  const [probeLoading, setProbeLoading] = useState(true);
-  const [probeError, setProbeError] = useState<string | null>(null);
+  const hardwareProbeQuery = useHardwareProbe();
+  const hardwareProbe = hardwareProbeQuery.data ?? null;
+  const refreshHardwareProbe = useRefreshHardwareProbe();
+  const [refreshingProbe, setRefreshingProbe] = useState(false);
+  const [refreshProbeError, setRefreshProbeError] = useState<string | null>(null);
+  const probeLoading = hardwareProbeQuery.isLoading || refreshingProbe;
+  const probeError =
+    refreshProbeError ??
+    (hardwareProbeQuery.error instanceof Error ? hardwareProbeQuery.error.message : null);
   const [installingTrtRtx, setInstallingTrtRtx] = useState(false);
   const [installTrtRtxError, setInstallTrtRtxError] = useState<string | null>(null);
   const [installTrtRtxLog, setInstallTrtRtxLog] = useState<string[]>([]);
@@ -105,31 +107,35 @@ export function IHVIntegrationPanel({
     latestStateRef.current = state;
   }, [state]);
 
+  // Auto-apply recommended provider the first time a probe result lands,
+  // whether from the shared query's own mount fetch or a manual refresh.
+  useEffect(() => {
+    if (hasAutoAppliedRef.current || !hardwareProbe?.recommendedProvider) return;
+    hasAutoAppliedRef.current = true;
+    setState(
+      prepareProviderChange(latestStateRef.current, hardwareProbe.recommendedProvider, hardwareProbe) ?? {
+        ihvProvider: hardwareProbe.recommendedProvider,
+      },
+    );
+  }, [hardwareProbe, setState]);
+
+  // Forces a fresh probe, bypassing the server-side cache. Passed to the
+  // install hooks (onProbeRefresh) and the manual rescan button; the initial
+  // mount-time probe is handled by useHardwareProbe itself.
   const runHardwareProbe = useCallback(
     async (refresh = false) => {
-      setProbeLoading(true);
-      setProbeError(null);
+      if (!refresh) return;
+      setRefreshingProbe(true);
+      setRefreshProbeError(null);
       try {
-        const result = await fetchHardwareProbe(refresh);
-        setHardwareProbe(result);
-
-        // Auto-apply recommended provider on first probe completion
-        if (!hasAutoAppliedRef.current && result.recommendedProvider) {
-          hasAutoAppliedRef.current = true;
-          setState(
-            prepareProviderChange(latestStateRef.current, result.recommendedProvider, result) ?? {
-              ihvProvider: result.recommendedProvider,
-            },
-          );
-        }
+        await refreshHardwareProbe();
       } catch (err) {
-        setProbeError(err instanceof Error ? err.message : "Hardware probe failed.");
-        setHardwareProbe(null);
+        setRefreshProbeError(err instanceof Error ? err.message : "Hardware probe failed.");
       } finally {
-        setProbeLoading(false);
+        setRefreshingProbe(false);
       }
     },
-    [setState],
+    [refreshHardwareProbe],
   );
 
   // Shared mutex across hardware installs (families differ, but pip UX is serialized).
@@ -244,13 +250,6 @@ export function IHVIntegrationPanel({
       setInstallingOrtGpu(false);
     }
   }, [hardwareInstallBusy, runHardwareProbe]);
-
-  useEffect(() => {
-    // Synchronous probe state updates on mount are intentional; runHardwareProbe
-    // is also shared by the rescan button and install handlers.
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount probe seeds hardware state before paint
-    void runHardwareProbe(false);
-  }, [runHardwareProbe]);
 
   const filteredValidations = validations.filter((v) => {
     const matchesSearch =

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, ChangeEvent, useMemo, useTransition } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -40,7 +41,7 @@ import {
   summarizeRecipeHardwareCompatibility,
 } from "@/lib/recipeHardwareCompatibility";
 import { isNvTensorRtRtxCatalogPath } from "@/lib/tensorrtRtxDeps";
-import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
+import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { navigatePipeline } from "@/lib/pipelineNavigation";
 import { estimateVramForCatalogPreset } from "@/lib/presetVramEstimate";
 import { CompatCountSummary, CompatStatusPill } from "@/components/features/CompatStatus";
@@ -118,6 +119,7 @@ export function InputEnvironmentPanel({
   const storeState = usePipelineState();
   const state = propState ?? storeState.state;
   const setState = propSetState ?? storeState.setState;
+  const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chunkFilesRef = useRef<Map<string, File>>(new Map());
   const [isReconstructing, setIsReconstructing] = useState(false);
@@ -129,48 +131,65 @@ export function InputEnvironmentPanel({
   const [downloadName, setDownloadName] = useState<string | null>(null);
 
   // HuggingFace token
-  const [hfTokenStatus, setHfTokenStatus] = useState<
-    "environment" | "runtime" | "none" | "loading"
-  >("loading");
   const [hfTokenInput, setHfTokenInput] = useState("");
-  const [isSubmittingToken, setIsSubmittingToken] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/env/hf-token-status")
-      .then((r) => r.json())
-      .then((d) => {
-        const source = d?.source;
-        if (source === "environment" || source === "runtime" || source === "none") {
-          setHfTokenStatus(source);
-        } else {
-          setHfTokenStatus("none");
-        }
-      })
-      .catch(() => setHfTokenStatus("none"));
-  }, []);
+  const hfTokenStatusQuery = useQuery({
+    queryKey: ["hf-token-status"],
+    queryFn: async (): Promise<"environment" | "runtime" | "none"> => {
+      const r = await fetch("/api/env/hf-token-status");
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      const source = d?.source;
+      return source === "environment" || source === "runtime" ? source : "none";
+    },
+    retry: false,
+  });
+  const hfTokenStatus = hfTokenStatusQuery.isLoading
+    ? "loading"
+    : hfTokenStatusQuery.isError
+      ? "error"
+      : (hfTokenStatusQuery.data ?? "none");
 
-  const handleSubmitToken = async () => {
-    if (!hfTokenInput.trim()) return;
-    setIsSubmittingToken(true);
-    try {
+  const submitTokenMutation = useMutation({
+    mutationFn: async (token: string) => {
       const r = await fetch("/api/env/hf-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: hfTokenInput.trim() }),
+        body: JSON.stringify({ token }),
       });
-      if (r.ok) {
-        setHfTokenStatus("runtime");
-        setHfTokenInput("");
-      }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    },
+    onSuccess: () => {
+      queryClient.setQueryData(["hf-token-status"], "runtime");
+      setHfTokenInput("");
+    },
+  });
+
+  const clearTokenMutation = useMutation({
+    mutationFn: async () => {
+      const r = await fetch("/api/env/hf-token", { method: "DELETE" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    },
+    onSuccess: () => {
+      queryClient.setQueryData(["hf-token-status"], "none");
+    },
+  });
+
+  const handleSubmitToken = async () => {
+    if (!hfTokenInput.trim()) return;
+    try {
+      await submitTokenMutation.mutateAsync(hfTokenInput.trim());
     } catch {
       /* ignore */
     }
-    setIsSubmittingToken(false);
   };
 
   const handleClearToken = async () => {
-    await fetch("/api/env/hf-token", { method: "DELETE" });
-    setHfTokenStatus("none");
+    try {
+      await clearTokenMutation.mutateAsync();
+    } catch {
+      /* ignore — clearTokenMutation.error surfaces via mutation state */
+    }
   };
 
   // States for the Olive Recipe Hub
@@ -207,30 +226,10 @@ export function InputEnvironmentPanel({
   const [localHintsLoading, setLocalHintsLoading] = useState(false);
   const [showLocalRecipeMatchesOnly, setShowLocalRecipeMatchesOnly] = useState(false);
   const [hideIncompatibleRecipes, setHideIncompatibleRecipes] = useState(true);
-  const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
-  const [hardwareProbeLoading, setHardwareProbeLoading] = useState(true);
+  const { data: hardwareProbe = null, isLoading: hardwareProbeLoading } = useHardwareProbe();
   const [recipeSort, setRecipeSort] = useState<RecipeSortMode>("recommended");
 
   const recipeRailCollapsed = Boolean(appliedRecipeLabel) && !recipeRailExpanded;
-
-  useEffect(() => {
-    let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: on-mount hardware probe
-    setHardwareProbeLoading(true);
-    void fetchHardwareProbe(false)
-      .then((result) => {
-        if (!cancelled) setHardwareProbe(result);
-      })
-      .catch(() => {
-        if (!cancelled) setHardwareProbe(null);
-      })
-      .finally(() => {
-        if (!cancelled) setHardwareProbeLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const applyCuratedRecipe = async (item: RecipeCatalogItem, options?: { allowIncompatible?: boolean }) => {
     setApplyingRecipePath(item.repoPath);
@@ -1598,6 +1597,11 @@ export function InputEnvironmentPanel({
                               Not set — required for gated models
                             </span>
                           )}
+                          {hfTokenStatus === "error" && (
+                            <span className="text-[10px] bg-rose-500/10 border border-rose-500/20 text-rose-400 px-2 py-0.5 rounded font-mono">
+                              Couldn't check token status
+                            </span>
+                          )}
                         </div>
 
                         {hfTokenStatus !== "environment" && hfTokenStatus !== "loading" && (
@@ -1617,10 +1621,10 @@ export function InputEnvironmentPanel({
                             <Button
                               type="button"
                               onClick={handleSubmitToken}
-                              disabled={!hfTokenInput.trim() || isSubmittingToken}
+                              disabled={!hfTokenInput.trim() || submitTokenMutation.isPending}
                               className="h-9 px-4 text-xs bg-electric-blue hover:bg-electric-blue/90 text-slate-950 font-bold"
                             >
-                              {isSubmittingToken ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+                              {submitTokenMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
                             </Button>
                             {hfTokenStatus === "runtime" && (
                               <Button

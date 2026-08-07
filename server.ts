@@ -1,4 +1,5 @@
 import express, { Router } from "express";
+import expressStaticGzip from "express-static-gzip";
 import path from "path";
 import fs from "fs";
 import { ANY_DOT_VENV_DIR } from "./src/server/shared/anyDotVenvDir.ts";
@@ -203,11 +204,39 @@ async function startServer() {
       console.error(`Production build not found at ${indexHtml}\nRun: pnpm build\nThen:  pnpm start`);
       process.exit(1);
     }
-    app.use(staticServeRateLimit, express.static(distPath, { index: "index.html" }));
+    app.use(
+      staticServeRateLimit,
+      expressStaticGzip(distPath, {
+        index: "index.html",
+        enableBrotli: false,
+        orderPreference: ["gz"],
+        serveStatic: {
+          setHeaders: (res, filePath) => {
+            if (filePath.endsWith("index.html")) {
+              res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+              return;
+            }
+            // Only Vite's Rollup-emitted JS/CSS carry a content hash in the
+            // filename (name-<8-char-hash>.js) — safe to cache forever.
+            // Matching on extension alone would also catch any stable-URL
+            // .js/.css copied verbatim from public/, so require the actual
+            // hash suffix. Everything else under dist/ (logo.png, fonts,
+            // favicon) has a stable URL and must be revalidated, not served
+            // from a 1-year cache untouched.
+            const isHashedBuildOutput = /-[\w-]{8}\.(js|css)(\.gz)?$/.test(filePath);
+            res.setHeader(
+              "Cache-Control",
+              isHashedBuildOutput ? "public, max-age=31536000, immutable" : "public, max-age=3600",
+            );
+          },
+        },
+      }),
+    );
     // SPA fallback for client routes (Express 5-safe; avoid bare "*")
     app.use(staticServeRateLimit, (req, res, next) => {
       if (req.method !== "GET" && req.method !== "HEAD") return next();
       if (req.path.startsWith("/api")) return next();
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.sendFile(indexHtml);
     });
     // eslint-disable-next-line no-console -- intentional server startup message
