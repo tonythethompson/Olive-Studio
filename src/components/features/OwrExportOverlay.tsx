@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
+import { Button } from "@/components/ui/Button";
+import { Card, CardContent, CardHeader } from "@/components/ui/Card";
+import { Label } from "@/components/ui/Label";
 import {
   X,
   Globe,
@@ -72,9 +74,10 @@ export function OwrExportOverlay({
   }
 
   const handleCopyActiveCode = () => {
-    void navigator.clipboard.writeText(fileContent);
-    setIsOwrCopied(true);
-    setTimeout(() => setIsOwrCopied(false), 2000);
+    void navigator.clipboard.writeText(fileContent).then(() => {
+      setIsOwrCopied(true);
+      setTimeout(() => setIsOwrCopied(false), 2000);
+    });
   };
 
   return (
@@ -88,6 +91,7 @@ export function OwrExportOverlay({
               type="button"
               variant="ghost"
               className="h-8 w-8 p-0 hover:bg-slate-800"
+              aria-label="Close OWR export overlay"
               onClick={onClose}
             >
               <X className="h-4 w-4" />
@@ -254,6 +258,8 @@ export function OwrExportOverlay({
 
               <textarea
                 readOnly
+                id="owr-export-active-file"
+                aria-label={`Contents of ${fileTitle}`}
                 className="w-full flex-1 bg-transparent p-4 font-mono text-xs text-electric-blue focus-visible:outline-none resize-none overflow-y-auto cursor-text whitespace-pre bg-transparent select-text"
                 value={fileContent}
                 onClick={(e) => (e.target as HTMLTextAreaElement).select()}

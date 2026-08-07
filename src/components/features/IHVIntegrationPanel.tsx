@@ -471,7 +471,9 @@ export function IHVIntegrationPanel({
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // Synchronous probe state updates on mount are intentional; runHardwareProbe
+    // is also shared by the rescan button and install handlers.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount probe seeds hardware state before paint
     void runHardwareProbe(false);
   }, [runHardwareProbe]);
 

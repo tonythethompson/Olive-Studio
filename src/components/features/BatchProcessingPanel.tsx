@@ -475,7 +475,16 @@ function BatchJobCard({
 }) {
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={`Select batch job ${job.name}`}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
       className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border cursor-pointer transition-all ${
         isSelected
           ? "border-electric-blue bg-electric-blue/5"
@@ -580,6 +589,7 @@ function BatchJobCard({
         <div className="flex items-center gap-1">
           <button
             type="button"
+            aria-label={`Delete batch job ${job.name}`}
             onClick={(e) => {
               e.stopPropagation();
               onDelete();

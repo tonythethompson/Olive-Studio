@@ -79,7 +79,7 @@ def _load_kb_text() -> list[tuple[str, str]]:
                 data = json.load(f)
             for path, text in _flatten(data, prefix=file.stem):
                 all_text.append((path, text))
-        except (OSError, json.JSONDecodeError) as exc:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             logger.debug("Failed to load KB file %s: %s", file.name, exc)
             continue
     return all_text

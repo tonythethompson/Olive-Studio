@@ -199,7 +199,7 @@ async function probePythonRuntime(
 
 // ─── Probe diagnostics ────────────────────────────────────────────────────
 
-interface ProbeDiagnosticInput {
+export interface ProbeDiagnosticInput {
   defaultOrtProviders?: string[];
   cudaOrtProviders?: string[];
   openvinoOrtProviders?: string[];
@@ -218,24 +218,21 @@ interface ProbeDiagnosticInput {
   qnnVenvLoadable: boolean;
   qnn?: QnnProbeResult;
   platformArch: string;
+  platformOs: NodeJS.Platform;
 }
 
-interface ProbeDiagnosticOutput {
+export interface ProbeDiagnosticOutput {
   notes: string[];
   onnxRuntimeProviders?: string[];
   nvidiaTensorRtFamilyCapable: boolean;
   qnnHostMode: ReturnType<typeof resolveQnnHostMode>;
 }
 
-function buildProbeDiagnostics(input: ProbeDiagnosticInput): ProbeDiagnosticOutput {
+function buildOrtProviderNotes(
+  input: ProbeDiagnosticInput,
+  onnxRuntimeProviders: string[] | undefined,
+): string[] {
   const notes: string[] = [];
-  const onnxRuntimeProviders = mergeOrtProvidersForDisplay(
-    input.defaultOrtProviders,
-    input.cudaOrtProviders,
-    input.openvinoOrtProviders,
-    input.qnnOrtProviders,
-    input.systemOrtProviders,
-  );
   if (input.defaultOrtProviders?.length) {
     notes.push("ONNX Runtime providers probed via default runtime.");
   } else if (input.cudaOrtProviders?.length) {
@@ -248,6 +245,26 @@ function buildProbeDiagnostics(input: ProbeDiagnosticInput): ProbeDiagnosticOutp
     notes.push("ONNX Runtime providers probed via system Python.");
   }
 
+  // List merged providers for display only. Do not infer CUDA readiness from
+  // this combined list — default/DirectML/OpenVINO entries would falsely trip
+  // a CUDA-missing warning. CUDA install/loadability notes already gate on
+  // `cudaVenvLoadable` / the cuda-family probe.
+  if (onnxRuntimeProviders?.length) {
+    notes.push(`ORT execution providers: ${onnxRuntimeProviders.join(", ")}`);
+  } else if (input.nvidia) {
+    notes.push("ONNX Runtime not installed in Python — NVIDIA GPU inferred from nvidia-smi.");
+  }
+
+  if (!input.nvidia) notes.push("No NVIDIA GPU detected (nvidia-smi unavailable or returned no devices).");
+  if (!input.rocm) notes.push("No AMD ROCm GPU detected.");
+  return notes;
+}
+
+function buildTensorRtNotes(input: ProbeDiagnosticInput): {
+  notes: string[];
+  nvidiaTensorRtFamilyCapable: boolean;
+} {
+  const notes: string[] = [];
   if (input.tensorRtRtxVenvLoadable) {
     notes.push(`TensorRT RTX runtime verified${input.tensorRtRtx?.version ? ` (${input.tensorRtRtx.version})` : ""}.`);
   } else if (input.nvidia?.gpus.length) {
@@ -268,6 +285,23 @@ function buildProbeDiagnostics(input: ProbeDiagnosticInput): ProbeDiagnosticOutp
     );
   }
 
+  // Gate TensorRT-family EPs on the SM ≥ 7.5 (Turing) floor.
+  const nvidiaTensorRtFamilyCapable = input.nvidia
+    ? input.nvidia.gpus.some((g) => isNvidiaGpuTensorRtFamily(g))
+    : false;
+  // Only warn when there are *actual* GPUs below the floor — `[].some(...)`
+  // returning false for an empty GPU list would otherwise print a misleading
+  // "all NVIDIA GPUs below TensorRT floor" note on machines with zero GPUs.
+  if (nvidiaTensorRtFamilyCapable === false && (input.nvidia?.gpus.length ?? 0) > 0) {
+    notes.push(
+      `NVIDIA GPU(s) below TensorRT 10.x floor (compute capability < ${TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.major}.${TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.minor}); TensorRT / TensorRT-RTX EPs hidden.`,
+    );
+  }
+  return { notes, nvidiaTensorRtFamilyCapable };
+}
+
+function buildCudaNotes(input: ProbeDiagnosticInput): string[] {
+  const notes: string[] = [];
   if (input.cudaVenvLoadable) {
     notes.push("CUDA execution provider load verified.");
   } else if (input.nvidia?.gpus.length) {
@@ -281,18 +315,23 @@ function buildProbeDiagnostics(input: ProbeDiagnosticInput): ProbeDiagnosticOutp
     );
   }
 
-  // List merged providers for display only. Do not infer CUDA readiness from
-  // this combined list — default/DirectML/OpenVINO entries would falsely trip
-  // a CUDA-missing warning. CUDA install/loadability notes above already gate
-  // on `cudaVenvLoadable` / the cuda-family probe.
-  if (onnxRuntimeProviders?.length) {
-    notes.push(`ORT execution providers: ${onnxRuntimeProviders.join(", ")}`);
-  } else if (input.nvidia) {
-    notes.push("ONNX Runtime not installed in Python — NVIDIA GPU inferred from nvidia-smi.");
+  // Surface pre-Maxwell NVIDIA boxes (every detected GPU below the CUDA 12
+  // toolkit floor) so the IHV panel / recipe compat layer can suppress the
+  // install hints (no install can recover Kepler SM 3.x).
+  if (input.nvidia?.gpus.length && isPreMaxwellNvidiaBox(input.nvidia.gpus)) {
+    notes.push(
+      `NVIDIA GPU(s) below CUDA 12 toolkit floor (compute capability < ${CUDA_SM_FLOOR}); modern CUDA cannot run on Maxwell/Pascal/Kepler cards.`,
+    );
+  } else if (input.nvidia?.cudaToolkit?.available === false) {
+    notes.push(
+      "CUDA driver detected but the CUDA Toolkit (nvcc) is not installed. Inference via onnxruntime-gpu does not need it; get it from NVIDIA's CUDA Toolkit Archive for native builds.",
+    );
   }
+  return notes;
+}
 
-  if (!input.nvidia) notes.push("No NVIDIA GPU detected (nvidia-smi unavailable or returned no devices).");
-  if (!input.rocm) notes.push("No AMD ROCm GPU detected.");
+function buildOpenVinoNotes(input: ProbeDiagnosticInput): string[] {
+  const notes: string[] = [];
   if (input.openvinoVenvAvailable) {
     const deviceMsg = input.openvino?.devices?.length ? ` [${input.openvino.devices.join(", ")}]` : "";
     notes.push(
@@ -307,7 +346,14 @@ function buildProbeDiagnostics(input: ProbeDiagnosticInput): ProbeDiagnosticOutp
   } else {
     notes.push("OpenVINO Python stack not found locally (needs openvino + optimum-intel).");
   }
-  const qnnHostMode = resolveQnnHostMode({ platform: process.platform, arch: input.platformArch });
+  return notes;
+}
+
+function buildQnnNotes(
+  input: ProbeDiagnosticInput,
+  qnnHostMode: ReturnType<typeof resolveQnnHostMode>,
+): string[] {
+  const notes: string[] = [];
   if (input.qnnVenvLoadable) {
     if (input.qnn?.verifiedInference && isQnnSnapdragonReleaseGatePassed()) {
       notes.push(
@@ -340,32 +386,49 @@ function buildProbeDiagnostics(input: ProbeDiagnosticInput): ProbeDiagnosticOutp
       "QNN plugin install/UX is Windows-first in this release (Win ARM64 inference / Win x64 preparation).",
     );
   }
+  return notes;
+}
 
-  // Surface pre-Maxwell NVIDIA boxes (every detected GPU below the CUDA 12
-  // toolkit floor) so the IHV panel / recipe compat layer can suppress the
-  // install hints (no install can recover Kepler SM 3.x).
-  if (input.nvidia?.gpus.length && isPreMaxwellNvidiaBox(input.nvidia.gpus)) {
-    notes.push(
-      `NVIDIA GPU(s) below CUDA 12 toolkit floor (compute capability < ${CUDA_SM_FLOOR}); modern CUDA cannot run on Maxwell/Pascal/Kepler cards.`,
-    );
-  } else if (input.nvidia?.cudaToolkit?.available === false) {
-    notes.push(
-      "CUDA driver detected but the CUDA Toolkit (nvcc) is not installed. Inference via onnxruntime-gpu does not need it; get it from NVIDIA's CUDA Toolkit Archive for native builds.",
-    );
-  }
+/**
+ * Pure probe-note assembler. Domain helpers keep ordering identical to the
+ * historical monolithic body: ORT source → TRT load → CUDA load → ORT list /
+ * GPU absence → OpenVINO → QNN → CUDA floor → TRT floor.
+ */
+export function buildProbeDiagnostics(input: ProbeDiagnosticInput): ProbeDiagnosticOutput {
+  const onnxRuntimeProviders = mergeOrtProvidersForDisplay(
+    input.defaultOrtProviders,
+    input.cudaOrtProviders,
+    input.openvinoOrtProviders,
+    input.qnnOrtProviders,
+    input.systemOrtProviders,
+  );
+  const qnnHostMode = resolveQnnHostMode({ platform: input.platformOs, arch: input.platformArch });
 
-  // Gate TensorRT-family EPs on the SM ≥ 7.5 (Turing) floor.
-  const nvidiaTensorRtFamilyCapable = input.nvidia
-    ? input.nvidia.gpus.some((g) => isNvidiaGpuTensorRtFamily(g))
-    : false;
-  // Only warn when there are *actual* GPUs below the floor — `[].some(...)`
-  // returning false for an empty GPU list would otherwise print a misleading
-  // "all NVIDIA GPUs below TensorRT floor" note on machines with zero GPUs.
-  if (nvidiaTensorRtFamilyCapable === false && (input.nvidia?.gpus.length ?? 0) > 0) {
-    notes.push(
-      `NVIDIA GPU(s) below TensorRT 10.x floor (compute capability < ${TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.major}.${TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.minor}); TensorRT / TensorRT-RTX EPs hidden.`,
-    );
-  }
+  const ortNotes = buildOrtProviderNotes(input, onnxRuntimeProviders);
+  const { notes: tensorRtNotes, nvidiaTensorRtFamilyCapable } = buildTensorRtNotes(input);
+  const cudaNotes = buildCudaNotes(input);
+
+  const ortSourceNotes = ortNotes.filter((n) => n.startsWith("ONNX Runtime providers probed"));
+  const ortSummaryNotes = ortNotes.filter((n) => !n.startsWith("ONNX Runtime providers probed"));
+  const tensorRtLoadNotes = tensorRtNotes.filter((n) => !n.includes("below TensorRT 10.x floor"));
+  const tensorRtFloorNotes = tensorRtNotes.filter((n) => n.includes("below TensorRT 10.x floor"));
+  const cudaLoadNotes = cudaNotes.filter(
+    (n) => !n.includes("below CUDA 12 toolkit floor") && !n.includes("CUDA Toolkit (nvcc)"),
+  );
+  const cudaFloorNotes = cudaNotes.filter(
+    (n) => n.includes("below CUDA 12 toolkit floor") || n.includes("CUDA Toolkit (nvcc)"),
+  );
+
+  const notes = [
+    ...ortSourceNotes,
+    ...tensorRtLoadNotes,
+    ...cudaLoadNotes,
+    ...ortSummaryNotes,
+    ...buildOpenVinoNotes(input),
+    ...buildQnnNotes(input, qnnHostMode),
+    ...cudaFloorNotes,
+    ...tensorRtFloorNotes,
+  ];
 
   return { notes, onnxRuntimeProviders, nvidiaTensorRtFamilyCapable, qnnHostMode };
 }
@@ -578,6 +641,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     qnnVenvLoadable,
     qnn,
     platformArch: platform.arch,
+    platformOs: process.platform,
   });
   notes.push(...diag.notes);
   const { onnxRuntimeProviders, nvidiaTensorRtFamilyCapable, qnnHostMode } = diag;

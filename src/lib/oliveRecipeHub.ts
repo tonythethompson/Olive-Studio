@@ -60,6 +60,14 @@ export interface DeriveUiStateOptions {
   basePasses?: UIState["passes"];
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
 export function parseGitHubRecipeTarget(
   repoInput: string,
   branchInput: string,
@@ -502,18 +510,24 @@ function mapPassesFromRecipe(recipePasses: Record<string, unknown>): UIState["pa
  * @returns The UI state values derived from the recipe.
  */
 export function deriveUiStateFromOliveRecipe(parsed: unknown, options?: DeriveUiStateOptions): Partial<UIState> {
-  const recipe = parsed as Record<string, unknown> | undefined;
+  const recipe = isRecord(parsed) ? parsed : undefined;
   const incomingState: Partial<UIState> = {};
-  const inputModel = recipe?.input_model as Record<string, unknown> | undefined;
-  const icfg = (inputModel?.config ?? {}) as Record<string, unknown>;
-  const hfConfig = icfg.hf_config as Record<string, unknown> | undefined;
+  const inputModel = isRecord(recipe?.input_model) ? recipe.input_model : undefined;
+  const icfg = isRecord(inputModel?.config) ? inputModel.config : {};
+  const hfConfig = isRecord(icfg.hf_config) ? icfg.hf_config : undefined;
   const hfModelPath =
     typeof inputModel?.model_path === "string"
       ? inputModel.model_path
       : typeof icfg.model_path === "string"
         ? icfg.model_path
         : null;
-  const hfName = (hfConfig?.model_name ?? hfModelPath) as string | undefined | null;
+  const rawModelName = hfConfig?.model_name;
+  const hfName =
+    typeof rawModelName === "string"
+      ? rawModelName
+      : typeof hfModelPath === "string"
+        ? hfModelPath
+        : null;
 
   if (hfName) {
     incomingState.modelSource = "huggingface";
@@ -531,9 +545,9 @@ export function deriveUiStateFromOliveRecipe(parsed: unknown, options?: DeriveUi
   }
 
   const localFiles = icfg.local_files;
-  if (Array.isArray(localFiles) && localFiles.length > 0) {
+  if (isStringArray(localFiles) && localFiles.length > 0) {
     incomingState.modelSource = "local";
-    incomingState.localFiles = localFiles.map((name: string) => ({ name, size: 2_000_000_000 }));
+    incomingState.localFiles = localFiles.map((name) => ({ name, size: 2_000_000_000 }));
   } else if (icfg.model_path && !hfConfig && !hfModelPath?.includes("/")) {
     incomingState.modelSource = "local";
   }
@@ -558,8 +572,8 @@ export function deriveUiStateFromOliveRecipe(parsed: unknown, options?: DeriveUi
     incomingState.memoryOffload = offloadMode;
   }
 
-  if (recipe?.passes && typeof recipe.passes === "object") {
-    const mapped = mapPassesFromRecipe(recipe.passes as Record<string, unknown>);
+  if (recipe?.passes && isRecord(recipe.passes)) {
+    const mapped = mapPassesFromRecipe(recipe.passes);
     if (options?.replacePasses) {
       incomingState.passes = mapped;
       // Clear MCP / prior-run pass overrides so curated/import loads do not

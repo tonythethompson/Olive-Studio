@@ -13,7 +13,8 @@ import {
   type MouseEvent as ReactMouseEvent,
   type SetStateAction,
 } from "react";
-import { Card, CardContent, CardHeader, Button } from "@/components/ui";
+import { Button } from "@/components/ui/Button";
+import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { UIState, type McpTroubleshootFeedbackRating } from "@/types";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";

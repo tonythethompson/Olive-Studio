@@ -138,16 +138,16 @@ Passes 1–6 were verified green on CI (run #30966708317 on PR #115).
 
 ## GitHub Issue Audit (2026-08-07)
 
-Full cross-reference of 52 open GitHub issues against the current codebase. **23 issues closed, 31 remain open.** (31 verified via `gh issue list --state open`.)
+Full cross-reference of previously open GitHub issues against the current codebase. **21 issues closed, 31 remain open.** (31 verified via `gh issue list --state open`.)
 
 ### Summary
 
 | Action | Count | Issues |
 |--------|-------|--------|
 | Closed — code fixed | 10 | #137, #142, #143, #144, #145, #146, #147, #148, #149, #151 |
-| Closed — verified complete | 8 | #124, #134, #136, #138, #153, #154, #155 |
+| Closed — verified complete | 7 | #124, #134, #136, #138, #153, #154, #155 |
 | Closed — partial resolution (refactoring) | 4 | #120, #121, #122, #140 |
-| **Total closed** | **23** | *(includes 1 previously closed duplicate, #145)* |
+| **Total closed** | **21** | |
 | Remaining open | **31** | See below |
 
 ### Closed: Code Fixed (2026-08-07)
@@ -203,15 +203,6 @@ All ESLint warnings in `src/` and `server.ts` resolved. `eslint --max-warnings 2
 
 ### Remaining Open (31 issues)
 
-#### Large component complexity (4) — partially addressed
-
-| GH # | Issue | Current status |
-|------|-------|----------------|
-| **#120** | Complex Method in ExecutionWorkspace.tsx | ✅ Closed. OWR overlay extracted (233 lines). Remaining candidates: SSE streaming → `useOliveStream` hook, export overlay → `<RecipeExportOverlay>`. |
-| **#121** | Complex Method in IHVIntegrationPanel.tsx | ✅ Closed. Assessed; extraction candidates for `HardwareCompatibilityMatrix` and `PassValidationCards` identified. |
-| **#122** | Complex Method in BatchProcessingPanel.tsx | ✅ Closed. `BatchJobList` + `BatchJobCard` extracted as module-level helpers. |
-| **#140** | Very Complex Method in system.ts (probeSystemHardware) | ✅ Closed. `buildProbeDiagnostics` extracted (160 lines, 37% reduction). |
-
 #### Duplication issues (3) — likely stale
 
 | GH # | Issue | Notes |
@@ -246,7 +237,7 @@ All ESLint warnings in `src/` and `server.ts` resolved. `eslint --max-warnings 2
 |------|------|---------|
 | #48 | Security | 2 Security issues in docs_search.py |
 
-#### Feature / bug / epic issues (13)
+#### Feature / bug / epic issues (15)
 
 | GH # | Type | Summary |
 |------|------|---------|
