@@ -194,9 +194,9 @@ export function ExecutionWorkspace({
   const [diagnosisHistory, setDiagnosisHistory] = useState<DiagnosisEntry[]>([]);
   const [activeHistoryIndex, setActiveHistoryIndex] = useState(-1);
 
-  // Browse older history entries on the card (matched_entry + thumbs); index 0 / none = live MCP result.
+  // Browse diagnosis history entries on the card; -1 means "live" (current MCP result).
   const viewingHistoricalDiagnosis =
-    activeHistoryIndex > 0 && activeHistoryIndex < diagnosisHistory.length;
+    activeHistoryIndex >= 0 && activeHistoryIndex < diagnosisHistory.length;
   const displayedDiagnostic = viewingHistoricalDiagnosis
     ? diagnosisHistory[activeHistoryIndex]!.diagnostic
     : mcpDiagnostic;
