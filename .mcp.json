@@ -10,7 +10,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/oraios/serena",
+        "serena-agent==1.6.1",
         "serena",
         "start-mcp-server",
         "--project-from-cwd"
