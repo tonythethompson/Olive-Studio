@@ -34,7 +34,12 @@ export interface FromOliveOutputsProps {
   onFile: (file: File) => void;
 }
 
-/** Local-mode convenience: list + download Olive cache/output models by opaque id. */
+/**
+ * Renders a local-mode panel for selecting Olive-generated model files.
+ *
+ * @param slotLabel - Label used to associate the panel with its model slot
+ * @param onFile - Callback invoked with the selected model file
+ */
 export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);

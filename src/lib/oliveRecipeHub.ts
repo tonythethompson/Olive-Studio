@@ -60,14 +60,33 @@ export interface DeriveUiStateOptions {
   basePasses?: UIState["passes"];
 }
 
+/**
+ * Determines whether a value is a non-null object with string keys.
+ *
+ * @returns `true` if the value is a record, `false` otherwise.
+ */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Determines whether a value is an array containing only strings.
+ *
+ * @param value - The value to check
+ * @returns `true` if the value is an array of strings, `false` otherwise.
+ */
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === "string");
 }
 
+/**
+ * Parses a GitHub repository or file URL into its repository, branch, and file path components.
+ *
+ * @param repoInput - A GitHub repository URL, raw file URL, or `owner/repo` value
+ * @param branchInput - The branch to use when it is not specified in `repoInput`
+ * @param pathInput - The file path to use when it is not specified in `repoInput`
+ * @returns The parsed repository owner, repository name, branch, and file path
+ */
 export function parseGitHubRecipeTarget(
   repoInput: string,
   branchInput: string,
@@ -151,6 +170,14 @@ export async function fetchGitHubRecipeJson(
   return { json: payload, target };
 }
 
+/**
+ * Fetches a recipe catalog item from the configured Olive recipes repository.
+ *
+ * @param item - The catalog item whose repository path identifies the recipe
+ * @param repo - The GitHub repository containing the recipe
+ * @param branch - The repository branch containing the recipe
+ * @returns The parsed recipe catalog item payload
+ */
 export async function fetchOliveRecipesCatalogItem(
   item: RecipeCatalogItem,
   repo = OLIVE_RECIPES_REPO,
@@ -160,6 +187,11 @@ export async function fetchOliveRecipesCatalogItem(
   return json;
 }
 
+/**
+ * Determines the execution provider declared by a recipe's accelerator configuration.
+ *
+ * @returns The first recognized execution provider, or `undefined` when the recipe has no recognized provider.
+ */
 function mapExecutionProviderFromRecipe(parsed: unknown): IHVProvider | undefined {
   const recipe = parsed as Record<string, unknown> | undefined;
   const systems = recipe?.systems as Record<string, unknown> | undefined;
@@ -219,7 +251,11 @@ function mapOpenVinoTargetFromRecipe(parsed: unknown): OpenVinoTargetDevice | un
   return undefined;
 }
 
-/** Catalog device label from recipe JSON (more accurate than folder tags). */
+/**
+ * Determines the catalog device label specified by a recipe's execution providers.
+ *
+ * @returns The matching catalog device label, or `undefined` when no supported provider is found.
+ */
 export function getCatalogDeviceFromRecipe(parsed: unknown): string | undefined {
   const recipe = parsed as Record<string, unknown> | undefined;
   const systems = recipe?.systems as Record<string, unknown> | undefined;
@@ -302,6 +338,13 @@ export function mapProviderToCatalogDevice(provider: IHVProvider): string {
   }
 }
 
+/**
+ * Compares a catalog item's device label with the device inferred from a recipe.
+ *
+ * @param item - The catalog item whose device label is compared.
+ * @param parsed - The parsed recipe to inspect.
+ * @returns The catalog device, inferred recipe device when available, and whether they match.
+ */
 export function compareCatalogMetadataToRecipe(
   item: RecipeCatalogItem,
   parsed: unknown,
@@ -315,6 +358,13 @@ export function compareCatalogMetadataToRecipe(
   };
 }
 
+/**
+ * Determines the quantization method from a pass type and configuration.
+ *
+ * @param config - Quantization configuration containing algorithm or mode settings
+ * @param passType - Quantization pass type
+ * @returns The inferred quantization method
+ */
 function mapQuantMethod(config: unknown, passType = ""): UIState["passes"]["quantMethod"] {
   const cfg = config as Record<string, unknown>;
   const typeLower = passType.toLowerCase();
@@ -338,6 +388,13 @@ function mapQuantMethod(config: unknown, passType = ""): UIState["passes"]["quan
   return "ptq";
 }
 
+/**
+ * Determines the quantization precision represented by a pass configuration.
+ *
+ * @param config - The pass configuration containing precision-related settings
+ * @param passType - The pass type used to identify weight compression formats
+ * @returns The inferred quantization precision
+ */
 function mapQuantPrecision(config: unknown, passType = ""): UIState["passes"]["quantPrecision"] {
   const cfg = config as Record<string, unknown>;
   const typeLower = passType.toLowerCase();
@@ -358,12 +415,24 @@ function mapQuantPrecision(config: unknown, passType = ""): UIState["passes"]["q
   return "int8";
 }
 
+/**
+ * Determines the pruning criterion configured for a recipe.
+ *
+ * @param config - Configuration containing the pruning criterion
+ * @returns The normalized pruning criterion, or `undefined` when none is configured
+ */
 function mapPruningCriteria(config: unknown): "l1_norm" | "l2_norm" | undefined {
   const cfg = config as Record<string, unknown>;
   if (!cfg.pruning_criteria) return undefined;
   return String(cfg.pruning_criteria).toLowerCase().includes("l2") ? "l2_norm" : "l1_norm";
 }
 
+/**
+ * Maps Olive recipe passes to the corresponding inactive UI pass state.
+ *
+ * @param recipePasses - Recipe pass definitions keyed by pass name
+ * @returns UI pass state derived from the recognized recipe passes
+ */
 function mapPassesFromRecipe(recipePasses: Record<string, unknown>): UIState["passes"] {
   const next = createInactivePasses();
 

@@ -28,6 +28,17 @@ export interface UseOliveStreamReturn {
   handleCancelJob: () => Promise<void>;
 }
 
+/**
+ * Manages Olive job execution, cancellation, event-stream updates, and completion history.
+ *
+ * @param state - Current Olive configuration used to build and record job recipes.
+ * @param hardwareProbe - Hardware information used during recipe construction and validation.
+ * @param setState - Updates the shared Olive configuration with the active job ID.
+ * @param onRunStateChange - Called when job execution starts or stops.
+ * @param isUnmountedRef - Indicates whether the owning component has unmounted.
+ * @param setMcpFixApplied - Clears applied MCP fixes when execution fails.
+ * @returns Current job state, execution logs, GPU metrics, and job execution controls.
+ */
 export function useOliveStream({
   state,
   hardwareProbe,

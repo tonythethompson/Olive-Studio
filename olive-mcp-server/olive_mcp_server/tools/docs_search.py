@@ -70,6 +70,12 @@ def _flatten(obj: Any, prefix: str = "") -> list[tuple[str, str]]:
 
 
 def _load_kb_text() -> list[tuple[str, str]]:
+    """
+    Load and flatten searchable JSON knowledge-base files.
+    
+    Returns:
+    	list[tuple[str, str]]: Key-path and text pairs extracted from successfully loaded files.
+    """
     all_text: list[tuple[str, str]] = []
     for file in KB_DIR.glob("*.json"):
         if file.name in _EXCLUDED_KB_FILES:

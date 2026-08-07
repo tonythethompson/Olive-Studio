@@ -37,6 +37,12 @@ export interface OwrExportOverlayProps {
   onDownloadBundle: () => void;
 }
 
+/**
+ * Displays an overlay for configuring and exporting ONNX Runtime Web or Mobile artifacts.
+ *
+ * @param props - Export configuration, selection state, and callbacks for updating the overlay and its contents.
+ * @returns The export overlay when open, otherwise `null`.
+ */
 export function OwrExportOverlay({
   open,
   onClose,
