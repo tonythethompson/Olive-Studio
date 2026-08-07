@@ -545,8 +545,10 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     ),
   });
 
+  // Execute Live uses the default Olive runtime for platform-local EPs. Do not
+  // let providers from system/CUDA/OpenVINO/QNN runtimes authorize that path.
   const detectedProviders = mergeDetectedProviders({
-    onnxRuntimeProviders,
+    onnxRuntimeProviders: defaultOrtProviders,
     hasNvidiaGpu: Boolean(nvidia?.gpus.length),
     hasRocmGpu: Boolean(rocm?.gpus.length),
     hasOpenVino: Boolean(openvino?.available),
