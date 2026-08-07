@@ -27,6 +27,26 @@ describe("parseBody", () => {
     expect(result).toEqual({ parsed: { recipe: { passes: {} } } });
   });
 
+  it("rejects malformed JSON strings for json fields", () => {
+    const result = parseBody<{ recipe: unknown }>({ recipe: "{ not json " }, {
+      recipe: { type: "json", message: "Missing recipe" },
+    });
+
+    expect(result).toEqual({ error: "recipe must be valid JSON" });
+  });
+
+  it("accepts a plain object for json fields without re-stringifying", () => {
+    const recipe = { passes: {} };
+    const result = parseBody<{ recipe: unknown }>({ recipe }, {
+      recipe: { type: "json" },
+    });
+
+    expect(result).toEqual({ parsed: { recipe } });
+    if (!isParseBodyError(result)) {
+      expect(result.parsed.recipe).toBe(recipe);
+    }
+  });
+
   it("omits optional json fields when the value is an empty string", () => {
     const result = parseBody<{ note?: unknown }>({ note: "" }, {
       note: { type: "json", required: false },
