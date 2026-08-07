@@ -185,7 +185,7 @@ export function mountProviderRoutes(router: Router): void {
     return res.json({ models: [], source: "fallback" });
   });
 
-  router.post("/ai/models", async (req, res) => {
+  router.post("/ai/models", authActionRateLimit, async (req, res) => {
     const body = parseBody<{
       provider: ProviderConfig["provider"];
       apiKey?: string;
