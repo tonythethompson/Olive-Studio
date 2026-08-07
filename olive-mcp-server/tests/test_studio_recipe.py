@@ -183,6 +183,50 @@ def test_resolve_studio_base_rejects_out_of_range_port(monkeypatch: pytest.Monke
 
 
 @pytest.mark.parametrize(
+    "bad_url",
+    [
+        "http://127.0.0.1:3000/foo",
+        "http://127.0.0.1:3000/api",
+        "http://localhost:3000/?x=1",
+        "http://127.0.0.1:3000/#frag",
+        "http://127.0.0.1:3000/path?q=1#f",
+    ],
+)
+def test_resolve_studio_base_rejects_path_query_fragment(
+    monkeypatch: pytest.MonkeyPatch, bad_url: str
+):
+    """Objective: OLIVE_STUDIO_API_URL must be a bare base URL."""
+    monkeypatch.setenv(ENV_API_URL, bad_url)
+    base, err = studio_loopback.resolve_studio_base()
+    assert base is None
+    assert err is not None
+    assert err["error"] == "studio_unavailable"
+    assert "base url" in err["message"].lower()
+
+
+@pytest.mark.parametrize(
+    "ok_url",
+    [
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3000/",
+        "http://localhost:3000",
+        "https://127.0.0.1:3443",
+    ],
+)
+def test_resolve_studio_base_accepts_bare_base_url(
+    monkeypatch: pytest.MonkeyPatch, ok_url: str
+):
+    monkeypatch.setenv(ENV_API_URL, ok_url)
+    base, err = studio_loopback.resolve_studio_base()
+    assert err is None
+    assert base is not None
+    assert base.endswith(("3000", "3443"))
+    assert "/foo" not in base
+    assert "?" not in base
+    assert "#" not in base
+
+
+@pytest.mark.parametrize(
     "base",
     [
         "http://127.0.0.1:3000",
@@ -432,22 +476,18 @@ def test_http_error_with_error_payload_is_forwarded(monkeypatch: pytest.MonkeyPa
     assert "passes" in result["message"]
 
 
-def test_http_error_with_success_shaped_body_is_projected(
+def test_http_error_with_success_shaped_body_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    """Objective: HTTPError carrying a full success payload is still projected."""
-    # Arrange — some gateways raise HTTPError even when body is a valid result
+    """Objective: HTTPError with a success-shaped body is not treated as success."""
     _set_loopback_url(monkeypatch)
-    err = _http_error(200, json.dumps(_SUCCESS_PAYLOAD).encode("utf-8"), msg="OK")
+    err = _http_error(500, json.dumps(_SUCCESS_PAYLOAD).encode("utf-8"), msg="Error")
     _patch_opener(monkeypatch, side_effect=err)
 
-    # Act
     result = validate_ui_state_recipe(_SAMPLE_UI_STATE)
 
-    # Assert
-    assert "error" not in result
-    assert result["is_runnable"] is True
-    assert result["effective_state"] == _SUCCESS_PAYLOAD["effectiveState"]
+    assert result["error"] == "studio_unavailable"
+    assert "status=500" in result["detail"]
 
 
 def test_http_status_ge_400_on_success_path(monkeypatch: pytest.MonkeyPatch):

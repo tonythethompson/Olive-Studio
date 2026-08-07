@@ -95,11 +95,23 @@ def resolve_studio_base() -> tuple[str | None, dict[str, Any] | None]:
             "(127.0.0.1, localhost, or ::1).",
             detail=f"host={parsed.hostname!r}",
         )
+    try:
+        # Eagerly validate port; urlparse stores invalid ports and raises
+        # ValueError only when .port is accessed (out-of-range / malformed).
+        _ = parsed.port
+    except ValueError as exc:
+        return None, studio_unavailable(
+            f"{ENV_API_URL} has an invalid or out-of-range port.",
+            detail=str(exc),
+        )
+    # Base URL only: reject path/query/fragment so `{base}{path}` stays correct.
     if parsed.path not in ("", "/") or parsed.params or parsed.query or parsed.fragment:
         return None, studio_unavailable(
-            f"{ENV_API_URL} must be a loopback base URL without a path, query, or fragment.",
+            f"{ENV_API_URL} must be a loopback base URL without path, query, or fragment "
+            "(e.g. http://127.0.0.1:3000).",
             detail=(
-                f"path={parsed.path!r} params={parsed.params!r} query={parsed.query!r} fragment={parsed.fragment!r}"  # noqa: E501
+                f"path={parsed.path!r} params={parsed.params!r} "
+                f"query={parsed.query!r} fragment={parsed.fragment!r}"
             ),
         )
     return f"{parsed.scheme}://{parsed.netloc}", None
@@ -171,9 +183,13 @@ def studio_request(
         except Exception:  # noqa: BLE001 — best-effort body read
             err_body = b""
         parsed = _parse_json_body(err_body)
-        # Preserve Studio's structured error payloads, but do not treat HTTP failures
-        # as success when the body is an arbitrary JSON object.
-        if isinstance(parsed, dict) and "error" in parsed:
+        # Only forward structured error payloads; never treat an HTTP >=400
+        # success-shaped body as a successful bridge response.
+        if (
+            isinstance(parsed, dict)
+            and isinstance(parsed.get("error"), str)
+            and parsed["error"]
+        ):
             return parsed
         return studio_unavailable(
             "Olive Studio bridge returned an HTTP error.",
