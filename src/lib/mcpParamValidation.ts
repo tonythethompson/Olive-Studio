@@ -25,13 +25,24 @@ interface McpParamDoc {
   interactions?: string;
 }
 
-interface McpPassParamsResponse {
+export interface McpPassParamsPayload {
   pass_name?: string;
   description?: string;
   required_params?: string[];
   parameters?: Record<string, McpParamDoc>;
   gotchas?: string[];
   error?: string;
+}
+
+export type McpPassParamsParseResult = { ok: true; data: McpPassParamsPayload } | { ok: false };
+
+/** Classify an MCP get_pass_parameters tool response without touching the session cache. */
+export function parseMcpPassParamsPayload(responseOk: boolean, data: unknown): McpPassParamsParseResult {
+  if (!responseOk) return { ok: false };
+  const payload = data as McpPassParamsPayload;
+  if (!payload || typeof payload !== "object") return { ok: false };
+  if (typeof payload.error === "string" && payload.error) return { ok: false };
+  return { ok: true, data: payload };
 }
 
 /**
@@ -82,14 +93,14 @@ function isValueInRange(value: unknown, range: string): boolean {
  * Fetch MCP parameter metadata for a pass type.
  * Caches results per session to avoid redundant fetches.
  */
-const paramCache = new Map<string, McpPassParamsResponse | null>();
+const paramCache = new Map<string, McpPassParamsPayload | null>();
 
 /** Clear the param cache so the next fetch re-reads from MCP. */
 export function clearParamCache(): void {
   paramCache.clear();
 }
 
-export async function fetchMcpPassParams(passTypeName: string): Promise<McpPassParamsResponse | null> {
+export async function fetchMcpPassParams(passTypeName: string): Promise<McpPassParamsPayload | null> {
   if (paramCache.has(passTypeName)) {
     return paramCache.get(passTypeName) ?? null;
   }
@@ -104,19 +115,15 @@ export async function fetchMcpPassParams(passTypeName: string): Promise<McpPassP
       }),
     });
 
-    if (!res.ok) {
+    const data: unknown = await res.json();
+    const parsed = parseMcpPassParamsPayload(res.ok, data);
+    if (!parsed.ok) {
       paramCache.set(passTypeName, null);
       return null;
     }
 
-    const data: McpPassParamsResponse = await res.json();
-    if (data.error) {
-      paramCache.set(passTypeName, null);
-      return null;
-    }
-
-    paramCache.set(passTypeName, data);
-    return data;
+    paramCache.set(passTypeName, parsed.data);
+    return parsed.data;
   } catch {
     paramCache.set(passTypeName, null);
     return null;
@@ -130,7 +137,7 @@ function validateSinglePass(
   passName: string,
   passTypeName: string,
   config: Record<string, unknown>,
-  meta: McpPassParamsResponse,
+  meta: McpPassParamsPayload,
 ): McpParamWarning[] {
   const warnings: McpParamWarning[] = [];
   const params = meta.parameters ?? {};

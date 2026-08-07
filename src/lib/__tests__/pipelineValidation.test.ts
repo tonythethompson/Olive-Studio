@@ -20,6 +20,7 @@ import {
   isProviderCompatibleWithPasses,
   getQuantMethodActivationBlock,
   prepareProviderChange,
+  parseUIStatePayload,
 } from "@/lib/pipelineValidation";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import type { UIState, IHVProvider } from "@/types";
@@ -705,5 +706,21 @@ describe("commitUiStateUpdate", () => {
     });
     expect(n.ihvProvider).toBe("CPUExecutionProvider");
     expect(n.passes.conversionFormat).toBe("onnx");
+  });
+});
+
+describe("parseUIStatePayload", () => {
+  it("accepts a complete UIState payload", () => {
+    const result = parseUIStatePayload(baseState());
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects incomplete state objects", () => {
+    const result = parseUIStatePayload({
+      modelSource: "huggingface",
+      ihvProvider: "CPUExecutionProvider",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("passes");
   });
 });
