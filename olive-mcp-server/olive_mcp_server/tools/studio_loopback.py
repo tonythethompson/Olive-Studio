@@ -95,16 +95,14 @@ def resolve_studio_base() -> tuple[str | None, dict[str, Any] | None]:
             "(127.0.0.1, localhost, or ::1).",
             detail=f"host={parsed.hostname!r}",
         )
-    try:
-        # Eagerly validate port; urlparse stores invalid ports and raises
-        # ValueError only when .port is accessed (out-of-range / malformed).
-        _ = parsed.port
-    except ValueError as exc:
+    if parsed.path not in ("", "/") or parsed.params or parsed.query or parsed.fragment:
         return None, studio_unavailable(
-            f"{ENV_API_URL} has an invalid or out-of-range port.",
-            detail=str(exc),
+            f"{ENV_API_URL} must be a loopback base URL without a path, query, or fragment.",
+            detail=(
+                f"path={parsed.path!r} params={parsed.params!r} query={parsed.query!r} fragment={parsed.fragment!r}"  # noqa: E501
+            ),
         )
-    return raw.rstrip("/"), None
+    return f"{parsed.scheme}://{parsed.netloc}", None
 
 
 def _parse_json_body(raw: bytes | str) -> Any | None:
