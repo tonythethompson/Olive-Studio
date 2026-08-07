@@ -241,12 +241,15 @@ export function useOliveStream({
         }
       }
 
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
       liveSourceRef.current?.close();
 
       let reconnectAttempts = 0;
       const MAX_RECONNECT_ATTEMPTS = 10;
       const MAX_BACKOFF_MS = 30000;
-
       const connectSSE = (targetJobId: string) => {
         if (isUnmountedRef.current) return;
         liveSourceRef.current?.close();
