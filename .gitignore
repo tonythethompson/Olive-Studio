@@ -40,6 +40,9 @@ start-server.bat
 .review-threads.json
 /dogfood-output/
 
+# Machine-local mcporter imports (paths, env refs, editor copies)
+/config/mcporter.json
+
 # Local Olive optimization outputs (ONNX, footprints, run history)
 /models/
 
