@@ -216,7 +216,6 @@
       "accelerator": "npu",
       "execution_providers": ["OpenVINOExecutionProvider"],
       "recommended_passes": [
-        "OnnxConversion",
         "OpenVINOOptimumConversion",
         "OpenVINOWeightCompression"
       ],
@@ -236,7 +235,7 @@
       "target": "Windows DirectML GPU",
       "accelerator": "gpu",
       "execution_providers": ["DmlExecutionProvider"],
-      "recommended_passes": ["OnnxConversion", "OnnxStaticQuantization", "OnnxModelOptimizer"],
+      "recommended_passes": ["OnnxConversion", "OnnxModelOptimizer", "OnnxStaticQuantization"],
       "typical_speedup": "2-5x",
       "calibration_size": 128,
       "optimal_batch_size": 8,
@@ -252,7 +251,7 @@
       "target": "WebGPU (Browser)",
       "accelerator": "gpu",
       "execution_providers": ["WebGpuExecutionProvider"],
-      "recommended_passes": ["OnnxConversion", "OnnxFloatToFloat16", "OnnxModelOptimizer"],
+      "recommended_passes": ["OnnxConversion", "OnnxModelOptimizer", "OnnxFloatToFloat16"],
       "typical_speedup": "1-3x",
       "calibration_size": 64,
       "optimal_batch_size": 1,

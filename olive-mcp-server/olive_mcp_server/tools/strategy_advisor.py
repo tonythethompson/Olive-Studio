@@ -178,7 +178,7 @@ def get_quantization_strategy(
                 "Set openvinoTargetDevice to NPU in Olive Studio (EP id stays OpenVINOExecutionProvider).",
                 "Unsupported ops fall back to CPU; verify Core Ultra / Meteor Lake+ NPU driver.",
             ]
-            pass_chain = ["OnnxConversion", "OpenVINOOptimumConversion", "OpenVINOWeightCompression"]
+            pass_chain = ["OpenVINOOptimumConversion", "OpenVINOWeightCompression"]
         else:
             algorithm = "GPTQ or HQQ weight-only int4 (CPU fallback)"
             calibration = "calibration-free (HQQ) or 128 samples (GPTQ)"
@@ -218,7 +218,7 @@ def get_quantization_strategy(
                 "Windows + onnxruntime-directml only; do not mix CUDA/TRT packages into this EP path.",
                 "Validate operator coverage on the target DirectX 12 GPU.",
             ]
-            pass_chain = ["OnnxConversion", "OnnxStaticQuantization", "OnnxModelOptimizer"]
+            pass_chain = ["OnnxConversion", "OnnxModelOptimizer", "OnnxStaticQuantization"]
         elif hw == "webgpu":
             algorithm = "FP16 + model optimizer for browser WebGPU"
             calibration = "n/a for FP16; optional small set if probing quantized WebGPU"
@@ -231,7 +231,7 @@ def get_quantization_strategy(
                 "Not a local Olive CLI execution target; export recipe for ORT Web WebGPU.",
                 "INT8 support varies by browser/GPU.",
             ]
-            pass_chain = ["OnnxConversion", "OnnxFloatToFloat16", "OnnxModelOptimizer"]
+            pass_chain = ["OnnxConversion", "OnnxModelOptimizer", "OnnxFloatToFloat16"]
         elif hw == "rocm":
             algorithm = "INT8 static PTQ + optional FP16 for ROCm EP"
             calibration = "100-300 ImageNet-like samples; whitelist ops for ROCMExecutionProvider"

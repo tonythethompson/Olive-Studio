@@ -862,7 +862,7 @@
       "model_type": ["CNN", "Vision"],
       "target_hardware": ["Windows DirectML GPU"],
       "source_format": "PyTorch",
-      "passes": ["OnnxConversion", "OnnxStaticQuantization", "OnnxModelOptimizer"],
+      "passes": ["OnnxConversion", "OnnxModelOptimizer", "OnnxStaticQuantization"],
       "recipe": {
         "input_model": {
           "type": "PyTorchModel",
@@ -905,6 +905,9 @@
               "target_opset": 14
             }
           },
+          "optimize": {
+            "type": "OnnxModelOptimizer"
+          },
           "static_quant": {
             "type": "OnnxStaticQuantization",
             "config": {
@@ -912,9 +915,6 @@
               "per_channel": false,
               "data_config": "imagenet_calib"
             }
-          },
-          "optimize": {
-            "type": "OnnxModelOptimizer"
           }
         },
         "engine": {
@@ -994,7 +994,7 @@
       "model_type": ["Transformer", "NLP", "BERT"],
       "target_hardware": ["WebGPU (Browser)"],
       "source_format": "HuggingFace",
-      "passes": ["OnnxConversion", "OnnxFloatToFloat16", "OnnxModelOptimizer"],
+      "passes": ["OnnxConversion", "OnnxModelOptimizer", "OnnxFloatToFloat16"],
       "recipe": {
         "input_model": {
           "type": "HuggingfaceModel",
@@ -1023,14 +1023,14 @@
               "target_opset": 14
             }
           },
+          "optimize": {
+            "type": "OnnxModelOptimizer"
+          },
           "fp16": {
             "type": "OnnxFloatToFloat16",
             "config": {
               "keep_io_types": true
             }
-          },
-          "optimize": {
-            "type": "OnnxModelOptimizer"
           }
         },
         "engine": {

@@ -140,6 +140,31 @@ def test_quantization_strategy_openvino_npu_uses_device_not_string_sniff() -> No
     assert result["target_hardware"] == "intel"
     assert result.get("openvino_device") == "NPU"
     assert "npu" in result["recommended_algorithm"].lower()
+    # Optimum conversion accepts torch only — do not prepend OnnxConversion.
+    assert result["pass_chain"] == [
+        "OpenVINOOptimumConversion",
+        "OpenVINOWeightCompression",
+    ]
+
+
+def test_quantization_strategy_directml_optimizes_before_quant() -> None:
+    result = get_quantization_strategy(model_type="CNN", target_hardware="directml")
+    assert "error" not in result
+    assert result["pass_chain"] == [
+        "OnnxConversion",
+        "OnnxModelOptimizer",
+        "OnnxStaticQuantization",
+    ]
+
+
+def test_quantization_strategy_webgpu_optimizes_before_fp16() -> None:
+    result = get_quantization_strategy(model_type="CNN", target_hardware="webgpu")
+    assert "error" not in result
+    assert result["pass_chain"] == [
+        "OnnxConversion",
+        "OnnxModelOptimizer",
+        "OnnxFloatToFloat16",
+    ]
 
 
 def test_quantization_strategy_canonical_ov_npu_profile() -> None:

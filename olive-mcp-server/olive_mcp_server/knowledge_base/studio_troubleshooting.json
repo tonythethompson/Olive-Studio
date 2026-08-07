@@ -150,9 +150,9 @@
       "patterns": [
         "WebGpuExecutionProvider",
         "WebGPU",
-        "localExecutionIssues",
         "webgpu",
-        "isRunnable"
+        "ORT Web WebGPU",
+        "browser WebGPU"
       ],
       "title": "WebGPU is browser-only — local Execute Live blocked",
       "root_cause": "WebGpuExecutionProvider targets ONNX Runtime Web in the browser. Olive Studio marks WebGPU recipes non-runnable locally (isRunnable: false / localExecutionIssues).",
@@ -164,11 +164,12 @@
       "id": "studio-openvino-npu-device",
       "domain": "studio",
       "patterns": [
-        "openvinoTargetDevice",
         "OpenVINO NPU",
         "device NPU",
-        "OpenVINOExecutionProvider",
-        "Core Ultra NPU"
+        "openvinoTargetDevice\": \"NPU\"",
+        "openvinoTargetDevice: NPU",
+        "Core Ultra NPU",
+        "device=NPU"
       ],
       "title": "OpenVINO NPU needs target device NPU (not EP rename)",
       "root_cause": "Intel NPU still uses OpenVINOExecutionProvider. The device is selected separately via openvinoTargetDevice (or equivalent). Without device=NPU and the OpenVINO NPU driver, work stays on CPU.",
