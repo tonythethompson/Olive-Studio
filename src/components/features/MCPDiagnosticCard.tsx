@@ -35,6 +35,60 @@ interface DiagnosticFeedbackButtonsProps {
   onFeedbackSubmitted?: MCPDiagnosticCardProps["onFeedbackSubmitted"];
 }
 
+function feedbackThumbClassName(
+  kind: "up" | "down",
+  status: FeedbackStatus,
+  active: boolean,
+): string {
+  const base =
+    "inline-flex items-center justify-center rounded border p-1 transition-all cursor-pointer disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1";
+  if (kind === "up") {
+    if (active && status === "success") {
+      return `${base} focus-visible:ring-emerald-400/60 border-emerald-500/50 bg-emerald-500/15 text-emerald-400 disabled:opacity-100`;
+    }
+    if (active && status === "submitting") {
+      return `${base} focus-visible:ring-emerald-400/60 border-emerald-500/40 bg-emerald-500/10 text-emerald-400/80 disabled:opacity-70`;
+    }
+    return `${base} focus-visible:ring-emerald-400/60 border-slate-700 bg-slate-900/40 text-slate-400 hover:border-emerald-500/40 hover:text-emerald-400 disabled:opacity-50`;
+  }
+  if (active && status === "success") {
+    return `${base} focus-visible:ring-rose-400/60 border-rose-500/50 bg-rose-500/15 text-rose-300 disabled:opacity-100`;
+  }
+  if (active && status === "submitting") {
+    return `${base} focus-visible:ring-rose-400/60 border-rose-500/40 bg-rose-500/10 text-rose-300/80 disabled:opacity-70`;
+  }
+  return `${base} focus-visible:ring-rose-400/60 border-slate-700 bg-slate-900/40 text-slate-400 hover:border-rose-500/40 hover:text-rose-300 disabled:opacity-50`;
+}
+
+interface FeedbackThumbButtonProps {
+  kind: "up" | "down";
+  status: FeedbackStatus;
+  active: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}
+
+function FeedbackThumbButton({ kind, status, active, disabled, onClick }: FeedbackThumbButtonProps) {
+  const Icon = kind === "up" ? ThumbsUp : ThumbsDown;
+  const successLabel = kind === "up" ? "Thumbs up submitted" : "Thumbs down submitted";
+  const idleLabel =
+    kind === "up"
+      ? "Thumbs up — this diagnosis was helpful"
+      : "Thumbs down — this diagnosis was not helpful";
+  return (
+    <button
+      type="button"
+      aria-label={status === "success" && active ? successLabel : idleLabel}
+      aria-pressed={active}
+      disabled={disabled}
+      onClick={onClick}
+      className={feedbackThumbClassName(kind, status, active)}
+    >
+      <Icon className="h-3.5 w-3.5" aria-hidden />
+    </button>
+  );
+}
+
 /**
  * Accessible thumbs-up / thumbs-down for a single matched KB entry.
  * Submits via the MCP proxy; disables after success; leaves controls enabled for retry on failure.
@@ -53,15 +107,7 @@ function DiagnosticFeedbackButtons({
     statusRef.current = status;
   }, [status]);
 
-  // Reset when the diagnosis target changes (new match or history navigation).
-  useEffect(() => {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    setStatus("idle");
-    setSubmittedRating(null);
-    setErrorMessage(null);
-  }, [matchedEntry]);
-
+  // Feedback remounts when matched_entry changes (key), so no reset effect.
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
@@ -99,7 +145,6 @@ function DiagnosticFeedbackButtons({
 
       if (result.error === "aborted") return;
 
-      // Failure: re-enable both controls so the user can retry.
       setStatus("error");
       setSubmittedRating(null);
       setErrorMessage(result.message ?? "Could not submit feedback. Try again.");
@@ -115,50 +160,24 @@ function DiagnosticFeedbackButtons({
     <div className="flex flex-col gap-1 pt-1">
       <div className="flex items-center gap-1.5 flex-wrap">
         <span className="text-[10px] text-slate-500 shrink-0">Helpful?</span>
-        <button
-          type="button"
-          aria-label={
-            status === "success" && upActive
-              ? "Thumbs up submitted"
-              : "Thumbs up — this diagnosis was helpful"
-          }
-          aria-pressed={upActive}
+        <FeedbackThumbButton
+          kind="up"
+          status={status}
+          active={upActive}
           disabled={disabled}
           onClick={() => {
             void submit("thumbs-up");
           }}
-          className={`inline-flex items-center justify-center rounded border p-1 transition-all cursor-pointer disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400/60 ${
-            upActive && status === "success"
-              ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-400 disabled:opacity-100"
-              : upActive && status === "submitting"
-                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400/80 disabled:opacity-70"
-                : "border-slate-700 bg-slate-900/40 text-slate-400 hover:border-emerald-500/40 hover:text-emerald-400 disabled:opacity-50"
-          }`}
-        >
-          <ThumbsUp className="h-3.5 w-3.5" aria-hidden />
-        </button>
-        <button
-          type="button"
-          aria-label={
-            status === "success" && downActive
-              ? "Thumbs down submitted"
-              : "Thumbs down — this diagnosis was not helpful"
-          }
-          aria-pressed={downActive}
+        />
+        <FeedbackThumbButton
+          kind="down"
+          status={status}
+          active={downActive}
           disabled={disabled}
           onClick={() => {
             void submit("thumbs-down");
           }}
-          className={`inline-flex items-center justify-center rounded border p-1 transition-all cursor-pointer disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-rose-400/60 ${
-            downActive && status === "success"
-              ? "border-rose-500/50 bg-rose-500/15 text-rose-300 disabled:opacity-100"
-              : downActive && status === "submitting"
-                ? "border-rose-500/40 bg-rose-500/10 text-rose-300/80 disabled:opacity-70"
-                : "border-slate-700 bg-slate-900/40 text-slate-400 hover:border-rose-500/40 hover:text-rose-300 disabled:opacity-50"
-          }`}
-        >
-          <ThumbsDown className="h-3.5 w-3.5" aria-hidden />
-        </button>
+        />
         {status === "submitting" && (
           <span className="text-[10px] text-slate-500 animate-pulse">Sending…</span>
         )}
@@ -310,6 +329,7 @@ export function MCPDiagnosticCard({
 
           {hasMcpFeedbackTarget(diagnostic) ? (
             <DiagnosticFeedbackButtons
+              key={diagnostic.matched_entry}
               matchedEntry={diagnostic.matched_entry}
               onFeedbackSubmitted={onFeedbackSubmitted}
             />

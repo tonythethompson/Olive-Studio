@@ -91,16 +91,25 @@ function parseLocalFiles(raw: unknown): UIState["localFiles"] | undefined {
   return out;
 }
 
-/**
- * Allowlist-merge untrusted partial UI fields. Unknown / dangerous keys ignored.
- * Returns an error when `passes` is present but not a plain object.
- */
-export function mergeBridgeUiState(
-  defaults: UIState,
+function assignClippedBridgeStrings(
+  partial: UiStatePatch,
   raw: Record<string, unknown>,
-): { ok: true; state: UIState } | StudioRecipeBridgeError {
-  const partial: UiStatePatch = {};
+): void {
+  const hfModelId = clipString(raw.hfModelId, 256);
+  if (hfModelId !== undefined) partial.hfModelId = hfModelId;
+  const hfDataset = clipString(raw.hfDataset, 256);
+  if (hfDataset !== undefined) partial.hfDataset = hfDataset;
+  const hfTask = clipString(raw.hfTask, 128);
+  if (hfTask !== undefined) partial.hfTask = hfTask;
+  const azureModelPath = clipString(raw.azureModelPath, 1024);
+  if (azureModelPath !== undefined) partial.azureModelPath = azureModelPath;
+  const azureStr = clipString(raw.azureStr, 1024);
+  if (azureStr !== undefined) partial.azureStr = azureStr;
+  const cacheDir = clipString(raw.cacheDir, 512);
+  if (cacheDir !== undefined) partial.cacheDir = cacheDir;
+}
 
+function assignEnumBridgeFields(partial: UiStatePatch, raw: Record<string, unknown>): void {
   if (typeof raw.modelSource === "string" && MODEL_SOURCES.has(raw.modelSource)) {
     partial.modelSource = raw.modelSource as ModelSource;
   }
@@ -119,35 +128,44 @@ export function mergeBridgeUiState(
   if (typeof raw.distributedCaching === "boolean") {
     partial.distributedCaching = raw.distributedCaching;
   }
+}
 
-  const hfModelId = clipString(raw.hfModelId, 256);
-  if (hfModelId !== undefined) partial.hfModelId = hfModelId;
-  const hfDataset = clipString(raw.hfDataset, 256);
-  if (hfDataset !== undefined) partial.hfDataset = hfDataset;
-  const hfTask = clipString(raw.hfTask, 128);
-  if (hfTask !== undefined) partial.hfTask = hfTask;
-  const azureModelPath = clipString(raw.azureModelPath, 1024);
-  if (azureModelPath !== undefined) partial.azureModelPath = azureModelPath;
-  const azureStr = clipString(raw.azureStr, 1024);
-  if (azureStr !== undefined) partial.azureStr = azureStr;
-  const cacheDir = clipString(raw.cacheDir, 512);
-  if (cacheDir !== undefined) partial.cacheDir = cacheDir;
+function assignBridgePasses(
+  partial: UiStatePatch,
+  raw: Record<string, unknown>,
+): StudioRecipeBridgeError | null {
+  if (!("passes" in raw)) return null;
+  if (!isObjectRecord(raw.passes)) {
+    return { ok: false, code: "invalid_passes", error: "passes must be a plain object" };
+  }
+  const passes: Partial<UIState["passes"]> = {};
+  for (const [key, value] of Object.entries(raw.passes)) {
+    const coerced = coercePassValue(key, value);
+    if (coerced === null) continue;
+    (passes as Record<string, unknown>)[key] = coerced;
+  }
+  if (Object.keys(passes).length > 0) partial.passes = passes;
+  return null;
+}
+
+/**
+ * Allowlist-merge untrusted partial UI fields. Unknown / dangerous keys ignored.
+ * Returns an error when `passes` is present but not a plain object.
+ */
+export function mergeBridgeUiState(
+  defaults: UIState,
+  raw: Record<string, unknown>,
+): { ok: true; state: UIState } | StudioRecipeBridgeError {
+  const partial: UiStatePatch = {};
+
+  assignEnumBridgeFields(partial, raw);
+  assignClippedBridgeStrings(partial, raw);
 
   const localFiles = parseLocalFiles(raw.localFiles);
   if (localFiles) partial.localFiles = localFiles;
 
-  if ("passes" in raw) {
-    if (!isObjectRecord(raw.passes)) {
-      return { ok: false, code: "invalid_passes", error: "passes must be a plain object" };
-    }
-    const passes: Partial<UIState["passes"]> = {};
-    for (const [key, value] of Object.entries(raw.passes)) {
-      const coerced = coercePassValue(key, value);
-      if (coerced === null) continue;
-      (passes as Record<string, unknown>)[key] = coerced;
-    }
-    if (Object.keys(passes).length > 0) partial.passes = passes;
-  }
+  const passesError = assignBridgePasses(partial, raw);
+  if (passesError) return passesError;
 
   // Explicitly drop dangerous keys even if somehow copied later.
   for (const key of REJECTED_KEYS) {

@@ -132,22 +132,8 @@ def _iter_claims(
                     yield str(model), str(hw_name), str(claim_key), claim
 
 
-def collect_matrix_errors(
-    matrix_data: dict[str, Any],
-    known_passes: set[str],
-    *,
-    enforce_olive_window: bool = True,
-) -> list[str]:
-    """Return human-readable validation errors (empty list => valid).
-
-    Checks schema-level required fields, support enum, evidence provenance,
-    pass registry membership, uniqueness, olive_version_support shape, and
-    (optionally) that olive-scoped evidence versions sit inside the declared
-    Olive support window.
-    """
+def _collect_top_level_errors(matrix_data: dict[str, Any]) -> list[str]:
     errors: list[str] = []
-
-    # --- top-level required ---
     for key in ("version", "last_updated", "models"):
         if key not in matrix_data:
             errors.append(f"missing top-level field: {key}")
@@ -168,180 +154,315 @@ def collect_matrix_errors(
     if models is not None:
         if not isinstance(models, list) or len(models) < 1:
             errors.append("models must be a non-empty array")
+    return errors
 
-    # --- olive_version_support window ---
+
+def _collect_olive_window(
+    matrix_data: dict[str, Any],
+) -> tuple[list[str], str | None, str | None]:
+    errors: list[str] = []
     ovs = matrix_data.get("olive_version_support")
     window_min: str | None = None
     window_max: str | None = None
-    if ovs is not None:
-        if not isinstance(ovs, dict):
-            errors.append("olive_version_support must be an object")
+    if ovs is None:
+        return errors, window_min, window_max
+    if not isinstance(ovs, dict):
+        errors.append("olive_version_support must be an object")
+        return errors, window_min, window_max
+
+    window_min = ovs.get("min")
+    window_max = ovs.get("max")
+    for label, raw in (("min", window_min), ("max", window_max)):
+        if raw is None:
+            continue
+        try:
+            _parse_version(str(raw))
+        except ValueError as exc:
+            errors.append(f"olive_version_support.{label}: {exc}")
+    if window_min is not None and window_max is not None:
+        try:
+            lo = _parse_version(str(window_min))
+            hi = _parse_version(str(window_max))
+            width = max(len(lo), len(hi))
+            lo_p = lo + (0,) * (width - len(lo))
+            hi_p = hi + (0,) * (width - len(hi))
+            if lo_p > hi_p:
+                errors.append(
+                    f"olive_version_support malformed range: "
+                    f"min={window_min!r} > max={window_max!r}"
+                )
+        except ValueError:
+            pass  # already recorded above
+    return errors, window_min, window_max
+
+
+def _collect_evidence_window_errors(
+    claim_loc: str,
+    *,
+    etype: Any,
+    ever: Any,
+    enforce_olive_window: bool,
+    window_min: str | None,
+    window_max: str | None,
+) -> list[str]:
+    if not (
+        enforce_olive_window
+        and window_min is not None
+        and window_max is not None
+        and etype in _OLIVE_EVIDENCE_TYPES
+        and isinstance(ever, str)
+        and ever.strip()
+    ):
+        return []
+    try:
+        if _version_in_range(ever, str(window_min), str(window_max)):
+            return []
+        return [
+            f"{claim_loc}: evidence.version {ever!r} "
+            f"outside olive_version_support "
+            f"[{window_min}, {window_max}]"
+        ]
+    except ValueError as exc:
+        return [f"{claim_loc}: evidence.version unparseable for window check: {exc}"]
+
+
+def _collect_claim_evidence_errors(
+    claim: dict[str, Any],
+    claim_loc: str,
+    *,
+    enforce_olive_window: bool,
+    window_min: str | None,
+    window_max: str | None,
+) -> list[str]:
+    errors: list[str] = []
+    if "evidence" not in claim:
+        return errors
+    evidence = claim.get("evidence")
+    if not isinstance(evidence, dict):
+        errors.append(f"{claim_loc}: evidence must be an object")
+        return errors
+
+    for ereq in ("reference", "type", "version"):
+        if ereq not in evidence:
+            errors.append(f"{claim_loc}: evidence missing required field {ereq!r}")
+    ref = evidence.get("reference")
+    if ref is not None and (not isinstance(ref, str) or not ref.strip()):
+        errors.append(f"{claim_loc}: evidence.reference must be non-empty")
+    etype = evidence.get("type")
+    if etype is not None and etype not in _EVIDENCE_TYPES:
+        errors.append(
+            f"{claim_loc}: invalid evidence.type {etype!r}; "
+            f"expected one of {sorted(_EVIDENCE_TYPES)}"
+        )
+    ever = evidence.get("version")
+    if ever is not None and (not isinstance(ever, str) or not ever.strip()):
+        errors.append(f"{claim_loc}: evidence.version must be non-empty")
+
+    errors.extend(
+        _collect_evidence_window_errors(
+            claim_loc,
+            etype=etype,
+            ever=ever,
+            enforce_olive_window=enforce_olive_window,
+            window_min=window_min,
+            window_max=window_max,
+        )
+    )
+    return errors
+
+
+def _collect_claim_errors(
+    claim: dict[str, Any],
+    claim_loc: str,
+    *,
+    model_name: str,
+    hw_name: str,
+    known_passes: set[str],
+    seen_triples: set[tuple[str, str, str]],
+    enforce_olive_window: bool,
+    window_min: str | None,
+    window_max: str | None,
+) -> list[str]:
+    errors: list[str] = []
+    for req in ("support", "olive_pass", "evidence"):
+        if req not in claim:
+            errors.append(f"{claim_loc}: missing required field {req!r}")
+
+    support = claim.get("support")
+    if support is not None and support not in _SUPPORT_STATES:
+        errors.append(
+            f"{claim_loc}: invalid support state {support!r}; "
+            f"expected one of {sorted(_SUPPORT_STATES)}"
+        )
+
+    olive_pass = claim.get("olive_pass")
+    if olive_pass is not None:
+        if not isinstance(olive_pass, str) or not olive_pass.strip():
+            errors.append(f"{claim_loc}: olive_pass must be non-empty string")
         else:
-            window_min = ovs.get("min")
-            window_max = ovs.get("max")
-            for label, raw in (("min", window_min), ("max", window_max)):
-                if raw is None:
-                    continue
-                try:
-                    _parse_version(str(raw))
-                except ValueError as exc:
-                    errors.append(f"olive_version_support.{label}: {exc}")
-            if window_min is not None and window_max is not None:
-                try:
-                    lo = _parse_version(str(window_min))
-                    hi = _parse_version(str(window_max))
-                    width = max(len(lo), len(hi))
-                    lo_p = lo + (0,) * (width - len(lo))
-                    hi_p = hi + (0,) * (width - len(hi))
-                    if lo_p > hi_p:
-                        errors.append(
-                            f"olive_version_support malformed range: "
-                            f"min={window_min!r} > max={window_max!r}"
-                        )
-                except ValueError:
-                    pass  # already recorded above
+            if olive_pass not in known_passes:
+                errors.append(
+                    f"{claim_loc}: unknown olive_pass {olive_pass!r} "
+                    f"(not in passes.json)"
+                )
+            triple = (str(model_name), str(hw_name), olive_pass)
+            if triple in seen_triples:
+                errors.append(
+                    f"duplicate model/hardware/pass claim: "
+                    f"{model_name!r} / {hw_name!r} / {olive_pass!r}"
+                )
+            else:
+                seen_triples.add(triple)
 
-    # --- model entries + claims ---
-    seen_models: set[str] = set()
-    seen_triples: set[tuple[str, str, str]] = set()
+    errors.extend(
+        _collect_claim_evidence_errors(
+            claim,
+            claim_loc,
+            enforce_olive_window=enforce_olive_window,
+            window_min=window_min,
+            window_max=window_max,
+        )
+    )
+    return errors
 
+
+def _collect_frameworks_errors(loc: str, model_name: str, frameworks: Any) -> list[str]:
+    if frameworks is None:
+        return []
+    if not isinstance(frameworks, list) or len(frameworks) < 1:
+        return [f"{loc} ({model_name}): frameworks must be non-empty array"]
+    return [
+        f"{loc} ({model_name}): unknown framework {fw!r}"
+        for fw in frameworks
+        if fw not in _FRAMEWORKS
+    ]
+
+
+def _collect_hardware_map_errors(
+    loc: str,
+    model_name: str,
+    hardware: Any,
+    *,
+    known_passes: set[str],
+    seen_triples: set[tuple[str, str, str]],
+    enforce_olive_window: bool,
+    window_min: str | None,
+    window_max: str | None,
+) -> list[str]:
+    if hardware is None:
+        return []
+    if not isinstance(hardware, dict):
+        return [f"{loc} ({model_name}): hardware must be an object"]
+
+    errors: list[str] = []
+    for hw_name, passes in hardware.items():
+        hw_loc = f"{loc} ({model_name}) / hardware[{hw_name!r}]"
+        if not isinstance(passes, dict):
+            errors.append(f"{hw_loc}: pass map must be an object")
+            continue
+        for claim_key, claim in passes.items():
+            claim_loc = f"{hw_loc} / {claim_key}"
+            if not isinstance(claim, dict):
+                errors.append(f"{claim_loc}: claim must be an object")
+                continue
+            errors.extend(
+                _collect_claim_errors(
+                    claim,
+                    claim_loc,
+                    model_name=str(model_name),
+                    hw_name=str(hw_name),
+                    known_passes=known_passes,
+                    seen_triples=seen_triples,
+                    enforce_olive_window=enforce_olive_window,
+                    window_min=window_min,
+                    window_max=window_max,
+                )
+            )
+    return errors
+
+
+def _collect_model_entry_errors(
+    entry: Any,
+    idx: int,
+    *,
+    known_passes: set[str],
+    seen_models: set[str],
+    seen_triples: set[tuple[str, str, str]],
+    enforce_olive_window: bool,
+    window_min: str | None,
+    window_max: str | None,
+) -> list[str]:
+    errors: list[str] = []
+    loc = f"models[{idx}]"
+    if not isinstance(entry, dict):
+        errors.append(f"{loc}: entry must be an object")
+        return errors
+
+    for req in ("model", "frameworks", "hardware"):
+        if req not in entry:
+            errors.append(f"{loc}: missing required field {req!r}")
+
+    model_name = entry.get("model")
+    if not isinstance(model_name, str) or not model_name.strip():
+        errors.append(f"{loc}: model must be a non-empty string")
+        model_name = f"<invalid-{idx}>"
+    elif model_name in seen_models:
+        errors.append(f"duplicate model entry: {model_name!r}")
+    else:
+        seen_models.add(model_name)
+
+    errors.extend(_collect_frameworks_errors(loc, str(model_name), entry.get("frameworks")))
+    errors.extend(
+        _collect_hardware_map_errors(
+            loc,
+            str(model_name),
+            entry.get("hardware"),
+            known_passes=known_passes,
+            seen_triples=seen_triples,
+            enforce_olive_window=enforce_olive_window,
+            window_min=window_min,
+            window_max=window_max,
+        )
+    )
+    return errors
+
+
+def collect_matrix_errors(
+    matrix_data: dict[str, Any],
+    known_passes: set[str],
+    *,
+    enforce_olive_window: bool = True,
+) -> list[str]:
+    """Return human-readable validation errors (empty list => valid).
+
+    Checks schema-level required fields, support enum, evidence provenance,
+    pass registry membership, uniqueness, olive_version_support shape, and
+    (optionally) that olive-scoped evidence versions sit inside the declared
+    Olive support window.
+    """
+    errors = _collect_top_level_errors(matrix_data)
+    window_errors, window_min, window_max = _collect_olive_window(matrix_data)
+    errors.extend(window_errors)
+
+    models = matrix_data.get("models")
     if not isinstance(models, list):
         return errors
 
+    seen_models: set[str] = set()
+    seen_triples: set[tuple[str, str, str]] = set()
     for idx, entry in enumerate(models):
-        loc = f"models[{idx}]"
-        if not isinstance(entry, dict):
-            errors.append(f"{loc}: entry must be an object")
-            continue
-
-        for req in ("model", "frameworks", "hardware"):
-            if req not in entry:
-                errors.append(f"{loc}: missing required field {req!r}")
-
-        model_name = entry.get("model")
-        if not isinstance(model_name, str) or not model_name.strip():
-            errors.append(f"{loc}: model must be a non-empty string")
-            model_name = f"<invalid-{idx}>"
-        elif model_name in seen_models:
-            errors.append(f"duplicate model entry: {model_name!r}")
-        else:
-            seen_models.add(model_name)
-
-        frameworks = entry.get("frameworks")
-        if frameworks is not None:
-            if not isinstance(frameworks, list) or len(frameworks) < 1:
-                errors.append(f"{loc} ({model_name}): frameworks must be non-empty array")
-            else:
-                for fw in frameworks:
-                    if fw not in _FRAMEWORKS:
-                        errors.append(
-                            f"{loc} ({model_name}): unknown framework {fw!r}"
-                        )
-
-        hardware = entry.get("hardware")
-        if hardware is None:
-            continue
-        if not isinstance(hardware, dict):
-            errors.append(f"{loc} ({model_name}): hardware must be an object")
-            continue
-
-        for hw_name, passes in hardware.items():
-            hw_loc = f"{loc} ({model_name}) / hardware[{hw_name!r}]"
-            if not isinstance(passes, dict):
-                errors.append(f"{hw_loc}: pass map must be an object")
-                continue
-
-            for claim_key, claim in passes.items():
-                claim_loc = f"{hw_loc} / {claim_key}"
-                if not isinstance(claim, dict):
-                    errors.append(f"{claim_loc}: claim must be an object")
-                    continue
-
-                # Required schema fields
-                for req in ("support", "olive_pass", "evidence"):
-                    if req not in claim:
-                        errors.append(f"{claim_loc}: missing required field {req!r}")
-
-                support = claim.get("support")
-                if support is not None and support not in _SUPPORT_STATES:
-                    errors.append(
-                        f"{claim_loc}: invalid support state {support!r}; "
-                        f"expected one of {sorted(_SUPPORT_STATES)}"
-                    )
-
-                olive_pass = claim.get("olive_pass")
-                if olive_pass is not None:
-                    if not isinstance(olive_pass, str) or not olive_pass.strip():
-                        errors.append(f"{claim_loc}: olive_pass must be non-empty string")
-                    else:
-                        if olive_pass not in known_passes:
-                            errors.append(
-                                f"{claim_loc}: unknown olive_pass {olive_pass!r} "
-                                f"(not in passes.json)"
-                            )
-                        triple = (str(model_name), str(hw_name), olive_pass)
-                        if triple in seen_triples:
-                            errors.append(
-                                f"duplicate model/hardware/pass claim: "
-                                f"{model_name!r} / {hw_name!r} / {olive_pass!r}"
-                            )
-                        else:
-                            seen_triples.add(triple)
-
-                # Provenance / evidence
-                evidence = claim.get("evidence")
-                if "evidence" in claim:
-                    if not isinstance(evidence, dict):
-                        errors.append(f"{claim_loc}: evidence must be an object")
-                    else:
-                        for ereq in ("reference", "type", "version"):
-                            if ereq not in evidence:
-                                errors.append(
-                                    f"{claim_loc}: evidence missing required field {ereq!r}"
-                                )
-                        ref = evidence.get("reference")
-                        if ref is not None and (
-                            not isinstance(ref, str) or not ref.strip()
-                        ):
-                            errors.append(
-                                f"{claim_loc}: evidence.reference must be non-empty"
-                            )
-                        etype = evidence.get("type")
-                        if etype is not None and etype not in _EVIDENCE_TYPES:
-                            errors.append(
-                                f"{claim_loc}: invalid evidence.type {etype!r}; "
-                                f"expected one of {sorted(_EVIDENCE_TYPES)}"
-                            )
-                        ever = evidence.get("version")
-                        if ever is not None and (
-                            not isinstance(ever, str) or not ever.strip()
-                        ):
-                            errors.append(
-                                f"{claim_loc}: evidence.version must be non-empty"
-                            )
-
-                        # Olive support window for olive-scoped evidence
-                        if (
-                            enforce_olive_window
-                            and window_min is not None
-                            and window_max is not None
-                            and etype in _OLIVE_EVIDENCE_TYPES
-                            and isinstance(ever, str)
-                            and ever.strip()
-                        ):
-                            try:
-                                if not _version_in_range(ever, str(window_min), str(window_max)):
-                                    errors.append(
-                                        f"{claim_loc}: evidence.version {ever!r} "
-                                        f"outside olive_version_support "
-                                        f"[{window_min}, {window_max}]"
-                                    )
-                            except ValueError as exc:
-                                errors.append(
-                                    f"{claim_loc}: evidence.version unparseable "
-                                    f"for window check: {exc}"
-                                )
-
+        errors.extend(
+            _collect_model_entry_errors(
+                entry,
+                idx,
+                known_passes=known_passes,
+                seen_models=seen_models,
+                seen_triples=seen_triples,
+                enforce_olive_window=enforce_olive_window,
+                window_min=window_min,
+                window_max=window_max,
+            )
+        )
     return errors
 
 
