@@ -9,6 +9,7 @@ import { resolveQnnHostMode } from "@/lib/qnnDeps";
 import {
   alwaysSelectableProviders,
   isExportTargetProvider,
+  isPlatformLocalProvider,
 } from "@/lib/providerRuntimeKind";
 
 /**
