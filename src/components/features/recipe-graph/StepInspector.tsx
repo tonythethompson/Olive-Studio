@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
 import { Button } from "@/components/ui";
 import { GraphConflictBanner } from "@/components/features/GraphConflictBanner";
-import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
+import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { getPipelineValidation } from "@/lib/pipelineValidation";
 import { UIState } from "@/types";
 import { Info, Plus, Settings, X } from "lucide-react";
@@ -26,13 +25,7 @@ interface StepInspectorProps {
 }
 
 export function StepInspector({ state, setState, selectedNodeId, pipelineSteps }: StepInspectorProps) {
-  const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
-
-  useEffect(() => {
-    fetchHardwareProbe()
-      .then(setHardwareProbe)
-      .catch(() => setHardwareProbe(null));
-  }, []);
+  const { data: hardwareProbe = null } = useHardwareProbe();
 
   const validation = getPipelineValidation(state, { hardwareProbe });
   // Derive advisories from the validation already computed above —

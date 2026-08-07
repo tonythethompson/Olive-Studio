@@ -1,7 +1,8 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { UIState } from "@/types";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
-import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProbe";
+import type { HardwareProbeResult } from "@/lib/hardwareProbe";
+import { useHardwareProbe, useRefreshHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import {
   compareVramFit,
   estimateVramRequirement,
@@ -34,26 +35,29 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
 }: VramEstimateBannerProps) {
   const storeState = usePipelineState();
   const state = propState ?? storeState.state;
-  const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(hardwareProbeProp ?? null);
+
+  // No prop passed → fall back to the shared, deduped probe query.
+  const sharedProbeQuery = useHardwareProbe();
+  const refreshHardwareProbe = useRefreshHardwareProbe();
+  const [forcedProbe, setForcedProbe] = useState<HardwareProbeResult | null>(null);
 
   useEffect(() => {
-    if (hardwareProbeProp !== undefined) {
-      const missingRam =
-        hardwareProbeProp != null &&
-        (hardwareProbeProp.platform.systemRamGb == null || hardwareProbeProp.platform.systemRamGb <= 0);
-      if (missingRam) {
-        void fetchHardwareProbe(true)
-          .then(setHardwareProbe)
-          .catch(() => setHardwareProbe(hardwareProbeProp));
-        return;
-      }
-      setHardwareProbe(hardwareProbeProp);
-      return;
-    }
-    void fetchHardwareProbe()
-      .then(setHardwareProbe)
-      .catch(() => setHardwareProbe(null));
-  }, [hardwareProbeProp]);
+    if (hardwareProbeProp === undefined) return;
+    const missingRam =
+      hardwareProbeProp != null &&
+      (hardwareProbeProp.platform.systemRamGb == null || hardwareProbeProp.platform.systemRamGb <= 0);
+    if (!missingRam) return;
+    // Prop's probe is missing RAM info — force a fresh probe (published to the
+    // shared cache too) and fall back to the prop's value if that also fails.
+    void refreshHardwareProbe()
+      .then(setForcedProbe)
+      .catch(() => setForcedProbe(null));
+  }, [hardwareProbeProp, refreshHardwareProbe]);
+
+  const hardwareProbe =
+    hardwareProbeProp !== undefined
+      ? (forcedProbe ?? hardwareProbeProp)
+      : (sharedProbeQuery.data ?? null);
 
   const estimate = useMemo(() => estimateVramRequirement(state), [state]);
   const modelLabel = useMemo(() => getVramModelLabel(state), [state]);

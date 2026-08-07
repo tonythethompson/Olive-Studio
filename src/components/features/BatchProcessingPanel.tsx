@@ -14,7 +14,8 @@ import { buildRecipeJsonFromState, buildOliveRecipeFromBatchJob } from "@/lib/re
 import { parseOliveMetricsFromLogs } from "@/lib/oliveLogMetrics";
 import { commitUiStateUpdate, getPipelineValidation } from "@/lib/pipelineValidation";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
-import { fetchHardwareProbe, getSelectableProviders, type HardwareProbeResult } from "@/lib/hardwareProbe";
+import { getSelectableProviders, type HardwareProbeResult } from "@/lib/hardwareProbe";
+import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { MCPDiagnosticCard } from "./MCPDiagnosticCard";
 import {
@@ -663,7 +664,7 @@ export function BatchProcessingPanel({
   const [newModelId, setNewModelId] = useState("meta-llama/Llama-3-8B");
   const [newSource, setNewSource] = useState<ModelSource>("huggingface");
   const [newProvider, setNewProvider] = useState<IHVProvider>("CUDAExecutionProvider");
-  const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
+  const { data: hardwareProbe = null } = useHardwareProbe();
 
   // Enabled passes for custom job
   const [passConv, setPassConv] = useState(true);
@@ -676,17 +677,16 @@ export function BatchProcessingPanel({
     jobsRef.current = state.batchJobs || [];
   }, [state.batchJobs]);
 
+  const defaultProviderAppliedRef = useRef(false);
   useEffect(() => {
-    fetchHardwareProbe()
-      .then((probe) => {
-        setHardwareProbe(probe);
-        if (!getSelectableProviders(probe).includes(newProvider)) {
-          setNewProvider(probe.recommendedProvider);
-        }
-      })
-      .catch(() => setHardwareProbe(null));
+    if (defaultProviderAppliedRef.current || !hardwareProbe) return;
+    defaultProviderAppliedRef.current = true;
+    if (!getSelectableProviders(hardwareProbe).includes(newProvider)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time default seeded from the mount-time probe
+      setNewProvider(hardwareProbe.recommendedProvider);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hardwareProbe]);
 
   const selectableBatchProviders = useMemo(
     () => PROVIDER_CATALOG.filter((p) => getSelectableProviders(hardwareProbe).includes(p.id)),
