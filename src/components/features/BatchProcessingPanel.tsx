@@ -187,7 +187,7 @@ export function BatchProcessingPanel({
       };
       const jobValidation = getPipelineValidation(jobState, {
         forLocalExecution: true,
-        probe: hardwareProbe,
+        hardwareProbe,
       });
       if (jobValidation.isBlocked) {
         const errorLogs = [

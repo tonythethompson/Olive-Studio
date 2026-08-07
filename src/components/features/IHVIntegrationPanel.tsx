@@ -28,6 +28,7 @@ import { isMemoryOffloadAvailable, hasHuggingFaceModel } from "@/lib/memoryOfflo
 import { isGpuProvider, formatMemoryGb } from "@/lib/vramEstimate";
 import {
   fetchHardwareProbe,
+  getSelectableProviders,
   isProviderDetectedLocally,
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";

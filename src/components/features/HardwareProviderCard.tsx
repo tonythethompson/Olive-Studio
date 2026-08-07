@@ -791,6 +791,7 @@ export function HardwareProviderCard({
   const cardHasCritical = pConflicts.some((c) => c.severity === "critical");
   const cardHardwareBlocked =
     !isExportTargetProvider(p.id) &&
+    !isPlatformLocalProvider(p.id) &&
     (Boolean(getProviderHardwareBlock(p.id, hardwareProbe)) ||
       (p.id === "CPUExecutionProvider" && !hardwareProbe));
   const cardBlocked = cardHasCritical || cardHardwareBlocked;

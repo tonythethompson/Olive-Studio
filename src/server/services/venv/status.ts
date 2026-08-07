@@ -39,6 +39,8 @@ export type RuntimeFamilyStatus = {
   integrityHealthy: boolean;
   needsRepair: boolean;
   python: string | null;
+  /** ORT `get_available_providers()` from this family venv (empty when unprobed). */
+  ortProviders: string[];
   capabilities: {
     cpu: CapabilityStatus;
     directml?: CapabilityStatus;
@@ -337,6 +339,7 @@ export async function probeFamilyStatus(family: VenvFamily): Promise<RuntimeFami
       integrityHealthy: false,
       needsRepair: false,
       python: null,
+      ortProviders: [],
       capabilities: {
         cpu: missing("venv missing"),
         ...(family === "default"
@@ -392,6 +395,7 @@ export async function probeFamilyStatus(family: VenvFamily): Promise<RuntimeFami
     integrityHealthy,
     needsRepair,
     python,
+    ortProviders: Array.isArray(probe?.providers) ? probe.providers.slice() : [],
     capabilities: buildCapabilities(family, probe),
   };
 }

@@ -513,14 +513,15 @@ export function getSelectableProviders(probe: HardwareProbeResult | null | undef
 
 /**
  * Block selection when a provider is absent from the local probe.
- * Export targets never return a block (selectable without “not detected”).
+ * Export targets and platform-local EPs never return a block (selectable without
+ * “not detected”); Execute Live is gated separately via pipeline validation.
  */
 export function getProviderAvailabilityBlock(
   provider: IHVProvider,
   probe: HardwareProbeResult | null | undefined,
 ): { reason: string } | null {
-  // Export targets (incl. WebGPU) are not local Python EPs to probe.
-  if (isExportTargetProvider(provider)) {
+  // Export / platform-local targets are recipe-selectable without a probe hit.
+  if (isExportTargetProvider(provider) || isPlatformLocalProvider(provider)) {
     return null;
   }
   if (provider === "CPUExecutionProvider") {
