@@ -264,6 +264,157 @@ function waitForBatchOliveStream(handlers: BatchStreamHandlers): Promise<void> {
   });
 }
 
+type QueueJobContext = {
+  state: UIState;
+  jobsRef: { current: BatchJob[] | undefined };
+  haltRequestedRef: { current: boolean };
+  activeSourcesRef: { current: EventSource[] };
+  currentStreamResolveRef: { current: (() => void) | null };
+  currentOliveJobIdRef: { current: string | null };
+  setState: (s: Partial<UIState>) => void;
+  fetchKeyedDiagnostic: (key: string, logs: string[]) => void;
+};
+
+type QueueJobStep = "continue" | "break";
+
+function failQueuedBatchJob(
+  ctx: Pick<QueueJobContext, "jobsRef" | "setState" | "fetchKeyedDiagnostic">,
+  jobId: string,
+  errorLogs: string[],
+): void {
+  ctx.setState({
+    batchJobs: (ctx.jobsRef.current ?? []).map((j) =>
+      j.id === jobId ? { ...j, status: "failed", logs: errorLogs } : j,
+    ),
+  });
+  ctx.fetchKeyedDiagnostic(jobId, errorLogs);
+}
+
+function uiStateForBatchJob(job: BatchJob, state: UIState): UIState {
+  return {
+    ...state,
+    modelSource: job.modelSource,
+    hfModelId: job.modelSource === "huggingface" ? job.modelIdentifier : state.hfModelId,
+    azureModelPath: job.modelSource === "azure" ? job.modelIdentifier : state.azureModelPath,
+    ihvProvider: job.provider,
+  };
+}
+
+function validationFailureLogs(
+  job: BatchJob,
+  jobs: BatchJob[],
+  statusLabel: string,
+  criticalTitles: string[],
+): string[] {
+  return [
+    ...(jobs.find((j) => j.id === job.id)?.logs || []),
+    `[ERROR] Job validation failed: ${statusLabel}`,
+    ...criticalTitles.map((title) => `[ERROR] ${title}`),
+  ];
+}
+
+function markBatchJobRunning(
+  ctx: Pick<QueueJobContext, "jobsRef" | "setState">,
+  jobId: string,
+): void {
+  ctx.setState({
+    batchJobs: (ctx.jobsRef.current ?? []).map((j) =>
+      j.id === jobId
+        ? { ...j, status: "running", progress: -1, logs: ["[INFO] Starting Olive run..."] }
+        : j,
+    ),
+  });
+}
+
+async function applyHaltBeforeStream(
+  ctx: Pick<QueueJobContext, "jobsRef" | "setState">,
+  job: BatchJob,
+  oliveJobId: string,
+): Promise<void> {
+  const { terminalStatus, haltLog } = await resolveHaltBeforeStream(oliveJobId);
+  ctx.setState({
+    batchJobs: (ctx.jobsRef.current ?? []).map((j) =>
+      j.id === job.id
+        ? {
+            ...j,
+            oliveJobId,
+            status: terminalStatus,
+            logs: [...(j.logs || []), haltLog],
+          }
+        : j,
+    ),
+  });
+}
+
+/**
+ * Run one queued batch job through validate → start → stream.
+ * Returns `break` when the queue should stop after this step.
+ */
+async function processQueuedBatchJob(job: BatchJob, ctx: QueueJobContext): Promise<QueueJobStep> {
+  if (ctx.haltRequestedRef.current) return "break";
+
+  const jobValidation = getPipelineValidation(uiStateForBatchJob(job, ctx.state), {
+    forLocalExecution: true,
+  });
+  if (jobValidation.isBlocked) {
+    failQueuedBatchJob(
+      ctx,
+      job.id,
+      validationFailureLogs(
+        job,
+        ctx.jobsRef.current ?? [],
+        jobValidation.statusLabel,
+        jobValidation.issues.filter((i) => i.severity === "critical").map((i) => i.title),
+      ),
+    );
+    return "continue";
+  }
+
+  markBatchJobRunning(ctx, job.id);
+  const startResult = await postBatchOliveRun(buildOliveRecipeFromBatchJob(job, ctx.state));
+  if (!startResult.ok) {
+    failQueuedBatchJob(ctx, job.id, [
+      ...((ctx.jobsRef.current ?? []).find((j) => j.id === job.id)?.logs || []),
+      `[ERROR] ${startResult.error}`,
+    ]);
+    return "continue";
+  }
+
+  const { jobId } = startResult;
+  if (ctx.haltRequestedRef.current) {
+    await applyHaltBeforeStream(ctx, job, jobId);
+    return "break";
+  }
+
+  ctx.currentOliveJobIdRef.current = jobId;
+  ctx.setState({
+    batchJobs: (ctx.jobsRef.current ?? []).map((j) =>
+      j.id === job.id ? { ...j, oliveJobId: jobId } : j,
+    ),
+  });
+
+  await waitForBatchOliveStream({
+    jobId,
+    batchJobId: job.id,
+    jobsRef: ctx.jobsRef,
+    haltRequestedRef: ctx.haltRequestedRef,
+    activeSourcesRef: ctx.activeSourcesRef,
+    currentStreamResolveRef: ctx.currentStreamResolveRef,
+    setState: ctx.setState,
+    fetchKeyedDiagnostic: ctx.fetchKeyedDiagnostic,
+  });
+
+  ctx.currentOliveJobIdRef.current = null;
+  return ctx.haltRequestedRef.current ? "break" : "continue";
+}
+
+async function runQueuedBatchJobs(queuedJobs: BatchJob[], ctx: QueueJobContext): Promise<void> {
+  for (const job of queuedJobs) {
+    const step = await processQueuedBatchJob(job, ctx);
+    if (step === "break") break;
+  }
+}
+
 /**
  * Renders a panel for managing, running, and inspecting sequential batch-processing jobs.
  *
@@ -410,92 +561,16 @@ export function BatchProcessingPanel({
     haltRequestedRef.current = false;
     setIsProcessing(true);
 
-    const failJob = (jobId: string, errorLogs: string[]) => {
-      setState({
-        batchJobs: (jobsRef.current ?? []).map((j) =>
-          j.id === jobId ? { ...j, status: "failed", logs: errorLogs } : j,
-        ),
-      });
-      fetchKeyedDiagnostic(jobId, errorLogs);
-    };
-
-    for (const job of queuedJobs) {
-      if (haltRequestedRef.current) break;
-
-      const jobState: UIState = {
-        ...state,
-        modelSource: job.modelSource,
-        hfModelId: job.modelSource === "huggingface" ? job.modelIdentifier : state.hfModelId,
-        azureModelPath: job.modelSource === "azure" ? job.modelIdentifier : state.azureModelPath,
-        ihvProvider: job.provider,
-      };
-      const jobValidation = getPipelineValidation(jobState, { forLocalExecution: true });
-      if (jobValidation.isBlocked) {
-        failJob(job.id, [
-          ...((jobsRef.current ?? []).find((j) => j.id === job.id)?.logs || []),
-          `[ERROR] Job validation failed: ${jobValidation.statusLabel}`,
-          ...jobValidation.issues.filter((i) => i.severity === "critical").map((i) => `[ERROR] ${i.title}`),
-        ]);
-        continue;
-      }
-
-      const recipe = buildOliveRecipeFromBatchJob(job, state);
-      setState({
-        batchJobs: (jobsRef.current ?? []).map((j) =>
-          j.id === job.id
-            ? { ...j, status: "running", progress: -1, logs: ["[INFO] Starting Olive run..."] }
-            : j,
-        ),
-      });
-
-      const startResult = await postBatchOliveRun(recipe);
-      if (!startResult.ok) {
-        failJob(job.id, [
-          ...((jobsRef.current ?? []).find((j) => j.id === job.id)?.logs || []),
-          `[ERROR] ${startResult.error}`,
-        ]);
-        continue;
-      }
-      const { jobId } = startResult;
-
-      if (haltRequestedRef.current) {
-        const { terminalStatus, haltLog } = await resolveHaltBeforeStream(jobId);
-        setState({
-          batchJobs: (jobsRef.current ?? []).map((j) =>
-            j.id === job.id
-              ? {
-                  ...j,
-                  oliveJobId: jobId,
-                  status: terminalStatus,
-                  logs: [...(j.logs || []), haltLog],
-                }
-              : j,
-          ),
-        });
-        break;
-      }
-
-      currentOliveJobIdRef.current = jobId;
-      setState({
-        batchJobs: (jobsRef.current ?? []).map((j) =>
-          j.id === job.id ? { ...j, oliveJobId: jobId } : j,
-        ),
-      });
-
-      await waitForBatchOliveStream({
-        jobId,
-        batchJobId: job.id,
-        jobsRef,
-        haltRequestedRef,
-        activeSourcesRef,
-        currentStreamResolveRef,
-        setState,
-        fetchKeyedDiagnostic,
-      });
-
-      currentOliveJobIdRef.current = null;
-      if (haltRequestedRef.current) break;
-    }
+    await runQueuedBatchJobs(queuedJobs, {
+      state,
+      jobsRef,
+      haltRequestedRef,
+      activeSourcesRef,
+      currentStreamResolveRef,
+      currentOliveJobIdRef,
+      setState,
+      fetchKeyedDiagnostic,
+    });
 
     currentOliveJobIdRef.current = null;
     setIsProcessing(false);
