@@ -1,14 +1,12 @@
 import { useState, useCallback } from "react";
 import { useAutoClearError, useImportPresets, useExportPresets } from "@/lib/hooks";
+import { Label, Select, Slider } from "@/components/ui";
 import {
-  Label,
-  Select,
-  Slider,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui";
+} from "@/components/ui/Tooltip";
 import { getAllowedPruningTypes } from "@/lib/pipelineValidation";
 import {
   loadCustomPresets,

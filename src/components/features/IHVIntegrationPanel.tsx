@@ -5,9 +5,9 @@ import {
   CardHeader,
   Select,
   Label,
-  Switch,
-  TooltipProvider,
 } from "@/components/ui";
+import { Switch } from "@/components/ui/Switch";
+import { TooltipProvider } from "@/components/ui/Tooltip";
 import { IHVProvider, UIState } from "@/types";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import {

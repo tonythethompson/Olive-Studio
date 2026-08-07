@@ -53,8 +53,6 @@ export const TabsContent = React.forwardRef<
 ));
 TabsContent.displayName = TabsPrimitive.Content.displayName;
 
-export { Switch } from "./Switch";
-
 // Radix Slider
 export const Slider = React.forwardRef<
   React.ElementRef<typeof SliderPrimitive.Root>,
@@ -198,5 +196,3 @@ export const Button = React.forwardRef<
   );
 });
 Button.displayName = "Button";
-
-export { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "./Tooltip";

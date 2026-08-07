@@ -7,7 +7,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui";
+} from "@/components/ui/Tooltip";
 import type { OpenVinoInstallState } from "@/components/features/useOpenVinoInstall";
 import type { DirectMlInstallState } from "@/components/features/useDirectMlInstall";
 import type { QnnInstallState } from "@/components/features/useQnnInstall";

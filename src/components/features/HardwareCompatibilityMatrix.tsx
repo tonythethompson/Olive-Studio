@@ -76,80 +76,77 @@ export function HardwareCompatibilityMatrix({
                   return (
                     <th
                       key={p.id}
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`Select provider ${p.shortName}`}
-                      aria-pressed={isSelectedProvider}
-                      onClick={() => {
-                        // Allow selecting undetected providers for cross-compile / remote targets
-                        const detected = detectedProviders.includes(p.id);
-                        const patch = prepareProviderChange(state, p.id, hardwareProbe, {
-                          skipHardwareBlock: !detected,
-                        });
-                        if (patch) setState(patch);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key !== "Enter" && e.key !== " ") return;
-                        e.preventDefault();
-                        const detected = detectedProviders.includes(p.id);
-                        const patch = prepareProviderChange(state, p.id, hardwareProbe, {
-                          skipHardwareBlock: !detected,
-                        });
-                        if (patch) setState(patch);
-                      }}
-                      className={`p-2 px-1 text-center cursor-pointer transition-all relative select-none ${
+                      scope="col"
+                      className={`p-0 text-center transition-all relative select-none ${
                         isSelectedProvider
                           ? "bg-electric-blue/10 border-l border-r border-t-2 border-t-electric-blue border-l-electric-blue/20 border-r-electric-blue/20"
-                          : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/30"
+                          : "text-slate-400"
                       }`}
                     >
-                      <div className="flex flex-col items-center justify-center gap-1 py-1">
-                        <div
-                          className={`p-1 rounded border leading-none transition-all ${
-                            isSelectedProvider
-                              ? "bg-electric-blue/10 border-electric-blue/50 text-electric-blue"
-                              : "bg-slate-900 border-slate-800 text-slate-500"
-                          }`}
-                        >
-                          <HIcon className="h-3 w-3" />
-                        </div>
-                        <span
-                          className={`text-[10px] font-mono font-semibold leading-none text-center ${
-                            isSelectedProvider
-                              ? "text-electric-blue"
-                              : detectedLocally
-                                ? "text-slate-400"
-                                : "text-slate-600"
-                          }`}
-                        >
-                          {p.shortName}
-                        </span>
-                        {!detectedLocally && !probeLoading && (
-                          <span className="text-[7px] font-mono text-slate-600 uppercase tracking-wide leading-none">
-                            Absent
-                          </span>
-                        )}
-                        {detectedLocally && !isSelectedProvider && (
-                          <span className="text-[7px] font-mono text-emerald-600 uppercase tracking-wide leading-none">
-                            Local
-                          </span>
-                        )}
-                        {isSelectedProvider ? (
-                          <div className="flex items-center gap-1">
-                            <span className="flex h-1.5 w-1.5 relative">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                            </span>
-                            <span className="text-[8px] tracking-widest font-mono font-black uppercase text-electric-blue leading-none">
-                              Active
-                            </span>
+                      <button
+                        type="button"
+                        aria-label={`Select provider ${p.shortName}`}
+                        aria-pressed={isSelectedProvider}
+                        onClick={() => {
+                          // Allow selecting undetected providers for cross-compile / remote targets
+                          const detected = detectedProviders.includes(p.id);
+                          const patch = prepareProviderChange(state, p.id, hardwareProbe, {
+                            skipHardwareBlock: !detected,
+                          });
+                          if (patch) setState(patch);
+                        }}
+                        className={`w-full h-full p-2 px-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
+                          isSelectedProvider ? "" : "hover:text-slate-200 hover:bg-slate-900/30"
+                        }`}
+                      >
+                        <div className="flex flex-col items-center justify-center gap-1 py-1">
+                          <div
+                            className={`p-1 rounded border leading-none transition-all ${
+                              isSelectedProvider
+                                ? "bg-electric-blue/10 border-electric-blue/50 text-electric-blue"
+                                : "bg-slate-900 border-slate-800 text-slate-500"
+                            }`}
+                          >
+                            <HIcon className="h-3 w-3" />
                           </div>
-                        ) : (
-                          <span className="text-[8px] font-mono text-slate-700 uppercase tracking-wider leading-none select-none hover:text-slate-400">
-                            Select
+                          <span
+                            className={`text-[10px] font-mono font-semibold leading-none text-center ${
+                              isSelectedProvider
+                                ? "text-electric-blue"
+                                : detectedLocally
+                                  ? "text-slate-400"
+                                  : "text-slate-600"
+                            }`}
+                          >
+                            {p.shortName}
                           </span>
-                        )}
-                      </div>
+                          {!detectedLocally && !probeLoading && (
+                            <span className="text-[7px] font-mono text-slate-600 uppercase tracking-wide leading-none">
+                              Absent
+                            </span>
+                          )}
+                          {detectedLocally && !isSelectedProvider && (
+                            <span className="text-[7px] font-mono text-emerald-600 uppercase tracking-wide leading-none">
+                              Local
+                            </span>
+                          )}
+                          {isSelectedProvider ? (
+                            <div className="flex items-center gap-1">
+                              <span className="flex h-1.5 w-1.5 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                              </span>
+                              <span className="text-[8px] tracking-widest font-mono font-black uppercase text-electric-blue leading-none">
+                                Active
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-[8px] font-mono text-slate-700 uppercase tracking-wider leading-none select-none hover:text-slate-400">
+                              Select
+                            </span>
+                          )}
+                        </div>
+                      </button>
                     </th>
                   );
                 })}
@@ -226,8 +223,21 @@ export function HardwareCompatibilityMatrix({
                         >
                           <Tooltip>
                             <TooltipTrigger asChild>
+                              <div
+                                tabIndex={0}
+                                className={`inline-flex w-full items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
+                                  cellDisabled ? "cursor-not-allowed" : "cursor-pointer"
+                                }`}
+                                onKeyDown={(e) => {
+                                  if (cellDisabled) return;
+                                  if (e.key !== "Enter" && e.key !== " ") return;
+                                  e.preventDefault();
+                                  handleCellClick();
+                                }}
+                              >
                               <button
                                 type="button"
+                                tabIndex={-1}
                                 disabled={cellDisabled}
                                 onClick={handleCellClick}
                                 aria-label={
@@ -235,9 +245,7 @@ export function HardwareCompatibilityMatrix({
                                     ? `Toggle ${v.name} on ${p.shortName}`
                                     : `Select ${p.shortName} and enable ${v.name}`
                                 }
-                                className={`inline-flex w-full items-center justify-center p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:opacity-100 ${
-                                  cellDisabled ? "cursor-not-allowed" : "cursor-pointer"
-                                }`}
+                                className="inline-flex w-full items-center justify-center p-1 disabled:opacity-100"
                               >
                                 {comp.status === "supported" ? (
                                   isCurrentlyActiveInCore ? (
@@ -271,6 +279,7 @@ export function HardwareCompatibilityMatrix({
                                   </div>
                                 )}
                               </button>
+                              </div>
                             </TooltipTrigger>
 
                             <TooltipContent

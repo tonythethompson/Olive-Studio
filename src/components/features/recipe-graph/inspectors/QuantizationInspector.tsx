@@ -1,4 +1,5 @@
-import { Label, Select, Switch } from "@/components/ui";
+import { Label, Select } from "@/components/ui";
+import { Switch } from "@/components/ui/Switch";
 import { getAllowedQuantMethods } from "@/lib/pipelineValidation";
 import { UIState } from "@/types";
 import { ImportConfirmDialog } from "./ImportConfirmDialog";
