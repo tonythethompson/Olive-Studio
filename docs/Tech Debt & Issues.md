@@ -138,7 +138,7 @@ Passes 1–6 were verified green on CI (run #30966708317 on PR #115).
 
 ## GitHub Issue Audit (2026-08-07)
 
-Full cross-reference of previously open GitHub issues against the current codebase. **21 issues closed, 31 remain open.** (31 verified via `gh issue list --state open`.)
+Full cross-reference of previously open GitHub issues against the current codebase. **24 issues closed, 30 remain open.** (30 verified via `gh issue list --repo tonythethompson/Olive-Studio --state open --limit 100` on 2026-08-07.)
 
 ### Summary
 

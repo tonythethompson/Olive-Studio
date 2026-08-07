@@ -74,14 +74,26 @@ export function OwrExportOverlay({
   }
 
   const handleCopyActiveCode = () => {
-    void navigator.clipboard.writeText(fileContent).then(() => {
-      setIsOwrCopied(true);
-      setTimeout(() => setIsOwrCopied(false), 2000);
-    });
+    navigator.clipboard.writeText(fileContent).then(
+      () => {
+        setIsOwrCopied(true);
+        setTimeout(() => setIsOwrCopied(false), 2000);
+      },
+      () => {
+        // Clipboard write failed — silently ignore (e.g. permission denied, non-secure context)
+      },
+    );
   };
 
   return (
-    <div className="absolute inset-0 z-55 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in overflow-y-auto">
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="absolute inset-0 z-55 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in overflow-y-auto"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+    >
       <Card className="w-full max-w-4xl border-electric-blue/30 flex flex-col max-h-[90vh]">
         <CardHeader
           title="Export for ONNX Runtime (Web/Mobile)"

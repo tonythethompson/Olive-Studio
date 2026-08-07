@@ -265,9 +265,16 @@ function buildTensorRtNotes(input: ProbeDiagnosticInput): {
   nvidiaTensorRtFamilyCapable: boolean;
 } {
   const notes: string[] = [];
+
+  // Gate TensorRT-family EPs on the SM ≥ 7.5 (Turing) floor — must be evaluated
+  // before note-generation branches so below-floor GPUs never emit "compatible" guidance.
+  const nvidiaTensorRtFamilyCapable = input.nvidia
+    ? input.nvidia.gpus.some((g) => isNvidiaGpuTensorRtFamily(g))
+    : false;
+
   if (input.tensorRtRtxVenvLoadable) {
     notes.push(`TensorRT RTX runtime verified${input.tensorRtRtx?.version ? ` (${input.tensorRtRtx.version})` : ""}.`);
-  } else if (input.nvidia?.gpus.length) {
+  } else if (input.nvidia?.gpus.length && nvidiaTensorRtFamilyCapable) {
     notes.push(
       input.tensorRtRtx?.detail
         ? `TensorRT RTX plugin not ready (${input.tensorRtRtx.detail}). GPU is compatible — install tensorrt-rtx from Hardware or on first TRT RTX run.`
@@ -277,18 +284,13 @@ function buildTensorRtNotes(input: ProbeDiagnosticInput): {
 
   if (input.tensorRtVenvLoadable) {
     notes.push("TensorRT execution provider load verified.");
-  } else if (input.nvidia?.gpus.length) {
+  } else if (input.nvidia?.gpus.length && nvidiaTensorRtFamilyCapable) {
     notes.push(
       input.tensorrt?.detail
         ? `Full TensorRT SDK not ready (${input.tensorrt.detail}). GPU is compatible — install tensorrt from Hardware or on first TensorRT run.`
         : "Full TensorRT SDK (nvinfer_10) not in .venv yet. GPU is compatible — use Install in Hardware, or Olive installs it on first TensorRT run.",
     );
   }
-
-  // Gate TensorRT-family EPs on the SM ≥ 7.5 (Turing) floor.
-  const nvidiaTensorRtFamilyCapable = input.nvidia
-    ? input.nvidia.gpus.some((g) => isNvidiaGpuTensorRtFamily(g))
-    : false;
   // Only warn when there are *actual* GPUs below the floor — `[].some(...)`
   // returning false for an empty GPU list would otherwise print a misleading
   // "all NVIDIA GPUs below TensorRT floor" note on machines with zero GPUs.

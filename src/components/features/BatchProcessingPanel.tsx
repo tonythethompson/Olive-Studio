@@ -480,6 +480,8 @@ function BatchJobCard({
       aria-label={`Select batch job ${job.name}`}
       onClick={onSelect}
       onKeyDown={(e) => {
+        // Let the nested delete button handle its own Enter/Space activation
+        if ((e.target as HTMLElement).closest('button, [role="button"]') !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onSelect();
