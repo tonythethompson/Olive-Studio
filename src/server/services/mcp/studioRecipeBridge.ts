@@ -109,16 +109,7 @@ function assignClippedBridgeStrings(
   if (cacheDir !== undefined) partial.cacheDir = cacheDir;
 }
 
-/**
- * Allowlist-merge untrusted partial UI fields. Unknown / dangerous keys ignored.
- * Returns an error when `passes` is present but not a plain object.
- */
-export function mergeBridgeUiState(
-  defaults: UIState,
-  raw: Record<string, unknown>,
-): { ok: true; state: UIState } | StudioRecipeBridgeError {
-  const partial: UiStatePatch = {};
-
+function assignEnumBridgeFields(partial: UiStatePatch, raw: Record<string, unknown>): void {
   if (typeof raw.modelSource === "string" && MODEL_SOURCES.has(raw.modelSource)) {
     partial.modelSource = raw.modelSource as ModelSource;
   }
@@ -137,24 +128,44 @@ export function mergeBridgeUiState(
   if (typeof raw.distributedCaching === "boolean") {
     partial.distributedCaching = raw.distributedCaching;
   }
+}
 
+function assignBridgePasses(
+  partial: UiStatePatch,
+  raw: Record<string, unknown>,
+): StudioRecipeBridgeError | null {
+  if (!("passes" in raw)) return null;
+  if (!isObjectRecord(raw.passes)) {
+    return { ok: false, code: "invalid_passes", error: "passes must be a plain object" };
+  }
+  const passes: Partial<UIState["passes"]> = {};
+  for (const [key, value] of Object.entries(raw.passes)) {
+    const coerced = coercePassValue(key, value);
+    if (coerced === null) continue;
+    (passes as Record<string, unknown>)[key] = coerced;
+  }
+  if (Object.keys(passes).length > 0) partial.passes = passes;
+  return null;
+}
+
+/**
+ * Allowlist-merge untrusted partial UI fields. Unknown / dangerous keys ignored.
+ * Returns an error when `passes` is present but not a plain object.
+ */
+export function mergeBridgeUiState(
+  defaults: UIState,
+  raw: Record<string, unknown>,
+): { ok: true; state: UIState } | StudioRecipeBridgeError {
+  const partial: UiStatePatch = {};
+
+  assignEnumBridgeFields(partial, raw);
   assignClippedBridgeStrings(partial, raw);
 
   const localFiles = parseLocalFiles(raw.localFiles);
   if (localFiles) partial.localFiles = localFiles;
 
-  if ("passes" in raw) {
-    if (!isObjectRecord(raw.passes)) {
-      return { ok: false, code: "invalid_passes", error: "passes must be a plain object" };
-    }
-    const passes: Partial<UIState["passes"]> = {};
-    for (const [key, value] of Object.entries(raw.passes)) {
-      const coerced = coercePassValue(key, value);
-      if (coerced === null) continue;
-      (passes as Record<string, unknown>)[key] = coerced;
-    }
-    if (Object.keys(passes).length > 0) partial.passes = passes;
-  }
+  const passesError = assignBridgePasses(partial, raw);
+  if (passesError) return passesError;
 
   // Explicitly drop dangerous keys even if somehow copied later.
   for (const key of REJECTED_KEYS) {

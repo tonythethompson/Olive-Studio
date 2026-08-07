@@ -64,23 +64,18 @@ export function hasMcpFeedbackTarget(
   return typeof diagnostic?.matched_entry === "string" && diagnostic.matched_entry.length > 0;
 }
 
-/**
- * Build a typed {@link McpDiagnostic} from an untrusted MCP tool payload.
- * Forwards only known fields (including feedback key `matched_entry`).
- * Returns null when required display fields are missing or optionals are malformed.
- */
-export function parseMcpDiagnosticPayload(payload: Record<string, unknown>): McpDiagnostic | null {
-  if (
-    typeof payload.title !== "string" ||
-    !payload.title ||
-    typeof payload.root_cause !== "string" ||
-    !payload.root_cause ||
-    typeof payload.workaround !== "string" ||
-    !payload.workaround
-  ) {
-    return null;
-  }
+function mcpDiagnosticRequiredFieldsPresent(payload: Record<string, unknown>): boolean {
+  return (
+    typeof payload.title === "string" &&
+    Boolean(payload.title) &&
+    typeof payload.root_cause === "string" &&
+    Boolean(payload.root_cause) &&
+    typeof payload.workaround === "string" &&
+    Boolean(payload.workaround)
+  );
+}
 
+function mcpDiagnosticOptionalsValid(payload: Record<string, unknown>): boolean {
   const optionalUpdated =
     payload.updated_config === undefined ||
     (payload.updated_config !== null &&
@@ -96,36 +91,30 @@ export function parseMcpDiagnosticPayload(payload: Record<string, unknown>): Mcp
     payload.domain === "olive" ||
     payload.domain === "studio";
   const optionalApplyable = payload.applyable === undefined || typeof payload.applyable === "boolean";
-
-  // matched_entry: stable feedback id — string | null | omitted; empty → null
   const matchedEntry = optionalNullableString(payload.matched_entry);
   const optionalMatched = matchedEntry !== undefined || payload.matched_entry === undefined;
-
   const relatedEntry = optionalNullableString(payload.related_olive_entry);
   const optionalRelated = relatedEntry !== undefined || payload.related_olive_entry === undefined;
+  return (
+    optionalUpdated &&
+    optionalQuirks &&
+    optionalDomain &&
+    optionalApplyable &&
+    optionalMatched &&
+    optionalRelated
+  );
+}
 
-  // frequency is best-effort: invalid shape is stripped, not a hard reject
+function buildMcpDiagnosticFromPayload(payload: Record<string, unknown>): McpDiagnostic {
+  const matchedEntry = optionalNullableString(payload.matched_entry);
+  const relatedEntry = optionalNullableString(payload.related_olive_entry);
   const frequency = parseOptionalFrequency(payload.frequency);
-
-  if (
-    !optionalUpdated ||
-    !optionalQuirks ||
-    !optionalDomain ||
-    !optionalApplyable ||
-    !optionalMatched ||
-    !optionalRelated
-  ) {
-    return null;
-  }
-
   const diagnostic: McpDiagnostic = {
-    title: payload.title,
-    root_cause: payload.root_cause,
-    workaround: payload.workaround,
-    // Always define matched_entry so feedback UI can key off a stable value.
+    title: payload.title as string,
+    root_cause: payload.root_cause as string,
+    workaround: payload.workaround as string,
     matched_entry: matchedEntry === undefined ? null : matchedEntry,
   };
-
   if (payload.updated_config !== undefined && payload.updated_config !== null) {
     diagnostic.updated_config = payload.updated_config as Record<string, unknown>;
   }
@@ -144,8 +133,19 @@ export function parseMcpDiagnosticPayload(payload: Record<string, unknown>): Mcp
   if (frequency !== undefined) {
     diagnostic.frequency = frequency;
   }
-
   return diagnostic;
+}
+
+/**
+ * Build a typed {@link McpDiagnostic} from an untrusted MCP tool payload.
+ * Forwards only known fields (including feedback key `matched_entry`).
+ * Returns null when required display fields are missing or optionals are malformed.
+ */
+export function parseMcpDiagnosticPayload(payload: Record<string, unknown>): McpDiagnostic | null {
+  if (!mcpDiagnosticRequiredFieldsPresent(payload) || !mcpDiagnosticOptionalsValid(payload)) {
+    return null;
+  }
+  return buildMcpDiagnosticFromPayload(payload);
 }
 
 /**
@@ -407,27 +407,7 @@ export async function requestMcpTroubleshootFeedback(
     if (signal?.aborted) {
       return { status: "error", error: "aborted", message: "Feedback request was cancelled." };
     }
-
-    const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
-    const payload =
-      record && record.result && typeof record.result === "object" && !Array.isArray(record.result)
-        ? (record.result as Record<string, unknown>)
-        : record;
-
-    if (!resp.ok) {
-      const msg =
-        (payload && typeof payload.error === "string" && payload.error) ||
-        (payload && typeof payload.message === "string" && payload.message) ||
-        (record && typeof record.error === "string" && record.error) ||
-        `Feedback failed (HTTP ${resp.status})`;
-      return {
-        status: "error",
-        error: typeof payload?.error === "string" ? payload.error : "http_error",
-        message: msg,
-      };
-    }
-
-    return parseFeedbackToolPayload(payload);
+    return interpretFeedbackHttpResponse(resp, data);
   } catch (err: unknown) {
     if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) {
       return { status: "error", error: "aborted", message: "Feedback request was cancelled." };
@@ -438,6 +418,38 @@ export async function requestMcpTroubleshootFeedback(
       message: err instanceof Error ? err.message : "Feedback request failed",
     };
   }
+}
+
+function feedbackPayloadRecord(data: unknown): {
+  record: Record<string, unknown> | null;
+  payload: Record<string, unknown> | null;
+} {
+  const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+  const payload =
+    record && record.result && typeof record.result === "object" && !Array.isArray(record.result)
+      ? (record.result as Record<string, unknown>)
+      : record;
+  return { record, payload };
+}
+
+function interpretFeedbackHttpResponse(
+  resp: Response,
+  data: unknown,
+): McpTroubleshootFeedbackResult | McpTroubleshootFeedbackError {
+  const { record, payload } = feedbackPayloadRecord(data);
+  if (!resp.ok) {
+    const msg =
+      (payload && typeof payload.error === "string" && payload.error) ||
+      (payload && typeof payload.message === "string" && payload.message) ||
+      (record && typeof record.error === "string" && record.error) ||
+      `Feedback failed (HTTP ${resp.status})`;
+    return {
+      status: "error",
+      error: typeof payload?.error === "string" ? payload.error : "http_error",
+      message: msg,
+    };
+  }
+  return parseFeedbackToolPayload(payload);
 }
 
 /**

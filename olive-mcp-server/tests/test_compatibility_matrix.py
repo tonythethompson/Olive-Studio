@@ -196,6 +196,36 @@ def _collect_olive_window(
     return errors, window_min, window_max
 
 
+def _collect_evidence_window_errors(
+    claim_loc: str,
+    *,
+    etype: Any,
+    ever: Any,
+    enforce_olive_window: bool,
+    window_min: str | None,
+    window_max: str | None,
+) -> list[str]:
+    if not (
+        enforce_olive_window
+        and window_min is not None
+        and window_max is not None
+        and etype in _OLIVE_EVIDENCE_TYPES
+        and isinstance(ever, str)
+        and ever.strip()
+    ):
+        return []
+    try:
+        if _version_in_range(ever, str(window_min), str(window_max)):
+            return []
+        return [
+            f"{claim_loc}: evidence.version {ever!r} "
+            f"outside olive_version_support "
+            f"[{window_min}, {window_max}]"
+        ]
+    except ValueError as exc:
+        return [f"{claim_loc}: evidence.version unparseable for window check: {exc}"]
+
+
 def _collect_claim_evidence_errors(
     claim: dict[str, Any],
     claim_loc: str,
@@ -228,25 +258,16 @@ def _collect_claim_evidence_errors(
     if ever is not None and (not isinstance(ever, str) or not ever.strip()):
         errors.append(f"{claim_loc}: evidence.version must be non-empty")
 
-    if (
-        enforce_olive_window
-        and window_min is not None
-        and window_max is not None
-        and etype in _OLIVE_EVIDENCE_TYPES
-        and isinstance(ever, str)
-        and ever.strip()
-    ):
-        try:
-            if not _version_in_range(ever, str(window_min), str(window_max)):
-                errors.append(
-                    f"{claim_loc}: evidence.version {ever!r} "
-                    f"outside olive_version_support "
-                    f"[{window_min}, {window_max}]"
-                )
-        except ValueError as exc:
-            errors.append(
-                f"{claim_loc}: evidence.version unparseable for window check: {exc}"
-            )
+    errors.extend(
+        _collect_evidence_window_errors(
+            claim_loc,
+            etype=etype,
+            ever=ever,
+            enforce_olive_window=enforce_olive_window,
+            window_min=window_min,
+            window_max=window_max,
+        )
+    )
     return errors
 
 
@@ -305,6 +326,61 @@ def _collect_claim_errors(
     return errors
 
 
+def _collect_frameworks_errors(loc: str, model_name: str, frameworks: Any) -> list[str]:
+    if frameworks is None:
+        return []
+    if not isinstance(frameworks, list) or len(frameworks) < 1:
+        return [f"{loc} ({model_name}): frameworks must be non-empty array"]
+    return [
+        f"{loc} ({model_name}): unknown framework {fw!r}"
+        for fw in frameworks
+        if fw not in _FRAMEWORKS
+    ]
+
+
+def _collect_hardware_map_errors(
+    loc: str,
+    model_name: str,
+    hardware: Any,
+    *,
+    known_passes: set[str],
+    seen_triples: set[tuple[str, str, str]],
+    enforce_olive_window: bool,
+    window_min: str | None,
+    window_max: str | None,
+) -> list[str]:
+    if hardware is None:
+        return []
+    if not isinstance(hardware, dict):
+        return [f"{loc} ({model_name}): hardware must be an object"]
+
+    errors: list[str] = []
+    for hw_name, passes in hardware.items():
+        hw_loc = f"{loc} ({model_name}) / hardware[{hw_name!r}]"
+        if not isinstance(passes, dict):
+            errors.append(f"{hw_loc}: pass map must be an object")
+            continue
+        for claim_key, claim in passes.items():
+            claim_loc = f"{hw_loc} / {claim_key}"
+            if not isinstance(claim, dict):
+                errors.append(f"{claim_loc}: claim must be an object")
+                continue
+            errors.extend(
+                _collect_claim_errors(
+                    claim,
+                    claim_loc,
+                    model_name=str(model_name),
+                    hw_name=str(hw_name),
+                    known_passes=known_passes,
+                    seen_triples=seen_triples,
+                    enforce_olive_window=enforce_olive_window,
+                    window_min=window_min,
+                    window_max=window_max,
+                )
+            )
+    return errors
+
+
 def _collect_model_entry_errors(
     entry: Any,
     idx: int,
@@ -335,45 +411,19 @@ def _collect_model_entry_errors(
     else:
         seen_models.add(model_name)
 
-    frameworks = entry.get("frameworks")
-    if frameworks is not None:
-        if not isinstance(frameworks, list) or len(frameworks) < 1:
-            errors.append(f"{loc} ({model_name}): frameworks must be non-empty array")
-        else:
-            for fw in frameworks:
-                if fw not in _FRAMEWORKS:
-                    errors.append(f"{loc} ({model_name}): unknown framework {fw!r}")
-
-    hardware = entry.get("hardware")
-    if hardware is None:
-        return errors
-    if not isinstance(hardware, dict):
-        errors.append(f"{loc} ({model_name}): hardware must be an object")
-        return errors
-
-    for hw_name, passes in hardware.items():
-        hw_loc = f"{loc} ({model_name}) / hardware[{hw_name!r}]"
-        if not isinstance(passes, dict):
-            errors.append(f"{hw_loc}: pass map must be an object")
-            continue
-        for claim_key, claim in passes.items():
-            claim_loc = f"{hw_loc} / {claim_key}"
-            if not isinstance(claim, dict):
-                errors.append(f"{claim_loc}: claim must be an object")
-                continue
-            errors.extend(
-                _collect_claim_errors(
-                    claim,
-                    claim_loc,
-                    model_name=str(model_name),
-                    hw_name=str(hw_name),
-                    known_passes=known_passes,
-                    seen_triples=seen_triples,
-                    enforce_olive_window=enforce_olive_window,
-                    window_min=window_min,
-                    window_max=window_max,
-                )
-            )
+    errors.extend(_collect_frameworks_errors(loc, str(model_name), entry.get("frameworks")))
+    errors.extend(
+        _collect_hardware_map_errors(
+            loc,
+            str(model_name),
+            entry.get("hardware"),
+            known_passes=known_passes,
+            seen_triples=seen_triples,
+            enforce_olive_window=enforce_olive_window,
+            window_min=window_min,
+            window_max=window_max,
+        )
+    )
     return errors
 
 
