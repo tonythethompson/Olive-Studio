@@ -346,7 +346,7 @@ function buildCudaNotes(input: ProbeDiagnosticInput): string[] {
   // install hints (no install can recover Kepler SM 3.x).
   if (input.nvidia?.gpus.length && isPreMaxwellNvidiaBox(input.nvidia.gpus)) {
     notes.push(
-      `NVIDIA GPU(s) below CUDA 12 toolkit floor (compute capability < ${CUDA_SM_FLOOR}); modern CUDA cannot run on Maxwell/Pascal/Kepler cards.`,
+      `NVIDIA GPU(s) below CUDA 12 toolkit floor (compute capability < ${CUDA_SM_FLOOR}); modern CUDA cannot run on Kepler / pre-Maxwell GPUs.`,
     );
   } else if (input.nvidia?.cudaToolkit?.available === false) {
     notes.push(
