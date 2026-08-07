@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   isModuleNotFoundError,
   _resetCodexStateForTests,
@@ -10,6 +10,10 @@ import {
 describe("codexAgent", () => {
   beforeEach(() => {
     _resetCodexStateForTests();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   describe("isModuleNotFoundError", () => {
@@ -30,6 +34,14 @@ describe("codexAgent", () => {
       const err = new Error("Cannot find package 'some-transitive-dep' imported from /node_modules/@openai/codex-sdk/index.js");
       (err as unknown as Record<string, unknown>).code = "ERR_MODULE_NOT_FOUND";
       (err as unknown as Record<string, unknown>).specifier = "some-transitive-dep";
+      expect(isModuleNotFoundError(err)).toBe(false);
+    });
+
+    it("returns false for missing transitive dependencies without err.specifier", () => {
+      const err = new Error(
+        "Cannot find package 'some-transitive-dep' imported from /node_modules/@openai/codex-sdk/index.js",
+      );
+      (err as unknown as Record<string, unknown>).code = "ERR_MODULE_NOT_FOUND";
       expect(isModuleNotFoundError(err)).toBe(false);
     });
 

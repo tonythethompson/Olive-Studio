@@ -60,11 +60,14 @@ export function isModuleNotFoundError(err: unknown): boolean {
     return false;
   }
   const specifier =
-    ("specifier" in err && typeof err.specifier === "string" ? err.specifier : "") ||
-    ("url" in err && typeof err.url === "string" ? err.url : "") ||
-    err.message;
+    ("specifier" in err && typeof err.specifier === "string" && err.specifier
+      ? err.specifier
+      : "url" in err && typeof err.url === "string" && err.url
+        ? err.url
+        : err.message.match(/Cannot find (?:package|module) ['"]([^'\"]+)['\"]/)?.[1]) ??
+    "";
 
-  return specifier.includes("@openai/codex-sdk");
+  return specifier === "@openai/codex-sdk";
 }
 
 export function _resetCodexStateForTests(): void {
