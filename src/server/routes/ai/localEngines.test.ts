@@ -8,9 +8,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
 
-import { findLmsCli, ensureOllamaReady, ensureLmsReady } from "./localEngines.ts";
-import { localEngineRuntime, resetLocalEngineRuntime } from "../../services/ai/localEngineState.ts";
-
 const mocks = vi.hoisted(() => ({
   execFileImpl: null as null | ((...args: unknown[]) => unknown),
   spawnImpl: null as null | ((...args: unknown[]) => unknown),
@@ -21,6 +18,9 @@ vi.mock("child_process", async (importOriginal) => {
   const { childProcessVitestMockFactory } = await import("../../__tests__/childProcessTestMocks.ts");
   return childProcessVitestMockFactory(mocks, { includeSpawn: true })(importOriginal);
 });
+
+import { findLmsCli, ensureOllamaReady, ensureLmsReady } from "./localEngines.ts";
+import { localEngineRuntime, resetLocalEngineRuntime } from "../../services/ai/localEngineState.ts";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

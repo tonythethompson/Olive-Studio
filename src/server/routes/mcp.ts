@@ -14,7 +14,9 @@ import {
   setKbSyncInProgress,
 } from "../services/mcp/state.ts";
 import { callOliveMcpTool, MCP_UNAVAILABLE_ERROR } from "../services/mcp/client.ts";
+import { isAllowedMcpToolName } from "../services/mcp/allowedTools.ts";
 import { kbStatusRateLimit, kbSyncRateLimit } from "../middleware/rateLimit.ts";
+import { parseBody, isParseBodyError } from "../middleware/bodyGuard.ts";
 import { readStudioConfig, writeStudioConfig } from "../config.ts";
 import type { KbStatusCache } from "../types.ts";
 
@@ -194,12 +196,16 @@ export function performKbSync():
 export function mountMcpRoutes(router: Router): void {
   // ─── MCP Tool Proxy ───────────────────────────────────────────────────
   router.post("/mcp/tool", async (req, res) => {
-    const { toolName, args } = req.body as { toolName?: string; args?: Record<string, unknown> };
-    if (!toolName) {
-      return res.status(400).json({ error: "Missing toolName" });
+    const body = parseBody<{ toolName: string; args?: Record<string, unknown> }>(req.body, {
+      toolName: { type: "string", message: "Missing toolName" },
+      args: { type: "object", required: false },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    if (!isAllowedMcpToolName(body.parsed.toolName)) {
+      return res.status(400).json({ error: "Unknown toolName" });
     }
     try {
-      const out = await callOliveMcpTool(toolName, args ?? {});
+      const out = await callOliveMcpTool(body.parsed.toolName, body.parsed.args ?? {});
       if (out.unavailable) {
         return res.status(503).json({ available: false, error: out.error ?? MCP_UNAVAILABLE_ERROR });
       }

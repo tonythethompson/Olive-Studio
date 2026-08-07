@@ -163,6 +163,25 @@ describe("Route integration tests", () => {
     });
   });
 
+  // ─── POST /api/ai/analyze-state ────────────────────────────────────────────
+
+  describe("POST /api/ai/analyze-state", () => {
+    it("returns 400 when state is incomplete", async () => {
+      const res = await fetch(`${baseUrl}/api/ai/analyze-state`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          state: { modelSource: "huggingface", ihvProvider: "CPUExecutionProvider" },
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body).toHaveProperty("error");
+      expect(String(body.error)).toContain("passes");
+    });
+  });
+
   // ─── GET /api/mcp/kb-status ──────────────────────────────────────────────
 
   describe("GET /api/mcp/kb-status", () => {

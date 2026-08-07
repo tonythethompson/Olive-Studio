@@ -6,9 +6,6 @@
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-import { callOliveMcpTools, callOliveMcpTool, MCP_UNAVAILABLE_ERROR } from "./client.ts";
-import mcpBreaker, { resetMcpBreaker } from "./breaker.ts";
-
 const mocks = vi.hoisted(() => ({
   execFileImpl: null as null | ((...args: unknown[]) => unknown),
   spawnImpl: null as null | ((...args: unknown[]) => unknown),
@@ -20,10 +17,15 @@ vi.mock("child_process", async (importOriginal) => {
   return childProcessVitestMockFactory(mocks)(importOriginal);
 });
 
+import { callOliveMcpTools, callOliveMcpTool, MCP_UNAVAILABLE_ERROR } from "./client.ts";
+import mcpBreaker, { resetMcpBreaker } from "./breaker.ts";
+
+/** Trip the process-wide breaker using the current admission epoch (safe after reset()). */
 function tripMcpBreaker(): void {
   for (let i = 0; i < 3; i += 1) {
     const admission = mcpBreaker.beforeCall();
-    if (admission) mcpBreaker.recordFailure(admission.epoch);
+    if (!admission) return;
+    mcpBreaker.recordFailure(admission.epoch);
   }
 }
 

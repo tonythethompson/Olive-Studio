@@ -10,13 +10,6 @@
  * `child_process` is mocked via `src/server/__tests__/childProcessTestMocks.ts`.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
-import express from "express";
-import type { Server } from "http";
-import fs from "fs";
-
-import { mountMcpRoutes } from "./mcp.ts";
-import { setKbStatusCache } from "../services/mcp/state.ts";
-import mcpBreaker, { resetMcpBreaker } from "../services/mcp/breaker.ts";
 
 const mcpToolMocks = vi.hoisted(() => ({
   execFileImpl: null as null | ((...args: unknown[]) => unknown),
@@ -29,10 +22,19 @@ vi.mock("child_process", async (importOriginal) => {
   return childProcessVitestMockFactory(mcpToolMocks, { trackExecFileCalls: true })(importOriginal);
 });
 
+import express from "express";
+import type { Server } from "http";
+import fs from "fs";
+
+import { mountMcpRoutes } from "./mcp.ts";
+import { setKbStatusCache } from "../services/mcp/state.ts";
+import mcpBreaker, { resetMcpBreaker } from "../services/mcp/breaker.ts";
+
 function tripMcpBreaker(): void {
   for (let i = 0; i < 3; i += 1) {
     const admission = mcpBreaker.beforeCall();
-    if (admission) mcpBreaker.recordFailure(admission.epoch);
+    if (!admission) return;
+    mcpBreaker.recordFailure(admission.epoch);
   }
 }
 
@@ -185,7 +187,7 @@ describe("POST /api/mcp/tool", () => {
     const res = await fetch(`${baseUrl}/api/mcp/tool`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ toolName: "x", args: {} }),
+      body: JSON.stringify({ toolName: "get_olive_passes", args: {} }),
     });
 
     expect(res.status).toBe(503);
@@ -195,14 +197,26 @@ describe("POST /api/mcp/tool", () => {
     expect(mcpToolMocks.execFileCalls).toHaveLength(0);
   });
 
+  it("returns 400 for an unknown toolName", async () => {
+    const res = await fetch(`${baseUrl}/api/mcp/tool`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toolName: "not_a_real_tool", args: {} }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Unknown toolName" });
+    expect(mcpToolMocks.execFileCalls).toHaveLength(0);
+  });
+
   it("returns 200 with the tool result when the closed breaker proxies valid JSON", async () => {
     mcpToolMocks.execFileImpl = () =>
-      Promise.resolve({ stdout: '[{"tool":"x","result":{"ok":true}}]', stderr: "" });
+      Promise.resolve({ stdout: '[{"tool":"get_olive_passes","result":{"ok":true}}]', stderr: "" });
 
     const res = await fetch(`${baseUrl}/api/mcp/tool`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ toolName: "x", args: {} }),
+      body: JSON.stringify({ toolName: "get_olive_passes", args: {} }),
     });
 
     expect(res.status).toBe(200);

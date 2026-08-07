@@ -27,6 +27,7 @@ import {
   LMS_GET_MAX_MS,
 } from "./localEngines.ts";
 import { trackStreamClient, beginPullSse } from "./streamHelpers.ts";
+import { parseBody, isParseBodyError } from "../../middleware/bodyGuard.ts";
 
 export function mountLmStudioRoutes(router: Router): void {
   router.get("/ai/local-models", async (_req, res) => {
@@ -81,10 +82,11 @@ export function mountLmStudioRoutes(router: Router): void {
   });
 
   router.post("/ai/local-load", async (req, res) => {
-    const { modelTag } = req.body ?? {};
-    if (typeof modelTag !== "string" || !modelTag) {
-      return res.status(400).json({ error: "Missing modelTag" });
-    }
+    const body = parseBody<{ modelTag: string }>(req.body, {
+      modelTag: { type: "string" },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const { modelTag } = body.parsed;
     try {
       const r = await fetch(`http://127.0.0.1:${LM_STUDIO_PORT}/v1/models/load`, {
         method: "POST",

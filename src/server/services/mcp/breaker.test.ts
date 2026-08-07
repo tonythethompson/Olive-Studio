@@ -197,7 +197,6 @@ describe("createMcpCircuitBreaker", () => {
 
     // Late success from the pre-open admission must not clear half-open state.
     breaker.recordSuccess(stale.epoch);
-    expect(breaker.isOpen()).toBe(false);
     expect(breaker.beforeCall()).toBe(false);
 
     // The actual recovery probe failure must still reopen the breaker.

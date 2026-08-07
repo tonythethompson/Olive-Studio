@@ -1,4 +1,4 @@
-import { IHVProvider, UIState, OliveRecipe } from "@/types";
+import { IHVProvider, ModelSource, UIState, OliveRecipe } from "@/types";
 import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
 import { getProviderAvailabilityBlock, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { buildOliveRecipe, isPyTorchNativeQuantMethod } from "@/lib/oliveRecipeBuilder";
@@ -886,6 +886,54 @@ export function sanitizePipelineState(state: UIState): UIState {
   }
 
   return current;
+}
+
+const UI_STATE_MODEL_SOURCES = new Set<ModelSource>(["huggingface", "local", "azure"]);
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Validates an untrusted `state` payload before `buildAiWorkspaceContext`. */
+export function parseUIStatePayload(
+  value: unknown,
+): { ok: true; state: UIState } | { ok: false; error: string } {
+  if (!isPlainRecord(value)) {
+    return { ok: false, error: "state must be a JSON object" };
+  }
+  if (
+    typeof value.modelSource !== "string" ||
+    !UI_STATE_MODEL_SOURCES.has(value.modelSource as ModelSource)
+  ) {
+    return { ok: false, error: "state.modelSource is invalid" };
+  }
+  if (typeof value.ihvProvider !== "string" || !value.ihvProvider.endsWith("ExecutionProvider")) {
+    return { ok: false, error: "state.ihvProvider is invalid" };
+  }
+  if (!isPlainRecord(value.passes)) {
+    return { ok: false, error: "state.passes must be a JSON object" };
+  }
+  if (!Array.isArray(value.localFiles)) {
+    return { ok: false, error: "state.localFiles must be an array" };
+  }
+  for (const field of [
+    "hfModelId",
+    "hfDataset",
+    "azureModelPath",
+    "cacheDir",
+    "azureStr",
+    "openvinoTargetDevice",
+    "memoryOffload",
+    "cudaVersion",
+  ] as const) {
+    if (typeof value[field] !== "string") {
+      return { ok: false, error: `state.${field} must be a string` };
+    }
+  }
+  if (typeof value.distributedCaching !== "boolean") {
+    return { ok: false, error: "state.distributedCaching must be a boolean" };
+  }
+  return { ok: true, state: value as unknown as UIState };
 }
 
 export function commitUiStateUpdate(prev: UIState, partial: Partial<UIState>): UIState {

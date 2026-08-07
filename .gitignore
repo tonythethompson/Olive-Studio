@@ -62,3 +62,4 @@ bun.lock
 /.playwright-mcp
 /.cursor/worktrees
 /.amazonq
+install.sh
