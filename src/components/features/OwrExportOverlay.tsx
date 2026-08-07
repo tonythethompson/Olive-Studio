@@ -37,6 +37,12 @@ export interface OwrExportOverlayProps {
   onDownloadBundle: () => void;
 }
 
+/**
+ * Displays an overlay for configuring and exporting ONNX Runtime Web or Mobile artifacts.
+ *
+ * @param props - Export configuration, selection state, and callbacks for updating the overlay and its contents.
+ * @returns The export overlay when open, otherwise `null`.
+ */
 export function OwrExportOverlay({
   open,
   onClose,
@@ -74,15 +80,15 @@ export function OwrExportOverlay({
   }
 
   const handleCopyActiveCode = () => {
-    navigator.clipboard.writeText(fileContent).then(
-      () => {
+    void navigator.clipboard
+      .writeText(fileContent)
+      .then(() => {
         setIsOwrCopied(true);
         setTimeout(() => setIsOwrCopied(false), 2000);
-      },
-      () => {
-        // Clipboard write failed — silently ignore (e.g. permission denied, non-secure context)
-      },
-    );
+      })
+      .catch(() => {
+        setIsOwrCopied(false);
+      });
   };
 
   return (

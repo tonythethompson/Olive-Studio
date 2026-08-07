@@ -1,6 +1,6 @@
 # Tech Debt & Issues
 
-> **Status:** audited against the codebase on 2026-08-07; remediation passes 1–6 landed in PR #115 (branch `tech-debt-passes-1-6`). **24 GitHub issues closed** across the 2026-08-07 audit session. **30 remain open.**
+> **Status:** audited against the codebase on 2026-08-07; remediation passes 1–6 landed in PR #115 (branch `tech-debt-passes-1-6`). **23 GitHub issues closed** across the 2026-08-07 audit session. **32 remain open** (verified via `gh issue list --state open`, minus #159 closed in this PR).
 
 ## Status overview
 
@@ -145,10 +145,10 @@ Full cross-reference of previously open GitHub issues against the current codeba
 | Action | Count | Issues |
 |--------|-------|--------|
 | Closed — code fixed | 10 | #137, #142, #143, #144, #145, #146, #147, #148, #149, #151 |
-| Closed — verified complete | 8 | #124, #134, #136, #138, #153, #154, #155 |
-| Closed — refactoring (component extractions) | 5 | #120, #121, #122, #139, #140 |
-| **Total closed** | **24** | *(23 from this session + 1 previously closed duplicate #145)* |
-| Remaining open | **30** | See below |
+| Closed — verified complete | 7 | #124, #134, #136, #138, #153, #154, #155 |
+| Closed — refactoring (component extractions) | 6 | #120, #121, #122, #139, #140, #159 |
+| **Total closed** | **23** | |
+| Remaining open | **32** | See below |
 
 ### Closed: Code Fixed (2026-08-07)
 
@@ -184,7 +184,9 @@ Full cross-reference of previously open GitHub issues against the current codeba
 | **#120** | Complex Method in ExecutionWorkspace.tsx | Extracted `OwrExportOverlay` (301 lines, 14 typed props) into `OwrExportOverlay.tsx`. Extracted SSE streaming + execution lifecycle into `useOliveStream` hook (398 lines). Removed 11 unused imports. | 1753 → 1174 (−579, 33%) |
 | **#121** | Complex Method in IHVIntegrationPanel.tsx | Extracted `HardwareCompatibilityMatrix` (359 lines, 7 typed props) — interactive heatmap table + footer legend. `OptimizationPassValidation` interface exported. Removed unused `Check` import. | 1592 → 1282 (−310, 19%) |
 | **#122** | Complex Method in BatchProcessingPanel.tsx | Extracted `BatchJobList` (empty state + mapping) and `BatchJobCard` (status, metrics, progress bar, delete) as module-level helpers. | Render block: −13 lines inline |
+| **#139** | Duplicate Code in HardwareProviderCard.tsx | Extracted `PluginInstallBlock` and reused across provider install cards. | DRY across 6 install blocks |
 | **#140** | Very Complex Method in system.ts (probeSystemHardware) | Extracted `buildProbeDiagnostics()` (~160 lines) with typed `ProbeDiagnosticInput`/`ProbeDiagnosticOutput` interfaces. | 395 → ~250 (−145, 37%) |
+| **#159** | Duplicate Code in IHVIntegrationPanel.tsx | Shared `providerCardProps` for local/export card grids. Extracted Interactive Cards tab to `HardwarePassCards.tsx`. | Removed duplicated prop bags + ~150-line cards tab |
 
 ### Lint Cleanup (2026-08-07)
 
@@ -201,22 +203,12 @@ All ESLint warnings in `src/` and `server.ts` resolved. `eslint --max-warnings 2
 | `arenaOliveOutputs.test.ts:441` | `@typescript-eslint/no-unused-vars` | Renamed `reject` → `_reject` |
 | `registry.test.ts:31` | `no-duplicate-imports` | Merged duplicate imports |
 
-### Remaining Open (30 issues)
+### Remaining Open (32 issues)
 
-#### Large component complexity — ✅ all 4 resolved
-
-| GH # | Issue | Current status |
-|------|-------|----------------|
-| **#120** | Complex Method in ExecutionWorkspace.tsx | ✅ Closed. `OwrExportOverlay` + `useOliveStream` extracted (579 total lines, 33% reduction). |
-| **#121** | Complex Method in IHVIntegrationPanel.tsx | ✅ Closed. `HardwareCompatibilityMatrix` extracted (310 lines, 19% reduction). |
-| **#122** | Complex Method in BatchProcessingPanel.tsx | ✅ Closed. `BatchJobList` + `BatchJobCard` extracted as module-level helpers. |
-| **#140** | Very Complex Method in system.ts (probeSystemHardware) | ✅ Closed. `buildProbeDiagnostics` extracted (160 lines, 37% reduction). |
-
-#### Duplication issues (3)
+#### Duplication issues (2)
 
 | GH # | Issue | Notes |
 |------|-------|-------|
-| **#139** | Duplicate Code in HardwareProviderCard.tsx | ✅ Closed (2026-08-07). `PluginInstallBlock` extracted and reused 6 times — fully DRY. CodeFactor flags from pre-refactoring snapshot. |
 | **#150** | Duplicate Code in GraphCanvas/graphCanvasHelpers | ⚠️ Partial. HardwareProviderCard items resolved. Real ~35-line SVG duplication between `renderConnectionSegmentGroup` (helper) and inline code in `GraphCanvas.tsx`. `.agents/skills/` files not project code. |
 | **#102** | 2 Duplication issues | Older CodeFactor findings. May be partially addressed by prior refactoring. |
 
@@ -225,6 +217,13 @@ All ESLint warnings in `src/` and `server.ts` resolved. `eslint --max-warnings 2
 | GH # | Issue | Notes |
 |------|-------|-------|
 | **#152** | 4 Complexity issues in route handlers | Handler bodies shortened by bodyGuard middleware. AI route splitting (Pass 6) reduced scope. Re-scan recommended. |
+
+#### Newer CodeFactor complexity (2)
+
+| GH # | Issue | Notes |
+|------|-------|-------|
+| **#157** | Very Complex Method in InputEnvironmentPanel.tsx | Follow-up complexity finding after prior extractions. |
+| **#158** | Very Complex Method in system.ts | Follow-up after `buildProbeDiagnostics` extraction. |
 
 #### Older complexity / maintainability issues (9)
 

@@ -164,6 +164,13 @@ async function probeIntelGpuNames(): Promise<string[]> {
   return [];
 }
 
+/**
+ * Probes a Python interpreter for OpenVINO and ONNX Runtime support.
+ *
+ * @param python - The Python interpreter to probe
+ * @param env - Environment variables used when launching the interpreter
+ * @returns Detected OpenVINO availability and version, plus available ONNX Runtime providers
+ */
 async function probePythonRuntime(
   python: string,
   env: NodeJS.ProcessEnv = process.env,
@@ -228,6 +235,13 @@ export interface ProbeDiagnosticOutput {
   qnnHostMode: ReturnType<typeof resolveQnnHostMode>;
 }
 
+/**
+ * Builds diagnostic notes for ONNX Runtime provider detection and GPU availability.
+ *
+ * @param input - Probe results used to identify the runtime source and detected GPUs
+ * @param onnxRuntimeProviders - Merged ONNX Runtime execution providers
+ * @returns Diagnostic notes describing provider detection and missing NVIDIA or AMD GPUs
+ */
 function buildOrtProviderNotes(
   input: ProbeDiagnosticInput,
   onnxRuntimeProviders: string[] | undefined,
@@ -260,6 +274,12 @@ function buildOrtProviderNotes(
   return notes;
 }
 
+/**
+ * Builds diagnostic notes for TensorRT and TensorRT RTX runtime readiness and GPU compatibility.
+ *
+ * @param input - Probe results used to determine TensorRT runtime status and NVIDIA GPU capability
+ * @returns TensorRT diagnostic notes and whether any NVIDIA GPU supports the TensorRT family
+ */
 function buildTensorRtNotes(input: ProbeDiagnosticInput): {
   notes: string[];
   nvidiaTensorRtFamilyCapable: boolean;
@@ -302,6 +322,12 @@ function buildTensorRtNotes(input: ProbeDiagnosticInput): {
   return { notes, nvidiaTensorRtFamilyCapable };
 }
 
+/**
+ * Builds diagnostic notes for CUDA execution provider readiness and GPU compatibility.
+ *
+ * @param input - Probe results used to assess CUDA availability, NVIDIA GPU support, and CUDA Toolkit installation
+ * @returns Diagnostic messages describing CUDA readiness, installation requirements, or compatibility limitations
+ */
 function buildCudaNotes(input: ProbeDiagnosticInput): string[] {
   const notes: string[] = [];
   if (input.cudaVenvLoadable) {
@@ -322,7 +348,7 @@ function buildCudaNotes(input: ProbeDiagnosticInput): string[] {
   // install hints (no install can recover Kepler SM 3.x).
   if (input.nvidia?.gpus.length && isPreMaxwellNvidiaBox(input.nvidia.gpus)) {
     notes.push(
-      `NVIDIA GPU(s) below CUDA 12 toolkit floor (compute capability < ${CUDA_SM_FLOOR}); modern CUDA cannot run on Maxwell/Pascal/Kepler cards.`,
+      `NVIDIA GPU(s) below CUDA 12 toolkit floor (compute capability < ${CUDA_SM_FLOOR}); modern CUDA cannot run on Kepler / pre-Maxwell GPUs.`,
     );
   } else if (input.nvidia?.cudaToolkit?.available === false) {
     notes.push(
@@ -332,6 +358,12 @@ function buildCudaNotes(input: ProbeDiagnosticInput): string[] {
   return notes;
 }
 
+/**
+ * Builds diagnostic notes describing the availability and readiness of the OpenVINO Python stack.
+ *
+ * @param input - Probe results used to determine OpenVINO installation status and device details
+ * @returns Diagnostic messages for the OpenVINO stack
+ */
 function buildOpenVinoNotes(input: ProbeDiagnosticInput): string[] {
   const notes: string[] = [];
   if (input.openvinoVenvAvailable) {
@@ -351,6 +383,13 @@ function buildOpenVinoNotes(input: ProbeDiagnosticInput): string[] {
   return notes;
 }
 
+/**
+ * Builds diagnostic notes describing QNN runtime availability and host compatibility.
+ *
+ * @param input - Probe results and QNN runtime state used to determine readiness.
+ * @param qnnHostMode - Host mode that determines whether local inference or preparation is supported.
+ * @returns Diagnostic messages describing QNN readiness, installation requirements, or platform limitations.
+ */
 function buildQnnNotes(
   input: ProbeDiagnosticInput,
   qnnHostMode: ReturnType<typeof resolveQnnHostMode>,
@@ -392,9 +431,10 @@ function buildQnnNotes(
 }
 
 /**
- * Pure probe-note assembler. Domain helpers keep ordering identical to the
- * historical monolithic body: ORT source → TRT load → CUDA load → ORT list /
- * GPU absence → OpenVINO → QNN → CUDA floor → TRT floor.
+ * Assembles hardware-probe diagnostics and derived provider capability data.
+ *
+ * @param input - Probe results and platform information used to generate diagnostics.
+ * @returns Diagnostic notes, merged ONNX Runtime providers, TensorRT family capability, and QNN host mode.
  */
 export function buildProbeDiagnostics(input: ProbeDiagnosticInput): ProbeDiagnosticOutput {
   const onnxRuntimeProviders = mergeOrtProvidersForDisplay(
@@ -461,7 +501,7 @@ export interface SystemProbeOptions {
 /**
  * Probes the host system for hardware capabilities and available inference runtimes.
  *
- * @param opts - Probes used to determine whether TensorRT and TensorRT RTX can load
+ * @param opts - Probe functions used to determine runtime availability and loadability
  * @returns A timestamped report containing platform details, detected hardware, runtime capabilities, provider recommendations, and diagnostic notes
  */
 async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwareProbeResult> {

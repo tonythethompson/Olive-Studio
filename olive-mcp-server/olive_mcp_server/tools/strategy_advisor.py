@@ -51,6 +51,15 @@ def _normalize_model_type(model_type: str) -> str:
 
 
 def _latency_rank(latency: str) -> int:
+    """
+    Classify a latency description by urgency.
+    
+    Parameters:
+    	latency (str): Text describing the target latency.
+    
+    Returns:
+    	int: 0 for real-time latency, 1 for latency under 500 milliseconds, 2 for latency under one second, or 3 for unspecified latency.
+    """
     lat_lower = latency.lower()
     if "<100" in lat_lower or "100ms" in lat_lower or "realtime" in lat_lower or "real-time" in lat_lower:
         return 0

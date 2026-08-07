@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { deriveUiStateFromOliveRecipe } from "../oliveRecipeHub";
+import {
+  deriveUiStateFromOliveRecipe,
+  getCatalogDeviceFromRecipe,
+} from "../oliveRecipeHub";
+
+function recipeWithExecutionProviders(providers: unknown) {
+  return {
+    systems: {
+      local_system: {
+        config: {
+          accelerators: [{ execution_providers: providers }],
+        },
+      },
+    },
+  };
+}
 
 describe("deriveUiStateFromOliveRecipe validation", () => {
   // ── hf_config.model_name ────────────────────────────────────────────
@@ -16,6 +31,22 @@ describe("deriveUiStateFromOliveRecipe validation", () => {
     });
     expect(state.hfModelId).toBeUndefined();
     expect(state.modelSource).toBeUndefined();
+  });
+
+  it("accepts valid string hf_config.model_name", () => {
+    const state = deriveUiStateFromOliveRecipe({
+      input_model: {
+        config: {
+          hf_config: {
+            model_name: "microsoft/phi-2",
+            task: "text-generation",
+          },
+        },
+      },
+    });
+    expect(state.modelSource).toBe("huggingface");
+    expect(state.hfModelId).toBe("microsoft/phi-2");
+    expect(state.hfTask).toBe("text-generation");
   });
 
   // ── local_files ─────────────────────────────────────────────────────
@@ -290,6 +321,7 @@ describe("deriveUiStateFromOliveRecipe validation", () => {
       {
         passes: {
           m1: { type: "MagnitudePruner", config: { sparsity: 0.4 } },
+
         },
       },
       { replacePasses: true },
@@ -421,5 +453,6 @@ describe("deriveUiStateFromOliveRecipe validation", () => {
     const state = deriveUiStateFromOliveRecipe("not an object");
     expect(state.ihvProvider).toBeUndefined();
     expect(state.modelSource).toBeUndefined();
+
   });
 });

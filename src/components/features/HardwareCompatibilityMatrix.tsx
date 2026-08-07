@@ -8,7 +8,10 @@ import { IHVProvider, UIState } from "@/types";
 import { prepareProviderChange } from "@/lib/pipelineValidation";
 import { isProviderDetectedLocally, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
-import { getCellCompatibility, type OptimizationPassValidation } from "./IHVIntegrationPanel";
+import {
+  getCellCompatibility,
+  type OptimizationPassValidation,
+} from "./hardwarePassCompatibility";
 import {
   Check,
   CheckCircle,
@@ -27,6 +30,17 @@ interface HardwareCompatibilityMatrixProps {
   setState: (s: Partial<UIState>) => void;
 }
 
+/**
+ * Displays a selectable compatibility matrix for optimization passes across hardware providers.
+ *
+ * @param selectableProviders - Providers available for selection in the matrix.
+ * @param state - Current provider and optimization-pass configuration.
+ * @param hardwareProbe - Hardware detection results used to indicate local provider availability.
+ * @param probeLoading - Whether hardware detection is still in progress.
+ * @param filteredValidations - Optimization passes to display.
+ * @param detectedProviders - Provider identifiers detected on the local machine.
+ * @param setState - Updates the provider and pass configuration.
+ */
 export function HardwareCompatibilityMatrix({
   selectableProviders,
   state,

@@ -418,10 +418,12 @@ async function runQueuedBatchJobs(queuedJobs: BatchJob[], ctx: QueueJobContext):
 }
 
 /**
- * Renders a panel for managing, running, and inspecting sequential batch-processing jobs.
+ * Renders the batch-job queue or an empty-queue message.
  *
- * @param state - Optional pipeline state; uses the pipeline store state when omitted.
- * @param setState - Optional state updater; uses the pipeline store updater when omitted.
+ * @param jobs - The jobs to display.
+ * @param selectedJobId - The identifier of the selected job, if any.
+ * @param onSelectJob - Handles selection of a job.
+ * @param onDeleteJob - Handles deletion of a job.
  */
 function BatchJobList({
   jobs,
@@ -462,6 +464,14 @@ function BatchJobList({
   );
 }
 
+/**
+ * Renders a selectable batch job card with status, execution details, progress, metrics, and deletion controls.
+ *
+ * @param job - The batch job represented by the card
+ * @param isSelected - Whether the card is currently selected
+ * @param onSelect - Called when the card is selected
+ * @param onDelete - Called when the job is deleted
+ */
 function BatchJobCard({
   job,
   isSelected,
@@ -596,6 +606,13 @@ function BatchJobCard({
               e.stopPropagation();
               onDelete();
             }}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" && e.key !== " ") return;
+              // Stop the card’s role="button" handler from selecting / preventDefault-ing.
+              e.preventDefault();
+              e.stopPropagation();
+              onDelete();
+            }}
             className="text-slate-600 hover:text-red-400 p-1 rounded hover:bg-slate-900 transition-colors shrink-0 cursor-pointer"
           >
             <Trash2 className="h-4 w-4" />
@@ -609,6 +626,12 @@ function BatchJobCard({
   );
 }
 
+/**
+ * Renders the batch-processing workspace for configuring, monitoring, and managing sequential Olive jobs.
+ *
+ * @param state - Optional pipeline state override.
+ * @param setState - Optional state updater override.
+ */
 export function BatchProcessingPanel({
   state: propState,
   setState: propSetState,
