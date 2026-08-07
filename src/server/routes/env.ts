@@ -18,7 +18,7 @@ import { ensureOpenVino } from "../services/olive/openvino.ts";
 import { ensureOnnxRuntimeGpu } from "../services/olive/cuda.ts";
 import { ensureDirectMl } from "../services/olive/directml.ts";
 import { ensureQnn, runQnnHtpDiagnostic } from "../services/olive/qnn.ts";
-import { fsWriteRateLimit, heavyCommandRateLimit } from "../middleware/rateLimit.ts";
+import { authActionRateLimit, fsWriteRateLimit, heavyCommandRateLimit } from "../middleware/rateLimit.ts";
 import { parseBody, isParseBodyError } from "../middleware/bodyGuard.ts";
 import { resolveAllowedPythonFile } from "../services/venv/pythonGuard.ts";
 
@@ -85,7 +85,7 @@ export function mountEnvRoutes(router: Router): void {
     return res.json({ source: "none" });
   });
 
-  router.post("/env/hf-token", (req, res) => {
+  router.post("/env/hf-token", authActionRateLimit, (req, res) => {
     const body = parseBody<{ token: string }>(req.body, {
       token: { type: "string", message: "Missing token" },
     });

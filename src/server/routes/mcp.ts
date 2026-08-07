@@ -14,6 +14,7 @@ import {
   setKbSyncInProgress,
 } from "../services/mcp/state.ts";
 import { callOliveMcpTool, MCP_UNAVAILABLE_ERROR } from "../services/mcp/client.ts";
+import { isAllowedMcpToolName } from "../services/mcp/allowedTools.ts";
 import { kbStatusRateLimit, kbSyncRateLimit } from "../middleware/rateLimit.ts";
 import { parseBody, isParseBodyError } from "../middleware/bodyGuard.ts";
 import { readStudioConfig, writeStudioConfig } from "../config.ts";
@@ -200,6 +201,9 @@ export function mountMcpRoutes(router: Router): void {
       args: { type: "object", required: false },
     });
     if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    if (!isAllowedMcpToolName(body.parsed.toolName)) {
+      return res.status(400).json({ error: "Unknown toolName" });
+    }
     try {
       const out = await callOliveMcpTool(body.parsed.toolName, body.parsed.args ?? {});
       if (out.unavailable) {

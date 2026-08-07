@@ -19,6 +19,14 @@ describe("parseBody", () => {
     expect(result).toEqual({ error: "token is required and must be a string" });
   });
 
+  it("rejects malformed JSON strings for json fields", () => {
+    const result = parseBody<{ recipe: unknown }>({ recipe: "{ not json " }, {
+      recipe: { type: "json", message: "Missing recipe" },
+    });
+
+    expect(result).toEqual({ error: "recipe must be a string or JSON object" });
+  });
+
   it("accepts a non-empty JSON string for json fields", () => {
     const result = parseBody<{ recipe: unknown }>({ recipe: '{"passes":{}}' }, {
       recipe: { type: "json" },
