@@ -1,0 +1,11 @@
+# Taste
+- Prefers hardware/ML runtimes (e.g., OpenVINO, TensorRT) installed via PyPI into the project `.venv`, reusing the same mutex/stream pattern as the existing TensorRT install rather than bespoke per-runtime install paths. Confidence: 0.8
+- Prefers new hardware runtimes to mirror the established TRT UX loop: probe → requiresInstall → Hardware install button → NDJSON ensure* pip install → re-probe. Confidence: 0.8
+- Prefers soft (unpinned) dependency versions by default; applies hard pins only where coupling requires it (e.g., TRT with ORT/nvinfer), not as a blanket policy. Confidence: 0.8
+- Prefers lean installs: install only what a recipe actually needs; avoid auto-installing extra stacks (e.g., Diffusers/Torch) alongside a runtime. Confidence: 0.8
+- Prefers linking out-of-band driver documentation from the app rather than attempting to drive driver installation in-app. Confidence: 0.7
+- Prefers a dry-run/validate step before executing conversions or long-running work, reporting schema/runtime errors before execution. Confidence: 0.7
+- Prefers scheduled/automated knowledge-base and docs refreshes over manual runs. Confidence: 0.7
+- Prefers tying compatibility claims to actual runtime availability tests rather than static matrices. Confidence: 0.6
+- Prefers capturing user feedback (thumbs up/down) to re-rank poor results. Confidence: 0.6
+- Prefers managing dev worktrees via a config file (worktree.json) with a proper setup. Confidence: 0.6
