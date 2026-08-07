@@ -185,7 +185,10 @@ export function BatchProcessingPanel({
         azureModelPath: job.modelSource === "azure" ? job.modelIdentifier : state.azureModelPath,
         ihvProvider: job.provider,
       };
-      const jobValidation = getPipelineValidation(jobState, { forLocalExecution: true });
+      const jobValidation = getPipelineValidation(jobState, {
+        forLocalExecution: true,
+        probe: hardwareProbe,
+      });
       if (jobValidation.isBlocked) {
         const errorLogs = [
           ...((jobsRef.current ?? []).find((j) => j.id === job.id)?.logs || []),
