@@ -171,9 +171,9 @@ def studio_request(
         except Exception:  # noqa: BLE001 — best-effort body read
             err_body = b""
         parsed = _parse_json_body(err_body)
-        # Forward structured JSON objects (error payloads or success-shaped
-        # bodies some gateways surface via HTTPError).
-        if isinstance(parsed, dict):
+        # Preserve Studio's structured error payloads, but do not treat HTTP failures
+        # as success when the body is an arbitrary JSON object.
+        if isinstance(parsed, dict) and "error" in parsed:
             return parsed
         return studio_unavailable(
             "Olive Studio bridge returned an HTTP error.",
