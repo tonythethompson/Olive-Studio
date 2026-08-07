@@ -4,16 +4,14 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
-  useCallback,
   useDeferredValue,
   useTransition,
   Suspense,
   lazy,
-  type Dispatch,
   type MouseEvent as ReactMouseEvent,
-  type SetStateAction,
 } from "react";
-import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
+import { Button } from "@/components/ui/Button";
+import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { UIState, type McpTroubleshootFeedbackRating } from "@/types";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";
@@ -22,8 +20,8 @@ import {
   expandLogSelection,
   isFailureLine,
   isStudioHfTaskSpeechFix,
-  logsIndicateFailure,
 } from "@/lib/logFailurePatterns";
+import { useOliveStream } from "./useOliveStream";
 import { DiagnosisHistory, type DiagnosisEntry } from "./DiagnosisHistory";
 import { MCPDiagnosticCard } from "./MCPDiagnosticCard";
 import {
@@ -39,11 +37,6 @@ import {
   Globe,
   RefreshCw,
   Download,
-  Laptop,
-  Smartphone,
-  FileCode,
-  Sliders,
-  Cpu,
   AlertTriangle,
   CircleDot,
   History,
@@ -63,11 +56,12 @@ import { qnnExplicitRetryProviders } from "@/lib/qnnReadiness";
 import { prepareProviderChange } from "@/lib/pipelineValidation";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { GpuMetricsBar } from "@/components/features/GpuMetricsBar";
-import { parseGpuMetrics, type GpuMetrics } from "@/lib/gpuMetrics";
-import { getJobHistory, saveJobHistory } from "@/lib/jobHistoryStore";
+
+import { getJobHistory } from "@/lib/jobHistoryStore";
 import { downloadMarkdownReport } from "@/lib/reportGenerator";
 import { JobHistoryModal } from "@/components/features/JobHistoryModal";
 import { ReportIssueModal } from "@/components/ReportIssueModal";
+import { OwrExportOverlay } from "./OwrExportOverlay";
 import type { ReportArea } from "@/lib/issueReport";
 
 const RecipeGraphView = lazy(() => import("./RecipeGraphView").then((m) => ({ default: m.RecipeGraphView })));
@@ -147,12 +141,13 @@ function LoadingFallback({ label, minH }: { label: string; minH?: string }) {
 }
 
 /**
- * Renders the Olive recipe workspace for reviewing, exporting, queuing, and executing a pipeline.
+ * Provides a workspace for reviewing, validating, exporting, queuing, and executing an Olive pipeline.
  *
- * @param state - Optional pipeline state override; the store state is used when omitted.
- * @param setState - Optional state update function; the store updater is used when omitted.
- * @param onOpenAiAudit - Callback invoked when the AI audit review is opened.
- * @param onRunStateChange - Callback invoked when live execution starts or stops.
+ * @param state - Controlled pipeline state. Must be provided together with `setState`.
+ * @param setState - Updates controlled pipeline state. Must be provided together with `state`.
+ * @param onOpenAiAudit - Called when the AI audit review is opened.
+ * @param onRunStateChange - Called when live execution starts or stops.
+ * @throws Error if only one of `state` or `setState` is provided.
  */
 export function ExecutionWorkspace({
   state: propState,
@@ -187,30 +182,6 @@ export function ExecutionWorkspace({
   // responsive; submit handlers rebuild fresh from `state` at click time.
   const deferredState = useDeferredValue(state);
   // Live execution state
-  const [liveJobId, setLiveJobId] = useState<string | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [executionLogs, setExecutionLogsState] = useState<string[]>([]);
-  const executionLogsRef = useRef<string[]>([]);
-  // Keep the ref in sync inside the state updater so the SSE "done" handler
-  // can read the latest lines before effects flush.
-  const setExecutionLogs: Dispatch<SetStateAction<string[]>> = useCallback((update) => {
-    setExecutionLogsState((prev) => {
-      const next = typeof update === "function" ? update(prev) : update;
-      executionLogsRef.current = next;
-      return next;
-    });
-  }, []);
-  const [executionStatus, setExecutionStatus] = useState<
-    "idle" | "running" | "completed" | "failed" | "cancelled"
-  >("idle");
-  const [executionExitCode, setExecutionExitCode] = useState<number | null>(null);
-  const [gpuMetrics, setGpuMetrics] = useState<GpuMetrics | null>(null);
-  const liveSourceRef = useRef<EventSource | null>(null);
-  const runStartTimeRef = useRef<number | null>(null);
-  /** Recipe JSON actually submitted for the current run (display may be deferred). */
-  const runRecipeJsonRef = useRef<string | null>(null);
-  /** Cancel clicked before /olive/run returned a jobId — fire cancel as soon as id exists. */
-  const pendingCancelRef = useRef(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportArea, setReportArea] = useState<ReportArea | undefined>(undefined);
@@ -343,103 +314,7 @@ export function ExecutionWorkspace({
     }
   };
 
-  // Clear log selection when logs change (new run starts)
-  useLayoutEffect(() => {
-    setSelectedLogIndices(new Set()); // eslint-disable-line react-hooks/set-state-in-effect
-    lastClickedIndexRef.current = null;
-  }, [executionLogs.length]);
 
-  // Auto-select error lines when a job fails so Diagnose can focus on them.
-  const prevStatusRef = useRef<string | null>(null);
-
-  useLayoutEffect(() => {
-    // Only auto-select on the FIRST render where status transitions to "failed"
-    if (executionStatus === "failed" && prevStatusRef.current !== "failed") {
-      if (executionLogs.length > 0) {
-        const errorIndices = new Set<number>();
-        for (let i = 0; i < executionLogs.length; i++) {
-          if (isFailureLine(executionLogs[i]!)) {
-            errorIndices.add(i);
-          }
-        }
-        if (errorIndices.size > 0) {
-          setSelectedLogIndices(errorIndices); // eslint-disable-line react-hooks/set-state-in-effect
-        }
-      }
-    }
-    prevStatusRef.current = executionStatus;
-  }, [executionStatus, executionLogs]);
-
-  // Log line selection for manual diagnosis
-  const handleLogLineClick = (index: number, e: ReactMouseEvent<HTMLParagraphElement>) => {
-    setSelectedLogIndices((prev) => {
-      const next = new Set(prev);
-      if (e.shiftKey && lastClickedIndexRef.current !== null) {
-        // Range select from last clicked to current
-        const start = Math.min(lastClickedIndexRef.current, index);
-        const end = Math.max(lastClickedIndexRef.current, index);
-        for (let i = start; i <= end; i++) next.add(i);
-      } else if (e.ctrlKey || e.metaKey) {
-        // Toggle individual line
-        if (next.has(index)) next.delete(index);
-        else next.add(index);
-      } else {
-        // Plain click: select only this line
-        next.clear();
-        next.add(index);
-      }
-      return next;
-    });
-    lastClickedIndexRef.current = index;
-  };
-
-  /** Prefer selected lines when present; expand traceback context; else full log. */
-  const handleDiagnose = () => {
-    if (executionLogs.length === 0) return;
-    setMcpFixApplied("");
-    const logs =
-      selectedLogIndices.size > 0
-        ? expandLogSelection(executionLogs, Array.from(selectedLogIndices))
-        : executionLogs;
-    void fetchKeyedDiagnostic("current", logs);
-  };
-
-  // Auto-diagnose once when a run fails (same pattern as BatchProcessingPanel).
-  const autoDiagnoseRef = useRef(false);
-  useEffect(() => {
-    if (executionStatus === "failed" && executionLogs.length > 0 && !autoDiagnoseRef.current) {
-      autoDiagnoseRef.current = true;
-      // Derive failure-line indices here (do not wait for the selection layout effect).
-      const errorIndices: number[] = [];
-      for (let i = 0; i < executionLogs.length; i++) {
-        if (isFailureLine(executionLogs[i]!)) {
-          errorIndices.push(i);
-        }
-      }
-      const logs = errorIndices.length > 0 ? expandLogSelection(executionLogs, errorIndices) : executionLogs;
-      void fetchKeyedDiagnostic("current", logs);
-    }
-    if (executionStatus !== "failed") {
-      autoDiagnoseRef.current = false;
-    }
-  }, [executionStatus, executionLogs, fetchKeyedDiagnostic]);
-
-  // Auto-save completed diagnoses to history
-  const prevDiagnosticRef = useRef(mcpDiagnostic);
-  useEffect(() => {
-    if (mcpDiagnostic && mcpDiagnostic !== prevDiagnosticRef.current) {
-      const entry: DiagnosisEntry = {
-        id: `diag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        timestamp: Date.now(),
-        diagnostic: mcpDiagnostic,
-        logSnippet: executionLogs.slice(-20).join("\n"),
-        fixApplied: false,
-      };
-      setDiagnosisHistory((prev) => [entry, ...prev].slice(0, 50));
-      setActiveHistoryIndex(0);
-    }
-    prevDiagnosticRef.current = mcpDiagnostic;
-  }, [mcpDiagnostic, executionLogs]);
 
   const handleSelectHistory = (index: number) => {
     setActiveHistoryIndex(index);
@@ -451,7 +326,6 @@ export function ExecutionWorkspace({
   };
 
   const isUnmountedRef = useRef(false);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const justQueuedTimerRef = useRef<NodeJS.Timeout | null>(null);
   const copiedTimerRef = useRef<NodeJS.Timeout | null>(null);
   const exportCopiedTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -460,7 +334,6 @@ export function ExecutionWorkspace({
     isUnmountedRef.current = false;
     return () => {
       isUnmountedRef.current = true;
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (justQueuedTimerRef.current) clearTimeout(justQueuedTimerRef.current);
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
       if (exportCopiedTimerRef.current) clearTimeout(exportCopiedTimerRef.current);
@@ -475,7 +348,7 @@ export function ExecutionWorkspace({
   const [owrSelectedFile, setOwrSelectedFile] = useState<
     "ort_config.json" | "web_init.js" | "mobile_init.kt" | "onnx_model_manifest.json"
   >("ort_config.json");
-  const [isOwrCopied, setIsOwrCopied] = useState(false);
+
   const [hardwareProbe, setHardwareProbe] = useState<HardwareProbeResult | null>(null);
 
   useEffect(() => {
@@ -567,7 +440,28 @@ ${owrPlatform === "web"
   };
 
   const pipeline = buildRecipeFromState(deferredState, { hardwareProbe });
-  const { recipe, recipeJson, validation, schema, advisories, isRunnable } = pipeline;
+  const { recipe, recipeJson: _recipeJson, validation, schema, advisories, isRunnable } = pipeline;
+
+  // SSE streaming lifecycle managed by useOliveStream hook
+  const {
+    liveJobId,
+    isRunning,
+    executionLogs,
+    setExecutionLogs,
+    executionStatus,
+    executionExitCode,
+    gpuMetrics,
+    handleExecuteLive,
+    handleCancelJob,
+  } = useOliveStream({
+    state,
+    hardwareProbe,
+    setState,
+    onRunStateChange,
+    isUnmountedRef,
+    setMcpFixApplied,
+  });
+
   const schemaErrors = schema.errors ?? [];
   // Local structure/compat checks only. A green badge must not imply Execute Live succeeded.
   const localValidationLabel = !schema.valid
@@ -580,6 +474,99 @@ ${owrPlatform === "web"
     }`
     : localValidationLabel;
   const validationTone = runFailed ? "error" : localValidationTone;
+
+  // Clear log selection once when a new live run starts (not on every streamed line).
+  useLayoutEffect(() => {
+    setSelectedLogIndices(new Set()); // eslint-disable-line react-hooks/set-state-in-effect
+    lastClickedIndexRef.current = null;
+  }, [liveJobId]);
+
+  // Auto-select error lines when a job fails so Diagnose can focus on them.
+  const prevStatusRef = useRef<string | null>(null);
+
+  useLayoutEffect(() => {
+    if (executionStatus === "failed" && prevStatusRef.current !== "failed") {
+      if (executionLogs.length > 0) {
+        const errorIndices = new Set<number>();
+        for (let i = 0; i < executionLogs.length; i++) {
+          if (isFailureLine(executionLogs[i]!)) {
+            errorIndices.add(i);
+          }
+        }
+        if (errorIndices.size > 0) {
+          setSelectedLogIndices(errorIndices); // eslint-disable-line react-hooks/set-state-in-effect
+        }
+      }
+    }
+    prevStatusRef.current = executionStatus;
+  }, [executionStatus, executionLogs]);
+
+  // Log line selection for manual diagnosis
+  const handleLogLineClick = (index: number, e: ReactMouseEvent<HTMLParagraphElement>) => {
+    setSelectedLogIndices((prev) => {
+      const next = new Set(prev);
+      if (e.shiftKey && lastClickedIndexRef.current !== null) {
+        const start = Math.min(lastClickedIndexRef.current, index);
+        const end = Math.max(lastClickedIndexRef.current, index);
+        for (let i = start; i <= end; i++) next.add(i);
+      } else if (e.ctrlKey || e.metaKey) {
+        if (next.has(index)) next.delete(index);
+        else next.add(index);
+      } else {
+        next.clear();
+        next.add(index);
+      }
+      return next;
+    });
+    lastClickedIndexRef.current = index;
+  };
+
+  /** Prefer selected lines when present; expand traceback context; else full log. */
+  const handleDiagnose = () => {
+    if (executionLogs.length === 0) return;
+    setMcpFixApplied("");
+    const logs =
+      selectedLogIndices.size > 0
+        ? expandLogSelection(executionLogs, Array.from(selectedLogIndices))
+        : executionLogs;
+    void fetchKeyedDiagnostic("current", logs);
+  };
+
+  // Auto-diagnose once when a run fails (same pattern as BatchProcessingPanel).
+  const autoDiagnoseRef = useRef(false);
+  useEffect(() => {
+    if (executionStatus === "failed" && executionLogs.length > 0 && !autoDiagnoseRef.current) {
+      autoDiagnoseRef.current = true;
+      const errorIndices: number[] = [];
+      for (let i = 0; i < executionLogs.length; i++) {
+        if (isFailureLine(executionLogs[i]!)) {
+          errorIndices.push(i);
+        }
+      }
+      const logs = errorIndices.length > 0 ? expandLogSelection(executionLogs, errorIndices) : executionLogs;
+      void fetchKeyedDiagnostic("current", logs);
+    }
+    if (executionStatus !== "failed") {
+      autoDiagnoseRef.current = false;
+    }
+  }, [executionStatus, executionLogs, fetchKeyedDiagnostic]);
+
+  // Auto-save completed diagnoses to history
+  const prevDiagnosticRef = useRef(mcpDiagnostic);
+  useEffect(() => {
+    if (mcpDiagnostic && mcpDiagnostic !== prevDiagnosticRef.current) {
+      const entry: DiagnosisEntry = {
+        id: `diag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: Date.now(),
+        diagnostic: mcpDiagnostic,
+        logSnippet: executionLogs.slice(-20).join("\n"),
+        fixApplied: false,
+      };
+      setDiagnosisHistory((prev) => [entry, ...prev].slice(0, 50));
+      setActiveHistoryIndex(0);
+    }
+    prevDiagnosticRef.current = mcpDiagnostic;
+  }, [mcpDiagnostic, executionLogs]);
 
   const handleQueueJob = () => {
     // Rebuild from live state — the deferred display pipeline may lag the latest keystroke.
@@ -614,336 +601,7 @@ ${owrPlatform === "web"
     justQueuedTimerRef.current = setTimeout(() => setJustQueued(false), 3000);
   };
 
-  const recordJobCompletion = (
-    jobId: string,
-    status: "completed" | "failed" | "cancelled",
-    exitCode: number | null,
-  ) => {
-    const duration = runStartTimeRef.current ? Date.now() - runStartTimeRef.current : 0; // eslint-disable-line react-hooks/purity -- event handler
-    const activePassesNames: string[] = [];
-    if (state.passes.conversion)
-      activePassesNames.push(
-        `Conversion (${state.passes.conversionFormat === "onnx" ? "ONNX" : "OpenVINO"})`,
-      );
-    if (state.passes.quantization) activePassesNames.push(`Quantization (${state.passes.quantPrecision})`);
-    if (state.passes.pruning) activePassesNames.push(`Pruning (${state.passes.pruningMethod})`);
-    if (state.passes.onnxTransforms) activePassesNames.push("ORT Transforms");
-    if (activePassesNames.length === 0) activePassesNames.push("Default Baseline Export");
 
-    saveJobHistory({
-      id: jobId,
-      jobId,
-      timestamp: new Date().toISOString(),
-      modelId: state.hfModelId || (state.localFiles && state.localFiles[0]?.name) || "Custom Model",
-      ihvProvider: state.ihvProvider,
-      memoryOffload: state.memoryOffload,
-      status,
-      exitCode,
-      durationMs: duration,
-      passCount: activePassesNames.length,
-      passNames: activePassesNames,
-      recipeJson: runRecipeJsonRef.current ?? recipeJson,
-    });
-  };
-
-  const handleCancelJob = async () => {
-    if (!liveJobId) {
-      // Run POST still in flight — mark pending; cancel once jobId arrives.
-      pendingCancelRef.current = true;
-      setExecutionLogs((prev) => [
-        ...prev,
-        "[INFO] Cancel queued — will send as soon as the job id is assigned...",
-      ]);
-      return;
-    }
-    try {
-      setExecutionLogs((prev) => [...prev, "[INFO] Requesting process cancellation..."]);
-      const resp = await fetch("/api/olive/cancel", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId: liveJobId }),
-      });
-      const data = (await resp.json().catch(() => ({}))) as { status?: string; error?: string };
-      if (resp.ok && data.status === "cancelled") {
-        setExecutionLogs((prev) => [...prev, "[INFO] Cancellation signal confirmed by server."]);
-        setExecutionStatus("cancelled");
-        setExecutionExitCode(null);
-        setIsRunning(false);
-        onRunStateChange?.(false);
-        liveSourceRef.current?.close();
-        liveSourceRef.current = null;
-        recordJobCompletion(liveJobId, "cancelled", null);
-      } else if (resp.ok) {
-        setExecutionLogs((prev) => [
-          ...prev,
-          `[INFO] Job already ${data.status ?? "finished"}; waiting for stream status.`,
-        ]);
-      } else {
-        setExecutionLogs((prev) => [...prev, `[ERROR] Cancel failed: ${data.error ?? "unknown"}`]);
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      setExecutionLogs((prev) => [...prev, `[ERROR] Failed to send cancel signal: ${message}`]);
-    }
-  };
-
-  const handleExecuteLive = async () => {
-    if (isRunning) return;
-
-    // Rebuild from live state — the deferred display pipeline may lag the latest keystroke.
-    const fresh = buildRecipeFromState(state, { hardwareProbe });
-
-    if (!fresh.isRunnable) {
-      const blockingCount = fresh.validation.criticalCount + fresh.localExecutionIssues.length;
-      const freshSchemaErrors = fresh.schema.errors ?? [];
-      const freshBlockLines = fresh.localExecutionIssues.map(
-        (issue) => `[BLOCK] ${issue.title}: ${issue.description}`,
-      );
-      setExecutionLogs([
-        fresh.schema.valid
-          ? `[ERROR] Cannot execute: ${blockingCount} blocking issue(s).`
-          : `[ERROR] Cannot execute: recipe schema invalid.`,
-        ...(fresh.schema.valid
-          ? [
-            ...fresh.validation.issues
-              .filter((issue) => issue.severity === "critical")
-              .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
-            ...freshBlockLines,
-          ]
-          : freshSchemaErrors.map((e) => `[SCHEMA] ${e}`)),
-      ]);
-      setExecutionStatus("failed");
-      return;
-    }
-
-    runRecipeJsonRef.current = fresh.recipeJson;
-    pendingCancelRef.current = false;
-    setLiveJobId(null);
-    setState({ activeJobId: null });
-    setIsRunning(true);
-    onRunStateChange?.(true);
-    setExecutionLogs(["[INFO] Initiating Olive run...\n"]);
-    setExecutionStatus("running");
-    setExecutionExitCode(null);
-    setGpuMetrics(null);
-    runStartTimeRef.current = Date.now(); // eslint-disable-line react-hooks/purity -- event handler
-
-    try {
-      const resp = await fetch("/api/olive/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipeJson: fresh.recipeJson, cudaVersion: state.cudaVersion ?? "auto" }),
-      });
-
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
-        setExecutionLogs((prev) => [...prev, `[ERROR] ${errData.error}`]);
-        setExecutionStatus("failed");
-        setIsRunning(false);
-        onRunStateChange?.(false);
-        pendingCancelRef.current = false;
-        return;
-      }
-
-      const { jobId } = await resp.json();
-      setLiveJobId(jobId);
-      setState({ activeJobId: jobId });
-
-      if (pendingCancelRef.current) {
-        pendingCancelRef.current = false;
-        setExecutionLogs((prev) => [
-          ...prev,
-          "[INFO] Applying queued cancel now that the job id is assigned...",
-        ]);
-        try {
-          const cancelResp = await fetch("/api/olive/cancel", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ jobId }),
-          });
-          const cancelData = (await cancelResp.json().catch(() => ({}))) as {
-            status?: string;
-            error?: string;
-          };
-          if (cancelResp.ok && cancelData.status === "cancelled") {
-            setExecutionLogs((prev) => [...prev, "[INFO] Cancellation signal confirmed by server."]);
-            setExecutionStatus("cancelled");
-            setExecutionExitCode(null);
-            setIsRunning(false);
-            onRunStateChange?.(false);
-            recordJobCompletion(jobId, "cancelled", null);
-            return;
-          }
-          setExecutionLogs((prev) => [
-            ...prev,
-            cancelResp.ok
-              ? `[INFO] Queued cancel found job already ${cancelData.status ?? "finished"}. Connecting stream.`
-              : `[ERROR] Queued cancel failed: ${cancelData.error ?? "unknown"}. Continuing with stream.`,
-          ]);
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err);
-          setExecutionLogs((prev) => [
-            ...prev,
-            `[ERROR] Queued cancel failed: ${message}. Continuing with stream.`,
-          ]);
-        }
-      }
-
-      // Close any existing SSE connection
-      liveSourceRef.current?.close();
-
-      let reconnectAttempts = 0;
-      const MAX_RECONNECT_ATTEMPTS = 10;
-      const MAX_BACKOFF_MS = 30000;
-
-      const connectSSE = (targetJobId: string) => {
-        if (isUnmountedRef.current) return;
-        liveSourceRef.current?.close();
-
-        const evtSource = new EventSource(`/api/olive/stream/${targetJobId}`);
-        liveSourceRef.current = evtSource;
-
-        evtSource.onopen = () => {
-          if (reconnectAttempts > 0) {
-            setExecutionLogs((prev) => [...prev, "[INFO] Stream reconnected successfully."]);
-          }
-          reconnectAttempts = 0;
-        };
-
-        evtSource.addEventListener("log", (e: MessageEvent) => {
-          try {
-            const payload = JSON.parse(String(e.data)) as { line?: string };
-            if (payload.line) {
-              setExecutionLogs((prev) => [...prev, payload.line!]);
-            }
-          } catch {
-            /* ignore malformed */
-          }
-        });
-
-        evtSource.addEventListener("metrics", (e: MessageEvent) => {
-          try {
-            const parsed: unknown = JSON.parse(e.data);
-            const metrics = parseGpuMetrics(parsed);
-            if (metrics) setGpuMetrics(metrics);
-          } catch {
-            /* ignore malformed */
-          }
-        });
-
-        evtSource.addEventListener("done", (e: MessageEvent) => {
-          let exitCode: number | null = null;
-          let serverStatus: string | undefined;
-          try {
-            const payload = JSON.parse(e.data) as { exitCode?: number | null; status?: string };
-            exitCode = typeof payload.exitCode === "number" ? payload.exitCode : null;
-            serverStatus = payload.status;
-          } catch {
-            exitCode = null;
-          }
-          // Olive sometimes exits 0 after a pass traceback (e.g. HF task KeyError).
-          // Read the mirrored log ref so this updater stays pure (StrictMode-safe).
-          const currentLogs = executionLogsRef.current;
-          let finalStatus: "completed" | "failed" | "cancelled";
-          if (serverStatus === "cancelled") {
-            finalStatus = "cancelled";
-          } else if (exitCode === null) {
-            // Unreadable done payload: never treat as success.
-            finalStatus = "failed";
-          } else {
-            const failed = exitCode !== 0 || logsIndicateFailure(currentLogs);
-            finalStatus = failed ? "failed" : "completed";
-          }
-          // Cancelled runs often report exit 0; unparsable done must not look like success.
-          const reportedExit =
-            finalStatus === "cancelled"
-              ? exitCode !== null && exitCode !== 0
-                ? exitCode
-                : null
-              : exitCode === null || (finalStatus === "failed" && exitCode === 0)
-                ? 1
-                : exitCode;
-          setExecutionStatus(finalStatus);
-          setExecutionExitCode(reportedExit);
-          setIsRunning(false);
-          setGpuMetrics(null);
-          onRunStateChange?.(false);
-          recordJobCompletion(targetJobId, finalStatus, reportedExit);
-          // Auto-diagnose is owned by the executionStatus==="failed" effect below.
-          if (finalStatus === "failed") setMcpFixApplied("");
-          evtSource.close();
-          liveSourceRef.current = null;
-        });
-
-        evtSource.onerror = async () => {
-          evtSource.close();
-          if (isUnmountedRef.current) return;
-
-          let serverSaysRunning = false;
-          try {
-            const statusResp = await fetch(`/api/olive/status/${targetJobId}`);
-            if (statusResp.ok) {
-              const statusData = await statusResp.json();
-              if (
-                statusData.status === "completed" ||
-                statusData.status === "failed" ||
-                statusData.status === "cancelled"
-              ) {
-                const finalStatus =
-                  statusData.status === "completed"
-                    ? "completed"
-                    : statusData.status === "cancelled"
-                      ? "cancelled"
-                      : "failed";
-                setExecutionStatus(finalStatus);
-                setExecutionExitCode(statusData.exitCode ?? (finalStatus === "completed" ? 0 : 1));
-                setIsRunning(false);
-                onRunStateChange?.(false);
-                recordJobCompletion(targetJobId, finalStatus, statusData.exitCode);
-                // Auto-diagnose is owned by the executionStatus==="failed" effect.
-                if (finalStatus === "failed") setMcpFixApplied("");
-                return;
-              } else if (statusData.status === "running" || statusData.status === "setting_up") {
-                serverSaysRunning = true;
-              }
-            }
-          } catch {
-            /* ignore status check failure */
-          }
-
-          if (serverSaysRunning || reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-            reconnectAttempts++;
-            const backoffMs = Math.min(1000 * Math.pow(1.5, reconnectAttempts), MAX_BACKOFF_MS);
-            setExecutionLogs((prev) => [
-              ...prev,
-              `[WARN] Stream connection lost. Reconnecting (attempt ${reconnectAttempts}${serverSaysRunning ? "" : `/${MAX_RECONNECT_ATTEMPTS}`} in ${(backoffMs / 1000).toFixed(1)}s)...`,
-            ]);
-
-            reconnectTimeoutRef.current = setTimeout(() => {
-              if (!isUnmountedRef.current) connectSSE(targetJobId);
-            }, backoffMs);
-          } else {
-            setExecutionLogs((prev) => [
-              ...prev,
-              "[ERROR] SSE connection lost permanently after maximum retry attempts.",
-            ]);
-            setExecutionStatus("failed");
-            setIsRunning(false);
-            onRunStateChange?.(false);
-            recordJobCompletion(targetJobId, "failed", 1);
-          }
-        };
-      };
-
-      connectSSE(jobId);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      setExecutionLogs((prev) => [...prev, `[ERROR] ${message}`]);
-      setExecutionStatus("failed");
-      setIsRunning(false);
-      onRunStateChange?.(false);
-    }
-  };
 
   const _handleCopy = () => {
     // Rebuild from live state — the displayed (deferred) recipe may lag the latest keystroke.
@@ -1054,254 +712,20 @@ ${owrPlatform === "web"
       )}
 
       {/* OWR Export Bundle Overlay */}
-      {isOwrExportOpen &&
-        (() => {
-          const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = owrConfigs;
-
-          let fileTitle = "";
-          let fileContent = "";
-          if (owrSelectedFile === "ort_config.json") {
-            fileTitle = "ort_config.json";
-            fileContent = JSON.stringify(ortConfig, null, 2);
-          } else if (owrSelectedFile === "onnx_model_manifest.json") {
-            fileTitle = "onnx_model_manifest.json";
-            fileContent = JSON.stringify(manifestConfig, null, 2);
-          } else if (owrSelectedFile === "web_init.js") {
-            fileTitle = "web_init.js";
-            fileContent = webInitCode;
-          } else {
-            fileTitle = "mobile_init.kt";
-            fileContent = mobileInitCode;
-          }
-
-          const handleCopyActiveCode = () => {
-            navigator.clipboard.writeText(fileContent);
-            setIsOwrCopied(true);
-            setTimeout(() => setIsOwrCopied(false), 2000);
-          };
-
-          return (
-            <div className="absolute inset-0 z-55 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in overflow-y-auto">
-              <Card className="w-full max-w-4xl border-electric-blue/30 flex flex-col max-h-[90vh]">
-                <CardHeader
-                  title="Export for ONNX Runtime (Web/Mobile)"
-                  description="Package specific metadata configurations, environment session maps, and code initializers for seamless OWR edge deployment."
-                  badge={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="h-8 w-8 p-0 hover:bg-slate-800"
-                      onClick={() => setIsOwrExportOpen(false)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  }
-                />
-                <CardContent className="grid grid-cols-1 md:grid-cols-12 gap-6 p-6 overflow-auto flex-1">
-                  {/* Left Parameter Panel: Platform Config & Variables */}
-                  <div className="md:col-span-4 flex flex-col gap-4 border-r border-slate-900/60 pr-4">
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                          <Globe className="h-3.5 w-3.5 text-electric-blue" /> Target Platform Runtime
-                        </Label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            className={`p-2.5 rounded-lg border text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${owrPlatform === "web"
-                              ? "bg-electric-blue/15 border-electric-blue/50 text-electric-blue font-semibold"
-                              : "bg-slate-950 border-slate-850 text-slate-400 hover:border-slate-800"
-                              }`}
-                            onClick={() => {
-                              setOwrPlatform("web");
-                              if (owrSelectedFile === "mobile_init.kt") {
-                                setOwrSelectedFile("web_init.js");
-                              }
-                            }}
-                          >
-                            <Laptop className="h-5 w-5" />
-                            ORT Web
-                          </button>
-                          <button
-                            type="button"
-                            className={`p-2.5 rounded-lg border text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${owrPlatform === "mobile"
-                              ? "bg-electric-blue/15 border-electric-blue/50 text-electric-blue font-semibold"
-                              : "bg-slate-950 border-slate-850 text-slate-400 hover:border-slate-800"
-                              }`}
-                            onClick={() => {
-                              setOwrPlatform("mobile");
-                              if (owrSelectedFile === "web_init.js") {
-                                setOwrSelectedFile("mobile_init.kt");
-                              }
-                            }}
-                          >
-                            <Smartphone className="h-5 w-5" />
-                            ORT Mobile
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5 pt-2">
-                        <Label
-                          htmlFor="owr-thread-allocation"
-                          className="text-xs font-semibold text-slate-300 flex items-center gap-1.5"
-                        >
-                          <Cpu className="h-3.5 w-3.5 text-electric-blue" /> Runtime Thread Allocation
-                        </Label>
-                        <select
-                          id="owr-thread-allocation"
-                          aria-label="Runtime thread allocation"
-                          value={owrThreads}
-                          onChange={(e) => setOwrThreads(e.target.value)}
-                          className="w-full text-xs bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 font-sans justify-between text-slate-200 outline-none hover:border-slate-700 cursor-pointer"
-                        >
-                          <option value="1">1 Thread (Battery-safe)</option>
-                          <option value="2">2 Threads (Optimized)</option>
-                          <option value="4">4 Threads (Standard Core)</option>
-                          <option value="8">8 Threads (Performance Rig)</option>
-                        </select>
-                        <span className="text-[11px] text-slate-400 block leading-tight">
-                          Determines maximum browser/mobile parallel worker operations.
-                        </span>
-                      </div>
-
-                      <div className="space-y-1.5 pt-2">
-                        <Label
-                          htmlFor="owr-vram-mode"
-                          className="text-xs font-semibold text-slate-300 flex items-center gap-1.5"
-                        >
-                          <Sliders className="h-3.5 w-3.5 text-electric-blue" /> VRAM Optimizer Mode
-                        </Label>
-                        <select
-                          id="owr-vram-mode"
-                          aria-label="VRAM optimizer mode"
-                          value={owrVramMode}
-                          onChange={(e) => setOwrVramMode(e.target.value as "performance" | "memory")}
-                          className="w-full text-xs bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 font-sans justify-between text-slate-200 outline-none hover:border-slate-700 cursor-pointer"
-                        >
-                          <option value="performance">Performance Focus (Accelerated)</option>
-                          <option value="memory">Memory Conservative (Low-Memory)</option>
-                        </select>
-                        <span className="text-[11px] text-slate-400 block leading-tight">
-                          Configured to leverage WebGPU execution providers or WASM pipelines.
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-auto pt-4 border-t border-slate-900/60 space-y-2">
-                      <div className="p-3 rounded-lg bg-electric-blue/5 border border-electric-blue/10 text-[11px] text-slate-400 leading-relaxed font-sans">
-                        <strong>Olive OWR Cross-compile:</strong> Generates structural session configs mapped
-                        dynamically to the model's weight format, execution steps, and target drivers.
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Interactive Code Viewer */}
-                  <div className="md:col-span-8 flex flex-col gap-4 overflow-hidden h-full">
-                    <div className="flex bg-slate-950 p-1 border border-slate-850 rounded-lg overflow-x-auto shrink-0 gap-1 scrollbar-none">
-                      <button
-                        type="button"
-                        className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${owrSelectedFile === "onnx_model_manifest.json"
-                          ? "bg-electric-blue text-slate-950 font-medium"
-                          : "text-slate-400 hover:text-slate-200"
-                          }`}
-                        onClick={() => setOwrSelectedFile("onnx_model_manifest.json")}
-                      >
-                        onnx_model_manifest.json
-                      </button>
-                      <button
-                        type="button"
-                        className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${owrSelectedFile === "ort_config.json"
-                          ? "bg-electric-blue text-slate-950 font-medium"
-                          : "text-slate-400 hover:text-slate-200"
-                          }`}
-                        onClick={() => setOwrSelectedFile("ort_config.json")}
-                      >
-                        ort_config.json
-                      </button>
-                      {owrPlatform === "web" ? (
-                        <button
-                          type="button"
-                          className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${owrSelectedFile === "web_init.js"
-                            ? "bg-electric-blue text-slate-950 font-medium"
-                            : "text-slate-400 hover:text-slate-200"
-                            }`}
-                          onClick={() => setOwrSelectedFile("web_init.js")}
-                        >
-                          web_init.js
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${owrSelectedFile === "mobile_init.kt"
-                            ? "bg-electric-blue text-slate-950 font-medium"
-                            : "text-slate-400 hover:text-slate-200"
-                            }`}
-                          onClick={() => setOwrSelectedFile("mobile_init.kt")}
-                        >
-                          mobile_init.kt
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-h-[250px] relative flex flex-col overflow-hidden bg-slate-950 border border-slate-850 rounded-lg">
-                      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-900 bg-slate-900/40 shrink-0">
-                        <div className="flex items-center gap-1.5 text-xs font-mono text-slate-300">
-                          <FileCode className="h-4 w-4 text-electric-blue" />
-                          <span>{fileTitle}</span>
-                        </div>
-                        <span className="text-[10px] bg-electric-blue/10 border border-electric-blue/20 text-electric-blue px-2 py-0.5 rounded font-mono">
-                          ORT export
-                        </span>
-                      </div>
-
-                      <textarea
-                        readOnly
-                        className="w-full flex-1 bg-transparent p-4 font-mono text-xs text-electric-blue focus-visible:outline-none resize-none overflow-y-auto cursor-text whitespace-pre bg-transparent select-text"
-                        value={fileContent}
-                        onClick={(e) => (e.target as HTMLTextAreaElement).select()}
-                      />
-                    </div>
-
-                    <div className="flex justify-between items-center gap-3 pt-2 shrink-0">
-                      <span className="text-xs text-slate-500 font-mono hidden sm:inline">
-                        Includes boilerplate loaders & execution environment configs
-                      </span>
-                      <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-                        <Button
-                          variant="outline"
-                          className="text-xs h-9"
-                          onClick={() => setIsOwrExportOpen(false)}
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="text-xs h-9 border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
-                          onClick={handleCopyActiveCode}
-                        >
-                          {isOwrCopied ? (
-                            <Check className="h-4 w-4 mr-1.5 text-emerald-500" />
-                          ) : (
-                            <Copy className="h-4 w-4 mr-1.5" />
-                          )}
-                          {isOwrCopied ? "Copied!" : "Copy Active File"}
-                        </Button>
-                        <Button
-                          variant="default"
-                          className="text-xs h-9 bg-electric-blue hover:bg-electric-blue-dark text-slate-950 font-bold"
-                          onClick={handleDownloadOwrBundle}
-                        >
-                          <Download className="h-4 w-4 mr-1.5" /> Download Bundle (.zip)
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          );
-        })()}
+      <OwrExportOverlay
+        open={isOwrExportOpen}
+        onClose={() => setIsOwrExportOpen(false)}
+        configs={owrConfigs}
+        platform={owrPlatform}
+        onPlatformChange={setOwrPlatform}
+        selectedFile={owrSelectedFile}
+        onFileSelect={setOwrSelectedFile}
+        threads={owrThreads}
+        onThreadsChange={setOwrThreads}
+        vramMode={owrVramMode}
+        onVramModeChange={setOwrVramMode}
+        onDownloadBundle={handleDownloadOwrBundle}
+      />
 
       {/* Recipe Preview */}
       <Card

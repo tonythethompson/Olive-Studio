@@ -1,4 +1,5 @@
-import { Card, CardContent, CardHeader, Input, Label, Switch } from "@/components/ui";
+import { Card, CardContent, CardHeader, Input, Label } from "@/components/ui";
+import { Switch } from "@/components/ui/Switch";
 import { UIState } from "@/types";
 import { KeyRound, Database, Network } from "lucide-react";
 

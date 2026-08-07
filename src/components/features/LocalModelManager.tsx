@@ -179,6 +179,7 @@ export function LocalModelManager({
   useEffect(() => {
     if (!isOpen) return;
     const cancelGuard = { cancelled: false };
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh(() => cancelGuard.cancelled);
     return () => {
       cancelGuard.cancelled = true;

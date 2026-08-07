@@ -3,9 +3,9 @@ import { Minus, Square, X, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * Custom window chrome for Tauri (decorations: false).
- * Matches Olive Studio slate/olive palette; drag region for moving the window.
- * No-ops gracefully in plain browser / non-Tauri environments.
+ * Renders custom Tauri window controls for Olive Studio.
+ *
+ * @returns The title bar in Tauri, or `null` in other environments.
  */
 export function TitleBar() {
   const [isTauri, setIsTauri] = useState(false);
@@ -13,6 +13,7 @@ export function TitleBar() {
 
   useEffect(() => {
     const tauri = typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsTauri(Boolean(tauri));
     if (!tauri) return;
 

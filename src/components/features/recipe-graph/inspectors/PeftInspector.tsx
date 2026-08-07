@@ -1,4 +1,5 @@
-import { Label, Select, Switch } from "@/components/ui";
+import { Label, Select } from "@/components/ui";
+import { Switch } from "@/components/ui/Switch";
 import { getAllowedPeftMethods, isPeftAllowed } from "@/lib/pipelineValidation";
 import { getPeftBlockReason, isDiffusionModel } from "@/lib/modelFamily";
 import { UIState } from "@/types";

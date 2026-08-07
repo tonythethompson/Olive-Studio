@@ -7,7 +7,7 @@ import path from "path";
 import { spawn } from "child_process";
 import type { VenvFamily } from "../../../lib/venvFamily.ts";
 import { execFileAsync } from "../shared/exec.ts";
-import { findSystemPython } from "./systemPython.ts";
+import { findSystemPython, getPythonVersion } from "./systemPython.ts";
 import { getVenvPython, pythonPathForRoot } from "./paths.ts";
 import { envForVenvRoot } from "./pathIsolation.ts";
 import {
@@ -32,7 +32,6 @@ import {
   getLegacyGpuBackupRoot,
 } from "./spec.ts";
 import { invalidateRuntimeStatusCache, listInstalledOrtDistributions } from "./status.ts";
-import { getPythonVersion } from "./systemPython.ts";
 import {
   isQnnFamilyPythonMinor,
   PINNED_ONNXRUNTIME_QNN_FAMILY_ORT_VERSION,

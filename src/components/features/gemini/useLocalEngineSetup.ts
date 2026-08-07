@@ -170,6 +170,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
         setLmsHealthy(false);
         setLmsInstalled(false);
       });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshInstalledModels(preferredEngine);
   }, [isOpen, preferredEngine, refreshInstalledModels]);
 

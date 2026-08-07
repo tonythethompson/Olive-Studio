@@ -27,8 +27,8 @@ import {
   detectEnvProvider,
   callProvider,
   providerSupportsJsonResponse,
+  type AiProviderPlugin,
 } from "./registry.ts";
-import type { AiProviderPlugin } from "./registry.ts";
 import type { ProviderConfig, AIChatMessage } from "../../types.ts";
 import { readEnvApiKey } from "./env.ts";
 

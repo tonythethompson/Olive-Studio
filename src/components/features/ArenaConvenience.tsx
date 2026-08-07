@@ -34,7 +34,12 @@ export interface FromOliveOutputsProps {
   onFile: (file: File) => void;
 }
 
-/** Local-mode convenience: list + download Olive cache/output models by opaque id. */
+/**
+ * Renders a local-mode panel for selecting Olive-generated model files.
+ *
+ * @param slotLabel - Label used to associate the panel with its model slot
+ * @param onFile - Callback invoked with the selected model file
+ */
 export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -71,6 +76,7 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
     // Do not auto-retry after a failed list: error + null payload would re-fire
     // forever. Refresh list (or re-open after clearing) is the recovery path.
     if (open && !payload && !loading && !error) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void loadList();
     }
   }, [open, payload, loading, error, loadList]);

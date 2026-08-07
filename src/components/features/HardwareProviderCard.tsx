@@ -2,12 +2,12 @@
  * Single IHV provider selection card (conflicts, install CTAs, local detection).
  * Extracted from IHVIntegrationPanel to keep that panel under CodeFactor complexity limits.
  */
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui";
+} from "@/components/ui/Tooltip";
 import type { OpenVinoInstallState } from "@/components/features/useOpenVinoInstall";
 import type { DirectMlInstallState } from "@/components/features/useDirectMlInstall";
 import type { QnnInstallState } from "@/components/features/useQnnInstall";
@@ -752,7 +752,7 @@ function ProviderConflictAssist({
   );
 }
 
-export function HardwareProviderCard({
+export const HardwareProviderCard = memo(function HardwareProviderCard({
   provider: p,
   state,
   setState,
@@ -1001,4 +1001,4 @@ export function HardwareProviderCard({
       ) : null}
     </div>
   );
-}
+});

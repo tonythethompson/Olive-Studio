@@ -62,7 +62,8 @@ vi.mock("@/components/features/VramEstimateBanner", () => ({
   VramEstimateBanner: () => <div data-testid="vram-banner">VRAM</div>,
 }));
 
-import { IHVIntegrationPanel, getCellCompatibility } from "./IHVIntegrationPanel";
+import { IHVIntegrationPanel } from "./IHVIntegrationPanel";
+import { getCellCompatibility } from "./hardwarePassCompatibility";
 
 describe("IHVIntegrationPanel", () => {
   useFetchRoutesMock({

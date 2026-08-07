@@ -70,6 +70,12 @@ def _flatten(obj: Any, prefix: str = "") -> list[tuple[str, str]]:
 
 
 def _load_kb_text() -> list[tuple[str, str]]:
+    """
+    Load and flatten searchable JSON knowledge-base files.
+    
+    Returns:
+    	list[tuple[str, str]]: Key-path and text pairs extracted from successfully loaded files.
+    """
     all_text: list[tuple[str, str]] = []
     for file in KB_DIR.glob("*.json"):
         if file.name in _EXCLUDED_KB_FILES:
@@ -79,7 +85,8 @@ def _load_kb_text() -> list[tuple[str, str]]:
                 data = json.load(f)
             for path, text in _flatten(data, prefix=file.stem):
                 all_text.append((path, text))
-        except Exception:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            logger.debug("Failed to load KB file %s: %s", file.name, exc)
             continue
     return all_text
 

@@ -438,7 +438,7 @@ describe("cloud-inference body-read abort handling", () => {
       prompt: "hello",
     });
 
-    await new Promise<void>((resolve, reject) => {
+    await new Promise<void>((resolve, _reject) => {
       const req = http.request(
         {
           hostname: url.hostname,
