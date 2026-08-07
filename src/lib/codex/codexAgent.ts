@@ -48,21 +48,40 @@ function loadCodexSdk(): Promise<CodexSdkModule> {
   return dynamicImport("@openai/codex-sdk");
 }
 
-/** True only for Node's "can't resolve this specifier" errors, not evaluation/export failures. */
-function isModuleNotFoundError(err: unknown): boolean {
-  return (
-    err instanceof Error &&
-    "code" in err &&
-    (err.code === "ERR_MODULE_NOT_FOUND" || err.code === "MODULE_NOT_FOUND")
-  );
+/** True only for Node's "can't resolve @openai/codex-sdk" errors, not transitive module or evaluation/export failures. */
+export function isModuleNotFoundError(err: unknown): boolean {
+  if (
+    !(
+      err instanceof Error &&
+      "code" in err &&
+      (err.code === "ERR_MODULE_NOT_FOUND" || err.code === "MODULE_NOT_FOUND")
+    )
+  ) {
+    return false;
+  }
+  const specifier =
+    ("specifier" in err && typeof err.specifier === "string" ? err.specifier : "") ||
+    ("url" in err && typeof err.url === "string" ? err.url : "") ||
+    err.message;
+
+  return specifier.includes("@openai/codex-sdk");
 }
 
-async function getCodex(): Promise<CodexClient> {
+export function _resetCodexStateForTests(): void {
+  codexSingleton = null;
+  codexModulePromise = null;
+}
+
+export async function getCodex(): Promise<CodexClient> {
   if (!codexSingleton) {
     codexModulePromise ??= loadCodexSdk();
     let Codex: CodexSdkModule["Codex"];
     try {
-      ({ Codex } = await codexModulePromise);
+      const mod = await codexModulePromise;
+      Codex = mod?.Codex;
+      if (typeof Codex !== "function") {
+        throw new Error("Module '@openai/codex-sdk' does not export a valid Codex constructor.");
+      }
     } catch (err) {
       // Reset so a later install (or a transient failure) doesn't require a server restart.
       codexModulePromise = null;

@@ -348,6 +348,7 @@ export function ExecutionWorkspace({
     "ort_config.json" | "web_init.js" | "mobile_init.kt" | "onnx_model_manifest.json"
   >("ort_config.json");
   const [owrDownloadError, setOwrDownloadError] = useState<string | null>(null);
+  const [isOwrDownloading, setIsOwrDownloading] = useState(false);
 
   const { data: hardwareProbe = null } = useHardwareProbe();
 
@@ -383,63 +384,69 @@ export function ExecutionWorkspace({
   );
 
   const handleDownloadOwrBundle = async () => {
-    setOwrDownloadError(null);
-    const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = owrConfigs;
-    let zip: InstanceType<typeof import("jszip")>;
+    if (isOwrDownloading) return;
+    setIsOwrDownloading(true);
     try {
-      const { default: JSZip } = await import("jszip");
-      zip = new JSZip();
-    } catch (e) {
-      console.error("Failed to load ZIP module", e);
-      setOwrDownloadError("Couldn't load the ZIP module. Check your connection and try again.");
-      return;
-    }
-
-    zip.file("ort_config.json", JSON.stringify(ortConfig, null, 2));
-    zip.file("onnx_model_manifest.json", JSON.stringify(manifestConfig, null, 2));
-
-    if (owrPlatform === "web") {
-      zip.file("web_init.js", webInitCode);
-    } else {
-      zip.file("mobile_init.kt", mobileInitCode);
-    }
-
-    const rawModelId = state.hfModelId || (state.localFiles && state.localFiles[0]?.name) || "model";
-    const modelName = rawModelId.split("/").pop() || "model";
-
-    const readme = `ONNX Runtime Web/Mobile (OWR) Deployment Bundle
-==================================================
-Created: ${new Date().toLocaleString()}
-Target Environment: ONNX Runtime ${owrPlatform === "web" ? "Web (WebGPU/WASM)" : "Mobile (Android/iOS)"}
-Optimized Model: ${modelName}
-
-Contents of this bundle:
-1. onnx_model_manifest.json - Full optimization and pipeline conversion audit trail from MS Olive.
-2. ort_config.json - Direct configuration rules for loading the model session dynamically.
-3. ${owrPlatform === "web" ? "web_init.js" : "mobile_init.kt"} - Boilerplate initialization and execution patterns.
-
-Deployment Steps:
-${owrPlatform === "web"
-        ? "- Place the optimized model file (model.onnx) in your public asset folder.\\n- Install 'onnxruntime-web' dependency using pnpm.\\n- Import and invoke your customized initializeOrtSession() function. "
-        : "- Place the compiled ORT flatbuffer file (model.ort) under your Android App's 'src/main/assets' directory.\\n- Implement 'ai.onnxruntime:onnxruntime-android' via gradle.\\n- Wire up your OnnxModelExecutor wrapper inside Activities/Handlers."
+      setOwrDownloadError(null);
+      const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = owrConfigs;
+      let zip: InstanceType<typeof import("jszip")>;
+      try {
+        const { default: JSZip } = await import("jszip");
+        zip = new JSZip();
+      } catch (e) {
+        console.error("Failed to load ZIP module", e);
+        setOwrDownloadError("Couldn't load the ZIP module. Check your connection and try again.");
+        return;
       }
-`;
-    zip.file("README.txt", readme);
 
-    try {
-      const content = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(content);
-      const link = document.createElement("a");
-      link.href = url;
-      const modelCleanName = modelName.replace(/[^a-z0-9_-]/gi, "_").toLowerCase();
-      link.download = `owr_bundle_${owrPlatform}_${modelCleanName}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error("ZIP Generation failed", e);
-      setOwrDownloadError("ZIP generation failed. Try again, or check the browser console for details.");
+      zip.file("ort_config.json", JSON.stringify(ortConfig, null, 2));
+      zip.file("onnx_model_manifest.json", JSON.stringify(manifestConfig, null, 2));
+
+      if (owrPlatform === "web") {
+        zip.file("web_init.js", webInitCode);
+      } else {
+        zip.file("mobile_init.kt", mobileInitCode);
+      }
+
+      const rawModelId = state.hfModelId || (state.localFiles && state.localFiles[0]?.name) || "model";
+      const modelName = rawModelId.split("/").pop() || "model";
+
+      const readme = `ONNX Runtime Web/Mobile (OWR) Deployment Bundle
+  ==================================================
+  Created: ${new Date().toLocaleString()}
+  Target Environment: ONNX Runtime ${owrPlatform === "web" ? "Web (WebGPU/WASM)" : "Mobile (Android/iOS)"}
+  Optimized Model: ${modelName}
+
+  Contents of this bundle:
+  1. onnx_model_manifest.json - Full optimization and pipeline conversion audit trail from MS Olive.
+  2. ort_config.json - Direct configuration rules for loading the model session dynamically.
+  3. ${owrPlatform === "web" ? "web_init.js" : "mobile_init.kt"} - Boilerplate initialization and execution patterns.
+
+  Deployment Steps:
+  ${owrPlatform === "web"
+          ? "- Place the optimized model file (model.onnx) in your public asset folder.\\n- Install 'onnxruntime-web' dependency using pnpm.\\n- Import and invoke your customized initializeOrtSession() function. "
+          : "- Place the compiled ORT flatbuffer file (model.ort) under your Android App's 'src/main/assets' directory.\\n- Implement 'ai.onnxruntime:onnxruntime-android' via gradle.\\n- Wire up your OnnxModelExecutor wrapper inside Activities/Handlers."
+        }
+  `;
+      zip.file("README.txt", readme);
+
+      try {
+        const content = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(content);
+        const link = document.createElement("a");
+        link.href = url;
+        const modelCleanName = modelName.replace(/[^a-z0-9_-]/gi, "_").toLowerCase();
+        link.download = `owr_bundle_${owrPlatform}_${modelCleanName}.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        console.error("ZIP Generation failed", e);
+        setOwrDownloadError("ZIP generation failed. Try again, or check the browser console for details.");
+      }
+    } finally {
+      setIsOwrDownloading(false);
     }
   };
 
@@ -729,6 +736,7 @@ ${owrPlatform === "web"
         vramMode={owrVramMode}
         onVramModeChange={setOwrVramMode}
         onDownloadBundle={handleDownloadOwrBundle}
+        isDownloading={isOwrDownloading}
         downloadError={owrDownloadError}
       />
 

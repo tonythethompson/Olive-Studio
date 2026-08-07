@@ -162,6 +162,7 @@ export function InputEnvironmentPanel({
     onSuccess: () => {
       queryClient.setQueryData(["hf-token-status"], "runtime");
       setHfTokenInput("");
+      clearTokenMutation.reset();
     },
   });
 
@@ -175,8 +176,10 @@ export function InputEnvironmentPanel({
     },
   });
 
+  const isTokenMutating = submitTokenMutation.isPending || clearTokenMutation.isPending;
+
   const handleSubmitToken = async () => {
-    if (!hfTokenInput.trim()) return;
+    if (isTokenMutating || !hfTokenInput.trim()) return;
     try {
       await submitTokenMutation.mutateAsync(hfTokenInput.trim());
     } catch {
@@ -185,6 +188,7 @@ export function InputEnvironmentPanel({
   };
 
   const handleClearToken = async () => {
+    if (isTokenMutating) return;
     try {
       await clearTokenMutation.mutateAsync();
     } catch {
@@ -1599,7 +1603,7 @@ export function InputEnvironmentPanel({
                           )}
                           {hfTokenStatus === "error" && (
                             <span className="text-[10px] bg-rose-500/10 border border-rose-500/20 text-rose-400 px-2 py-0.5 rounded font-mono">
-                              Couldn't check token status
+                              Couldn&apos;t check token status
                             </span>
                           )}
                         </div>
@@ -1616,12 +1620,13 @@ export function InputEnvironmentPanel({
                                 value={hfTokenInput}
                                 onChange={(e) => setHfTokenInput(e.target.value)}
                                 onKeyDown={(e) => e.key === "Enter" && handleSubmitToken()}
+                                disabled={isTokenMutating}
                               />
                             </div>
                             <Button
                               type="button"
                               onClick={handleSubmitToken}
-                              disabled={!hfTokenInput.trim() || submitTokenMutation.isPending}
+                              disabled={!hfTokenInput.trim() || isTokenMutating}
                               className="h-9 px-4 text-xs bg-electric-blue hover:bg-electric-blue/90 text-slate-950 font-bold"
                             >
                               {submitTokenMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
@@ -1631,11 +1636,15 @@ export function InputEnvironmentPanel({
                                 type="button"
                                 variant="outline"
                                 onClick={handleClearToken}
-                                disabled={clearTokenMutation.isPending}
+                                disabled={isTokenMutating}
+                                aria-label={clearTokenMutation.isPending ? "Clearing token" : undefined}
                                 className="h-9 px-3 text-xs border-red-500/30 text-red-400 hover:bg-red-500/10"
                               >
                                 {clearTokenMutation.isPending ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    <span className="sr-only">Clearing token</span>
+                                  </>
                                 ) : (
                                   "Clear"
                                 )}
@@ -1645,7 +1654,7 @@ export function InputEnvironmentPanel({
                         )}
                         {clearTokenMutation.isError && (
                           <p role="alert" className="text-[10px] text-rose-400">
-                            Couldn't clear the token — try again.
+                            Couldn&apos;t clear the token — try again.
                           </p>
                         )}
 
