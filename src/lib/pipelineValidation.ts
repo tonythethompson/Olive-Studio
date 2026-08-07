@@ -5,6 +5,11 @@ import { buildOliveRecipe, isPyTorchNativeQuantMethod } from "@/lib/oliveRecipeB
 import { assessQnnRecipeReadiness, type QnnReadinessIssue } from "@/lib/qnnReadiness";
 import { isKnownPass, getPassSchema } from "@/lib/schemaEngine";
 import { pickOpenVinoTargetFromDevices } from "@/lib/openvinoDeps";
+import {
+  isExportTargetProvider,
+  isLegacyExportProvider,
+  isPlatformLocalProvider,
+} from "@/lib/providerRuntimeKind";
 
 export type PipelineValidationOptions = {
   hardwareProbe?: HardwareProbeResult | null;
@@ -700,22 +705,62 @@ function getPassCatalogIssues(state: UIState, recipe: OliveRecipe): PipelineIssu
  *
  * @param state - The current pipeline configuration.
  * @param forLocalExecution - Whether the pipeline is being prepared for local execution.
+ * @param probe - Optional hardware probe (needed to clear platform-local gates).
  * @returns Critical issues affecting local execution.
  */
-export function getLocalExecutionIssues(state: UIState, forLocalExecution?: boolean): PipelineIssue[] {
-  if (!forLocalExecution || state.ihvProvider !== "WebGpuExecutionProvider") {
+export function getLocalExecutionIssues(
+  state: UIState,
+  forLocalExecution?: boolean,
+  probe?: HardwareProbeResult | null,
+): PipelineIssue[] {
+  if (!forLocalExecution) {
     return [];
   }
-  return [
-    {
-      id: "webgpu-local-execution-unsupported",
-      severity: "critical",
-      title: "WebGPU cannot run via local Olive Python",
-      description:
-        "WebGpuExecutionProvider is a browser deploy target (ONNX Runtime Web), not a local Python EP. Export the recipe and use Browser Test / WebGPU benchmark instead of Execute Live.",
-      affectedPasses: ["provider"],
-    },
-  ];
+
+  const provider = state.ihvProvider;
+  if (isExportTargetProvider(provider)) {
+    const legacyNote = isLegacyExportProvider(provider)
+      ? " Prefer QNNExecutionProvider for Snapdragon NPU work."
+      : "";
+    if (provider === "WebGpuExecutionProvider") {
+      return [
+        {
+          id: "webgpu-local-execution-unsupported",
+          severity: "critical",
+          title: "WebGPU cannot run via local Olive Python",
+          description:
+            "WebGpuExecutionProvider is a browser deploy target (ONNX Runtime Web), not a local Python EP. Export the recipe and use Browser Test / WebGPU benchmark instead of Execute Live.",
+          affectedPasses: ["provider"],
+        },
+      ];
+    }
+    return [
+      {
+        id: "export-target-local-execution-unsupported",
+        severity: "critical",
+        title: `${provider} cannot run via local Olive Python`,
+        description: `${provider} is an export / deploy target, not a local Python execution provider. Build or export the recipe for the target runtime instead of Execute Live.${legacyNote}`,
+        affectedPasses: ["provider"],
+      },
+    ];
+  }
+
+  if (isPlatformLocalProvider(provider)) {
+    const detected = Boolean(probe?.detectedProviders.includes(provider));
+    if (!detected) {
+      return [
+        {
+          id: "platform-local-execution-unavailable",
+          severity: "critical",
+          title: `${provider} is not available for local Execute Live`,
+          description: `${provider} requires a matching ORT build on this host (and must appear in the hardware probe). You can still select it for recipe export; Execute Live stays blocked until it is detected.`,
+          affectedPasses: ["provider"],
+        },
+      ];
+    }
+  }
+
+  return [];
 }
 
 /**
@@ -754,7 +799,7 @@ export function getPipelineValidation(
     ...getProviderIssues(state),
     ...getProviderHardwareIssues(state, options?.hardwareProbe),
     ...getQnnRecipeReadinessIssues(state, recipe, options?.hardwareProbe),
-    ...getLocalExecutionIssues(state, options?.forLocalExecution),
+    ...getLocalExecutionIssues(state, options?.forLocalExecution, options?.hardwareProbe),
     ...getAdvisoryIssues(state),
     ...getRecipeRuntimeIssues(state, recipe),
     ...getPassCatalogIssues(state, recipe),

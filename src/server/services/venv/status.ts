@@ -495,6 +495,13 @@ export function capabilityForProvider(
       return status.capabilities.qnnPreparation;
     case "ROCMExecutionProvider":
     case "WebGpuExecutionProvider":
+    case "CoreMLExecutionProvider":
+    case "NNAPIExecutionProvider":
+    case "VitisAIExecutionProvider":
+    case "SNPEExecutionProvider":
+    case "TensorflowLiteExecutionProvider":
+    case "XnnpackExecutionProvider":
+    case "WasmExecutionProvider":
       return undefined;
     default: {
       const _exhaustive: never = provider;

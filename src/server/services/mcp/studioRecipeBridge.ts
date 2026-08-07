@@ -28,6 +28,13 @@ const IHV_PROVIDERS = new Set<string>([
   "QNNExecutionProvider",
   "ROCMExecutionProvider",
   "WebGpuExecutionProvider",
+  "CoreMLExecutionProvider",
+  "NNAPIExecutionProvider",
+  "VitisAIExecutionProvider",
+  "SNPEExecutionProvider",
+  "TensorflowLiteExecutionProvider",
+  "XnnpackExecutionProvider",
+  "WasmExecutionProvider",
 ]);
 
 const MODEL_SOURCES = new Set<string>(["huggingface", "local", "azure"]);

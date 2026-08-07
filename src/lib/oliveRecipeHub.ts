@@ -248,6 +248,20 @@ export function mapProviderToCatalogDevice(provider: IHVProvider): string {
       return "DirectML";
     case "WebGpuExecutionProvider":
       return "WebGPU";
+    case "CoreMLExecutionProvider":
+      return "CoreML";
+    case "NNAPIExecutionProvider":
+      return "NNAPI";
+    case "VitisAIExecutionProvider":
+      return "VitisAI";
+    case "SNPEExecutionProvider":
+      return "SNPE";
+    case "TensorflowLiteExecutionProvider":
+      return "TFLite";
+    case "XnnpackExecutionProvider":
+      return "XNNPACK";
+    case "WasmExecutionProvider":
+      return "WASM";
     case "CPUExecutionProvider":
       return "CPU";
     default: {

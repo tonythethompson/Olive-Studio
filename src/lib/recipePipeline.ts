@@ -67,7 +67,7 @@ export function buildRecipeFromState(
   // Reuse the recipe getPipelineValidation already built instead of rebuilding.
   const recipe = validation.recipe as unknown as Record<string, unknown>;
   const recipeJson = serializeRecipe(recipe);
-  const localExecutionIssues = getLocalExecutionIssues(sanitized, true);
+  const localExecutionIssues = getLocalExecutionIssues(sanitized, true, options?.hardwareProbe);
   const schema = validateOliveRecipeStructure(recipe);
 
   return {

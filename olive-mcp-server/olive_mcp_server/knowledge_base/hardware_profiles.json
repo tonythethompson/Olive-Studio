@@ -1,6 +1,6 @@
 {
-  "version": "0.3.0",
-  "last_updated": "2026-08-06",
+  "version": "0.4.0",
+  "last_updated": "2026-08-07",
   "profiles": [
     {
       "target": "NVIDIA RTX 4090",
@@ -264,6 +264,70 @@
         "INT8 support varies by browser/GPU."
       ],
       "notes": "Export/optimize ONNX for in-browser ORT Web WebGPU. Prefer FP16. Use Studio for recipe build/export, not Execute Live."
+    },
+    {
+      "target": "XNNPACK (Mobile)",
+      "accelerator": "cpu",
+      "execution_providers": ["XnnpackExecutionProvider"],
+      "recommended_passes": ["OnnxConversion", "OnnxModelOptimizer", "OnnxFloatToFloat16"],
+      "typical_speedup": "1-3x",
+      "calibration_size": 64,
+      "optimal_batch_size": 1,
+      "memory_gb": 4,
+      "ops_supported": ["Conv", "Gemm", "Softmax", "Relu"],
+      "known_issues": [
+        "OWR / ORT Mobile CPU backend only; not a local Olive Studio Execute Live EP.",
+        "Prefer as mobile CPU fallback beside NNAPI."
+      ],
+      "notes": "Export-target profile. Recommend FP16/INT8 export chains similar to WebGPU, not CUDA AWQ."
+    },
+    {
+      "target": "WASM (Browser)",
+      "accelerator": "cpu",
+      "execution_providers": ["WasmExecutionProvider"],
+      "recommended_passes": ["OnnxConversion", "OnnxModelOptimizer", "OnnxFloatToFloat16"],
+      "typical_speedup": "0.5-2x",
+      "calibration_size": 64,
+      "optimal_batch_size": 1,
+      "memory_gb": 2,
+      "ops_supported": ["Conv", "Gemm", "Softmax"],
+      "known_issues": [
+        "ORT Web WASM CPU path; not a local Olive Python EP.",
+        "Often paired as WebGPU fallback in OWR web configs."
+      ],
+      "notes": "Export-target profile for browser CPU. Prefer FP16; keep graphs small."
+    },
+    {
+      "target": "Qualcomm SNPE (Legacy)",
+      "accelerator": "npu",
+      "execution_providers": ["SNPEExecutionProvider"],
+      "recommended_passes": ["OnnxConversion", "SNPEConversion"],
+      "typical_speedup": "2-6x",
+      "calibration_size": 64,
+      "optimal_batch_size": 1,
+      "memory_gb": 4,
+      "ops_supported": ["Conv", "Gemm", "Relu", "Softmax"],
+      "known_issues": [
+        "Legacy Qualcomm SNPE / DLC path; prefer QNNExecutionProvider for new Snapdragon work.",
+        "Not available for Studio Execute Live."
+      ],
+      "notes": "Legacy export profile. MCP should prefer QNN hardware guidance; keep SNPE only for DLC conversion recipes."
+    },
+    {
+      "target": "TensorFlow Lite Export",
+      "accelerator": "cpu",
+      "execution_providers": ["TensorflowLiteExecutionProvider"],
+      "recommended_passes": ["OnnxConversion", "OnnxModelOptimizer"],
+      "typical_speedup": "1-3x",
+      "calibration_size": 64,
+      "optimal_batch_size": 1,
+      "memory_gb": 2,
+      "ops_supported": ["Conv", "Gemm", "MaxPool", "Softmax"],
+      "known_issues": [
+        "TFLite conversion/export path; not a local Olive Execute Live EP.",
+        "Operator coverage differs from ONNX ORT EPs."
+      ],
+      "notes": "Export-target profile for TFLite conversion. Prefer INT8 TFLite tooling outside Studio Execute Live."
     }
   ]
 }

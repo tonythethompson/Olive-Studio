@@ -88,9 +88,19 @@ export async function ensureProviderCapability(
       ? qnnCapabilityForUsage(status, usage)
       : capabilityForProvider(status, provider);
 
-  // Providers without a capability slot (ROCm/WebGPU) only need the family base.
+  // Providers without a capability slot (ROCm/WebGPU/export/platform) only need the family base.
   if (cap === undefined) {
-    if (provider === "ROCMExecutionProvider" || provider === "WebGpuExecutionProvider") {
+    if (
+      provider === "ROCMExecutionProvider" ||
+      provider === "WebGpuExecutionProvider" ||
+      provider === "CoreMLExecutionProvider" ||
+      provider === "NNAPIExecutionProvider" ||
+      provider === "VitisAIExecutionProvider" ||
+      provider === "SNPEExecutionProvider" ||
+      provider === "TensorflowLiteExecutionProvider" ||
+      provider === "XnnpackExecutionProvider" ||
+      provider === "WasmExecutionProvider"
+    ) {
       return { ok: true, family, python: getVenvPython(family) };
     }
     return {
@@ -124,6 +134,13 @@ async function installCapabilityPackages(
       case "DmlExecutionProvider":
       case "ROCMExecutionProvider":
       case "WebGpuExecutionProvider":
+      case "CoreMLExecutionProvider":
+      case "NNAPIExecutionProvider":
+      case "VitisAIExecutionProvider":
+      case "SNPEExecutionProvider":
+      case "TensorflowLiteExecutionProvider":
+      case "XnnpackExecutionProvider":
+      case "WasmExecutionProvider":
         return { ok: true };
 
       case "QNNExecutionProvider": {

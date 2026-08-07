@@ -1657,7 +1657,7 @@
           "default": "fp16"
         }
       },
-      "hardware_requirements": ["CPUExecutionProvider", "CUDAExecutionProvider", "DirectMLExecutionProvider"],
+      "hardware_requirements": ["CPUExecutionProvider", "CUDAExecutionProvider", "DmlExecutionProvider"],
       "typical_compression": "varies",
       "gotchas": ["Optimized for ONNX Runtime GenAI execution engine."]
     },

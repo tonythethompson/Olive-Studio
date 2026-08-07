@@ -3,6 +3,40 @@ import type { UIState } from "@/types";
 export type OwrPlatform = "web" | "mobile";
 export type OwrVramMode = "performance" | "memory";
 
+/**
+ * Intentional dual spellings between Studio catalog and ORT Web / OWR:
+ * - Studio / Olive recipe: `WebGpuExecutionProvider`
+ * - ORT Web session config: `WebGPUExecutionProvider`
+ * - Studio / Olive recipe: `NNAPIExecutionProvider`
+ * - OWR mobile ORT config: `NnapiExecutionProvider`
+ */
+export const STUDIO_WEB_GPU_EP = "WebGpuExecutionProvider" as const;
+export const OWR_WEB_GPU_EP = "WebGPUExecutionProvider" as const;
+export const STUDIO_NNAPI_EP = "NNAPIExecutionProvider" as const;
+export const OWR_NNAPI_EP = "NnapiExecutionProvider" as const;
+export const OWR_WASM_EP = "WasmExecutionProvider" as const;
+export const OWR_XNNPACK_EP = "XnnpackExecutionProvider" as const;
+
+/** Map Studio WebGPU id → ORT Web / OWR web session EP string. */
+export function studioWebGpuToOwrEp(
+  provider: typeof STUDIO_WEB_GPU_EP | string = STUDIO_WEB_GPU_EP,
+): typeof OWR_WEB_GPU_EP {
+  if (provider === STUDIO_WEB_GPU_EP || provider === OWR_WEB_GPU_EP) {
+    return OWR_WEB_GPU_EP;
+  }
+  return OWR_WEB_GPU_EP;
+}
+
+/** Map Studio NNAPI id → OWR mobile session EP string. */
+export function studioNnapiToOwrEp(
+  provider: typeof STUDIO_NNAPI_EP | string = STUDIO_NNAPI_EP,
+): typeof OWR_NNAPI_EP {
+  if (provider === STUDIO_NNAPI_EP || provider === OWR_NNAPI_EP) {
+    return OWR_NNAPI_EP;
+  }
+  return OWR_NNAPI_EP;
+}
+
 const ARCHITECTURE_MATCHERS: Array<{ needle: string; architecture: string }> = [
   { needle: "llama", architecture: "Llama" },
   { needle: "phi", architecture: "Phi" },
@@ -31,17 +65,20 @@ export function resolveOwrModelName(state: Pick<UIState, "hfModelId" | "localFil
 
 export function buildOrtConfig(opts: { platform: OwrPlatform; vramMode: OwrVramMode; threads: string }) {
   const { platform, vramMode, threads } = opts;
+  // OWR web uses ORT-Web spelling (WebGPUExecutionProvider), not Studio WebGpuExecutionProvider.
   const webProviders =
     vramMode === "performance"
-      ? ["WebGPUExecutionProvider", "WasmExecutionProvider"]
-      : ["WasmExecutionProvider"];
+      ? [studioWebGpuToOwrEp(), OWR_WASM_EP]
+      : [OWR_WASM_EP];
 
   return {
     model_path: platform === "web" ? "models/optimized/model.onnx" : "models/optimized/model.ort",
     session_options: {
       execution_mode: "ORT_SEQUENTIAL",
       execution_providers:
-        platform === "web" ? webProviders : ["XnnpackExecutionProvider", "NnapiExecutionProvider"],
+        platform === "web"
+          ? webProviders
+          : [OWR_XNNPACK_EP, studioNnapiToOwrEp()],
       graph_optimization_level: "ORT_ENABLE_ALL",
       intra_op_num_threads: parseInt(threads) || 4,
       inter_op_num_threads: 1,

@@ -31,6 +31,11 @@ import {
 } from "@/lib/hardwareProbe";
 import type { ProviderCatalogEntry } from "@/lib/providerCatalog";
 import {
+  isExportTargetProvider,
+  isLegacyExportProvider,
+  isPlatformLocalProvider,
+} from "@/lib/providerRuntimeKind";
+import {
   OPEN_VINO_GPU_DRIVER_URL,
   OPEN_VINO_NPU_DRIVER_URL,
   pickOpenVinoTargetFromDevices,
@@ -102,7 +107,11 @@ function resolveCardChrome(input: {
   cardHardwareBlocked: boolean;
   cardHasCritical: boolean;
   cardHasWarning: boolean;
+  /** WebGPU keeps the historical “Browser deploy target” badge copy. */
   isWebGpuTarget: boolean;
+  isExportTarget: boolean;
+  isLegacyTarget: boolean;
+  isPlatformTarget: boolean;
   detectedLocally: boolean;
   probeLoading: boolean;
   needsPluginInstall: boolean;
@@ -121,10 +130,15 @@ function resolveCardChrome(input: {
     cardHasCritical,
     cardHasWarning,
     isWebGpuTarget,
+    isExportTarget,
+    isLegacyTarget,
+    isPlatformTarget,
     detectedLocally,
     probeLoading,
     needsPluginInstall,
   } = input;
+
+  const softTarget = isExportTarget || isPlatformTarget;
 
   if (isSelected) {
     if (cardBlocked) {
@@ -146,11 +160,17 @@ function resolveCardChrome(input: {
     return {
       cardClasses: base + "border-electric-blue bg-electric-blue/5",
       badgeText:
-        !detectedLocally && !probeLoading && !isWebGpuTarget
+        !detectedLocally && !probeLoading && !softTarget
           ? "Active (not local)"
           : isWebGpuTarget
             ? "Active (browser target)"
-            : "Active Target",
+            : isLegacyTarget
+              ? "Active (legacy export)"
+              : isExportTarget
+                ? "Active (export target)"
+                : isPlatformTarget
+                  ? "Active (platform)"
+                  : "Active Target",
       BadgeIcon: CheckCircle,
       badgeColor: "bg-electric-blue/10 text-electric-blue border-electric-blue/20",
     };
@@ -162,6 +182,32 @@ function resolveCardChrome(input: {
       badgeText: "Browser deploy target",
       BadgeIcon: Globe,
       badgeColor: "bg-slate-800/80 text-slate-300 border-slate-700/60",
+    };
+  }
+  if (isLegacyTarget) {
+    return {
+      cardClasses: base + "border-slate-800/80 bg-slate-900/40 hover:bg-slate-900 hover:border-slate-700",
+      badgeText: "Legacy export",
+      BadgeIcon: Globe,
+      badgeColor: "bg-amber-500/10 text-amber-400/90 border-amber-500/20",
+    };
+  }
+  if (isExportTarget) {
+    return {
+      cardClasses: base + "border-slate-800/80 bg-slate-900/40 hover:bg-slate-900 hover:border-slate-700",
+      badgeText: "Export target",
+      BadgeIcon: Globe,
+      badgeColor: "bg-slate-800/80 text-slate-300 border-slate-700/60",
+    };
+  }
+  if (isPlatformTarget) {
+    return {
+      cardClasses: base + "border-slate-800/80 bg-slate-900/40 hover:bg-slate-900 hover:border-slate-700",
+      badgeText: detectedLocally ? "Platform (local)" : "Platform",
+      BadgeIcon: detectedLocally ? CheckCircle : Globe,
+      badgeColor: detectedLocally
+        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+        : "bg-slate-800/80 text-slate-300 border-slate-700/60",
     };
   }
   if (cardHardwareBlocked) {
@@ -744,7 +790,7 @@ export function HardwareProviderCard({
   const pConflicts = getProviderConflicts(p.id, state.passes);
   const cardHasCritical = pConflicts.some((c) => c.severity === "critical");
   const cardHardwareBlocked =
-    p.id !== "WebGpuExecutionProvider" &&
+    !isExportTargetProvider(p.id) &&
     (Boolean(getProviderHardwareBlock(p.id, hardwareProbe)) ||
       (p.id === "CPUExecutionProvider" && !hardwareProbe));
   const cardBlocked = cardHasCritical || cardHardwareBlocked;
@@ -752,6 +798,9 @@ export function HardwareProviderCard({
   const showSwitchAssist = pConflicts.length > 0 && (isSelected || !cardBlocked);
   const detectedLocally = isProviderDetectedLocally(p.id, hardwareProbe);
   const isWebGpuTarget = p.id === "WebGpuExecutionProvider";
+  const isExportTarget = isExportTargetProvider(p.id);
+  const isLegacyTarget = isLegacyExportProvider(p.id);
+  const isPlatformTarget = isPlatformLocalProvider(p.id);
   const qnnNeedsInstall =
     Boolean(hardwareProbe) &&
     isProviderDetectedLocally("QNNExecutionProvider", hardwareProbe) &&
@@ -775,6 +824,9 @@ export function HardwareProviderCard({
     cardHasCritical,
     cardHasWarning,
     isWebGpuTarget,
+    isExportTarget,
+    isLegacyTarget,
+    isPlatformTarget,
     detectedLocally,
     probeLoading,
     needsPluginInstall,
@@ -882,7 +934,23 @@ export function HardwareProviderCard({
               Chrome or Edge 113+.
             </p>
           ) : null}
-          {!detectedLocally && !probeLoading && !isWebGpuTarget && !needsPluginInstall ? (
+          {isExportTarget && !isWebGpuTarget ? (
+            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+              {isLegacyTarget
+                ? "Legacy export path (prefer QNN for Snapdragon). Not available for Studio Execute Live."
+                : "Export / deploy target only. Not a local Python EP — Execute Live stays blocked."}
+            </p>
+          ) : null}
+          {isPlatformTarget && !detectedLocally && !probeLoading ? (
+            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+              Platform EP: selectable for recipes; Execute Live requires a matching ORT probe hit on this host.
+            </p>
+          ) : null}
+          {!detectedLocally &&
+          !probeLoading &&
+          !isExportTarget &&
+          !isPlatformTarget &&
+          !needsPluginInstall ? (
             <p className="text-[11px] text-slate-600">
               {p.id === "CPUExecutionProvider"
                 ? "Hardware detection unavailable — CPU status is unknown."

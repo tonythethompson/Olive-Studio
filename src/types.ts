@@ -39,7 +39,14 @@ export type IHVProvider =
   | "OpenVINOExecutionProvider"
   | "QNNExecutionProvider"
   | "ROCMExecutionProvider"
-  | "WebGpuExecutionProvider";
+  | "WebGpuExecutionProvider"
+  | "CoreMLExecutionProvider"
+  | "NNAPIExecutionProvider"
+  | "VitisAIExecutionProvider"
+  | "SNPEExecutionProvider"
+  | "TensorflowLiteExecutionProvider"
+  | "XnnpackExecutionProvider"
+  | "WasmExecutionProvider";
 
 /** OpenVINOExecutionProvider silicon target (maps to Olive accelerator.device). */
 export type OpenVinoTargetDevice = "CPU" | "GPU" | "NPU";

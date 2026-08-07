@@ -92,8 +92,15 @@ _EXECUTION_PROVIDER_TO_TARGET = {
     "QNNExecutionProvider": "Qualcomm Snapdragon NPU",
     "ROCMExecutionProvider": "AMD MI300X / ROCm",
     "DmlExecutionProvider": "Windows DirectML GPU",
-    "DirectMLExecutionProvider": "Windows DirectML GPU",  # passes.json spelling
+    "DirectMLExecutionProvider": "Windows DirectML GPU",  # legacy alias only (canonical EP id is DmlExecutionProvider)
     "WebGpuExecutionProvider": "WebGPU (Browser)",
+    "CoreMLExecutionProvider": "Apple M2/M3 (CoreML)",
+    "NNAPIExecutionProvider": "Android NNAPI",
+    "VitisAIExecutionProvider": "Xilinx Vitis AI DPU",
+    "SNPEExecutionProvider": "Qualcomm SNPE (Legacy)",
+    "TensorflowLiteExecutionProvider": "TensorFlow Lite Export",
+    "XnnpackExecutionProvider": "XNNPACK (Mobile)",
+    "WasmExecutionProvider": "WASM (Browser)",
 }
 
 _EXECUTION_PROVIDER_TO_TARGET_LOWER = {
@@ -115,6 +122,14 @@ _HARDWARE_ALIASES = {
     "webgpu": "WebGPU (Browser)",
     "web gpu": "WebGPU (Browser)",
     "ort web": "WebGPU (Browser)",
+    "coreml": "Apple M2/M3 (CoreML)",
+    "nnapi": "Android NNAPI",
+    "vitisai": "Xilinx Vitis AI DPU",
+    "vitis-ai": "Xilinx Vitis AI DPU",
+    "snpe": "Qualcomm SNPE (Legacy)",
+    "tflite": "TensorFlow Lite Export",
+    "xnnpack": "XNNPACK (Mobile)",
+    "wasm": "WASM (Browser)",
 }
 
 OpenVinoDevice = Literal["CPU", "GPU", "NPU"]

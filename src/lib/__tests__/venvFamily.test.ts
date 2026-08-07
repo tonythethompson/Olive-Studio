@@ -35,6 +35,24 @@ describe("venvFamily policy", () => {
     expect(mandatoryFamilyForProvider("OpenVINOExecutionProvider")).toBe("openvino");
     expect(mandatoryFamilyForProvider("QNNExecutionProvider")).toBe("qnn");
     expect(mandatoryFamilyForProvider("CPUExecutionProvider")).toBeNull();
+    expect(mandatoryFamilyForProvider("WebGpuExecutionProvider")).toBeNull();
+    expect(mandatoryFamilyForProvider("CoreMLExecutionProvider")).toBeNull();
+    expect(mandatoryFamilyForProvider("NNAPIExecutionProvider")).toBeNull();
+    expect(mandatoryFamilyForProvider("VitisAIExecutionProvider")).toBeNull();
+    expect(mandatoryFamilyForProvider("SNPEExecutionProvider")).toBeNull();
+    expect(mandatoryFamilyForProvider("TensorflowLiteExecutionProvider")).toBeNull();
+    expect(mandatoryFamilyForProvider("XnnpackExecutionProvider")).toBeNull();
+    expect(mandatoryFamilyForProvider("WasmExecutionProvider")).toBeNull();
+  });
+
+  it("normalizes new export/platform aliases", () => {
+    expect(normalizeIhvProvider("coreml")).toBe("CoreMLExecutionProvider");
+    expect(normalizeIhvProvider("nnapi")).toBe("NNAPIExecutionProvider");
+    expect(normalizeIhvProvider("vitisai")).toBe("VitisAIExecutionProvider");
+    expect(normalizeIhvProvider("snpe")).toBe("SNPEExecutionProvider");
+    expect(normalizeIhvProvider("tflite")).toBe("TensorflowLiteExecutionProvider");
+    expect(normalizeIhvProvider("xnnpack")).toBe("XnnpackExecutionProvider");
+    expect(normalizeIhvProvider("wasm")).toBe("WasmExecutionProvider");
   });
 
   it("labels openvino and qnn families", () => {

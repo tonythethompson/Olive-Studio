@@ -206,6 +206,13 @@ export function isGpuProvider(provider: IHVProvider): boolean {
     case "CPUExecutionProvider":
     case "OpenVINOExecutionProvider":
     case "QNNExecutionProvider":
+    case "CoreMLExecutionProvider":
+    case "NNAPIExecutionProvider":
+    case "VitisAIExecutionProvider":
+    case "SNPEExecutionProvider":
+    case "TensorflowLiteExecutionProvider":
+    case "XnnpackExecutionProvider":
+    case "WasmExecutionProvider":
       return false;
     default: {
       const _exhaustive: never = provider;

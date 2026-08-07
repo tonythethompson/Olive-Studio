@@ -183,6 +183,16 @@ describe("providerToAccelerator", () => {
     });
   });
 
+  it("maps CoreML / NNAPI / VitisAI / SNPE to npu and Wasm / Xnnpack / TFLite to cpu", () => {
+    expect(providerToAccelerator("CoreMLExecutionProvider").device).toBe("npu");
+    expect(providerToAccelerator("NNAPIExecutionProvider").device).toBe("npu");
+    expect(providerToAccelerator("VitisAIExecutionProvider").device).toBe("npu");
+    expect(providerToAccelerator("SNPEExecutionProvider").device).toBe("npu");
+    expect(providerToAccelerator("XnnpackExecutionProvider").device).toBe("cpu");
+    expect(providerToAccelerator("WasmExecutionProvider").device).toBe("cpu");
+    expect(providerToAccelerator("TensorflowLiteExecutionProvider").device).toBe("cpu");
+  });
+
   it("returns execution_providers array containing the provider string", () => {
     const providers: IHVProvider[] = [
       "CPUExecutionProvider",
@@ -192,6 +202,13 @@ describe("providerToAccelerator", () => {
       "OpenVINOExecutionProvider",
       "QNNExecutionProvider",
       "ROCMExecutionProvider",
+      "CoreMLExecutionProvider",
+      "NNAPIExecutionProvider",
+      "VitisAIExecutionProvider",
+      "SNPEExecutionProvider",
+      "TensorflowLiteExecutionProvider",
+      "XnnpackExecutionProvider",
+      "WasmExecutionProvider",
     ];
     for (const p of providers) {
       expect(providerToAccelerator(p).execution_providers).toEqual([p]);

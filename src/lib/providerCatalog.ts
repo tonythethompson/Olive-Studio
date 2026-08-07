@@ -160,6 +160,93 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
         "Use FP16 for broadest WebGPU compatibility. INT8 support varies by browser and GPU vendor. Export to ONNX format for web deployment.",
     },
   },
+  {
+    id: "CoreMLExecutionProvider",
+    name: "Apple CoreML",
+    shortName: "CoreML",
+    desc: "Apple Neural Engine / GPU via CoreML on macOS and iOS (platform-local when ORT lists it).",
+    icon: CpuIcon,
+    tooltip: {
+      requirements: "macOS or iOS with onnxruntime CoreML EP. Prefer fixed input shapes.",
+      quantMethods: "PTQ INT8 (per-channel recommended), FP16.",
+      recommendation:
+        "Build recipes for Apple edge deploy. Execute Live only when the probe reports CoreMLExecutionProvider (Darwin + ORT CoreML).",
+    },
+  },
+  {
+    id: "NNAPIExecutionProvider",
+    name: "Android NNAPI",
+    shortName: "NNAPI",
+    desc: "Android Neural Networks API export target for OWR / mobile ORT (not a local Python EP).",
+    icon: CpuIcon,
+    tooltip: {
+      requirements: "Android device or OWR mobile export. Studio does not run NNAPI via Execute Live.",
+      quantMethods: "PTQ INT8 / uint8 (NNAPI limits vary by driver).",
+      recommendation:
+        "Prefer INT8 with small graphs. Use OWR mobile export; many ops fall back to CPU on device.",
+    },
+  },
+  {
+    id: "VitisAIExecutionProvider",
+    name: "AMD/Xilinx Vitis AI",
+    shortName: "Vitis AI",
+    desc: "Xilinx DPU / Vitis AI edge target (platform-local when ORT lists it).",
+    icon: CpuIcon,
+    tooltip: {
+      requirements: "Xilinx board with Vitis AI ORT EP. Power-of-2 scale constraints apply.",
+      quantMethods: "VitisAIQuantization / INT8 calibration.",
+      recommendation:
+        "Best for edge CNNs. Execute Live only when the probe reports VitisAIExecutionProvider.",
+    },
+  },
+  {
+    id: "SNPEExecutionProvider",
+    name: "Qualcomm SNPE (Legacy)",
+    shortName: "SNPE",
+    desc: "Legacy Qualcomm SNPE / DLC path. Prefer QNN for Snapdragon NPU work.",
+    icon: CpuIcon,
+    tooltip: {
+      requirements: "Legacy SNPE SDK / DLC conversion. Not supported for Studio Execute Live.",
+      quantMethods: "SNPEConversion + vendor quantization tooling.",
+      recommendation: "Prefer QNNExecutionProvider for new Qualcomm targets. Keep SNPE only for legacy DLC pipelines.",
+    },
+  },
+  {
+    id: "TensorflowLiteExecutionProvider",
+    name: "TensorFlow Lite",
+    shortName: "TFLite",
+    desc: "TFLite conversion / export path (not a local Olive Execute Live EP).",
+    icon: Cpu,
+    tooltip: {
+      requirements: "TFLite runtime or conversion toolchain. Studio blocks Execute Live for this target.",
+      quantMethods: "INT8 TFLite conversion paths.",
+      recommendation: "Use for TFLite export recipes only. Prefer ONNX + QNN/NNAPI/WebGPU for Studio-first flows.",
+    },
+  },
+  {
+    id: "XnnpackExecutionProvider",
+    name: "XNNPACK (Mobile)",
+    shortName: "XNNPACK",
+    desc: "OWR / ONNX Runtime Mobile CPU backend via XNNPACK (export target).",
+    icon: Cpu,
+    tooltip: {
+      requirements: "ORT Mobile / OWR mobile package. Not a local Python EP in Studio.",
+      quantMethods: "FP16 / INT8 suitable for mobile CPU.",
+      recommendation: "Pair with OWR mobile export. Prefer as CPU fallback beside NNAPI on Android.",
+    },
+  },
+  {
+    id: "WasmExecutionProvider",
+    name: "WASM (Browser)",
+    shortName: "WASM",
+    desc: "ONNX Runtime Web WASM CPU backend for browsers (export target).",
+    icon: Cpu,
+    tooltip: {
+      requirements: "onnxruntime-web WASM build. Not a local Python EP.",
+      quantMethods: "FP32 / FP16; INT8 support depends on ORT Web build.",
+      recommendation: "Use as WebGPU fallback in OWR web configs, or alone for CPU-only browser deploy.",
+    },
+  },
 ];
 
 export function getProviderCatalogEntry(id: IHVProvider): ProviderCatalogEntry | undefined {

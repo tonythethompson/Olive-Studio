@@ -253,6 +253,44 @@ describe("projectUiStateToRecipeEvaluation", () => {
     expect(result.recipe).toHaveProperty("systems");
   });
 
+  it("marks export-target EPs non-runnable for local Execute Live", () => {
+    for (const ihvProvider of [
+      "NNAPIExecutionProvider",
+      "XnnpackExecutionProvider",
+      "WasmExecutionProvider",
+      "SNPEExecutionProvider",
+      "TensorflowLiteExecutionProvider",
+    ] as const) {
+      const result = projectUiStateToRecipeEvaluation(baseState({ ihvProvider }));
+      expect(result.isRunnable).toBe(false);
+      expect(
+        result.localExecutionIssues.some((i) => i.id === "export-target-local-execution-unsupported"),
+      ).toBe(true);
+    }
+  });
+
+  it("blocks platform-local EPs until the probe lists them", () => {
+    const blocked = projectUiStateToRecipeEvaluation(
+      baseState({ ihvProvider: "CoreMLExecutionProvider" }),
+    );
+    expect(blocked.isRunnable).toBe(false);
+    expect(
+      blocked.localExecutionIssues.some((i) => i.id === "platform-local-execution-unavailable"),
+    ).toBe(true);
+
+    const probe: HardwareProbeResult = {
+      probedAt: new Date().toISOString(),
+      platform: { os: "darwin", arch: "arm64", cpuModel: "Apple M2", cpuCores: 8 },
+      detectedProviders: ["CPUExecutionProvider", "CoreMLExecutionProvider"],
+      recommendedProvider: "CoreMLExecutionProvider",
+      notes: [],
+    };
+    const allowed = buildRecipeFromState(baseState({ ihvProvider: "CoreMLExecutionProvider" }), {
+      hardwareProbe: probe,
+    });
+    expect(allowed.localExecutionIssues).toEqual([]);
+  });
+
   // ❌ Negative: returned issue arrays are defensive copies
   it("returns defensive copies of issue arrays (mutation does not leak)", () => {
     // Arrange
