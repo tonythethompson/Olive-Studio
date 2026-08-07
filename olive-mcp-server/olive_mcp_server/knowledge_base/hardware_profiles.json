@@ -324,10 +324,11 @@
       "memory_gb": 2,
       "ops_supported": ["Conv", "Gemm", "MaxPool", "Softmax"],
       "known_issues": [
-        "TFLite conversion/export path; not a local Olive Execute Live EP.",
+        "Olive has no first-class .tflite emitter in this catalog; this profile prepares ONNX for external TFLite tooling.",
+        "Not a local Olive Execute Live EP — export/recipe only.",
         "Operator coverage differs from ONNX ORT EPs."
       ],
-      "notes": "Export-target profile for TFLite conversion. Prefer INT8 TFLite tooling outside Studio Execute Live."
+      "notes": "ONNX preparation profile for external TensorFlow Lite conversion (e.g. onnx2tf / TFLite converter). Studio marks TensorflowLiteExecutionProvider as an export target; do not treat the recommended Olive passes as a complete .tflite export chain."
     }
   ]
 }

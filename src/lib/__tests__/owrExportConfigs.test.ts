@@ -49,10 +49,16 @@ describe("owrExportConfigs", () => {
   it("keeps intentional Studio vs OWR EP spelling dualism", () => {
     expect(STUDIO_WEB_GPU_EP).toBe("WebGpuExecutionProvider");
     expect(studioWebGpuToOwrEp()).toBe(OWR_WEB_GPU_EP);
+    expect(studioWebGpuToOwrEp(STUDIO_WEB_GPU_EP)).toBe(OWR_WEB_GPU_EP);
+    expect(studioWebGpuToOwrEp(OWR_WEB_GPU_EP)).toBe(OWR_WEB_GPU_EP);
     expect(OWR_WEB_GPU_EP).toBe("WebGPUExecutionProvider");
     expect(STUDIO_NNAPI_EP).toBe("NNAPIExecutionProvider");
     expect(studioNnapiToOwrEp()).toBe(OWR_NNAPI_EP);
+    expect(studioNnapiToOwrEp(STUDIO_NNAPI_EP)).toBe(OWR_NNAPI_EP);
+    expect(studioNnapiToOwrEp(OWR_NNAPI_EP)).toBe(OWR_NNAPI_EP);
     expect(OWR_NNAPI_EP).toBe("NnapiExecutionProvider");
+    expect(() => studioWebGpuToOwrEp("CUDAExecutionProvider")).toThrow(/WebGPU/);
+    expect(() => studioNnapiToOwrEp("garbage")).toThrow(/NNAPI/);
   });
 
   it("builds web and mobile configs without throwing", () => {

@@ -19,22 +19,22 @@ export const OWR_XNNPACK_EP = "XnnpackExecutionProvider" as const;
 
 /** Map Studio WebGPU id → ORT Web / OWR web session EP string. */
 export function studioWebGpuToOwrEp(
-  provider: typeof STUDIO_WEB_GPU_EP | string = STUDIO_WEB_GPU_EP,
+  provider: string = STUDIO_WEB_GPU_EP,
 ): typeof OWR_WEB_GPU_EP {
   if (provider === STUDIO_WEB_GPU_EP || provider === OWR_WEB_GPU_EP) {
     return OWR_WEB_GPU_EP;
   }
-  return OWR_WEB_GPU_EP;
+  throw new Error(`Expected Studio/ORT-Web WebGPU provider id, got: ${provider}`);
 }
 
 /** Map Studio NNAPI id → OWR mobile session EP string. */
 export function studioNnapiToOwrEp(
-  provider: typeof STUDIO_NNAPI_EP | string = STUDIO_NNAPI_EP,
+  provider: string = STUDIO_NNAPI_EP,
 ): typeof OWR_NNAPI_EP {
   if (provider === STUDIO_NNAPI_EP || provider === OWR_NNAPI_EP) {
     return OWR_NNAPI_EP;
   }
-  return OWR_NNAPI_EP;
+  throw new Error(`Expected Studio/OWR NNAPI provider id, got: ${provider}`);
 }
 
 const ARCHITECTURE_MATCHERS: Array<{ needle: string; architecture: string }> = [

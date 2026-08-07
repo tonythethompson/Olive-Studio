@@ -207,3 +207,17 @@ def test_compatibility_invalid_ov_device_errors() -> None:
     assert "tpu" in result["error"].lower()
     assert "openvino_device" not in result
     assert "selected_hardware" not in result
+
+
+def test_tflite_profile_is_onnx_prep_not_tflite_emitter() -> None:
+    """TFLite catalog entry prepares ONNX for external converters (no .tflite pass)."""
+    result = get_hardware_optimization_guide(target_hardware="tflite")
+    assert "error" not in result, result
+    assert result["target_hardware"] == "TensorFlow Lite Export"
+    assert "TensorflowLiteExecutionProvider" in result["execution_providers"]
+    assert result["recommended_passes"] == ["OnnxConversion", "OnnxModelOptimizer"]
+    notes = str(result.get("notes", "")).lower()
+    issues = " ".join(str(x).lower() for x in result.get("known_issues", []))
+    assert "onnx" in notes or "onnx" in issues
+    assert "external" in notes or "external" in issues
+    assert ".tflite" in notes or "tflite" in issues

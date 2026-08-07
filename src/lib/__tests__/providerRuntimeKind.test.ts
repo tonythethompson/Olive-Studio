@@ -51,7 +51,16 @@ describe("export-target probe carve-outs", () => {
     expect(selectable).toContain("NNAPIExecutionProvider");
     expect(selectable).toContain("XnnpackExecutionProvider");
     expect(selectable).toContain("WasmExecutionProvider");
+    expect(selectable).toContain("CoreMLExecutionProvider");
+    expect(selectable).toContain("VitisAIExecutionProvider");
     expect(selectable).not.toContain("CUDAExecutionProvider");
+  });
+
+  it("includes platform-local providers in alwaysSelectableProviders", () => {
+    const always = alwaysSelectableProviders();
+    expect(always).toEqual(
+      expect.arrayContaining(["CoreMLExecutionProvider", "VitisAIExecutionProvider"]),
+    );
   });
 
   it("maps CoreML / VitisAI ORT names when present", () => {
