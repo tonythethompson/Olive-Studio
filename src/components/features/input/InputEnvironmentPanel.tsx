@@ -188,7 +188,7 @@ export function InputEnvironmentPanel({
     try {
       await clearTokenMutation.mutateAsync();
     } catch {
-      /* ignore — clearTokenMutation.error surfaces via mutation state */
+      /* ignore — clearTokenMutation.error is rendered next to the Clear button */
     }
   };
 
@@ -1631,12 +1631,22 @@ export function InputEnvironmentPanel({
                                 type="button"
                                 variant="outline"
                                 onClick={handleClearToken}
+                                disabled={clearTokenMutation.isPending}
                                 className="h-9 px-3 text-xs border-red-500/30 text-red-400 hover:bg-red-500/10"
                               >
-                                Clear
+                                {clearTokenMutation.isPending ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  "Clear"
+                                )}
                               </Button>
                             )}
                           </div>
+                        )}
+                        {clearTokenMutation.isError && (
+                          <p role="alert" className="text-[10px] text-rose-400">
+                            Couldn't clear the token — try again.
+                          </p>
                         )}
 
                         <p className="text-[10px] text-slate-500 leading-relaxed">

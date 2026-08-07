@@ -347,6 +347,7 @@ export function ExecutionWorkspace({
   const [owrSelectedFile, setOwrSelectedFile] = useState<
     "ort_config.json" | "web_init.js" | "mobile_init.kt" | "onnx_model_manifest.json"
   >("ort_config.json");
+  const [owrDownloadError, setOwrDownloadError] = useState<string | null>(null);
 
   const { data: hardwareProbe = null } = useHardwareProbe();
 
@@ -382,6 +383,7 @@ export function ExecutionWorkspace({
   );
 
   const handleDownloadOwrBundle = async () => {
+    setOwrDownloadError(null);
     const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = owrConfigs;
     let zip: InstanceType<typeof import("jszip")>;
     try {
@@ -389,6 +391,7 @@ export function ExecutionWorkspace({
       zip = new JSZip();
     } catch (e) {
       console.error("Failed to load ZIP module", e);
+      setOwrDownloadError("Couldn't load the ZIP module. Check your connection and try again.");
       return;
     }
 
@@ -436,6 +439,7 @@ ${owrPlatform === "web"
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error("ZIP Generation failed", e);
+      setOwrDownloadError("ZIP generation failed. Try again, or check the browser console for details.");
     }
   };
 
@@ -725,6 +729,7 @@ ${owrPlatform === "web"
         vramMode={owrVramMode}
         onVramModeChange={setOwrVramMode}
         onDownloadBundle={handleDownloadOwrBundle}
+        downloadError={owrDownloadError}
       />
 
       {/* Recipe Preview */}

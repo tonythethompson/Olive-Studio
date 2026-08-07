@@ -35,6 +35,7 @@ export interface OwrExportOverlayProps {
   vramMode: "performance" | "memory";
   onVramModeChange: (mode: "performance" | "memory") => void;
   onDownloadBundle: () => void;
+  downloadError?: string | null;
 }
 
 /**
@@ -56,6 +57,7 @@ export function OwrExportOverlay({
   vramMode,
   onVramModeChange,
   onDownloadBundle,
+  downloadError,
 }: OwrExportOverlayProps) {
   const [isOwrCopied, setIsOwrCopied] = useState(false);
   const titleId = useId();
@@ -384,6 +386,11 @@ export function OwrExportOverlay({
                   <Download className="h-4 w-4 mr-1.5" /> Download Bundle (.zip)
                 </Button>
               </div>
+              {downloadError && (
+                <p role="alert" className="text-xs text-rose-400 text-right">
+                  {downloadError}
+                </p>
+              )}
             </div>
           </div>
         </CardContent>
