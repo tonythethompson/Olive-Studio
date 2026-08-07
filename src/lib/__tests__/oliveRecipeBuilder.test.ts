@@ -521,6 +521,157 @@ describe("buildOliveRecipe", () => {
     expect((q.config as Record<string, unknown>).quant_mode).toBe("static");
   });
 
+  it("uses HQQ for CPU targets", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider: "CPUExecutionProvider",
+        passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "hqq", quantPrecision: "int4" },
+      }),
+    );
+    const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
+    expect(quantization).toEqual({ type: "OnnxHqqQuantization", config: { precision: "int4" } });
+  });
+
+  it("falls back to QNN quantization when HQQ is unavailable", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider: "QNNExecutionProvider",
+        passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "hqq" },
+      }),
+    );
+    const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
+    expect(quantization).toEqual({ type: "QNNQuantization", config: {} });
+  });
+
+  it("uses RTN for CUDA targets", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider: "CUDAExecutionProvider",
+        passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "rtn", quantPrecision: "int4" },
+      }),
+    );
+    const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
+    expect(quantization).toEqual({
+      type: "OnnxBlockWiseRtnQuantization",
+      config: { bits: 4, block_size: 128, is_symmetric: true },
+    });
+  });
+
+  it("uses OpenVINO quantization for PTQ", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider: "OpenVINOExecutionProvider",
+        passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "ptq", quantPrecision: "int8" },
+      }),
+    );
+    const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
+    expect(quantization).toEqual({ type: "OpenVINOQuantization", config: {} });
+  });
+
+  it("uses Nvfp4Quantizer for TensorRT int4 quantization", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider: "TensorrtExecutionProvider",
+        passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "ptq", quantPrecision: "int4" },
+      }),
+    );
+    const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
+    expect(quantization).toEqual({ type: "Nvfp4Quantizer", config: {} });
+  });
+
+  it("uses OnnxQuantization for TensorRT int8 quantization", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider: "TensorrtExecutionProvider",
+        passes: {
+          ...DEFAULT_PASSES,
+          conversionFormat: "tensorrt",
+          quantization: true,
+          quantMethod: "ptq",
+          quantPrecision: "int8",
+        },
+      }),
+    );
+    const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
+    expect(quantization).toEqual({ type: "OnnxQuantization", config: {} });
+  });
+
+  // ROCM / DirectML / WebGPU: no EP-specific Olive quant pass; PTQ uses the default ONNX builder.
+  it.each([
+    "ROCMExecutionProvider",
+    "DmlExecutionProvider",
+    "WebGpuExecutionProvider",
+  ] as const)("uses default OnnxQuantization for PTQ on %s", (ihvProvider) => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider,
+        passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "ptq", quantPrecision: "int8" },
+      }),
+    );
+    const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
+    expect(quantization).toEqual({
+      type: "OnnxQuantization",
+      config: { quant_mode: "static", precision: "int8", quant_preprocess: true },
+    });
+  });
+
+  it("falls back to OnnxQuantization when HQQ gate fails on ROCM", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider: "ROCMExecutionProvider",
+        passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "hqq", quantPrecision: "int4" },
+      }),
+    );
+    const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
+    expect(quantization).toEqual({
+      type: "OnnxQuantization",
+      config: { quant_mode: "static", precision: "int4", quant_preprocess: true },
+    });
+  });
+
+  it("creates QATQuantizer for native PyTorch QAT", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider: "CUDAExecutionProvider",
+        passes: {
+          ...DEFAULT_PASSES,
+          quantization: true,
+          quantMethod: "qat",
+          qatQuantPrecision: "int8",
+          qatCalibrateMethod: "minmax",
+          qatCalibrateSteps: 100,
+        },
+      }),
+    );
+    const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
+    expect(quantization).toEqual({
+      type: "QATQuantizer",
+      config: { precision: "int8", calibrate_method: "minmax", calibrate_steps: 100 },
+    });
+  });
+
+  it("creates SpinQuant for native PyTorch spinquant", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider: "CUDAExecutionProvider",
+        passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "spinquant" },
+      }),
+    );
+    const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
+    expect(quantization).toEqual({ type: "SpinQuant", config: { rotate_mode: "hadamard" } });
+  });
+
+  it("creates QuaRot for native PyTorch quarot", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider: "CUDAExecutionProvider",
+        passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "quarot" },
+      }),
+    );
+    const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
+    expect(quantization).toEqual({ type: "QuaRot", config: { rotate_mode: "hadamard" } });
+  });
+
   it("adds user_script to quantization config when provided", () => {
     const state = baseState({
       userScript: "/path/to/script.py",

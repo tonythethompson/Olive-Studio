@@ -13,6 +13,7 @@ import {
   syncCloudflareFromWrangler,
 } from "../../../lib/cloudflare/client.ts";
 import { isValidCloudflareAccountId } from "../../../lib/cloudflare/credentials.ts";
+import { isParseBodyError, parseBody } from "../../middleware/bodyGuard.ts";
 import { authActionRateLimit } from "../../middleware/rateLimit.ts";
 
 export function mountCloudflareRoutes(router: Router): void {
@@ -27,9 +28,15 @@ export function mountCloudflareRoutes(router: Router): void {
   });
 
   router.post("/cloudflare/sync", authActionRateLimit, async (req, res) => {
+    // express.json() leaves body undefined when the client sends no payload;
+    // optional accountId means an empty object is a valid default sync.
+    // Preserve null so parseBody can reject an explicit JSON null body.
+    const body = parseBody<{ accountId?: string }>(req.body === undefined ? {} : req.body, {
+      accountId: { type: "string", required: false },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ ok: false, error: body.error });
     try {
-      const preferredAccountId =
-        typeof req.body?.accountId === "string" ? req.body.accountId.trim() : undefined;
+      const preferredAccountId = body.parsed.accountId?.trim() || undefined;
       const creds = await syncCloudflareFromWrangler(preferredAccountId);
       return res.json({
         ok: true,
@@ -44,9 +51,15 @@ export function mountCloudflareRoutes(router: Router): void {
   });
 
   router.post("/cloudflare/login/manual", authActionRateLimit, (req, res) => {
+    const body = parseBody<{ apiToken: unknown; accountId: unknown }>(req.body, {
+      apiToken: { type: "unknown", message: "apiToken and accountId are required." },
+      accountId: { type: "unknown", message: "apiToken and accountId are required." },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ ok: false, error: body.error });
     try {
-      const apiToken = typeof req.body?.apiToken === "string" ? req.body.apiToken.trim() : "";
-      const accountId = typeof req.body?.accountId === "string" ? req.body.accountId.trim() : "";
+      const { apiToken: rawApiToken, accountId: rawAccountId } = body.parsed;
+      const apiToken = typeof rawApiToken === "string" ? rawApiToken.trim() : "";
+      const accountId = typeof rawAccountId === "string" ? rawAccountId.trim() : "";
       if (!apiToken || !accountId) {
         return res.status(400).json({ ok: false, error: "apiToken and accountId are required." });
       }

@@ -104,8 +104,11 @@ export function mountLmStudioRoutes(router: Router): void {
   });
 
   router.post("/ai/local-unload", async (req, res) => {
-    const { modelTag } = req.body ?? {};
-    if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
+    const body = parseBody<{ modelTag: string }>(req.body, {
+      modelTag: { type: "string", message: "Missing modelTag" },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const { modelTag } = body.parsed;
     try {
       const r = await fetch(`http://127.0.0.1:${LM_STUDIO_PORT}/v1/models/unload`, {
         method: "POST",
@@ -123,8 +126,11 @@ export function mountLmStudioRoutes(router: Router): void {
   });
 
   router.post("/ai/local-pull", heavyCommandRateLimit, async (req, res) => {
-    const { modelTag } = req.body ?? {};
-    if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
+    const body = parseBody<{ modelTag: string }>(req.body, {
+      modelTag: { type: "string", message: "Missing modelTag" },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const { modelTag } = body.parsed;
     const guard = trackStreamClient(req, res);
     const rawSend = beginPullSse(res);
     const send = (evt: Record<string, unknown>) => {

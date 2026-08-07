@@ -7,7 +7,7 @@
  * All external dependencies (Python, AI providers, LM Studio, Ollama) are
  * mocked via `setup.integration.ts` so these tests run reliably in CI.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import type { Server } from "http";
 
 import { stubGlobalFetch, restoreGlobalFetch } from "./setup.integration.ts";
@@ -111,6 +111,78 @@ describe("Route integration tests", () => {
       expect(Array.isArray(body.models)).toBe(true);
       expect(body.models).toEqual([]);
       expect(body.source).toBe("fallback");
+    });
+  });
+
+  describe("POST /api/ai/provider and /api/ai/models body guards", () => {
+    it("rejects non-string provider fields", async () => {
+      const providerResponse = await fetch(`${baseUrl}/api/ai/provider`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: 42 }),
+      });
+      expect(providerResponse.status).toBe(400);
+      await expect(providerResponse.json()).resolves.toEqual({ error: "provider must be a string" });
+
+      const modelsResponse = await fetch(`${baseUrl}/api/ai/models`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: "openai", baseUrl: 42 }),
+      });
+      expect(modelsResponse.status).toBe(400);
+      await expect(modelsResponse.json()).resolves.toEqual({ error: "baseUrl must be a string" });
+    });
+  });
+
+  describe("POST /api/cloudflare body guards", () => {
+    it("keeps generic object errors and manual credential errors stable", async () => {
+      const syncResponse = await fetch(`${baseUrl}/api/cloudflare/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([]),
+      });
+      expect(syncResponse.status).toBe(400);
+      await expect(syncResponse.json()).resolves.toEqual({
+        ok: false,
+        error: "Request body must be a JSON object",
+      });
+
+      const manualResponse = await fetch(`${baseUrl}/api/cloudflare/login/manual`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiToken: 42, accountId: "a".repeat(32) }),
+      });
+      expect(manualResponse.status).toBe(400);
+      await expect(manualResponse.json()).resolves.toEqual({
+        ok: false,
+        error: "apiToken and accountId are required.",
+      });
+    });
+
+    it("accepts a bodyless default Cloudflare sync", async () => {
+      const syncResponse = await fetch(`${baseUrl}/api/cloudflare/sync`, { method: "POST" });
+      // Missing Wrangler credentials fail as 500; success is 200. Never a body-parse 400.
+      expect([200, 500]).toContain(syncResponse.status);
+      const payload = (await syncResponse.json()) as { ok?: boolean; error?: string };
+      if (syncResponse.status === 500) {
+        expect(payload).toMatchObject({ ok: false });
+        expect(payload.error).toBeTruthy();
+      } else {
+        expect(payload).toMatchObject({ ok: true });
+      }
+    });
+
+    it("rejects an explicit null Cloudflare sync body", async () => {
+      const syncResponse = await fetch(`${baseUrl}/api/cloudflare/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "null",
+      });
+      expect(syncResponse.status).toBe(400);
+      await expect(syncResponse.json()).resolves.toEqual({
+        ok: false,
+        error: "Request body must be a JSON object",
+      });
     });
   });
 
@@ -784,6 +856,100 @@ describe("Route integration tests", () => {
       const body = JSON.parse(text) as { error?: string; type?: string };
       expect(body.error || body.type).toBeTruthy();
     });
+
+    it("rejects a non-string modelTag before opening a stream", async () => {
+      const res = await fetch(`${baseUrl}/api/ai/local-pull`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modelTag: 42 }),
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.headers.get("content-type")).toContain("application/json");
+      await expect(res.json()).resolves.toEqual({ error: "modelTag must be a string" });
+    });
+  });
+
+  describe("POST local model control body guards", () => {
+    it("rejects malformed local and Ollama model tags", async () => {
+      const localUnload = await fetch(`${baseUrl}/api/ai/local-unload`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modelTag: false }),
+      });
+      expect(localUnload.status).toBe(400);
+      await expect(localUnload.json()).resolves.toEqual({ error: "modelTag must be a string" });
+
+      const ollamaPull = await fetch(`${baseUrl}/api/ai/ollama-pull`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(ollamaPull.status).toBe(400);
+      expect(ollamaPull.headers.get("content-type")).toContain("application/json");
+      await expect(ollamaPull.json()).resolves.toEqual({ error: "Missing modelTag" });
+
+      const ollamaLoad = await fetch(`${baseUrl}/api/ai/ollama-load`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modelTag: 42 }),
+      });
+      expect(ollamaLoad.status).toBe(400);
+      await expect(ollamaLoad.json()).resolves.toEqual({ error: "modelTag must be a string" });
+
+      const ollamaUnload = await fetch(`${baseUrl}/api/ai/ollama-unload`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modelTag: [] }),
+      });
+      expect(ollamaUnload.status).toBe(400);
+      await expect(ollamaUnload.json()).resolves.toEqual({ error: "modelTag must be a string" });
+    });
+  });
+
+  describe("POST /api/ai/ollama-pull", () => {
+    it("streams an error event when Ollama fails after streaming begins", async () => {
+      const mockedFetch = globalThis.fetch;
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        if (url.includes("127.0.0.1:11434/api/pull")) {
+          const encoder = new TextEncoder();
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(
+                  encoder.encode(
+                    `${JSON.stringify({ status: "pulling manifest", completed: 1, total: 2 })}\n${JSON.stringify({ error: "Ollama test pull failed" })}\n`,
+                  ),
+                );
+                controller.close();
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/x-ndjson" } },
+          );
+        }
+        return mockedFetch(input, init);
+      });
+
+      try {
+        const res = await fetch(`${baseUrl}/api/ai/ollama-pull`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ modelTag: "llama3:8b" }),
+        });
+
+        expect(res.status).toBe(200);
+        expect(res.headers.get("content-type")).toContain("application/x-ndjson");
+        const events = (await res.text())
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line) as { type?: string; error?: string });
+        expect(events.some((event) => event.type === "progress")).toBe(true);
+        expect(events).toContainEqual({ type: "error", error: "Ollama test pull failed" });
+      } finally {
+        vi.stubGlobal("fetch", mockedFetch);
+      }
+    });
   });
 
   // ─── POST /api/env/venv-install ─────────────────────────────────────────
@@ -873,6 +1039,59 @@ describe("Route integration tests", () => {
       expect(res.status).toBe(400);
       const body = await res.json();
       expect(body).toHaveProperty("error");
+    });
+
+    it("preserves the run error envelope for a wrong-type recipeJson", async () => {
+      const res = await fetch(`${baseUrl}/api/olive/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipeJson: {} }),
+      });
+
+      expect(res.status).toBe(400);
+      await expect(res.json()).resolves.toEqual({ ok: false, error: "recipeJson must be a string" });
+    });
+  });
+
+  describe("POST /api/olive/cancel", () => {
+    it("preserves the missing jobId 404 contract", async () => {
+      const res = await fetch(`${baseUrl}/api/olive/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      expect(res.status).toBe(404);
+      await expect(res.json()).resolves.toEqual({ error: "Job not found" });
+    });
+
+    it("preserves the bodyless cancel 404 contract", async () => {
+      const res = await fetch(`${baseUrl}/api/olive/cancel`, { method: "POST" });
+
+      expect(res.status).toBe(404);
+      await expect(res.json()).resolves.toEqual({ error: "Job not found" });
+    });
+
+    it("rejects an explicit null cancel body", async () => {
+      const res = await fetch(`${baseUrl}/api/olive/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "null",
+      });
+
+      expect(res.status).toBe(400);
+      await expect(res.json()).resolves.toEqual({ error: "Request body must be a JSON object" });
+    });
+
+    it("rejects a wrong-type jobId", async () => {
+      const res = await fetch(`${baseUrl}/api/olive/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: 42 }),
+      });
+
+      expect(res.status).toBe(400);
+      await expect(res.json()).resolves.toEqual({ error: "jobId must be a string" });
     });
   });
 
