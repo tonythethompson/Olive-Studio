@@ -58,17 +58,21 @@ vi.mock("@/lib/hooks", async (importOriginal) => {
 });
 
 // Mock hardware probe
-vi.mock("@/lib/hardwareProbe", () => ({
-  fetchHardwareProbe: () =>
-    Promise.resolve({
-      probedAt: "now",
-      platform: { cpuModel: "Test CPU", cpuCores: 8, os: "win", arch: "x64" },
-      detectedProviders: ["CPUExecutionProvider"],
-      recommendedProvider: "CPUExecutionProvider",
-      notes: [],
-    }),
-  getSelectableProviders: () => ["CPUExecutionProvider"],
-}));
+vi.mock("@/lib/hardwareProbe", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/hardwareProbe")>();
+  return {
+    ...actual,
+    fetchHardwareProbe: () =>
+      Promise.resolve({
+        probedAt: "now",
+        platform: { cpuModel: "Test CPU", cpuCores: 8, os: "win", arch: "x64" },
+        detectedProviders: ["CPUExecutionProvider"],
+        recommendedProvider: "CPUExecutionProvider",
+        notes: [],
+      }),
+    getSelectableProviders: () => ["CPUExecutionProvider"],
+  };
+});
 
 function failedJob(id = "job-failed"): BatchJob {
   return {
