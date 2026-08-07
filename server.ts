@@ -21,7 +21,9 @@ import { staticServeRateLimit } from "./src/server/middleware/rateLimit.ts";
 loadStudioEnv();
 
 const app = express();
-app.use(express.json({ limit: "10mb" }));
+// strict:false lets top-level JSON null/primitives reach parseBody, which
+// rejects non-objects. Omitted bodies stay undefined (defaulted per-route).
+app.use(express.json({ limit: "10mb", strict: false }));
 
 /** Shared readiness flag: false until listen succeeds (or tests call markServerReady). */
 let serverReady = false;

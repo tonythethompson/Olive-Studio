@@ -17,15 +17,15 @@
 | 9 | Module-level mutable state in ai.ts | ✅ Resolved (Pass 6) |
 | 10 | Fragile substring matching | ✅ Resolved (Pass 4) |
 | 11 | Flat passes bag | ⏳ Open |
-| 12 | Builder if/else chain | ⏳ Open |
-| 13 | No request body validation | ⏳ Open |
+| 12 | Builder if/else chain | ✅ Resolved |
+| 13 | No request body validation | ✅ Resolved |
 | 14 | getPipelineValidation rebuilds recipe | ✅ Resolved (Pass 2) |
 | 15 | Unbounded SSE logs | ✅ Resolved (Pass 5) |
-| 16 | Uncancellable polling loops | ⏳ Open |
+| 16 | Uncancellable polling loops | ✅ Resolved |
 | 17 | No persistent job history | ✅ Closed as mitigated (Pass 5) |
 | 18 | Duplicated coercion/validation rules | ✅ Resolved (Pass 4) |
 | 19 | vite in both dep sections | ✅ Resolved (Pass 1) |
-| 20 | MCP no health check | ⏳ Open |
+| 20 | MCP no health check | ✅ Resolved |
 
 ## 🟢 Quick Wins
 
@@ -75,15 +75,15 @@ Both are now explicit ordered lookup tables (`HF_TASK_RULES`, `MODEL_TYPE_RULES`
 
 ### 11. ⏳ UIState.passes flat bag — open
 
-Still a flat object of ~30 fields. A discriminated union per pass type remains the target; do after #12.
+Still a flat object of ~30 fields. A discriminated union per pass type remains an independent follow-up.
 
-### 12. ⏳ oliveRecipeBuilder if/else chain — open
+### 12. ✅ oliveRecipeBuilder if/else chain — resolved
 
-The quantization block has grown to 11 branches. Per-pass builder functions registered in a map (keyed by pass type) is still the plan.
+`PASS_BUILDERS` dispatches the conversion, transformer optimization, quantization, splitting, PEFT, and pruning builders in fixed pipeline order. Quantization uses first-match `QUANT_METHOD_BUILDERS` with provider gates, then `FORMAT_QUANT_BUILDERS` as the fallback, so native HQQ/RTN selection and OpenVINO/QNN/TensorRT fallback behavior are explicit and testable.
 
-### 13. ⏳ No request body validation — open
+### 13. ✅ No request body validation — resolved
 
-Routes still destructure `req.body` directly (some manual guards exist in `/olive/run` and `mcp.ts`). A schema library (zod) or manual guards at the route boundary is still recommended.
+`parseBody` in `src/server/middleware/bodyGuard.ts` provides stable 400 boundaries through its discriminated result API. Guarded routes parse object bodies and field types before handlers use them, while preserving their established response envelopes and messages; no schema dependency is required.
 
 ### 14. ✅ getPipelineValidation rebuilds — resolved (Pass 2)
 
@@ -93,9 +93,9 @@ Covered by the Pass 2 memoization/reuse work; the recipe built inside `getPipeli
 
 `job.logs` is capped at 1,000 lines (batched trim at a 1,250 watermark), `OliveJob.logsTruncated` records the trim, the SSE reconnect replay emits an `[info]` marker when truncated, and `/olive/status` exposes `logsTruncated`. Live subscribers still receive every line — the cap bounds server memory and replay, not the live stream. Tests: `gpu.test.ts`, truncated-replay case in `olive.stream.test.ts`.
 
-### 16. ⏳ ensureOllama/ensureLms polling loops — open
+### 16. ✅ ensureOllama/ensureLms polling loops — resolved
 
-Still fixed-interval `sleepMs(1000)` loops (40 / 30 iterations) with no AbortSignal. Planned together with replacing `execSync` CLI probing (see Performance section). Note: the sleeps are awaited promises (they don't block the event loop); the real gaps are cancellability and backoff.
+LM Studio and Ollama readiness-loop polling/backoff waits accept `AbortSignal`, so a disconnect releases that client's setup waiter; shared readiness polling is aborted only when the last waiter leaves. Initial health checks and CLI discovery probes remain bounded independently. LM Studio CLI discovery is asynchronous, cached, and single-flight, so concurrent requests share one bounded probe instead of blocking the event loop.
 
 ### 17. ✅ No persistent job history — closed as mitigated (Pass 5)
 
@@ -109,9 +109,9 @@ Terminal runs are persisted client-side in IndexedDB (`src/lib/jobHistoryStore.t
 
 `server.ts` imports vite dynamically inside the dev branch only; vite lives in `devDependencies` exclusively. Production static serving never loads vite.
 
-### 20. ⏳ MCP health check / restart — open, reframed
+### 20. ✅ MCP health check / restart — resolved
 
-The MCP client spawns a fresh Python subprocess per call (`services/mcp/client.ts`), so there is no long-lived process to die or restart — the original framing is outdated. Remaining work: a circuit breaker/failure counter and status surfacing so repeated MCP failures show up as "MCP unavailable" instead of per-call 500s.
+The MCP client still uses a fresh Python subprocess per call, with a circuit breaker for infrastructure failures: three failures open it, callers receive a stable 503-unavailable result, and a single half-open probe recovers after cooldown. Tool-level errors do not trip the breaker.
 
 ## Performance & Efficiency Improvements
 
@@ -121,7 +121,7 @@ The MCP client spawns a fresh Python subprocess per call (`services/mcp/client.t
 - ✅ **onnxruntime-web** — no action needed: all runtime imports are dynamic (`InBrowserValidation`, `WebGpuBenchmarkPanel`, `ArenaPanel`); the earlier "critical path" flag was a grep false positive — the match in `owrExportConfigs.ts` sits inside a generated-code template string, not a real import. Build emits ORT as its own 386kb chunk.
 - ✅ **@mendable/firecrawl-js** — removed (Pass 3): zero imports anywhere; the dependency and its `allowBuilds` entry are gone.
 - ❌ **React Query probe cache** — not applicable: the hardware probe (`/api/system/hardware-probe`) is fetched with plain `fetch` (`fetchHardwareProbe`), not React Query, and the server already caches probe results with a TTL (`system.ts`).
-- ⏳ **execSync in findLmsCli** — open: `execSync("where/which lms|ollama")` still used with an in-memory cache; convert to async probing together with #16.
+- ✅ **Async CLI probing** — `findLmsCli` uses a bounded asynchronous `execFile` probe, positive/miss caching, and a cached single-flight request for concurrent callers; it never blocks the event loop.
 
 ## Verification
 

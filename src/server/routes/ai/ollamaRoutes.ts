@@ -17,6 +17,7 @@ import {
   OLLAMA_PULL_MAX_MS,
 } from "./localEngines.ts";
 import { trackStreamClient, beginPullSse } from "./streamHelpers.ts";
+import { isParseBodyError, parseBody } from "../../middleware/bodyGuard.ts";
 
 export function mountOllamaRoutes(router: Router): void {
   router.get("/ai/ollama-models", async (_req, res) => {
@@ -60,8 +61,11 @@ export function mountOllamaRoutes(router: Router): void {
   });
 
   router.post("/ai/ollama-pull", heavyCommandRateLimit, async (req, res) => {
-    const { modelTag } = req.body ?? {};
-    if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
+    const body = parseBody<{ modelTag: string }>(req.body, {
+      modelTag: { type: "string", message: "Missing modelTag" },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const { modelTag } = body.parsed;
     const guard = trackStreamClient(req, res);
     const rawSend = beginPullSse(res);
     const send = (evt: Record<string, unknown>) => {
@@ -281,8 +285,11 @@ export function mountOllamaRoutes(router: Router): void {
   });
 
   router.post("/ai/ollama-load", async (req, res) => {
-    const { modelTag } = req.body ?? {};
-    if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
+    const body = parseBody<{ modelTag: string }>(req.body, {
+      modelTag: { type: "string", message: "Missing modelTag" },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const { modelTag } = body.parsed;
     try {
       const r = await fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/generate`, {
         method: "POST",
@@ -300,8 +307,11 @@ export function mountOllamaRoutes(router: Router): void {
   });
 
   router.post("/ai/ollama-unload", async (req, res) => {
-    const { modelTag } = req.body ?? {};
-    if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
+    const body = parseBody<{ modelTag: string }>(req.body, {
+      modelTag: { type: "string", message: "Missing modelTag" },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const { modelTag } = body.parsed;
     try {
       const r = await fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/generate`, {
         method: "POST",

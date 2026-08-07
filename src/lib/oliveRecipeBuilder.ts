@@ -245,6 +245,8 @@ function effectiveFormatFamily(state: UIState): FormatFamily {
   if (state.passes.conversionFormat === "tensorrt" || state.ihvProvider === "TensorrtExecutionProvider") {
     return "tensorrt";
   }
+  // ROCM / DirectML / WebGPU (and other ONNX EPs) share the default ONNX quant path;
+  // there is no EP-specific Olive quant pass for those providers.
   return "onnx";
 }
 
