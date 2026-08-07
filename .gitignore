@@ -52,7 +52,10 @@ bun.lock
 /.cursor/hooks/state/continual-learning-index.json
 /.dirac-cache
 /.qoder
-.serena/
+/.serena/cache
+/.serena/logs
+/.serena/memories
+/.serena/project.local.yml
 .bobignore
 .clineignore
 .devinignore
