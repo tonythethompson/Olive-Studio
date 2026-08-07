@@ -20,6 +20,7 @@ import { getCodexAppServer } from "../../../lib/codex/CodexAppServerClient.ts";
 import { listDevinModels } from "../../../lib/devin/client.ts";
 import type { ProviderConfig } from "../../types.ts";
 import { authActionRateLimit } from "../../middleware/rateLimit.ts";
+import { isParseBodyError, parseBody } from "../../middleware/bodyGuard.ts";
 import { fetchLiveModelCatalog } from "./modelCatalog.ts";
 
 /** Local openai-compat endpoints may omit API keys for model listing. */
@@ -117,7 +118,19 @@ export function mountProviderRoutes(router: Router): void {
   });
 
   router.post("/ai/provider", authActionRateLimit, (req, res) => {
-    const { provider, apiKey, model, baseUrl } = req.body ?? {};
+    const body = parseBody<{
+      provider: ProviderConfig["provider"];
+      apiKey?: string;
+      model?: string;
+      baseUrl?: string;
+    }>(req.body, {
+      provider: { type: "string", message: "Missing provider" },
+      apiKey: { type: "string", required: false },
+      model: { type: "string", required: false },
+      baseUrl: { type: "string", required: false },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const { provider, apiKey, model, baseUrl } = body.parsed;
     if (!provider) return res.status(400).json({ error: "Missing provider" });
     if (!ALLOWED_AI_PROVIDERS.has(provider))
       return res.status(400).json({ error: `Unsupported provider: ${provider}` });
@@ -173,7 +186,17 @@ export function mountProviderRoutes(router: Router): void {
   });
 
   router.post("/ai/models", async (req, res) => {
-    const { provider, apiKey, baseUrl } = req.body ?? {};
+    const body = parseBody<{
+      provider: ProviderConfig["provider"];
+      apiKey?: string;
+      baseUrl?: string;
+    }>(req.body, {
+      provider: { type: "string", message: "Missing provider" },
+      apiKey: { type: "string", required: false },
+      baseUrl: { type: "string", required: false },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const { provider, apiKey, baseUrl } = body.parsed;
     if (!provider) return res.status(400).json({ error: "Missing provider" });
     if (!ALLOWED_AI_PROVIDERS.has(provider))
       return res.status(400).json({ error: `Unsupported provider: ${provider}` });
