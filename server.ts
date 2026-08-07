@@ -217,12 +217,13 @@ async function startServer() {
               return;
             }
             // Only Vite's Rollup-emitted JS/CSS carry a content hash in the
-            // filename (index-<hash>.js) — safe to cache forever. Everything
-            // else under dist/ (logo.png, fonts, favicon) is copied from
-            // public/ verbatim with a stable URL, so a content change on the
-            // same filename must be revalidated, not served from a 1-year
-            // cache untouched.
-            const isHashedBuildOutput = /\.(js|css)(\.gz)?$/.test(filePath);
+            // filename (name-<8-char-hash>.js) — safe to cache forever.
+            // Matching on extension alone would also catch any stable-URL
+            // .js/.css copied verbatim from public/, so require the actual
+            // hash suffix. Everything else under dist/ (logo.png, fonts,
+            // favicon) has a stable URL and must be revalidated, not served
+            // from a 1-year cache untouched.
+            const isHashedBuildOutput = /-[\w-]{8}\.(js|css)(\.gz)?$/.test(filePath);
             res.setHeader(
               "Cache-Control",
               isHashedBuildOutput ? "public, max-age=31536000, immutable" : "public, max-age=3600",

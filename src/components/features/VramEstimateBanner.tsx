@@ -36,8 +36,11 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
   const storeState = usePipelineState();
   const state = propState ?? storeState.state;
 
-  // No prop passed → fall back to the shared, deduped probe query.
-  const sharedProbeQuery = useHardwareProbe();
+  // No prop passed → fall back to the shared, deduped probe query. When a
+  // prop IS passed, skip this query entirely — otherwise it fires its own
+  // fetchHardwareProbe(false) in parallel with the forced-refresh effect
+  // below, doubling probe invocations for props with incomplete RAM info.
+  const sharedProbeQuery = useHardwareProbe({ enabled: hardwareProbeProp === undefined });
   const refreshHardwareProbe = useRefreshHardwareProbe();
   const [forcedProbe, setForcedProbe] = useState<HardwareProbeResult | null>(null);
 

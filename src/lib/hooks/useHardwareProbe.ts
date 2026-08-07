@@ -11,7 +11,7 @@ import { fetchHardwareProbe, type HardwareProbeResult } from "@/lib/hardwareProb
 
 export const HARDWARE_PROBE_QUERY_KEY = ["hardware-probe"] as const;
 
-export function useHardwareProbe(): UseQueryResult<HardwareProbeResult> {
+export function useHardwareProbe(options: { enabled?: boolean } = {}): UseQueryResult<HardwareProbeResult> {
   return useQuery({
     queryKey: HARDWARE_PROBE_QUERY_KEY,
     queryFn: () => fetchHardwareProbe(false),
@@ -20,6 +20,7 @@ export function useHardwareProbe(): UseQueryResult<HardwareProbeResult> {
     // forced refresh); RQ's default 3x backoff retry on top would triple
     // real probe invocations (shells out to GPU/TensorRT detection).
     retry: false,
+    enabled: options.enabled ?? true,
   });
 }
 
