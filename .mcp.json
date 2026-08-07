@@ -4,6 +4,17 @@
       "type": "stdio",
       "command": "python",
       "args": ["olive-mcp-server/run.py"]
+    },
+    "serena": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "serena-agent==1.6.1",
+        "serena",
+        "start-mcp-server",
+        "--project-from-cwd"
+      ]
     }
   }
 }
