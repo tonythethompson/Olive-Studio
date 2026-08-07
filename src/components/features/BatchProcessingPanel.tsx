@@ -485,25 +485,19 @@ function BatchJobCard({
 }) {
   return (
     <div
-      role="button"
-      tabIndex={0}
-      aria-label={`Select batch job ${job.name}`}
-      onClick={onSelect}
-      onKeyDown={(e) => {
-        // Let the nested delete button handle its own Enter/Space activation
-        if ((e.target as HTMLElement).closest('button, [role="button"]') !== e.currentTarget) return;
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect();
-        }
-      }}
-      className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border cursor-pointer transition-all ${
+      className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border transition-all ${
         isSelected
           ? "border-electric-blue bg-electric-blue/5"
           : "border-slate-800/80 bg-slate-900/30 hover:border-slate-700 hover:bg-slate-900/50"
       }`}
     >
-      <div className="flex items-start gap-3.5 min-w-0">
+      <button
+        type="button"
+        aria-label={`Select batch job ${job.name}`}
+        aria-pressed={isSelected}
+        onClick={onSelect}
+        className="flex items-start gap-3.5 min-w-0 flex-1 text-left cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue/60"
+      >
         {/* Status Icon */}
         <div className="mt-0.5 shrink-0">
           {job.status === "completed" && (
@@ -556,7 +550,7 @@ function BatchJobCard({
             ))}
           </div>
         </div>
-      </div>
+      </button>
 
       <div className="flex items-center justify-between sm:justify-end gap-4 mt-4 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-0 border-slate-900 shrink-0">
         {job.status === "running" && (
@@ -602,17 +596,7 @@ function BatchJobCard({
           <button
             type="button"
             aria-label={`Delete batch job ${job.name}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            onKeyDown={(e) => {
-              if (e.key !== "Enter" && e.key !== " ") return;
-              // Stop the card’s role="button" handler from selecting / preventDefault-ing.
-              e.preventDefault();
-              e.stopPropagation();
-              onDelete();
-            }}
+            onClick={onDelete}
             className="text-slate-600 hover:text-red-400 p-1 rounded hover:bg-slate-900 transition-colors shrink-0 cursor-pointer"
           >
             <Trash2 className="h-4 w-4" />

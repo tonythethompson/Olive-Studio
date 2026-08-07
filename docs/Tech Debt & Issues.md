@@ -1,6 +1,6 @@
 # Tech Debt & Issues
 
-> **Status:** audited against the codebase on 2026-08-07; remediation passes 1–6 landed in PR #115 (branch `tech-debt-passes-1-6`). **23 GitHub issues closed** across the 2026-08-07 audit session. **32 remain open** (verified via `gh issue list --state open`, minus #159 closed in this PR).
+> **Status:** audited against the codebase on 2026-08-07; remediation passes 1–6 landed in PR #115 (branch `tech-debt-passes-1-6`). **22 GitHub issues closed** across the 2026-08-07 audit session. **33 remain open** (verified via `gh issue list --repo tonythethompson/Olive-Studio --state open --limit 100` on 2026-08-07; includes #159, whose code landed in this PR but the issue is still open).
 
 ## Status overview
 
@@ -138,7 +138,7 @@ Passes 1–6 were verified green on CI (run #30966708317 on PR #115).
 
 ## GitHub Issue Audit (2026-08-07)
 
-Full cross-reference of previously open GitHub issues against the current codebase. **24 issues closed, 30 remain open.** (30 verified via `gh issue list --repo tonythethompson/Olive-Studio --state open --limit 100` on 2026-08-07.)
+Full cross-reference of previously open GitHub issues against the current codebase. **22 issues closed, 33 remain open.** (33 verified via `gh issue list --repo tonythethompson/Olive-Studio --state open --limit 100` on 2026-08-07. Authoritative pair used throughout this document.)
 
 ### Summary
 
@@ -146,9 +146,9 @@ Full cross-reference of previously open GitHub issues against the current codeba
 |--------|-------|--------|
 | Closed — code fixed | 10 | #137, #142, #143, #144, #145, #146, #147, #148, #149, #151 |
 | Closed — verified complete | 7 | #124, #134, #136, #138, #153, #154, #155 |
-| Closed — refactoring (component extractions) | 6 | #120, #121, #122, #139, #140, #159 |
-| **Total closed** | **23** | |
-| Remaining open | **32** | See below |
+| Closed — refactoring (component extractions) | 5 | #120, #121, #122, #139, #140 |
+| **Total closed** | **22** | |
+| Remaining open | **33** | See below (includes #159) |
 
 ### Closed: Code Fixed (2026-08-07)
 
@@ -186,7 +186,6 @@ Full cross-reference of previously open GitHub issues against the current codeba
 | **#122** | Complex Method in BatchProcessingPanel.tsx | Extracted `BatchJobList` (empty state + mapping) and `BatchJobCard` (status, metrics, progress bar, delete) as module-level helpers. | Render block: −13 lines inline |
 | **#139** | Duplicate Code in HardwareProviderCard.tsx | Extracted `PluginInstallBlock` and reused across provider install cards. | DRY across 6 install blocks |
 | **#140** | Very Complex Method in system.ts (probeSystemHardware) | Extracted `buildProbeDiagnostics()` (~160 lines) with typed `ProbeDiagnosticInput`/`ProbeDiagnosticOutput` interfaces. | 395 → ~250 (−145, 37%) |
-| **#159** | Duplicate Code in IHVIntegrationPanel.tsx | Shared `providerCardProps` for local/export card grids. Extracted Interactive Cards tab to `HardwarePassCards.tsx`. | Removed duplicated prop bags + ~150-line cards tab |
 
 ### Lint Cleanup (2026-08-07)
 
@@ -203,12 +202,13 @@ All ESLint warnings in `src/` and `server.ts` resolved. `eslint --max-warnings 2
 | `arenaOliveOutputs.test.ts:441` | `@typescript-eslint/no-unused-vars` | Renamed `reject` → `_reject` |
 | `registry.test.ts:31` | `no-duplicate-imports` | Merged duplicate imports |
 
-### Remaining Open (32 issues)
+### Remaining Open (33 issues)
 
-#### Duplication issues (2)
+#### Duplication issues (3)
 
 | GH # | Issue | Notes |
 |------|-------|-------|
+| **#159** | Duplicate Code in IHVIntegrationPanel.tsx | Code landed in this PR (`providerCardProps` + `HardwarePassCards.tsx`); GitHub issue still open as of 2026-08-07. |
 | **#150** | Duplicate Code in GraphCanvas/graphCanvasHelpers | ⚠️ Partial. HardwareProviderCard items resolved. Real ~35-line SVG duplication between `renderConnectionSegmentGroup` (helper) and inline code in `GraphCanvas.tsx`. `.agents/skills/` files not project code. |
 | **#102** | 2 Duplication issues | Older CodeFactor findings. May be partially addressed by prior refactoring. |
 

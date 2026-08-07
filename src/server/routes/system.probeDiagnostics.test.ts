@@ -49,6 +49,33 @@ describe("buildProbeDiagnostics", () => {
     expect(diag.notes.some((n) => n.includes("below TensorRT 10.x floor"))).toBe(false);
   });
 
+  it("does not recommend CUDA install on pre-Maxwell GPUs", () => {
+    const diag = buildProbeDiagnostics(
+      baseInput({
+        nvidia: {
+          gpus: [{ name: "Kepler", computeCapability: "3.5", vramMb: 2048 }],
+        },
+      }),
+    );
+    expect(diag.notes.some((n) => n.includes("GPU is compatible"))).toBe(false);
+    expect(diag.notes.some((n) => n.includes("Install onnxruntime-gpu"))).toBe(false);
+    expect(diag.notes.some((n) => n.includes("below CUDA 12 toolkit floor"))).toBe(true);
+  });
+
+  it("recommends CUDA install when GPUs meet the CUDA floor", () => {
+    const diag = buildProbeDiagnostics(
+      baseInput({
+        nvidia: {
+          gpus: [{ name: "Turing", computeCapability: "7.5", vramMb: 8192 }],
+        },
+      }),
+    );
+    expect(diag.notes.some((n) => n.includes("Install onnxruntime-gpu") || n.includes("onnxruntime-gpu"))).toBe(
+      true,
+    );
+    expect(diag.notes.some((n) => n.includes("below CUDA 12 toolkit floor"))).toBe(false);
+  });
+
   it("reports qnnHostMode preparation on Windows x64 and shapes QNN notes", () => {
     const diag = buildProbeDiagnostics(
       baseInput({

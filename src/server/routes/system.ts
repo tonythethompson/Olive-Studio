@@ -288,8 +288,9 @@ function buildTensorRtNotes(input: ProbeDiagnosticInput): {
   floorNotes: string[];
   nvidiaTensorRtFamilyCapable: boolean;
 } {
-<<<<<<< HEAD
-  const notes: string[] = [];
+  const sourceNotes: string[] = [];
+  const loadNotes: string[] = [];
+  const floorNotes: string[] = [];
 
   // Gate TensorRT-family EPs on the SM ≥ 7.5 (Turing) floor — must be evaluated
   // before note-generation branches so below-floor GPUs never emit "compatible" guidance.
@@ -298,18 +299,9 @@ function buildTensorRtNotes(input: ProbeDiagnosticInput): {
     : false;
 
   if (input.tensorRtRtxVenvLoadable) {
-    notes.push(`TensorRT RTX runtime verified${input.tensorRtRtx?.version ? ` (${input.tensorRtRtx.version})` : ""}.`);
-  } else if (input.nvidia?.gpus.length && nvidiaTensorRtFamilyCapable) {
-    notes.push(
-=======
-  const sourceNotes: string[] = [];
-  const loadNotes: string[] = [];
-  const floorNotes: string[] = [];
-  if (input.tensorRtRtxVenvLoadable) {
     loadNotes.push(`TensorRT RTX runtime verified${input.tensorRtRtx?.version ? ` (${input.tensorRtRtx.version})` : ""}.`);
-  } else if (input.nvidia?.gpus.length) {
+  } else if (input.nvidia?.gpus.length && nvidiaTensorRtFamilyCapable) {
     loadNotes.push(
->>>>>>> 5b391ba (Address remaining review findings across IHV, OWR, stream, and probe notes)
       input.tensorRtRtx?.detail
         ? `TensorRT RTX plugin not ready (${input.tensorRtRtx.detail}). GPU is compatible — install tensorrt-rtx from Hardware or on first TRT RTX run.`
         : "TensorRT RTX plugin (tensorrt-rtx) not in .venv yet. GPU is compatible — use Install in Hardware, or Olive installs it on first TRT RTX run.",
@@ -317,15 +309,9 @@ function buildTensorRtNotes(input: ProbeDiagnosticInput): {
   }
 
   if (input.tensorRtVenvLoadable) {
-<<<<<<< HEAD
-    notes.push("TensorRT execution provider load verified.");
-  } else if (input.nvidia?.gpus.length && nvidiaTensorRtFamilyCapable) {
-    notes.push(
-=======
     loadNotes.push("TensorRT execution provider load verified.");
-  } else if (input.nvidia?.gpus.length) {
+  } else if (input.nvidia?.gpus.length && nvidiaTensorRtFamilyCapable) {
     loadNotes.push(
->>>>>>> 5b391ba (Address remaining review findings across IHV, OWR, stream, and probe notes)
       input.tensorrt?.detail
         ? `Full TensorRT SDK not ready (${input.tensorrt.detail}). GPU is compatible — install tensorrt from Hardware or on first TensorRT run.`
         : "Full TensorRT SDK (nvinfer_10) not in .venv yet. GPU is compatible — use Install in Hardware, or Olive installs it on first TensorRT run.",
@@ -356,9 +342,15 @@ function buildCudaNotes(input: ProbeDiagnosticInput): {
   const sourceNotes: string[] = [];
   const loadNotes: string[] = [];
   const floorNotes: string[] = [];
+  // Gate install/"GPU is compatible" hints on the CUDA 12 SM floor — same
+  // pre-Maxwell check as the floor note below, so Kepler boxes never get an
+  // install recommendation that modern CUDA cannot satisfy.
+  const cudaFloorCapable =
+    Boolean(input.nvidia?.gpus.length) && !isPreMaxwellNvidiaBox(input.nvidia!.gpus);
+
   if (input.cudaVenvLoadable) {
     loadNotes.push("CUDA execution provider load verified.");
-  } else if (input.nvidia?.gpus.length) {
+  } else if (cudaFloorCapable) {
     // Derive the install command from the pinned args so a wheel-pin
     // bump updates this hint and the probe-detail string above in lockstep.
     const ortGpuCmd = pinnedOrtGpuInstallCommand();

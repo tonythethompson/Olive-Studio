@@ -173,18 +173,21 @@ describe("deriveUiStateFromOliveRecipe validation", () => {
   // ── catalog-device ──────────────────────────────────────────────────
 
   it("getCatalogDeviceFromRecipe maps provider tokens to device labels", () => {
-    // CUDA
-    const cuda = deriveUiStateFromOliveRecipe({
-      systems: { gpu: { config: { accelerators: [{ execution_providers: ["CUDAExecutionProvider"] }] } } },
-    });
-    // catalog-device is derived internally; the public API is ihvProvider
-    expect(cuda.ihvProvider).toBe("CUDAExecutionProvider");
+    expect(
+      getCatalogDeviceFromRecipe({
+        systems: {
+          gpu: { config: { accelerators: [{ execution_providers: ["CUDAExecutionProvider"] }] } },
+        },
+      }),
+    ).toBe("CUDA");
 
-    // DirectML
-    const dml = deriveUiStateFromOliveRecipe({
-      systems: { gpu: { config: { accelerators: [{ execution_providers: ["DmlExecutionProvider"] }] } } },
-    });
-    expect(dml.ihvProvider).toBe("DmlExecutionProvider");
+    expect(
+      getCatalogDeviceFromRecipe({
+        systems: {
+          gpu: { config: { accelerators: [{ execution_providers: ["DmlExecutionProvider"] }] } },
+        },
+      }),
+    ).toBe("DirectML");
   });
 
   // ── quantization ────────────────────────────────────────────────────
