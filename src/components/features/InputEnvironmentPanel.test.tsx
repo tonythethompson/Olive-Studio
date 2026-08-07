@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { screen, act, fireEvent } from "@testing-library/react";
 import { createMockUIState, useFetchRoutesMock, renderWithProviders as render } from "./__tests__/testUtils";
 
@@ -128,5 +128,67 @@ describe("InputEnvironmentPanel", () => {
     const input = container.querySelector("#modelId") as HTMLInputElement | null;
     expect(input).toBeTruthy();
     expect(input?.value).toMatch(/meta-llama/i);
+  });
+
+  describe("HuggingFace token error handling", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("shows an error state when the token status request fails", async () => {
+      vi.spyOn(globalThis, "fetch").mockImplementation((url: unknown) => {
+        const urlStr = String(url);
+        if (urlStr.includes("hf-token-status")) {
+          return Promise.resolve(new Response("Internal Error", { status: 500 }));
+        }
+        return Promise.resolve(new Response("{}", { status: 200 }));
+      });
+
+      render(<InputEnvironmentPanel />);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      const configureLabel = screen.getByText(/configure model source/i);
+      act(() => {
+        fireEvent.click(configureLabel.closest("button") ?? configureLabel);
+      });
+
+      expect(await screen.findByText(/couldn't check token status/i)).toBeTruthy();
+    });
+
+    it("does not clear the cached token status on a failed DELETE", async () => {
+      let deleteCalled = false;
+      vi.spyOn(globalThis, "fetch").mockImplementation((url: unknown, init?: RequestInit) => {
+        const urlStr = String(url);
+        if (urlStr.includes("hf-token-status")) {
+          return Promise.resolve(new Response(JSON.stringify({ source: "runtime" }), { status: 200 }));
+        }
+        if (urlStr.includes("/api/env/hf-token") && init?.method === "DELETE") {
+          deleteCalled = true;
+          return Promise.resolve(new Response("Internal Error", { status: 500 }));
+        }
+        return Promise.resolve(new Response("{}", { status: 200 }));
+      });
+
+      render(<InputEnvironmentPanel />);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      const configureLabel = screen.getByText(/configure model source/i);
+      act(() => {
+        fireEvent.click(configureLabel.closest("button") ?? configureLabel);
+      });
+
+      expect(await screen.findByText(/set for this session/i)).toBeTruthy();
+      const clearButton = screen.getByRole("button", { name: /clear/i });
+      await act(async () => {
+        fireEvent.click(clearButton);
+        await Promise.resolve();
+      });
+
+      expect(deleteCalled).toBe(true);
+      // Status stays "runtime" — a failed DELETE must not optimistically clear the cache.
+      expect(screen.getByText(/set for this session/i)).toBeTruthy();
+    });
   });
 });

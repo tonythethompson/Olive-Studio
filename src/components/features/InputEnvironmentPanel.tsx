@@ -144,7 +144,11 @@ export function InputEnvironmentPanel({
     },
     retry: false,
   });
-  const hfTokenStatus = hfTokenStatusQuery.isLoading ? "loading" : (hfTokenStatusQuery.data ?? "none");
+  const hfTokenStatus = hfTokenStatusQuery.isLoading
+    ? "loading"
+    : hfTokenStatusQuery.isError
+      ? "error"
+      : (hfTokenStatusQuery.data ?? "none");
 
   const submitTokenMutation = useMutation({
     mutationFn: async (token: string) => {
@@ -163,7 +167,8 @@ export function InputEnvironmentPanel({
 
   const clearTokenMutation = useMutation({
     mutationFn: async () => {
-      await fetch("/api/env/hf-token", { method: "DELETE" });
+      const r = await fetch("/api/env/hf-token", { method: "DELETE" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
     },
     onSuccess: () => {
       queryClient.setQueryData(["hf-token-status"], "none");
@@ -180,7 +185,11 @@ export function InputEnvironmentPanel({
   };
 
   const handleClearToken = async () => {
-    await clearTokenMutation.mutateAsync();
+    try {
+      await clearTokenMutation.mutateAsync();
+    } catch {
+      /* ignore — clearTokenMutation.error surfaces via mutation state */
+    }
   };
 
   // States for the Olive Recipe Hub
@@ -1586,6 +1595,11 @@ export function InputEnvironmentPanel({
                           {hfTokenStatus === "none" && (
                             <span className="text-[10px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-mono">
                               Not set — required for gated models
+                            </span>
+                          )}
+                          {hfTokenStatus === "error" && (
+                            <span className="text-[10px] bg-rose-500/10 border border-rose-500/20 text-rose-400 px-2 py-0.5 rounded font-mono">
+                              Couldn't check token status
                             </span>
                           )}
                         </div>
