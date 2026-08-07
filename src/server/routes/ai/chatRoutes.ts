@@ -22,7 +22,7 @@ import {
 import { CHAT_JSON_RESPONSE_CONTRACT, parseChatStructuredReply } from "../../../lib/chatActions.ts";
 import { getChatScopeBlock } from "../../../lib/chatScope.ts";
 import { validateOliveRecipeStructure } from "../../../lib/oliveRecipeSchema.ts";
-import type { UIState } from "../../../types.ts";
+import { parseUIStatePayload } from "../../../lib/pipelineValidation.ts";
 
 export function mountChatRoutes(router: Router): void {
   router.post("/ai/chat", async (req, res) => {
@@ -58,7 +58,8 @@ export function mountChatRoutes(router: Router): void {
         if (workspaceContext && typeof workspaceContext === "object") {
           workspace = workspaceContext as AiWorkspaceContext;
         } else if (state && typeof state === "object") {
-          workspace = buildAiWorkspaceContext(state as UIState);
+          const parsedState = parseUIStatePayload(state);
+          if (parsedState.ok) workspace = buildAiWorkspaceContext(parsedState.state);
         }
         workspaceBlock = workspace ? formatAiWorkspaceContextForPrompt(workspace) : null;
       } catch {
@@ -122,11 +123,13 @@ export function mountChatRoutes(router: Router): void {
   });
 
   router.post("/ai/analyze-state", async (req, res) => {
-    const body = parseBody<{ state: UIState }>(req.body, {
+    const body = parseBody<{ state: unknown }>(req.body, {
       state: { type: "object", message: "Missing state" },
     });
     if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
-    const { state } = body.parsed;
+    const parsedState = parseUIStatePayload(body.parsed.state);
+    if (!parsedState.ok) return res.status(400).json({ error: parsedState.error });
+    const { state } = parsedState;
     try {
       const ctx = buildAiWorkspaceContext(state);
       // Cap context so small models still have room for full-sentence JSON.

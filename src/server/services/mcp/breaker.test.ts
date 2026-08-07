@@ -141,8 +141,8 @@ describe("createMcpCircuitBreaker", () => {
     const first = requireAdmission(breaker.beforeCall());
     expect(first).toEqual({ epoch: 0 });
 
-    breaker.recordFailure(0);
-    breaker.recordFailure(0);
+    breaker.recordFailure(first.epoch);
+    breaker.recordFailure(first.epoch);
     expect(breaker.isOpen()).toBe(true);
 
     // Late success from the pre-open admission must not close the breaker.

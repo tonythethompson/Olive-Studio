@@ -82,6 +82,8 @@ export function mountOllamaRoutes(router: Router): void {
     };
     let maxTimer: ReturnType<typeof setTimeout> | null = null;
     let timedOut = false;
+    /** Clears pull mutex as soon as the client disconnects (does not wait for shared readiness). */
+    let onClientAbort: (() => void) | undefined;
     try {
       if (!isValidLocalModelTag(tag)) {
         send({ type: "error", error: "Invalid modelTag." });
@@ -106,7 +108,26 @@ export function mountOllamaRoutes(router: Router): void {
 
       localEngineRuntime.ollamaPullBusyTag = tag;
       ownsBusy = true;
-      const ready = await ensureOllamaReady((evt) => send(evt), guard.signal);
+      // Shared ensure continues for other waiters; this pull must drop the mutex on abort
+      // so a second pull is not blocked while readiness is still in flight.
+      let settleAbortWait: (() => void) | undefined;
+      onClientAbort = () => {
+        releaseBusy();
+        settleAbortWait?.();
+      };
+      guard.signal.addEventListener("abort", onClientAbort);
+      if (guard.signal.aborted) {
+        onClientAbort();
+        guard.endOnce();
+        return;
+      }
+      const ready = await Promise.race([
+        ensureOllamaReady((evt) => send(evt), guard.signal),
+        new Promise<Awaited<ReturnType<typeof ensureOllamaReady>>>((resolve) => {
+          settleAbortWait = () =>
+            resolve({ ok: false, steps: [], cancelled: true, error: "Setup cancelled." });
+        }),
+      ]);
       if (guard.disconnected()) {
         releaseBusy();
         guard.endOnce();
@@ -256,6 +277,7 @@ export function mountOllamaRoutes(router: Router): void {
         }
       }
     } finally {
+      if (onClientAbort) guard.signal.removeEventListener("abort", onClientAbort);
       if (maxTimer) clearTimeout(maxTimer);
       releaseBusy();
       guard.endOnce();

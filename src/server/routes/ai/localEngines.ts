@@ -445,14 +445,19 @@ export async function ensureOllamaReady(
   }
 
   localEngineRuntime.ollamaEnsureWaiters += 1;
+  let onClientAbort: (() => void) | undefined;
   if (signal) {
     if (signal.aborted) releaseWaiter();
-    else signal.addEventListener("abort", releaseWaiter, { once: true });
+    else {
+      onClientAbort = () => releaseWaiter();
+      signal.addEventListener("abort", onClientAbort);
+    }
   }
   try {
     return await localEngineRuntime.ollamaEnsureInFlight;
   } finally {
     if (onProgress) localEngineRuntime.ollamaProgressSubscribers.delete(onProgress);
+    if (signal && onClientAbort) signal.removeEventListener("abort", onClientAbort);
     releaseWaiter();
   }
 }
@@ -640,14 +645,19 @@ export async function ensureLmsReady(
   }
 
   localEngineRuntime.lmsEnsureWaiters += 1;
+  let onClientAbort: (() => void) | undefined;
   if (signal) {
     if (signal.aborted) releaseWaiter();
-    else signal.addEventListener("abort", releaseWaiter, { once: true });
+    else {
+      onClientAbort = () => releaseWaiter();
+      signal.addEventListener("abort", onClientAbort);
+    }
   }
   try {
     return await localEngineRuntime.lmsEnsureInFlight;
   } finally {
     if (onProgress) localEngineRuntime.lmsProgressSubscribers.delete(onProgress);
+    if (signal && onClientAbort) signal.removeEventListener("abort", onClientAbort);
     releaseWaiter();
   }
 }
