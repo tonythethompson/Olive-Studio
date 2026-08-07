@@ -18,7 +18,8 @@ import { ensureOpenVino } from "../services/olive/openvino.ts";
 import { ensureOnnxRuntimeGpu } from "../services/olive/cuda.ts";
 import { ensureDirectMl } from "../services/olive/directml.ts";
 import { ensureQnn, runQnnHtpDiagnostic } from "../services/olive/qnn.ts";
-import { fsWriteRateLimit, heavyCommandRateLimit } from "../middleware/rateLimit.ts";
+import { authActionRateLimit, fsWriteRateLimit, heavyCommandRateLimit } from "../middleware/rateLimit.ts";
+import { parseBody, isParseBodyError } from "../middleware/bodyGuard.ts";
 import { resolveAllowedPythonFile } from "../services/venv/pythonGuard.ts";
 
 /** Serialize all stack installs that mutate the shared venv via pip. */
@@ -84,12 +85,12 @@ export function mountEnvRoutes(router: Router): void {
     return res.json({ source: "none" });
   });
 
-  router.post("/env/hf-token", (req, res) => {
-    const { token } = req.body ?? {};
-    if (!token || typeof token !== "string") {
-      return res.status(400).json({ error: "Missing token" });
-    }
-    setRuntimeHfToken(token);
+  router.post("/env/hf-token", authActionRateLimit, (req, res) => {
+    const body = parseBody<{ token: string }>(req.body, {
+      token: { type: "string", message: "Missing token" },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    setRuntimeHfToken(body.parsed.token);
     return res.json({ ok: true });
   });
 
@@ -142,8 +143,11 @@ export function mountEnvRoutes(router: Router): void {
 
   // ─── Python Path ──────────────────────────────────────────────────────
   router.post("/env/python-path", fsWriteRateLimit, async (req, res) => {
-    const { pythonPath } = req.body ?? {};
-    const safe = resolveAllowedPythonFile(pythonPath);
+    const body = parseBody<{ pythonPath: string }>(req.body, {
+      pythonPath: { type: "string", message: "Missing pythonPath" },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const safe = resolveAllowedPythonFile(body.parsed.pythonPath);
     if (!safe.ok) {
       return res.status(400).json({ ok: false, error: safe.error });
     }

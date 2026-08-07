@@ -7,10 +7,12 @@
  * All external dependencies (Python, AI providers, LM Studio, Ollama) are
  * mocked via `setup.integration.ts` so these tests run reliably in CI.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import type { Server } from "http";
 
 import { stubGlobalFetch, restoreGlobalFetch } from "./setup.integration.ts";
+import { resetMcpBreaker } from "../services/mcp/breaker.ts";
+import { resetLocalEngineRuntime } from "../services/ai/localEngineState.ts";
 import { app, markServerReady } from "../../../server.ts";
 
 let server: Server;
@@ -45,6 +47,12 @@ afterAll(async () => {
   if (server) {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+});
+
+// Process-wide singletons; reset per test so state never leaks across cases.
+beforeEach(() => {
+  resetMcpBreaker();
+  resetLocalEngineRuntime();
 });
 
 describe("Route integration tests", () => {
@@ -152,6 +160,25 @@ describe("Route integration tests", () => {
       } else {
         expect(body).toHaveProperty("reply");
       }
+    });
+  });
+
+  // ─── POST /api/ai/analyze-state ────────────────────────────────────────────
+
+  describe("POST /api/ai/analyze-state", () => {
+    it("returns 400 when state is incomplete", async () => {
+      const res = await fetch(`${baseUrl}/api/ai/analyze-state`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          state: { modelSource: "huggingface", ihvProvider: "CPUExecutionProvider" },
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body).toHaveProperty("error");
+      expect(String(body.error)).toContain("passes");
     });
   });
 
@@ -460,8 +487,8 @@ describe("Route integration tests", () => {
     });
 
     it("returns SSE error when LM Studio CLI is not installed", async () => {
-      // findLmsCli() uses execSync("where lms") which fails on systems
-      // without LM Studio. The handler streams NDJSON (or legacy SSE) events.
+      // findLmsCli() probes via execFileAsync("where lms") which the setup mock
+      // resolves to empty output (CLI missing). The handler streams NDJSON events.
       const res = await fetch(`${baseUrl}/api/ai/local-pull`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

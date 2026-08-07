@@ -3,7 +3,7 @@
  * (install/start/ensure), and pull-verification helpers shared by the
  * /ai/local-*, /ai/ollama-*, and /ai/install-engine routes.
  */
-import { spawn, execFile, execSync, type ChildProcess } from "child_process";
+import { spawn, execFile, type ChildProcess } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import path from "path";
@@ -23,6 +23,9 @@ import {
 } from "../../services/ai/localEngineState.ts";
 
 const execFileAsync = promisify(execFile);
+
+/** Timeout for `where/which` CLI discovery probes (fail fast when the tool is not on PATH). */
+const CLI_PROBE_TIMEOUT_MS = 2000;
 
 export const LM_STUDIO_PORT = 1234;
 export const OLLAMA_PORT = 11434;
@@ -95,18 +98,10 @@ function resetLmsCliCache(): void {
   localEngineRuntime.lmsCliMissAt = 0;
 }
 
-/** Module-level LMS CLI path cache (avoids re-probing disk/PATH on every request). */
-export function findLmsCli(): string | null {
-  // Reuse a positive cache hit immediately
-  if (localEngineRuntime.cachedLmsCli) return localEngineRuntime.cachedLmsCli;
-  // Reuse a cached miss within TTL to avoid repeated expensive probes
-  if (
-    localEngineRuntime.cachedLmsCli === null &&
-    localEngineRuntime.lmsCliMissAt > 0 &&
-    Date.now() - localEngineRuntime.lmsCliMissAt < LMS_CLI_MISS_TTL_MS
-  ) {
-    return null;
-  }
+/** Single-flight guard: concurrent callers share one `where/which` probe. */
+let lmsProbeInFlight: Promise<string | null> | null = null;
+
+async function probeLmsCli(): Promise<string | null> {
   const home = os.homedir();
   const candidates =
     process.platform === "win32"
@@ -121,23 +116,20 @@ export function findLmsCli(): string | null {
     if (c && fs.existsSync(c)) {
       localEngineRuntime.cachedLmsCli = c;
       localEngineRuntime.lmsCliMissAt = 0;
-      return localEngineRuntime.cachedLmsCli;
+      return c;
     }
   }
   try {
-    const result = execSync(process.platform === "win32" ? "where lms" : "which lms", {
+    const { stdout } = await execFileAsync(process.platform === "win32" ? "where" : "which", ["lms"], {
       encoding: "utf-8",
-      timeout: 2000,
+      timeout: CLI_PROBE_TIMEOUT_MS,
       windowsHide: true,
-    })
-      .toString()
-      .trim()
-      .split(/\r?\n/)[0]
-      ?.trim();
+    });
+    const result = stdout.trim().split(/\r?\n/)[0]?.trim();
     if (result && fs.existsSync(result)) {
       localEngineRuntime.cachedLmsCli = result;
       localEngineRuntime.lmsCliMissAt = 0;
-      return localEngineRuntime.cachedLmsCli;
+      return result;
     }
   } catch {
     /* not on PATH */
@@ -148,9 +140,29 @@ export function findLmsCli(): string | null {
   return null;
 }
 
+/** Async LM Studio CLI path discovery — never blocks the event loop on `where/which`. */
+export async function findLmsCli(): Promise<string | null> {
+  // Reuse a positive cache hit immediately
+  if (localEngineRuntime.cachedLmsCli) return localEngineRuntime.cachedLmsCli;
+  // Reuse a cached miss within TTL to avoid repeated expensive probes
+  if (
+    localEngineRuntime.cachedLmsCli === null &&
+    localEngineRuntime.lmsCliMissAt > 0 &&
+    Date.now() - localEngineRuntime.lmsCliMissAt < LMS_CLI_MISS_TTL_MS
+  ) {
+    return null;
+  }
+  if (!lmsProbeInFlight) {
+    lmsProbeInFlight = probeLmsCli().finally(() => {
+      lmsProbeInFlight = null;
+    });
+  }
+  return lmsProbeInFlight;
+}
+
 /** List downloaded LM Studio LLM model keys via `lms ls --json` (not just currently loaded). */
 export async function listLmsInstalledModelKeys(): Promise<string[] | null> {
-  const lms = findLmsCli();
+  const lms = await findLmsCli();
   if (!lms) return null;
   try {
     const { stdout } = await execFileAsync(lms, ["ls", "--json"], {
@@ -170,7 +182,10 @@ export async function listLmsInstalledModelKeys(): Promise<string[] | null> {
   }
 }
 
-function findOllamaCli(): string | null {
+/** Single-flight guard: concurrent callers share one `where/which` probe. */
+let ollamaProbeInFlight: Promise<string | null> | null = null;
+
+async function probeOllamaCli(): Promise<string | null> {
   const home = os.homedir();
   const candidates =
     process.platform === "win32"
@@ -184,20 +199,26 @@ function findOllamaCli(): string | null {
     if (c && fs.existsSync(c)) return c;
   }
   try {
-    const result = execSync(process.platform === "win32" ? "where ollama" : "which ollama", {
+    const { stdout } = await execFileAsync(process.platform === "win32" ? "where" : "which", ["ollama"], {
       encoding: "utf-8",
-      timeout: 2000,
+      timeout: CLI_PROBE_TIMEOUT_MS,
       windowsHide: true,
-    })
-      .toString()
-      .trim()
-      .split(/\r?\n/)[0]
-      ?.trim();
+    });
+    const result = stdout.trim().split(/\r?\n/)[0]?.trim();
     if (result && fs.existsSync(result)) return result;
   } catch {
     /* not on PATH */
   }
   return null;
+}
+
+function findOllamaCli(): Promise<string | null> {
+  if (!ollamaProbeInFlight) {
+    ollamaProbeInFlight = probeOllamaCli().finally(() => {
+      ollamaProbeInFlight = null;
+    });
+  }
+  return ollamaProbeInFlight;
 }
 
 /** Windows/macOS tray app that owns the local server lifecycle (do not also spawn `ollama serve`). */
@@ -219,14 +240,68 @@ function findOllamaApp(): string | null {
   return null;
 }
 
-function sleepMs(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+/** Sleep that resolves immediately when `signal` aborts (so polling exits promptly). */
+function sleepMs(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
-export async function tryWingetInstall(packageIds: string[]): Promise<boolean> {
+/** Capped exponential backoff delays (250ms → 500ms → 1s → 2s…). */
+const POLL_BACKOFF_BASE_MS = 250;
+const POLL_BACKOFF_MAX_MS = 2000;
+
+/**
+ * Poll `check` until it returns true, `maxWaitMs` elapses, or `signal` aborts.
+ * Aborts stop the wait immediately — callers distinguish cancellation from
+ * timeout via `signal.aborted` after this returns false. `delayFirst` mirrors
+ * the old sleep-then-check loops; otherwise the first check runs immediately.
+ */
+async function pollUntil(
+  check: () => Promise<boolean>,
+  maxWaitMs: number,
+  signal?: AbortSignal,
+  delayFirst = false,
+): Promise<boolean> {
+  const deadline = Date.now() + maxWaitMs;
+  let delay = POLL_BACKOFF_BASE_MS;
+  let first = true;
+  while (true) {
+    if (signal?.aborted) return false;
+    if (!delayFirst || !first) {
+      if (await check()) return true;
+    }
+    if (Date.now() >= deadline) return false;
+    await sleepMs(Math.min(delay, deadline - Date.now()), signal);
+    if (signal?.aborted) return false;
+    delay = Math.min(delay * 2, POLL_BACKOFF_MAX_MS);
+    first = false;
+  }
+}
+
+/** Budget caps preserve the pre-backoff fixed loops (Tech Debt #16). */
+export const OLLAMA_READY_MAX_WAIT_MS = 40_000; // was 40 × 1000ms
+export const LMS_READY_MAX_WAIT_MS = 30_000; // was 30 × 1000ms
+const OLLAMA_INSTALL_MAX_WAIT_MS = 40_000; // was 20 × 2000ms
+const LMS_INSTALL_MAX_WAIT_MS = 40_000; // was 20 × 2000ms
+const OLLAMA_POST_INSTALL_MAX_WAIT_MS = 15_000; // was 15 × 1000ms
+
+export async function tryWingetInstall(packageIds: string[], signal?: AbortSignal): Promise<boolean> {
   if (process.platform !== "win32") return false;
   try {
-    await execFileAsync("winget", ["--version"], { timeout: 5000, windowsHide: true });
+    await execFileAsync("winget", ["--version"], { timeout: 5000, windowsHide: true, signal });
   } catch {
     return false;
   }
@@ -244,7 +319,7 @@ export async function tryWingetInstall(packageIds: string[]): Promise<boolean> {
           "--disable-interactivity",
           "--silent",
         ],
-        { timeout: 600_000, windowsHide: true },
+        { timeout: 600_000, windowsHide: true, signal },
       );
       return true;
     } catch {
@@ -321,9 +396,28 @@ function startOllamaOnce(cliPath: string): Promise<{ mode: "app" | "serve"; deta
 
 const OLLAMA_START_COOLDOWN_MS = 45_000;
 
+/**
+ * Ensure Ollama is installed and its HTTP server is reachable.
+ *
+ * Concurrent callers share one in-flight setup. Each caller registers as a
+ * waiter; shared work uses an internal `AbortController` and is aborted only
+ * when the last waiter leaves (client disconnect via `signal` or promise
+ * settlement). Late joiners do not cancel setup started by an earlier client.
+ */
 export async function ensureOllamaReady(
   onProgress?: (evt: EnsureProgressEvt) => void,
+  signal?: AbortSignal,
 ): Promise<OllamaEnsureResult> {
+  let released = false;
+  const releaseWaiter = () => {
+    if (released) return;
+    released = true;
+    localEngineRuntime.ollamaEnsureWaiters -= 1;
+    if (localEngineRuntime.ollamaEnsureWaiters === 0) {
+      localEngineRuntime.ollamaEnsureAbort?.abort();
+    }
+  };
+
   if (onProgress) {
     localEngineRuntime.ollamaProgressSubscribers.add(onProgress);
     if (localEngineRuntime.ollamaEnsureInFlight) {
@@ -331,65 +425,89 @@ export async function ensureOllamaReady(
     }
   }
   if (!localEngineRuntime.ollamaEnsureInFlight) {
-    localEngineRuntime.ollamaEnsureInFlight = ensureOllamaReadyImpl((evt) => {
-      for (const sub of localEngineRuntime.ollamaProgressSubscribers) {
-        try {
-          sub(evt);
-        } catch (err) {
-          console.error("[ensureOllamaReady] Progress subscriber threw:", err);
+    const ac = new AbortController();
+    localEngineRuntime.ollamaEnsureAbort = ac;
+    localEngineRuntime.ollamaEnsureInFlight = ensureOllamaReadyImpl(
+      (evt) => {
+        for (const sub of localEngineRuntime.ollamaProgressSubscribers) {
+          try {
+            sub(evt);
+          } catch (err) {
+            console.error("[ensureOllamaReady] Progress subscriber threw:", err);
+          }
         }
-      }
-    }).finally(() => {
+      },
+      ac.signal,
+    ).finally(() => {
       localEngineRuntime.ollamaEnsureInFlight = null;
+      localEngineRuntime.ollamaEnsureAbort = null;
     });
+  }
+
+  localEngineRuntime.ollamaEnsureWaiters += 1;
+  let onClientAbort: (() => void) | undefined;
+  if (signal) {
+    if (signal.aborted) releaseWaiter();
+    else {
+      onClientAbort = () => releaseWaiter();
+      signal.addEventListener("abort", onClientAbort);
+    }
   }
   try {
     return await localEngineRuntime.ollamaEnsureInFlight;
   } finally {
     if (onProgress) localEngineRuntime.ollamaProgressSubscribers.delete(onProgress);
+    if (signal && onClientAbort) signal.removeEventListener("abort", onClientAbort);
+    releaseWaiter();
   }
 }
 
 async function ensureOllamaReadyImpl(
   onProgress?: (evt: { type: string; message: string; percent?: number }) => void,
+  signal?: AbortSignal,
 ): Promise<OllamaEnsureResult> {
   const steps: string[] = [];
   const note = (message: string, percent?: number) => {
     steps.push(message);
     onProgress?.({ type: "step", message, percent });
   };
+  const cancelled = (): OllamaEnsureResult => ({ ok: false, steps, cancelled: true, error: "Setup cancelled." });
+
   if (await isOllamaRunning()) {
     note("Ollama already running", 15);
     return { ok: true, steps };
   }
-  let ollama = findOllamaCli();
+  let ollama = await findOllamaCli();
   if (!ollama) {
     note("Ollama CLI not found. Installing…", 5);
     if (process.platform === "win32") {
       note("Running winget install Ollama.Ollama (silent)…", 8);
-      await tryWingetInstall(["Ollama.Ollama"]);
+      await tryWingetInstall(["Ollama.Ollama"], signal);
     } else if (process.platform === "darwin") {
       note("Running brew install ollama…", 8);
       try {
-        await execFileAsync("brew", ["install", "ollama"], { timeout: 600_000 });
+        await execFileAsync("brew", ["install", "ollama"], { timeout: 600_000, signal });
       } catch {
         note("brew install failed", 12);
       }
     }
-    for (let i = 0; i < 20; i++) {
-      ollama = findOllamaCli();
-      if (ollama) break;
-      await sleepMs(2000);
-    }
+    await pollUntil(
+      async () => {
+        const found = await findOllamaCli();
+        if (found) ollama = found;
+        return found !== null;
+      },
+      OLLAMA_INSTALL_MAX_WAIT_MS,
+      signal,
+    );
     // Installer often auto-starts the tray app; give it a moment before we launch anything.
-    for (let i = 0; i < 15; i++) {
-      if (await isOllamaRunning()) {
-        note("Ollama started after install", 28);
-        return { ok: true, steps };
-      }
-      await sleepMs(1000);
+    const autoStarted = await pollUntil(isOllamaRunning, OLLAMA_POST_INSTALL_MAX_WAIT_MS, signal, true);
+    if (autoStarted) {
+      note("Ollama started after install", 28);
+      return { ok: true, steps };
     }
   }
+  if (signal?.aborted) return cancelled();
   if (!ollama)
     return {
       ok: false,
@@ -415,12 +533,11 @@ async function ensureOllamaReadyImpl(
         note(`Failed to start Ollama: ${err instanceof Error ? err.message : String(err)}`, 22);
       }
     }
-    for (let i = 0; i < 40; i++) {
-      await sleepMs(1000);
-      if (await isOllamaRunning()) {
-        note("Ollama HTTP server ready on :11434", 30);
-        return { ok: true, steps };
-      }
+    const ready = await pollUntil(isOllamaRunning, OLLAMA_READY_MAX_WAIT_MS, signal, true);
+    if (signal?.aborted) return cancelled();
+    if (ready) {
+      note("Ollama HTTP server ready on :11434", 30);
+      return { ok: true, steps };
     }
     return {
       ok: false,
@@ -483,7 +600,24 @@ export async function listOllamaInstalledNames(): Promise<string[] | null> {
   }
 }
 
-export async function ensureLmsReady(onProgress?: (evt: EnsureProgressEvt) => void): Promise<LmsEnsureResult> {
+/**
+ * Ensure LM Studio CLI/server is available. Same single-flight and waiter-based
+ * abort rules as {@link ensureOllamaReady}.
+ */
+export async function ensureLmsReady(
+  onProgress?: (evt: EnsureProgressEvt) => void,
+  signal?: AbortSignal,
+): Promise<LmsEnsureResult> {
+  let released = false;
+  const releaseWaiter = () => {
+    if (released) return;
+    released = true;
+    localEngineRuntime.lmsEnsureWaiters -= 1;
+    if (localEngineRuntime.lmsEnsureWaiters === 0) {
+      localEngineRuntime.lmsEnsureAbort?.abort();
+    }
+  };
+
   if (onProgress) {
     localEngineRuntime.lmsProgressSubscribers.add(onProgress);
     if (localEngineRuntime.lmsEnsureInFlight) {
@@ -491,47 +625,69 @@ export async function ensureLmsReady(onProgress?: (evt: EnsureProgressEvt) => vo
     }
   }
   if (!localEngineRuntime.lmsEnsureInFlight) {
-    localEngineRuntime.lmsEnsureInFlight = ensureLmsReadyImpl((evt) => {
-      for (const sub of localEngineRuntime.lmsProgressSubscribers) {
-        try {
-          sub(evt);
-        } catch (err) {
-          console.error("[ensureLmsReady] Progress subscriber threw:", err);
+    const ac = new AbortController();
+    localEngineRuntime.lmsEnsureAbort = ac;
+    localEngineRuntime.lmsEnsureInFlight = ensureLmsReadyImpl(
+      (evt) => {
+        for (const sub of localEngineRuntime.lmsProgressSubscribers) {
+          try {
+            sub(evt);
+          } catch (err) {
+            console.error("[ensureLmsReady] Progress subscriber threw:", err);
+          }
         }
-      }
-    }).finally(() => {
+      },
+      ac.signal,
+    ).finally(() => {
       localEngineRuntime.lmsEnsureInFlight = null;
+      localEngineRuntime.lmsEnsureAbort = null;
     });
+  }
+
+  localEngineRuntime.lmsEnsureWaiters += 1;
+  let onClientAbort: (() => void) | undefined;
+  if (signal) {
+    if (signal.aborted) releaseWaiter();
+    else {
+      onClientAbort = () => releaseWaiter();
+      signal.addEventListener("abort", onClientAbort);
+    }
   }
   try {
     return await localEngineRuntime.lmsEnsureInFlight;
   } finally {
     if (onProgress) localEngineRuntime.lmsProgressSubscribers.delete(onProgress);
+    if (signal && onClientAbort) signal.removeEventListener("abort", onClientAbort);
+    releaseWaiter();
   }
 }
 
-async function ensureLmsReadyImpl(onProgress?: (evt: EnsureProgressEvt) => void): Promise<LmsEnsureResult> {
+async function ensureLmsReadyImpl(
+  onProgress?: (evt: EnsureProgressEvt) => void,
+  signal?: AbortSignal,
+): Promise<LmsEnsureResult> {
   const steps: string[] = [];
   const note = (message: string, percent?: number) => {
     steps.push(message);
     onProgress?.({ type: "step", message, percent });
   };
+  const cancelled = (): LmsEnsureResult => ({ ok: false, steps, cancelled: true, error: "Setup cancelled." });
 
   if (await isLmsServerRunning()) {
     note("LM Studio server already running", 15);
     return { ok: true, steps };
   }
 
-  let lms = findLmsCli();
+  let lms = await findLmsCli();
   if (!lms) {
     note("LM Studio CLI (lms) not found. Installing…", 5);
     if (process.platform === "win32") {
       note("Running winget install ElementLabs.LMStudio…", 8);
-      await tryWingetInstall(["ElementLabs.LMStudio"]);
+      await tryWingetInstall(["ElementLabs.LMStudio"], signal);
     } else if (process.platform === "darwin") {
       note("Running brew install --cask lm-studio…", 8);
       try {
-        await execFileAsync("brew", ["install", "--cask", "lm-studio"], { timeout: 600_000 });
+        await execFileAsync("brew", ["install", "--cask", "lm-studio"], { timeout: 600_000, signal });
       } catch {
         note("brew cask install failed. Continuing discovery…", 10);
       }
@@ -539,14 +695,19 @@ async function ensureLmsReadyImpl(onProgress?: (evt: EnsureProgressEvt) => void)
       note("No package-manager install path for this Linux host. Install LM Studio manually if needed.", 8);
     }
 
-    for (let i = 0; i < 20; i++) {
-      resetLmsCliCache();
-      lms = findLmsCli();
-      if (lms) break;
-      await sleepMs(2000);
-    }
+    await pollUntil(
+      async () => {
+        resetLmsCliCache();
+        const found = await findLmsCli();
+        if (found) lms = found;
+        return found !== null;
+      },
+      LMS_INSTALL_MAX_WAIT_MS,
+      signal,
+    );
   }
 
+  if (signal?.aborted) return cancelled();
   if (!lms) {
     return {
       ok: false,
@@ -570,12 +731,11 @@ async function ensureLmsReadyImpl(onProgress?: (evt: EnsureProgressEvt) => void)
       }
     }
 
-    for (let i = 0; i < 30; i++) {
-      await sleepMs(1000);
-      if (await isLmsServerRunning()) {
-        note("LM Studio HTTP server ready", 90);
-        return { ok: true, steps };
-      }
+    const ready = await pollUntil(isLmsServerRunning, LMS_READY_MAX_WAIT_MS, signal, true);
+    if (signal?.aborted) return cancelled();
+    if (ready) {
+      note("LM Studio HTTP server ready", 90);
+      return { ok: true, steps };
     }
     return {
       ok: false,
