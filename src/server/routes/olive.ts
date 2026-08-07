@@ -392,7 +392,10 @@ export function mountOliveRoutes(router: Router): void {
 
   // ─── Cancel ───────────────────────────────────────────────────────────
   router.post("/olive/cancel", (req, res) => {
-    const body = parseBody<{ jobId?: string }>(req.body, {
+    // express.json() leaves body undefined when the client sends no payload;
+    // optional jobId means an empty object preserves the 404 "Job not found" contract.
+    // Preserve null so parseBody can reject an explicit JSON null body.
+    const body = parseBody<{ jobId?: string }>(req.body === undefined ? {} : req.body, {
       jobId: { type: "string", required: false },
     });
     if (isParseBodyError(body)) return res.status(400).json({ error: body.error });

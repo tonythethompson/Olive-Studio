@@ -804,6 +804,24 @@ describe("Route integration tests", () => {
       await expect(res.json()).resolves.toEqual({ error: "Job not found" });
     });
 
+    it("preserves the bodyless cancel 404 contract", async () => {
+      const res = await fetch(`${baseUrl}/api/olive/cancel`, { method: "POST" });
+
+      expect(res.status).toBe(404);
+      await expect(res.json()).resolves.toEqual({ error: "Job not found" });
+    });
+
+    it("rejects an explicit null cancel body", async () => {
+      const res = await fetch(`${baseUrl}/api/olive/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "null",
+      });
+
+      expect(res.status).toBe(400);
+      await expect(res.json()).resolves.toEqual({ error: "Request body must be a JSON object" });
+    });
+
     it("rejects a wrong-type jobId", async () => {
       const res = await fetch(`${baseUrl}/api/olive/cancel`, {
         method: "POST",
