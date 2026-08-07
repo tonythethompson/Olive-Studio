@@ -146,7 +146,7 @@ export function useOliveStream({
       if (!isCurrentRun(generation)) return;
 
       let finalStatus = args.status;
-      let exitCode = args.exitCode ?? null;
+      const exitCode = args.exitCode ?? null;
       const applyHeuristics = args.applyOutcomeHeuristics !== false;
 
       if (applyHeuristics && finalStatus !== "cancelled") {
