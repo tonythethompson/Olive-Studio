@@ -493,10 +493,7 @@ export function IHVIntegrationPanel({
     () => selectableProviders.filter((p) => getProviderRuntimeKind(p.id) !== "local"),
     [selectableProviders],
   );
-  const detectedProviders = useMemo(
-    () => hardwareProbe?.detectedProviders ?? (["CPUExecutionProvider"] as IHVProvider[]),
-    [hardwareProbe],
-  );
+  const detectedProviders = useMemo(() => getSelectableProviders(hardwareProbe), [hardwareProbe]);
   const locallyDetectedCount = useMemo(
     () => selectableProviders.filter((p) => isProviderDetectedLocally(p.id, hardwareProbe)).length,
     [selectableProviders, hardwareProbe],
