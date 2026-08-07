@@ -147,6 +147,7 @@ jobs:
         if: steps.threads.outputs.count != '0'
         with:
           node-version: '22'
+          cache: pnpm
 
       - uses: actions/setup-python@v5
         if: steps.threads.outputs.count != '0'
@@ -207,7 +208,8 @@ jobs:
         env:
           COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
         run: |
-          composio login --api-key "$COMPOSIO_API_KEY"
+          composio logout || echo "::notice::composio logout failed (continuing)"
+          composio add --api-key "$COMPOSIO_API_KEY"
           echo "COMPOSIO_HEADERS={\"x-consumer-api-key\":\"$COMPOSIO_API_KEY\"}" >> $GITHUB_ENV
 
       # Agent has no GitHub token. It edits files and writes a report; the
