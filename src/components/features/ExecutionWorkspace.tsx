@@ -46,7 +46,6 @@ import {
   FileText,
   Bug,
 } from "lucide-react";
-import JSZip from "jszip";
 import { cn } from "@/lib/utils";
 
 import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
@@ -390,6 +389,7 @@ export function ExecutionWorkspace({
 
   const handleDownloadOwrBundle = async () => {
     const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = owrConfigs;
+    const { default: JSZip } = await import("jszip");
     const zip = new JSZip();
 
     zip.file("ort_config.json", JSON.stringify(ortConfig, null, 2));
