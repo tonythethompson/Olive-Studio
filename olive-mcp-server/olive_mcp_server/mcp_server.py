@@ -59,6 +59,8 @@ _TOOL_IMPORTS: dict[str, tuple[str, str]] = {
         "record_troubleshoot_feedback",
     ),
 }
+# Studio's HTTP POST /api/mcp/tool proxies these tools but is loopback-only
+# (mcpToolLocalOnly). That gate is required for write tools like feedback.
 
 _mcp_instance: Any | None = None
 _resolved_tools: dict[str, Any] = {}

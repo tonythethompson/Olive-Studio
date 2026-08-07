@@ -123,8 +123,21 @@ jobs:
 
           # Preserve human edits: refuse to rebuild/force-push if non-bot commits exist.
           if git ls-remote --exit-code origin "refs/heads/${BRANCH}" >/dev/null 2>&1; then
-            git fetch origin "${BRANCH}" --depth=50
+            # Fetch the full refresh branch tip so human commits outside a shallow
+            # window are still visible, then deepen default-branch history until
+            # a merge-base exists (avoids false "human edits" from disconnected tips).
+            git fetch origin "${BRANCH}"
             git fetch origin "${DEFAULT_BRANCH}" --depth=50
+            for _ in 1 2 3 4 5 6 7 8; do
+              if git merge-base "origin/${DEFAULT_BRANCH}" "origin/${BRANCH}" >/dev/null 2>&1; then
+                break
+              fi
+              git fetch origin "${DEFAULT_BRANCH}" --deepen=200 || true
+            done
+            if ! git merge-base "origin/${DEFAULT_BRANCH}" "origin/${BRANCH}" >/dev/null 2>&1; then
+              git fetch origin "${DEFAULT_BRANCH}" --unshallow 2>/dev/null \
+                || git fetch origin "${DEFAULT_BRANCH}"
+            fi
             HUMAN="$(
               git log --format='%ae' "origin/${DEFAULT_BRANCH}..origin/${BRANCH}" 2>/dev/null \
                 | grep -vF "${BOT_EMAIL}" \

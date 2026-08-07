@@ -16,6 +16,10 @@ export const ALLOWED_MCP_TOOL_NAMES = new Set([
   "get_pass_parameters",
   "evaluate_optimization_tradeoff",
   "get_context_for_pipeline",
+  // Write-capable / studio bridge tools: HTTP proxy is loopback-only (mcpToolLocalOnly).
+  "validate_ui_state_recipe",
+  "get_recipe_for_ui_state",
+  "record_troubleshoot_feedback",
 ]);
 
 export function isAllowedMcpToolName(toolName: string): boolean {

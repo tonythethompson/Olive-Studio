@@ -31,9 +31,10 @@ import { readStudioConfig, writeStudioConfig } from "../config.ts";
 import type { KbStatusCache } from "../types.ts";
 
 /**
- * Strict loopback gate for the private studio-recipe bridge.
- * Rejects reverse-proxy hops and non-loopback clients. Never honors
- * OLIVE_ARENA_ALLOW_REMOTE — this bridge is local MCP ↔ Studio only.
+ * Strict loopback gate for the MCP tool proxy (including write-capable tools
+ * such as record_troubleshoot_feedback). Rejects reverse-proxy hops and
+ * non-loopback clients. Never honors OLIVE_ARENA_ALLOW_REMOTE — this proxy is
+ * local MCP ↔ Studio only.
  */
 function mcpToolLocalOnly(req: Request, res: Response, next: NextFunction): void {
   if (hasProxyForwardingHeaders(req) || !isLoopbackRemoteAddress(req.socket.remoteAddress)) {

@@ -12,8 +12,10 @@ import logging
 import os
 import tempfile
 import threading
+import time
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Final, Literal
+from typing import Any, Final, Iterator, Literal
 
 from . import load_studio_troubleshooting, load_troubleshooting
 
@@ -60,11 +62,64 @@ _KEY_DOWN: Final[str] = "thumbs_down"
 _KEY_REASONS: Final[str] = "reason_codes"
 
 # ---------------------------------------------------------------------------
-# Path override + in-process lock
+# Path override + in-process + inter-process locks
 # ---------------------------------------------------------------------------
 
 _lock = threading.Lock()
 _path_override: Path | None = None
+
+
+@contextmanager
+def _interprocess_store_lock(path: Path) -> Iterator[None]:
+    """Exclusive lock across processes for feedback read-modify-write.
+
+    The HTTP MCP proxy spawns a fresh Python process per request, so a
+    threading.Lock alone cannot serialize overlapping increments. Lock a
+    sibling ``*.lock`` file with ``fcntl`` (POSIX) or ``msvcrt`` (Windows).
+    """
+    lock_path = path.with_name(path.name + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            # LK_LOCK blocks until the region is free; retry on transient errors.
+            while True:
+                try:
+                    msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+                    break
+                except OSError:
+                    time.sleep(0.01)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                try:
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                except OSError:
+                    pass
+            else:
+                import fcntl
+
+                fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+
+
+@contextmanager
+def _store_lock(path: Path) -> Iterator[None]:
+    """Hold both the cross-process file lock and the in-process threading lock."""
+    with _interprocess_store_lock(path):
+        with _lock:
+            yield
 
 
 def set_feedback_path(path: str | Path | None) -> None:
@@ -95,7 +150,7 @@ def reset_feedback_store() -> None:
     missing. Does not clear ``set_feedback_path`` / env overrides.
     """
     path = get_feedback_path()
-    with _lock:
+    with _store_lock(path):
         try:
             if path.is_file():
                 path.unlink()
@@ -235,7 +290,7 @@ def get_entry_feedback_counts(matched_entry: str) -> dict[str, int]:
     if not isinstance(matched_entry, str) or not matched_entry:
         return {_KEY_UP: 0, _KEY_DOWN: 0}
     path = get_feedback_path()
-    with _lock:
+    with _store_lock(path):
         store = _load_store_unlocked(path)
         entry = store["entries"].get(matched_entry) or {}
         return {
@@ -247,7 +302,7 @@ def get_entry_feedback_counts(matched_entry: str) -> dict[str, int]:
 def get_all_feedback_aggregates() -> dict[str, dict[str, int]]:
     """Return ``{entry_id: {thumbs_up, thumbs_down}}`` for all tracked entries."""
     path = get_feedback_path()
-    with _lock:
+    with _store_lock(path):
         store = _load_store_unlocked(path)
         result: dict[str, dict[str, int]] = {}
         for eid, entry in store["entries"].items():
@@ -348,7 +403,7 @@ def record_troubleshoot_feedback(
         normalized_reason = reason_code
 
     path = get_feedback_path()
-    with _lock:
+    with _store_lock(path):
         store = _load_store_unlocked(path)
         entries: dict[str, Any] = store["entries"]
 

@@ -520,3 +520,51 @@ def test_api_does_not_accept_free_form_kwargs():
             "thumbs-up",
             error_message="CUDA OOM traceback",
         )
+
+# ---------------------------------------------------------------------------
+# Inter-process lock
+# ---------------------------------------------------------------------------
+
+
+def _worker_increment(store_path: str, entry_id: str, n: int) -> None:
+    """Child-process helper: n thumbs-up increments against a shared store path."""
+    import os
+
+    os.environ["OLIVE_MCP_FEEDBACK_PATH"] = store_path
+    from olive_mcp_server.tools import feedback as feedback_mod
+
+    feedback_mod.set_feedback_path(None)  # force env path
+    from olive_mcp_server.tools.feedback import record_troubleshoot_feedback as record
+
+    for _ in range(n):
+        result = record(entry_id, "thumbs-up")
+        assert result["status"] == "ok", result
+
+
+def test_concurrent_processes_preserve_increments(tmp_path: Path, monkeypatch):
+    """Overlapping proxy-style processes must not drop acknowledged votes."""
+    import multiprocessing as mp
+
+    shared = tmp_path / "worker_feedback.json"
+    monkeypatch.setenv("OLIVE_MCP_FEEDBACK_PATH", str(shared))
+    set_feedback_path(None)
+    reset_feedback_store()
+
+    seed = record_troubleshoot_feedback(_ENTRY_A, "thumbs-up")
+    assert seed["status"] == "ok"
+    assert seed["thumbs_up"] == 1
+
+    procs = [
+        mp.Process(target=_worker_increment, args=(str(shared), _ENTRY_A, 5))
+        for _ in range(4)
+    ]
+    for p in procs:
+        p.start()
+    for p in procs:
+        p.join(timeout=60)
+        assert p.exitcode == 0, f"worker failed with {p.exitcode}"
+
+    data = _read_store(shared)
+    # 1 seed + 4 workers * 5 increments
+    assert data["entries"][_ENTRY_A]["thumbs_up"] == 21
+
