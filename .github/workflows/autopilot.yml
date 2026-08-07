@@ -194,7 +194,6 @@ jobs:
         env:
           COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
         run: |
-          composio login --api-key "$COMPOSIO_API_KEY"
           echo "COMPOSIO_HEADERS={\"x-consumer-api-key\":\"$COMPOSIO_API_KEY\"}" >> $GITHUB_ENV
 
       # Agent has no GitHub token. It edits files and writes a report; the
@@ -238,8 +237,10 @@ jobs:
           TASK
           )" \
             --model "gemini/gemini-3.6-flash" \
-            --max-steps "${{ vars.AUTOPILOT_MAX_STEPS || 100 }}" \
-            --config yolo
+            -c mini.yaml \
+            -c "agent.step_limit=${{ vars.AUTOPILOT_MAX_STEPS || 100 }}" \
+            --yolo \
+            --exit-immediately
 
       - name: Sanity checks
         if: steps.threads.outputs.count != '0'
