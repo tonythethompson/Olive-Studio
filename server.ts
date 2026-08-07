@@ -214,7 +214,9 @@ async function startServer() {
           setHeaders: (res, filePath) =>
             res.setHeader(
               "Cache-Control",
-              filePath.endsWith("index.html") ? "no-cache" : "public, max-age=31536000, immutable",
+              filePath.endsWith("index.html")
+                ? "no-cache, no-store, must-revalidate"
+                : "public, max-age=31536000, immutable",
             ),
         },
       }),
@@ -223,6 +225,7 @@ async function startServer() {
     app.use(staticServeRateLimit, (req, res, next) => {
       if (req.method !== "GET" && req.method !== "HEAD") return next();
       if (req.path.startsWith("/api")) return next();
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.sendFile(indexHtml);
     });
     // eslint-disable-next-line no-console -- intentional server startup message
