@@ -5,12 +5,8 @@ name: Autopilot PR Remediation
 # Secrets: GEMINI_API_KEY, COMPOSIO_API_KEY
 #          AUTOPILOT_TOKEN (optional PAT — without it, pushed commits won't
 #          trigger your other workflows, so nothing re-runs CI on the fix)
-# Vars:    AUTOPILOT_TEST_CMD (optional; default: pnpm test when pnpm-lock.yaml)
+# Vars:    AUTOPILOT_TEST_CMD (optional, auto-detected)
 #          AUTOPILOT_MAX_STEPS (default 100)
-#
-# Olive Studio: Node 22 + pnpm to match ci.yml. Unresolved human and bot
-# review threads are included. Keep AUTOPILOT_TEST_CMD light (unit tests);
-# do not point it at the full CI matrix inside a 30m job.
 
 on:
   issue_comment:
@@ -108,6 +104,7 @@ jobs:
             -F pr="${{ github.event.issue.number }}" \
           | jq -s '[ .[].data.repository.pullRequest.reviewThreads.nodes[] ]
                    | map(select(.isResolved == false))
+                   | map(select(.comments.nodes[0].author.login // "" | test("\\[bot\\]$") | not))
                    | map({
                        thread_id: .id,
                        reply_to_id: .comments.nodes[0].databaseId,
@@ -140,14 +137,11 @@ jobs:
           git fetch origin "${{ needs.guard.outputs.base_branch }}"
           git merge --no-edit "origin/${{ needs.guard.outputs.base_branch }}" || true
 
-      - uses: pnpm/action-setup@v6
-        if: steps.threads.outputs.count != '0'
-
       - uses: actions/setup-node@v4
         if: steps.threads.outputs.count != '0'
         with:
-          node-version: '22'
-          cache: pnpm
+          node-version: '20'
+          cache: npm
 
       - uses: actions/setup-python@v5
         if: steps.threads.outputs.count != '0'
@@ -158,16 +152,12 @@ jobs:
       - name: Install dependencies
         if: steps.threads.outputs.count != '0'
         run: |
-          if   [ -f pnpm-lock.yaml ];    then pnpm install --frozen-lockfile
+          if   [ -f pnpm-lock.yaml ];    then corepack enable && pnpm install --frozen-lockfile
           elif [ -f package-lock.json ]; then npm ci
           elif [ -f yarn.lock ];         then corepack enable && yarn install --frozen-lockfile
           fi
-          if [ -f olive-mcp-server/pyproject.toml ]; then
-            pip install -e "olive-mcp-server/[dev]" "mcp<2" || pip install -e "olive-mcp-server/" || true
-          elif [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          elif [ -f pyproject.toml ]; then
-            pip install -e ".[dev]" || pip install -e . || true
+          if   [ -f requirements.txt ]; then pip install -r requirements.txt
+          elif [ -f pyproject.toml ];   then pip install -e ".[dev]" || pip install -e . || true
           fi
 
       - name: Resolve test command
@@ -177,12 +167,8 @@ jobs:
           set -euo pipefail
           CMD="${{ vars.AUTOPILOT_TEST_CMD }}"
           if [ -z "$CMD" ]; then
-            if [ -f pnpm-lock.yaml ] && [ -f package.json ] && jq -e '.scripts.test' package.json >/dev/null 2>&1; then
-              CMD="pnpm test"
-            elif [ -f package.json ] && jq -e '.scripts.test' package.json >/dev/null 2>&1; then
-              CMD="npm test"
-            elif [ -f pytest.ini ] || [ -d tests ] || [ -d olive-mcp-server/tests ]; then
-              CMD="pytest -q"
+            if   [ -f package.json ] && jq -e '.scripts.test' package.json >/dev/null 2>&1; then CMD="npm test"
+            elif [ -f pytest.ini ] || [ -d tests ]; then CMD="pytest -q"
             fi
           fi
           echo "cmd=$CMD" >> "$GITHUB_OUTPUT"
@@ -221,7 +207,7 @@ jobs:
         run: |
           mini \
             --task "$(cat <<'TASK'
-          You are addressing unresolved PR review comments (human and bot).
+          You are addressing your owner's code review comments.
 
           INPUT: Read the JSON array at $THREADS_FILE. Each entry has thread_id,
           reply_to_id, path, line, and the full discussion.
@@ -251,8 +237,10 @@ jobs:
           TASK
           )" \
             --model "gemini/gemini-3.6-flash" \
-            --max_steps "${{ vars.AUTOPILOT_MAX_STEPS || 100 }}" \
-            --config yolo
+            -c mini.yaml \
+            -c "agent.step_limit=${{ vars.AUTOPILOT_MAX_STEPS || 100 }}" \
+            --yolo \
+            --exit-immediately
 
       - name: Sanity checks
         if: steps.threads.outputs.count != '0'
