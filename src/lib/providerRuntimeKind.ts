@@ -51,6 +51,11 @@ export function isLegacyExportProvider(provider: IHVProvider): boolean {
   return provider === "SNPEExecutionProvider";
 }
 
+/**
+ * Providers always choosable for recipe selection without a local probe hit:
+ * export targets (WebGPU, OWR mobile/web, TFLite, SNPE) and platform-local EPs
+ * (CoreML, VitisAI). Execute Live stays gated separately via pipeline validation.
+ */
 export function alwaysSelectableProviders(): IHVProvider[] {
   return (
     [

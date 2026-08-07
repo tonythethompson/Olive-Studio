@@ -499,9 +499,9 @@ function undetectedProviderReason(
 
 /**
  * Providers the user may select after local hardware detection.
- * Export targets (WebGPU, OWR mobile/web, TFLite, SNPE) are always choosable
- * even when absent from `detectedProviders` — they are not local Python EPs,
- * so missing them from the probe must never look like a failed detection.
+ * Export targets and platform-local EPs (CoreML/VitisAI) are always choosable
+ * even when absent from `detectedProviders` — recipe selection must not look
+ * like a failed detection. Execute Live is gated separately.
  */
 export function getSelectableProviders(probe: HardwareProbeResult | null | undefined): IHVProvider[] {
   const extras = alwaysSelectableProviders();
