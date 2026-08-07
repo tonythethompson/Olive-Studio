@@ -208,8 +208,6 @@ jobs:
         env:
           COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
         run: |
-          composio logout || echo "::notice::composio logout failed (continuing)"
-          composio add --api-key "$COMPOSIO_API_KEY"
           echo "COMPOSIO_HEADERS={\"x-consumer-api-key\":\"$COMPOSIO_API_KEY\"}" >> $GITHUB_ENV
 
       # Agent has no GitHub token. It edits files and writes a report; the
