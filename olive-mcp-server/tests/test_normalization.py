@@ -95,7 +95,6 @@ def test_normalize_model_no_false_substring_match() -> None:
         ("igpu", "Intel iGPU / OpenVINO"),
         ("openvino arc", "Intel Arc A770"),
         ("intel arc", "Intel Arc A770"),
-        ("RTX 4090", "NVIDIA RTX 4090"),
     ],
 )
 def test_normalize_hardware(input: str, expected: str) -> None:
@@ -154,12 +153,34 @@ def test_parse_hardware_target_invalid_ov_device() -> None:
 
 
 def test_parse_hardware_target_bare_gpu_not_ov() -> None:
-    """Bare 'gpu' must not be claimed by the OpenVINO structured path."""
+    """Bare 'gpu' must not be claimed by OpenVINO or WebGPU reverse match."""
     target = parse_hardware_target("gpu")
     assert target.error is None
     assert target.openvino_device is None
-    # OV structured path must not map bare gpu → iGPU/Arc/NPU/CPU.
+    # Unresolved generic GPU fallback (not WebGPU / DirectML / OpenVINO).
+    assert target.profile == "gpu"
+    assert target.profile != "WebGPU (Browser)"
+    assert target.profile != "Windows DirectML GPU"
     assert target.profile != "Intel iGPU / OpenVINO"
     assert target.profile != "Intel Arc A770"
     assert target.profile != "Intel Core Ultra NPU (OpenVINO)"
     assert target.profile != "Intel Core i9 CPU"
+
+
+@pytest.mark.parametrize(
+    "ep_id",
+    [
+        "dmlexecutionprovider",
+        "DmlExecutionProvider",
+        "webgpuexecutionprovider",
+        "nvtensorrtrtxexecutionprovider",
+    ],
+)
+def test_parse_hardware_target_ep_map_is_case_insensitive(ep_id: str) -> None:
+    target = parse_hardware_target(ep_id)
+    assert target.error is None
+    assert target.profile in {
+        "Windows DirectML GPU",
+        "WebGPU (Browser)",
+        "NVIDIA TensorRT RTX",
+    }

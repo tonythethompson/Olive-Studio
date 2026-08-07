@@ -96,7 +96,35 @@ def test_quantization_strategy_new_categories(
     assert result["target_hardware"] == expected_category
     assert algo_substr.lower() in result["recommended_algorithm"].lower()
     assert result["pass_chain"]
+    assert "resolved_profile" in result
+    assert isinstance(result["resolved_profile"], str)
+    assert result["resolved_profile"]
 
+
+@pytest.mark.parametrize(
+    ("hardware", "model_type", "algo_substr"),
+    [
+        ("webgpu", "LLM", "FP16"),
+        ("directml", "LLM", "INT8"),
+    ],
+)
+def test_quantization_strategy_latency_budget_skips_int4_override(
+    hardware: str,
+    model_type: str,
+    algo_substr: str,
+) -> None:
+    """FP16/INT8 strategies must not gain int4 KV-cache guidance under tight latency."""
+    result = get_quantization_strategy(
+        model_type=model_type,
+        target_hardware=hardware,
+        latency_budget="<100ms",
+    )
+    assert "error" not in result
+    algo = result["recommended_algorithm"].lower()
+    assert algo_substr.lower() in algo
+    assert "kv-cache" not in algo
+    assert "int4" not in algo
+    assert "aggressive" not in algo
 
 def test_amd_epyc_is_not_rocm_category() -> None:
     """Bare AMD EPYC / amd CPU strings must not map to the ROCm strategy bucket."""

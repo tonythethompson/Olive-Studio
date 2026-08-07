@@ -77,8 +77,11 @@ def get_quantization_strategy(
 
     Returns:
         Recommended algorithm, calibration strategy, expected outcomes, and risks.
-        Returns ``{"error": ...}`` when the hardware target has an invalid
-        OpenVINO device token.
+        ``target_hardware`` identifies the strategy bucket (e.g. ``nvidia``,
+        ``webgpu``); ``resolved_profile`` preserves the resolved hardware
+        description. ``openvino_device`` is unchanged when an OpenVINO path
+        was selected. Returns ``{"error": ...}`` when the hardware target has
+        an invalid OpenVINO device token.
     """
     parsed: HardwareTarget = parse_hardware_target(target_hardware)
     if parsed.error:
@@ -348,25 +351,33 @@ def get_quantization_strategy(
             ]
             pass_chain = ["OnnxConversion", "OnnxModelOptimizer", "OnnxStaticQuantization"]
 
-    # Latency aggressiveness overrides.
-    if latency_rank_val == 0 and mt == "llm":
-        algorithm = algorithm.replace("int4", "int4 (aggressive)") + " + KV-cache quantization recommended"
-        risks.append("Aggressive int4 can increase perplexity; evaluate with a held-out set.")
-    elif latency_rank_val == 0 and (mt == "cnn" or mt == "vision"):
-        algorithm += " + consider pruning 20-30% before quantization"
-        risks.append("Pruning + quantization compound accuracy loss; fine-tune if possible.")
+    # Latency / accuracy overrides only when the selected algorithm uses int4.
+    uses_int4 = "int4" in algorithm.lower()
+    if uses_int4:
+        if latency_rank_val == 0 and mt == "llm":
+            algorithm = (
+                algorithm.replace("int4", "int4 (aggressive)")
+                + " + KV-cache quantization recommended"
+            )
+            risks.append("Aggressive int4 can increase perplexity; evaluate with a held-out set.")
+        elif latency_rank_val == 0 and (mt == "cnn" or mt == "vision"):
+            algorithm += " + consider pruning 20-30% before quantization"
+            risks.append(
+                "Pruning + quantization compound accuracy loss; fine-tune if possible."
+            )
 
-    # Accuracy constraint override.
-    match = re.search(r"(\d+(?:\.\d+)?)\s*%", accuracy_threshold)
-    if match:
-        try:
-            threshold_value = float(match.group(1))
-            if threshold_value <= 1.0:
-                algorithm = algorithm.replace("int4", "int8") + " (tight accuracy target)"
-                risks.append("Tight accuracy target requires larger calibration set and per-channel weights.")
-        except ValueError:
-            # Skip override if parsing fails
-            pass
+        match = re.search(r"(\d+(?:\.\d+)?)\s*%", accuracy_threshold)
+        if match:
+            try:
+                threshold_value = float(match.group(1))
+                if threshold_value <= 1.0:
+                    algorithm = algorithm.replace("int4", "int8") + " (tight accuracy target)"
+                    risks.append(
+                        "Tight accuracy target requires larger calibration set and per-channel weights."
+                    )
+            except ValueError:
+                # Skip override if parsing fails
+                pass
 
     # Pull the top quirks from the most relevant categories.
     candidates = quirks.get("quantization", [])[:2] + quirks.get("pass_ordering", [])[:1]
@@ -375,6 +386,7 @@ def get_quantization_strategy(
     result: dict[str, Any] = {
         "model_type": mt,
         "target_hardware": hw,
+        "resolved_profile": parsed.profile,
         "latency_budget": latency_budget,
         "accuracy_threshold": accuracy_threshold,
         "recommended_algorithm": algorithm,

@@ -96,33 +96,20 @@ _EXECUTION_PROVIDER_TO_TARGET = {
     "WebGpuExecutionProvider": "WebGPU (Browser)",
 }
 
+_EXECUTION_PROVIDER_TO_TARGET_LOWER = {
+    key.lower(): value for key, value in _EXECUTION_PROVIDER_TO_TARGET.items()
+}
+
 # Exact lowercase keys only (full stripped input). Applied after EP map, before
 # profile exact/substring match. Do not use loose substrings (e.g. bare "rtx").
-# Bare "gpu" is intentionally absent — it must not become OV/WebGPU/DML.
+# Bare "gpu" is handled as an explicit unresolved fallback (must not become
+# OV/WebGPU/DML via reverse profile substring match).
+# OpenVINO inputs are handled solely by _try_parse_openvino (not listed here).
 _HARDWARE_ALIASES = {
     "tensorrt rtx": "NVIDIA TensorRT RTX",
     "trt rtx": "NVIDIA TensorRT RTX",
     "nvtensorrtrtx": "NVIDIA TensorRT RTX",
     "tensorrt-rtx": "NVIDIA TensorRT RTX",
-    "openvino npu": "Intel Core Ultra NPU (OpenVINO)",
-    "openvino:npu": "Intel Core Ultra NPU (OpenVINO)",
-    "openvino+npu": "Intel Core Ultra NPU (OpenVINO)",
-    "intel npu": "Intel Core Ultra NPU (OpenVINO)",
-    "core ultra npu": "Intel Core Ultra NPU (OpenVINO)",
-    "openvinoexecutionprovider:npu": "Intel Core Ultra NPU (OpenVINO)",
-    "openvinoexecutionprovider+npu": "Intel Core Ultra NPU (OpenVINO)",
-    "openvino gpu": "Intel iGPU / OpenVINO",
-    "openvino:gpu": "Intel iGPU / OpenVINO",
-    "openvino+gpu": "Intel iGPU / OpenVINO",
-    "openvinoexecutionprovider:gpu": "Intel iGPU / OpenVINO",
-    "openvinoexecutionprovider+gpu": "Intel iGPU / OpenVINO",
-    "intel gpu": "Intel iGPU / OpenVINO",
-    "igpu": "Intel iGPU / OpenVINO",
-    "intel igpu": "Intel iGPU / OpenVINO",
-    "openvino arc": "Intel Arc A770",
-    "intel arc": "Intel Arc A770",
-    "openvino:arc": "Intel Arc A770",
-    "openvino+arc": "Intel Arc A770",
     "directml": "Windows DirectML GPU",
     "dml": "Windows DirectML GPU",
     "webgpu": "WebGPU (Browser)",
@@ -272,6 +259,11 @@ def _try_parse_openvino(lower: str) -> HardwareTarget | None:
 
 def _match_hardware_profile(lower: str, fallback_name: str) -> str:
     """Resolve lowercased input against known hardware profiles."""
+    # Bare "gpu" matches many profile names via reverse substring ("WebGPU",
+    # "DirectML GPU", …). Keep it unresolved / non-OpenVINO instead.
+    if lower == "gpu":
+        return fallback_name
+
     profiles = _get_hardware_profiles()
 
     for profile in profiles:
@@ -306,9 +298,9 @@ def parse_hardware_target(raw: str) -> HardwareTarget:
     Match order:
       1. strip
       2. OpenVINO / EP+device structured parse
-      3. execution-provider map
+      3. execution-provider map (case-insensitive)
       4. exact hardware aliases
-      5. profile exact / forward / reverse (shortest-npu rule)
+      5. profile exact / forward / reverse (shortest-npu rule; bare gpu fallback)
     """
     name = raw.strip()
     if not name:
@@ -321,8 +313,10 @@ def parse_hardware_target(raw: str) -> HardwareTarget:
         return ov_target
 
     # Map ONNX Runtime execution-provider strings to canonical hardware targets.
-    if name in _EXECUTION_PROVIDER_TO_TARGET:
-        name = _EXECUTION_PROVIDER_TO_TARGET[name]
+    # Lookup is case-insensitive so mixed/lowercase EP ids resolve before aliases.
+    ep_target = _EXECUTION_PROVIDER_TO_TARGET_LOWER.get(lower)
+    if ep_target is not None:
+        name = ep_target
         lower = name.lower()
 
     # Exact alias match on the full lowercased input (after EP map).

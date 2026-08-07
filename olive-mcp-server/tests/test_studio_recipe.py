@@ -152,6 +152,37 @@ def test_credentials_in_url_rejected(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.parametrize(
+    "bad_url",
+    [
+        "http://127.0.0.1:99999",
+        "http://localhost:70000",
+        "http://127.0.0.1:notaport",
+    ],
+)
+def test_invalid_or_out_of_range_port_rejected(
+    monkeypatch: pytest.MonkeyPatch, bad_url: str
+):
+    """Objective: malformed / out-of-range ports → studio_unavailable (not request-time crash)."""
+    _set_loopback_url(monkeypatch, bad_url)
+    opener = _patch_opener(monkeypatch, return_value=_mock_response(_SUCCESS_PAYLOAD))
+
+    result = validate_ui_state_recipe(_SAMPLE_UI_STATE)
+
+    assert result["error"] == "studio_unavailable"
+    assert "port" in result["message"].lower()
+    opener.open.assert_not_called()
+
+
+def test_resolve_studio_base_rejects_out_of_range_port(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv(ENV_API_URL, "http://127.0.0.1:99999")
+    base, err = studio_loopback.resolve_studio_base()
+    assert base is None
+    assert err is not None
+    assert err["error"] == "studio_unavailable"
+    assert "port" in err["message"].lower()
+
+
+@pytest.mark.parametrize(
     "base",
     [
         "http://127.0.0.1:3000",

@@ -95,6 +95,15 @@ def resolve_studio_base() -> tuple[str | None, dict[str, Any] | None]:
             "(127.0.0.1, localhost, or ::1).",
             detail=f"host={parsed.hostname!r}",
         )
+    try:
+        # Eagerly validate port; urlparse stores invalid ports and raises
+        # ValueError only when .port is accessed (out-of-range / malformed).
+        _ = parsed.port
+    except ValueError as exc:
+        return None, studio_unavailable(
+            f"{ENV_API_URL} has an invalid or out-of-range port.",
+            detail=str(exc),
+        )
     return raw.rstrip("/"), None
 
 

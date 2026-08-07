@@ -414,10 +414,13 @@ def _best_match(
         hits = _pattern_hit_count(entry, keyword_text)
         scored.append((entry, hybrid, hits))
     scored.sort(key=lambda x: (x[1], x[2]), reverse=True)
-    best_entry, best_score, hits = scored[0]
+    candidates = scored
+    if require_keyword:
+        candidates = [row for row in scored if row[2] > 0]
+        if not candidates:
+            return None, 0.0
+    best_entry, best_score, _hits = candidates[0]
     if best_score <= 0:
-        return None, 0.0
-    if require_keyword and hits == 0:
         return None, 0.0
     return best_entry, best_score
 

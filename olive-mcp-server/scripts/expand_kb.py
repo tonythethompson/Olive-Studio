@@ -547,7 +547,7 @@ def expand_hardware_profiles():
             "memory_gb": 12,
             "ops_supported": ["Conv", "Gemm", "Attention", "LayerNormalization", "GELU"],
             "known_issues": [
-                "Requires tensorrt-rtx package (not full TensorRT SDK); SM ≥ 7.5 (Turing+).",
+                "The tensorrt-rtx package installs the standalone TensorRT RTX EP-ABI provider library implementing NvTensorRTRTXExecutionProvider for ONNX Runtime 1.23+ (not the full TensorRT / nvinfer SDK). Requires SM ≥ 7.5 (Turing+).",
                 "PTQ INT8/QDQ path is a poor fit for tensorrt-rtx; prefer AWQ INT4.",
             ],
             "notes": "Consumer RTX path via JIT TensorRT engines; distinct from full TensorrtExecutionProvider / nvinfer SDK. Align with Olive Studio provider catalog TRT RTX.",

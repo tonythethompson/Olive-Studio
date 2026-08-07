@@ -91,7 +91,9 @@ def _olive_config_json_path() -> Path | None:
         path = Path(str(cfg))
         if path.is_file():
             return path
-    except Exception:  # noqa: BLE001 — try site-packages walk
+    except Exception:  # noqa: BLE001, S110 — intentional: fall back to site-packages walk
+        # Metadata lookup can fail when olive is missing or partially installed;
+        # continue to the site-packages walk below.
         pass
 
     try:
@@ -323,7 +325,10 @@ def main(argv: Iterable[str] | None = None) -> int:
         )
         return 1
 
-    print("OK: all matrix supported/warning olive_pass claims are in the Olive registry.")
+    print(
+        "OK: all matrix supported/warning olive_pass claims were recognized by "
+        "the Olive registry, alias mapping, or cloud-only allowlist."
+    )
     # Helpful sample for CI logs (sorted, capped).
     sample = ", ".join(sorted(claimed)[:12])
     if len(claimed) > 12:

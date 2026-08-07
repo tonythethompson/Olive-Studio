@@ -853,7 +853,7 @@
           "output_dir": "outputs/phi3_trt_rtx_awq"
         }
       },
-      "notes": "Requires tensorrt-rtx package and SM≥7.5 (Turing+). Prefer AWQ INT4 over PTQ INT8/QDQ for NvTensorRTRTXExecutionProvider."
+      "notes": "Requires both the tensorrt-rtx package and the matching ONNX Runtime EP-ABI plugin, plus SM≥7.5 (Turing+). Prefer AWQ INT4 over PTQ INT8/QDQ for NvTensorRTRTXExecutionProvider."
     },
     {
       "id": "resnet50_directml",

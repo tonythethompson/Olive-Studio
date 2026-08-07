@@ -25,6 +25,10 @@ def get_model_compatibility(
         dict[str, Any]: Compatibility details, supported passes and workflow suggestions for
             unknown models, or hardware-specific compatibility and warnings when requested.
             Includes ``openvino_device`` when the hardware target selected an OpenVINO path.
+            May include an optional ``error`` key: invalid OpenVINO device requests return
+            model-level data together with ``error`` while omitting hardware-specific fields
+            (``selected_hardware``, ``hardware_compatibility``, etc.). That partially
+            populated shape differs from sibling tools that return a bare ``{"error": ...}``.
     """
     models = load_compatibility_matrix()
     key = normalize_model(model_name)

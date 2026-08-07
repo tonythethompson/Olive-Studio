@@ -123,8 +123,8 @@
         "NvTensorRTRTX"
       ],
       "title": "TensorRT RTX execution provider not registered",
-      "root_cause": "Consumer TensorRT RTX path needs the tensorrt-rtx package (and matching ORT EP plugin), not the full nvinfer TensorRT SDK. Missing install or SM < 7.5 leaves NvTensorRTRTXExecutionProvider unregistered.",
-      "solution": "Hardware → Install TensorRT RTX, or pip install tensorrt-rtx in the app venv. Requires NVIDIA GPU SM ≥ 7.5 (Turing+). Prefer AWQ INT4 (NVModelOpt) over PTQ INT8/QDQ for this EP. Restart the app after install.",
+      "root_cause": "Consumer TensorRT RTX path needs both the tensorrt-rtx package and a matching ONNX Runtime EP-ABI plugin build, not the full nvinfer TensorRT SDK. Missing install or SM < 7.5 leaves NvTensorRTRTXExecutionProvider unregistered.",
+      "solution": "Install both tensorrt-rtx and the matching ONNX Runtime EP-ABI plugin (Hardware → Install TensorRT RTX, or pip in the app venv). Requires NVIDIA GPU SM ≥ 7.5 (Turing+). Verify NvTensorRTRTXExecutionProvider appears in onnxruntime.get_available_providers(). Prefer AWQ INT4 (NVModelOpt) over PTQ INT8/QDQ for this EP. Restart the app after install.",
       "updated_config": {},
       "applyable": false
     },
