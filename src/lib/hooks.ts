@@ -27,25 +27,34 @@ function parseOptionalFrequency(value: unknown): McpDiagnosticFrequency | null |
   if (typeof value !== "object" || Array.isArray(value)) return undefined;
   const rec = value as Record<string, unknown>;
   const out: McpDiagnosticFrequency = {};
-  if (rec.occurrence_count !== undefined) {
-    if (typeof rec.occurrence_count !== "number" || !Number.isFinite(rec.occurrence_count)) {
-      return undefined;
-    }
-    out.occurrence_count = rec.occurrence_count;
-  }
-  if (rec.first_seen !== undefined) {
-    if (rec.first_seen !== null && typeof rec.first_seen !== "string") return undefined;
-    out.first_seen = rec.first_seen as string | null;
-  }
-  if (rec.last_seen !== undefined) {
-    if (rec.last_seen !== null && typeof rec.last_seen !== "string") return undefined;
-    out.last_seen = rec.last_seen as string | null;
-  }
-  if (rec.label !== undefined) {
-    if (rec.label !== null && typeof rec.label !== "string") return undefined;
-    out.label = rec.label as string | null;
-  }
+  if (!assignOptionalFrequencyCount(rec, out)) return undefined;
+  if (!assignOptionalFrequencyString(rec, out, "first_seen")) return undefined;
+  if (!assignOptionalFrequencyString(rec, out, "last_seen")) return undefined;
+  if (!assignOptionalFrequencyString(rec, out, "label")) return undefined;
   return out;
+}
+
+function assignOptionalFrequencyCount(
+  rec: Record<string, unknown>,
+  out: McpDiagnosticFrequency,
+): boolean {
+  if (rec.occurrence_count === undefined) return true;
+  if (typeof rec.occurrence_count !== "number" || !Number.isFinite(rec.occurrence_count)) {
+    return false;
+  }
+  out.occurrence_count = rec.occurrence_count;
+  return true;
+}
+
+function assignOptionalFrequencyString(
+  rec: Record<string, unknown>,
+  out: McpDiagnosticFrequency,
+  key: "first_seen" | "last_seen" | "label",
+): boolean {
+  if (rec[key] === undefined) return true;
+  if (rec[key] !== null && typeof rec[key] !== "string") return false;
+  out[key] = rec[key] as string | null;
+  return true;
 }
 
 /** True when a diagnosis has a stable KB id suitable for feedback submission. */
@@ -320,31 +329,8 @@ function parseFeedbackToolPayload(
     return { status: "error", error: "empty_response", message: "Feedback returned an empty response." };
   }
   if (payload.status === "ok" && typeof payload.matched_entry === "string") {
-    const rating = payload.rating;
-    if (typeof rating === "string" && FEEDBACK_RATING_SET.has(rating)) {
-      const thumbs_up = typeof payload.thumbs_up === "number" ? payload.thumbs_up : 0;
-      const thumbs_down = typeof payload.thumbs_down === "number" ? payload.thumbs_down : 0;
-      const reasonRaw = payload.reason_code;
-      const reason_code =
-        reasonRaw === null || reasonRaw === undefined
-          ? null
-          : typeof reasonRaw === "string" && FEEDBACK_REASON_SET.has(reasonRaw)
-            ? (reasonRaw as McpTroubleshootFeedbackReasonCode)
-            : null;
-      const result: McpTroubleshootFeedbackResult = {
-        status: "ok",
-        matched_entry: payload.matched_entry,
-        rating: rating as McpTroubleshootFeedbackRating,
-        reason_code,
-        thumbs_up,
-        thumbs_down,
-        total: typeof payload.total === "number" ? payload.total : thumbs_up + thumbs_down,
-      };
-      if (typeof payload.score_delta === "number") {
-        result.score_delta = payload.score_delta;
-      }
-      return result;
-    }
+    const ok = parseFeedbackOkPayload(payload);
+    if (ok) return ok;
   }
   const error =
     (typeof payload.error === "string" && payload.error) ||
@@ -355,6 +341,35 @@ function parseFeedbackToolPayload(
       ? payload.message
       : "Feedback request failed or returned an unexpected response.";
   return { status: "error", error, message };
+}
+
+function parseFeedbackOkPayload(
+  payload: Record<string, unknown>,
+): McpTroubleshootFeedbackResult | null {
+  const rating = payload.rating;
+  if (typeof rating !== "string" || !FEEDBACK_RATING_SET.has(rating)) return null;
+  const thumbs_up = typeof payload.thumbs_up === "number" ? payload.thumbs_up : 0;
+  const thumbs_down = typeof payload.thumbs_down === "number" ? payload.thumbs_down : 0;
+  const reasonRaw = payload.reason_code;
+  const reason_code =
+    reasonRaw === null || reasonRaw === undefined
+      ? null
+      : typeof reasonRaw === "string" && FEEDBACK_REASON_SET.has(reasonRaw)
+        ? (reasonRaw as McpTroubleshootFeedbackReasonCode)
+        : null;
+  const result: McpTroubleshootFeedbackResult = {
+    status: "ok",
+    matched_entry: payload.matched_entry as string,
+    rating: rating as McpTroubleshootFeedbackRating,
+    reason_code,
+    thumbs_up,
+    thumbs_down,
+    total: typeof payload.total === "number" ? payload.total : thumbs_up + thumbs_down,
+  };
+  if (typeof payload.score_delta === "number") {
+    result.score_delta = payload.score_delta;
+  }
+  return result;
 }
 
 /**

@@ -91,6 +91,24 @@ function parseLocalFiles(raw: unknown): UIState["localFiles"] | undefined {
   return out;
 }
 
+function assignClippedBridgeStrings(
+  partial: UiStatePatch,
+  raw: Record<string, unknown>,
+): void {
+  const hfModelId = clipString(raw.hfModelId, 256);
+  if (hfModelId !== undefined) partial.hfModelId = hfModelId;
+  const hfDataset = clipString(raw.hfDataset, 256);
+  if (hfDataset !== undefined) partial.hfDataset = hfDataset;
+  const hfTask = clipString(raw.hfTask, 128);
+  if (hfTask !== undefined) partial.hfTask = hfTask;
+  const azureModelPath = clipString(raw.azureModelPath, 1024);
+  if (azureModelPath !== undefined) partial.azureModelPath = azureModelPath;
+  const azureStr = clipString(raw.azureStr, 1024);
+  if (azureStr !== undefined) partial.azureStr = azureStr;
+  const cacheDir = clipString(raw.cacheDir, 512);
+  if (cacheDir !== undefined) partial.cacheDir = cacheDir;
+}
+
 /**
  * Allowlist-merge untrusted partial UI fields. Unknown / dangerous keys ignored.
  * Returns an error when `passes` is present but not a plain object.
@@ -120,18 +138,7 @@ export function mergeBridgeUiState(
     partial.distributedCaching = raw.distributedCaching;
   }
 
-  const hfModelId = clipString(raw.hfModelId, 256);
-  if (hfModelId !== undefined) partial.hfModelId = hfModelId;
-  const hfDataset = clipString(raw.hfDataset, 256);
-  if (hfDataset !== undefined) partial.hfDataset = hfDataset;
-  const hfTask = clipString(raw.hfTask, 128);
-  if (hfTask !== undefined) partial.hfTask = hfTask;
-  const azureModelPath = clipString(raw.azureModelPath, 1024);
-  if (azureModelPath !== undefined) partial.azureModelPath = azureModelPath;
-  const azureStr = clipString(raw.azureStr, 1024);
-  if (azureStr !== undefined) partial.azureStr = azureStr;
-  const cacheDir = clipString(raw.cacheDir, 512);
-  if (cacheDir !== undefined) partial.cacheDir = cacheDir;
+  assignClippedBridgeStrings(partial, raw);
 
   const localFiles = parseLocalFiles(raw.localFiles);
   if (localFiles) partial.localFiles = localFiles;

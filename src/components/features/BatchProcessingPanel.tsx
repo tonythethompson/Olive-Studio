@@ -121,49 +121,58 @@ export function BatchProcessingPanel({
 
   const jobs = state.batchJobs || [];
 
+  const forceSettleHaltedJob = (oliveJobId: string) => {
+    activeSourcesRef.current.forEach((s) => s.close());
+    activeSourcesRef.current = [];
+    const resolveStream = currentStreamResolveRef.current;
+    currentStreamResolveRef.current = null;
+    resolveStream?.();
+    setState({
+      batchJobs: (jobsRef.current ?? []).map((j) =>
+        j.status === "running" || j.oliveJobId === oliveJobId
+          ? {
+              ...j,
+              status: "cancelled",
+              logs: [...(j.logs || []), "[INFO] Halted by user."],
+            }
+          : j,
+      ),
+    });
+  };
+
+  const requestHaltRunningQueue = async () => {
+    // Halt: request cancel and keep the open SSE so the server `done` event
+    // settles the queue waiter. Do not clear isProcessing here — the running
+    // start loop exits after the stream completes.
+    haltRequestedRef.current = true;
+    const oliveJobId = currentOliveJobIdRef.current;
+    if (!oliveJobId) {
+      // No live job id yet (POST still in flight): the start loop cancels after jobId.
+      return;
+    }
+    try {
+      const resp = await fetch("/api/olive/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: oliveJobId }),
+      });
+      const data = (await resp.json().catch(() => ({}))) as { status?: string };
+      if (resp.ok && data.status === "cancelled") {
+        // `finalizeJob` emits `done`; leave EventSource open for that path.
+        return;
+      }
+      // Already terminal with another status — leave the stream to report it.
+      if (resp.ok) return;
+    } catch {
+      /* fall through to force-settle */
+    }
+    // Cancel failed: close SSE and release the waiter so the queue cannot hang.
+    forceSettleHaltedJob(oliveJobId);
+  };
+
   const handleStartQueue = async () => {
     if (isProcessing) {
-      // Halt: request cancel and keep the open SSE so the server `done` event
-      // settles the queue waiter. Do not clear isProcessing here — the running
-      // start loop exits after the stream completes.
-      haltRequestedRef.current = true;
-      const oliveJobId = currentOliveJobIdRef.current;
-      if (oliveJobId) {
-        try {
-          const resp = await fetch("/api/olive/cancel", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ jobId: oliveJobId }),
-          });
-          const data = (await resp.json().catch(() => ({}))) as { status?: string };
-          if (resp.ok && data.status === "cancelled") {
-            // `finalizeJob` emits `done`; leave EventSource open for that path.
-            return;
-          }
-          // Already terminal with another status — leave the stream to report it.
-          if (resp.ok) return;
-        } catch {
-          /* fall through to force-settle */
-        }
-        // Cancel failed: close SSE and release the waiter so the queue cannot hang.
-        activeSourcesRef.current.forEach((s) => s.close());
-        activeSourcesRef.current = [];
-        const resolveStream = currentStreamResolveRef.current;
-        currentStreamResolveRef.current = null;
-        resolveStream?.();
-        setState({
-          batchJobs: (jobsRef.current ?? []).map((j) =>
-            j.status === "running" || j.oliveJobId === oliveJobId
-              ? {
-                  ...j,
-                  status: "cancelled",
-                  logs: [...(j.logs || []), "[INFO] Halted by user."],
-                }
-              : j,
-          ),
-        });
-      }
-      // No live job id yet (POST still in flight): the start loop cancels after jobId.
+      await requestHaltRunningQueue();
       return;
     }
 

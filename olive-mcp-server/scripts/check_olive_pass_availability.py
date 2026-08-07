@@ -14,9 +14,12 @@ from __future__ import annotations
 
 import importlib
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Any, Iterable
+
+_LOG = logging.getLogger(__name__)
 
 # Claimed support levels that must exist in the pinned Olive registry.
 _REQUIRED_SUPPORT = frozenset({"supported", "warning"})
@@ -91,8 +94,8 @@ def _olive_config_json_path() -> Path | None:
         path = Path(str(cfg))
         if path.is_file():
             return path
-    except Exception:  # noqa: BLE001 — try site-packages walk
-        pass
+    except Exception as exc:  # noqa: BLE001 — fall through to site-packages walk
+        _LOG.debug("importlib.metadata olive_config lookup failed: %s", exc)
 
     try:
         import site
@@ -102,7 +105,8 @@ def _olive_config_json_path() -> Path | None:
             candidate = Path(root) / "olive" / "olive_config.json"
             if candidate.is_file():
                 return candidate
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        _LOG.debug("site-packages olive_config walk failed: %s", exc)
         return None
     return None
 

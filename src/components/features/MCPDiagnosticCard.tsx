@@ -53,15 +53,7 @@ function DiagnosticFeedbackButtons({
     statusRef.current = status;
   }, [status]);
 
-  // Reset when the diagnosis target changes (new match or history navigation).
-  useEffect(() => {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    setStatus("idle");
-    setSubmittedRating(null);
-    setErrorMessage(null);
-  }, [matchedEntry]);
-
+  // Feedback remounts when matched_entry changes (key), so no reset effect.
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
@@ -310,6 +302,7 @@ export function MCPDiagnosticCard({
 
           {hasMcpFeedbackTarget(diagnostic) ? (
             <DiagnosticFeedbackButtons
+              key={diagnostic.matched_entry}
               matchedEntry={diagnostic.matched_entry}
               onFeedbackSubmitted={onFeedbackSubmitted}
             />
