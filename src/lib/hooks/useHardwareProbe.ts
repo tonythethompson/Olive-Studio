@@ -16,6 +16,10 @@ export function useHardwareProbe(): UseQueryResult<HardwareProbeResult> {
     queryKey: HARDWARE_PROBE_QUERY_KEY,
     queryFn: () => fetchHardwareProbe(false),
     staleTime: 5 * 60 * 1000,
+    // fetchHardwareProbe already retries once internally (missing RAM ->
+    // forced refresh); RQ's default 3x backoff retry on top would triple
+    // real probe invocations (shells out to GPU/TensorRT detection).
+    retry: false,
   });
 }
 

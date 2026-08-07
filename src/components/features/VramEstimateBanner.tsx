@@ -41,22 +41,25 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
   const refreshHardwareProbe = useRefreshHardwareProbe();
   const [forcedProbe, setForcedProbe] = useState<HardwareProbeResult | null>(null);
 
+  const propMissingRam =
+    hardwareProbeProp != null &&
+    (hardwareProbeProp.platform.systemRamGb == null || hardwareProbeProp.platform.systemRamGb <= 0);
+
   useEffect(() => {
-    if (hardwareProbeProp === undefined) return;
-    const missingRam =
-      hardwareProbeProp != null &&
-      (hardwareProbeProp.platform.systemRamGb == null || hardwareProbeProp.platform.systemRamGb <= 0);
-    if (!missingRam) return;
+    if (hardwareProbeProp === undefined || !propMissingRam) return;
     // Prop's probe is missing RAM info — force a fresh probe (published to the
     // shared cache too) and fall back to the prop's value if that also fails.
     void refreshHardwareProbe()
       .then(setForcedProbe)
       .catch(() => setForcedProbe(null));
-  }, [hardwareProbeProp, refreshHardwareProbe]);
+  }, [hardwareProbeProp, propMissingRam, refreshHardwareProbe]);
 
+  // Only let a forced probe override the prop while the prop itself is still
+  // incomplete — once the parent supplies a fresher/complete probe, prefer it
+  // so a stale forced value from an earlier rescan can't shadow it forever.
   const hardwareProbe =
     hardwareProbeProp !== undefined
-      ? (forcedProbe ?? hardwareProbeProp)
+      ? (propMissingRam ? (forcedProbe ?? hardwareProbeProp) : hardwareProbeProp)
       : (sharedProbeQuery.data ?? null);
 
   const estimate = useMemo(() => estimateVramRequirement(state), [state]);

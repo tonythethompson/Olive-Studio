@@ -383,8 +383,14 @@ export function ExecutionWorkspace({
 
   const handleDownloadOwrBundle = async () => {
     const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = owrConfigs;
-    const { default: JSZip } = await import("jszip");
-    const zip = new JSZip();
+    let zip: InstanceType<typeof import("jszip")>;
+    try {
+      const { default: JSZip } = await import("jszip");
+      zip = new JSZip();
+    } catch (e) {
+      console.error("Failed to load ZIP module", e);
+      return;
+    }
 
     zip.file("ort_config.json", JSON.stringify(ortConfig, null, 2));
     zip.file("onnx_model_manifest.json", JSON.stringify(manifestConfig, null, 2));

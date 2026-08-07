@@ -211,13 +211,23 @@ async function startServer() {
         enableBrotli: false,
         orderPreference: ["gz"],
         serveStatic: {
-          setHeaders: (res, filePath) =>
+          setHeaders: (res, filePath) => {
+            if (filePath.endsWith("index.html")) {
+              res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+              return;
+            }
+            // Only Vite's Rollup-emitted JS/CSS carry a content hash in the
+            // filename (index-<hash>.js) — safe to cache forever. Everything
+            // else under dist/ (logo.png, fonts, favicon) is copied from
+            // public/ verbatim with a stable URL, so a content change on the
+            // same filename must be revalidated, not served from a 1-year
+            // cache untouched.
+            const isHashedBuildOutput = /\.(js|css)(\.gz)?$/.test(filePath);
             res.setHeader(
               "Cache-Control",
-              filePath.endsWith("index.html")
-                ? "no-cache, no-store, must-revalidate"
-                : "public, max-age=31536000, immutable",
-            ),
+              isHashedBuildOutput ? "public, max-age=31536000, immutable" : "public, max-age=3600",
+            );
+          },
         },
       }),
     );

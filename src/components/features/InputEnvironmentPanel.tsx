@@ -137,10 +137,12 @@ export function InputEnvironmentPanel({
     queryKey: ["hf-token-status"],
     queryFn: async (): Promise<"environment" | "runtime" | "none"> => {
       const r = await fetch("/api/env/hf-token-status");
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
       const source = d?.source;
       return source === "environment" || source === "runtime" ? source : "none";
     },
+    retry: false,
   });
   const hfTokenStatus = hfTokenStatusQuery.isLoading ? "loading" : (hfTokenStatusQuery.data ?? "none");
 

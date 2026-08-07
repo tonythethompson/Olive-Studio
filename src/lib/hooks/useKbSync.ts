@@ -65,6 +65,9 @@ async function postKbSync(): Promise<KbSyncResult> {
           : (data.error ?? `HTTP ${res.status}`);
       throw new Error(detail);
     }
+    if (data.ok !== true) {
+      throw new Error(data.error ?? `HTTP ${res.status}`);
+    }
     return data;
   } catch (err: unknown) {
     if (err instanceof DOMException && err.name === "AbortError") {
@@ -126,6 +129,7 @@ export function useKbSync() {
     queryKey: KB_STATUS_QUERY_KEY,
     queryFn: fetchKbStatus,
     refetchInterval: REFRESH_INTERVAL_MS,
+    retry: false,
   });
   const status = statusQuery.data ?? null;
 

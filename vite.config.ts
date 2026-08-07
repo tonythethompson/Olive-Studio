@@ -2,7 +2,6 @@ import typegpu from 'unplugin-typegpu/vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
-import fs from 'fs';
 import { defineConfig, type Plugin } from 'vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import compression from 'vite-plugin-compression';
@@ -13,18 +12,25 @@ import { ANY_DOT_VENV_DIR } from './src/server/shared/anyDotVenvDir';
  * call site (ArenaPanel, InBrowserValidation, WebGpuBenchmarkPanel) points
  * `env.wasm.wasmPaths` at the jsdelivr CDN so the browser fetches them from
  * there instead. Vite still copies the ~50MB of .wasm into dist as an asset
- * because ort's JS references them; strip them post-build so they don't ship.
+ * because ort's JS references them; drop them from the bundle so they never
+ * ship — and never get compressed, unlike a post-hoc delete would allow.
+ *
+ * Removes them in `generateBundle`, not `closeBundle`: closeBundle is a
+ * parallel hook, so a file-based delete there could race with
+ * vite-plugin-compression's own closeBundle and either miss files it hasn't
+ * written yet or delete files out from under it mid-write.
+ * `generateBundle` runs before anything is written to disk, so pulling the
+ * assets out of the in-memory bundle here means compression's later hook
+ * never sees them to begin with — no race possible.
  */
 function stripUnusedOrtWasm(): Plugin {
   return {
     name: 'strip-unused-ort-wasm',
     apply: 'build',
-    closeBundle() {
-      const assetsDir = path.resolve(import.meta.dirname, 'dist/assets');
-      if (!fs.existsSync(assetsDir)) return;
-      for (const file of fs.readdirSync(assetsDir)) {
-        if (file.endsWith('.wasm') || file.endsWith('.wasm.gz')) {
-          fs.rmSync(path.join(assetsDir, file));
+    generateBundle(_options, bundle) {
+      for (const fileName of Object.keys(bundle)) {
+        if (fileName.endsWith('.wasm')) {
+          delete bundle[fileName];
         }
       }
     },
