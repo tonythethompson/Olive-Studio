@@ -217,14 +217,26 @@ Olive Studio validates at several layers so bad recipes fail fast:
 
 ## MCP integration
 
-The repository includes `olive-mcp-server/`, a Python MCP server that exposes Olive pass, hardware, troubleshooting, and compatibility tools.
+The repository includes `olive-mcp-server/`, a Python MCP server that exposes Olive pass, hardware, troubleshooting, compatibility, UIState recipe bridge, and local feedback tools.
 
 - `.mcp.json` wires the server to Claude via `olive-mcp-server/run.py`.
-- `server.ts` exposes `POST /api/mcp/tool` so the web UI can proxy tool calls.
+- `server.ts` exposes `POST /api/mcp/tool` so the web UI can proxy tool calls, and a loopback-only `POST /api/mcp/studio-recipe` bridge for UIState validation/recipe build (no Olive execution).
+- Bridge-backed MCP tools (`validate_ui_state_recipe`, `get_recipe_for_ui_state`) require Studio running and `OLIVE_STUDIO_API_URL` set to a **loopback** base URL (e.g. `http://127.0.0.1:3000`).
 - **Assistant chat** (`POST /api/ai/chat`) queries Olive MCP first (docs search + targeted tools) and injects those excerpts as the primary system knowledge. Optional external web search runs only when MCP coverage is thin and `OLIVE_STUDIO_WEB_SEARCH_URL` is set.
-- `MCPDiagnosticCard` renders MCP troubleshooting results inside the recipe workspace.
+- `MCPDiagnosticCard` renders MCP troubleshooting results inside the recipe workspace, with optional thumbs feedback when a diagnosis has a stable `matched_entry`.
 
-See [olive-mcp-server/README.md](olive-mcp-server/README.md) for setup and tool details.
+### Local-only diagnostic feedback (privacy)
+
+- Thumbs up/down on a matched MCP diagnosis call `record_troubleshoot_feedback` through the existing MCP proxy.
+- Feedback is **aggregate-only** (entry id + rating counts, optional allowlisted reason codes). Error logs, stack traces, and free-form notes are never accepted or stored.
+- Data stays on the local machine under the MCP user-data path (override with `OLIVE_MCP_FEEDBACK_PATH`). Nothing is uploaded by this path.
+- Ranking influence is capped so feedback only nudges close ties.
+
+### Knowledge-base refresh PRs
+
+Scheduled workflow [`.github/workflows/kb-update.yml`](.github/workflows/kb-update.yml) (Monday + manual) runs the KB generators, compatibility checks, and Python MCP tests. When generated KB files change, it opens or updates a single labeled PR (`kb-refresh`) for human review. **PRs are never auto-merged.**
+
+See [olive-mcp-server/README.md](olive-mcp-server/README.md) for setup, bridge preconditions, tool input/response examples, and feedback details.
 
 ---
 

@@ -14,7 +14,7 @@ import {
   type SetStateAction,
 } from "react";
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
-import { UIState } from "@/types";
+import { UIState, type McpTroubleshootFeedbackRating } from "@/types";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";
 import { applyMcpDiagnosticToUiState, canApplyMcpDiagnostic } from "@/lib/mcpConfigMapping";
@@ -51,6 +51,7 @@ import {
   Wrench,
   MoreHorizontal,
   FileText,
+  Bug,
 } from "lucide-react";
 import JSZip from "jszip";
 import { cn } from "@/lib/utils";
@@ -67,7 +68,6 @@ import { getJobHistory, saveJobHistory } from "@/lib/jobHistoryStore";
 import { downloadMarkdownReport } from "@/lib/reportGenerator";
 import { JobHistoryModal } from "@/components/features/JobHistoryModal";
 import { ReportIssueModal } from "@/components/ReportIssueModal";
-import { Bug } from "lucide-react";
 import type { ReportArea } from "@/lib/issueReport";
 
 const RecipeGraphView = lazy(() => import("./RecipeGraphView").then((m) => ({ default: m.RecipeGraphView })));
@@ -78,6 +78,63 @@ const RecipeGraphView = lazy(() => import("./RecipeGraphView").then((m) => ({ de
  * @param label - The text displayed below the spinner
  * @param minH - The optional minimum height of the loading container
  */
+
+function collectActivePassNames(passes: UIState["passes"]): string[] {
+  const names: string[] = [];
+  if (passes.conversion) {
+    names.push(`Conversion (${passes.conversionFormat === "onnx" ? "ONNX" : "OpenVINO"})`);
+  }
+  if (passes.quantization) names.push(`Quantization (${passes.quantPrecision})`);
+  if (passes.pruning) names.push(`Pruning (${passes.pruningMethod})`);
+  if (passes.onnxTransforms) names.push("ORT Transforms");
+  return names.length > 0 ? names : ["Default Baseline Export"];
+}
+
+function resolveQueuedModelIdentifier(state: UIState): string {
+  if (state.modelSource === "huggingface") return state.hfModelId || "unspecified-hf-model";
+  if (state.modelSource === "azure") return state.azureModelPath || "AzureML Asset Container";
+  return "Offline Weights Folder";
+}
+
+function buildQueuedBatchJob(state: UIState) {
+  const mid = resolveQueuedModelIdentifier(state);
+  const activePassesNames = collectActivePassNames(state.passes);
+  const jobName = `Staged: ${mid.split("/").pop()} - ${state.ihvProvider.replace("ExecutionProvider", "")}`;
+  return {
+    id: "job-" + Date.now(),
+    name: jobName,
+    modelSource: state.modelSource,
+    modelIdentifier: mid,
+    provider: state.ihvProvider,
+    passes: activePassesNames,
+    recipeJson: buildRecipeJsonFromState(state),
+    status: "queued" as const,
+    progress: 0,
+    progressKnown: true,
+    logs: ["Job created from active template configuration. Awaiting queue start."],
+  };
+}
+
+function describeAppliedMcpPatches(
+  patches: Partial<UIState>,
+  statePasses: UIState["passes"],
+  appliedQuirks: string[],
+): string[] {
+  const appliedParts: string[] = [];
+  if (patches.cacheDir) appliedParts.push(`cacheDir=${patches.cacheDir}`);
+  if (patches.passRecipeOverrides) {
+    appliedParts.push(`passOverrides=${Object.keys(patches.passRecipeOverrides).join("+")}`);
+  }
+  if (patches.passes) {
+    const changed = Object.entries(patches.passes)
+      .filter(([k, v]) => (statePasses as Record<string, unknown>)[k] !== v)
+      .map(([k, v]) => `${k}=${JSON.stringify(v)}`);
+    if (changed.length) appliedParts.push(...changed.slice(0, 8));
+  }
+  if (appliedQuirks.length) appliedParts.push(`quirks=${appliedQuirks.join("+")}`);
+  return appliedParts;
+}
+
 function LoadingFallback({ label, minH }: { label: string; minH?: string }) {
   return (
     <div className="flex items-center justify-center w-full" style={minH ? { minHeight: minH } : undefined}>
@@ -193,12 +250,33 @@ export function ExecutionWorkspace({
   const [diagnosisHistory, setDiagnosisHistory] = useState<DiagnosisEntry[]>([]);
   const [activeHistoryIndex, setActiveHistoryIndex] = useState(-1);
 
+  // Browse diagnosis history entries on the card; -1 means "live" (current MCP result).
+  const viewingHistoricalDiagnosis =
+    activeHistoryIndex >= 0 && activeHistoryIndex < diagnosisHistory.length;
+  const displayedDiagnostic = viewingHistoricalDiagnosis
+    ? diagnosisHistory[activeHistoryIndex]!.diagnostic
+    : mcpDiagnostic;
+  const displayedFixApplied = viewingHistoricalDiagnosis
+    ? diagnosisHistory[activeHistoryIndex]!.fixApplied
+      ? "applied"
+      : ""
+    : mcpFixApplied;
+
   // Log line selection state for manual diagnosis
   const [selectedLogIndices, setSelectedLogIndices] = useState<Set<number>>(new Set());
   const lastClickedIndexRef = useRef<number | null>(null);
 
+  /** Card self-submits feedback; parent hook is optional analytics / future history annotation. */
+  const handleFeedbackSubmitted = (payload: {
+    matched_entry: string;
+    rating: McpTroubleshootFeedbackRating;
+  }) => {
+    // No UI mutation — diagnosis display and history stay as-is after thumbs.
+    void payload.matched_entry;
+  };
+
   const handleApplyMcpFix = () => {
-    if (!mcpDiagnostic || !canApplyMcpDiagnostic(mcpDiagnostic)) {
+    if (!displayedDiagnostic || !canApplyMcpDiagnostic(displayedDiagnostic)) {
       setExecutionLogs((prev) => [
         ...prev,
         "[MCP FIX] Nothing auto-applyable — follow Recommended Fix / Known Quirks manually.",
@@ -206,13 +284,20 @@ export function ExecutionWorkspace({
       return;
     }
 
-    if (isStudioHfTaskSpeechFix(mcpDiagnostic)) {
+    if (isStudioHfTaskSpeechFix(displayedDiagnostic)) {
       setState({ hfTask: "automatic-speech-recognition" });
       setExecutionLogs((prev) => [
         ...prev,
         "[FIX] Hugging Face task corrected to `automatic-speech-recognition` for Whisper. Rebuild/refresh the recipe, then run Execute Live again.",
       ]);
       setMcpFixApplied("applied");
+      // Mark the history row that matches the applied diagnostic (live = index 0).
+      const historyIdx = viewingHistoricalDiagnosis ? activeHistoryIndex : 0;
+      if (historyIdx >= 0 && historyIdx < diagnosisHistory.length) {
+        setDiagnosisHistory((prev) =>
+          prev.map((entry, idx) => (idx === historyIdx ? { ...entry, fixApplied: true } : entry)),
+        );
+      }
       return;
     }
 
@@ -221,7 +306,7 @@ export function ExecutionWorkspace({
       logs,
       appliedQuirks,
       notedQuirks: _notedQuirks,
-    } = applyMcpDiagnosticToUiState(mcpDiagnostic, state.passes, state.passRecipeOverrides);
+    } = applyMcpDiagnosticToUiState(displayedDiagnostic, state.passes, state.passRecipeOverrides);
 
     const hasPatches = Object.keys(patches).length > 0;
     if (!hasPatches && logs.length === 0) {
@@ -236,20 +321,7 @@ export function ExecutionWorkspace({
       setState(patches);
     }
 
-    const appliedParts: string[] = [];
-    if (patches.cacheDir) appliedParts.push(`cacheDir=${patches.cacheDir}`);
-    if (patches.passRecipeOverrides) {
-      appliedParts.push(`passOverrides=${Object.keys(patches.passRecipeOverrides).join("+")}`);
-    }
-    if (patches.passes) {
-      const changed = Object.entries(patches.passes)
-        .filter(([k, v]) => (state.passes as Record<string, unknown>)[k] !== v)
-        .map(([k, v]) => `${k}=${JSON.stringify(v)}`);
-      if (changed.length) appliedParts.push(...changed.slice(0, 8));
-    }
-    if (appliedQuirks.length) {
-      appliedParts.push(`quirks=${appliedQuirks.join("+")}`);
-    }
+    const appliedParts = describeAppliedMcpPatches(patches, state.passes, appliedQuirks);
 
     setExecutionLogs((prev) => [
       ...prev,
@@ -259,7 +331,16 @@ export function ExecutionWorkspace({
         : "[MCP FIX] Logged notes only — no UI fields changed.",
     ]);
     // Gate success UI state on actual applied quirks/patches only, not noted quirks
-    setMcpFixApplied(hasPatches || appliedQuirks.length > 0 ? "applied" : "");
+    const applied = hasPatches || appliedQuirks.length > 0;
+    setMcpFixApplied(applied ? "applied" : "");
+    if (applied) {
+      const historyIdx = viewingHistoricalDiagnosis ? activeHistoryIndex : 0;
+      if (historyIdx >= 0 && historyIdx < diagnosisHistory.length) {
+        setDiagnosisHistory((prev) =>
+          prev.map((entry, idx) => (idx === historyIdx ? { ...entry, fixApplied: true } : entry)),
+        );
+      }
+    }
   };
 
   // Clear log selection when logs change (new run starts)
@@ -515,54 +596,17 @@ ${owrPlatform === "web"
           : `[ERROR] Cannot queue batch job: recipe schema invalid.\n${freshSchemaErrors.map((e) => `[SCHEMA] ${e}`).join("\n")}`,
         ...(fresh.schema.valid
           ? [
-            ...fresh.validation.issues
-              .filter((issue) => issue.severity === "critical")
-              .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
-            ...freshBlockLines,
-          ]
+              ...fresh.validation.issues
+                .filter((issue) => issue.severity === "critical")
+                .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
+              ...freshBlockLines,
+            ]
           : []),
       ]);
       return;
     }
 
-    const activePassesNames: string[] = [];
-    if (state.passes.conversion)
-      activePassesNames.push(
-        `Conversion (${state.passes.conversionFormat === "onnx" ? "ONNX" : "OpenVINO"})`,
-      );
-    if (state.passes.quantization) activePassesNames.push(`Quantization (${state.passes.quantPrecision})`);
-    if (state.passes.pruning) activePassesNames.push(`Pruning (${state.passes.pruningMethod})`);
-    if (state.passes.onnxTransforms) activePassesNames.push("ORT Transforms");
-
-    if (activePassesNames.length === 0) {
-      activePassesNames.push("Default Baseline Export");
-    }
-
-    let mid = "Offline Weights Folder";
-    if (state.modelSource === "huggingface") {
-      mid = state.hfModelId || "unspecified-hf-model";
-    } else if (state.modelSource === "azure") {
-      mid = state.azureModelPath || "AzureML Asset Container";
-    }
-
-    const jobName = `Staged: ${mid.split("/").pop()} - ${state.ihvProvider.replace("ExecutionProvider", "")}`;
-
-    const recipeJsonForJob = buildRecipeJsonFromState(state);
-
-    const newJob = {
-      id: "job-" + Date.now(),
-      name: jobName,
-      modelSource: state.modelSource,
-      modelIdentifier: mid,
-      provider: state.ihvProvider,
-      passes: activePassesNames,
-      recipeJson: recipeJsonForJob,
-      status: "queued" as const,
-      progress: 0,
-      progressKnown: true,
-      logs: ["Job created from active template configuration. Awaiting queue start."],
-    };
-
+    const newJob = buildQueuedBatchJob(state);
     const currentJobs = state.batchJobs || [];
     setState({ batchJobs: [...currentJobs, newJob] });
     setJustQueued(true);
@@ -1657,15 +1701,16 @@ ${owrPlatform === "web"
             />
           </div>
 
-          {/* MCP Diagnostic & Auto-Fix Card */}
+          {/* MCP Diagnostic & Auto-Fix Card (matched_entry from MCP/local parsers enables thumbs) */}
           {executionStatus === "failed" && (
             <MCPDiagnosticCard
-              diagnostic={mcpDiagnostic}
+              diagnostic={displayedDiagnostic}
               isDiagnosing={isDiagnosing}
-              fixApplied={mcpFixApplied}
+              fixApplied={displayedFixApplied}
               onApplyFix={handleApplyMcpFix}
               onRunDiagnosis={handleDiagnose}
               error={diagnoseError}
+              onFeedbackSubmitted={handleFeedbackSubmitted}
             />
           )}
         </CardContent>

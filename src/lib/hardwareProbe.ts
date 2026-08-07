@@ -6,6 +6,11 @@ import {
   pinnedOrtGpuInstallCommand,
 } from "@/lib/cudaDeps";
 import { resolveQnnHostMode } from "@/lib/qnnDeps";
+import {
+  alwaysSelectableProviders,
+  isExportTargetProvider,
+  isPlatformLocalProvider,
+} from "@/lib/providerRuntimeKind";
 
 /**
  * Compute capability is reported as `"<major>.<minor>"` (e.g. `"8.9"` for
@@ -172,6 +177,16 @@ const ORT_PROVIDER_MAP: Record<string, IHVProvider> = {
   QNNExecutionProvider: "QNNExecutionProvider",
   ROCMExecutionProvider: "ROCMExecutionProvider",
   WebGpuExecutionProvider: "WebGpuExecutionProvider",
+  // Browser / OWR spellings are not local Python EPs; map if a probe ever reports them.
+  WebGPUExecutionProvider: "WebGpuExecutionProvider",
+  CoreMLExecutionProvider: "CoreMLExecutionProvider",
+  NNAPIExecutionProvider: "NNAPIExecutionProvider",
+  NnapiExecutionProvider: "NNAPIExecutionProvider",
+  VitisAIExecutionProvider: "VitisAIExecutionProvider",
+  SNPEExecutionProvider: "SNPEExecutionProvider",
+  TensorflowLiteExecutionProvider: "TensorflowLiteExecutionProvider",
+  XnnpackExecutionProvider: "XnnpackExecutionProvider",
+  WasmExecutionProvider: "WasmExecutionProvider",
 };
 
 /**
@@ -457,6 +472,20 @@ function undetectedProviderReason(
     }
     case "WebGpuExecutionProvider":
       return "WebGPU is a browser deploy target (ONNX Runtime Web), not a local Python EP. Select it to build web-oriented recipes, then run Browser Test / WebGPU benchmark in Recipe & run (Chrome 113+ / Edge 113+).";
+    case "CoreMLExecutionProvider":
+      return "Apple CoreML was not detected (requires macOS/iOS onnxruntime with CoreMLExecutionProvider). You can still select it for recipe export; Execute Live needs a probe hit.";
+    case "VitisAIExecutionProvider":
+      return "AMD/Xilinx Vitis AI was not detected (requires a Vitis AI ORT build). You can still select it for recipe export; Execute Live needs a probe hit.";
+    case "NNAPIExecutionProvider":
+      return "Android NNAPI is an OWR / mobile export target, not a local Python EP.";
+    case "SNPEExecutionProvider":
+      return "Qualcomm SNPE is a legacy export path (prefer QNN). Not available for Studio Execute Live.";
+    case "TensorflowLiteExecutionProvider":
+      return "TensorFlow Lite is a conversion/export path, not a local Olive Execute Live EP.";
+    case "XnnpackExecutionProvider":
+      return "XNNPACK is an OWR / ORT Mobile CPU export target, not a local Python EP.";
+    case "WasmExecutionProvider":
+      return "WASM is an ONNX Runtime Web CPU export target, not a local Python EP.";
     case "DmlExecutionProvider":
       return "Windows DirectML was not detected (requires Windows + onnxruntime-directml in the default .venv). Use Install in Hardware.";
     case "CPUExecutionProvider":
@@ -468,21 +497,31 @@ function undetectedProviderReason(
   }
 }
 
-/** Providers the user may select after local hardware detection. */
+/**
+ * Providers the user may select after local hardware detection.
+ * Export targets and platform-local EPs (CoreML/VitisAI) are always choosable
+ * even when absent from `detectedProviders` — recipe selection must not look
+ * like a failed detection. Execute Live is gated separately.
+ */
 export function getSelectableProviders(probe: HardwareProbeResult | null | undefined): IHVProvider[] {
+  const extras = alwaysSelectableProviders();
   if (!probe) {
-    return ["CPUExecutionProvider"];
+    return Array.from(new Set<IHVProvider>(["CPUExecutionProvider", ...extras]));
   }
-  return probe.detectedProviders;
+  return Array.from(new Set<IHVProvider>([...probe.detectedProviders, ...extras]));
 }
 
-/** Block selection when a provider is absent from the local probe. */
+/**
+ * Block selection when a provider is absent from the local probe.
+ * Export targets and platform-local EPs never return a block (selectable without
+ * “not detected”); Execute Live is gated separately via pipeline validation.
+ */
 export function getProviderAvailabilityBlock(
   provider: IHVProvider,
   probe: HardwareProbeResult | null | undefined,
 ): { reason: string } | null {
-  // WebGPU is a browser deploy target (ORT Web), not a local Python EP to probe.
-  if (provider === "WebGpuExecutionProvider") {
+  // Export / platform-local targets are recipe-selectable without a probe hit.
+  if (isExportTargetProvider(provider) || isPlatformLocalProvider(provider)) {
     return null;
   }
   if (provider === "CPUExecutionProvider") {

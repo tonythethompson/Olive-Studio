@@ -46,7 +46,25 @@ _TOOL_IMPORTS: dict[str, tuple[str, str]] = {
         "olive_mcp_server.tools.passive_context",
         "get_context_for_pipeline",
     ),
+    "validate_ui_state_recipe": (
+        "olive_mcp_server.tools.studio_recipe",
+        "validate_ui_state_recipe",
+    ),
+    "get_recipe_for_ui_state": (
+        "olive_mcp_server.tools.studio_recipe",
+        "get_recipe_for_ui_state",
+    ),
+    "get_runtime_ep_hints": (
+        "olive_mcp_server.tools.runtime_ep_hints",
+        "get_runtime_ep_hints",
+    ),
+    "record_troubleshoot_feedback": (
+        "olive_mcp_server.tools.feedback",
+        "record_troubleshoot_feedback",
+    ),
 }
+# Studio's HTTP POST /api/mcp/tool proxies these tools but is loopback-only
+# (mcpToolLocalOnly). That gate is required for write tools like feedback.
 
 _mcp_instance: Any | None = None
 _resolved_tools: dict[str, Any] = {}

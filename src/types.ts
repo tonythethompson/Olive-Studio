@@ -39,7 +39,14 @@ export type IHVProvider =
   | "OpenVINOExecutionProvider"
   | "QNNExecutionProvider"
   | "ROCMExecutionProvider"
-  | "WebGpuExecutionProvider";
+  | "WebGpuExecutionProvider"
+  | "CoreMLExecutionProvider"
+  | "NNAPIExecutionProvider"
+  | "VitisAIExecutionProvider"
+  | "SNPEExecutionProvider"
+  | "TensorflowLiteExecutionProvider"
+  | "XnnpackExecutionProvider"
+  | "WasmExecutionProvider";
 
 /** OpenVINOExecutionProvider silicon target (maps to Olive accelerator.device). */
 export type OpenVinoTargetDevice = "CPU" | "GPU" | "NPU";
@@ -160,8 +167,20 @@ export interface UIState {
   };
 }
 
-/** MCP diagnostic response from troubleshoot_olive_error tool. */
+/**
+ * MCP diagnostic response from `troubleshoot_olive_error`.
+ *
+ * Display fields (`title`, `root_cause`, `workaround`, …) are unchanged for
+ * existing cards/history. Feedback (thumbs up/down) is keyed only by
+ * {@link McpDiagnostic.matched_entry} — never by log text.
+ */
 export interface McpDiagnostic {
+  /**
+   * Stable knowledge-base entry id when a match is found; `null` when unmatched.
+   * Required on the type so callers always read a defined value; local Studio
+   * matchers and MCP both set it. Use a non-empty string as the feedback key
+   * for `record_troubleshoot_feedback`; omit feedback UI when null/empty.
+   */
   matched_entry: string | null;
   title: string;
   root_cause: string;
@@ -173,4 +192,85 @@ export interface McpDiagnostic {
   /** When false, Apply Fix stays disabled even if updated_config is present. */
   applyable?: boolean;
   related_olive_entry?: string | null;
+  /**
+   * Optional occurrence metadata from the MCP server (forwarded when present).
+   * Not required for feedback; safe to omit on local/unmatched diagnoses.
+   */
+  frequency?: McpDiagnosticFrequency | null;
+}
+
+/** Occurrence stats attached to some MCP diagnosis payloads. */
+export interface McpDiagnosticFrequency {
+  occurrence_count?: number;
+  first_seen?: string | null;
+  last_seen?: string | null;
+  label?: string | null;
+}
+
+/**
+ * Thumbs rating for local aggregate troubleshoot feedback.
+ * Must match olive-mcp-server `ALLOWED_RATINGS` (`thumbs-up` | `thumbs-down`).
+ */
+export type McpTroubleshootFeedbackRating = "thumbs-up" | "thumbs-down";
+
+/**
+ * Allowlisted reason codes for `record_troubleshoot_feedback`.
+ * Must match olive-mcp-server `ALLOWED_REASON_CODES` — never free-form text.
+ */
+export type McpTroubleshootFeedbackReasonCode =
+  | "accurate"
+  | "clear_fix"
+  | "fixed_issue"
+  | "wrong_match"
+  | "outdated"
+  | "incomplete"
+  | "incorrect_fix";
+
+/** Runtime allowlist for feedback ratings (mirrors MCP server). */
+export const MCP_TROUBLESHOOT_FEEDBACK_RATINGS: readonly McpTroubleshootFeedbackRating[] = [
+  "thumbs-up",
+  "thumbs-down",
+] as const;
+
+/** Runtime allowlist for feedback reason codes (mirrors MCP server). */
+export const MCP_TROUBLESHOOT_FEEDBACK_REASON_CODES: readonly McpTroubleshootFeedbackReasonCode[] = [
+  "accurate",
+  "clear_fix",
+  "fixed_issue",
+  "wrong_match",
+  "outdated",
+  "incomplete",
+  "incorrect_fix",
+] as const;
+
+/**
+ * Args for MCP tool `record_troubleshoot_feedback`.
+ * Aggregate-only: entry id + rating (+ optional bounded reason code).
+ * Never includes logs, tracebacks, or free-form diagnostic text.
+ */
+export interface McpTroubleshootFeedbackArgs {
+  /** Must be a non-empty {@link McpDiagnostic.matched_entry} known to the KB. */
+  matched_entry: string;
+  rating: McpTroubleshootFeedbackRating;
+  /** Optional allowlisted reason code — not free-form user prose. */
+  reason_code?: McpTroubleshootFeedbackReasonCode;
+}
+
+/** Successful aggregate acknowledgement from `record_troubleshoot_feedback`. */
+export interface McpTroubleshootFeedbackResult {
+  status: "ok";
+  matched_entry: string;
+  rating: McpTroubleshootFeedbackRating;
+  reason_code: McpTroubleshootFeedbackReasonCode | null;
+  thumbs_up: number;
+  thumbs_down: number;
+  total: number;
+  score_delta?: number;
+}
+
+/** Structured error from `record_troubleshoot_feedback` or the proxy. */
+export interface McpTroubleshootFeedbackError {
+  status: "error";
+  error: string;
+  message?: string;
 }

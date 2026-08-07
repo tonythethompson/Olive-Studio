@@ -269,3 +269,45 @@ def test_get_integration_recipe_openvino_vision():
     assert "error" not in result
     pass_types = {p["type"] for p in result["recipe"]["passes"].values()}
     assert "OpenVINOQuantization" in pass_types
+
+
+def _recipe_execution_providers(result: dict) -> list[str]:
+    accelerators = result["recipe"]["systems"]["local_system"]["config"]["accelerators"]
+    return accelerators[0]["execution_providers"]
+
+
+def test_get_integration_recipe_phi3_trt_rtx():
+    result = get_integration_recipe(recipe_id="phi3_trt_rtx_awq")
+    assert "error" not in result
+    assert result["recipe_id"] == "phi3_trt_rtx_awq"
+    assert "NvTensorRTRTXExecutionProvider" in _recipe_execution_providers(result)
+
+
+def test_get_integration_recipe_resnet50_directml():
+    result = get_integration_recipe(recipe_id="resnet50_directml")
+    assert "error" not in result
+    assert result["recipe_id"] == "resnet50_directml"
+    assert "DmlExecutionProvider" in _recipe_execution_providers(result)
+
+
+def test_get_integration_recipe_mobilenet_openvino_npu():
+    result = get_integration_recipe(recipe_id="mobilenet_openvino_npu")
+    assert "error" not in result
+    assert result["recipe_id"] == "mobilenet_openvino_npu"
+    assert "OpenVINOExecutionProvider" in _recipe_execution_providers(result)
+
+
+def test_get_integration_recipe_bert_webgpu_fp16():
+    result = get_integration_recipe(recipe_id="bert_webgpu_fp16")
+    assert "error" not in result
+    assert result["recipe_id"] == "bert_webgpu_fp16"
+    assert "WebGpuExecutionProvider" in _recipe_execution_providers(result)
+
+
+def test_get_integration_recipe_llama3_rocm():
+    result = get_integration_recipe(recipe_id="llama3_rocm_gptq")
+    assert "error" not in result
+    assert result["recipe_id"] == "llama3_rocm_gptq"
+    assert "ROCMExecutionProvider" in _recipe_execution_providers(result)
+    pass_types = {p["type"] for p in result["recipe"]["passes"].values()}
+    assert "GptqQuantizer" in pass_types

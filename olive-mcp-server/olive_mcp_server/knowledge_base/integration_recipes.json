@@ -1,6 +1,6 @@
 {
-  "version": "0.1.0",
-  "last_updated": "2026-07-25",
+  "version": "0.2.1",
+  "last_updated": "2026-08-06",
   "source": "https://microsoft.github.io/Olive/",
   "recipes": [
     {
@@ -260,6 +260,93 @@
         }
       },
       "notes": "Requires AWQ support and significant GPU memory. Replace model_path with your Llama checkpoint."
+    },
+    {
+      "id": "llama3_rocm_gptq",
+      "name": "Llama-3 GPTQ INT4 ROCm",
+      "description": "GPTQ int4 path for Llama-3-class LLMs on AMD ROCm (MI300X class).",
+      "model_type": ["LLM", "Transformer"],
+      "target_hardware": ["AMD MI300X / ROCm"],
+      "source_format": "HuggingFace",
+      "passes": ["OnnxConversion", "GptqQuantizer", "OnnxModelOptimizer"],
+      "recipe": {
+        "input_model": {
+          "type": "HuggingfaceModel",
+          "config": {
+            "model_path": "meta-llama/Meta-Llama-3-8B",
+            "task": "text-generation",
+            "load_kwargs": {
+              "torch_dtype": "float16"
+            }
+          }
+        },
+        "systems": {
+          "local_system": {
+            "type": "LocalSystem",
+            "config": {
+              "accelerators": [
+                {
+                  "device": "gpu",
+                  "execution_providers": ["ROCMExecutionProvider"]
+                }
+              ]
+            }
+          }
+        },
+        "data_configs": [
+          {
+            "name": "wikitext2",
+            "type": "HuggingfaceContainer",
+            "params_config": {
+              "data_path": "wikitext",
+              "subset": "wikitext-2-raw-v1",
+              "split": "train",
+              "batch_size": 1,
+              "max_seq_len": 2048
+            }
+          }
+        ],
+        "passes": {
+          "gptq": {
+            "type": "GptqQuantizer",
+            "config": {
+              "bits": 4,
+              "group_size": 128,
+              "desc_act": false,
+              "data_config": "wikitext2"
+            }
+          },
+          "convert": {
+            "type": "OnnxConversion",
+            "config": {
+              "target_opset": 14
+            }
+          },
+          "optimize": {
+            "type": "OnnxModelOptimizer"
+          }
+        },
+        "evaluators": {
+          "common_eval": {
+            "metrics": [
+              {
+                "name": "perplexity",
+                "type": "perplexity",
+                "data_config": "wikitext2"
+              }
+            ]
+          }
+        },
+        "engine": {
+          "search_strategy": false,
+          "host": "local_system",
+          "target": "local_system",
+          "evaluator": "common_eval",
+          "cache_dir": ".cache",
+          "output_dir": "outputs/llama3_rocm_gptq"
+        }
+      },
+      "notes": "Requires onnxruntime ROCm build + ROCm drivers. Op coverage lags CUDA; prefer GPTQ over AWQ on ROCm."
     },
     {
       "id": "llama_nvidia_int4",
@@ -692,6 +779,269 @@
         }
       },
       "notes": "Requires an Azure ML workspace and registered environment."
+    },
+    {
+      "id": "phi3_trt_rtx_awq",
+      "name": "Phi-3-mini AWQ TensorRT RTX",
+      "description": "AWQ INT4 quantization of Phi-3-mini for consumer NVIDIA TensorRT RTX (NvTensorRTRTXExecutionProvider).",
+      "model_type": ["LLM", "Transformer"],
+      "target_hardware": ["NVIDIA TensorRT RTX"],
+      "source_format": "HuggingFace",
+      "passes": ["AutoAWQQuantizer", "OnnxConversion", "OnnxModelOptimizer"],
+      "recipe": {
+        "input_model": {
+          "type": "HuggingfaceModel",
+          "config": {
+            "model_path": "microsoft/Phi-3-mini-4k-instruct",
+            "task": "text-generation",
+            "load_kwargs": {
+              "torch_dtype": "float16"
+            }
+          }
+        },
+        "systems": {
+          "local_system": {
+            "type": "LocalSystem",
+            "config": {
+              "accelerators": [
+                {
+                  "device": "gpu",
+                  "execution_providers": ["NvTensorRTRTXExecutionProvider"]
+                }
+              ]
+            }
+          }
+        },
+        "data_configs": [
+          {
+            "name": "wikitext2",
+            "type": "HuggingfaceContainer",
+            "params_config": {
+              "data_path": "wikitext",
+              "subset": "wikitext-2-raw-v1",
+              "split": "train",
+              "batch_size": 1,
+              "max_seq_len": 2048
+            }
+          }
+        ],
+        "passes": {
+          "awq": {
+            "type": "AutoAWQQuantizer",
+            "config": {
+              "bits": 4,
+              "group_size": 128,
+              "zero_point": true,
+              "data_config": "wikitext2"
+            }
+          },
+          "convert": {
+            "type": "OnnxConversion",
+            "config": {
+              "target_opset": 14
+            }
+          },
+          "optimize": {
+            "type": "OnnxModelOptimizer"
+          }
+        },
+        "engine": {
+          "search_strategy": false,
+          "host": "local_system",
+          "target": "local_system",
+          "cache_dir": ".cache",
+          "output_dir": "outputs/phi3_trt_rtx_awq"
+        }
+      },
+      "notes": "Requires both the tensorrt-rtx package and the matching ONNX Runtime EP-ABI plugin, plus SM≥7.5 (Turing+). Prefer AWQ INT4 over PTQ INT8/QDQ for NvTensorRTRTXExecutionProvider."
+    },
+    {
+      "id": "resnet50_directml",
+      "name": "ResNet-50 INT8 DirectML",
+      "description": "Static INT8 PTQ pipeline for ResNet-50 targeting Windows DirectML (DmlExecutionProvider).",
+      "model_type": ["CNN", "Vision"],
+      "target_hardware": ["Windows DirectML GPU"],
+      "source_format": "PyTorch",
+      "passes": ["OnnxConversion", "OnnxModelOptimizer", "OnnxStaticQuantization"],
+      "recipe": {
+        "input_model": {
+          "type": "PyTorchModel",
+          "config": {
+            "model_path": "resnet50.pt",
+            "io_config": {
+              "input_names": ["input"],
+              "output_names": ["output"],
+              "input_shapes": [[1, 3, 224, 224]]
+            }
+          }
+        },
+        "systems": {
+          "local_system": {
+            "type": "LocalSystem",
+            "config": {
+              "accelerators": [
+                {
+                  "device": "gpu",
+                  "execution_providers": ["DmlExecutionProvider"]
+                }
+              ]
+            }
+          }
+        },
+        "data_configs": [
+          {
+            "name": "imagenet_calib",
+            "type": "HuggingfaceContainer",
+            "params_config": {
+              "data_path": "imagenet/val",
+              "batch_size": 1
+            }
+          }
+        ],
+        "passes": {
+          "convert": {
+            "type": "OnnxConversion",
+            "config": {
+              "target_opset": 14
+            }
+          },
+          "optimize": {
+            "type": "OnnxModelOptimizer"
+          },
+          "static_quant": {
+            "type": "OnnxStaticQuantization",
+            "config": {
+              "quant_format": "QDQ",
+              "per_channel": false,
+              "data_config": "imagenet_calib"
+            }
+          }
+        },
+        "engine": {
+          "search_strategy": false,
+          "host": "local_system",
+          "target": "local_system",
+          "cache_dir": ".cache",
+          "output_dir": "outputs/resnet50_directml"
+        }
+      },
+      "notes": "Windows 10/11 + onnxruntime-directml only. Do not use CUDA/Linux ORT wheels for DmlExecutionProvider."
+    },
+    {
+      "id": "mobilenet_openvino_npu",
+      "name": "MobileNetV2 OpenVINO NPU",
+      "description": "OpenVINO conversion and INT8 quantization of MobileNetV2 for Intel Core Ultra NPU.",
+      "model_type": ["CNN", "Vision"],
+      "target_hardware": ["Intel Core Ultra NPU (OpenVINO)"],
+      "source_format": "PyTorch",
+      "passes": ["OnnxConversion", "OpenVINOConversion", "OpenVINOQuantization"],
+      "recipe": {
+        "input_model": {
+          "type": "PyTorchModel",
+          "config": {
+            "model_path": "mobilenet_v2.pt",
+            "io_config": {
+              "input_names": ["input"],
+              "output_names": ["output"],
+              "input_shapes": [[1, 3, 224, 224]]
+            }
+          }
+        },
+        "systems": {
+          "local_system": {
+            "type": "LocalSystem",
+            "config": {
+              "accelerators": [
+                {
+                  "device": "npu",
+                  "execution_providers": ["OpenVINOExecutionProvider"]
+                }
+              ]
+            }
+          }
+        },
+        "passes": {
+          "convert": {
+            "type": "OnnxConversion",
+            "config": {
+              "target_opset": 14
+            }
+          },
+          "openvino": {
+            "type": "OpenVINOConversion"
+          },
+          "quant": {
+            "type": "OpenVINOQuantization",
+            "config": {
+              "preset": "performance"
+            }
+          }
+        },
+        "engine": {
+          "search_strategy": false,
+          "host": "local_system",
+          "target": "local_system",
+          "cache_dir": ".cache",
+          "output_dir": "outputs/mobilenet_openvino_npu"
+        }
+      },
+      "notes": "Set openvinoTargetDevice=NPU (device=NPU) in Studio/provider options. Requires Intel Core Ultra NPU driver; unsupported ops may CPU-fallback."
+    },
+    {
+      "id": "bert_webgpu_fp16",
+      "name": "BERT FP16 WebGPU (browser export)",
+      "description": "FP16 ONNX export of BERT for in-browser ORT Web WebGPU (export-only; not local Olive Execute Live).",
+      "model_type": ["Transformer", "NLP", "BERT"],
+      "target_hardware": ["WebGPU (Browser)"],
+      "source_format": "HuggingFace",
+      "passes": ["OnnxConversion", "OnnxModelOptimizer", "OnnxFloatToFloat16"],
+      "recipe": {
+        "input_model": {
+          "type": "HuggingfaceModel",
+          "config": {
+            "model_path": "bert-base-uncased",
+            "task": "feature-extraction"
+          }
+        },
+        "systems": {
+          "local_system": {
+            "type": "LocalSystem",
+            "config": {
+              "accelerators": [
+                {
+                  "device": "cpu",
+                  "execution_providers": ["WebGpuExecutionProvider"]
+                }
+              ]
+            }
+          }
+        },
+        "passes": {
+          "convert": {
+            "type": "OnnxConversion",
+            "config": {
+              "target_opset": 14
+            }
+          },
+          "optimize": {
+            "type": "OnnxModelOptimizer"
+          },
+          "fp16": {
+            "type": "OnnxFloatToFloat16",
+            "config": {
+              "keep_io_types": true
+            }
+          }
+        },
+        "engine": {
+          "search_strategy": false,
+          "host": "local_system",
+          "target": "local_system",
+          "cache_dir": ".cache",
+          "output_dir": "outputs/bert_webgpu_fp16"
+        }
+      },
+      "notes": "Export-only recipe for browser ORT Web WebGPU. Local Olive Execute Live is blocked (isRunnable: false). device=cpu is the Studio convention for browser export hosts."
     }
   ]
 }

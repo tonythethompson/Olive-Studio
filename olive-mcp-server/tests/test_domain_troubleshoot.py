@@ -77,3 +77,33 @@ def test_call_tool_diagnose_error_registered():
     )
     assert result["domain"] == "studio"
     assert result["matched_entry"] == "studio-pytorch-hf-config"
+
+
+def test_webgpu_entry_requires_webgpu_signal():
+    """Generic isRunnable / localExecutionIssues must not alone match WebGPU."""
+    generic = troubleshoot_olive_error(
+        "Recipe validation failed: isRunnable false due to localExecutionIssues",
+        domain="studio",
+    )
+    assert generic.get("matched_entry") != "studio-webgpu-local-blocked"
+
+    specific = troubleshoot_olive_error(
+        "WebGpuExecutionProvider selected; local Execute Live blocked for browser WebGPU",
+        domain="studio",
+    )
+    assert specific["matched_entry"] == "studio-webgpu-local-blocked"
+
+
+def test_openvino_npu_entry_requires_npu_signal():
+    """Bare OpenVINOExecutionProvider / openvinoTargetDevice must not alone match NPU."""
+    generic = troubleshoot_olive_error(
+        "OpenVINOExecutionProvider selected with openvinoTargetDevice CPU",
+        domain="studio",
+    )
+    assert generic.get("matched_entry") != "studio-openvino-npu-device"
+
+    specific = troubleshoot_olive_error(
+        "OpenVINO NPU path: set openvinoTargetDevice: NPU on Core Ultra NPU",
+        domain="studio",
+    )
+    assert specific["matched_entry"] == "studio-openvino-npu-device"

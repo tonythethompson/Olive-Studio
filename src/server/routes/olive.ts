@@ -16,6 +16,7 @@ import { normalizeIhvProvider } from "../../lib/venvFamily.ts";
 import { resolveQnnHostMode } from "../../lib/qnnDeps.ts";
 import { assessQnnRecipeReadiness } from "../../lib/qnnReadiness.ts";
 import { DEFAULT_PASSES } from "../../lib/defaultPasses.ts";
+import { isExportTargetProvider } from "../../lib/providerRuntimeKind.ts";
 
 import {
   jobRegistry,
@@ -35,6 +36,7 @@ import {
 } from "../services/venv/index.ts";
 import type { OliveRecipe, OliveJob } from "../types.ts";
 import { oliveRunRateLimit } from "../middleware/rateLimit.ts";
+import { isParseBodyError, parseBody } from "../middleware/bodyGuard.ts";
 import type { HardwareProbeResult } from "../../lib/hardwareProbe.ts";
 
 /** Grace period after SIGTERM before escalating cancel to SIGKILL. */
@@ -56,10 +58,12 @@ export function mountOliveRoutes(router: Router): void {
 
   // ─── POST /api/olive/run ──────────────────────────────────────────────
   router.post("/olive/run", oliveRunRateLimit, async (req, res) => {
-    const { recipeJson, cudaVersion = "auto" } = req.body as { recipeJson?: string; cudaVersion?: string };
-    if (!recipeJson) {
-      return res.status(400).json({ ok: false, error: "Missing recipeJson" });
-    }
+    const body = parseBody<{ recipeJson: string; cudaVersion?: string }>(req.body, {
+      recipeJson: { type: "string", message: "Missing recipeJson" },
+      cudaVersion: { type: "string", required: false },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ ok: false, error: body.error });
+    const { recipeJson, cudaVersion = "auto" } = body.parsed;
 
     let recipe: OliveRecipe;
     try {
@@ -81,6 +85,13 @@ export function mountOliveRoutes(router: Router): void {
       return res.status(400).json({
         ok: false,
         error: `Unknown execution provider: ${String(providerRaw)}`,
+      });
+    }
+
+    if (isExportTargetProvider(provider)) {
+      return res.status(400).json({
+        ok: false,
+        error: `${provider} cannot run via local Olive Python; export the recipe for the target runtime instead`,
       });
     }
 
@@ -389,8 +400,15 @@ export function mountOliveRoutes(router: Router): void {
 
   // ─── Cancel ───────────────────────────────────────────────────────────
   router.post("/olive/cancel", (req, res) => {
-    const { jobId } = req.body ?? {};
-    const job = jobRegistry.get(jobId);
+    // express.json() leaves body undefined when the client sends no payload;
+    // optional jobId means an empty object preserves the 404 "Job not found" contract.
+    // Preserve null so parseBody can reject an explicit JSON null body.
+    const body = parseBody<{ jobId?: string }>(req.body === undefined ? {} : req.body, {
+      jobId: { type: "string", required: false },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const { jobId } = body.parsed;
+    const job = jobId ? jobRegistry.get(jobId) : undefined;
     if (!job) return res.status(404).json({ error: "Job not found" });
 
     // Already terminal — nothing to cancel.

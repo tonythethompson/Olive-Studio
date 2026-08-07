@@ -27,6 +27,7 @@ import {
   LMS_GET_MAX_MS,
 } from "./localEngines.ts";
 import { trackStreamClient, beginPullSse } from "./streamHelpers.ts";
+import { parseBody, isParseBodyError } from "../../middleware/bodyGuard.ts";
 
 export function mountLmStudioRoutes(router: Router): void {
   router.get("/ai/local-models", async (_req, res) => {
@@ -76,13 +77,16 @@ export function mountLmStudioRoutes(router: Router): void {
 
   router.get("/ai/local-health", async (_req, res) => {
     const healthy = await isLmsServerRunning();
-    const lmsCli = findLmsCli();
+    const lmsCli = await findLmsCli();
     return res.json({ healthy, lmsInstalled: !!lmsCli });
   });
 
   router.post("/ai/local-load", async (req, res) => {
-    const { modelTag } = req.body ?? {};
-    if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
+    const body = parseBody<{ modelTag: string }>(req.body, {
+      modelTag: { type: "string" },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const { modelTag } = body.parsed;
     try {
       const r = await fetch(`http://127.0.0.1:${LM_STUDIO_PORT}/v1/models/load`, {
         method: "POST",
@@ -100,8 +104,11 @@ export function mountLmStudioRoutes(router: Router): void {
   });
 
   router.post("/ai/local-unload", async (req, res) => {
-    const { modelTag } = req.body ?? {};
-    if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
+    const body = parseBody<{ modelTag: string }>(req.body, {
+      modelTag: { type: "string", message: "Missing modelTag" },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const { modelTag } = body.parsed;
     try {
       const r = await fetch(`http://127.0.0.1:${LM_STUDIO_PORT}/v1/models/unload`, {
         method: "POST",
@@ -119,8 +126,11 @@ export function mountLmStudioRoutes(router: Router): void {
   });
 
   router.post("/ai/local-pull", heavyCommandRateLimit, async (req, res) => {
-    const { modelTag } = req.body ?? {};
-    if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
+    const body = parseBody<{ modelTag: string }>(req.body, {
+      modelTag: { type: "string", message: "Missing modelTag" },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const { modelTag } = body.parsed;
     const guard = trackStreamClient(req, res);
     const rawSend = beginPullSse(res);
     const send = (evt: Record<string, unknown>) => {
@@ -154,7 +164,8 @@ export function mountLmStudioRoutes(router: Router): void {
       }
 
       localEngineRuntime.lmsPullBusyTag = tag;
-      const ready = await ensureLmsReady((evt) => send(evt));
+      // Waiter-based abort: shared ensure continues while other clients wait.
+      const ready = await ensureLmsReady((evt) => send(evt), guard.signal);
       if (guard.disconnected()) {
         releaseBusy();
         guard.endOnce();
@@ -170,7 +181,7 @@ export function mountLmStudioRoutes(router: Router): void {
         guard.endOnce();
         return;
       }
-      const lmsCli = findLmsCli();
+      const lmsCli = await findLmsCli();
       if (!lmsCli) {
         send({
           type: "error",

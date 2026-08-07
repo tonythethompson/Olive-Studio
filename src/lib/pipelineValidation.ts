@@ -1,10 +1,15 @@
-import { IHVProvider, UIState, OliveRecipe } from "@/types";
+import { IHVProvider, ModelSource, UIState, OliveRecipe } from "@/types";
 import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
 import { getProviderAvailabilityBlock, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { buildOliveRecipe, isPyTorchNativeQuantMethod } from "@/lib/oliveRecipeBuilder";
 import { assessQnnRecipeReadiness, type QnnReadinessIssue } from "@/lib/qnnReadiness";
 import { isKnownPass, getPassSchema } from "@/lib/schemaEngine";
 import { pickOpenVinoTargetFromDevices } from "@/lib/openvinoDeps";
+import {
+  isExportTargetProvider,
+  isLegacyExportProvider,
+  isPlatformLocalProvider,
+} from "@/lib/providerRuntimeKind";
 
 export type PipelineValidationOptions = {
   hardwareProbe?: HardwareProbeResult | null;
@@ -700,22 +705,62 @@ function getPassCatalogIssues(state: UIState, recipe: OliveRecipe): PipelineIssu
  *
  * @param state - The current pipeline configuration.
  * @param forLocalExecution - Whether the pipeline is being prepared for local execution.
+ * @param probe - Optional hardware probe (needed to clear platform-local gates).
  * @returns Critical issues affecting local execution.
  */
-export function getLocalExecutionIssues(state: UIState, forLocalExecution?: boolean): PipelineIssue[] {
-  if (!forLocalExecution || state.ihvProvider !== "WebGpuExecutionProvider") {
+export function getLocalExecutionIssues(
+  state: UIState,
+  forLocalExecution?: boolean,
+  probe?: HardwareProbeResult | null,
+): PipelineIssue[] {
+  if (!forLocalExecution) {
     return [];
   }
-  return [
-    {
-      id: "webgpu-local-execution-unsupported",
-      severity: "critical",
-      title: "WebGPU cannot run via local Olive Python",
-      description:
-        "WebGpuExecutionProvider is a browser deploy target (ONNX Runtime Web), not a local Python EP. Export the recipe and use Browser Test / WebGPU benchmark instead of Execute Live.",
-      affectedPasses: ["provider"],
-    },
-  ];
+
+  const provider = state.ihvProvider;
+  if (isExportTargetProvider(provider)) {
+    const legacyNote = isLegacyExportProvider(provider)
+      ? " Prefer QNNExecutionProvider for Snapdragon NPU work."
+      : "";
+    if (provider === "WebGpuExecutionProvider") {
+      return [
+        {
+          id: "webgpu-local-execution-unsupported",
+          severity: "critical",
+          title: "WebGPU cannot run via local Olive Python",
+          description:
+            "WebGpuExecutionProvider is a browser deploy target (ONNX Runtime Web), not a local Python EP. Export the recipe and use Browser Test / WebGPU benchmark instead of Execute Live.",
+          affectedPasses: ["provider"],
+        },
+      ];
+    }
+    return [
+      {
+        id: "export-target-local-execution-unsupported",
+        severity: "critical",
+        title: `${provider} cannot run via local Olive Python`,
+        description: `${provider} is an export / deploy target, not a local Python execution provider. Build or export the recipe for the target runtime instead of Execute Live.${legacyNote}`,
+        affectedPasses: ["provider"],
+      },
+    ];
+  }
+
+  if (isPlatformLocalProvider(provider)) {
+    const detected = Boolean(probe?.detectedProviders.includes(provider));
+    if (!detected) {
+      return [
+        {
+          id: "platform-local-execution-unavailable",
+          severity: "critical",
+          title: `${provider} is not available for local Execute Live`,
+          description: `${provider} requires a matching ORT build on this host (and must appear in the hardware probe). You can still select it for recipe export; Execute Live stays blocked until it is detected.`,
+          affectedPasses: ["provider"],
+        },
+      ];
+    }
+  }
+
+  return [];
 }
 
 /**
@@ -754,7 +799,7 @@ export function getPipelineValidation(
     ...getProviderIssues(state),
     ...getProviderHardwareIssues(state, options?.hardwareProbe),
     ...getQnnRecipeReadinessIssues(state, recipe, options?.hardwareProbe),
-    ...getLocalExecutionIssues(state, options?.forLocalExecution),
+    ...getLocalExecutionIssues(state, options?.forLocalExecution, options?.hardwareProbe),
     ...getAdvisoryIssues(state),
     ...getRecipeRuntimeIssues(state, recipe),
     ...getPassCatalogIssues(state, recipe),
@@ -796,7 +841,10 @@ export function applyIssueAutofix(state: UIState, issue: PipelineIssue): Partial
   return next;
 }
 
-export function mergeUiState(state: UIState, patch: Partial<UIState>): UIState {
+/** Partial UIState merge patch; nested `passes` keys are shallow-merged at runtime. */
+export type UiStatePatch = Partial<Omit<UIState, "passes">> & { passes?: Partial<UIState["passes"]> };
+
+export function mergeUiState(state: UIState, patch: UiStatePatch): UIState {
   // Replace (do not deep-merge) when the key is present so recipe loads can
   // clear stale MCP overrides with `passRecipeOverrides: {}`. Callers that need
   // incremental accumulation (MCP Apply Fix) must merge onto current overrides
@@ -886,6 +934,54 @@ export function sanitizePipelineState(state: UIState): UIState {
   }
 
   return current;
+}
+
+const UI_STATE_MODEL_SOURCES = new Set<ModelSource>(["huggingface", "local", "azure"]);
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Validates an untrusted `state` payload before `buildAiWorkspaceContext`. */
+export function parseUIStatePayload(
+  value: unknown,
+): { ok: true; state: UIState } | { ok: false; error: string } {
+  if (!isPlainRecord(value)) {
+    return { ok: false, error: "state must be a JSON object" };
+  }
+  if (
+    typeof value.modelSource !== "string" ||
+    !UI_STATE_MODEL_SOURCES.has(value.modelSource as ModelSource)
+  ) {
+    return { ok: false, error: "state.modelSource is invalid" };
+  }
+  if (typeof value.ihvProvider !== "string" || !value.ihvProvider.endsWith("ExecutionProvider")) {
+    return { ok: false, error: "state.ihvProvider is invalid" };
+  }
+  if (!isPlainRecord(value.passes)) {
+    return { ok: false, error: "state.passes must be a JSON object" };
+  }
+  if (!Array.isArray(value.localFiles)) {
+    return { ok: false, error: "state.localFiles must be an array" };
+  }
+  for (const field of [
+    "hfModelId",
+    "hfDataset",
+    "azureModelPath",
+    "cacheDir",
+    "azureStr",
+    "openvinoTargetDevice",
+    "memoryOffload",
+    "cudaVersion",
+  ] as const) {
+    if (typeof value[field] !== "string") {
+      return { ok: false, error: `state.${field} must be a string` };
+    }
+  }
+  if (typeof value.distributedCaching !== "boolean") {
+    return { ok: false, error: "state.distributedCaching must be a boolean" };
+  }
+  return { ok: true, state: value as unknown as UIState };
 }
 
 export function commitUiStateUpdate(prev: UIState, partial: Partial<UIState>): UIState {

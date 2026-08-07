@@ -3,23 +3,29 @@ import { UIState } from "@/types";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import { commitUiStateUpdate } from "@/lib/pipelineValidation";
 
-const defaultState: UIState = {
-  modelSource: "huggingface",
-  localFiles: [],
-  azureModelPath: "",
-  hfModelId: "meta-llama/Meta-Llama-3-8B",
-  hfTask: "",
-  hfDataset: "",
-  ihvProvider: "CPUExecutionProvider",
-  openvinoTargetDevice: "CPU",
-  memoryOffload: "gpu_only",
-  cudaVersion: "auto",
-  cacheDir: "",
-  azureStr: "",
-  distributedCaching: false,
-  activeJobId: null,
-  passes: { ...DEFAULT_PASSES },
-};
+/**
+ * Pure factory for default pipeline UI state.
+ * Returns a fresh object each call (no shared mutable singleton).
+ */
+export function createDefaultPipelineState(): UIState {
+  return {
+    modelSource: "huggingface",
+    localFiles: [],
+    azureModelPath: "",
+    hfModelId: "meta-llama/Meta-Llama-3-8B",
+    hfTask: "",
+    hfDataset: "",
+    ihvProvider: "CPUExecutionProvider",
+    openvinoTargetDevice: "CPU",
+    memoryOffload: "gpu_only",
+    cudaVersion: "auto",
+    cacheDir: "",
+    azureStr: "",
+    distributedCaching: false,
+    activeJobId: null,
+    passes: { ...DEFAULT_PASSES },
+  };
+}
 
 interface PipelineStore {
   state: UIState;
@@ -31,7 +37,7 @@ interface PipelineStore {
 }
 
 export const usePipelineStore = create<PipelineStore>((set) => ({
-  state: defaultState,
+  state: createDefaultPipelineState(),
 
   setState: (partial) =>
     set((store) => ({
@@ -45,7 +51,7 @@ export const usePipelineStore = create<PipelineStore>((set) => ({
 
   resetState: () =>
     set({
-      state: commitUiStateUpdate(defaultState, {}),
+      state: commitUiStateUpdate(createDefaultPipelineState(), {}),
     }),
 }));
 

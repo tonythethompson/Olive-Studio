@@ -48,6 +48,14 @@ describe("PROVIDER_CATALOG", () => {
     expect(ids).toContain("ROCMExecutionProvider");
     expect(ids).toContain("QNNExecutionProvider");
     expect(ids).toContain("WebGpuExecutionProvider");
+    expect(ids).toContain("CoreMLExecutionProvider");
+    expect(ids).toContain("NNAPIExecutionProvider");
+    expect(ids).toContain("VitisAIExecutionProvider");
+    expect(ids).toContain("SNPEExecutionProvider");
+    expect(ids).toContain("TensorflowLiteExecutionProvider");
+    expect(ids).toContain("XnnpackExecutionProvider");
+    expect(ids).toContain("WasmExecutionProvider");
+    expect(ids).toHaveLength(16);
   });
 
   it("returns the matching entry from getProviderCatalogEntry", () => {

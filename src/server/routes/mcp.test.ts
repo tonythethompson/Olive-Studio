@@ -2,16 +2,41 @@
  * Route-level coverage for the MCP KB endpoints: the failure taxonomy
  * (missing / unreadable / invalid JSON / schema-invalid), sanitized client
  * error messages, caching of a successful status, and the non-2xx sync failure.
+ * Also covers the tool proxy: the open-breaker 503 short-circuit and a
+ * successful proxied call that spawns (mocked) Python.
  *
  * `fs.readFileSync` is stubbed per-test so no real KB file is required.
+ *
+ * `child_process` is mocked via `src/server/__tests__/childProcessTestMocks.ts`.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
+
+const mcpToolMocks = vi.hoisted(() => ({
+  execFileImpl: null as null | ((...args: unknown[]) => unknown),
+  spawnImpl: null as null | ((...args: unknown[]) => unknown),
+  execFileCalls: [] as unknown[][],
+}));
+
+vi.mock("child_process", async (importOriginal) => {
+  const { childProcessVitestMockFactory } = await import("../__tests__/childProcessTestMocks.ts");
+  return childProcessVitestMockFactory(mcpToolMocks, { trackExecFileCalls: true })(importOriginal);
+});
+
 import express from "express";
 import type { Server } from "http";
 import fs from "fs";
 
 import { mountMcpRoutes } from "./mcp.ts";
 import { setKbStatusCache } from "../services/mcp/state.ts";
+import mcpBreaker, { resetMcpBreaker } from "../services/mcp/breaker.ts";
+
+function tripMcpBreaker(): void {
+  for (let i = 0; i < 3; i += 1) {
+    const admission = mcpBreaker.beforeCall();
+    if (!admission) return;
+    mcpBreaker.recordFailure(admission.epoch);
+  }
+}
 
 const VALID_KB = JSON.stringify({
   version: "2.0",
@@ -60,6 +85,9 @@ afterAll(async () => {
 
 beforeEach(() => {
   setKbStatusCache(null);
+  resetMcpBreaker();
+  mcpToolMocks.execFileImpl = null;
+  mcpToolMocks.execFileCalls.length = 0;
 });
 
 afterEach(() => {
@@ -149,5 +177,54 @@ describe("POST /api/mcp/sync-kb", () => {
     const body = await res.json();
     expect(body).toMatchObject({ ok: false, reason: "missing" });
     expect(body.error).toBe("Knowledge base has not been generated yet.");
+  });
+});
+
+describe("POST /api/mcp/tool", () => {
+  it("short-circuits with 503 when the breaker is open", async () => {
+    tripMcpBreaker();
+
+    const res = await fetch(`${baseUrl}/api/mcp/tool`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toolName: "get_olive_passes", args: {} }),
+    });
+
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body).toEqual({ available: false, error: expect.any(String) });
+    // The short-circuit must not spawn a Python subprocess.
+    expect(mcpToolMocks.execFileCalls).toHaveLength(0);
+  });
+
+  it("returns 400 for an unknown toolName", async () => {
+    const res = await fetch(`${baseUrl}/api/mcp/tool`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toolName: "not_a_real_tool", args: {} }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Unknown toolName" });
+    expect(mcpToolMocks.execFileCalls).toHaveLength(0);
+  });
+
+  it("returns 200 with the tool result when the closed breaker proxies valid JSON", async () => {
+    mcpToolMocks.execFileImpl = () =>
+      Promise.resolve({ stdout: '[{"tool":"get_olive_passes","result":{"ok":true}}]', stderr: "" });
+
+    const res = await fetch(`${baseUrl}/api/mcp/tool`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toolName: "get_olive_passes", args: {} }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Clients expect the tool payload at the top level, not wrapped in `result`.
+    expect(body).toEqual({ ok: true });
+    // The client's promisified execFile (custom-symbol handler) was actually
+    // invoked and settled — exercising the path that used to hang forever.
+    expect(mcpToolMocks.execFileCalls).toHaveLength(1);
   });
 });

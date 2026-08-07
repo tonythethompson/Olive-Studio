@@ -17,6 +17,7 @@ import {
   OLLAMA_PULL_MAX_MS,
 } from "./localEngines.ts";
 import { trackStreamClient, beginPullSse } from "./streamHelpers.ts";
+import { isParseBodyError, parseBody } from "../../middleware/bodyGuard.ts";
 
 export function mountOllamaRoutes(router: Router): void {
   router.get("/ai/ollama-models", async (_req, res) => {
@@ -60,8 +61,11 @@ export function mountOllamaRoutes(router: Router): void {
   });
 
   router.post("/ai/ollama-pull", heavyCommandRateLimit, async (req, res) => {
-    const { modelTag } = req.body ?? {};
-    if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
+    const body = parseBody<{ modelTag: string }>(req.body, {
+      modelTag: { type: "string", message: "Missing modelTag" },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const { modelTag } = body.parsed;
     const guard = trackStreamClient(req, res);
     const rawSend = beginPullSse(res);
     const send = (evt: Record<string, unknown>) => {
@@ -78,6 +82,8 @@ export function mountOllamaRoutes(router: Router): void {
     };
     let maxTimer: ReturnType<typeof setTimeout> | null = null;
     let timedOut = false;
+    /** Clears pull mutex as soon as the client disconnects (does not wait for shared readiness). */
+    let onClientAbort: (() => void) | undefined;
     try {
       if (!isValidLocalModelTag(tag)) {
         send({ type: "error", error: "Invalid modelTag." });
@@ -102,8 +108,26 @@ export function mountOllamaRoutes(router: Router): void {
 
       localEngineRuntime.ollamaPullBusyTag = tag;
       ownsBusy = true;
-      // Shared ensure continues for other clients; this request just stops consuming progress.
-      const ready = await ensureOllamaReady((evt) => send(evt));
+      // Shared ensure continues for other waiters; this pull must drop the mutex on abort
+      // so a second pull is not blocked while readiness is still in flight.
+      let settleAbortWait: (() => void) | undefined;
+      onClientAbort = () => {
+        releaseBusy();
+        settleAbortWait?.();
+      };
+      guard.signal.addEventListener("abort", onClientAbort);
+      if (guard.signal.aborted) {
+        onClientAbort();
+        guard.endOnce();
+        return;
+      }
+      const ready = await Promise.race([
+        ensureOllamaReady((evt) => send(evt), guard.signal),
+        new Promise<Awaited<ReturnType<typeof ensureOllamaReady>>>((resolve) => {
+          settleAbortWait = () =>
+            resolve({ ok: false, steps: [], cancelled: true, error: "Setup cancelled." });
+        }),
+      ]);
       if (guard.disconnected()) {
         releaseBusy();
         guard.endOnce();
@@ -253,6 +277,7 @@ export function mountOllamaRoutes(router: Router): void {
         }
       }
     } finally {
+      if (onClientAbort) guard.signal.removeEventListener("abort", onClientAbort);
       if (maxTimer) clearTimeout(maxTimer);
       releaseBusy();
       guard.endOnce();
@@ -260,8 +285,11 @@ export function mountOllamaRoutes(router: Router): void {
   });
 
   router.post("/ai/ollama-load", async (req, res) => {
-    const { modelTag } = req.body ?? {};
-    if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
+    const body = parseBody<{ modelTag: string }>(req.body, {
+      modelTag: { type: "string", message: "Missing modelTag" },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const { modelTag } = body.parsed;
     try {
       const r = await fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/generate`, {
         method: "POST",
@@ -279,8 +307,11 @@ export function mountOllamaRoutes(router: Router): void {
   });
 
   router.post("/ai/ollama-unload", async (req, res) => {
-    const { modelTag } = req.body ?? {};
-    if (!modelTag) return res.status(400).json({ error: "Missing modelTag" });
+    const body = parseBody<{ modelTag: string }>(req.body, {
+      modelTag: { type: "string", message: "Missing modelTag" },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const { modelTag } = body.parsed;
     try {
       const r = await fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/generate`, {
         method: "POST",

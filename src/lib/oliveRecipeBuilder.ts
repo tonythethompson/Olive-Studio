@@ -10,7 +10,13 @@ const GPU_PROVIDERS: IHVProvider[] = [
   "WebGpuExecutionProvider",
   "DmlExecutionProvider",
 ];
-const NPU_PROVIDERS: IHVProvider[] = ["QNNExecutionProvider"];
+const NPU_PROVIDERS: IHVProvider[] = [
+  "QNNExecutionProvider",
+  "CoreMLExecutionProvider",
+  "NNAPIExecutionProvider",
+  "VitisAIExecutionProvider",
+  "SNPEExecutionProvider",
+];
 
 /**
  * Ordered task-inference rules — first match wins. Order is significant
@@ -176,6 +182,376 @@ function finalizePasses(
   return out;
 }
 
+// ─── Per-pass builders ────────────────────────────────────────────────
+
+/** A single Olive pass as written into recipe.passes[<key>]. */
+type PassSpec = { type: string; config: Record<string, unknown> };
+
+type ConversionFormat = UIState["passes"]["conversionFormat"];
+type QuantMethod = UIState["passes"]["quantMethod"];
+type PruningMethod = UIState["passes"]["pruningMethod"];
+
+/** Effective pipeline family derived from conversion format + provider (first match wins). */
+type FormatFamily = "openvino" | "qnn" | "tensorrt" | "onnx";
+
+/** Shared per-recipe values computed once in buildOliveRecipe. */
+type RecipeBuildContext = {
+  torchQuantActive: boolean;
+  useMemoryOffload: boolean;
+};
+
+type PassBuilder = (state: UIState, ctx: RecipeBuildContext) => PassSpec | undefined;
+
+type IntQuantPrecision = Extract<UIState["passes"]["quantPrecision"], "int4" | "int8">;
+
+/** Builders that only distinguish int4 vs wider int quant collapse fp16 onto int8. */
+function asIntQuantPrecision(precision: UIState["passes"]["quantPrecision"]): IntQuantPrecision {
+  return precision === "int4" ? "int4" : "int8";
+}
+
+const INT_QUANT_SPECS = {
+  int4: {
+    bits: 4,
+    precision: "int4",
+    openVinoPassType: "OpenVINOWeightCompression",
+    tensorRtPassType: "Nvfp4Quantizer",
+  },
+  int8: {
+    bits: 8,
+    precision: "int8",
+    openVinoPassType: "OpenVINOQuantization",
+    tensorRtPassType: "OnnxQuantization",
+  },
+} as const satisfies Record<
+  IntQuantPrecision,
+  {
+    bits: 4 | 8;
+    precision: IntQuantPrecision;
+    openVinoPassType: string;
+    tensorRtPassType: string;
+  }
+>;
+
+function intQuantSpec(precision: UIState["passes"]["quantPrecision"]) {
+  return INT_QUANT_SPECS[asIntQuantPrecision(precision)];
+}
+
+type QuantMethodBuilder = {
+  gate?: (state: UIState) => boolean;
+  build: (state: UIState) => PassSpec;
+};
+
+function effectiveFormatFamily(state: UIState): FormatFamily {
+  if (state.passes.conversionFormat === "openvino" || state.ihvProvider === "OpenVINOExecutionProvider") {
+    return "openvino";
+  }
+  if (state.passes.conversionFormat === "qnn" || state.ihvProvider === "QNNExecutionProvider") {
+    return "qnn";
+  }
+  if (state.passes.conversionFormat === "tensorrt" || state.ihvProvider === "TensorrtExecutionProvider") {
+    return "tensorrt";
+  }
+  // ROCM / DirectML / WebGPU (and other ONNX EPs) share the default ONNX quant path;
+  // there is no EP-specific Olive quant pass for those providers.
+  return "onnx";
+}
+
+const isCpuOrCuda = (state: UIState): boolean =>
+  state.ihvProvider === "CPUExecutionProvider" || state.ihvProvider === "CUDAExecutionProvider";
+
+/** Calibration datasets and custom scripts are shared by every quantization branch. */
+function withCalibrationData(
+  base: Record<string, unknown>,
+  state: UIState,
+): Record<string, unknown> {
+  const config = { ...base };
+  if (state.hfDataset) {
+    config.data_config = { data_dir: state.hfDataset, batch_size: 1 };
+  }
+  if (state.userScript) {
+    config.user_script = state.userScript;
+  }
+  return config;
+}
+
+// ─── Conversion ───────────────────────────────────────────────────────
+
+function buildOpenVinoConversion(_state: UIState): PassSpec {
+  return { type: "OpenVINOConversion", config: {} };
+}
+
+function buildOnnxConversion(state: UIState): PassSpec {
+  return {
+    type: "OnnxConversion",
+    config: {
+      target_opset: state.passes.conversionOpset,
+      input_model_dtype: state.passes.conversionInputTargetTypes,
+      source_format: state.passes.conversionSourceFormat,
+    },
+  };
+}
+
+const CONVERSION_BUILDERS: Record<ConversionFormat, (state: UIState) => PassSpec> = {
+  onnx: buildOnnxConversion,
+  qnn: () => ({ type: "QNNConversion", config: {} }),
+  tensorrt: () => ({ type: "TensorRTConversion", config: {} }),
+  openvino: buildOpenVinoConversion,
+};
+
+function buildConversionPass(state: UIState): PassSpec | undefined {
+  if (!state.passes.conversion) return undefined;
+  return CONVERSION_BUILDERS[state.passes.conversionFormat](state);
+}
+
+// ─── Quantization ─────────────────────────────────────────────────────
+
+function buildAwqQuantizer(state: UIState): PassSpec {
+  const quant = intQuantSpec(state.passes.quantPrecision);
+  return {
+    type: "AutoAWQQuantizer",
+    config: withCalibrationData(
+      {
+        bits: quant.bits,
+        input_model_dtype: state.passes.conversionInputTargetTypes || "fp16",
+        group_size: state.passes.awqGroupSize,
+        damp_percent: state.passes.awqDampPercent,
+        sym: state.passes.awqSym,
+      },
+      state,
+    ),
+  };
+}
+
+function buildGptqQuantizer(state: UIState): PassSpec {
+  const quant = intQuantSpec(state.passes.quantPrecision);
+  return {
+    type: "GptqQuantizer",
+    config: withCalibrationData(
+      {
+        bits: quant.bits,
+        input_model_dtype: state.passes.conversionInputTargetTypes || "fp16",
+        block_size: state.passes.gptqBlockSize,
+        group_size: state.passes.gptqGroupSize,
+        desc_act: state.passes.gptqDescAct,
+      },
+      state,
+    ),
+  };
+}
+
+function buildQatQuantizer(state: UIState): PassSpec {
+  return {
+    type: "QATQuantizer",
+    config: withCalibrationData(
+      {
+        precision: state.passes.qatQuantPrecision,
+        calibrate_method: state.passes.qatCalibrateMethod,
+        calibrate_steps: state.passes.qatCalibrateSteps,
+      },
+      state,
+    ),
+  };
+}
+
+// Docs: https://microsoft.github.io/Olive/0.12.1/reference/options.html -> OnnxHqqQuantization
+function buildHqqQuantizer(state: UIState): PassSpec {
+  const quant = intQuantSpec(state.passes.quantPrecision);
+  return {
+    type: "OnnxHqqQuantization",
+    config: withCalibrationData(
+      { precision: quant.precision },
+      state,
+    ),
+  };
+}
+
+// Docs: https://microsoft.github.io/Olive/0.12.1/reference/options.html -> OnnxBlockWiseRtnQuantization
+function buildRtnQuantizer(state: UIState): PassSpec {
+  const quant = intQuantSpec(state.passes.quantPrecision);
+  return {
+    type: "OnnxBlockWiseRtnQuantization",
+    config: withCalibrationData(
+      {
+        bits: quant.bits,
+        block_size: 128,
+        is_symmetric: true,
+      },
+      state,
+    ),
+  };
+}
+
+function buildSpinQuantQuantizer(state: UIState): PassSpec {
+  return {
+    type: "SpinQuant",
+    config: withCalibrationData({ rotate_mode: "hadamard" }, state),
+  };
+}
+
+function buildQuaRotQuantizer(state: UIState): PassSpec {
+  return {
+    type: "QuaRot",
+    config: withCalibrationData({ rotate_mode: "hadamard" }, state),
+  };
+}
+
+/**
+ * First-match-wins quant dispatch: PyTorch-native method builders first,
+ * then provider/format-family builders (hqq/rtn fall through when their
+ * provider gate fails, exactly as the original branch chain did).
+ */
+const QUANT_METHOD_BUILDERS: Partial<Record<QuantMethod, QuantMethodBuilder>> = {
+  awq: { build: buildAwqQuantizer },
+  gptq: { build: buildGptqQuantizer },
+  qat: { build: buildQatQuantizer },
+  hqq: { gate: isCpuOrCuda, build: buildHqqQuantizer },
+  rtn: { gate: isCpuOrCuda, build: buildRtnQuantizer },
+  spinquant: { build: buildSpinQuantQuantizer },
+  quarot: { build: buildQuaRotQuantizer },
+};
+
+function buildOpenVinoQuantization(state: UIState): PassSpec {
+  return {
+    type: intQuantSpec(state.passes.quantPrecision).openVinoPassType,
+    config: withCalibrationData({}, state),
+  };
+}
+
+function buildQnnQuantization(state: UIState): PassSpec {
+  return { type: "QNNQuantization", config: withCalibrationData({}, state) };
+}
+
+function buildTensorRtQuantization(state: UIState): PassSpec {
+  return {
+    type: intQuantSpec(state.passes.quantPrecision).tensorRtPassType,
+    config: withCalibrationData({}, state),
+  };
+}
+
+function buildDefaultOnnxQuantization(state: UIState): PassSpec {
+  return {
+    type: "OnnxQuantization",
+    config: withCalibrationData(
+      {
+        quant_mode: "static",
+        precision: state.passes.quantPrecision,
+        quant_preprocess: true,
+      },
+      state,
+    ),
+  };
+}
+
+const FORMAT_QUANT_BUILDERS: Record<FormatFamily, (state: UIState) => PassSpec> = {
+  openvino: buildOpenVinoQuantization,
+  qnn: buildQnnQuantization,
+  tensorrt: buildTensorRtQuantization,
+  onnx: buildDefaultOnnxQuantization,
+};
+
+function buildQuantizationPass(state: UIState): PassSpec | undefined {
+  if (!state.passes.quantization) return undefined;
+  const methodBuilder = QUANT_METHOD_BUILDERS[state.passes.quantMethod];
+  if (methodBuilder && (!methodBuilder.gate || methodBuilder.gate(state))) {
+    return methodBuilder.build(state);
+  }
+  return FORMAT_QUANT_BUILDERS[effectiveFormatFamily(state)](state);
+}
+
+// ─── Transformer optimization ─────────────────────────────────────────
+
+function buildOrtTransformersOptimization(state: UIState): PassSpec {
+  const config: Record<string, unknown> = {
+    model_type: inferModelType(state.hfModelId || ""),
+    use_gpu: GPU_PROVIDERS.includes(state.ihvProvider),
+  };
+  if (state.userScript) {
+    config.user_script = state.userScript;
+  }
+  return { type: "OrtTransformersOptimization", config };
+}
+
+const FORMAT_TRANSFORM_BUILDERS: Record<FormatFamily, (state: UIState) => PassSpec> = {
+  openvino: () => ({ type: "OpenVINOIoUpdate", config: {} }),
+  qnn: () => ({ type: "QNNPreprocess", config: {} }),
+  tensorrt: () => ({ type: "NVModelOptGraphSurgery", config: { surgeries: ["replace-gqa"] } }),
+  onnx: buildOrtTransformersOptimization,
+};
+
+// ONNX graph passes cannot follow a torch-native quantizer without an ONNX conversion.
+function buildTransformerOptPass(state: UIState, ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!state.passes.onnxTransforms || (ctx.torchQuantActive && !state.passes.conversion)) {
+    return undefined;
+  }
+  return FORMAT_TRANSFORM_BUILDERS[effectiveFormatFamily(state)](state);
+}
+
+// ─── Splitting ────────────────────────────────────────────────────────
+
+function buildSplittingPass(state: UIState, ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!state.passes.splitting || (ctx.torchQuantActive && !state.passes.conversion)) {
+    return undefined;
+  }
+  return { type: "SplitModel", config: {} };
+}
+
+// ─── PEFT ─────────────────────────────────────────────────────────────
+
+function buildPeftPass(state: UIState, ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!state.passes.peft) return undefined;
+  const peftType = state.passes.peftMethod === "qlora" ? "QLoRA" : "LoRA";
+  const config: Record<string, unknown> = { r: 8, alpha: 16 };
+  if (state.passes.diffusionLora) {
+    config.diffusion_lora = true;
+  }
+  if (ctx.useMemoryOffload) {
+    Object.assign(config, buildPeftOffloadConfig());
+  }
+  return { type: peftType, config };
+}
+
+// ─── Pruning ──────────────────────────────────────────────────────────
+
+const PRUNING_TYPE_BY_METHOD: Record<PruningMethod, string> = {
+  magnitude: "Prune",
+  sparsegpt: "SparseGPT",
+  wanda: "Wanda",
+};
+
+function buildPruningPass(state: UIState): PassSpec | undefined {
+  if (!state.passes.pruning) return undefined;
+  const passType = PRUNING_TYPE_BY_METHOD[state.passes.pruningMethod] ?? "Prune";
+  const sparsityKey = passType === "Prune" ? "target_sparsity" : "sparsity_ratio";
+  const config: Record<string, unknown> = {
+    [sparsityKey]: state.passes.pruningSparsity,
+    // Preserve legacy key for older recipe-hub round-trip until hub reads the new keys.
+    sparsity: state.passes.pruningSparsity,
+    pruning_criteria: state.passes.pruningCriteria,
+  };
+  if (state.userScript) {
+    config.user_script = state.userScript;
+  }
+  return { type: passType, config };
+}
+
+// ─── Pass registry ────────────────────────────────────────────────────
+
+/**
+ * Per-pass builder registry. buildOliveRecipe invokes every builder with the
+ * shared context; a builder returns undefined when its pass is inactive.
+ * Registering a new pass type is a single entry in this object.
+ */
+const PASS_BUILDERS = {
+  conversion: buildConversionPass,
+  transformer_opt: buildTransformerOptPass,
+  quantization: buildQuantizationPass,
+  splitting: buildSplittingPass,
+  peft: buildPeftPass,
+  pruning: buildPruningPass,
+} satisfies Record<string, PassBuilder>;
+
+type PassKey = keyof typeof PASS_BUILDERS;
+
 /**
  * Reference-equality memo: UIState objects are immutable (each store commit
  * creates a fresh object), so the sanitize loop, buildRecipeFromState, and the
@@ -247,272 +623,10 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   // ONNX-only passes cannot precede them in the fixed pipeline order.
   const torchQuantActive = state.passes.quantization && isPyTorchNativeQuantMethod(state.passes.quantMethod);
 
-  if (state.passes.conversion) {
-    if (state.passes.conversionFormat === "onnx") {
-      passes.conversion = {
-        type: "OnnxConversion",
-        config: {
-          target_opset: state.passes.conversionOpset,
-          input_model_dtype: state.passes.conversionInputTargetTypes,
-          source_format: state.passes.conversionSourceFormat,
-        },
-      };
-    } else if (state.passes.conversionFormat === "qnn") {
-      passes.conversion = { type: "QNNConversion", config: {} };
-    } else if (state.passes.conversionFormat === "tensorrt") {
-      passes.conversion = { type: "TensorRTConversion", config: {} };
-    } else {
-      passes.conversion = { type: "OpenVINOConversion", config: {} };
-    }
-  }
-
-  if (state.passes.quantization) {
-    if (state.passes.quantMethod === "awq") {
-      const awqConfig: Record<string, unknown> = {
-        bits: state.passes.quantPrecision === "int4" ? 4 : 8,
-        input_model_dtype: state.passes.conversionInputTargetTypes || "fp16",
-        group_size: state.passes.awqGroupSize,
-        damp_percent: state.passes.awqDampPercent,
-        sym: state.passes.awqSym,
-      };
-      if (state.hfDataset) {
-        awqConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
-      }
-      if (state.userScript) {
-        awqConfig.user_script = state.userScript;
-      }
-      passes.quantization = {
-        type: "AutoAWQQuantizer",
-        config: awqConfig,
-      };
-    } else if (state.passes.quantMethod === "gptq") {
-      const gptqConfig: Record<string, unknown> = {
-        bits: state.passes.quantPrecision === "int4" ? 4 : 8,
-        input_model_dtype: state.passes.conversionInputTargetTypes || "fp16",
-        block_size: state.passes.gptqBlockSize,
-        group_size: state.passes.gptqGroupSize,
-        desc_act: state.passes.gptqDescAct,
-      };
-      if (state.hfDataset) {
-        gptqConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
-      }
-      if (state.userScript) {
-        gptqConfig.user_script = state.userScript;
-      }
-      passes.quantization = {
-        type: "GptqQuantizer",
-        config: gptqConfig,
-      };
-    } else if (state.passes.quantMethod === "qat") {
-      const qatConfig: Record<string, unknown> = {
-        precision: state.passes.qatQuantPrecision,
-        calibrate_method: state.passes.qatCalibrateMethod,
-        calibrate_steps: state.passes.qatCalibrateSteps,
-      };
-      if (state.hfDataset) {
-        qatConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
-      }
-      if (state.userScript) {
-        qatConfig.user_script = state.userScript;
-      }
-      passes.quantization = {
-        type: "QATQuantizer",
-        config: qatConfig,
-      };
-    } else if (
-      state.passes.quantMethod === "hqq" &&
-      (state.ihvProvider === "CPUExecutionProvider" || state.ihvProvider === "CUDAExecutionProvider")
-    ) {
-      // Docs: https://microsoft.github.io/Olive/0.12.1/reference/options.html -> OnnxHqqQuantization
-      const hqqConfig: Record<string, unknown> = {
-        precision: state.passes.quantPrecision === "int4" ? "int4" : "int8",
-      };
-      if (state.hfDataset) {
-        hqqConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
-      }
-      if (state.userScript) {
-        hqqConfig.user_script = state.userScript;
-      }
-      passes.quantization = {
-        type: "OnnxHqqQuantization",
-        config: hqqConfig,
-      };
-    } else if (
-      state.passes.quantMethod === "rtn" &&
-      (state.ihvProvider === "CPUExecutionProvider" || state.ihvProvider === "CUDAExecutionProvider")
-    ) {
-      // Docs: https://microsoft.github.io/Olive/0.12.1/reference/options.html -> OnnxBlockWiseRtnQuantization
-      const rtnConfig: Record<string, unknown> = {
-        bits: state.passes.quantPrecision === "int4" ? 4 : 8,
-        block_size: 128,
-        is_symmetric: true,
-      };
-      if (state.hfDataset) {
-        rtnConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
-      }
-      if (state.userScript) {
-        rtnConfig.user_script = state.userScript;
-      }
-      passes.quantization = {
-        type: "OnnxBlockWiseRtnQuantization",
-        config: rtnConfig,
-      };
-    } else if (state.passes.quantMethod === "spinquant") {
-      const spinConfig: Record<string, unknown> = { rotate_mode: "hadamard" };
-      if (state.hfDataset) {
-        spinConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
-      }
-      if (state.userScript) {
-        spinConfig.user_script = state.userScript;
-      }
-      passes.quantization = {
-        type: "SpinQuant",
-        config: spinConfig,
-      };
-    } else if (state.passes.quantMethod === "quarot") {
-      const quarotConfig: Record<string, unknown> = { rotate_mode: "hadamard" };
-      if (state.hfDataset) {
-        quarotConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
-      }
-      if (state.userScript) {
-        quarotConfig.user_script = state.userScript;
-      }
-      passes.quantization = {
-        type: "QuaRot",
-        config: quarotConfig,
-      };
-    } else if (
-      state.passes.conversionFormat === "openvino" ||
-      state.ihvProvider === "OpenVINOExecutionProvider"
-    ) {
-      const ovQuantConfig: Record<string, unknown> = {};
-      if (state.hfDataset) {
-        ovQuantConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
-      }
-      if (state.userScript) {
-        ovQuantConfig.user_script = state.userScript;
-      }
-      passes.quantization = {
-        type: state.passes.quantPrecision === "int4" ? "OpenVINOWeightCompression" : "OpenVINOQuantization",
-        config: ovQuantConfig,
-      };
-    } else if (state.passes.conversionFormat === "qnn" || state.ihvProvider === "QNNExecutionProvider") {
-      const qnnQuantConfig: Record<string, unknown> = {};
-      if (state.hfDataset) {
-        qnnQuantConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
-      }
-      if (state.userScript) {
-        qnnQuantConfig.user_script = state.userScript;
-      }
-      passes.quantization = {
-        type: "QNNQuantization",
-        config: qnnQuantConfig,
-      };
-    } else if (
-      state.passes.conversionFormat === "tensorrt" ||
-      state.ihvProvider === "TensorrtExecutionProvider"
-    ) {
-      const trtQuantConfig: Record<string, unknown> = {};
-      if (state.hfDataset) {
-        trtQuantConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
-      }
-      if (state.userScript) {
-        trtQuantConfig.user_script = state.userScript;
-      }
-      passes.quantization = {
-        type: state.passes.quantPrecision === "int4" ? "Nvfp4Quantizer" : "OnnxQuantization",
-        config: trtQuantConfig,
-      };
-    } else {
-      const quantConfig: Record<string, unknown> = {
-        quant_mode: "static",
-        precision: state.passes.quantPrecision,
-        quant_preprocess: true,
-      };
-      if (state.hfDataset) {
-        quantConfig.data_config = { data_dir: state.hfDataset, batch_size: 1 };
-      }
-      if (state.userScript) {
-        quantConfig.user_script = state.userScript;
-      }
-      passes.quantization = {
-        type: "OnnxQuantization",
-        config: quantConfig,
-      };
-    }
-  }
-
-  // ONNX graph passes cannot follow a torch-native quantizer without an ONNX conversion.
-  if (state.passes.onnxTransforms && (!torchQuantActive || state.passes.conversion)) {
-    if (state.passes.conversionFormat === "openvino" || state.ihvProvider === "OpenVINOExecutionProvider") {
-      passes.transformer_opt = {
-        type: "OpenVINOIoUpdate",
-        config: {},
-      };
-    } else if (state.passes.conversionFormat === "qnn" || state.ihvProvider === "QNNExecutionProvider") {
-      passes.transformer_opt = {
-        type: "QNNPreprocess",
-        config: {},
-      };
-    } else if (
-      state.passes.conversionFormat === "tensorrt" ||
-      state.ihvProvider === "TensorrtExecutionProvider"
-    ) {
-      passes.transformer_opt = {
-        type: "NVModelOptGraphSurgery",
-        config: { surgeries: ["replace-gqa"] },
-      };
-    } else {
-      const ortConfig: Record<string, unknown> = {
-        model_type: inferModelType(state.hfModelId || ""),
-        use_gpu: GPU_PROVIDERS.includes(state.ihvProvider),
-      };
-      if (state.userScript) {
-        ortConfig.user_script = state.userScript;
-      }
-      passes.transformer_opt = {
-        type: "OrtTransformersOptimization",
-        config: ortConfig,
-      };
-    }
-  }
-
-  if (state.passes.splitting && (!torchQuantActive || state.passes.conversion)) {
-    passes.splitting = { type: "SplitModel", config: {} };
-  }
-
-  if (state.passes.peft) {
-    const peftType = state.passes.peftMethod === "qlora" ? "QLoRA" : "LoRA";
-    const peftConfig: Record<string, unknown> = { r: 8, alpha: 16 };
-    if (state.passes.diffusionLora) {
-      peftConfig.diffusion_lora = true;
-    }
-    if (useMemoryOffload) {
-      Object.assign(peftConfig, buildPeftOffloadConfig());
-    }
-    passes.peft = { type: peftType, config: peftConfig };
-  }
-
-  if (state.passes.pruning) {
-    const pType =
-      state.passes.pruningMethod === "sparsegpt"
-        ? "SparseGPT"
-        : state.passes.pruningMethod === "wanda"
-          ? "Wanda"
-          : "Prune";
-    const sparsityKey = pType === "Prune" ? "target_sparsity" : "sparsity_ratio";
-    const config: Record<string, unknown> = {
-      [sparsityKey]: state.passes.pruningSparsity,
-      // Preserve legacy key for older recipe-hub round-trip until hub reads the new keys.
-      sparsity: state.passes.pruningSparsity,
-      pruning_criteria: state.passes.pruningCriteria,
-    };
-
-    if (state.userScript) {
-      config.user_script = state.userScript;
-    }
-
-    passes.pruning = { type: pType, config };
+  const ctx: RecipeBuildContext = { torchQuantActive, useMemoryOffload };
+  for (const passKey of Object.keys(PASS_BUILDERS) as PassKey[]) {
+    const pass = PASS_BUILDERS[passKey](state, ctx);
+    if (pass) passes[passKey] = pass;
   }
 
   // Evaluators block for custom metrics (required for accuracy evaluation).

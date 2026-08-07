@@ -174,6 +174,18 @@ function mapExecutionProviderFromRecipe(parsed: any): IHVProvider | undefined {
         if (token.includes("openvino")) return "OpenVINOExecutionProvider";
         if (token.includes("webgpu")) return "WebGpuExecutionProvider";
         if (token.includes("rocm")) return "ROCMExecutionProvider";
+        if (token.includes("coreml")) return "CoreMLExecutionProvider";
+        if (token.includes("nnapi")) return "NNAPIExecutionProvider";
+        if (token.includes("vitisai") || token.includes("vitis-ai") || token.includes("vitis_ai")) {
+          return "VitisAIExecutionProvider";
+        }
+        if (token.includes("snpe")) return "SNPEExecutionProvider";
+        if (token.includes("tflite") || token.includes("tensorflowlite")) {
+          return "TensorflowLiteExecutionProvider";
+        }
+        if (token.includes("xnnpack")) return "XnnpackExecutionProvider";
+        if (token.includes("wasm")) return "WasmExecutionProvider";
+        if (token.includes("cpu")) return "CPUExecutionProvider";
       }
     }
   }
@@ -219,6 +231,16 @@ export function getCatalogDeviceFromRecipe(parsed: unknown): string | undefined 
         if (token.includes("openvino")) return "OpenVINO";
         if (token.includes("webgpu")) return "WebGPU";
         if (token.includes("rocm")) return "CUDA";
+        if (token.includes("coreml")) return "CoreML";
+        if (token.includes("nnapi")) return "NNAPI";
+        if (token.includes("vitisai") || token.includes("vitis-ai") || token.includes("vitis_ai")) {
+          return "VitisAI";
+        }
+        if (token.includes("snpe")) return "SNPE";
+        if (token.includes("tflite") || token.includes("tensorflowlite")) return "TFLite";
+        if (token.includes("xnnpack")) return "XNNPACK";
+        if (token.includes("wasm")) return "WASM";
+        if (token.includes("cpu")) return "CPU";
       }
     }
   }
@@ -248,6 +270,20 @@ export function mapProviderToCatalogDevice(provider: IHVProvider): string {
       return "DirectML";
     case "WebGpuExecutionProvider":
       return "WebGPU";
+    case "CoreMLExecutionProvider":
+      return "CoreML";
+    case "NNAPIExecutionProvider":
+      return "NNAPI";
+    case "VitisAIExecutionProvider":
+      return "VitisAI";
+    case "SNPEExecutionProvider":
+      return "SNPE";
+    case "TensorflowLiteExecutionProvider":
+      return "TFLite";
+    case "XnnpackExecutionProvider":
+      return "XNNPACK";
+    case "WasmExecutionProvider":
+      return "WASM";
     case "CPUExecutionProvider":
       return "CPU";
     default: {

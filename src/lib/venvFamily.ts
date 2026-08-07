@@ -25,6 +25,13 @@ export const KNOWN_IHV_PROVIDERS: readonly IHVProvider[] = [
   "QNNExecutionProvider",
   "ROCMExecutionProvider",
   "WebGpuExecutionProvider",
+  "CoreMLExecutionProvider",
+  "NNAPIExecutionProvider",
+  "VitisAIExecutionProvider",
+  "SNPEExecutionProvider",
+  "TensorflowLiteExecutionProvider",
+  "XnnpackExecutionProvider",
+  "WasmExecutionProvider",
 ] as const;
 
 const KNOWN_SET = new Set<string>(KNOWN_IHV_PROVIDERS);
@@ -43,6 +50,13 @@ const PROVIDER_ALIASES: ReadonlyMap<string, IHVProvider> = new Map([
   ["qnnexecutionprovider", "QNNExecutionProvider"],
   ["rocmexecutionprovider", "ROCMExecutionProvider"],
   ["webgpuexecutionprovider", "WebGpuExecutionProvider"],
+  ["coremlexecutionprovider", "CoreMLExecutionProvider"],
+  ["nnapiexecutionprovider", "NNAPIExecutionProvider"],
+  ["vitisaiexecutionprovider", "VitisAIExecutionProvider"],
+  ["snpeexecutionprovider", "SNPEExecutionProvider"],
+  ["tensorflowliteexecutionprovider", "TensorflowLiteExecutionProvider"],
+  ["xnnpackexecutionprovider", "XnnpackExecutionProvider"],
+  ["wasmexecutionprovider", "WasmExecutionProvider"],
   ["cpu", "CPUExecutionProvider"],
   ["cuda", "CUDAExecutionProvider"],
   ["tensorrt", "TensorrtExecutionProvider"],
@@ -55,6 +69,15 @@ const PROVIDER_ALIASES: ReadonlyMap<string, IHVProvider> = new Map([
   ["qnn", "QNNExecutionProvider"],
   ["rocm", "ROCMExecutionProvider"],
   ["webgpu", "WebGpuExecutionProvider"],
+  ["coreml", "CoreMLExecutionProvider"],
+  ["nnapi", "NNAPIExecutionProvider"],
+  ["vitisai", "VitisAIExecutionProvider"],
+  ["vitis-ai", "VitisAIExecutionProvider"],
+  ["snpe", "SNPEExecutionProvider"],
+  ["tflite", "TensorflowLiteExecutionProvider"],
+  ["tensorflowlite", "TensorflowLiteExecutionProvider"],
+  ["xnnpack", "XnnpackExecutionProvider"],
+  ["wasm", "WasmExecutionProvider"],
 ]);
 
 export function isKnownIhvProvider(id: string): id is IHVProvider {
@@ -106,6 +129,13 @@ export function mandatoryFamilyForProvider(provider: IHVProvider): VenvFamily | 
       return "default";
     case "CPUExecutionProvider":
     case "WebGpuExecutionProvider":
+    case "CoreMLExecutionProvider":
+    case "NNAPIExecutionProvider":
+    case "VitisAIExecutionProvider":
+    case "SNPEExecutionProvider":
+    case "TensorflowLiteExecutionProvider":
+    case "XnnpackExecutionProvider":
+    case "WasmExecutionProvider":
       return null;
     default: {
       const _exhaustive: never = provider;
@@ -125,10 +155,10 @@ export function resolveVenvFamily(
   const mandatory = mandatoryFamilyForProvider(provider);
   if (mandatory) return mandatory;
 
-  if (provider === "WebGpuExecutionProvider") return "default";
+  // CPU / export / platform targets: prefer default if CPU-usable; else cuda; else default.
+  // Do not place these jobs on the openvino or qnn families.
+  if (provider !== "CPUExecutionProvider") return "default";
 
-  // CPU: prefer default if CPU-usable; else cuda if CPU-usable; else default (will create).
-  // Do not place CPU jobs on the openvino or qnn families.
   if (flags.default.cpuUsable) return "default";
   if (flags.cuda.cpuUsable) return "cuda";
   return "default";
@@ -152,7 +182,7 @@ export function resolveRequiredFamilies(
       hasCpu = true;
       continue;
     }
-    if (provider === "WebGpuExecutionProvider") continue;
+    // Export / platform targets with no venv family do not provision runtimes.
     const mandatory = mandatoryFamilyForProvider(provider);
     if (mandatory) families.add(mandatory);
   }

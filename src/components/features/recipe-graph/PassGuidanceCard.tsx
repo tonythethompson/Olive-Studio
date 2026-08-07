@@ -1,30 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PassGuidance } from "@/lib/passGuidance";
+import {
+  parseMcpPassParamsPayload,
+  type McpPassParamsPayload,
+} from "@/lib/mcpParamValidation";
 import { CheckCircle2, XCircle, Database, ChevronDown, ChevronRight } from "lucide-react";
-
-interface McpParamDoc {
-  description?: string;
-  type?: string;
-  default?: unknown;
-  valid_range?: string;
-  interactions?: string;
-}
-
-interface McpPassParamsResponse {
-  pass_name?: string;
-  description?: string;
-  required_params?: string[];
-  parameters?: Record<string, McpParamDoc>;
-  gotchas?: string[];
-  error?: string;
-}
 
 interface PassGuidanceCardProps {
   guidance: PassGuidance;
 }
 
 export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
-  const [params, setParams] = useState<McpPassParamsResponse | null>(null);
+  const [params, setParams] = useState<McpPassParamsPayload | null>(null);
   const [hasFetched, setHasFetched] = useState(false);
   const [networkError, setNetworkError] = useState(false);
   const [paramsExpanded, setParamsExpanded] = useState(false);
@@ -47,13 +34,19 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
       }),
       signal: controller.signal,
     })
-      .then((r) => r.json())
-      .then((data: McpPassParamsResponse) => {
-        if (!controller.signal.aborted) {
-          setParams(data);
+      .then(async (r) => {
+        const data: unknown = await r.json();
+        if (controller.signal.aborted) return;
+        const parsed = parseMcpPassParamsPayload(r.ok, data);
+        if (!parsed.ok) {
+          setParams(null);
           setHasFetched(true);
-          setNetworkError(false);
+          setNetworkError(true);
+          return;
         }
+        setParams(parsed.data);
+        setHasFetched(true);
+        setNetworkError(false);
       })
       .catch((err) => {
         if (err.name === "AbortError") return;
@@ -74,9 +67,9 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
   const isLoading = guidance.passName != null && !hasFetched;
   const hasParams = params && !params.error && params.parameters && Object.keys(params.parameters).length > 0;
   const requiredParams = params?.required_params ?? [];
-  const optionalParams: Array<[string, McpParamDoc]> = hasParams
+  const optionalParams: Array<[string, NonNullable<McpPassParamsPayload["parameters"]>[string]]> = hasParams
     ? (Object.entries(params!.parameters!).filter(([k]) => !requiredParams.includes(k)) as Array<
-        [string, McpParamDoc]
+        [string, NonNullable<McpPassParamsPayload["parameters"]>[string]]
       >)
     : [];
 

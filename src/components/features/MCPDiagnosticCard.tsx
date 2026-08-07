@@ -1,7 +1,9 @@
-import { Check, Wrench } from "lucide-react";
-import type { McpDiagnostic } from "@/types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, ThumbsDown, ThumbsUp, Wrench } from "lucide-react";
+import type { McpDiagnostic, McpTroubleshootFeedbackRating } from "@/types";
 import { canApplyMcpDiagnostic, matchActionableQuirks } from "@/lib/mcpConfigMapping";
 import type { LocalLogDiagnostic } from "@/lib/logFailurePatterns";
+import { hasMcpFeedbackTarget, requestMcpTroubleshootFeedback } from "@/lib/hooks";
 
 export interface MCPDiagnosticCardProps {
   /** The diagnostic result from the MCP knowledge base. Null = no result yet. */
@@ -16,14 +18,189 @@ export interface MCPDiagnosticCardProps {
   onRunDiagnosis?: () => void;
   /** Fetch/proxy failure message to show instead of a fake "Querying..." state. */
   error?: string | null;
+  /**
+   * Optional: fired after a successful thumbs feedback submission.
+   * Parents (ExecutionWorkspace / Batch) may wire analytics or history; diagnosis display does not wait on this.
+   */
+  onFeedbackSubmitted?: (payload: {
+    matched_entry: string;
+    rating: McpTroubleshootFeedbackRating;
+  }) => void;
+}
+
+type FeedbackStatus = "idle" | "submitting" | "success" | "error";
+
+interface DiagnosticFeedbackButtonsProps {
+  matchedEntry: string;
+  onFeedbackSubmitted?: MCPDiagnosticCardProps["onFeedbackSubmitted"];
+}
+
+function feedbackThumbClassName(
+  kind: "up" | "down",
+  status: FeedbackStatus,
+  active: boolean,
+): string {
+  const base =
+    "inline-flex items-center justify-center rounded border p-1 transition-all cursor-pointer disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1";
+  if (kind === "up") {
+    if (active && status === "success") {
+      return `${base} focus-visible:ring-emerald-400/60 border-emerald-500/50 bg-emerald-500/15 text-emerald-400 disabled:opacity-100`;
+    }
+    if (active && status === "submitting") {
+      return `${base} focus-visible:ring-emerald-400/60 border-emerald-500/40 bg-emerald-500/10 text-emerald-400/80 disabled:opacity-70`;
+    }
+    return `${base} focus-visible:ring-emerald-400/60 border-slate-700 bg-slate-900/40 text-slate-400 hover:border-emerald-500/40 hover:text-emerald-400 disabled:opacity-50`;
+  }
+  if (active && status === "success") {
+    return `${base} focus-visible:ring-rose-400/60 border-rose-500/50 bg-rose-500/15 text-rose-300 disabled:opacity-100`;
+  }
+  if (active && status === "submitting") {
+    return `${base} focus-visible:ring-rose-400/60 border-rose-500/40 bg-rose-500/10 text-rose-300/80 disabled:opacity-70`;
+  }
+  return `${base} focus-visible:ring-rose-400/60 border-slate-700 bg-slate-900/40 text-slate-400 hover:border-rose-500/40 hover:text-rose-300 disabled:opacity-50`;
+}
+
+interface FeedbackThumbButtonProps {
+  kind: "up" | "down";
+  status: FeedbackStatus;
+  active: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}
+
+function FeedbackThumbButton({ kind, status, active, disabled, onClick }: FeedbackThumbButtonProps) {
+  const Icon = kind === "up" ? ThumbsUp : ThumbsDown;
+  const successLabel = kind === "up" ? "Thumbs up submitted" : "Thumbs down submitted";
+  const idleLabel =
+    kind === "up"
+      ? "Thumbs up — this diagnosis was helpful"
+      : "Thumbs down — this diagnosis was not helpful";
+  return (
+    <button
+      type="button"
+      aria-label={status === "success" && active ? successLabel : idleLabel}
+      aria-pressed={active}
+      disabled={disabled}
+      onClick={onClick}
+      className={feedbackThumbClassName(kind, status, active)}
+    >
+      <Icon className="h-3.5 w-3.5" aria-hidden />
+    </button>
+  );
+}
+
+/**
+ * Accessible thumbs-up / thumbs-down for a single matched KB entry.
+ * Submits via the MCP proxy; disables after success; leaves controls enabled for retry on failure.
+ */
+function DiagnosticFeedbackButtons({
+  matchedEntry,
+  onFeedbackSubmitted,
+}: DiagnosticFeedbackButtonsProps) {
+  const [status, setStatus] = useState<FeedbackStatus>("idle");
+  const [submittedRating, setSubmittedRating] = useState<McpTroubleshootFeedbackRating | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const statusRef = useRef<FeedbackStatus>(status);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  // Feedback remounts when matched_entry changes (key), so no reset effect.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  const submit = useCallback(
+    async (rating: McpTroubleshootFeedbackRating) => {
+      if (statusRef.current === "submitting" || statusRef.current === "success") return;
+
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      setStatus("submitting");
+      setErrorMessage(null);
+      setSubmittedRating(rating);
+
+      const result = await requestMcpTroubleshootFeedback(
+        { matched_entry: matchedEntry, rating },
+        controller.signal,
+      );
+
+      if (controller.signal.aborted) return;
+
+      if (result.status === "ok") {
+        setStatus("success");
+        setSubmittedRating(result.rating);
+        onFeedbackSubmitted?.({
+          matched_entry: result.matched_entry,
+          rating: result.rating,
+        });
+        return;
+      }
+
+      if (result.error === "aborted") return;
+
+      setStatus("error");
+      setSubmittedRating(null);
+      setErrorMessage(result.message ?? "Could not submit feedback. Try again.");
+    },
+    [matchedEntry, onFeedbackSubmitted],
+  );
+
+  const disabled = status === "submitting" || status === "success";
+  const upActive = submittedRating === "thumbs-up";
+  const downActive = submittedRating === "thumbs-down";
+
+  return (
+    <div className="flex flex-col gap-1 pt-1">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-[10px] text-slate-500 shrink-0">Helpful?</span>
+        <FeedbackThumbButton
+          kind="up"
+          status={status}
+          active={upActive}
+          disabled={disabled}
+          onClick={() => {
+            void submit("thumbs-up");
+          }}
+        />
+        <FeedbackThumbButton
+          kind="down"
+          status={status}
+          active={downActive}
+          disabled={disabled}
+          onClick={() => {
+            void submit("thumbs-down");
+          }}
+        />
+        {status === "submitting" && (
+          <span className="text-[10px] text-slate-500 animate-pulse">Sending…</span>
+        )}
+        {status === "success" && (
+          <span className="text-[10px] text-emerald-400/80">Thanks for the feedback</span>
+        )}
+      </div>
+      {status === "error" && errorMessage ? (
+        <p className="text-[10px] text-rose-300/90" role="alert">
+          {errorMessage}{" "}
+          <span className="text-slate-500">You can try again.</span>
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 /**
  * Displays MCP-based diagnostics and available fixes for a failed Olive run.
  *
  * Shows loading, error, idle, or diagnostic-result content, including optional
- * log evidence, recommended guidance, automatic fix controls, and diagnosis
- * retry actions.
+ * log evidence, recommended guidance, automatic fix controls, feedback thumbs
+ * (when a matched KB entry is present), and diagnosis retry actions.
  *
  * @param diagnostic - The diagnostic result to display, or `null` when no result is available
  * @param error - An error message to display when diagnosis fails
@@ -36,6 +213,7 @@ export function MCPDiagnosticCard({
   onApplyFix,
   onRunDiagnosis,
   error = null,
+  onFeedbackSubmitted,
 }: MCPDiagnosticCardProps) {
   const canApply = canApplyMcpDiagnostic(diagnostic);
   const actionableQuirkIds = diagnostic ? matchActionableQuirks(diagnostic.relevant_quirks) : [];
@@ -148,6 +326,14 @@ export function MCPDiagnosticCard({
               )}
             </div>
           )}
+
+          {hasMcpFeedbackTarget(diagnostic) ? (
+            <DiagnosticFeedbackButtons
+              key={diagnostic.matched_entry}
+              matchedEntry={diagnostic.matched_entry}
+              onFeedbackSubmitted={onFeedbackSubmitted}
+            />
+          ) : null}
 
           <div className="pt-1.5 space-y-1">
             <button
