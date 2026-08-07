@@ -490,6 +490,8 @@ function BatchJobCard({
       aria-label={`Select batch job ${job.name}`}
       onClick={onSelect}
       onKeyDown={(e) => {
+        // Nested controls (e.g. delete) must keep their own Enter/Space activation.
+        if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onSelect();
@@ -601,6 +603,13 @@ function BatchJobCard({
             type="button"
             aria-label={`Delete batch job ${job.name}`}
             onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" && e.key !== " ") return;
+              // Stop the card’s role="button" handler from selecting / preventDefault-ing.
+              e.preventDefault();
               e.stopPropagation();
               onDelete();
             }}

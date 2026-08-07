@@ -411,4 +411,40 @@ describe("BatchProcessingPanel", () => {
     expect(screen.queryByRole("button", { name: /Thumbs up/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Thumbs down/i })).toBeNull();
   });
+
+  it("deletes a job with Enter/Space on the delete control without relying on card selection", async () => {
+    const user = userEvent.setup();
+    const job: BatchJob = {
+      id: "job-kbd-delete",
+      name: "Keyboard Delete Job",
+      modelSource: "huggingface",
+      modelIdentifier: "microsoft/phi-2",
+      provider: "CPUExecutionProvider",
+      passes: ["Model Conversion (ONNX)"],
+      recipeJson: undefined,
+      status: "queued",
+      progress: 0,
+      progressKnown: true,
+      logs: ["queued"],
+    };
+    const stateWithJobs: UIState = {
+      ...createMockUIState(),
+      batchJobs: [job],
+    };
+    mockStoreState = stateWithJobs;
+
+    await act(async () => {
+      render(<BatchProcessingPanel state={stateWithJobs} setState={mockSetState} />);
+    });
+
+    const deleteBtn = screen.getByRole("button", { name: /Delete batch job Keyboard Delete Job/i });
+    deleteBtn.focus();
+    await user.keyboard("{Enter}");
+
+    expect(mockSetState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        batchJobs: [],
+      }),
+    );
+  });
 });
