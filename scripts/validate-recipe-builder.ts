@@ -10,6 +10,7 @@ import { sanitizePipelineState } from "../src/lib/pipelineValidation";
 import { validateOliveRecipeStructure } from "../src/lib/oliveRecipeSchema";
 import { getPipelineValidation, prepareProviderChange } from "../src/lib/pipelineValidation";
 import { getSelectableProviders } from "../src/lib/hardwareProbe";
+import { alwaysSelectableProviders } from "../src/lib/providerRuntimeKind";
 import { deriveUiStateFromOliveRecipe } from "../src/lib/oliveRecipeHub";
 import { UIState } from "../src/types";
 
@@ -215,8 +216,13 @@ assert.equal(
 
 assert.deepEqual(
   getSelectableProviders(mockDesktopProbe),
-  ["CPUExecutionProvider", "CUDAExecutionProvider"],
-  "selectable providers must match probe detection"
+  Array.from(
+    new Set([
+      ...mockDesktopProbe.detectedProviders,
+      ...alwaysSelectableProviders(),
+    ]),
+  ),
+  "selectable providers must be detected ∪ always-selectable (export/platform)"
 );
 
 for (const [target, device] of [
