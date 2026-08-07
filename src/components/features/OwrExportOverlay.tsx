@@ -80,10 +80,15 @@ export function OwrExportOverlay({
   }
 
   const handleCopyActiveCode = () => {
-    void navigator.clipboard.writeText(fileContent).then(() => {
-      setIsOwrCopied(true);
-      setTimeout(() => setIsOwrCopied(false), 2000);
-    });
+    void navigator.clipboard
+      .writeText(fileContent)
+      .then(() => {
+        setIsOwrCopied(true);
+        setTimeout(() => setIsOwrCopied(false), 2000);
+      })
+      .catch(() => {
+        setIsOwrCopied(false);
+      });
   };
 
   return (
