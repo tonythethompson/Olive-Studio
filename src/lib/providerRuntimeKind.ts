@@ -51,7 +51,6 @@ export function isLegacyExportProvider(provider: IHVProvider): boolean {
   return provider === "SNPEExecutionProvider";
 }
 
-/** Providers always choosable in Batch / ProviderInspector without local detection. */
 export function alwaysSelectableProviders(): IHVProvider[] {
   return (
     [
@@ -61,6 +60,8 @@ export function alwaysSelectableProviders(): IHVProvider[] {
       "TensorflowLiteExecutionProvider",
       "XnnpackExecutionProvider",
       "WasmExecutionProvider",
+      "CoreMLExecutionProvider",
+      "VitisAIExecutionProvider",
     ] as const
   ).slice();
 }
