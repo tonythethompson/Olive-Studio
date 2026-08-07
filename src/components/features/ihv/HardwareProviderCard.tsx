@@ -8,9 +8,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/Tooltip";
-import type { OpenVinoInstallState } from "@/components/features/useOpenVinoInstall";
-import type { DirectMlInstallState } from "@/components/features/useDirectMlInstall";
-import type { QnnInstallState } from "@/components/features/useQnnInstall";
+import type { OpenVinoInstallState } from "@/components/features/ihv/useOpenVinoInstall";
+import type { DirectMlInstallState } from "@/components/features/ihv/useDirectMlInstall";
+import type { QnnInstallState } from "@/components/features/ihv/useQnnInstall";
 import {
   QNN_ADVANCED_QAIRT_DOCS_URL,
   isQnnSnapdragonReleaseGatePassed,

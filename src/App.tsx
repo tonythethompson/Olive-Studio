@@ -1,9 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw, FlaskConical } from "lucide-react";
-import { InputEnvironmentPanel } from "@/components/features/InputEnvironmentPanel";
-import { IHVIntegrationPanel } from "@/components/features/IHVIntegrationPanel";
-import { ExecutionWorkspace } from "@/components/features/ExecutionWorkspace";
+import { InputEnvironmentPanel } from "@/components/features/input/InputEnvironmentPanel";
+import { IHVIntegrationPanel } from "@/components/features/ihv/IHVIntegrationPanel";
+import { ExecutionWorkspace } from "@/components/features/execute/ExecutionWorkspace";
 import { LicenseNotice } from "@/components/LicenseNotice";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ReportIssueModal } from "@/components/ReportIssueModal";
@@ -18,15 +18,15 @@ import { cn } from "@/lib/utils";
 import { OLIVE_PIPELINE_NAVIGATE, isPipelineViewId, type PipelineViewId } from "@/lib/pipelineNavigation";
 
 const BatchProcessingPanel = lazy(() =>
-  import("@/components/features/BatchProcessingPanel").then((m) => ({ default: m.BatchProcessingPanel })),
+  import("@/components/features/execute/BatchProcessingPanel").then((m) => ({ default: m.BatchProcessingPanel })),
 );
 
 const GeminiSidebar = lazy(() =>
-  import("@/components/features/GeminiSidebar").then((m) => ({ default: m.GeminiSidebar })),
+  import("@/components/features/gemini/GeminiSidebar").then((m) => ({ default: m.GeminiSidebar })),
 );
 
 const PlaygroundPanel = lazy(() =>
-  import("@/components/features/PlaygroundPanel").then((m) => ({ default: m.PlaygroundPanel })),
+  import("@/components/features/playground/PlaygroundPanel").then((m) => ({ default: m.PlaygroundPanel })),
 );
 
 function SidebarFallback() {

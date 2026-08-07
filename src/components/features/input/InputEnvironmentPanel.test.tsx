@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { screen, act, fireEvent } from "@testing-library/react";
-import { createMockUIState, useFetchRoutesMock, renderWithProviders as render } from "./__tests__/testUtils";
+import { createMockUIState, useFetchRoutesMock, renderWithProviders as render } from "../__tests__/testUtils";
 
 // Stable store mock: creating a fresh UIState each render churns effect deps
 // (e.g. state.localFiles) and can leave act()/findBy hanging.

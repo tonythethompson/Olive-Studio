@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
 import { Bot, Send } from "lucide-react";
 import { summarizeChatPatch, type ChatAction } from "@/lib/chatActions";
-import { ProviderErrorBlock } from "../ProviderErrorBlock";
+import { ProviderErrorBlock } from "./ProviderErrorBlock";
 import { renderMessageContent } from "./MessageContent";
 import type { ChatMessage } from "./useAiChat";
 

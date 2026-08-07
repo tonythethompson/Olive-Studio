@@ -11,16 +11,16 @@ import { chatPatchToUiState, sanitizeChatActionPatch, type ChatAction } from "@/
 import { Bot, X, Lightbulb, MessageSquareCode, Settings2, Bug } from "lucide-react";
 import { AuditPanel } from "./AuditPanel";
 import { ReportIssueModal } from "@/components/ReportIssueModal";
-import { PROVIDER_OPTIONS, normalizeUiProviderId } from "./gemini/aiProviderCatalog";
-import { ChatPanel } from "./gemini/ChatPanel";
-import { SettingsPanel } from "./gemini/SettingsPanel";
-import type { SidebarTab } from "./gemini/types";
-import { useAiAudit } from "./gemini/useAiAudit";
-import { useAiChat } from "./gemini/useAiChat";
-import { useAiProviderSettings } from "./gemini/useAiProviderSettings";
-import { useLocalEngineSetup } from "./gemini/useLocalEngineSetup";
+import { PROVIDER_OPTIONS, normalizeUiProviderId } from "./aiProviderCatalog";
+import { ChatPanel } from "./ChatPanel";
+import { SettingsPanel } from "./SettingsPanel";
+import type { SidebarTab } from "./types";
+import { useAiAudit } from "./useAiAudit";
+import { useAiChat } from "./useAiChat";
+import { useAiProviderSettings } from "./useAiProviderSettings";
+import { useLocalEngineSetup } from "./useLocalEngineSetup";
 
-export type { AnalysisResult, Suggestion } from "./gemini/types";
+export type { AnalysisResult, Suggestion } from "./types";
 
 interface GeminiSidebarProps {
   state?: UIState;

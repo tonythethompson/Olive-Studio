@@ -31,10 +31,10 @@ import { PASS_VALIDATIONS as validations } from "./hardwarePassCompatibility";
 import {
   HardwareProviderCard,
   type HardwareProviderCardProps,
-} from "@/components/features/HardwareProviderCard";
-import { useOpenVinoInstall } from "@/components/features/useOpenVinoInstall";
-import { useQnnInstall } from "@/components/features/useQnnInstall";
-import { useDirectMlInstall } from "@/components/features/useDirectMlInstall";
+} from "@/components/features/ihv/HardwareProviderCard";
+import { useOpenVinoInstall } from "@/components/features/ihv/useOpenVinoInstall";
+import { useQnnInstall } from "@/components/features/ihv/useQnnInstall";
+import { useDirectMlInstall } from "@/components/features/ihv/useDirectMlInstall";
 import { runNdjsonInstall } from "@/lib/ndjsonInstall";
 import {
   OPEN_VINO_TARGET_DEVICES,

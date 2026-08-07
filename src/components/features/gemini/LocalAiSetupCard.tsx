@@ -1,6 +1,6 @@
 import { Download, RefreshCw } from "lucide-react";
 import { openExternal } from "@/lib/openExternal";
-import { LocalModelManager } from "../LocalModelManager";
+import { LocalModelManager } from "./LocalModelManager";
 import {
   LMS_STARTER_MODELS,
   MODEL_ID_FUZZY_MIN_LEN,
