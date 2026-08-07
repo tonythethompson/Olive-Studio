@@ -117,7 +117,7 @@ python -m venv .venv
 # .venv\Scripts\python -m pytest tests -q
 ```
 
-The `.mcp.json` at repo root registers it for AI coding agents using a relative path (`olive-mcp-server/run.py`).
+The `.mcp.json` at repo root registers Olive MCP for AI coding agents using a relative path (`olive-mcp-server/run.py`). It also registers optional Serena via `uvx` (requires [uv](https://docs.astral.sh/uv/); no global `serena` install). Run `pnpm install` yourself before relying on Serena's TypeScript language server. Do not put `pnpm install` in `.serena/project.yml` activation.
 
 ## React Conventions
 

@@ -12,11 +12,13 @@ encoding: "utf-8"
 # abort activation. a per-project timeout (activation_command_timeout, default 180s) is the safety
 # backstop for non-terminating commands; on expiry the process is killed and activation continues.
 # example: activation_command: "npx nx run-many -t build"
-activation_command: "pnpm install --frozen-lockfile"
+# Intentionally unset: contributors already run `pnpm install` during normal setup. Binding
+# activation to a network install adds delay, mutation, and flaky failures on cold caches.
+activation_command:
 
 # maximum time in seconds to wait for activation_command to complete before killing it (default 180s).
 # must be a positive number.
-activation_command_timeout: 300.0
+activation_command_timeout: 180.0
 
 # line ending convention to use when writing source files.
 # Possible values: unset (use global setting), "lf", "crlf", or "native" (platform default)
@@ -199,8 +201,8 @@ ignored_memory_patterns: []
 # Note:
 #   - For C, use cpp
 #   - For JavaScript, use typescript
-#   - For Angular projects, use angular (subsumes typescript+html; requires `npm install` in the project root)
-#   - For Svelte projects, use svelte (subsumes typescript/javascript for .svelte projects; requires npm)
+#   - For Angular projects, use angular (subsumes typescript+html; requires `pnpm install` in the project root)
+#   - For Svelte projects, use svelte (subsumes typescript/javascript for .svelte projects; requires pnpm)
 #   - For SCSS / Sass / plain CSS, use scss (some-sass-language-server handles all three)
 #   - For Free Pascal/Lazarus, use pascal
 # Special requirements:

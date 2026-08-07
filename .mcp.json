@@ -7,8 +7,14 @@
     },
     "serena": {
       "type": "stdio",
-      "command": "serena",
-      "args": ["start-mcp-server", "--project-from-cwd"]
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--project-from-cwd"
+      ]
     }
   }
 }
