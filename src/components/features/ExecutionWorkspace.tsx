@@ -14,7 +14,7 @@ import {
   type SetStateAction,
 } from "react";
 import { Card, CardContent, CardHeader, Button, Label } from "@/components/ui";
-import { UIState } from "@/types";
+import { UIState, type McpTroubleshootFeedbackRating } from "@/types";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";
 import { applyMcpDiagnosticToUiState, canApplyMcpDiagnostic } from "@/lib/mcpConfigMapping";
@@ -51,6 +51,7 @@ import {
   Wrench,
   MoreHorizontal,
   FileText,
+  Bug,
 } from "lucide-react";
 import JSZip from "jszip";
 import { cn } from "@/lib/utils";
@@ -67,9 +68,7 @@ import { getJobHistory, saveJobHistory } from "@/lib/jobHistoryStore";
 import { downloadMarkdownReport } from "@/lib/reportGenerator";
 import { JobHistoryModal } from "@/components/features/JobHistoryModal";
 import { ReportIssueModal } from "@/components/ReportIssueModal";
-import { Bug } from "lucide-react";
 import type { ReportArea } from "@/lib/issueReport";
-import type { McpTroubleshootFeedbackRating } from "@/types";
 
 const RecipeGraphView = lazy(() => import("./RecipeGraphView").then((m) => ({ default: m.RecipeGraphView })));
 
@@ -79,6 +78,63 @@ const RecipeGraphView = lazy(() => import("./RecipeGraphView").then((m) => ({ de
  * @param label - The text displayed below the spinner
  * @param minH - The optional minimum height of the loading container
  */
+
+function collectActivePassNames(passes: UIState["passes"]): string[] {
+  const names: string[] = [];
+  if (passes.conversion) {
+    names.push(`Conversion (${passes.conversionFormat === "onnx" ? "ONNX" : "OpenVINO"})`);
+  }
+  if (passes.quantization) names.push(`Quantization (${passes.quantPrecision})`);
+  if (passes.pruning) names.push(`Pruning (${passes.pruningMethod})`);
+  if (passes.onnxTransforms) names.push("ORT Transforms");
+  return names.length > 0 ? names : ["Default Baseline Export"];
+}
+
+function resolveQueuedModelIdentifier(state: UIState): string {
+  if (state.modelSource === "huggingface") return state.hfModelId || "unspecified-hf-model";
+  if (state.modelSource === "azure") return state.azureModelPath || "AzureML Asset Container";
+  return "Offline Weights Folder";
+}
+
+function buildQueuedBatchJob(state: UIState) {
+  const mid = resolveQueuedModelIdentifier(state);
+  const activePassesNames = collectActivePassNames(state.passes);
+  const jobName = `Staged: ${mid.split("/").pop()} - ${state.ihvProvider.replace("ExecutionProvider", "")}`;
+  return {
+    id: "job-" + Date.now(),
+    name: jobName,
+    modelSource: state.modelSource,
+    modelIdentifier: mid,
+    provider: state.ihvProvider,
+    passes: activePassesNames,
+    recipeJson: buildRecipeJsonFromState(state),
+    status: "queued" as const,
+    progress: 0,
+    progressKnown: true,
+    logs: ["Job created from active template configuration. Awaiting queue start."],
+  };
+}
+
+function describeAppliedMcpPatches(
+  patches: Partial<UIState>,
+  statePasses: UIState["passes"],
+  appliedQuirks: string[],
+): string[] {
+  const appliedParts: string[] = [];
+  if (patches.cacheDir) appliedParts.push(`cacheDir=${patches.cacheDir}`);
+  if (patches.passRecipeOverrides) {
+    appliedParts.push(`passOverrides=${Object.keys(patches.passRecipeOverrides).join("+")}`);
+  }
+  if (patches.passes) {
+    const changed = Object.entries(patches.passes)
+      .filter(([k, v]) => (statePasses as Record<string, unknown>)[k] !== v)
+      .map(([k, v]) => `${k}=${JSON.stringify(v)}`);
+    if (changed.length) appliedParts.push(...changed.slice(0, 8));
+  }
+  if (appliedQuirks.length) appliedParts.push(`quirks=${appliedQuirks.join("+")}`);
+  return appliedParts;
+}
+
 function LoadingFallback({ label, minH }: { label: string; minH?: string }) {
   return (
     <div className="flex items-center justify-center w-full" style={minH ? { minHeight: minH } : undefined}>
@@ -265,20 +321,7 @@ export function ExecutionWorkspace({
       setState(patches);
     }
 
-    const appliedParts: string[] = [];
-    if (patches.cacheDir) appliedParts.push(`cacheDir=${patches.cacheDir}`);
-    if (patches.passRecipeOverrides) {
-      appliedParts.push(`passOverrides=${Object.keys(patches.passRecipeOverrides).join("+")}`);
-    }
-    if (patches.passes) {
-      const changed = Object.entries(patches.passes)
-        .filter(([k, v]) => (state.passes as Record<string, unknown>)[k] !== v)
-        .map(([k, v]) => `${k}=${JSON.stringify(v)}`);
-      if (changed.length) appliedParts.push(...changed.slice(0, 8));
-    }
-    if (appliedQuirks.length) {
-      appliedParts.push(`quirks=${appliedQuirks.join("+")}`);
-    }
+    const appliedParts = describeAppliedMcpPatches(patches, state.passes, appliedQuirks);
 
     setExecutionLogs((prev) => [
       ...prev,
@@ -553,54 +596,17 @@ ${owrPlatform === "web"
           : `[ERROR] Cannot queue batch job: recipe schema invalid.\n${freshSchemaErrors.map((e) => `[SCHEMA] ${e}`).join("\n")}`,
         ...(fresh.schema.valid
           ? [
-            ...fresh.validation.issues
-              .filter((issue) => issue.severity === "critical")
-              .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
-            ...freshBlockLines,
-          ]
+              ...fresh.validation.issues
+                .filter((issue) => issue.severity === "critical")
+                .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
+              ...freshBlockLines,
+            ]
           : []),
       ]);
       return;
     }
 
-    const activePassesNames: string[] = [];
-    if (state.passes.conversion)
-      activePassesNames.push(
-        `Conversion (${state.passes.conversionFormat === "onnx" ? "ONNX" : "OpenVINO"})`,
-      );
-    if (state.passes.quantization) activePassesNames.push(`Quantization (${state.passes.quantPrecision})`);
-    if (state.passes.pruning) activePassesNames.push(`Pruning (${state.passes.pruningMethod})`);
-    if (state.passes.onnxTransforms) activePassesNames.push("ORT Transforms");
-
-    if (activePassesNames.length === 0) {
-      activePassesNames.push("Default Baseline Export");
-    }
-
-    let mid = "Offline Weights Folder";
-    if (state.modelSource === "huggingface") {
-      mid = state.hfModelId || "unspecified-hf-model";
-    } else if (state.modelSource === "azure") {
-      mid = state.azureModelPath || "AzureML Asset Container";
-    }
-
-    const jobName = `Staged: ${mid.split("/").pop()} - ${state.ihvProvider.replace("ExecutionProvider", "")}`;
-
-    const recipeJsonForJob = buildRecipeJsonFromState(state);
-
-    const newJob = {
-      id: "job-" + Date.now(),
-      name: jobName,
-      modelSource: state.modelSource,
-      modelIdentifier: mid,
-      provider: state.ihvProvider,
-      passes: activePassesNames,
-      recipeJson: recipeJsonForJob,
-      status: "queued" as const,
-      progress: 0,
-      progressKnown: true,
-      logs: ["Job created from active template configuration. Awaiting queue start."],
-    };
-
+    const newJob = buildQueuedBatchJob(state);
     const currentJobs = state.batchJobs || [];
     setState({ batchJobs: [...currentJobs, newJob] });
     setJustQueued(true);
