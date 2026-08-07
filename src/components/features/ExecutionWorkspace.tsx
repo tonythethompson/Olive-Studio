@@ -4,14 +4,11 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
-  useCallback,
   useDeferredValue,
   useTransition,
   Suspense,
   lazy,
-  type Dispatch,
   type MouseEvent as ReactMouseEvent,
-  type SetStateAction,
 } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
@@ -23,8 +20,8 @@ import {
   expandLogSelection,
   isFailureLine,
   isStudioHfTaskSpeechFix,
-  logsIndicateFailure,
 } from "@/lib/logFailurePatterns";
+import { useOliveStream } from "./useOliveStream";
 import { DiagnosisHistory, type DiagnosisEntry } from "./DiagnosisHistory";
 import { MCPDiagnosticCard } from "./MCPDiagnosticCard";
 import {
@@ -59,8 +56,8 @@ import { qnnExplicitRetryProviders } from "@/lib/qnnReadiness";
 import { prepareProviderChange } from "@/lib/pipelineValidation";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { GpuMetricsBar } from "@/components/features/GpuMetricsBar";
-import { parseGpuMetrics, type GpuMetrics } from "@/lib/gpuMetrics";
-import { getJobHistory, saveJobHistory } from "@/lib/jobHistoryStore";
+
+import { getJobHistory } from "@/lib/jobHistoryStore";
 import { downloadMarkdownReport } from "@/lib/reportGenerator";
 import { JobHistoryModal } from "@/components/features/JobHistoryModal";
 import { ReportIssueModal } from "@/components/ReportIssueModal";
@@ -184,30 +181,6 @@ export function ExecutionWorkspace({
   // responsive; submit handlers rebuild fresh from `state` at click time.
   const deferredState = useDeferredValue(state);
   // Live execution state
-  const [liveJobId, setLiveJobId] = useState<string | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [executionLogs, setExecutionLogsState] = useState<string[]>([]);
-  const executionLogsRef = useRef<string[]>([]);
-  // Keep the ref in sync inside the state updater so the SSE "done" handler
-  // can read the latest lines before effects flush.
-  const setExecutionLogs: Dispatch<SetStateAction<string[]>> = useCallback((update) => {
-    setExecutionLogsState((prev) => {
-      const next = typeof update === "function" ? update(prev) : update;
-      executionLogsRef.current = next;
-      return next;
-    });
-  }, []);
-  const [executionStatus, setExecutionStatus] = useState<
-    "idle" | "running" | "completed" | "failed" | "cancelled"
-  >("idle");
-  const [executionExitCode, setExecutionExitCode] = useState<number | null>(null);
-  const [gpuMetrics, setGpuMetrics] = useState<GpuMetrics | null>(null);
-  const liveSourceRef = useRef<EventSource | null>(null);
-  const runStartTimeRef = useRef<number | null>(null);
-  /** Recipe JSON actually submitted for the current run (display may be deferred). */
-  const runRecipeJsonRef = useRef<string | null>(null);
-  /** Cancel clicked before /olive/run returned a jobId — fire cancel as soon as id exists. */
-  const pendingCancelRef = useRef(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportArea, setReportArea] = useState<ReportArea | undefined>(undefined);
@@ -340,103 +313,7 @@ export function ExecutionWorkspace({
     }
   };
 
-  // Clear log selection when logs change (new run starts)
-  useLayoutEffect(() => {
-    setSelectedLogIndices(new Set()); // eslint-disable-line react-hooks/set-state-in-effect
-    lastClickedIndexRef.current = null;
-  }, [executionLogs.length]);
 
-  // Auto-select error lines when a job fails so Diagnose can focus on them.
-  const prevStatusRef = useRef<string | null>(null);
-
-  useLayoutEffect(() => {
-    // Only auto-select on the FIRST render where status transitions to "failed"
-    if (executionStatus === "failed" && prevStatusRef.current !== "failed") {
-      if (executionLogs.length > 0) {
-        const errorIndices = new Set<number>();
-        for (let i = 0; i < executionLogs.length; i++) {
-          if (isFailureLine(executionLogs[i]!)) {
-            errorIndices.add(i);
-          }
-        }
-        if (errorIndices.size > 0) {
-          setSelectedLogIndices(errorIndices); // eslint-disable-line react-hooks/set-state-in-effect
-        }
-      }
-    }
-    prevStatusRef.current = executionStatus;
-  }, [executionStatus, executionLogs]);
-
-  // Log line selection for manual diagnosis
-  const handleLogLineClick = (index: number, e: ReactMouseEvent<HTMLParagraphElement>) => {
-    setSelectedLogIndices((prev) => {
-      const next = new Set(prev);
-      if (e.shiftKey && lastClickedIndexRef.current !== null) {
-        // Range select from last clicked to current
-        const start = Math.min(lastClickedIndexRef.current, index);
-        const end = Math.max(lastClickedIndexRef.current, index);
-        for (let i = start; i <= end; i++) next.add(i);
-      } else if (e.ctrlKey || e.metaKey) {
-        // Toggle individual line
-        if (next.has(index)) next.delete(index);
-        else next.add(index);
-      } else {
-        // Plain click: select only this line
-        next.clear();
-        next.add(index);
-      }
-      return next;
-    });
-    lastClickedIndexRef.current = index;
-  };
-
-  /** Prefer selected lines when present; expand traceback context; else full log. */
-  const handleDiagnose = () => {
-    if (executionLogs.length === 0) return;
-    setMcpFixApplied("");
-    const logs =
-      selectedLogIndices.size > 0
-        ? expandLogSelection(executionLogs, Array.from(selectedLogIndices))
-        : executionLogs;
-    void fetchKeyedDiagnostic("current", logs);
-  };
-
-  // Auto-diagnose once when a run fails (same pattern as BatchProcessingPanel).
-  const autoDiagnoseRef = useRef(false);
-  useEffect(() => {
-    if (executionStatus === "failed" && executionLogs.length > 0 && !autoDiagnoseRef.current) {
-      autoDiagnoseRef.current = true;
-      // Derive failure-line indices here (do not wait for the selection layout effect).
-      const errorIndices: number[] = [];
-      for (let i = 0; i < executionLogs.length; i++) {
-        if (isFailureLine(executionLogs[i]!)) {
-          errorIndices.push(i);
-        }
-      }
-      const logs = errorIndices.length > 0 ? expandLogSelection(executionLogs, errorIndices) : executionLogs;
-      void fetchKeyedDiagnostic("current", logs);
-    }
-    if (executionStatus !== "failed") {
-      autoDiagnoseRef.current = false;
-    }
-  }, [executionStatus, executionLogs, fetchKeyedDiagnostic]);
-
-  // Auto-save completed diagnoses to history
-  const prevDiagnosticRef = useRef(mcpDiagnostic);
-  useEffect(() => {
-    if (mcpDiagnostic && mcpDiagnostic !== prevDiagnosticRef.current) {
-      const entry: DiagnosisEntry = {
-        id: `diag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        timestamp: Date.now(),
-        diagnostic: mcpDiagnostic,
-        logSnippet: executionLogs.slice(-20).join("\n"),
-        fixApplied: false,
-      };
-      setDiagnosisHistory((prev) => [entry, ...prev].slice(0, 50));
-      setActiveHistoryIndex(0);
-    }
-    prevDiagnosticRef.current = mcpDiagnostic;
-  }, [mcpDiagnostic, executionLogs]);
 
   const handleSelectHistory = (index: number) => {
     setActiveHistoryIndex(index);
@@ -448,7 +325,6 @@ export function ExecutionWorkspace({
   };
 
   const isUnmountedRef = useRef(false);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const justQueuedTimerRef = useRef<NodeJS.Timeout | null>(null);
   const copiedTimerRef = useRef<NodeJS.Timeout | null>(null);
   const exportCopiedTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -457,7 +333,6 @@ export function ExecutionWorkspace({
     isUnmountedRef.current = false;
     return () => {
       isUnmountedRef.current = true;
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (justQueuedTimerRef.current) clearTimeout(justQueuedTimerRef.current);
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
       if (exportCopiedTimerRef.current) clearTimeout(exportCopiedTimerRef.current);
@@ -564,7 +439,27 @@ ${owrPlatform === "web"
   };
 
   const pipeline = buildRecipeFromState(deferredState, { hardwareProbe });
-  const { recipe, recipeJson, validation, schema, advisories, isRunnable } = pipeline;
+  const { recipe, recipeJson: _recipeJson, validation, schema, advisories, isRunnable } = pipeline;
+
+  // SSE streaming lifecycle managed by useOliveStream hook
+  const {
+    isRunning,
+    executionLogs,
+    setExecutionLogs,
+    executionStatus,
+    executionExitCode,
+    gpuMetrics,
+    handleExecuteLive,
+    handleCancelJob,
+  } = useOliveStream({
+    state,
+    hardwareProbe,
+    setState,
+    onRunStateChange,
+    isUnmountedRef,
+    setMcpFixApplied,
+  });
+
   const schemaErrors = schema.errors ?? [];
   // Local structure/compat checks only. A green badge must not imply Execute Live succeeded.
   const localValidationLabel = !schema.valid
@@ -577,6 +472,99 @@ ${owrPlatform === "web"
     }`
     : localValidationLabel;
   const validationTone = runFailed ? "error" : localValidationTone;
+
+  // Clear log selection when logs change (new run starts)
+  useLayoutEffect(() => {
+    setSelectedLogIndices(new Set()); // eslint-disable-line react-hooks/set-state-in-effect
+    lastClickedIndexRef.current = null;
+  }, [executionLogs.length]);
+
+  // Auto-select error lines when a job fails so Diagnose can focus on them.
+  const prevStatusRef = useRef<string | null>(null);
+
+  useLayoutEffect(() => {
+    if (executionStatus === "failed" && prevStatusRef.current !== "failed") {
+      if (executionLogs.length > 0) {
+        const errorIndices = new Set<number>();
+        for (let i = 0; i < executionLogs.length; i++) {
+          if (isFailureLine(executionLogs[i]!)) {
+            errorIndices.add(i);
+          }
+        }
+        if (errorIndices.size > 0) {
+          setSelectedLogIndices(errorIndices); // eslint-disable-line react-hooks/set-state-in-effect
+        }
+      }
+    }
+    prevStatusRef.current = executionStatus;
+  }, [executionStatus, executionLogs]);
+
+  // Log line selection for manual diagnosis
+  const handleLogLineClick = (index: number, e: ReactMouseEvent<HTMLParagraphElement>) => {
+    setSelectedLogIndices((prev) => {
+      const next = new Set(prev);
+      if (e.shiftKey && lastClickedIndexRef.current !== null) {
+        const start = Math.min(lastClickedIndexRef.current, index);
+        const end = Math.max(lastClickedIndexRef.current, index);
+        for (let i = start; i <= end; i++) next.add(i);
+      } else if (e.ctrlKey || e.metaKey) {
+        if (next.has(index)) next.delete(index);
+        else next.add(index);
+      } else {
+        next.clear();
+        next.add(index);
+      }
+      return next;
+    });
+    lastClickedIndexRef.current = index;
+  };
+
+  /** Prefer selected lines when present; expand traceback context; else full log. */
+  const handleDiagnose = () => {
+    if (executionLogs.length === 0) return;
+    setMcpFixApplied("");
+    const logs =
+      selectedLogIndices.size > 0
+        ? expandLogSelection(executionLogs, Array.from(selectedLogIndices))
+        : executionLogs;
+    void fetchKeyedDiagnostic("current", logs);
+  };
+
+  // Auto-diagnose once when a run fails (same pattern as BatchProcessingPanel).
+  const autoDiagnoseRef = useRef(false);
+  useEffect(() => {
+    if (executionStatus === "failed" && executionLogs.length > 0 && !autoDiagnoseRef.current) {
+      autoDiagnoseRef.current = true;
+      const errorIndices: number[] = [];
+      for (let i = 0; i < executionLogs.length; i++) {
+        if (isFailureLine(executionLogs[i]!)) {
+          errorIndices.push(i);
+        }
+      }
+      const logs = errorIndices.length > 0 ? expandLogSelection(executionLogs, errorIndices) : executionLogs;
+      void fetchKeyedDiagnostic("current", logs);
+    }
+    if (executionStatus !== "failed") {
+      autoDiagnoseRef.current = false;
+    }
+  }, [executionStatus, executionLogs, fetchKeyedDiagnostic]);
+
+  // Auto-save completed diagnoses to history
+  const prevDiagnosticRef = useRef(mcpDiagnostic);
+  useEffect(() => {
+    if (mcpDiagnostic && mcpDiagnostic !== prevDiagnosticRef.current) {
+      const entry: DiagnosisEntry = {
+        id: `diag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: Date.now(),
+        diagnostic: mcpDiagnostic,
+        logSnippet: executionLogs.slice(-20).join("\n"),
+        fixApplied: false,
+      };
+      setDiagnosisHistory((prev) => [entry, ...prev].slice(0, 50));
+      setActiveHistoryIndex(0);
+    }
+    prevDiagnosticRef.current = mcpDiagnostic;
+  }, [mcpDiagnostic, executionLogs]);
 
   const handleQueueJob = () => {
     // Rebuild from live state — the deferred display pipeline may lag the latest keystroke.
@@ -611,336 +599,7 @@ ${owrPlatform === "web"
     justQueuedTimerRef.current = setTimeout(() => setJustQueued(false), 3000);
   };
 
-  const recordJobCompletion = (
-    jobId: string,
-    status: "completed" | "failed" | "cancelled",
-    exitCode: number | null,
-  ) => {
-    const duration = runStartTimeRef.current ? Date.now() - runStartTimeRef.current : 0; // eslint-disable-line react-hooks/purity -- event handler
-    const activePassesNames: string[] = [];
-    if (state.passes.conversion)
-      activePassesNames.push(
-        `Conversion (${state.passes.conversionFormat === "onnx" ? "ONNX" : "OpenVINO"})`,
-      );
-    if (state.passes.quantization) activePassesNames.push(`Quantization (${state.passes.quantPrecision})`);
-    if (state.passes.pruning) activePassesNames.push(`Pruning (${state.passes.pruningMethod})`);
-    if (state.passes.onnxTransforms) activePassesNames.push("ORT Transforms");
-    if (activePassesNames.length === 0) activePassesNames.push("Default Baseline Export");
 
-    saveJobHistory({
-      id: jobId,
-      jobId,
-      timestamp: new Date().toISOString(),
-      modelId: state.hfModelId || (state.localFiles && state.localFiles[0]?.name) || "Custom Model",
-      ihvProvider: state.ihvProvider,
-      memoryOffload: state.memoryOffload,
-      status,
-      exitCode,
-      durationMs: duration,
-      passCount: activePassesNames.length,
-      passNames: activePassesNames,
-      recipeJson: runRecipeJsonRef.current ?? recipeJson,
-    });
-  };
-
-  const handleCancelJob = async () => {
-    if (!liveJobId) {
-      // Run POST still in flight — mark pending; cancel once jobId arrives.
-      pendingCancelRef.current = true;
-      setExecutionLogs((prev) => [
-        ...prev,
-        "[INFO] Cancel queued — will send as soon as the job id is assigned...",
-      ]);
-      return;
-    }
-    try {
-      setExecutionLogs((prev) => [...prev, "[INFO] Requesting process cancellation..."]);
-      const resp = await fetch("/api/olive/cancel", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId: liveJobId }),
-      });
-      const data = (await resp.json().catch(() => ({}))) as { status?: string; error?: string };
-      if (resp.ok && data.status === "cancelled") {
-        setExecutionLogs((prev) => [...prev, "[INFO] Cancellation signal confirmed by server."]);
-        setExecutionStatus("cancelled");
-        setExecutionExitCode(null);
-        setIsRunning(false);
-        onRunStateChange?.(false);
-        liveSourceRef.current?.close();
-        liveSourceRef.current = null;
-        recordJobCompletion(liveJobId, "cancelled", null);
-      } else if (resp.ok) {
-        setExecutionLogs((prev) => [
-          ...prev,
-          `[INFO] Job already ${data.status ?? "finished"}; waiting for stream status.`,
-        ]);
-      } else {
-        setExecutionLogs((prev) => [...prev, `[ERROR] Cancel failed: ${data.error ?? "unknown"}`]);
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      setExecutionLogs((prev) => [...prev, `[ERROR] Failed to send cancel signal: ${message}`]);
-    }
-  };
-
-  const handleExecuteLive = async () => {
-    if (isRunning) return;
-
-    // Rebuild from live state — the deferred display pipeline may lag the latest keystroke.
-    const fresh = buildRecipeFromState(state, { hardwareProbe });
-
-    if (!fresh.isRunnable) {
-      const blockingCount = fresh.validation.criticalCount + fresh.localExecutionIssues.length;
-      const freshSchemaErrors = fresh.schema.errors ?? [];
-      const freshBlockLines = fresh.localExecutionIssues.map(
-        (issue) => `[BLOCK] ${issue.title}: ${issue.description}`,
-      );
-      setExecutionLogs([
-        fresh.schema.valid
-          ? `[ERROR] Cannot execute: ${blockingCount} blocking issue(s).`
-          : `[ERROR] Cannot execute: recipe schema invalid.`,
-        ...(fresh.schema.valid
-          ? [
-            ...fresh.validation.issues
-              .filter((issue) => issue.severity === "critical")
-              .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
-            ...freshBlockLines,
-          ]
-          : freshSchemaErrors.map((e) => `[SCHEMA] ${e}`)),
-      ]);
-      setExecutionStatus("failed");
-      return;
-    }
-
-    runRecipeJsonRef.current = fresh.recipeJson;
-    pendingCancelRef.current = false;
-    setLiveJobId(null);
-    setState({ activeJobId: null });
-    setIsRunning(true);
-    onRunStateChange?.(true);
-    setExecutionLogs(["[INFO] Initiating Olive run...\n"]);
-    setExecutionStatus("running");
-    setExecutionExitCode(null);
-    setGpuMetrics(null);
-    runStartTimeRef.current = Date.now(); // eslint-disable-line react-hooks/purity -- event handler
-
-    try {
-      const resp = await fetch("/api/olive/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipeJson: fresh.recipeJson, cudaVersion: state.cudaVersion ?? "auto" }),
-      });
-
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
-        setExecutionLogs((prev) => [...prev, `[ERROR] ${errData.error}`]);
-        setExecutionStatus("failed");
-        setIsRunning(false);
-        onRunStateChange?.(false);
-        pendingCancelRef.current = false;
-        return;
-      }
-
-      const { jobId } = await resp.json();
-      setLiveJobId(jobId);
-      setState({ activeJobId: jobId });
-
-      if (pendingCancelRef.current) {
-        pendingCancelRef.current = false;
-        setExecutionLogs((prev) => [
-          ...prev,
-          "[INFO] Applying queued cancel now that the job id is assigned...",
-        ]);
-        try {
-          const cancelResp = await fetch("/api/olive/cancel", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ jobId }),
-          });
-          const cancelData = (await cancelResp.json().catch(() => ({}))) as {
-            status?: string;
-            error?: string;
-          };
-          if (cancelResp.ok && cancelData.status === "cancelled") {
-            setExecutionLogs((prev) => [...prev, "[INFO] Cancellation signal confirmed by server."]);
-            setExecutionStatus("cancelled");
-            setExecutionExitCode(null);
-            setIsRunning(false);
-            onRunStateChange?.(false);
-            recordJobCompletion(jobId, "cancelled", null);
-            return;
-          }
-          setExecutionLogs((prev) => [
-            ...prev,
-            cancelResp.ok
-              ? `[INFO] Queued cancel found job already ${cancelData.status ?? "finished"}. Connecting stream.`
-              : `[ERROR] Queued cancel failed: ${cancelData.error ?? "unknown"}. Continuing with stream.`,
-          ]);
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err);
-          setExecutionLogs((prev) => [
-            ...prev,
-            `[ERROR] Queued cancel failed: ${message}. Continuing with stream.`,
-          ]);
-        }
-      }
-
-      // Close any existing SSE connection
-      liveSourceRef.current?.close();
-
-      let reconnectAttempts = 0;
-      const MAX_RECONNECT_ATTEMPTS = 10;
-      const MAX_BACKOFF_MS = 30000;
-
-      const connectSSE = (targetJobId: string) => {
-        if (isUnmountedRef.current) return;
-        liveSourceRef.current?.close();
-
-        const evtSource = new EventSource(`/api/olive/stream/${targetJobId}`);
-        liveSourceRef.current = evtSource;
-
-        evtSource.onopen = () => {
-          if (reconnectAttempts > 0) {
-            setExecutionLogs((prev) => [...prev, "[INFO] Stream reconnected successfully."]);
-          }
-          reconnectAttempts = 0;
-        };
-
-        evtSource.addEventListener("log", (e: MessageEvent) => {
-          try {
-            const payload = JSON.parse(String(e.data)) as { line?: string };
-            if (payload.line) {
-              setExecutionLogs((prev) => [...prev, payload.line!]);
-            }
-          } catch {
-            /* ignore malformed */
-          }
-        });
-
-        evtSource.addEventListener("metrics", (e: MessageEvent) => {
-          try {
-            const parsed: unknown = JSON.parse(e.data);
-            const metrics = parseGpuMetrics(parsed);
-            if (metrics) setGpuMetrics(metrics);
-          } catch {
-            /* ignore malformed */
-          }
-        });
-
-        evtSource.addEventListener("done", (e: MessageEvent) => {
-          let exitCode: number | null = null;
-          let serverStatus: string | undefined;
-          try {
-            const payload = JSON.parse(e.data) as { exitCode?: number | null; status?: string };
-            exitCode = typeof payload.exitCode === "number" ? payload.exitCode : null;
-            serverStatus = payload.status;
-          } catch {
-            exitCode = null;
-          }
-          // Olive sometimes exits 0 after a pass traceback (e.g. HF task KeyError).
-          // Read the mirrored log ref so this updater stays pure (StrictMode-safe).
-          const currentLogs = executionLogsRef.current;
-          let finalStatus: "completed" | "failed" | "cancelled";
-          if (serverStatus === "cancelled") {
-            finalStatus = "cancelled";
-          } else if (exitCode === null) {
-            // Unreadable done payload: never treat as success.
-            finalStatus = "failed";
-          } else {
-            const failed = exitCode !== 0 || logsIndicateFailure(currentLogs);
-            finalStatus = failed ? "failed" : "completed";
-          }
-          // Cancelled runs often report exit 0; unparsable done must not look like success.
-          const reportedExit =
-            finalStatus === "cancelled"
-              ? exitCode !== null && exitCode !== 0
-                ? exitCode
-                : null
-              : exitCode === null || (finalStatus === "failed" && exitCode === 0)
-                ? 1
-                : exitCode;
-          setExecutionStatus(finalStatus);
-          setExecutionExitCode(reportedExit);
-          setIsRunning(false);
-          setGpuMetrics(null);
-          onRunStateChange?.(false);
-          recordJobCompletion(targetJobId, finalStatus, reportedExit);
-          // Auto-diagnose is owned by the executionStatus==="failed" effect below.
-          if (finalStatus === "failed") setMcpFixApplied("");
-          evtSource.close();
-          liveSourceRef.current = null;
-        });
-
-        evtSource.onerror = async () => {
-          evtSource.close();
-          if (isUnmountedRef.current) return;
-
-          let serverSaysRunning = false;
-          try {
-            const statusResp = await fetch(`/api/olive/status/${targetJobId}`);
-            if (statusResp.ok) {
-              const statusData = await statusResp.json();
-              if (
-                statusData.status === "completed" ||
-                statusData.status === "failed" ||
-                statusData.status === "cancelled"
-              ) {
-                const finalStatus =
-                  statusData.status === "completed"
-                    ? "completed"
-                    : statusData.status === "cancelled"
-                      ? "cancelled"
-                      : "failed";
-                setExecutionStatus(finalStatus);
-                setExecutionExitCode(statusData.exitCode ?? (finalStatus === "completed" ? 0 : 1));
-                setIsRunning(false);
-                onRunStateChange?.(false);
-                recordJobCompletion(targetJobId, finalStatus, statusData.exitCode);
-                // Auto-diagnose is owned by the executionStatus==="failed" effect.
-                if (finalStatus === "failed") setMcpFixApplied("");
-                return;
-              } else if (statusData.status === "running" || statusData.status === "setting_up") {
-                serverSaysRunning = true;
-              }
-            }
-          } catch {
-            /* ignore status check failure */
-          }
-
-          if (serverSaysRunning || reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-            reconnectAttempts++;
-            const backoffMs = Math.min(1000 * Math.pow(1.5, reconnectAttempts), MAX_BACKOFF_MS);
-            setExecutionLogs((prev) => [
-              ...prev,
-              `[WARN] Stream connection lost. Reconnecting (attempt ${reconnectAttempts}${serverSaysRunning ? "" : `/${MAX_RECONNECT_ATTEMPTS}`} in ${(backoffMs / 1000).toFixed(1)}s)...`,
-            ]);
-
-            reconnectTimeoutRef.current = setTimeout(() => {
-              if (!isUnmountedRef.current) connectSSE(targetJobId);
-            }, backoffMs);
-          } else {
-            setExecutionLogs((prev) => [
-              ...prev,
-              "[ERROR] SSE connection lost permanently after maximum retry attempts.",
-            ]);
-            setExecutionStatus("failed");
-            setIsRunning(false);
-            onRunStateChange?.(false);
-            recordJobCompletion(targetJobId, "failed", 1);
-          }
-        };
-      };
-
-      connectSSE(jobId);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      setExecutionLogs((prev) => [...prev, `[ERROR] ${message}`]);
-      setExecutionStatus("failed");
-      setIsRunning(false);
-      onRunStateChange?.(false);
-    }
-  };
 
   const _handleCopy = () => {
     // Rebuild from live state — the displayed (deferred) recipe may lag the latest keystroke.

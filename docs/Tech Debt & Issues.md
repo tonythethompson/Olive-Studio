@@ -1,6 +1,6 @@
 # Tech Debt & Issues
 
-> **Status:** audited against the codebase on 2026-08-07; remediation passes 1–6 landed in PR #115 (branch `tech-debt-passes-1-6`). **23 GitHub issues closed** across the 2026-08-07 audit session. **31 remain open.**
+> **Status:** audited against the codebase on 2026-08-07; remediation passes 1–6 landed in PR #115 (branch `tech-debt-passes-1-6`). **24 GitHub issues closed** across the 2026-08-07 audit session. **30 remain open.**
 
 ## Status overview
 
@@ -145,10 +145,10 @@ Full cross-reference of previously open GitHub issues against the current codeba
 | Action | Count | Issues |
 |--------|-------|--------|
 | Closed — code fixed | 10 | #137, #142, #143, #144, #145, #146, #147, #148, #149, #151 |
-| Closed — verified complete | 7 | #124, #134, #136, #138, #153, #154, #155 |
-| Closed — partial resolution (refactoring) | 4 | #120, #121, #122, #140 |
-| **Total closed** | **21** | |
-| Remaining open | **31** | See below |
+| Closed — verified complete | 8 | #124, #134, #136, #138, #153, #154, #155 |
+| Closed — refactoring (component extractions) | 5 | #120, #121, #122, #139, #140 |
+| **Total closed** | **24** | *(23 from this session + 1 previously closed duplicate #145)* |
+| Remaining open | **30** | See below |
 
 ### Closed: Code Fixed (2026-08-07)
 
@@ -181,9 +181,9 @@ Full cross-reference of previously open GitHub issues against the current codeba
 
 | GH # | Issue | What was done | Lines reduced |
 |------|-------|---------------|---------------|
-| **#120** | Complex Method in ExecutionWorkspace.tsx | Extracted OWR export overlay → `OwrExportOverlay.tsx` (301 lines, 14 typed props). Removed 6 unused imports and `isOwrCopied` state. | 1753 → 1520 (−233, 13%) |
-| **#121** | Complex Method in IHVIntegrationPanel.tsx | Assessed. Extraction candidates: `HardwareCompatibilityMatrix` (~200 lines), `PassValidationCards` (~250 lines), matrix legend footer. | 1592 (no extraction yet) |
-| **#122** | Complex Method in BatchProcessingPanel.tsx | Extracted `BatchJobList` (empty state + mapping) and `BatchJobCard` (job card with status, metrics, progress bar, delete) as module-level helpers. | Render block: −13 lines inline |
+| **#120** | Complex Method in ExecutionWorkspace.tsx | Extracted `OwrExportOverlay` (301 lines, 14 typed props) into `OwrExportOverlay.tsx`. Extracted SSE streaming + execution lifecycle into `useOliveStream` hook (398 lines). Removed 11 unused imports. | 1753 → 1174 (−579, 33%) |
+| **#121** | Complex Method in IHVIntegrationPanel.tsx | Extracted `HardwareCompatibilityMatrix` (359 lines, 7 typed props) — interactive heatmap table + footer legend. `OptimizationPassValidation` interface exported. Removed unused `Check` import. | 1592 → 1282 (−310, 19%) |
+| **#122** | Complex Method in BatchProcessingPanel.tsx | Extracted `BatchJobList` (empty state + mapping) and `BatchJobCard` (status, metrics, progress bar, delete) as module-level helpers. | Render block: −13 lines inline |
 | **#140** | Very Complex Method in system.ts (probeSystemHardware) | Extracted `buildProbeDiagnostics()` (~160 lines) with typed `ProbeDiagnosticInput`/`ProbeDiagnosticOutput` interfaces. | 395 → ~250 (−145, 37%) |
 
 ### Lint Cleanup (2026-08-07)
@@ -201,14 +201,23 @@ All ESLint warnings in `src/` and `server.ts` resolved. `eslint --max-warnings 2
 | `arenaOliveOutputs.test.ts:441` | `@typescript-eslint/no-unused-vars` | Renamed `reject` → `_reject` |
 | `registry.test.ts:31` | `no-duplicate-imports` | Merged duplicate imports |
 
-### Remaining Open (31 issues)
+### Remaining Open (30 issues)
 
-#### Duplication issues (3) — likely stale
+#### Large component complexity — ✅ all 4 resolved
+
+| GH # | Issue | Current status |
+|------|-------|----------------|
+| **#120** | Complex Method in ExecutionWorkspace.tsx | ✅ Closed. `OwrExportOverlay` + `useOliveStream` extracted (579 total lines, 33% reduction). |
+| **#121** | Complex Method in IHVIntegrationPanel.tsx | ✅ Closed. `HardwareCompatibilityMatrix` extracted (310 lines, 19% reduction). |
+| **#122** | Complex Method in BatchProcessingPanel.tsx | ✅ Closed. `BatchJobList` + `BatchJobCard` extracted as module-level helpers. |
+| **#140** | Very Complex Method in system.ts (probeSystemHardware) | ✅ Closed. `buildProbeDiagnostics` extracted (160 lines, 37% reduction). |
+
+#### Duplication issues (3)
 
 | GH # | Issue | Notes |
 |------|-------|-------|
-| **#139** | Duplicate Code in HardwareProviderCard.tsx | `PluginInstallBlock` already extracted and reused 7 times. Likely stale — re-scan recommended. |
-| **#150** | Duplicate Code in GraphCanvas/graphCanvasHelpers | graphCanvasHelpers already well-structured with many small functions. Likely stale — re-scan recommended. |
+| **#139** | Duplicate Code in HardwareProviderCard.tsx | ✅ Closed (2026-08-07). `PluginInstallBlock` extracted and reused 6 times — fully DRY. CodeFactor flags from pre-refactoring snapshot. |
+| **#150** | Duplicate Code in GraphCanvas/graphCanvasHelpers | ⚠️ Partial. HardwareProviderCard items resolved. Real ~35-line SVG duplication between `renderConnectionSegmentGroup` (helper) and inline code in `GraphCanvas.tsx`. `.agents/skills/` files not project code. |
 | **#102** | 2 Duplication issues | Older CodeFactor findings. May be partially addressed by prior refactoring. |
 
 #### Route handler complexity (1)
