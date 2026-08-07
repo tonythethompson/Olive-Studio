@@ -45,13 +45,15 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-const TYPE_CHECKERS: Record<Exclude<BodyFieldType, "json">, (value: unknown) => boolean> = {
+const TYPE_CHECKERS: Record<BodyFieldType, (value: unknown) => boolean> = {
   string: (value) => typeof value === "string",
   number: (value) => typeof value === "number" && Number.isFinite(value),
   boolean: (value) => typeof value === "boolean",
   object: (value) => isPlainObject(value),
   "string[]": (value) =>
     Array.isArray(value) && value.every((item) => typeof item === "string"),
+  // Recipes arrive either pre-parsed or as a JSON string.
+  json: (value) => isPlainObject(value) || typeof value === "string",
   // Pass-through fields with their own lenient handling downstream (e.g. clamps).
   // Does not narrow the parsed generic — callers must treat these as `unknown`.
   unknown: () => true,
@@ -71,25 +73,6 @@ const TYPE_DESCRIPTIONS: Record<BodyFieldType, string> = {
 function isFieldMissing(spec: BodyFieldSpec, value: unknown): boolean {
   if (value === undefined || value === null) return true;
   return (spec.type === "string" || spec.type === "json") && value === "";
-}
-
-/**
- * Accepts a plain object or a JSON string. Parses strings exactly once and returns
- * the decoded value so callers never re-parse.
- */
-function parseJsonField(
-  field: string,
-  value: unknown,
-): { ok: true; value: unknown } | { ok: false; error: string } {
-  if (isPlainObject(value)) return { ok: true, value };
-  if (typeof value !== "string") {
-    return { ok: false, error: `${field} must be ${TYPE_DESCRIPTIONS.json}` };
-  }
-  try {
-    return { ok: true, value: JSON.parse(value) };
-  } catch {
-    return { ok: false, error: `${field} must be ${TYPE_DESCRIPTIONS.json}` };
-  }
 }
 
 export function parseBody<T extends Record<string, unknown>>(
@@ -114,16 +97,18 @@ export function parseBody<T extends Record<string, unknown>>(
       }
       continue;
     }
-    if (fieldSpec.type === "json") {
-      const json = parseJsonField(field, value);
-      if (!json.ok) return { error: json.error };
-      parsed[field] = json.value;
-      continue;
-    }
     if (!TYPE_CHECKERS[fieldSpec.type](value)) {
       return { error: `${field} must be ${TYPE_DESCRIPTIONS[fieldSpec.type]}` };
     }
-    parsed[field] = value;
+    if (fieldSpec.type === "json" && typeof value === "string") {
+      try {
+        parsed[field] = JSON.parse(value);
+      } catch {
+        return { error: `${field} must be valid JSON` };
+      }
+    } else {
+      parsed[field] = value;
+    }
   }
 
   return { parsed: parsed as T };
