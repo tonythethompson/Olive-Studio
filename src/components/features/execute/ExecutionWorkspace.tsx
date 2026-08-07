@@ -63,7 +63,7 @@ import { ReportIssueModal } from "@/components/ReportIssueModal";
 import { OwrExportOverlay } from "./OwrExportOverlay";
 import type { ReportArea } from "@/lib/issueReport";
 
-const RecipeGraphView = lazy(() => import("./recipe-graph").then((m) => ({ default: m.RecipeGraphView })));
+const RecipeGraphView = lazy(() => import("./recipe-graph/RecipeGraphView").then((m) => ({ default: m.RecipeGraphView })));
 
 /**
  * Renders a centered loading spinner with a descriptive label.
