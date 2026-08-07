@@ -423,6 +423,180 @@ async function runQueuedBatchJobs(queuedJobs: BatchJob[], ctx: QueueJobContext):
  * @param state - Optional pipeline state; uses the pipeline store state when omitted.
  * @param setState - Optional state updater; uses the pipeline store updater when omitted.
  */
+function BatchJobList({
+  jobs,
+  selectedJobId,
+  onSelectJob,
+  onDeleteJob,
+}: {
+  jobs: BatchJob[];
+  selectedJobId: string | null;
+  onSelectJob: (id: string) => void;
+  onDeleteJob: (id: string) => void;
+}) {
+  if (jobs.length === 0) {
+    return (
+      <div className="text-center py-12 border border-dashed border-slate-800 rounded-xl bg-slate-950/20 text-slate-500">
+        <Layers className="h-10 w-10 mx-auto mb-3 opacity-30 text-slate-400" />
+        <h5 className="font-semibold text-slate-400 mb-1">Queue Empty</h5>
+        <p className="text-xs text-slate-500 max-w-sm mx-auto">
+          Configure your source models and trigger passes to queue jobs or add a custom sequence
+          manually.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {jobs.map((job) => (
+        <BatchJobCard
+          key={job.id}
+          job={job}
+          isSelected={selectedJobId === job.id}
+          onSelect={() => onSelectJob(job.id)}
+          onDelete={() => onDeleteJob(job.id)}
+        />
+      ))}
+    </>
+  );
+}
+
+function BatchJobCard({
+  job,
+  isSelected,
+  onSelect,
+  onDelete,
+}: {
+  job: BatchJob;
+  isSelected: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      onClick={onSelect}
+      className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border cursor-pointer transition-all ${
+        isSelected
+          ? "border-electric-blue bg-electric-blue/5"
+          : "border-slate-800/80 bg-slate-900/30 hover:border-slate-700 hover:bg-slate-900/50"
+      }`}
+    >
+      <div className="flex items-start gap-3.5 min-w-0">
+        {/* Status Icon */}
+        <div className="mt-0.5 shrink-0">
+          {job.status === "completed" && (
+            <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+          )}
+          {job.status === "running" && <PlayCircle className="h-5 w-5 text-electric-blue" />}
+          {job.status === "queued" && <Clock className="h-5 w-5 text-slate-500" />}
+          {job.status === "failed" && <XCircle className="h-5 w-5 text-red-500" />}
+          {job.status === "cancelled" && <Pause className="h-5 w-5 text-amber-400" />}
+        </div>
+
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+            <h4
+              className={`text-sm font-semibold truncate ${isSelected ? "text-slate-100" : "text-slate-300"}`}
+            >
+              {job.name}
+            </h4>
+            <span
+              className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full font-bold ${
+                job.status === "completed"
+                  ? "bg-emerald-500/10 text-emerald-400"
+                  : job.status === "running"
+                    ? "bg-electric-blue/10 text-electric-blue"
+                    : "bg-slate-800 text-slate-400"
+              }`}
+            >
+              {job.status}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-1">
+            <span className="flex items-center gap-1 font-mono text-slate-450">
+              <Database className="h-3 w-3" /> {job.modelIdentifier.split("/").pop()}
+            </span>
+            <span className="flex items-center gap-1">
+              <Cpu className="h-3 w-3" /> {job.provider.replace("ExecutionProvider", "")}
+            </span>
+          </div>
+
+          {/* Passes tag pill representation */}
+          <div className="flex flex-wrap gap-1 mt-2.5">
+            {job.passes.map((p, idx) => (
+              <span
+                key={idx}
+                className="text-[10px] font-mono bg-slate-950 px-1.5 py-0.5 rounded border border-slate-850 text-slate-400"
+              >
+                {p}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between sm:justify-end gap-4 mt-4 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-0 border-slate-900 shrink-0">
+        {job.status === "running" && (
+          <div className="flex flex-col items-end gap-1.5 w-24">
+            {job.progress >= 0 ? (
+              <>
+                <span className="text-[10px] font-mono text-electric-blue">
+                  {job.progress}%
+                </span>
+                <div className="h-1 w-full bg-slate-950 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-electric-blue transition-all duration-300"
+                    style={{ width: `${job.progress}%` }}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="text-[10px] font-mono text-electric-blue">running…</span>
+                <div className="h-1 w-full bg-slate-950 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-electric-blue animate-pulse"
+                    style={{ width: "40%" }}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {job.status === "completed" && job.metrics && (
+          <div className="text-right text-xs bg-emerald-500/5 px-2.5 py-1.5 rounded-md border border-emerald-500/10">
+            <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider font-mono">
+              LATENCY
+            </span>
+            <span className="font-semibold text-emerald-400 font-mono">
+              {job.metrics.latency}
+            </span>
+          </div>
+        )}
+
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="text-slate-600 hover:text-red-400 p-1 rounded hover:bg-slate-900 transition-colors shrink-0 cursor-pointer"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+          <ChevronRight
+            className={`h-4 w-4 text-slate-600 ${isSelected ? "text-slate-350" : ""}`}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function BatchProcessingPanel({
   state: propState,
   setState: propSetState,
@@ -847,143 +1021,12 @@ export function BatchProcessingPanel({
 
             {/* Queue Jobs Cards */}
             <div className="space-y-2.5">
-              {jobs.length === 0 ? (
-                <div className="text-center py-12 border border-dashed border-slate-800 rounded-xl bg-slate-950/20 text-slate-500">
-                  <Layers className="h-10 w-10 mx-auto mb-3 opacity-30 text-slate-400" />
-                  <h5 className="font-semibold text-slate-400 mb-1">Queue Empty</h5>
-                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                    Configure your source models and trigger passes to queue jobs or add a custom sequence
-                    manually.
-                  </p>
-                </div>
-              ) : (
-                jobs.map((job) => {
-                  const isSelected = selectedJobId === job.id;
-                  return (
-                    <div
-                      key={job.id}
-                      onClick={() => setSelectedJobId(job.id)}
-                      className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border cursor-pointer transition-all ${
-                        isSelected
-                          ? "border-electric-blue bg-electric-blue/5"
-                          : "border-slate-800/80 bg-slate-900/30 hover:border-slate-700 hover:bg-slate-900/50"
-                      }`}
-                    >
-                      <div className="flex items-start gap-3.5 min-w-0">
-                        {/* Status Icon */}
-                        <div className="mt-0.5 shrink-0">
-                          {job.status === "completed" && (
-                            <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                          )}
-                          {job.status === "running" && <PlayCircle className="h-5 w-5 text-electric-blue" />}
-                          {job.status === "queued" && <Clock className="h-5 w-5 text-slate-500" />}
-                          {job.status === "failed" && <XCircle className="h-5 w-5 text-red-500" />}
-                          {job.status === "cancelled" && <Pause className="h-5 w-5 text-amber-400" />}
-                        </div>
-
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                            <h4
-                              className={`text-sm font-semibold truncate ${isSelected ? "text-slate-100" : "text-slate-300"}`}
-                            >
-                              {job.name}
-                            </h4>
-                            <span
-                              className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full font-bold ${
-                                job.status === "completed"
-                                  ? "bg-emerald-500/10 text-emerald-400"
-                                  : job.status === "running"
-                                    ? "bg-electric-blue/10 text-electric-blue"
-                                    : "bg-slate-800 text-slate-400"
-                              }`}
-                            >
-                              {job.status}
-                            </span>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-1">
-                            <span className="flex items-center gap-1 font-mono text-slate-450">
-                              <Database className="h-3 w-3" /> {job.modelIdentifier.split("/").pop()}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Cpu className="h-3 w-3" /> {job.provider.replace("ExecutionProvider", "")}
-                            </span>
-                          </div>
-
-                          {/* Passes tag pill representation */}
-                          <div className="flex flex-wrap gap-1 mt-2.5">
-                            {job.passes.map((p, idx) => (
-                              <span
-                                key={idx}
-                                className="text-[10px] font-mono bg-slate-950 px-1.5 py-0.5 rounded border border-slate-850 text-slate-400"
-                              >
-                                {p}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between sm:justify-end gap-4 mt-4 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-0 border-slate-900 shrink-0">
-                        {job.status === "running" && (
-                          <div className="flex flex-col items-end gap-1.5 w-24">
-                            {job.progress >= 0 ? (
-                              <>
-                                <span className="text-[10px] font-mono text-electric-blue">
-                                  {job.progress}%
-                                </span>
-                                <div className="h-1 w-full bg-slate-950 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-electric-blue transition-all duration-300"
-                                    style={{ width: `${job.progress}%` }}
-                                  />
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <span className="text-[10px] font-mono text-electric-blue">running…</span>
-                                <div className="h-1 w-full bg-slate-950 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-electric-blue animate-pulse"
-                                    style={{ width: "40%" }}
-                                  />
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
-
-                        {job.status === "completed" && job.metrics && (
-                          <div className="text-right text-xs bg-emerald-500/5 px-2.5 py-1.5 rounded-md border border-emerald-500/10">
-                            <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider font-mono">
-                              LATENCY
-                            </span>
-                            <span className="font-semibold text-emerald-400 font-mono">
-                              {job.metrics.latency}
-                            </span>
-                          </div>
-                        )}
-
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteJob(job.id);
-                            }}
-                            className="text-slate-600 hover:text-red-400 p-1 rounded hover:bg-slate-900 transition-colors shrink-0 cursor-pointer"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                          <ChevronRight
-                            className={`h-4 w-4 text-slate-600 ${isSelected ? "text-slate-350" : ""}`}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+              <BatchJobList
+                jobs={jobs}
+                selectedJobId={selectedJobId}
+                onSelectJob={setSelectedJobId}
+                onDeleteJob={handleDeleteJob}
+              />
             </div>
           </CardContent>
         </Card>

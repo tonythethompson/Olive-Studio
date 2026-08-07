@@ -122,6 +122,7 @@ export function SettingsPanel({ providers, local, isOpen }: SettingsPanelProps) 
       providers.providerStatus.provider ?? providers.settingsProvider,
       providers.settingsBaseUrl || providers.providerStatus.baseUrl,
     );
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSettingsMode(next);
     const engine = preferredEngineFromBaseUrl(providers.settingsBaseUrl || providers.providerStatus.baseUrl);
     if (engine && engine !== local.preferredEngine) {

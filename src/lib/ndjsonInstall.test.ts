@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import { runNdjsonInstall } from "./ndjsonInstall.ts";
 
 function ndjsonResponse(frames: string[], status = 200): Response {

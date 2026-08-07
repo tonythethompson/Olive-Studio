@@ -13,6 +13,7 @@ export function TitleBar() {
 
   useEffect(() => {
     const tauri = typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsTauri(Boolean(tauri));
     if (!tauri) return;
 

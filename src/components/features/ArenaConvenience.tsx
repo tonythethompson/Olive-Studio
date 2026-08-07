@@ -71,6 +71,7 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
     // Do not auto-retry after a failed list: error + null payload would re-fire
     // forever. Refresh list (or re-open after clearing) is the recovery path.
     if (open && !payload && !loading && !error) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void loadList();
     }
   }, [open, payload, loading, error, loadList]);

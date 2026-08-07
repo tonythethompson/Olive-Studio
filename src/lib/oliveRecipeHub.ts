@@ -152,9 +152,9 @@ export async function fetchOliveRecipesCatalogItem(
   return json;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapExecutionProviderFromRecipe(parsed: any): IHVProvider | undefined {
-  const systems = parsed?.systems;
+function mapExecutionProviderFromRecipe(parsed: unknown): IHVProvider | undefined {
+  const recipe = parsed as Record<string, unknown> | undefined;
+  const systems = recipe?.systems as Record<string, unknown> | undefined;
   if (systems && typeof systems === "object") {
     for (const system of Object.values(systems)) {
       const config = (system as { config?: { accelerators?: unknown[] }; accelerators?: unknown[] })?.config;
@@ -213,7 +213,8 @@ function mapOpenVinoTargetFromRecipe(parsed: unknown): OpenVinoTargetDevice | un
 
 /** Catalog device label from recipe JSON (more accurate than folder tags). */
 export function getCatalogDeviceFromRecipe(parsed: unknown): string | undefined {
-  const systems = (parsed as { systems?: Record<string, unknown> })?.systems;
+  const recipe = parsed as Record<string, unknown> | undefined;
+  const systems = recipe?.systems as Record<string, unknown> | undefined;
   if (systems && typeof systems === "object") {
     for (const system of Object.values(systems)) {
       const config = (system as { config?: { accelerators?: unknown[] }; accelerators?: unknown[] })?.config;
@@ -306,8 +307,8 @@ export function compareCatalogMetadataToRecipe(
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapQuantMethod(config: any, passType = ""): UIState["passes"]["quantMethod"] {
+function mapQuantMethod(config: unknown, passType = ""): UIState["passes"]["quantMethod"] {
+  const cfg = config as Record<string, unknown>;
   const typeLower = passType.toLowerCase();
   if (typeLower.includes("autoawq")) {
     return "awq";
@@ -318,53 +319,50 @@ function mapQuantMethod(config: any, passType = ""): UIState["passes"]["quantMet
   if (typeLower.includes("hqq")) return "hqq";
   if (typeLower.includes("blockwisertn") || typeLower.includes("rtn")) return "rtn";
 
-  const algorithm = String(config?.algorithm ?? "").toLowerCase();
+  const algorithm = String(cfg.algorithm ?? "").toLowerCase();
   if (algorithm.includes("awq")) return "awq";
   if (algorithm.includes("gptq")) return "gptq";
 
-  const mode = String(config?.quant_mode ?? config?.mode ?? "").toLowerCase();
+  const mode = String(cfg.quant_mode ?? cfg.mode ?? "").toLowerCase();
   if (mode.includes("qat") || mode === "qlinearops") {
     return "qat";
   }
   return "ptq";
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapQuantPrecision(config: any, passType = ""): UIState["passes"]["quantPrecision"] {
+function mapQuantPrecision(config: unknown, passType = ""): UIState["passes"]["quantPrecision"] {
+  const cfg = config as Record<string, unknown>;
   const typeLower = passType.toLowerCase();
   if (typeLower.includes("weightcompression") || typeLower.includes("nvfp4")) {
     return "int4";
   }
-  if (config?.bits != null) {
-    return Number(config.bits) <= 4 ? "int4" : "int8";
+  if (cfg.bits != null) {
+    return Number(cfg.bits) <= 4 ? "int4" : "int8";
   }
-  if (config?.quant_level != null) {
-    const ql = String(config.quant_level).toLowerCase();
+  if (cfg.quant_level != null) {
+    const ql = String(cfg.quant_level).toLowerCase();
     if (ql.includes("w4") || ql.includes("4")) return "int4";
     if (ql.includes("w8") || ql.includes("8")) return "int8";
   }
-  const weight = String(config?.weight_type ?? config?.precision ?? "int8").toLowerCase();
+  const weight = String(cfg.weight_type ?? cfg.precision ?? "int8").toLowerCase();
   if (weight.includes("int4") || weight === "4") return "int4";
   if (weight.includes("fp16") || weight.includes("float16")) return "fp16";
   return "int8";
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapPruningCriteria(config: any): "l1_norm" | "l2_norm" | undefined {
-  if (!config?.pruning_criteria) return undefined;
-  return String(config.pruning_criteria).toLowerCase().includes("l2") ? "l2_norm" : "l1_norm";
+function mapPruningCriteria(config: unknown): "l1_norm" | "l2_norm" | undefined {
+  const cfg = config as Record<string, unknown>;
+  if (!cfg.pruning_criteria) return undefined;
+  return String(cfg.pruning_criteria).toLowerCase().includes("l2") ? "l2_norm" : "l1_norm";
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes"] {
+function mapPassesFromRecipe(recipePasses: Record<string, unknown>): UIState["passes"] {
   const next = createInactivePasses();
 
   for (const [key, pass] of Object.entries(recipePasses)) {
     if (!pass || typeof pass !== "object") continue;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const type = String((pass as any).type ?? "");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const config = (pass as any).config ?? {};
+    const type = String((pass as Record<string, unknown>).type ?? "");
+    const config = ((pass as Record<string, unknown>).config as Record<string, unknown>) ?? {};
     const lowerType = type.toLowerCase();
 
     if (lowerType.includes("openvino") && lowerType.includes("conversion")) {
@@ -503,64 +501,65 @@ function mapPassesFromRecipe(recipePasses: Record<string, any>): UIState["passes
  * @param options - Options controlling whether mapped passes replace or merge with existing passes.
  * @returns The UI state values derived from the recipe.
  */
-export function deriveUiStateFromOliveRecipe(parsed: any, options?: DeriveUiStateOptions): Partial<UIState> {
+export function deriveUiStateFromOliveRecipe(parsed: unknown, options?: DeriveUiStateOptions): Partial<UIState> {
+  const recipe = parsed as Record<string, unknown> | undefined;
   const incomingState: Partial<UIState> = {};
-  const inputModel = parsed?.input_model;
-
-  const hfConfig = inputModel?.config?.hf_config;
+  const inputModel = recipe?.input_model as Record<string, unknown> | undefined;
+  const icfg = (inputModel?.config ?? {}) as Record<string, unknown>;
+  const hfConfig = icfg.hf_config as Record<string, unknown> | undefined;
   const hfModelPath =
     typeof inputModel?.model_path === "string"
       ? inputModel.model_path
-      : typeof inputModel?.config?.model_path === "string"
-        ? inputModel.config.model_path
+      : typeof icfg.model_path === "string"
+        ? icfg.model_path
         : null;
-  const hfName = hfConfig?.model_name || hfModelPath;
+  const hfName = (hfConfig?.model_name ?? hfModelPath) as string | undefined | null;
 
   if (hfName) {
     incomingState.modelSource = "huggingface";
     incomingState.hfModelId = hfName;
     const dataset =
-      (typeof inputModel?.config?.dataset === "string" && inputModel.config.dataset) ||
+      (typeof icfg.dataset === "string" && icfg.dataset) ||
       (typeof hfConfig?.dataset === "string" && hfConfig.dataset) ||
       "";
     incomingState.hfDataset = dataset;
     const task =
-      (typeof inputModel?.config?.task === "string" && inputModel.config.task) ||
+      (typeof icfg.task === "string" && icfg.task) ||
       (typeof hfConfig?.task === "string" && hfConfig.task) ||
       "";
     incomingState.hfTask = task === "speech-recognition" ? "automatic-speech-recognition" : task;
   }
 
-  const localFiles = inputModel?.config?.local_files;
+  const localFiles = icfg.local_files;
   if (Array.isArray(localFiles) && localFiles.length > 0) {
     incomingState.modelSource = "local";
     incomingState.localFiles = localFiles.map((name: string) => ({ name, size: 2_000_000_000 }));
-  } else if (inputModel?.config?.model_path && !hfConfig && !hfModelPath?.includes("/")) {
+  } else if (icfg.model_path && !hfConfig && !hfModelPath?.includes("/")) {
     incomingState.modelSource = "local";
   }
 
-  if (inputModel?.config?.model_path && incomingState.modelSource === "azure") {
-    incomingState.azureModelPath = String(inputModel.config.model_path);
-  } else if (inputModel?.config?.model_path && !hfConfig && hfModelPath?.includes("azure")) {
+  if (icfg.model_path && incomingState.modelSource === "azure") {
+    incomingState.azureModelPath = String(icfg.model_path);
+  } else if (icfg.model_path && !hfConfig && hfModelPath?.includes("azure")) {
     incomingState.modelSource = "azure";
     incomingState.azureModelPath = hfModelPath;
   }
 
-  const provider = mapExecutionProviderFromRecipe(parsed);
+  const provider = mapExecutionProviderFromRecipe(recipe);
   if (provider) {
     incomingState.ihvProvider = provider;
   }
   if (provider === "OpenVINOExecutionProvider") {
-    incomingState.openvinoTargetDevice = mapOpenVinoTargetFromRecipe(parsed) ?? "CPU";
+    incomingState.openvinoTargetDevice = mapOpenVinoTargetFromRecipe(recipe) ?? "CPU";
   }
 
-  const offloadMode = memoryOffloadFromRecipe(parsed);
+  const offloadMode = memoryOffloadFromRecipe(recipe);
   if (offloadMode) {
     incomingState.memoryOffload = offloadMode;
   }
 
-  if (parsed?.passes && typeof parsed.passes === "object") {
-    const mapped = mapPassesFromRecipe(parsed.passes);
+  if (recipe?.passes && typeof recipe.passes === "object") {
+    const mapped = mapPassesFromRecipe(recipe.passes as Record<string, unknown>);
     if (options?.replacePasses) {
       incomingState.passes = mapped;
       // Clear MCP / prior-run pass overrides so curated/import loads do not

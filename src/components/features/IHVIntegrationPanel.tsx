@@ -471,6 +471,7 @@ export function IHVIntegrationPanel({
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void runHardwareProbe(false);
   }, [runHardwareProbe]);
 

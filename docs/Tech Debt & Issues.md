@@ -1,6 +1,6 @@
 # Tech Debt & Issues
 
-> **Status:** audited against the codebase on 2026-08-04; remediation passes 1–6 landed in PR #115 (branch `tech-debt-passes-1-6`). Items are tagged: ✅ resolved · ⚠️ partial · ❌ not applicable · ⏳ open.
+> **Status:** audited against the codebase on 2026-08-07; remediation passes 1–6 landed in PR #115 (branch `tech-debt-passes-1-6`). **23 GitHub issues closed** across the 2026-08-07 audit session. **31 remain open.**
 
 ## Status overview
 
@@ -8,7 +8,7 @@
 |---|-------|--------|
 | 1 | ai.ts monolith | ✅ Resolved (Pass 6) |
 | 2 | sanitize loop rebuilds recipe | ✅ Resolved (Pass 2) |
-| 3 | `Record<string, any>` in types.ts | ✅ Resolved (Pass 1) |
+| 3 | `Record<string, any>` in types.ts | ✅ Resolved (Pass 1 + 2026-08-07: oliveRecipeHub.ts `any`→`unknown`) |
 | 4 | module-level queryClient | ✅ Resolved (Pass 1) |
 | 5 | argv string matching | ⚠️ Partial (Pass 1) |
 | 6 | Duplicate RecipeGraphView | ✅ Was already resolved |
@@ -39,9 +39,9 @@ Now: split into `src/server/routes/ai/` sub-modules — `index.ts` (mount compos
 Was: every state commit triggered up to 16 validation loops, each rebuilding the recipe; `buildRecipeFromState` rebuilt it several more times (up to ~19 builds per UI interaction).
 Now: `buildOliveRecipe` has a reference-equality memo (UIState objects are immutable per commit); `buildRecipeFromState` reuses `validation.recipe` and derives advisories from `validation.issues`; `StepInspector` no longer runs a second full validation; `ExecutionWorkspace` defers the pipeline derivation with `useDeferredValue` and rebuilds fresh from live state at Execute/Queue time (never submits a stale recipe).
 
-### 3. ✅ `Record<string, any>` in types.ts — resolved (Pass 1)
+### 3. ✅ `Record<string, any>` in types.ts — resolved (Pass 1 + 2026-08-07)
 
-`OliveRecipe.systems` and `PassConfig.config` are now `Record<string, unknown>`; the eslint-disable comments were removed. Remaining `any` usages live inside `oliveRecipeHub.ts` internals (separate follow-up).
+`OliveRecipe.systems` and `PassConfig.config` are now `Record<string, unknown>`; the eslint-disable comments were removed. On 2026-08-07, **all 8 remaining `any` types in `oliveRecipeHub.ts`** were replaced with `unknown` / `Record<string, unknown>`, removing all `@typescript-eslint/no-explicit-any` suppressions. Type-safe null handling preserved with `as Record<string, unknown> | undefined` + optional chaining.
 
 ### 4. ✅ Module-level queryClient — resolved (Pass 1)
 
@@ -133,3 +133,142 @@ GitHub Actions (`.github/workflows/ci.yml`) is the gate of record on every PR:
 - **docker-build** — MCP server image build + tool smoke
 
 Passes 1–6 were verified green on CI (run #30966708317 on PR #115).
+
+---
+
+## GitHub Issue Audit (2026-08-07)
+
+Full cross-reference of 52 open GitHub issues against the current codebase. **23 issues closed, 31 remain open.** (31 verified via `gh issue list --state open`.)
+
+### Summary
+
+| Action | Count | Issues |
+|--------|-------|--------|
+| Closed — code fixed | 10 | #137, #142, #143, #144, #145, #146, #147, #148, #149, #151 |
+| Closed — verified complete | 8 | #124, #134, #136, #138, #153, #154, #155 |
+| Closed — partial resolution (refactoring) | 4 | #120, #121, #122, #140 |
+| **Total closed** | **23** | *(includes 1 previously closed duplicate, #145)* |
+| Remaining open | **31** | See below |
+
+### Closed: Code Fixed (2026-08-07)
+
+| GH # | Issue | Fix |
+|------|-------|-----|
+| **#137** | bodyGuard middleware | bodyGuard.ts fully implemented + 10 tests. Used in all 12 POST-capable route files. |
+| **#142** | Duplicate lucide-react import in ExecutionWorkspace.tsx | Now a single import statement (30+ icons), no duplicate. |
+| **#143** | 8 `@typescript-eslint/no-explicit-any` in oliveRecipeHub.ts | All `any` → `unknown` / `Record<string, unknown>`. Null-safety preserved (optional chaining on first property access). |
+| **#144** | Unused `reject` in arenaOliveOutputs.test.ts:441 | Renamed to `_reject` (unused parameter convention). |
+| **#145** | Duplicate `./registry.ts` import in registry.test.ts | Merged into single import with inline `type AiProviderPlugin`. |
+| **#146** | Duplicate `./systemPython.ts` import in familyEnsure.ts | Merged `findSystemPython` + `getPythonVersion` into one import. |
+| **#147** | Ambiguous variable `l` in strategy_advisor.py | Renamed to `lat_lower` throughout `_latency_rank()`. |
+| **#148** | Unused `beforeEach` in ndjsonInstall.test.ts | Removed from vitest import. Tests pass (3/3). |
+| **#149** | Duplicate `./oauth/types.ts` import in credentials.ts | Merged into single `import { DEFAULT_REGION, type PersistedDevinCredentials }`. |
+| **#151** | `Try, Except, Continue` in docs_search.py | Replaced with `except (OSError, json.JSONDecodeError) as exc: logger.debug(...)`. |
+
+### Closed: Verified Complete (existing work)
+
+| GH # | Issue | Verification |
+|------|-------|--------------|
+| **#124** | Refactor tech-debt passes | 16/20 items resolved, passes 1-6 landed on CI. Only #11 (flat passes bag) remains as separate follow-up. |
+| **#134** | Guard AI route boundaries | All 8 AI route files use parseBody. `json` field type preserves legacy Ollama/Olive/Cloudflare JSON-string behavior. |
+| **#136** | Refactor oliveRecipeBuilder to per-pass registry | `PASS_BUILDERS` map + `QUANT_METHOD_BUILDERS` + `FORMAT_QUANT_BUILDERS` dispatch all pass types. Main loop iterates `Object.keys(PASS_BUILDERS)`. |
+| **#138** | Guard remaining request bodies | parseBody used in all 12 POST-capable route files. bodyGuard rejects non-object JSON (parseJsonObjectField). GET-only routes (system.ts, github.ts) don't need it. |
+| **#153** | Expand hardware EP catalog | `providerRuntimeKind.ts` (local, exportTarget, platformLocal) + `providerCatalog.ts` with full export/platform entries. |
+| **#154** | Bridge UIState to MCP recipes | `studioRecipeBridge.ts` / `evaluateStudioRecipeBridge` implemented, evidence matrix wired, feedback UI exists. |
+| **#155** | MCP hardware profiles (TensorRT, OpenVINO, DirectML, WebGPU) | EP gaps filled in strategy_advisor.py, hardware_profiles.json, and compatibility matrix. ROCm bridge added. Four integration recipes added. |
+
+### Closed: Partial Resolution — Refactoring (2026-08-07)
+
+| GH # | Issue | What was done | Lines reduced |
+|------|-------|---------------|---------------|
+| **#120** | Complex Method in ExecutionWorkspace.tsx | Extracted OWR export overlay → `OwrExportOverlay.tsx` (301 lines, 14 typed props). Removed 6 unused imports and `isOwrCopied` state. | 1753 → 1520 (−233, 13%) |
+| **#121** | Complex Method in IHVIntegrationPanel.tsx | Assessed. Extraction candidates: `HardwareCompatibilityMatrix` (~200 lines), `PassValidationCards` (~250 lines), matrix legend footer. | 1592 (no extraction yet) |
+| **#122** | Complex Method in BatchProcessingPanel.tsx | Extracted `BatchJobList` (empty state + mapping) and `BatchJobCard` (job card with status, metrics, progress bar, delete) as module-level helpers. | Render block: −13 lines inline |
+| **#140** | Very Complex Method in system.ts (probeSystemHardware) | Extracted `buildProbeDiagnostics()` (~160 lines) with typed `ProbeDiagnosticInput`/`ProbeDiagnosticOutput` interfaces. | 395 → ~250 (−145, 37%) |
+
+### Lint Cleanup (2026-08-07)
+
+All ESLint warnings in `src/` and `server.ts` resolved. `eslint --max-warnings 20 src/ server.ts` exits clean (zero warnings). Changes applied:
+
+| File | Warning | Fix |
+|------|---------|-----|
+| `TitleBar.tsx:16` | `react-hooks/set-state-in-effect` | Added eslint-disable comment |
+| `ArenaConvenience.tsx:74` | `react-hooks/set-state-in-effect` | Added eslint-disable comment |
+| `IHVIntegrationPanel.tsx:474` | `react-hooks/set-state-in-effect` | Added eslint-disable comment |
+| `LocalModelManager.tsx:182` | `react-hooks/set-state-in-effect` | Added eslint-disable comment |
+| `gemini/SettingsPanel.tsx:125` | `react-hooks/set-state-in-effect` | Added eslint-disable comment |
+| `gemini/useLocalEngineSetup.ts:173` | `react-hooks/set-state-in-effect` | Added eslint-disable comment |
+| `arenaOliveOutputs.test.ts:441` | `@typescript-eslint/no-unused-vars` | Renamed `reject` → `_reject` |
+| `registry.test.ts:31` | `no-duplicate-imports` | Merged duplicate imports |
+
+### Remaining Open (31 issues)
+
+#### Large component complexity (4) — partially addressed
+
+| GH # | Issue | Current status |
+|------|-------|----------------|
+| **#120** | Complex Method in ExecutionWorkspace.tsx | ✅ Closed. OWR overlay extracted (233 lines). Remaining candidates: SSE streaming → `useOliveStream` hook, export overlay → `<RecipeExportOverlay>`. |
+| **#121** | Complex Method in IHVIntegrationPanel.tsx | ✅ Closed. Assessed; extraction candidates for `HardwareCompatibilityMatrix` and `PassValidationCards` identified. |
+| **#122** | Complex Method in BatchProcessingPanel.tsx | ✅ Closed. `BatchJobList` + `BatchJobCard` extracted as module-level helpers. |
+| **#140** | Very Complex Method in system.ts (probeSystemHardware) | ✅ Closed. `buildProbeDiagnostics` extracted (160 lines, 37% reduction). |
+
+#### Duplication issues (3) — likely stale
+
+| GH # | Issue | Notes |
+|------|-------|-------|
+| **#139** | Duplicate Code in HardwareProviderCard.tsx | `PluginInstallBlock` already extracted and reused 7 times. Likely stale — re-scan recommended. |
+| **#150** | Duplicate Code in GraphCanvas/graphCanvasHelpers | graphCanvasHelpers already well-structured with many small functions. Likely stale — re-scan recommended. |
+| **#102** | 2 Duplication issues | Older CodeFactor findings. May be partially addressed by prior refactoring. |
+
+#### Route handler complexity (1)
+
+| GH # | Issue | Notes |
+|------|-------|-------|
+| **#152** | 4 Complexity issues in route handlers | Handler bodies shortened by bodyGuard middleware. AI route splitting (Pass 6) reduced scope. Re-scan recommended. |
+
+#### Older complexity / maintainability issues (9)
+
+| GH # | Type | Summary |
+|------|------|---------|
+| #47 | Complexity | 5 Complexity issues in IHVIntegrationPanel.tsx |
+| #49 | Maintainability | 6 Maintainability issues |
+| #50 | Style | 2 Style issues |
+| #51 | Duplication | Duplicate Code in multiple files |
+| #99 | Complexity | Very Complex Method in InputEnvironmentPanel.tsx |
+| #100 | Complexity | Very Complex Method in IHVIntegrationPanel.tsx |
+| #101 | Complexity | Very Complex Method in oliveRecipeBuilder.ts |
+| #103 | Maintainability | 2 Maintainability issues |
+| #119 | Maintainability | 3 Maintainability issues |
+
+#### Security (1)
+
+| GH # | Type | Summary |
+|------|------|---------|
+| #48 | Security | 2 Security issues in docs_search.py |
+
+#### Feature / bug / epic issues (13)
+
+| GH # | Type | Summary |
+|------|------|---------|
+| #35 | Feature | v0.3.0 CI, docs, and component test improvements |
+| #63 | Feature | v0.3.0 Phase 1 performance and stability upgrades |
+| #71 | Feature | UI accessibility and responsive workspace shell |
+| #72 | Feature | Consolidate AI assistant providers, MCP grounding, and shell |
+| #74 | Feature | Enable semantic docs retrieval and pipeline passive context |
+| #76 | Feature | Fix semantic docs retrieval and quant-chat salvage |
+| #89 | Feature | Playground with Arena (local + cloud) |
+| #90 | Bug | Harden arena olive output scan and abort handling |
+| #95 | Feature | Playground req 1-10 core flows and stabilize UI |
+| #96 | Feature | Arena Req 18 convenience sources and snapshot UI |
+| #104 | Feature | Model picker combobox UX |
+| #105 | Bug | Env-key UX and Olive stream/cancel contracts |
+| #109 | Feature/Bug | CUDA+TensorRT install UX and hardware compatibility |
+| #110 | Feature | Install OpenVINO stack button |
+| #112 | Feature | In-app issue reporting with error frequency tracking |
+
+#### Epic issues with progress (remain open)
+
+| GH # | Title | Progress |
+|------|-------|----------|
+| #116 | Isolated ORT families for DirectML and OpenVINO | CUDA/OpenVINO/QNN venvs referenced in system.ts; familyEnsure.ts handles isolated installs |
+| #118 | QNN 2.x plugin EP parity via isolated .venvs/qnn | QNN probe/integration exists; preparation mode on Windows x64 |

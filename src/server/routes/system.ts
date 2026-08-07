@@ -197,6 +197,179 @@ async function probePythonRuntime(
   return result;
 }
 
+// ─── Probe diagnostics ────────────────────────────────────────────────────
+
+interface ProbeDiagnosticInput {
+  defaultOrtProviders?: string[];
+  cudaOrtProviders?: string[];
+  openvinoOrtProviders?: string[];
+  qnnOrtProviders?: string[];
+  systemOrtProviders?: string[];
+  tensorRtRtxVenvLoadable: boolean;
+  tensorRtRtx?: HardwareProbeResult["tensorRtRtx"];
+  tensorRtVenvLoadable: boolean;
+  tensorrt?: HardwareProbeResult["tensorrt"];
+  cudaVenvLoadable: boolean;
+  cuda?: HardwareProbeResult["cuda"];
+  nvidia?: HardwareProbeResult["nvidia"];
+  rocm?: HardwareProbeResult["rocm"];
+  openvinoVenvAvailable: boolean;
+  openvino?: OpenVinoProbeResult;
+  qnnVenvLoadable: boolean;
+  qnn?: QnnProbeResult;
+  platformArch: string;
+}
+
+interface ProbeDiagnosticOutput {
+  notes: string[];
+  onnxRuntimeProviders?: string[];
+  nvidiaTensorRtFamilyCapable: boolean;
+  qnnHostMode: ReturnType<typeof resolveQnnHostMode>;
+}
+
+function buildProbeDiagnostics(input: ProbeDiagnosticInput): ProbeDiagnosticOutput {
+  const notes: string[] = [];
+  const onnxRuntimeProviders = mergeOrtProvidersForDisplay(
+    input.defaultOrtProviders,
+    input.cudaOrtProviders,
+    input.openvinoOrtProviders,
+    input.qnnOrtProviders,
+    input.systemOrtProviders,
+  );
+  if (input.defaultOrtProviders?.length) {
+    notes.push("ONNX Runtime providers probed via default runtime.");
+  } else if (input.cudaOrtProviders?.length) {
+    notes.push("ONNX Runtime providers probed via CUDA runtime.");
+  } else if (input.openvinoOrtProviders?.length) {
+    notes.push("ONNX Runtime providers probed via OpenVINO runtime.");
+  } else if (input.qnnOrtProviders?.length) {
+    notes.push("ONNX Runtime providers probed via QNN runtime.");
+  } else if (input.systemOrtProviders?.length) {
+    notes.push("ONNX Runtime providers probed via system Python.");
+  }
+
+  if (input.tensorRtRtxVenvLoadable) {
+    notes.push(`TensorRT RTX runtime verified${input.tensorRtRtx?.version ? ` (${input.tensorRtRtx.version})` : ""}.`);
+  } else if (input.nvidia?.gpus.length) {
+    notes.push(
+      input.tensorRtRtx?.detail
+        ? `TensorRT RTX plugin not ready (${input.tensorRtRtx.detail}). GPU is compatible — install tensorrt-rtx from Hardware or on first TRT RTX run.`
+        : "TensorRT RTX plugin (tensorrt-rtx) not in .venv yet. GPU is compatible — use Install in Hardware, or Olive installs it on first TRT RTX run.",
+    );
+  }
+
+  if (input.tensorRtVenvLoadable) {
+    notes.push("TensorRT execution provider load verified.");
+  } else if (input.nvidia?.gpus.length) {
+    notes.push(
+      input.tensorrt?.detail
+        ? `Full TensorRT SDK not ready (${input.tensorrt.detail}). GPU is compatible — install tensorrt from Hardware or on first TensorRT run.`
+        : "Full TensorRT SDK (nvinfer_10) not in .venv yet. GPU is compatible — use Install in Hardware, or Olive installs it on first TensorRT run.",
+    );
+  }
+
+  if (input.cudaVenvLoadable) {
+    notes.push("CUDA execution provider load verified.");
+  } else if (input.nvidia?.gpus.length) {
+    // Derive the install command from the pinned args so a wheel-pin
+    // bump updates this hint and the probe-detail string above in lockstep.
+    const ortGpuCmd = pinnedOrtGpuInstallCommand();
+    notes.push(
+      input.cuda?.detail
+        ? `${input.cuda.detail}. GPU is compatible — click "Install onnxruntime-gpu" in Hardware (step 02) or run \`${ortGpuCmd}\` to enable CUDA EP.`
+        : `${ortGpuCmd} not yet run in .venv. GPU is compatible — click "Install onnxruntime-gpu" in Hardware (step 02) or it installs on first CUDA run.`,
+    );
+  }
+
+  // List merged providers for display only. Do not infer CUDA readiness from
+  // this combined list — default/DirectML/OpenVINO entries would falsely trip
+  // a CUDA-missing warning. CUDA install/loadability notes above already gate
+  // on `cudaVenvLoadable` / the cuda-family probe.
+  if (onnxRuntimeProviders?.length) {
+    notes.push(`ORT execution providers: ${onnxRuntimeProviders.join(", ")}`);
+  } else if (input.nvidia) {
+    notes.push("ONNX Runtime not installed in Python — NVIDIA GPU inferred from nvidia-smi.");
+  }
+
+  if (!input.nvidia) notes.push("No NVIDIA GPU detected (nvidia-smi unavailable or returned no devices).");
+  if (!input.rocm) notes.push("No AMD ROCm GPU detected.");
+  if (input.openvinoVenvAvailable) {
+    const deviceMsg = input.openvino?.devices?.length ? ` [${input.openvino.devices.join(", ")}]` : "";
+    notes.push(
+      `OpenVINO stack verified${input.openvino?.version ? ` (${input.openvino.version})` : ""}${deviceMsg}.`,
+    );
+  } else if (input.openvino?.version || input.openvino?.devices?.length || input.openvino?.optimumIntel) {
+    notes.push(
+      input.openvino?.detail
+        ? `OpenVINO stack not ready (${input.openvino.detail}). Use Install in Hardware (openvino + optimum-intel).`
+        : "OpenVINO packages are incomplete — use Install in Hardware.",
+    );
+  } else {
+    notes.push("OpenVINO Python stack not found locally (needs openvino + optimum-intel).");
+  }
+  const qnnHostMode = resolveQnnHostMode({ platform: process.platform, arch: input.platformArch });
+  if (input.qnnVenvLoadable) {
+    if (input.qnn?.verifiedInference && isQnnSnapdragonReleaseGatePassed()) {
+      notes.push(
+        `QNN NPU ready${input.qnn.pluginVersion ? ` (plugin ${input.qnn.pluginVersion})` : ""} — fail-closed HTP diagnostic passed.`,
+      );
+    } else if (qnnHostMode === "preparation") {
+      notes.push(
+        `QNN runtime installed${input.qnn?.pluginVersion ? ` (${input.qnn.pluginVersion})` : ""} — Windows x64 preparation / plugin AOT only (not local HTP inference).`,
+      );
+    } else if (input.qnn?.npuDevice) {
+      notes.push(
+        `QNN runtime installed with NPU EpDevice${input.qnn.pluginVersion ? ` (${input.qnn.pluginVersion})` : ""}. “QNN NPU ready” waits on the Snapdragon release gate` +
+          (input.qnn.htpSmoke?.status === "passed" ? " (HTP diagnostic already cached)." : " + Test QNN NPU."),
+      );
+    } else {
+      notes.push(
+        `QNN runtime installed${input.qnn?.pluginVersion ? ` (${input.qnn.pluginVersion})` : ""} — plugin registration ok; NPU device not filtered yet.`,
+      );
+    }
+  } else if (qnnHostMode === "local-inference" || qnnHostMode === "preparation") {
+    notes.push(
+      input.qnn?.detail
+        ? `QNN stack not ready (${input.qnn.detail}). Use Install QNN runtime in Hardware (.venvs/qnn).`
+        : qnnHostMode === "preparation"
+          ? "Windows x64: install QNN runtime for plugin preparation / AOT (not local HTP inference)."
+          : "Windows ARM64: install QNN runtime (.venvs/qnn) for Snapdragon NPU workflows.",
+    );
+  } else {
+    notes.push(
+      "QNN plugin install/UX is Windows-first in this release (Win ARM64 inference / Win x64 preparation).",
+    );
+  }
+
+  // Surface pre-Maxwell NVIDIA boxes (every detected GPU below the CUDA 12
+  // toolkit floor) so the IHV panel / recipe compat layer can suppress the
+  // install hints (no install can recover Kepler SM 3.x).
+  if (input.nvidia?.gpus.length && isPreMaxwellNvidiaBox(input.nvidia.gpus)) {
+    notes.push(
+      `NVIDIA GPU(s) below CUDA 12 toolkit floor (compute capability < ${CUDA_SM_FLOOR}); modern CUDA cannot run on Maxwell/Pascal/Kepler cards.`,
+    );
+  } else if (input.nvidia?.cudaToolkit?.available === false) {
+    notes.push(
+      "CUDA driver detected but the CUDA Toolkit (nvcc) is not installed. Inference via onnxruntime-gpu does not need it; get it from NVIDIA's CUDA Toolkit Archive for native builds.",
+    );
+  }
+
+  // Gate TensorRT-family EPs on the SM ≥ 7.5 (Turing) floor.
+  const nvidiaTensorRtFamilyCapable = input.nvidia
+    ? input.nvidia.gpus.some((g) => isNvidiaGpuTensorRtFamily(g))
+    : false;
+  // Only warn when there are *actual* GPUs below the floor — `[].some(...)`
+  // returning false for an empty GPU list would otherwise print a misleading
+  // "all NVIDIA GPUs below TensorRT floor" note on machines with zero GPUs.
+  if (nvidiaTensorRtFamilyCapable === false && (input.nvidia?.gpus.length ?? 0) > 0) {
+    notes.push(
+      `NVIDIA GPU(s) below TensorRT 10.x floor (compute capability < ${TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.major}.${TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.minor}); TensorRT / TensorRT-RTX EPs hidden.`,
+    );
+  }
+
+  return { notes, onnxRuntimeProviders, nvidiaTensorRtFamilyCapable, qnnHostMode };
+}
+
 // ─── Main probe orchestrator ───────────────────────────────────────────────
 
 /**
@@ -386,149 +559,29 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     }
   }
 
-  const onnxRuntimeProviders = mergeOrtProvidersForDisplay(
+  const diag = buildProbeDiagnostics({
     defaultOrtProviders,
     cudaOrtProviders,
     openvinoOrtProviders,
     qnnOrtProviders,
     systemOrtProviders,
-  );
-  if (defaultOrtProviders?.length) {
-    notes.push("ONNX Runtime providers probed via default runtime.");
-  } else if (cudaOrtProviders?.length) {
-    notes.push("ONNX Runtime providers probed via CUDA runtime.");
-  } else if (openvinoOrtProviders?.length) {
-    notes.push("ONNX Runtime providers probed via OpenVINO runtime.");
-  } else if (qnnOrtProviders?.length) {
-    notes.push("ONNX Runtime providers probed via QNN runtime.");
-  } else if (systemOrtProviders?.length) {
-    notes.push("ONNX Runtime providers probed via system Python.");
-  }
+    tensorRtRtxVenvLoadable,
+    tensorRtRtx,
+    tensorRtVenvLoadable,
+    tensorrt,
+    cudaVenvLoadable,
+    cuda,
+    nvidia,
+    rocm,
+    openvinoVenvAvailable,
+    openvino,
+    qnnVenvLoadable,
+    qnn,
+    platformArch: platform.arch,
+  });
+  notes.push(...diag.notes);
+  const { onnxRuntimeProviders, nvidiaTensorRtFamilyCapable, qnnHostMode } = diag;
 
-  if (tensorRtRtxVenvLoadable) {
-    notes.push(`TensorRT RTX runtime verified${tensorRtRtx?.version ? ` (${tensorRtRtx.version})` : ""}.`);
-  } else if (nvidia?.gpus.length) {
-    notes.push(
-      tensorRtRtx?.detail
-        ? `TensorRT RTX plugin not ready (${tensorRtRtx.detail}). GPU is compatible — install tensorrt-rtx from Hardware or on first TRT RTX run.`
-        : "TensorRT RTX plugin (tensorrt-rtx) not in .venv yet. GPU is compatible — use Install in Hardware, or Olive installs it on first TRT RTX run.",
-    );
-  }
-
-  if (tensorRtVenvLoadable) {
-    notes.push("TensorRT execution provider load verified.");
-  } else if (nvidia?.gpus.length) {
-    notes.push(
-      tensorrt?.detail
-        ? `Full TensorRT SDK not ready (${tensorrt.detail}). GPU is compatible — install tensorrt from Hardware or on first TensorRT run.`
-        : "Full TensorRT SDK (nvinfer_10) not in .venv yet. GPU is compatible — use Install in Hardware, or Olive installs it on first TensorRT run.",
-    );
-  }
-
-  if (cudaVenvLoadable) {
-    notes.push("CUDA execution provider load verified.");
-  } else if (nvidia?.gpus.length) {
-    // Derive the install command from the pinned args so a wheel-pin
-    // bump updates this hint and the probe-detail string above in
-    // lockstep.
-    const ortGpuCmd = pinnedOrtGpuInstallCommand();
-    notes.push(
-      cuda?.detail
-        ? `${cuda.detail}. GPU is compatible — click "Install onnxruntime-gpu" in Hardware (step 02) or run \`${ortGpuCmd}\` to enable CUDA EP.`
-        : `${ortGpuCmd} not yet run in .venv. GPU is compatible — click "Install onnxruntime-gpu" in Hardware (step 02) or it installs on first CUDA run.`,
-    );
-  }
-
-  // List merged providers for display only. Do not infer CUDA readiness from
-  // this combined list — default/DirectML/OpenVINO entries would falsely trip
-  // a CUDA-missing warning. CUDA install/loadability notes above already gate
-  // on `cudaVenvLoadable` / the cuda-family probe.
-  if (onnxRuntimeProviders?.length) {
-    notes.push(`ORT execution providers: ${onnxRuntimeProviders.join(", ")}`);
-  } else if (nvidia) {
-    notes.push("ONNX Runtime not installed in Python — NVIDIA GPU inferred from nvidia-smi.");
-  }
-
-  if (!nvidia) notes.push("No NVIDIA GPU detected (nvidia-smi unavailable or returned no devices).");
-  if (!rocm) notes.push("No AMD ROCm GPU detected.");
-  if (openvinoVenvAvailable) {
-    const deviceMsg = openvino?.devices?.length ? ` [${openvino.devices.join(", ")}]` : "";
-    notes.push(
-      `OpenVINO stack verified${openvino?.version ? ` (${openvino.version})` : ""}${deviceMsg}.`,
-    );
-  } else if (openvino?.version || openvino?.devices?.length || openvino?.optimumIntel) {
-    notes.push(
-      openvino?.detail
-        ? `OpenVINO stack not ready (${openvino.detail}). Use Install in Hardware (openvino + optimum-intel).`
-        : "OpenVINO packages are incomplete — use Install in Hardware.",
-    );
-  } else {
-    notes.push("OpenVINO Python stack not found locally (needs openvino + optimum-intel).");
-  }
-  const qnnHostMode = resolveQnnHostMode({ platform: process.platform, arch: platform.arch });
-  if (qnnVenvLoadable) {
-    if (qnn?.verifiedInference && isQnnSnapdragonReleaseGatePassed()) {
-      notes.push(
-        `QNN NPU ready${qnn.pluginVersion ? ` (plugin ${qnn.pluginVersion})` : ""} — fail-closed HTP diagnostic passed.`,
-      );
-    } else if (qnnHostMode === "preparation") {
-      notes.push(
-        `QNN runtime installed${qnn?.pluginVersion ? ` (${qnn.pluginVersion})` : ""} — Windows x64 preparation / plugin AOT only (not local HTP inference).`,
-      );
-    } else if (qnn?.npuDevice) {
-      notes.push(
-        `QNN runtime installed with NPU EpDevice${qnn.pluginVersion ? ` (${qnn.pluginVersion})` : ""}. “QNN NPU ready” waits on the Snapdragon release gate` +
-          (qnn.htpSmoke?.status === "passed" ? " (HTP diagnostic already cached)." : " + Test QNN NPU."),
-      );
-    } else {
-      notes.push(
-        `QNN runtime installed${qnn?.pluginVersion ? ` (${qnn.pluginVersion})` : ""} — plugin registration ok; NPU device not filtered yet.`,
-      );
-    }
-  } else if (qnnHostMode === "local-inference" || qnnHostMode === "preparation") {
-    notes.push(
-      qnn?.detail
-        ? `QNN stack not ready (${qnn.detail}). Use Install QNN runtime in Hardware (.venvs/qnn).`
-        : qnnHostMode === "preparation"
-          ? "Windows x64: install QNN runtime for plugin preparation / AOT (not local HTP inference)."
-          : "Windows ARM64: install QNN runtime (.venvs/qnn) for Snapdragon NPU workflows.",
-    );
-  } else {
-    notes.push(
-      "QNN plugin install/UX is Windows-first in this release (Win ARM64 inference / Win x64 preparation).",
-    );
-  }
-
-  // Surface pre-Maxwell NVIDIA boxes (every detected GPU below the CUDA 12
-  // toolkit floor) so the IHV panel / recipe compat layer can suppress the
-  // install hints (no install can recover Kepler SM 3.x). Mirrors the
-  // pre-Turing TensorRT short-circuit a few lines above.
-  if (nvidia?.gpus.length && isPreMaxwellNvidiaBox(nvidia.gpus)) {
-    notes.push(
-      `NVIDIA GPU(s) below CUDA 12 toolkit floor (compute capability < ${CUDA_SM_FLOOR}); modern CUDA cannot run on Maxwell/Pascal/Kepler cards.`,
-    );
-  } else if (nvidia?.cudaToolkit?.available === false) {
-    notes.push(
-      "CUDA driver detected but the CUDA Toolkit (nvcc) is not installed. Inference via onnxruntime-gpu does not need it; get it from NVIDIA's CUDA Toolkit Archive for native builds.",
-    );
-  }
-
-  // Gate TensorRT-family EPs on the SM ≥ 7.5 (Turing) floor.
-  // `hasNvidiaGpu` alone is not enough: pre-Turing cards return CUDA from
-  // ONNX Runtime but cannot execute TensorRT 10.x or TensorRT-RTX, so we
-  // must strip those EPs from the detected list (and from the install-needed
-  // hint path) before reporting compat.
-  const nvidiaTensorRtFamilyCapable = nvidia
-    ? nvidia.gpus.some((g) => isNvidiaGpuTensorRtFamily(g))
-    : false;
-  // Only warn when there are *actual* GPUs below the floor — `[].some(...)`
-  // returning false for an empty GPU list would otherwise print a misleading
-  // "all NVIDIA GPUs below TensorRT floor" note on machines with zero GPUs.
-  if (nvidiaTensorRtFamilyCapable === false && (nvidia?.gpus.length ?? 0) > 0) {
-    notes.push(
-      `NVIDIA GPU(s) below TensorRT 10.x floor (compute capability < ${TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.major}.${TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.minor}); TensorRT / TensorRT-RTX EPs hidden.`,
-    );
-  }
 
   const hasOpenVinoCompatibleHardware = computeOpenVinoCompatibleHardware({
     cpuModel: platform.cpuModel,

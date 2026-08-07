@@ -4,8 +4,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import type { PersistedDevinCredentials } from "./oauth/types.ts";
-import { DEFAULT_REGION } from "./oauth/types.ts";
+import { DEFAULT_REGION, type PersistedDevinCredentials } from "./oauth/types.ts";
 import { clearCachedUserJwt } from "./cloud-direct/auth.ts";
 import { clearSessionIds } from "./cloud-direct/chat.ts";
 import { clearCachedCatalog } from "./cloud-direct/catalog.ts";
