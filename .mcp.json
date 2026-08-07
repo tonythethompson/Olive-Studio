@@ -4,6 +4,11 @@
       "type": "stdio",
       "command": "python",
       "args": ["olive-mcp-server/run.py"]
+    },
+    "serena": {
+      "type": "stdio",
+      "command": "serena",
+      "args": ["start-mcp-server", "--project-from-cwd"]
     }
   }
 }

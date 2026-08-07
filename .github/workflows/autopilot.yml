@@ -140,8 +140,7 @@ jobs:
       - uses: actions/setup-node@v4
         if: steps.threads.outputs.count != '0'
         with:
-          node-version: '20'
-          cache: npm
+          node-version: '24'
 
       - uses: actions/setup-python@v5
         if: steps.threads.outputs.count != '0'
