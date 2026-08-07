@@ -173,21 +173,12 @@ describe("deriveUiStateFromOliveRecipe validation", () => {
   // ── catalog-device ──────────────────────────────────────────────────
 
   it("getCatalogDeviceFromRecipe maps provider tokens to device labels", () => {
-    expect(
-      getCatalogDeviceFromRecipe({
-        systems: {
-          gpu: { config: { accelerators: [{ execution_providers: ["CUDAExecutionProvider"] }] } },
-        },
-      }),
-    ).toBe("CUDA");
-
-    expect(
-      getCatalogDeviceFromRecipe({
-        systems: {
-          gpu: { config: { accelerators: [{ execution_providers: ["DmlExecutionProvider"] }] } },
-        },
-      }),
-    ).toBe("DirectML");
+    expect(getCatalogDeviceFromRecipe(recipeWithExecutionProviders(["CUDAExecutionProvider"]))).toBe(
+      "CUDA",
+    );
+    expect(getCatalogDeviceFromRecipe(recipeWithExecutionProviders(["DmlExecutionProvider"]))).toBe(
+      "DirectML",
+    );
   });
 
   // ── quantization ────────────────────────────────────────────────────
