@@ -1,9 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
+import type { UIState, BatchJob, McpDiagnostic } from "@/types";
 import { BatchProcessingPanel } from "./BatchProcessingPanel";
-import type { UIState, BatchJob } from "@/types";
 
 // Mock the pipeline store to avoid zustand coupling
 const mockSetState = vi.fn();
@@ -15,31 +15,80 @@ vi.mock("@/lib/stores/pipelineStore", () => ({
   }),
 }));
 
+const MATCHED_DIAGNOSTIC: McpDiagnostic = {
+  matched_entry: "quantization-precision-mismatch",
+  title: "Quantization Precision Not Supported",
+  root_cause: "EP does not support requested precision.",
+  workaround: "Switch to INT8 or a supporting EP.",
+  domain: "olive",
+  applyable: false,
+};
+
+const UNMATCHED_DIAGNOSTIC: McpDiagnostic = {
+  matched_entry: null,
+  title: "Local unmatched failure",
+  root_cause: "No MCP entry.",
+  workaround: "Inspect batch logs.",
+};
+
 // Mock hooks that make network calls
 const mockFetchKeyedDiagnostic = vi.fn();
-vi.mock("@/lib/hooks", () => ({
-  useAutoClearError: () => [null, vi.fn()],
-  useMcpDiagnosticKeyed: () => ({
-    fetchKeyedDiagnostic: mockFetchKeyedDiagnostic,
-    diagnostics: {},
-    diagnosingKeys: {},
-    errors: {},
-    diagnosticKey: "current",
-  }),
-}));
+const batchMcpState = {
+  diagnostics: {} as Record<string, McpDiagnostic | null>,
+  diagnosingKeys: {} as Record<string, boolean>,
+  errors: {} as Record<string, string | null>,
+};
+
+const mockRequestFeedback = vi.fn();
+
+vi.mock("@/lib/hooks", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/hooks")>();
+  return {
+    ...actual,
+    useAutoClearError: () => ["", vi.fn()],
+    useMcpDiagnosticKeyed: () => ({
+      fetchKeyedDiagnostic: mockFetchKeyedDiagnostic,
+      diagnostics: batchMcpState.diagnostics,
+      diagnosingKeys: batchMcpState.diagnosingKeys,
+      errors: batchMcpState.errors,
+      diagnosticKey: "current",
+    }),
+    requestMcpTroubleshootFeedback: (...args: unknown[]) => mockRequestFeedback(...args),
+  };
+});
 
 // Mock hardware probe
-vi.mock("@/lib/hardwareProbe", () => ({
-  fetchHardwareProbe: () =>
-    Promise.resolve({
-      probedAt: "now",
-      platform: { cpuModel: "Test CPU", cpuCores: 8, os: "win", arch: "x64" },
-      detectedProviders: ["CPUExecutionProvider"],
-      recommendedProvider: "CPUExecutionProvider",
-      notes: [],
-    }),
-  getSelectableProviders: () => ["CPUExecutionProvider"],
-}));
+vi.mock("@/lib/hardwareProbe", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/hardwareProbe")>();
+  return {
+    ...actual,
+    fetchHardwareProbe: () =>
+      Promise.resolve({
+        probedAt: "now",
+        platform: { cpuModel: "Test CPU", cpuCores: 8, os: "win", arch: "x64" },
+        detectedProviders: ["CPUExecutionProvider"],
+        recommendedProvider: "CPUExecutionProvider",
+        notes: [],
+      }),
+    getSelectableProviders: () => ["CPUExecutionProvider"],
+  };
+});
+
+function failedJob(id = "job-failed"): BatchJob {
+  return {
+    id,
+    name: "Failed Job",
+    modelSource: "huggingface",
+    modelIdentifier: "microsoft/phi-2",
+    provider: "CPUExecutionProvider",
+    passes: ["Model Conversion (ONNX)"],
+    recipeJson: undefined,
+    status: "failed",
+    progress: 0,
+    progressKnown: true,
+    logs: ["[ERROR] Simulated batch failure (no Olive)"],
+  };
+}
 
 describe("BatchProcessingPanel", () => {
   useFetchRoutesMock({
@@ -50,6 +99,25 @@ describe("BatchProcessingPanel", () => {
       recommendedProvider: "CPUExecutionProvider",
       notes: [],
     },
+  });
+
+  beforeEach(() => {
+    mockStoreState = createMockUIState();
+    mockSetState.mockClear();
+    mockFetchKeyedDiagnostic.mockClear();
+    batchMcpState.diagnostics = {};
+    batchMcpState.diagnosingKeys = {};
+    batchMcpState.errors = {};
+    mockRequestFeedback.mockReset();
+    mockRequestFeedback.mockResolvedValue({
+      status: "ok",
+      matched_entry: MATCHED_DIAGNOSTIC.matched_entry,
+      rating: "thumbs-up",
+      reason_code: null,
+      thumbs_up: 1,
+      thumbs_down: 0,
+      total: 1,
+    });
   });
 
   it("renders the panel heading", async () => {
@@ -132,7 +200,7 @@ describe("BatchProcessingPanel", () => {
         } as Response);
       }
       return Promise.reject(new Error("Unexpected fetch"));
-    });
+    }) as unknown as typeof fetch;
 
     // Mock EventSource for the valid job's stream. Capture the "done"
     // listener so the test can immediately signal a successful run,
@@ -234,7 +302,7 @@ describe("BatchProcessingPanel", () => {
         } as Response);
       }
       return Promise.reject(new Error(`Unexpected fetch: ${String(url)}`));
-    });
+    }) as unknown as typeof fetch;
 
     const eventSourceCtor = vi.fn(function EventSourceMock() {
       return { addEventListener: vi.fn(), close: vi.fn(), onerror: null };
@@ -286,5 +354,61 @@ describe("BatchProcessingPanel", () => {
         body: JSON.stringify({ jobId: "olive-already-done" }),
       }),
     );
+  });
+
+  it("shows feedback thumbs for a failed job with a matched MCP diagnostic", async () => {
+    const user = userEvent.setup();
+    const job = failedJob("job-fb-matched");
+    const stateWithJobs: UIState = {
+      ...createMockUIState(),
+      batchJobs: [job],
+    };
+    mockStoreState = stateWithJobs;
+    batchMcpState.diagnostics = { [job.id]: MATCHED_DIAGNOSTIC };
+
+    await act(async () => {
+      render(<BatchProcessingPanel state={stateWithJobs} setState={mockSetState} />);
+    });
+
+    // Select the failed job to open the detail panel + MCP card.
+    await user.click(screen.getByText(job.name));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Olive MCP Error Diagnostic/i)).toBeDefined();
+    });
+    expect(screen.getByText(MATCHED_DIAGNOSTIC.title)).toBeDefined();
+    expect(screen.getByRole("button", { name: /Thumbs up/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Thumbs down/i })).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: /Thumbs up — this diagnosis was helpful/i }));
+    await waitFor(() => {
+      expect(mockRequestFeedback).toHaveBeenCalledWith(
+        { matched_entry: MATCHED_DIAGNOSTIC.matched_entry, rating: "thumbs-up" },
+        expect.any(AbortSignal),
+      );
+    });
+  });
+
+  it("hides feedback controls for unmatched diagnostics on failed batch jobs", async () => {
+    const user = userEvent.setup();
+    const job = failedJob("job-fb-unmatched");
+    const stateWithJobs: UIState = {
+      ...createMockUIState(),
+      batchJobs: [job],
+    };
+    mockStoreState = stateWithJobs;
+    batchMcpState.diagnostics = { [job.id]: UNMATCHED_DIAGNOSTIC };
+
+    await act(async () => {
+      render(<BatchProcessingPanel state={stateWithJobs} setState={mockSetState} />);
+    });
+
+    await user.click(screen.getByText(job.name));
+
+    await waitFor(() => {
+      expect(screen.getByText(UNMATCHED_DIAGNOSTIC.title)).toBeDefined();
+    });
+    expect(screen.queryByRole("button", { name: /Thumbs up/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Thumbs down/i })).toBeNull();
   });
 });

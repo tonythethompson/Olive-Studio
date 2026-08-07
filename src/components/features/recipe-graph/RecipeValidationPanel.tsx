@@ -52,7 +52,21 @@ function getHardwareTargetFromProvider(provider: IHVProvider): string {
     case "ROCMExecutionProvider":
       return "AMD MI300X / ROCm";
     case "WebGpuExecutionProvider":
-      return "";
+      return "WebGPU (Browser)";
+    case "CoreMLExecutionProvider":
+      return "Apple M2/M3 (CoreML)";
+    case "NNAPIExecutionProvider":
+      return "Android NNAPI";
+    case "VitisAIExecutionProvider":
+      return "Xilinx Vitis AI DPU";
+    case "SNPEExecutionProvider":
+      return "Qualcomm SNPE (Legacy)";
+    case "TensorflowLiteExecutionProvider":
+      return "TensorFlow Lite Export";
+    case "XnnpackExecutionProvider":
+      return "XNNPACK (Mobile)";
+    case "WasmExecutionProvider":
+      return "WASM (Browser)";
     default: {
       const _exhaustive: never = provider;
       return _exhaustive;

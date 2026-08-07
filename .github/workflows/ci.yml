@@ -119,6 +119,46 @@ jobs:
       - name: Pytest
         run: python -m pytest tests -q --tb=short
 
+  # Enumerate Olive pass registry only — no models, no optimization, no CUDA.
+  # Pin matches src/lib/passCatalog.ts OLIVE_VERSION and matrix olive_version_support.max.
+  olive-pass-availability:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: olive-mcp-server
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: olive-mcp-server/pyproject.toml
+
+      - name: Install pinned Olive (CPU registry only)
+        env:
+          # Discourage CUDA wheel selection for transitive torch/ort if resolved.
+          CUDA_VISIBLE_DEVICES: ""
+          PIP_NO_CACHE_DIR: "1"
+        run: |
+          set -euo pipefail
+          # Documented pin: Olive 0.12.1 (passCatalog OLIVE_VERSION / matrix max).
+          # olive-mcp-server does not depend on olive-ai; pin lives here for CI.
+          pip install "olive-ai==0.12.1"
+
+      - name: Enumerate registry vs compatibility matrix
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+        run: |
+          set -euo pipefail
+          python scripts/check_olive_pass_availability.py \
+            olive_mcp_server/knowledge_base/compatibility_matrix.json
+
   docker-build:
     runs-on: ubuntu-latest
     permissions:

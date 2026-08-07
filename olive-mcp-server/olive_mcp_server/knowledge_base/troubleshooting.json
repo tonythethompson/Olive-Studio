@@ -1,6 +1,6 @@
 {
-  "version": "0.3.0",
-  "last_updated": "2026-07-31",
+  "version": "0.3.1",
+  "last_updated": "2026-08-06",
   "entries": [
     {
       "id": "onnx-export-shape",
@@ -614,6 +614,37 @@
       "title": "GPU device busy or unavailable to Olive",
       "root_cause": "Another process holds the GPU, or CUDA_VISIBLE_DEVICES hides all devices.",
       "solution": "Stop competing GPU jobs; check CUDA_VISIBLE_DEVICES; retry with a smaller calibration batch or CPU fallback for conversion-only steps.",
+      "updated_config": {},
+      "applyable": false
+    },
+    {
+      "id": "olive-directml-ep-missing",
+      "domain": "olive",
+      "patterns": [
+        "DmlExecutionProvider",
+        "DirectMLExecutionProvider",
+        "onnxruntime-directml",
+        "DirectML is not supported",
+        "Failed to create DirectML"
+      ],
+      "title": "DirectML execution provider not available to Olive",
+      "root_cause": "Olive/ORT process lacks onnxruntime-directml, or the host is not Windows with DirectX 12.",
+      "solution": "On Windows install onnxruntime-directml into the Olive environment; select DmlExecutionProvider. Do not expect DirectML on Linux/macOS or from CUDA-only ORT wheels.",
+      "updated_config": {},
+      "applyable": false
+    },
+    {
+      "id": "olive-webgpu-not-server-ort",
+      "domain": "olive",
+      "patterns": [
+        "WebGpuExecutionProvider",
+        "WebGPU",
+        "webgpu provider",
+        "ORT Web"
+      ],
+      "title": "WebGPU is not a server-side ONNX Runtime EP for Olive CLI",
+      "root_cause": "WebGpuExecutionProvider is for ONNX Runtime Web in browsers. Desktop/server Olive runs do not execute WebGPU the same way.",
+      "solution": "Build/export an ONNX recipe (prefer FP16) for browser ORT Web. For local Olive execution pick CUDA, TensorRT, DirectML, OpenVINO, or CPU instead.",
       "updated_config": {},
       "applyable": false
     }

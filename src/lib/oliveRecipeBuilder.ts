@@ -10,7 +10,13 @@ const GPU_PROVIDERS: IHVProvider[] = [
   "WebGpuExecutionProvider",
   "DmlExecutionProvider",
 ];
-const NPU_PROVIDERS: IHVProvider[] = ["QNNExecutionProvider"];
+const NPU_PROVIDERS: IHVProvider[] = [
+  "QNNExecutionProvider",
+  "CoreMLExecutionProvider",
+  "NNAPIExecutionProvider",
+  "VitisAIExecutionProvider",
+  "SNPEExecutionProvider",
+];
 
 /**
  * Ordered task-inference rules — first match wins. Order is significant

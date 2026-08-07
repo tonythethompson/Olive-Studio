@@ -6,6 +6,7 @@ from olive_mcp_server.tools.normalization import (
     normalize_framework,
     normalize_hardware,
     normalize_model,
+    parse_hardware_target,
 )
 
 
@@ -77,6 +78,23 @@ def test_normalize_model_no_false_substring_match() -> None:
         ("T4", "NVIDIA T4"),
         ("Azure ML N-series", "Azure ML N-series"),
         ("azure ml", "Azure ML N-series"),
+        ("NvTensorRTRTXExecutionProvider", "NVIDIA TensorRT RTX"),
+        ("DmlExecutionProvider", "Windows DirectML GPU"),
+        ("DirectMLExecutionProvider", "Windows DirectML GPU"),
+        ("WebGpuExecutionProvider", "WebGPU (Browser)"),
+        ("tensorrt rtx", "NVIDIA TensorRT RTX"),
+        ("openvino npu", "Intel Core Ultra NPU (OpenVINO)"),
+        ("intel npu", "Intel Core Ultra NPU (OpenVINO)"),
+        ("directml", "Windows DirectML GPU"),
+        ("webgpu", "WebGPU (Browser)"),
+        ("npu", "Qualcomm Snapdragon NPU"),
+        ("OpenVINOExecutionProvider", "Intel Core i9 CPU"),
+        ("openvino", "Intel Core i9 CPU"),
+        ("openvino gpu", "Intel iGPU / OpenVINO"),
+        ("intel gpu", "Intel iGPU / OpenVINO"),
+        ("igpu", "Intel iGPU / OpenVINO"),
+        ("openvino arc", "Intel Arc A770"),
+        ("intel arc", "Intel Arc A770"),
     ],
 )
 def test_normalize_hardware(input: str, expected: str) -> None:
@@ -85,3 +103,84 @@ def test_normalize_hardware(input: str, expected: str) -> None:
 
 def test_normalize_hardware_unknown() -> None:
     assert normalize_hardware("MadeUpChip 9000") == "MadeUpChip 9000"
+
+
+def test_normalize_hardware_invalid_ov_device_returns_stripped_input() -> None:
+    """Invalid OV device must not CPU-fallback; adapter returns stripped input."""
+    assert normalize_hardware("openvino:tpu") == "openvino:tpu"
+    assert normalize_hardware("  openvino:tpu  ") == "openvino:tpu"
+
+
+@pytest.mark.parametrize(
+    ("raw", "profile", "openvino_device"),
+    [
+        ("OpenVINOExecutionProvider", "Intel Core i9 CPU", "CPU"),
+        ("openvino", "Intel Core i9 CPU", "CPU"),
+        ("openvino npu", "Intel Core Ultra NPU (OpenVINO)", "NPU"),
+        ("openvino:npu", "Intel Core Ultra NPU (OpenVINO)", "NPU"),
+        ("openvino+npu", "Intel Core Ultra NPU (OpenVINO)", "NPU"),
+        ("OpenVINOExecutionProvider:NPU", "Intel Core Ultra NPU (OpenVINO)", "NPU"),
+        ("intel npu", "Intel Core Ultra NPU (OpenVINO)", "NPU"),
+        ("openvino gpu", "Intel iGPU / OpenVINO", "GPU"),
+        ("openvino:gpu", "Intel iGPU / OpenVINO", "GPU"),
+        ("intel gpu", "Intel iGPU / OpenVINO", "GPU"),
+        ("igpu", "Intel iGPU / OpenVINO", "GPU"),
+        ("openvino arc", "Intel Arc A770", "GPU"),
+        ("intel arc", "Intel Arc A770", "GPU"),
+        ("npu", "Qualcomm Snapdragon NPU", None),
+        ("NvTensorRTRTXExecutionProvider", "NVIDIA TensorRT RTX", None),
+        ("directml", "Windows DirectML GPU", None),
+        ("webgpu", "WebGPU (Browser)", None),
+        ("DmlExecutionProvider", "Windows DirectML GPU", None),
+        ("WebGpuExecutionProvider", "WebGPU (Browser)", None),
+    ],
+)
+def test_parse_hardware_target_acceptance(
+    raw: str, profile: str, openvino_device: str | None
+) -> None:
+    target = parse_hardware_target(raw)
+    assert target.error is None
+    assert target.profile == profile
+    assert target.openvino_device == openvino_device
+
+
+def test_parse_hardware_target_invalid_ov_device() -> None:
+    target = parse_hardware_target("openvino:tpu")
+    assert target.error is not None
+    assert "tpu" in target.error.lower()
+    assert target.profile == ""
+    assert target.openvino_device is None
+
+
+def test_parse_hardware_target_bare_gpu_not_ov() -> None:
+    """Bare 'gpu' must not be claimed by OpenVINO or WebGPU reverse match."""
+    target = parse_hardware_target("gpu")
+    assert target.error is None
+    assert target.openvino_device is None
+    # Unresolved generic GPU fallback (not WebGPU / DirectML / OpenVINO).
+    assert target.profile == "gpu"
+    assert target.profile != "WebGPU (Browser)"
+    assert target.profile != "Windows DirectML GPU"
+    assert target.profile != "Intel iGPU / OpenVINO"
+    assert target.profile != "Intel Arc A770"
+    assert target.profile != "Intel Core Ultra NPU (OpenVINO)"
+    assert target.profile != "Intel Core i9 CPU"
+
+
+@pytest.mark.parametrize(
+    "ep_id",
+    [
+        "dmlexecutionprovider",
+        "DmlExecutionProvider",
+        "webgpuexecutionprovider",
+        "nvtensorrtrtxexecutionprovider",
+    ],
+)
+def test_parse_hardware_target_ep_map_is_case_insensitive(ep_id: str) -> None:
+    target = parse_hardware_target(ep_id)
+    assert target.error is None
+    assert target.profile in {
+        "Windows DirectML GPU",
+        "WebGPU (Browser)",
+        "NVIDIA TensorRT RTX",
+    }

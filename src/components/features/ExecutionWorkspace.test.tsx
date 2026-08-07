@@ -1,6 +1,16 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, act, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { createMockUIState, useFetchRoutesMock } from "./__tests__/testUtils";
+import { DEFAULT_PASSES } from "@/lib/defaultPasses";
+import type { McpDiagnostic } from "@/types";
+
+/** Full default passes so Execute Live stays enabled (isRunnable). */
+function runnableUiState() {
+  return createMockUIState({
+    passes: { ...DEFAULT_PASSES, conversion: true, quantization: false },
+  });
+}
 
 // Mock the pipeline store
 const mockSetState = vi.fn();
@@ -11,17 +21,50 @@ vi.mock("@/lib/stores/pipelineStore", () => ({
   }),
 }));
 
-// Mock hooks
-vi.mock("@/lib/hooks", () => ({
-  useAutoClearError: () => [null, vi.fn()],
-  useMcpDiagnosticKeyed: () => ({
-    fetchKeyedDiagnostic: vi.fn(),
-    diagnostics: {},
-    diagnosingKeys: {},
-    errors: {},
-    diagnosticKey: "current",
-  }),
-}));
+const MATCHED_DIAGNOSTIC: McpDiagnostic = {
+  matched_entry: "onnxruntime-large-model-external-data",
+  title: "ONNX Export Fails for Models > 2GB",
+  root_cause: "Protobuf size limit.",
+  workaround: "Enable external data format.",
+  updated_config: { use_external_data_format: true },
+  domain: "olive",
+  applyable: true,
+};
+
+const UNMATCHED_DIAGNOSTIC: McpDiagnostic = {
+  matched_entry: null,
+  title: "Unrecognized runtime error",
+  root_cause: "No KB match.",
+  workaround: "Inspect logs manually.",
+  domain: null,
+};
+
+/** Mutable keyed-diagnostic mock shared across tests. */
+const mcpKeyedState = {
+  fetchKeyedDiagnostic: vi.fn(),
+  diagnostics: {} as Record<string, McpDiagnostic | null>,
+  diagnosingKeys: {} as Record<string, boolean>,
+  errors: {} as Record<string, string | null>,
+  diagnosticKey: "current",
+};
+
+const mockRequestFeedback = vi.fn();
+
+vi.mock("@/lib/hooks", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/hooks")>();
+  return {
+    ...actual,
+    useAutoClearError: () => ["", vi.fn()],
+    useMcpDiagnosticKeyed: () => ({
+      fetchKeyedDiagnostic: mcpKeyedState.fetchKeyedDiagnostic,
+      diagnostics: mcpKeyedState.diagnostics,
+      diagnosingKeys: mcpKeyedState.diagnosingKeys,
+      errors: mcpKeyedState.errors,
+      diagnosticKey: mcpKeyedState.diagnosticKey,
+    }),
+    requestMcpTroubleshootFeedback: (...args: unknown[]) => mockRequestFeedback(...args),
+  };
+});
 
 // Mock hardware probe
 vi.mock("@/lib/hardwareProbe", () => ({
@@ -83,15 +126,73 @@ vi.mock("@/lib/gpuMetrics", () => ({
 
 import { ExecutionWorkspace } from "./ExecutionWorkspace";
 
+const HW_PROBE = {
+  probedAt: "now",
+  platform: { cpuModel: "Test CPU", cpuCores: 8, os: "win", arch: "x64" },
+  detectedProviders: ["CPUExecutionProvider"],
+  recommendedProvider: "CPUExecutionProvider",
+  notes: [] as string[],
+};
+
+/**
+ * Runnable CPU conversion recipe + mocked /api/olive/run failure.
+ * Execute Live stays enabled (isRunnable), then fails without spawning Olive.
+ */
+function installNoOliveFetch() {
+  return vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/api/olive/run")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: "Simulated run rejection (no Olive)" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    if (url.includes("hardware-probe")) {
+      return Promise.resolve(
+        new Response(JSON.stringify(HW_PROBE), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  });
+}
+
+async function failExecuteLive() {
+  const user = userEvent.setup();
+  const executeBtn = await screen.findByRole("button", { name: /execute live/i });
+  expect((executeBtn as HTMLButtonElement).disabled).toBe(false);
+  await user.click(executeBtn);
+  await waitFor(() => {
+    expect(screen.getByText(/Olive MCP Error Diagnostic/i)).toBeDefined();
+  });
+}
+
 describe("ExecutionWorkspace", () => {
+  // Baseline fetch mock for non-feedback tests; feedback tests reinstall via installNoOliveFetch.
   useFetchRoutesMock({
-    "hardware-probe": {
-      probedAt: "now",
-      platform: { cpuModel: "Test CPU", cpuCores: 8, os: "win", arch: "x64" },
-      detectedProviders: ["CPUExecutionProvider"],
-      recommendedProvider: "CPUExecutionProvider",
-      notes: [],
-    },
+    "hardware-probe": HW_PROBE,
+  });
+
+  beforeEach(() => {
+    mockSetState.mockClear();
+    mcpKeyedState.fetchKeyedDiagnostic.mockClear();
+    mcpKeyedState.diagnostics = {};
+    mcpKeyedState.diagnosingKeys = {};
+    mcpKeyedState.errors = {};
+    mockRequestFeedback.mockReset();
+    mockRequestFeedback.mockResolvedValue({
+      status: "ok",
+      matched_entry: MATCHED_DIAGNOSTIC.matched_entry,
+      rating: "thumbs-up",
+      reason_code: null,
+      thumbs_up: 1,
+      thumbs_down: 0,
+      total: 1,
+    });
   });
 
   it("renders the workspace heading", async () => {
@@ -152,5 +253,81 @@ describe("ExecutionWorkspace", () => {
     // Text nodes for promoted Playground views must not appear in the menu
     expect(menu.textContent).not.toMatch(/Browser Test/i);
     expect(menu.textContent).not.toMatch(/Benchmark/i);
+  });
+
+  it("wires MCP feedback thumbs for matched diagnostics after a failed run (no Olive)", async () => {
+    const fetchSpy = installNoOliveFetch();
+    mcpKeyedState.diagnostics = { current: MATCHED_DIAGNOSTIC };
+
+    try {
+      await act(async () => {
+        render(<ExecutionWorkspace state={runnableUiState()} setState={mockSetState} />);
+      });
+
+      await failExecuteLive();
+
+      expect(screen.getByText(MATCHED_DIAGNOSTIC.title)).toBeDefined();
+      expect(screen.getByRole("button", { name: /Thumbs up/i })).toBeDefined();
+      expect(screen.getByRole("button", { name: /Thumbs down/i })).toBeDefined();
+
+      // Auto-diagnose still uses the keyed hook (history path remains intact).
+      expect(mcpKeyedState.fetchKeyedDiagnostic).toHaveBeenCalled();
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/olive/run",
+        expect.objectContaining({ method: "POST" }),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("hides feedback controls for unmatched diagnostics and still shows the card", async () => {
+    const fetchSpy = installNoOliveFetch();
+    mcpKeyedState.diagnostics = { current: UNMATCHED_DIAGNOSTIC };
+
+    try {
+      await act(async () => {
+        render(<ExecutionWorkspace state={runnableUiState()} setState={mockSetState} />);
+      });
+
+      await failExecuteLive();
+
+      expect(screen.getByText(UNMATCHED_DIAGNOSTIC.title)).toBeDefined();
+      expect(screen.queryByRole("button", { name: /Thumbs up/i })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Thumbs down/i })).toBeNull();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("records diagnosis history when the keyed diagnostic updates (no regression)", async () => {
+    const fetchSpy = installNoOliveFetch();
+    // Start empty so the history effect sees a transition when we re-render with a match.
+    mcpKeyedState.diagnostics = {};
+
+    try {
+      const { rerender } = render(
+        <ExecutionWorkspace state={runnableUiState()} setState={mockSetState} />,
+      );
+
+      await failExecuteLive();
+
+      // Simulate MCP returning a match after auto-diagnose (same path as production).
+      mcpKeyedState.diagnostics = { current: MATCHED_DIAGNOSTIC };
+      await act(async () => {
+        rerender(<ExecutionWorkspace state={runnableUiState()} setState={mockSetState} />);
+      });
+
+      await waitFor(() => {
+        expect(screen.getAllByText(MATCHED_DIAGNOSTIC.title).length).toBeGreaterThanOrEqual(1);
+      });
+
+      // DiagnosisHistory sidebar appears once an entry is recorded.
+      await waitFor(() => {
+        expect(screen.getByText(/History \(1\)/i)).toBeDefined();
+      });
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });

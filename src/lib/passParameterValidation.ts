@@ -51,6 +51,20 @@ function hardwareLabel(provider: IHVProvider): string {
       return "Windows DirectML";
     case "WebGpuExecutionProvider":
       return "WebGPU";
+    case "CoreMLExecutionProvider":
+      return "Apple CoreML";
+    case "NNAPIExecutionProvider":
+      return "Android NNAPI";
+    case "VitisAIExecutionProvider":
+      return "Vitis AI";
+    case "SNPEExecutionProvider":
+      return "Qualcomm SNPE";
+    case "TensorflowLiteExecutionProvider":
+      return "TensorFlow Lite";
+    case "XnnpackExecutionProvider":
+      return "XNNPACK";
+    case "WasmExecutionProvider":
+      return "WASM";
     case "CPUExecutionProvider":
       return "CPU";
     default: {

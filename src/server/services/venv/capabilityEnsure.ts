@@ -13,6 +13,7 @@ import { ensureTensorRt } from "../olive/tensorrt.ts";
 import { ensureTensorRtRtx } from "../olive/tensorrt-rtx.ts";
 import { ensureQnn } from "../olive/qnn.ts";
 import { ensureVenvFamily } from "./familyEnsure.ts";
+import { isExportTargetProvider, isPlatformLocalProvider } from "../../../lib/providerRuntimeKind.ts";
 import { getVenvPython } from "./paths.ts";
 import {
   capabilityForProvider,
@@ -60,6 +61,15 @@ export async function ensureProviderCapability(
   onLine: SetupListener,
   opts?: EnsureProviderCapabilityOptions,
 ): Promise<EnsureProviderCapabilityResult> {
+  if (isExportTargetProvider(provider)) {
+    return {
+      ok: false,
+      error: `${provider} cannot run via local Olive Python; export the recipe for the target runtime instead`,
+      family: "default",
+      python: null,
+    };
+  }
+
   const dual = await getDualRuntimeStatus({ force: true });
   const flags = familyFlagsFromStatus(dual.families);
   const family = resolveVenvFamily(provider, flags);
@@ -88,9 +98,24 @@ export async function ensureProviderCapability(
       ? qnnCapabilityForUsage(status, usage)
       : capabilityForProvider(status, provider);
 
-  // Providers without a capability slot (ROCm/WebGPU) only need the family base.
+  // Providers without a capability slot:
+  // - export targets are rejected above
+  // - platform-local (CoreML/VitisAI) must appear in this family's ORT providers
+  // - ROCm is best-effort on the default family base
   if (cap === undefined) {
-    if (provider === "ROCMExecutionProvider" || provider === "WebGpuExecutionProvider") {
+    if (isPlatformLocalProvider(provider)) {
+      const python = getVenvPython(family);
+      if (!status.ortProviders.includes(provider)) {
+        return {
+          ok: false,
+          error: `${provider} is not registered in ${humanFamilyLabel(family)} ORT; export the recipe or run on a host where the hardware probe detects it`,
+          family,
+          python,
+        };
+      }
+      return { ok: true, family, python };
+    }
+    if (provider === "ROCMExecutionProvider") {
       return { ok: true, family, python: getVenvPython(family) };
     }
     return {
@@ -124,6 +149,13 @@ async function installCapabilityPackages(
       case "DmlExecutionProvider":
       case "ROCMExecutionProvider":
       case "WebGpuExecutionProvider":
+      case "CoreMLExecutionProvider":
+      case "NNAPIExecutionProvider":
+      case "VitisAIExecutionProvider":
+      case "SNPEExecutionProvider":
+      case "TensorflowLiteExecutionProvider":
+      case "XnnpackExecutionProvider":
+      case "WasmExecutionProvider":
         return { ok: true };
 
       case "QNNExecutionProvider": {

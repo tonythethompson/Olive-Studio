@@ -23,6 +23,7 @@ from .embeddings import (
     cosine_similarity_scores,
     encode_query,
 )
+from .feedback import FEEDBACK_MAX_ADJUSTMENT, feedback_score_delta
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,9 @@ _KEYWORD_WEIGHT = 0.4
 # Extra ranking boost per pattern alternative hit (OR list multi-evidence).
 _HIT_RANK_BONUS = 0.05
 _HIT_RANK_BONUS_CAP = 5
+# Aggregate feedback may nudge rank by at most FEEDBACK_MAX_ADJUSTMENT (0.05):
+# enough to break close ties, never enough to invent a match or overturn a
+# clear keyword hit (_KEYWORD_WEIGHT = 0.4).
 
 # ---------------------------------------------------------------------------
 # Error frequency tracker (module-level, lives for the process lifetime)
@@ -265,6 +269,12 @@ _ENTRY_QUIRK_CATEGORIES: dict[str, list[str]] = {
     "studio-tensorrt-pip-invalid-requirement": ["studio", "hardware"],
     "studio-recipe-not-parsed": ["studio"],
     "studio-unique-cache-dir": ["studio", "pass_ordering"],
+    "studio-tensorrt-rtx-missing": ["studio", "hardware"],
+    "studio-directml-missing": ["studio", "hardware"],
+    "studio-webgpu-local-blocked": ["studio", "hardware"],
+    "studio-openvino-npu-device": ["studio", "hardware"],
+    "olive-directml-ep-missing": ["hardware"],
+    "olive-webgpu-not-server-ort": ["hardware"],
 }
 
 _QUIRK_CATEGORY_ORDER: tuple[str, ...] = (
@@ -352,6 +362,8 @@ def _best_match(
     error_message: str,
     pass_name: str,
     config_context: str,
+    *,
+    require_keyword: bool = False,
 ) -> tuple[dict[str, Any] | None, float]:
     """Select the highest-scoring troubleshooting entry (hybrid semantic+keyword).
 
@@ -383,10 +395,31 @@ def _best_match(
         hybrid = _score(
             entry, error_message, pass_name, config_context, semantic_score=sem
         )
+        # Bounded feedback adjustment after semantic/keyword hybrid score.
+        # Cap: |delta| <= FEEDBACK_MAX_ADJUSTMENT (0.05). Positive net votes
+        # slightly boost / break close ties; negative slightly demote.
+        # Only applied when hybrid > 0 so zero-score (no keyword/semantic
+        # evidence) stays a no-match and cannot be promoted by thumbs alone.
+        if hybrid > 0:
+            eid = entry.get("id")
+            if isinstance(eid, str) and eid:
+                delta = feedback_score_delta(eid)
+                # feedback_score_delta already caps; clamp again so the local
+                # rank bound stays obvious at the call site.
+                if delta > FEEDBACK_MAX_ADJUSTMENT:
+                    delta = FEEDBACK_MAX_ADJUSTMENT
+                elif delta < -FEEDBACK_MAX_ADJUSTMENT:
+                    delta = -FEEDBACK_MAX_ADJUSTMENT
+                hybrid = hybrid + delta
         hits = _pattern_hit_count(entry, keyword_text)
         scored.append((entry, hybrid, hits))
     scored.sort(key=lambda x: (x[1], x[2]), reverse=True)
-    best_entry, best_score, _hits = scored[0]
+    candidates = scored
+    if require_keyword:
+        candidates = [row for row in scored if row[2] > 0]
+        if not candidates:
+            return None, 0.0
+    best_entry, best_score, _hits = candidates[0]
     if best_score <= 0:
         return None, 0.0
     return best_entry, best_score
@@ -496,7 +529,13 @@ def troubleshoot_olive_error(
             matched_domain = "studio"
     else:
         pool = _pool_for_domain(resolved)
-        hit, score = _best_match(pool, error_message, pass_name, config_context)
+        hit, score = _best_match(
+            pool,
+            error_message,
+            pass_name,
+            config_context,
+            require_keyword=True,
+        )
         if hit is not None and score > 0:
             best = hit
             matched_domain = str(hit.get("domain") or resolved)

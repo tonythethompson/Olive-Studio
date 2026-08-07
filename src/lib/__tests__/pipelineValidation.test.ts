@@ -533,6 +533,23 @@ describe("getPipelineValidation", () => {
     expect(r.issues.some((i) => i.id === "qnn-readiness-qnn_out_of_scope")).toBe(true);
   });
 
+  it("emits a single critical for undetected platform-local Execute Live", () => {
+    const probe = {
+      probedAt: new Date().toISOString(),
+      platform: { os: "linux", arch: "x64", cpuModel: "Intel", cpuCores: 8 },
+      detectedProviders: ["CPUExecutionProvider"] as IHVProvider[],
+      recommendedProvider: "CPUExecutionProvider" as IHVProvider,
+      notes: [],
+    };
+    const r = getPipelineValidation(baseState({ ihvProvider: "CoreMLExecutionProvider" }), {
+      forLocalExecution: true,
+      hardwareProbe: probe,
+    });
+    const critical = r.issues.filter((i) => i.severity === "critical");
+    expect(critical.map((i) => i.id)).toEqual(["platform-local-execution-unavailable"]);
+    expect(r.isBlocked).toBe(true);
+  });
+
   it("blocks QNN when runtime is not loadable on Windows ARM64", () => {
     const probe = {
       probedAt: new Date().toISOString(),

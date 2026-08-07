@@ -16,6 +16,7 @@ import { normalizeIhvProvider } from "../../lib/venvFamily.ts";
 import { resolveQnnHostMode } from "../../lib/qnnDeps.ts";
 import { assessQnnRecipeReadiness } from "../../lib/qnnReadiness.ts";
 import { DEFAULT_PASSES } from "../../lib/defaultPasses.ts";
+import { isExportTargetProvider } from "../../lib/providerRuntimeKind.ts";
 
 import {
   jobRegistry,
@@ -84,6 +85,13 @@ export function mountOliveRoutes(router: Router): void {
       return res.status(400).json({
         ok: false,
         error: `Unknown execution provider: ${String(providerRaw)}`,
+      });
+    }
+
+    if (isExportTargetProvider(provider)) {
+      return res.status(400).json({
+        ok: false,
+        error: `${provider} cannot run via local Olive Python; export the recipe for the target runtime instead`,
       });
     }
 

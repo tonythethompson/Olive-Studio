@@ -78,3 +78,21 @@ export const staticServeRateLimit = rateLimit({
   legacyHeaders: false,
   message: "Too many requests",
 });
+
+/** Loopback MCP tool proxy, including write-capable feedback tools. */
+export const mcpToolRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many MCP tool requests. Please wait a minute and try again." },
+});
+
+/** No-side-effect studio-recipe bridge (loopback MCP → UIState recipe validation/build). */
+export const studioRecipeRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "Too many studio-recipe bridge requests. Please wait a minute and try again." },
+});

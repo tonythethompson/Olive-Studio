@@ -32,6 +32,7 @@ import {
   isProviderDetectedLocally,
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
+import { getProviderRuntimeKind } from "@/lib/providerRuntimeKind";
 import {
   isPreMaxwellNvidiaBox,
 } from "@/lib/cudaDeps";
@@ -485,6 +486,14 @@ export function IHVIntegrationPanel({
   // Real-time conflicts of the selected hardware provider
   const selectedConflicts = getProviderConflicts(state.ihvProvider, state.passes);
   const selectableProviders = useMemo(() => providers, []);
+  const localAccelerators = useMemo(
+    () => selectableProviders.filter((p) => getProviderRuntimeKind(p.id) === "local"),
+    [selectableProviders],
+  );
+  const exportAndPlatformTargets = useMemo(
+    () => selectableProviders.filter((p) => getProviderRuntimeKind(p.id) !== "local"),
+    [selectableProviders],
+  );
   const detectedProviders = useMemo(() => getSelectableProviders(hardwareProbe), [hardwareProbe]);
   const locallyDetectedCount = useMemo(
     () => selectableProviders.filter((p) => isProviderDetectedLocally(p.id, hardwareProbe)).length,
@@ -697,42 +706,94 @@ export function IHVIntegrationPanel({
               </div>
             ) : (
               <TooltipProvider delayDuration={200}>
-                {selectableProviders.map((p) => (
-                  <HardwareProviderCard
-                    key={p.id}
-                    provider={p}
-                    state={state}
-                    setState={setState}
-                    hardwareProbe={hardwareProbe}
-                    probeLoading={probeLoading}
-                    detectedProviders={detectedProviders}
-                    trtRtxNeedsInstall={trtRtxNeedsInstall}
-                    trtNeedsInstall={trtNeedsInstall}
-                    openvinoNeedsInstall={openvinoNeedsInstall}
-                    hardwareInstallBusy={hardwareInstallBusy}
-                    installingTrtRtx={installingTrtRtx}
-                    installTrtRtxError={installTrtRtxError}
-                    installTrtRtxLog={installTrtRtxLog}
-                    onInstallTensorRtRtx={() => void handleInstallTensorRtRtx()}
-                    installingTrt={installingTrt}
-                    installTrtError={installTrtError}
-                    installTrtLog={installTrtLog}
-                    onInstallTensorRt={() => void handleInstallTensorRt()}
-                    openvinoInstall={openvinoInstall}
-                    qnnInstall={qnnInstall}
-                    directMlInstall={directMlInstall}
-                    isPreMaxwellBox={isPreMaxwellBox}
-                    cudaNeedsOrtGpuInstall={cudaNeedsOrtGpuInstall}
-                    cudaToolkitMissingAndEpWorks={cudaToolkitMissingAndEpWorks}
-                    cudaToolkitMissing={cudaToolkitMissing}
-                    cudaEpInVenv={cudaEpInVenv}
-                    nvidiaGpus={nvidiaGpus}
-                    installingOrtGpu={installingOrtGpu}
-                    installOrtGpuError={installOrtGpuError}
-                    installOrtGpuLog={installOrtGpuLog}
-                    onInstallOrtGpu={() => void handleInstallOrtGpu()}
-                  />
-                ))}
+                <div className="space-y-5">
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">
+                      Local accelerators
+                    </p>
+                    <div className="grid gap-4 min-w-0 w-full">
+                      {localAccelerators.map((p) => (
+                        <HardwareProviderCard
+                          key={p.id}
+                          provider={p}
+                          state={state}
+                          setState={setState}
+                          hardwareProbe={hardwareProbe}
+                          probeLoading={probeLoading}
+                          detectedProviders={detectedProviders}
+                          trtRtxNeedsInstall={trtRtxNeedsInstall}
+                          trtNeedsInstall={trtNeedsInstall}
+                          openvinoNeedsInstall={openvinoNeedsInstall}
+                          hardwareInstallBusy={hardwareInstallBusy}
+                          installingTrtRtx={installingTrtRtx}
+                          installTrtRtxError={installTrtRtxError}
+                          installTrtRtxLog={installTrtRtxLog}
+                          onInstallTensorRtRtx={() => void handleInstallTensorRtRtx()}
+                          installingTrt={installingTrt}
+                          installTrtError={installTrtError}
+                          installTrtLog={installTrtLog}
+                          onInstallTensorRt={() => void handleInstallTensorRt()}
+                          openvinoInstall={openvinoInstall}
+                          qnnInstall={qnnInstall}
+                          directMlInstall={directMlInstall}
+                          isPreMaxwellBox={isPreMaxwellBox}
+                          cudaNeedsOrtGpuInstall={cudaNeedsOrtGpuInstall}
+                          cudaToolkitMissingAndEpWorks={cudaToolkitMissingAndEpWorks}
+                          cudaToolkitMissing={cudaToolkitMissing}
+                          cudaEpInVenv={cudaEpInVenv}
+                          nvidiaGpus={nvidiaGpus}
+                          installingOrtGpu={installingOrtGpu}
+                          installOrtGpuError={installOrtGpuError}
+                          installOrtGpuLog={installOrtGpuLog}
+                          onInstallOrtGpu={() => void handleInstallOrtGpu()}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">
+                      Export &amp; platform targets
+                    </p>
+                    <div className="grid gap-4 min-w-0 w-full">
+                      {exportAndPlatformTargets.map((p) => (
+                        <HardwareProviderCard
+                          key={p.id}
+                          provider={p}
+                          state={state}
+                          setState={setState}
+                          hardwareProbe={hardwareProbe}
+                          probeLoading={probeLoading}
+                          detectedProviders={detectedProviders}
+                          trtRtxNeedsInstall={trtRtxNeedsInstall}
+                          trtNeedsInstall={trtNeedsInstall}
+                          openvinoNeedsInstall={openvinoNeedsInstall}
+                          hardwareInstallBusy={hardwareInstallBusy}
+                          installingTrtRtx={installingTrtRtx}
+                          installTrtRtxError={installTrtRtxError}
+                          installTrtRtxLog={installTrtRtxLog}
+                          onInstallTensorRtRtx={() => void handleInstallTensorRtRtx()}
+                          installingTrt={installingTrt}
+                          installTrtError={installTrtError}
+                          installTrtLog={installTrtLog}
+                          onInstallTensorRt={() => void handleInstallTensorRt()}
+                          openvinoInstall={openvinoInstall}
+                          qnnInstall={qnnInstall}
+                          directMlInstall={directMlInstall}
+                          isPreMaxwellBox={isPreMaxwellBox}
+                          cudaNeedsOrtGpuInstall={cudaNeedsOrtGpuInstall}
+                          cudaToolkitMissingAndEpWorks={cudaToolkitMissingAndEpWorks}
+                          cudaToolkitMissing={cudaToolkitMissing}
+                          cudaEpInVenv={cudaEpInVenv}
+                          nvidiaGpus={nvidiaGpus}
+                          installingOrtGpu={installingOrtGpu}
+                          installOrtGpuError={installOrtGpuError}
+                          installOrtGpuLog={installOrtGpuLog}
+                          onInstallOrtGpu={() => void handleInstallOrtGpu()}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </TooltipProvider>
             )}
           </div>
