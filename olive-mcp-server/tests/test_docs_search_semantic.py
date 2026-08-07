@@ -315,3 +315,21 @@ def test_live_index_does_not_overwrite_newer_generation(monkeypatch: pytest.Monk
     docs_search._get_live_index()
     assert docs_search._LIVE_EMBED_CACHE_TIME == 200.0
     assert docs_search._LIVE_SNIPPETS[0][1] == "newer content"
+
+
+def test_load_kb_text_skips_invalid_utf8_and_keeps_valid_files(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+):
+    """One undecodable KB file must not abort loading of sibling valid JSON."""
+    bad = tmp_path / "bad_utf8.json"
+    good = tmp_path / "good.json"
+    bad.write_bytes(b'{"oops": "\xff\xfe invalid"}')
+    good.write_text('{"pass": "OnnxQuantization works"}', encoding="utf-8")
+
+    monkeypatch.setattr(docs_search, "KB_DIR", tmp_path)
+    loaded = docs_search._load_kb_text()
+    sources = " ".join(path for path, _ in loaded)
+    snippets = " ".join(text for _, text in loaded)
+    assert "good" in sources
+    assert "OnnxQuantization" in snippets
+    assert "bad_utf8" not in sources
