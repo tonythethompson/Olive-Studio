@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Label } from "@/components/ui/Label";
@@ -58,6 +58,18 @@ export function OwrExportOverlay({
   onDownloadBundle,
 }: OwrExportOverlayProps) {
   const [isOwrCopied, setIsOwrCopied] = useState(false);
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    dialogRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -93,15 +105,25 @@ export function OwrExportOverlay({
 
   return (
     <div
+<<<<<<< HEAD
       role="dialog"
       aria-modal="true"
       className="absolute inset-0 z-55 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in overflow-y-auto"
       onKeyDown={(e) => {
         if (e.key === "Escape") onClose();
       }}
+=======
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      tabIndex={-1}
+      className="absolute inset-0 z-55 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in overflow-y-auto"
+>>>>>>> 5b391ba (Address remaining review findings across IHV, OWR, stream, and probe notes)
     >
       <Card className="w-full max-w-4xl border-electric-blue/30 flex flex-col max-h-[90vh]">
         <CardHeader
+          titleId={titleId}
           title="Export for ONNX Runtime (Web/Mobile)"
           description="Package specific metadata configurations, environment session maps, and code initializers for seamless OWR edge deployment."
           badge={

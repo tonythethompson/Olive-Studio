@@ -245,18 +245,20 @@ export interface ProbeDiagnosticOutput {
 function buildOrtProviderNotes(
   input: ProbeDiagnosticInput,
   onnxRuntimeProviders: string[] | undefined,
-): string[] {
-  const notes: string[] = [];
+): { sourceNotes: string[]; loadNotes: string[]; floorNotes: string[] } {
+  const sourceNotes: string[] = [];
+  const loadNotes: string[] = [];
+  const floorNotes: string[] = [];
   if (input.defaultOrtProviders?.length) {
-    notes.push("ONNX Runtime providers probed via default runtime.");
+    sourceNotes.push("ONNX Runtime providers probed via default runtime.");
   } else if (input.cudaOrtProviders?.length) {
-    notes.push("ONNX Runtime providers probed via CUDA runtime.");
+    sourceNotes.push("ONNX Runtime providers probed via CUDA runtime.");
   } else if (input.openvinoOrtProviders?.length) {
-    notes.push("ONNX Runtime providers probed via OpenVINO runtime.");
+    sourceNotes.push("ONNX Runtime providers probed via OpenVINO runtime.");
   } else if (input.qnnOrtProviders?.length) {
-    notes.push("ONNX Runtime providers probed via QNN runtime.");
+    sourceNotes.push("ONNX Runtime providers probed via QNN runtime.");
   } else if (input.systemOrtProviders?.length) {
-    notes.push("ONNX Runtime providers probed via system Python.");
+    sourceNotes.push("ONNX Runtime providers probed via system Python.");
   }
 
   // List merged providers for display only. Do not infer CUDA readiness from
@@ -264,14 +266,14 @@ function buildOrtProviderNotes(
   // a CUDA-missing warning. CUDA install/loadability notes already gate on
   // `cudaVenvLoadable` / the cuda-family probe.
   if (onnxRuntimeProviders?.length) {
-    notes.push(`ORT execution providers: ${onnxRuntimeProviders.join(", ")}`);
+    loadNotes.push(`ORT execution providers: ${onnxRuntimeProviders.join(", ")}`);
   } else if (input.nvidia) {
-    notes.push("ONNX Runtime not installed in Python — NVIDIA GPU inferred from nvidia-smi.");
+    loadNotes.push("ONNX Runtime not installed in Python — NVIDIA GPU inferred from nvidia-smi.");
   }
 
-  if (!input.nvidia) notes.push("No NVIDIA GPU detected (nvidia-smi unavailable or returned no devices).");
-  if (!input.rocm) notes.push("No AMD ROCm GPU detected.");
-  return notes;
+  if (!input.nvidia) loadNotes.push("No NVIDIA GPU detected (nvidia-smi unavailable or returned no devices).");
+  if (!input.rocm) loadNotes.push("No AMD ROCm GPU detected.");
+  return { sourceNotes, loadNotes, floorNotes };
 }
 
 /**
@@ -281,9 +283,12 @@ function buildOrtProviderNotes(
  * @returns TensorRT diagnostic notes and whether any NVIDIA GPU supports the TensorRT family
  */
 function buildTensorRtNotes(input: ProbeDiagnosticInput): {
-  notes: string[];
+  sourceNotes: string[];
+  loadNotes: string[];
+  floorNotes: string[];
   nvidiaTensorRtFamilyCapable: boolean;
 } {
+<<<<<<< HEAD
   const notes: string[] = [];
 
   // Gate TensorRT-family EPs on the SM ≥ 7.5 (Turing) floor — must be evaluated
@@ -296,6 +301,15 @@ function buildTensorRtNotes(input: ProbeDiagnosticInput): {
     notes.push(`TensorRT RTX runtime verified${input.tensorRtRtx?.version ? ` (${input.tensorRtRtx.version})` : ""}.`);
   } else if (input.nvidia?.gpus.length && nvidiaTensorRtFamilyCapable) {
     notes.push(
+=======
+  const sourceNotes: string[] = [];
+  const loadNotes: string[] = [];
+  const floorNotes: string[] = [];
+  if (input.tensorRtRtxVenvLoadable) {
+    loadNotes.push(`TensorRT RTX runtime verified${input.tensorRtRtx?.version ? ` (${input.tensorRtRtx.version})` : ""}.`);
+  } else if (input.nvidia?.gpus.length) {
+    loadNotes.push(
+>>>>>>> 5b391ba (Address remaining review findings across IHV, OWR, stream, and probe notes)
       input.tensorRtRtx?.detail
         ? `TensorRT RTX plugin not ready (${input.tensorRtRtx.detail}). GPU is compatible — install tensorrt-rtx from Hardware or on first TRT RTX run.`
         : "TensorRT RTX plugin (tensorrt-rtx) not in .venv yet. GPU is compatible — use Install in Hardware, or Olive installs it on first TRT RTX run.",
@@ -303,9 +317,15 @@ function buildTensorRtNotes(input: ProbeDiagnosticInput): {
   }
 
   if (input.tensorRtVenvLoadable) {
+<<<<<<< HEAD
     notes.push("TensorRT execution provider load verified.");
   } else if (input.nvidia?.gpus.length && nvidiaTensorRtFamilyCapable) {
     notes.push(
+=======
+    loadNotes.push("TensorRT execution provider load verified.");
+  } else if (input.nvidia?.gpus.length) {
+    loadNotes.push(
+>>>>>>> 5b391ba (Address remaining review findings across IHV, OWR, stream, and probe notes)
       input.tensorrt?.detail
         ? `Full TensorRT SDK not ready (${input.tensorrt.detail}). GPU is compatible — install tensorrt from Hardware or on first TensorRT run.`
         : "Full TensorRT SDK (nvinfer_10) not in .venv yet. GPU is compatible — use Install in Hardware, or Olive installs it on first TensorRT run.",
@@ -315,11 +335,11 @@ function buildTensorRtNotes(input: ProbeDiagnosticInput): {
   // returning false for an empty GPU list would otherwise print a misleading
   // "all NVIDIA GPUs below TensorRT floor" note on machines with zero GPUs.
   if (nvidiaTensorRtFamilyCapable === false && (input.nvidia?.gpus.length ?? 0) > 0) {
-    notes.push(
+    floorNotes.push(
       `NVIDIA GPU(s) below TensorRT 10.x floor (compute capability < ${TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.major}.${TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.minor}); TensorRT / TensorRT-RTX EPs hidden.`,
     );
   }
-  return { notes, nvidiaTensorRtFamilyCapable };
+  return { sourceNotes, loadNotes, floorNotes, nvidiaTensorRtFamilyCapable };
 }
 
 /**
@@ -328,15 +348,21 @@ function buildTensorRtNotes(input: ProbeDiagnosticInput): {
  * @param input - Probe results used to assess CUDA availability, NVIDIA GPU support, and CUDA Toolkit installation
  * @returns Diagnostic messages describing CUDA readiness, installation requirements, or compatibility limitations
  */
-function buildCudaNotes(input: ProbeDiagnosticInput): string[] {
-  const notes: string[] = [];
+function buildCudaNotes(input: ProbeDiagnosticInput): {
+  sourceNotes: string[];
+  loadNotes: string[];
+  floorNotes: string[];
+} {
+  const sourceNotes: string[] = [];
+  const loadNotes: string[] = [];
+  const floorNotes: string[] = [];
   if (input.cudaVenvLoadable) {
-    notes.push("CUDA execution provider load verified.");
+    loadNotes.push("CUDA execution provider load verified.");
   } else if (input.nvidia?.gpus.length) {
     // Derive the install command from the pinned args so a wheel-pin
     // bump updates this hint and the probe-detail string above in lockstep.
     const ortGpuCmd = pinnedOrtGpuInstallCommand();
-    notes.push(
+    loadNotes.push(
       input.cuda?.detail
         ? `${input.cuda.detail}. GPU is compatible — click "Install onnxruntime-gpu" in Hardware (step 02) or run \`${ortGpuCmd}\` to enable CUDA EP.`
         : `${ortGpuCmd} not yet run in .venv. GPU is compatible — click "Install onnxruntime-gpu" in Hardware (step 02) or it installs on first CUDA run.`,
@@ -347,15 +373,15 @@ function buildCudaNotes(input: ProbeDiagnosticInput): string[] {
   // toolkit floor) so the IHV panel / recipe compat layer can suppress the
   // install hints (no install can recover Kepler SM 3.x).
   if (input.nvidia?.gpus.length && isPreMaxwellNvidiaBox(input.nvidia.gpus)) {
-    notes.push(
+    floorNotes.push(
       `NVIDIA GPU(s) below CUDA 12 toolkit floor (compute capability < ${CUDA_SM_FLOOR}); modern CUDA cannot run on Kepler / pre-Maxwell GPUs.`,
     );
   } else if (input.nvidia?.cudaToolkit?.available === false) {
-    notes.push(
+    floorNotes.push(
       "CUDA driver detected but the CUDA Toolkit (nvcc) is not installed. Inference via onnxruntime-gpu does not need it; get it from NVIDIA's CUDA Toolkit Archive for native builds.",
     );
   }
-  return notes;
+  return { sourceNotes, loadNotes, floorNotes };
 }
 
 /**
@@ -447,29 +473,30 @@ export function buildProbeDiagnostics(input: ProbeDiagnosticInput): ProbeDiagnos
   const qnnHostMode = resolveQnnHostMode({ platform: input.platformOs, arch: input.platformArch });
 
   const ortNotes = buildOrtProviderNotes(input, onnxRuntimeProviders);
-  const { notes: tensorRtNotes, nvidiaTensorRtFamilyCapable } = buildTensorRtNotes(input);
-  const cudaNotes = buildCudaNotes(input);
-
-  const ortSourceNotes = ortNotes.filter((n) => n.startsWith("ONNX Runtime providers probed"));
-  const ortSummaryNotes = ortNotes.filter((n) => !n.startsWith("ONNX Runtime providers probed"));
-  const tensorRtLoadNotes = tensorRtNotes.filter((n) => !n.includes("below TensorRT 10.x floor"));
-  const tensorRtFloorNotes = tensorRtNotes.filter((n) => n.includes("below TensorRT 10.x floor"));
-  const cudaLoadNotes = cudaNotes.filter(
-    (n) => !n.includes("below CUDA 12 toolkit floor") && !n.includes("CUDA Toolkit (nvcc)"),
-  );
-  const cudaFloorNotes = cudaNotes.filter(
-    (n) => n.includes("below CUDA 12 toolkit floor") || n.includes("CUDA Toolkit (nvcc)"),
-  );
+  const {
+    sourceNotes: tensorRtSourceNotes,
+    loadNotes: tensorRtLoadNotes,
+    floorNotes: tensorRtFloorNotes,
+    nvidiaTensorRtFamilyCapable,
+  } = buildTensorRtNotes(input);
+  const {
+    sourceNotes: cudaSourceNotes,
+    loadNotes: cudaLoadNotes,
+    floorNotes: cudaFloorNotes,
+  } = buildCudaNotes(input);
 
   const notes = [
-    ...ortSourceNotes,
+    ...ortNotes.sourceNotes,
+    ...tensorRtSourceNotes,
+    ...cudaSourceNotes,
     ...tensorRtLoadNotes,
     ...cudaLoadNotes,
-    ...ortSummaryNotes,
+    ...ortNotes.loadNotes,
     ...buildOpenVinoNotes(input),
     ...buildQnnNotes(input, qnnHostMode),
     ...cudaFloorNotes,
     ...tensorRtFloorNotes,
+    ...ortNotes.floorNotes,
   ];
 
   return { notes, onnxRuntimeProviders, nvidiaTensorRtFamilyCapable, qnnHostMode };

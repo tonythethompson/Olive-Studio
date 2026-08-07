@@ -59,11 +59,6 @@ import {
 } from "lucide-react";
 
 export { getProviderConflicts };
-export {
-  getCellCompatibility,
-  PASS_VALIDATIONS as validations,
-  type OptimizationPassValidation,
-} from "./hardwarePassCompatibility";
 
 const providers = PROVIDER_CATALOG;
 
@@ -190,7 +185,7 @@ export function IHVIntegrationPanel({
     qnnInstall.state.testing ||
     directMlInstall.state.installing;
 
-  const handleInstallTensorRtRtx = async () => {
+  const handleInstallTensorRtRtx = useCallback(async () => {
     if (hardwareInstallBusy) return;
     setInstallingTrtRtx(true);
     setInstallTrtRtxError(null);
@@ -208,9 +203,9 @@ export function IHVIntegrationPanel({
     } finally {
       setInstallingTrtRtx(false);
     }
-  };
+  }, [hardwareInstallBusy, runHardwareProbe]);
 
-  const handleInstallTensorRt = async () => {
+  const handleInstallTensorRt = useCallback(async () => {
     if (hardwareInstallBusy) return;
     setInstallingTrt(true);
     setInstallTrtError(null);
@@ -228,9 +223,9 @@ export function IHVIntegrationPanel({
     } finally {
       setInstallingTrt(false);
     }
-  };
+  }, [hardwareInstallBusy, runHardwareProbe]);
 
-  const handleInstallOrtGpu = async () => {
+  const handleInstallOrtGpu = useCallback(async () => {
     if (hardwareInstallBusy) return;
     setInstallingOrtGpu(true);
     setInstallOrtGpuError(null);
@@ -248,7 +243,7 @@ export function IHVIntegrationPanel({
     } finally {
       setInstallingOrtGpu(false);
     }
-  };
+  }, [hardwareInstallBusy, runHardwareProbe]);
 
   useEffect(() => {
     // Synchronous probe state updates on mount are intentional; runHardwareProbe
@@ -284,38 +279,72 @@ export function IHVIntegrationPanel({
   );
   const hasSelectedCritical = selectedConflicts.some((c) => c.severity === "critical");
 
-  const providerCardProps: Omit<HardwareProviderCardProps, "provider"> = {
-    state,
-    setState,
-    hardwareProbe,
-    probeLoading,
-    detectedProviders,
-    trtRtxNeedsInstall,
-    trtNeedsInstall,
-    openvinoNeedsInstall,
-    hardwareInstallBusy,
-    installingTrtRtx,
-    installTrtRtxError,
-    installTrtRtxLog,
-    onInstallTensorRtRtx: () => void handleInstallTensorRtRtx(),
-    installingTrt,
-    installTrtError,
-    installTrtLog,
-    onInstallTensorRt: () => void handleInstallTensorRt(),
-    openvinoInstall,
-    qnnInstall,
-    directMlInstall,
-    isPreMaxwellBox,
-    cudaNeedsOrtGpuInstall,
-    cudaToolkitMissingAndEpWorks,
-    cudaToolkitMissing,
-    cudaEpInVenv,
-    nvidiaGpus,
-    installingOrtGpu,
-    installOrtGpuError,
-    installOrtGpuLog,
-    onInstallOrtGpu: () => void handleInstallOrtGpu(),
-  };
+  const providerCardProps: Omit<HardwareProviderCardProps, "provider"> = useMemo(
+    () => ({
+      state,
+      setState,
+      hardwareProbe,
+      probeLoading,
+      detectedProviders,
+      trtRtxNeedsInstall,
+      trtNeedsInstall,
+      openvinoNeedsInstall,
+      hardwareInstallBusy,
+      installingTrtRtx,
+      installTrtRtxError,
+      installTrtRtxLog,
+      onInstallTensorRtRtx: () => void handleInstallTensorRtRtx(),
+      installingTrt,
+      installTrtError,
+      installTrtLog,
+      onInstallTensorRt: () => void handleInstallTensorRt(),
+      openvinoInstall,
+      qnnInstall,
+      directMlInstall,
+      isPreMaxwellBox,
+      cudaNeedsOrtGpuInstall,
+      cudaToolkitMissingAndEpWorks,
+      cudaToolkitMissing,
+      cudaEpInVenv,
+      nvidiaGpus,
+      installingOrtGpu,
+      installOrtGpuError,
+      installOrtGpuLog,
+      onInstallOrtGpu: () => void handleInstallOrtGpu(),
+    }),
+    [
+      state,
+      setState,
+      hardwareProbe,
+      probeLoading,
+      detectedProviders,
+      trtRtxNeedsInstall,
+      trtNeedsInstall,
+      openvinoNeedsInstall,
+      hardwareInstallBusy,
+      installingTrtRtx,
+      installTrtRtxError,
+      installTrtRtxLog,
+      handleInstallTensorRtRtx,
+      installingTrt,
+      installTrtError,
+      installTrtLog,
+      handleInstallTensorRt,
+      openvinoInstall,
+      qnnInstall,
+      directMlInstall,
+      isPreMaxwellBox,
+      cudaNeedsOrtGpuInstall,
+      cudaToolkitMissingAndEpWorks,
+      cudaToolkitMissing,
+      cudaEpInVenv,
+      nvidiaGpus,
+      installingOrtGpu,
+      installOrtGpuError,
+      installOrtGpuLog,
+      handleInstallOrtGpu,
+    ],
+  );
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 min-w-0 max-w-full">

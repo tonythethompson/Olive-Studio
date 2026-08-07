@@ -444,6 +444,7 @@ ${owrPlatform === "web"
 
   // SSE streaming lifecycle managed by useOliveStream hook
   const {
+    liveJobId,
     isRunning,
     executionLogs,
     setExecutionLogs,
@@ -474,11 +475,11 @@ ${owrPlatform === "web"
     : localValidationLabel;
   const validationTone = runFailed ? "error" : localValidationTone;
 
-  // Clear log selection when logs change (new run starts)
+  // Clear log selection once when a new live run starts (not on every streamed line).
   useLayoutEffect(() => {
     setSelectedLogIndices(new Set()); // eslint-disable-line react-hooks/set-state-in-effect
     lastClickedIndexRef.current = null;
-  }, [executionLogs.length]);
+  }, [liveJobId]);
 
   // Auto-select error lines when a job fails so Diagnose can focus on them.
   const prevStatusRef = useRef<string | null>(null);

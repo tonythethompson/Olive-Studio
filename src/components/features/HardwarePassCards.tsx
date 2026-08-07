@@ -1,14 +1,17 @@
+import { Switch } from "@/components/ui/Switch";
 import {
-  Switch,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui";
+} from "@/components/ui/Tooltip";
 import { UIState } from "@/types";
 import { getQuantMethodActivationBlock } from "@/lib/pipelineValidation";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
-import type { OptimizationPassValidation } from "./hardwarePassCompatibility";
+import {
+  QUANT_METHOD_BY_PASS_ID,
+  type OptimizationPassValidation,
+} from "./hardwarePassCompatibility";
 import {
   AlertCircle,
   AlertTriangle,
@@ -36,12 +39,11 @@ export function HardwarePassCards({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 animate-in fade-in">
         {filteredValidations.map((v) => {
           const isUnsupportedOnCurrent = v.isUnsupported(state.ihvProvider);
+          const quantMethod = QUANT_METHOD_BY_PASS_ID[v.id];
           const configBlock =
-            v.id === "awq-quantization"
-              ? getQuantMethodActivationBlock("awq", state.passes, state.ihvProvider)
-              : v.id === "qat-quantization"
-                ? getQuantMethodActivationBlock("qat", state.passes, state.ihvProvider)
-                : null;
+            quantMethod != null
+              ? getQuantMethodActivationBlock(quantMethod, state.passes, state.ihvProvider)
+              : null;
           const isBlockedByConfig = !isUnsupportedOnCurrent && configBlock !== null;
           const isActiveState = v.isActive(state.passes);
           const reason = v.getIncompatibilityReason(state.ihvProvider);

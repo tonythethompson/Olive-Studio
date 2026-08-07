@@ -455,4 +455,42 @@ describe("deriveUiStateFromOliveRecipe validation", () => {
     expect(state.modelSource).toBeUndefined();
 
   });
+
+  it("ignores non-object pruning config when mapping criteria", () => {
+    const withNull = deriveUiStateFromOliveRecipe(
+      { passes: { prune: { type: "SparseGPT", config: null } } },
+      { replacePasses: true },
+    );
+    expect(withNull.passes?.pruning).toBe(true);
+    expect(withNull.passes?.pruningMethod).toBe("sparsegpt");
+    // null config must not invent criteria; inactive default remains
+    expect(withNull.passes?.pruningCriteria).toBe("l1_norm");
+
+    const withString = deriveUiStateFromOliveRecipe(
+      {
+        passes: {
+          prune: {
+            type: "SparseGPT",
+            config: "not-an-object",
+          },
+        },
+      },
+      { replacePasses: true },
+    );
+    expect(withString.passes?.pruning).toBe(true);
+    expect(withString.passes?.pruningCriteria).toBe("l1_norm");
+
+    const withValid = deriveUiStateFromOliveRecipe(
+      {
+        passes: {
+          prune: {
+            type: "SparseGPT",
+            config: { pruning_criteria: "l2_norm", sparsity: 0.4 },
+          },
+        },
+      },
+      { replacePasses: true },
+    );
+    expect(withValid.passes?.pruningCriteria).toBe("l2_norm");
+  });
 });

@@ -414,8 +414,8 @@ describe("BatchProcessingPanel", () => {
 
   it("deletes a job with Enter/Space on the delete control without relying on card selection", async () => {
     const user = userEvent.setup();
-    const job: BatchJob = {
-      id: "job-kbd-delete",
+    const makeJob = (id: string): BatchJob => ({
+      id,
       name: "Keyboard Delete Job",
       modelSource: "huggingface",
       modelIdentifier: "microsoft/phi-2",
@@ -426,25 +426,31 @@ describe("BatchProcessingPanel", () => {
       progress: 0,
       progressKnown: true,
       logs: ["queued"],
-    };
-    const stateWithJobs: UIState = {
-      ...createMockUIState(),
-      batchJobs: [job],
-    };
-    mockStoreState = stateWithJobs;
-
-    await act(async () => {
-      render(<BatchProcessingPanel state={stateWithJobs} setState={mockSetState} />);
     });
 
-    const deleteBtn = screen.getByRole("button", { name: /Delete batch job Keyboard Delete Job/i });
-    deleteBtn.focus();
-    await user.keyboard("{Enter}");
+    for (const key of ["{Enter}", " "] as const) {
+      mockSetState.mockClear();
+      const job = makeJob(`job-kbd-delete-${key === " " ? "space" : "enter"}`);
+      const stateWithJobs: UIState = {
+        ...createMockUIState(),
+        batchJobs: [job],
+      };
+      mockStoreState = stateWithJobs;
 
-    expect(mockSetState).toHaveBeenCalledWith(
-      expect.objectContaining({
-        batchJobs: [],
-      }),
-    );
+      const { unmount } = render(<BatchProcessingPanel state={stateWithJobs} setState={mockSetState} />);
+
+      const deleteBtn = screen.getByRole("button", {
+        name: /Delete batch job Keyboard Delete Job/i,
+      });
+      deleteBtn.focus();
+      await user.keyboard(key);
+
+      expect(mockSetState).toHaveBeenCalledWith(
+        expect.objectContaining({
+          batchJobs: [],
+        }),
+      );
+      unmount();
+    }
   });
 });

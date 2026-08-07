@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, type Dispatch, type SetStateAction } from "react";
+import { useState, useRef, useCallback, useEffect, type Dispatch, type SetStateAction } from "react";
 import { type UIState } from "@/types";
 import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
 import { saveJobHistory } from "@/lib/jobHistoryStore";
@@ -52,12 +52,11 @@ export function useOliveStream({
   const [executionLogs, setExecutionLogsState] = useState<string[]>([]);
   const executionLogsRef = useRef<string[]>([]);
   const setExecutionLogs: Dispatch<SetStateAction<string[]>> = useCallback((update) => {
-    setExecutionLogsState((prev) => {
-      const next = typeof update === "function" ? update(prev) : update;
-      executionLogsRef.current = next;
-      return next;
-    });
+    setExecutionLogsState((prev) => (typeof update === "function" ? update(prev) : update));
   }, []);
+  useEffect(() => {
+    executionLogsRef.current = executionLogs;
+  }, [executionLogs]);
   const [executionStatus, setExecutionStatus] = useState<
     "idle" | "running" | "completed" | "failed" | "cancelled"
   >("idle");
@@ -69,8 +68,20 @@ export function useOliveStream({
   const pendingCancelRef = useRef(false);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  useEffect(() => {
+    return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      liveSourceRef.current?.close();
+      liveSourceRef.current = null;
+    };
+  }, []);
+
   const recordJobCompletion = useCallback(
     (jobId: string, status: "completed" | "failed" | "cancelled", exitCode: number | null) => {
+      if (isUnmountedRef.current) return;
       const duration = runStartTimeRef.current ? Date.now() - runStartTimeRef.current : 0;
       const activePassesNames: string[] = [];
       if (state.passes.conversion)
@@ -97,7 +108,7 @@ export function useOliveStream({
         recipeJson: runRecipeJsonRef.current ?? buildRecipeJsonFromState(state),
       });
     },
-    [state],
+    [state, isUnmountedRef],
   );
 
   const handleCancelJob = useCallback(async () => {

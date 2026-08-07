@@ -422,9 +422,8 @@ function mapQuantPrecision(config: unknown, passType = ""): UIState["passes"]["q
  * @returns The normalized pruning criterion, or `undefined` when none is configured
  */
 function mapPruningCriteria(config: unknown): "l1_norm" | "l2_norm" | undefined {
-  const cfg = config as Record<string, unknown>;
-  if (!cfg.pruning_criteria) return undefined;
-  return String(cfg.pruning_criteria).toLowerCase().includes("l2") ? "l2_norm" : "l1_norm";
+  if (!isRecord(config) || !config.pruning_criteria) return undefined;
+  return String(config.pruning_criteria).toLowerCase().includes("l2") ? "l2_norm" : "l1_norm";
 }
 
 /**
@@ -439,7 +438,8 @@ function mapPassesFromRecipe(recipePasses: Record<string, unknown>): UIState["pa
   for (const [key, pass] of Object.entries(recipePasses)) {
     if (!pass || typeof pass !== "object") continue;
     const type = String((pass as Record<string, unknown>).type ?? "");
-    const config = ((pass as Record<string, unknown>).config as Record<string, unknown>) ?? {};
+    const rawConfig = (pass as Record<string, unknown>).config;
+    const config = isRecord(rawConfig) ? rawConfig : {};
     const lowerType = type.toLowerCase();
 
     if (lowerType.includes("openvino") && lowerType.includes("conversion")) {

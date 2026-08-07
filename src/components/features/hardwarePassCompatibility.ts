@@ -8,6 +8,26 @@ import {
   isStructuredPruningAllowed,
 } from "@/lib/pipelineValidation";
 
+export type PassEstimates = {
+  speedup: string;
+  vram: string;
+  efficiency: string;
+};
+
+/** Pass IDs that map to a quant method for activation-block checks. */
+export const QUANT_METHOD_BY_PASS_ID: Partial<
+  Record<
+    string,
+    Extract<
+      UIState["passes"]["quantMethod"],
+      "awq" | "qat" | "gptq" | "hqq" | "spinquant" | "quarot"
+    >
+  >
+> = {
+  "awq-quantization": "awq",
+  "qat-quantization": "qat",
+};
+
 export interface OptimizationPassValidation {
   id: string;
   name: string;
@@ -18,6 +38,7 @@ export interface OptimizationPassValidation {
   isActive: (passes: UIState["passes"]) => boolean;
   toggle: (passes: UIState["passes"], currentActive: boolean) => Partial<UIState["passes"]>;
   requiresExplanation: string;
+  estimates: PassEstimates;
 }
 
 export const PASS_VALIDATIONS: OptimizationPassValidation[] = [
@@ -36,6 +57,7 @@ export const PASS_VALIDATIONS: OptimizationPassValidation[] = [
         : { ...passes, conversion: true, conversionFormat: "openvino" },
     requiresExplanation:
       "Standard CPU, NVIDIA Titan/GeForce/RTX, Qualcomm Snapdragon, and AMD hosts expect standard ONNX models instead of proprietary Intel IR files.",
+    estimates: { speedup: "3.1x", vram: "Host Shared", efficiency: "98%" },
   },
   {
     id: "awq-quantization",
@@ -52,6 +74,7 @@ export const PASS_VALIDATIONS: OptimizationPassValidation[] = [
         : { ...passes, quantization: true, quantMethod: "awq", pruning: false },
     requiresExplanation:
       "AWQ is fine-tuned for heavy linear layers utilizing specialized CUDA or ROCm GPU acceleration matrices.",
+    estimates: { speedup: "2.5x", vram: "-72% VRAM", efficiency: "92%" },
   },
   {
     id: "qat-quantization",
@@ -66,6 +89,7 @@ export const PASS_VALIDATIONS: OptimizationPassValidation[] = [
       active ? { ...passes, quantMethod: "ptq" } : { ...passes, quantization: true, quantMethod: "qat" },
     requiresExplanation:
       "Qualcomm Snapdragon Hexagon NPUs require standard offline Post-Training Quantization (PTQ) formats to run properly.",
+    estimates: { speedup: "1.8x", vram: "-50% VRAM", efficiency: "88%" },
   },
   {
     id: "structured-sparsity",
@@ -82,6 +106,7 @@ export const PASS_VALIDATIONS: OptimizationPassValidation[] = [
         : { ...passes, pruning: true, pruningType: "structured" },
     requiresExplanation:
       "2:4 block sparsity requires built-in hardware decoding logic integrated exclusively into modern NVIDIA RTX or enterprise datacenter GPUs.",
+    estimates: { speedup: "2.0x", vram: "No Change", efficiency: "99%" },
   },
   {
     id: "peft-adapters",
@@ -95,6 +120,7 @@ export const PASS_VALIDATIONS: OptimizationPassValidation[] = [
     toggle: (passes, active) => (active ? { ...passes, peft: false } : { ...passes, peft: true }),
     requiresExplanation:
       "Edge-facing Snapdragon or Intel NPU architectures cannot execute full training loops. Adapter configurations must be compiled on CPU/GPU.",
+    estimates: { speedup: "1.6x (Tuned)", vram: "-60% VRAM", efficiency: "94%" },
   },
   {
     id: "qlora-adapters",
@@ -109,16 +135,12 @@ export const PASS_VALIDATIONS: OptimizationPassValidation[] = [
       active ? { ...passes, peftMethod: "lora" } : { ...passes, peft: true, peftMethod: "qlora" },
     requiresExplanation:
       "QLoRA requires active, high-fidelity dynamic double-quantization backpropagation kernels which are completely unsupported on standard CPU hosts.",
+    estimates: { speedup: "1.5x (Tuned)", vram: "-82% VRAM", efficiency: "90%" },
   },
 ];
 
 /**
  * Determines the compatibility and estimated optimization characteristics of a pass for a provider.
- *
- * @param pass - The optimization pass to evaluate
- * @param provider - The execution provider to evaluate
- * @param passes - The configured optimization passes used to identify configuration conflicts
- * @returns Compatibility status, explanation, and estimated performance characteristics
  */
 export function getCellCompatibility(
   pass: OptimizationPassValidation,
@@ -126,24 +148,10 @@ export function getCellCompatibility(
   passes?: UIState["passes"],
 ) {
   const isUnsupported = pass.isUnsupported(provider);
+  const quantMethod = QUANT_METHOD_BY_PASS_ID[pass.id];
 
-  if (passes && pass.id === "awq-quantization" && !isUnsupported) {
-    const block = getQuantMethodActivationBlock("awq", passes, provider);
-    if (block) {
-      return {
-        status: "blocked" as const,
-        label: "Config blocked",
-        color: "bg-amber-500/15 border-amber-500/30 text-amber-400",
-        reason: block.reason,
-        speedup: "N/A",
-        vram: "N/A",
-        efficiency: "0%",
-      };
-    }
-  }
-
-  if (passes && pass.id === "qat-quantization" && !isUnsupported) {
-    const block = getQuantMethodActivationBlock("qat", passes, provider);
+  if (passes && quantMethod && !isUnsupported) {
+    const block = getQuantMethodActivationBlock(quantMethod, passes, provider);
     if (block) {
       return {
         status: "blocked" as const,
@@ -184,37 +192,11 @@ export function getCellCompatibility(
     }
   }
 
-  // Supported and optimized!
-  let speedup = "2.2x";
-  let vram = "-50%";
-  let efficiency = "95%";
-
-  if (pass.id === "openvino-format") {
-    speedup = "3.1x";
-    vram = "Host Shared";
-    efficiency = "98%";
-  } else if (pass.id === "awq-quantization") {
-    speedup = "2.5x";
-    vram = "-72% VRAM";
-    efficiency = "92%";
-  } else if (pass.id === "qat-quantization") {
-    speedup = "1.8x";
-    vram = "-50% VRAM";
-    efficiency = "88%";
-  } else if (pass.id === "structured-sparsity") {
-    speedup = "2.0x";
-    vram = "No Change";
-    efficiency = "99%";
-  } else if (pass.id === "peft-adapters") {
-    speedup = "1.6x (Tuned)";
-    vram = "-60% VRAM";
-    efficiency = "94%";
-  } else if (pass.id === "qlora-adapters") {
-    speedup = "1.5x (Tuned)";
-    vram = "-82% VRAM";
-    efficiency = "90%";
-  }
-
+  const { speedup, vram, efficiency } = pass.estimates ?? {
+    speedup: "2.2x",
+    vram: "-50%",
+    efficiency: "95%",
+  };
   return {
     status: "supported" as const,
     label: "Optimized",
