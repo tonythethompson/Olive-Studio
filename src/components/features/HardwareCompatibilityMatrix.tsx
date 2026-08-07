@@ -8,7 +8,10 @@ import { IHVProvider, UIState } from "@/types";
 import { prepareProviderChange } from "@/lib/pipelineValidation";
 import { isProviderDetectedLocally, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
-import { getCellCompatibility, type OptimizationPassValidation } from "./IHVIntegrationPanel";
+import {
+  getCellCompatibility,
+  type OptimizationPassValidation,
+} from "./hardwarePassCompatibility";
 import {
   Check,
   CheckCircle,

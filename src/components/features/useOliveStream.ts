@@ -252,6 +252,10 @@ export function useOliveStream({
       const MAX_BACKOFF_MS = 30000;
       const connectSSE = (targetJobId: string) => {
         if (isUnmountedRef.current) return;
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = null;
+        }
         liveSourceRef.current?.close();
 
         const evtSource = new EventSource(`/api/olive/stream/${targetJobId}`);
@@ -367,7 +371,12 @@ export function useOliveStream({
               `[WARN] Stream connection lost. Reconnecting (attempt ${reconnectAttempts}${serverSaysRunning ? "" : `/${MAX_RECONNECT_ATTEMPTS}`} in ${(backoffMs / 1000).toFixed(1)}s)...`,
             ]);
 
+            if (reconnectTimeoutRef.current) {
+              clearTimeout(reconnectTimeoutRef.current);
+              reconnectTimeoutRef.current = null;
+            }
             reconnectTimeoutRef.current = setTimeout(() => {
+              reconnectTimeoutRef.current = null;
               if (!isUnmountedRef.current) connectSSE(targetJobId);
             }, backoffMs);
           } else {
