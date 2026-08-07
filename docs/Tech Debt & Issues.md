@@ -1,6 +1,6 @@
 # Tech Debt & Issues
 
-> **Status:** audited against the codebase on 2026-08-07; remediation passes 1–6 landed in PR #115 (branch `tech-debt-passes-1-6`). **22 GitHub issues closed** across the 2026-08-07 audit session. **33 remain open** (verified via `gh issue list --state open`).
+> **Status:** audited against the codebase on 2026-08-07; remediation passes 1–6 landed in PR #115 (branch `tech-debt-passes-1-6`). **23 GitHub issues closed** across the 2026-08-07 audit session. **32 remain open** (verified via `gh issue list --state open`, minus #159 closed in this PR).
 
 ## Status overview
 
@@ -138,7 +138,7 @@ Passes 1–6 were verified green on CI (run #30966708317 on PR #115).
 
 ## GitHub Issue Audit (2026-08-07)
 
-Full cross-reference of previously open GitHub issues against the current codebase. **22 issues closed, 33 remain open.** (33 verified via `gh issue list --state open` on 2026-08-07.)
+Full cross-reference of previously open GitHub issues against the current codebase. **23 issues closed, 32 remain open.** (#159 closed via HardwarePassCards extract + shared provider-card props.)
 
 ### Summary
 
@@ -146,9 +146,9 @@ Full cross-reference of previously open GitHub issues against the current codeba
 |--------|-------|--------|
 | Closed — code fixed | 10 | #137, #142, #143, #144, #145, #146, #147, #148, #149, #151 |
 | Closed — verified complete | 7 | #124, #134, #136, #138, #153, #154, #155 |
-| Closed — refactoring (component extractions) | 5 | #120, #121, #122, #139, #140 |
-| **Total closed** | **22** | |
-| Remaining open | **33** | See below |
+| Closed — refactoring (component extractions) | 6 | #120, #121, #122, #139, #140, #159 |
+| **Total closed** | **23** | |
+| Remaining open | **32** | See below |
 
 ### Closed: Code Fixed (2026-08-07)
 
@@ -186,6 +186,7 @@ Full cross-reference of previously open GitHub issues against the current codeba
 | **#122** | Complex Method in BatchProcessingPanel.tsx | Extracted `BatchJobList` (empty state + mapping) and `BatchJobCard` (status, metrics, progress bar, delete) as module-level helpers. | Render block: −13 lines inline |
 | **#139** | Duplicate Code in HardwareProviderCard.tsx | Extracted `PluginInstallBlock` and reused across provider install cards. | DRY across 6 install blocks |
 | **#140** | Very Complex Method in system.ts (probeSystemHardware) | Extracted `buildProbeDiagnostics()` (~160 lines) with typed `ProbeDiagnosticInput`/`ProbeDiagnosticOutput` interfaces. | 395 → ~250 (−145, 37%) |
+| **#159** | Duplicate Code in IHVIntegrationPanel.tsx | Shared `providerCardProps` for local/export card grids. Extracted Interactive Cards tab to `HardwarePassCards.tsx`. | Removed duplicated prop bags + ~150-line cards tab |
 
 ### Lint Cleanup (2026-08-07)
 
@@ -202,7 +203,7 @@ All ESLint warnings in `src/` and `server.ts` resolved. `eslint --max-warnings 2
 | `arenaOliveOutputs.test.ts:441` | `@typescript-eslint/no-unused-vars` | Renamed `reject` → `_reject` |
 | `registry.test.ts:31` | `no-duplicate-imports` | Merged duplicate imports |
 
-### Remaining Open (33 issues)
+### Remaining Open (32 issues)
 
 #### Duplication issues (2)
 
@@ -217,13 +218,12 @@ All ESLint warnings in `src/` and `server.ts` resolved. `eslint --max-warnings 2
 |------|-------|-------|
 | **#152** | 4 Complexity issues in route handlers | Handler bodies shortened by bodyGuard middleware. AI route splitting (Pass 6) reduced scope. Re-scan recommended. |
 
-#### Newer CodeFactor complexity (3)
+#### Newer CodeFactor complexity (2)
 
 | GH # | Issue | Notes |
 |------|-------|-------|
 | **#157** | Very Complex Method in InputEnvironmentPanel.tsx | Follow-up complexity finding after prior extractions. |
 | **#158** | Very Complex Method in system.ts | Follow-up after `buildProbeDiagnostics` extraction. |
-| **#159** | Duplicate Code in IHVIntegrationPanel.tsx | Follow-up duplication finding; shared pass/compat helpers now live in `hardwarePassCompatibility.ts`. |
 
 #### Older complexity / maintainability issues (9)
 
