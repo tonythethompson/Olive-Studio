@@ -251,7 +251,7 @@ jobs:
           TASK
           )" \
             --model "gemini/gemini-3.6-flash" \
-            --max-steps "${{ vars.AUTOPILOT_MAX_STEPS || 100 }}" \
+            --max_steps "${{ vars.AUTOPILOT_MAX_STEPS || 100 }}" \
             --config yolo
 
       - name: Sanity checks
