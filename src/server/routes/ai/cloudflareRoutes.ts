@@ -30,7 +30,8 @@ export function mountCloudflareRoutes(router: Router): void {
   router.post("/cloudflare/sync", authActionRateLimit, async (req, res) => {
     // express.json() leaves body undefined when the client sends no payload;
     // optional accountId means an empty object is a valid default sync.
-    const body = parseBody<{ accountId?: string }>(req.body ?? {}, {
+    // Preserve null so parseBody can reject an explicit JSON null body.
+    const body = parseBody<{ accountId?: string }>(req.body === undefined ? {} : req.body, {
       accountId: { type: "string", required: false },
     });
     if (isParseBodyError(body)) return res.status(400).json({ ok: false, error: body.error });

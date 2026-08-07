@@ -160,15 +160,28 @@ describe("Route integration tests", () => {
 
     it("accepts a bodyless default Cloudflare sync", async () => {
       const syncResponse = await fetch(`${baseUrl}/api/cloudflare/sync`, { method: "POST" });
-      // Missing Wrangler credentials fail as 500, not as a body-parse 400.
-      expect(syncResponse.status).not.toBe(400);
+      // Missing Wrangler credentials fail as 500; success is 200. Never a body-parse 400.
+      expect([200, 500]).toContain(syncResponse.status);
       const payload = (await syncResponse.json()) as { ok?: boolean; error?: string };
-      if (syncResponse.status >= 400) {
+      if (syncResponse.status === 500) {
         expect(payload).toMatchObject({ ok: false });
         expect(payload.error).toBeTruthy();
       } else {
         expect(payload).toMatchObject({ ok: true });
       }
+    });
+
+    it("rejects an explicit null Cloudflare sync body", async () => {
+      const syncResponse = await fetch(`${baseUrl}/api/cloudflare/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "null",
+      });
+      expect(syncResponse.status).toBe(400);
+      await expect(syncResponse.json()).resolves.toEqual({
+        ok: false,
+        error: "Request body must be a JSON object",
+      });
     });
   });
 

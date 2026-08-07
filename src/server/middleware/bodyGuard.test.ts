@@ -47,6 +47,46 @@ describe("parseBody", () => {
     }
   });
 
+  it("rejects pre-parsed non-object values for json fields", () => {
+    expect(
+      parseBody<{ recipe: unknown }>({ recipe: [1, 2] }, { recipe: { type: "json" } }),
+    ).toEqual({ error: "recipe must be a JSON object" });
+
+    expect(
+      parseBody<{ recipe: unknown }>({ recipe: 42 }, { recipe: { type: "json" } }),
+    ).toEqual({ error: "recipe must be a JSON object" });
+
+    expect(
+      parseBody<{ recipe: unknown }>({ recipe: true }, { recipe: { type: "json" } }),
+    ).toEqual({ error: "recipe must be a JSON object" });
+  });
+
+  it("treats null as missing for required json fields", () => {
+    expect(
+      parseBody<{ recipe: unknown }>({ recipe: null }, {
+        recipe: { type: "json", message: "Missing recipe" },
+      }),
+    ).toEqual({ error: "Missing recipe" });
+  });
+
+  it("rejects JSON strings that decode to non-objects", () => {
+    expect(
+      parseBody<{ recipe: unknown }>({ recipe: "[1,2]" }, { recipe: { type: "json" } }),
+    ).toEqual({ error: "recipe must be a JSON object" });
+
+    expect(
+      parseBody<{ recipe: unknown }>({ recipe: "42" }, { recipe: { type: "json" } }),
+    ).toEqual({ error: "recipe must be a JSON object" });
+
+    expect(
+      parseBody<{ recipe: unknown }>({ recipe: "null" }, { recipe: { type: "json" } }),
+    ).toEqual({ error: "recipe must be a JSON object" });
+
+    expect(
+      parseBody<{ recipe: unknown }>({ recipe: '"plain"' }, { recipe: { type: "json" } }),
+    ).toEqual({ error: "recipe must be a JSON object" });
+  });
+
   it("omits optional json fields when the value is an empty string", () => {
     const result = parseBody<{ note?: unknown }>({ note: "" }, {
       note: { type: "json", required: false },

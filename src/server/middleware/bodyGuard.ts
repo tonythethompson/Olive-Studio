@@ -52,7 +52,9 @@ const TYPE_CHECKERS: Record<BodyFieldType, (value: unknown) => boolean> = {
   object: (value) => isPlainObject(value),
   "string[]": (value) =>
     Array.isArray(value) && value.every((item) => typeof item === "string"),
-  // Recipes arrive either pre-parsed or as a JSON string.
+  // Recipes arrive either pre-parsed or as a JSON string that decodes to an object.
+  // Non-object JSON values (arrays, numbers, null, booleans, strings) are rejected
+  // after parse — see parseJsonObjectField.
   json: (value) => isPlainObject(value) || typeof value === "string",
   // Pass-through fields with their own lenient handling downstream (e.g. clamps).
   // Does not narrow the parsed generic — callers must treat these as `unknown`.
@@ -65,9 +67,29 @@ const TYPE_DESCRIPTIONS: Record<BodyFieldType, string> = {
   boolean: "a boolean",
   object: "an object",
   "string[]": "an array of strings",
-  json: "valid JSON",
+  json: "a JSON object",
   unknown: "a value",
 };
+
+/**
+ * Normalize a `json` field to a plain object.
+ * Accepts a pre-parsed object or a JSON string that parses to an object.
+ */
+function parseJsonObjectField(field: string, value: unknown): ParseBodyResult<Record<string, unknown>> {
+  if (isPlainObject(value)) return { parsed: value };
+  if (typeof value !== "string") {
+    return { error: `${field} must be ${TYPE_DESCRIPTIONS.json}` };
+  }
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!isPlainObject(parsed)) {
+      return { error: `${field} must be ${TYPE_DESCRIPTIONS.json}` };
+    }
+    return { parsed };
+  } catch {
+    return { error: `${field} must be valid JSON` };
+  }
+}
 
 /** Undefined, null, and empty strings for string-like fields count as absent. */
 function isFieldMissing(spec: BodyFieldSpec, value: unknown): boolean {
@@ -100,12 +122,10 @@ export function parseBody<T extends Record<string, unknown>>(
     if (!TYPE_CHECKERS[fieldSpec.type](value)) {
       return { error: `${field} must be ${TYPE_DESCRIPTIONS[fieldSpec.type]}` };
     }
-    if (fieldSpec.type === "json" && typeof value === "string") {
-      try {
-        parsed[field] = JSON.parse(value);
-      } catch {
-        return { error: `${field} must be valid JSON` };
-      }
+    if (fieldSpec.type === "json") {
+      const jsonResult = parseJsonObjectField(field, value);
+      if (isParseBodyError(jsonResult)) return jsonResult;
+      parsed[field] = jsonResult.parsed;
     } else {
       parsed[field] = value;
     }
