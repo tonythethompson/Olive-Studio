@@ -22,7 +22,8 @@ for arg in "$@"; do
 done
 
 if ! command -v pnpm >/dev/null 2>&1; then
-  echo "pnpm is required. Install with: npm install -g pnpm@11.17.0 (or enable Corepack)." >&2
+  echo "pnpm is required. If corepack is missing (Node 25+), run: npm install -g corepack" >&2
+  echo "Then activate pnpm: corepack enable && corepack install pnpm@11.17.0" >&2
   exit 1
 fi
 
