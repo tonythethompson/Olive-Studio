@@ -157,6 +157,19 @@ describe("Route integration tests", () => {
         error: "apiToken and accountId are required.",
       });
     });
+
+    it("accepts a bodyless default Cloudflare sync", async () => {
+      const syncResponse = await fetch(`${baseUrl}/api/cloudflare/sync`, { method: "POST" });
+      // Missing Wrangler credentials fail as 500, not as a body-parse 400.
+      expect(syncResponse.status).not.toBe(400);
+      const payload = (await syncResponse.json()) as { ok?: boolean; error?: string };
+      if (syncResponse.status >= 400) {
+        expect(payload).toMatchObject({ ok: false });
+        expect(payload.error).toBeTruthy();
+      } else {
+        expect(payload).toMatchObject({ ok: true });
+      }
+    });
   });
 
   // ─── POST /api/ai/chat ───────────────────────────────────────────────────
