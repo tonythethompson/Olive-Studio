@@ -13,6 +13,7 @@ import { ensureTensorRt } from "../olive/tensorrt.ts";
 import { ensureTensorRtRtx } from "../olive/tensorrt-rtx.ts";
 import { ensureQnn } from "../olive/qnn.ts";
 import { ensureVenvFamily } from "./familyEnsure.ts";
+import { isExportTargetProvider } from "../../../lib/providerRuntimeKind.ts";
 import { getVenvPython } from "./paths.ts";
 import {
   capabilityForProvider,
@@ -60,6 +61,15 @@ export async function ensureProviderCapability(
   onLine: SetupListener,
   opts?: EnsureProviderCapabilityOptions,
 ): Promise<EnsureProviderCapabilityResult> {
+  if (isExportTargetProvider(provider)) {
+    return {
+      ok: false,
+      error: `${provider} cannot run via local Olive Python; export the recipe for the target runtime instead`,
+      family: "default",
+      python: null,
+    };
+  }
+
   const dual = await getDualRuntimeStatus({ force: true });
   const flags = familyFlagsFromStatus(dual.families);
   const family = resolveVenvFamily(provider, flags);
