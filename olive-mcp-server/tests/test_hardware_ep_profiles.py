@@ -140,9 +140,9 @@ def test_quantization_strategy_openvino_npu_uses_device_not_string_sniff() -> No
     assert result["target_hardware"] == "intel"
     assert result.get("openvino_device") == "NPU"
     assert "npu" in result["recommended_algorithm"].lower()
-    # Optimum conversion accepts torch only — do not prepend OnnxConversion.
+    # OpenVINOConversion accepts torch|onnx; avoid torch-only Optimum as the default.
     assert result["pass_chain"] == [
-        "OpenVINOOptimumConversion",
+        "OpenVINOConversion",
         "OpenVINOWeightCompression",
     ]
 

@@ -557,7 +557,7 @@ def expand_hardware_profiles():
             "accelerator": "npu",
             "execution_providers": ["OpenVINOExecutionProvider"],
             "recommended_passes": [
-                "OpenVINOOptimumConversion",
+                "OpenVINOConversion",
                 "OpenVINOWeightCompression",
             ],
             "typical_speedup": "3-8x",
@@ -569,8 +569,9 @@ def expand_hardware_profiles():
                 "NPU plugin requires Intel Core Ultra / Meteor Lake+ with OpenVINO NPU driver.",
                 "Unsupported ops fall back to CPU; verify OpenVINO device=NPU.",
                 'Olive Studio sets openvinoTargetDevice: "NPU" separately from EP id.',
+                "OpenVINOOptimumConversion is torch/HF-only; use OpenVINOConversion for ONNX sources.",
             ],
-            "notes": "Maps app OpenVINO + NPU device target. Prefer INT8/weight-compression paths documented for OpenVINO.",
+            "notes": "Maps app OpenVINO + NPU device target. Prefer INT8/weight-compression paths documented for OpenVINO. Default chain uses OpenVINOConversion (torch|onnx) before OpenVINOWeightCompression.",
         },
         {
             "target": "Windows DirectML GPU",

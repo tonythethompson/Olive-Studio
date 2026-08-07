@@ -177,8 +177,10 @@ def get_quantization_strategy(
             risks = [
                 "Set openvinoTargetDevice to NPU in Olive Studio (EP id stays OpenVINOExecutionProvider).",
                 "Unsupported ops fall back to CPU; verify Core Ultra / Meteor Lake+ NPU driver.",
+                "OpenVINOConversion accepts torch or ONNX; prefer OpenVINOOptimumConversion only for HuggingFace/Torch sources.",
             ]
-            pass_chain = ["OpenVINOOptimumConversion", "OpenVINOWeightCompression"]
+            # OpenVINOConversion accepts torch|onnx (unlike Optimum, which is torch-only).
+            pass_chain = ["OpenVINOConversion", "OpenVINOWeightCompression"]
         else:
             algorithm = "GPTQ or HQQ weight-only int4 (CPU fallback)"
             calibration = "calibration-free (HQQ) or 128 samples (GPTQ)"
