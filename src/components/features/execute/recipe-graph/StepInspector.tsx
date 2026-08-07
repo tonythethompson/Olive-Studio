@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui";
-import { GraphConflictBanner } from "@/components/features/GraphConflictBanner";
+import { GraphConflictBanner } from "@/components/features/execute/GraphConflictBanner";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { getPipelineValidation } from "@/lib/pipelineValidation";
 import { UIState } from "@/types";

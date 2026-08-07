@@ -54,16 +54,16 @@ import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { qnnExplicitRetryProviders } from "@/lib/qnnReadiness";
 import { prepareProviderChange } from "@/lib/pipelineValidation";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
-import { GpuMetricsBar } from "@/components/features/GpuMetricsBar";
+import { GpuMetricsBar } from "@/components/features/execute/GpuMetricsBar";
 
 import { getJobHistory } from "@/lib/jobHistoryStore";
 import { downloadMarkdownReport } from "@/lib/reportGenerator";
-import { JobHistoryModal } from "@/components/features/JobHistoryModal";
+import { JobHistoryModal } from "@/components/features/execute/JobHistoryModal";
 import { ReportIssueModal } from "@/components/ReportIssueModal";
 import { OwrExportOverlay } from "./OwrExportOverlay";
 import type { ReportArea } from "@/lib/issueReport";
 
-const RecipeGraphView = lazy(() => import("./RecipeGraphView").then((m) => ({ default: m.RecipeGraphView })));
+const RecipeGraphView = lazy(() => import("./recipe-graph/RecipeGraphView").then((m) => ({ default: m.RecipeGraphView })));
 
 /**
  * Renders a centered loading spinner with a descriptive label.

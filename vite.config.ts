@@ -90,9 +90,9 @@ export default defineConfig(() => {
         clientFiles: [
           './src/main.tsx',
           './src/App.tsx',
-          './src/components/features/InputEnvironmentPanel.tsx',
-          './src/components/features/IHVIntegrationPanel.tsx',
-          './src/components/features/ExecutionWorkspace.tsx',
+          './src/components/features/input/InputEnvironmentPanel.tsx',
+          './src/components/features/ihv/IHVIntegrationPanel.tsx',
+          './src/components/features/execute/ExecutionWorkspace.tsx',
         ],
       },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

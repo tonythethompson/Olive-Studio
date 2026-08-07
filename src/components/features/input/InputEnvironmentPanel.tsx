@@ -44,7 +44,7 @@ import { isNvTensorRtRtxCatalogPath } from "@/lib/tensorrtRtxDeps";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { navigatePipeline } from "@/lib/pipelineNavigation";
 import { estimateVramForCatalogPreset } from "@/lib/presetVramEstimate";
-import { CompatCountSummary, CompatStatusPill } from "@/components/features/CompatStatus";
+import { CompatCountSummary, CompatStatusPill } from "@/components/features/input/CompatStatus";
 import {
   DownloadCloud,
   KeyRound,

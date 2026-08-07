@@ -15,7 +15,7 @@ import {
   computeElapsed,
   getFasterSlot,
   isArenaPromptBlank,
-} from "@/components/features/ArenaPanel";
+} from "@/components/features/playground/ArenaPanel";
 
 const SUB_VIEWS = ["browser-test", "benchmark", "arena"] as const satisfies readonly PlaygroundSubView[];
 

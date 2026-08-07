@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createMockUIState, useFetchRoutesMock, renderWithProviders as render } from "./__tests__/testUtils";
+import { createMockUIState, useFetchRoutesMock, renderWithProviders as render } from "../__tests__/testUtils";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import type { McpDiagnostic } from "@/types";
 
@@ -102,15 +102,15 @@ vi.mock("jszip", () => ({
 }));
 
 // Mock lazy-loaded children
-vi.mock("./RecipeGraphView", () => ({
+vi.mock("./recipe-graph/RecipeGraphView", () => ({
   RecipeGraphView: () => <div data-testid="recipe-graph">RecipeGraph</div>,
 }));
 
-vi.mock("@/components/features/InBrowserValidation", () => ({
+vi.mock("@/components/features/playground/InBrowserValidation", () => ({
   InBrowserValidation: () => <div data-testid="in-browser-validation">Validation</div>,
 }));
 
-vi.mock("@/components/features/WebGpuBenchmarkPanel", () => ({
+vi.mock("@/components/features/playground/WebGpuBenchmarkPanel", () => ({
   WebGpuBenchmarkPanel: () => <div data-testid="webgpu-benchmark">Benchmark</div>,
 }));
 
