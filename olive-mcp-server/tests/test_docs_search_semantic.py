@@ -411,7 +411,7 @@ def test_live_auto_budgets_even_when_model_is_warm(monkeypatch: pytest.MonkeyPat
     """Warm model must not skip the auto budget: live fetch/index can still be cold."""
     import time
 
-    import olive_mcp_server.tools.retrieval as retrieval
+    from olive_mcp_server.tools import retrieval
     from olive_mcp_server.tools.retrieval import retrieval_meta
 
     # Ensure no abandoned budget worker from a prior test blocks single-flight.
