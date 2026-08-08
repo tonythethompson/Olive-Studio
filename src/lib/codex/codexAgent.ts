@@ -78,15 +78,19 @@ export function _resetCodexStateForTests(): void {
 export async function getCodex(): Promise<CodexClient> {
   if (!codexSingleton) {
     codexModulePromise ??= loadCodexSdk();
-    let Codex: CodexSdkModule["Codex"];
     try {
       const mod = await codexModulePromise;
-      Codex = mod?.Codex;
+      const Codex = mod?.Codex;
       if (typeof Codex !== "function") {
         throw new Error("Module '@openai/codex-sdk' does not export a valid Codex constructor.");
       }
+      // Construct inside the guarded path so ctor failures also clear caches for retry.
+      codexSingleton = new Codex({
+        codexPathOverride: process.env.CODEX_PATH || undefined,
+      });
     } catch (err) {
       // Reset so a later install (or a transient failure) doesn't require a server restart.
+      codexSingleton = null;
       codexModulePromise = null;
       if (isModuleNotFoundError(err)) {
         throw new Error(
@@ -94,13 +98,10 @@ export async function getCodex(): Promise<CodexClient> {
           { cause: err },
         );
       }
-      // Module resolved but failed to evaluate/export correctly — a missing-package
+      // Module resolved but failed to evaluate/export/construct correctly — a missing-package
       // message here would be misleading.
       throw new Error("Codex provider failed to load.", { cause: err });
     }
-    codexSingleton = new Codex({
-      codexPathOverride: process.env.CODEX_PATH || undefined,
-    });
   }
   return codexSingleton;
 }

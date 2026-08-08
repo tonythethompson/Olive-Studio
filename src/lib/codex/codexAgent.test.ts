@@ -118,5 +118,43 @@ describe("codexAgent", () => {
       const response = await codexAsk("Test prompt");
       expect(response).toBe("Agent response");
     });
+
+    it("clears cached state when Codex constructor throws so a later call can retry", async () => {
+      let loadCount = 0;
+
+      class ThrowingCodex {
+        constructor() {
+          throw new Error("constructor boom");
+        }
+      }
+
+      class GoodCodex {
+        startThread() {
+          return {
+            run: () => Promise.resolve({ finalResponse: "recovered", items: [] }),
+          };
+        }
+      }
+
+      vi.stubGlobal("Function", function () {
+        return () => {
+          loadCount += 1;
+          if (loadCount === 1) {
+            return Promise.resolve({ Codex: ThrowingCodex });
+          }
+          return Promise.resolve({ Codex: GoodCodex });
+        };
+      });
+
+      await expect(getCodex()).rejects.toThrow(/Codex provider failed to load\./i);
+      expect(loadCount).toBe(1);
+
+      const codex = await getCodex();
+      expect(codex).toBeTruthy();
+      expect(loadCount).toBe(2);
+
+      const response = await codexAsk("retry");
+      expect(response).toBe("recovered");
+    });
   });
 });
