@@ -243,7 +243,7 @@ def _search_local(
             retrieval_meta(mode=resolved, effective="keyword"),
         )
 
-    use_budget = resolved == "auto" and not is_model_loaded()
+    use_budget = resolved == "auto"
     budget_ms = get_semantic_budget_ms() if use_budget else 0
 
     def _semantic() -> list[dict[str, Any]]:
