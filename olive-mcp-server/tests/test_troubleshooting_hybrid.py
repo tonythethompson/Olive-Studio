@@ -462,11 +462,12 @@ def test_feedback_adjustment_clamped_in_best_match(monkeypatch: pytest.MonkeyPat
     ]
 
     # Act
-    best, score = ts._best_match(
+    best, score, _meta = ts._best_match(
         entries,
         error_message="neutral wording with no pattern hits",
         pass_name="",
         config_context="",
+        mode="semantic",
     )
 
     # Assert — hybrid = 0.6 * 0.40 + clamped(99→0.05)

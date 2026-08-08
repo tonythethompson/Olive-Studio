@@ -172,7 +172,14 @@ def test_search_olive_documentation_with_live_source(monkeypatch: pytest.MonkeyP
     local_results = [{"source": "passes.foo", "snippet": "local hit", "relevance": 0.5}]
     live_results = [{"source": "live:index", "snippet": "live hit", "relevance": 0.9}]
 
-    monkeypatch.setattr(docs_search, "_search_local", lambda query, top_k: local_results[:top_k])
+    def fake_local(query, top_k, mode=None):
+        return local_results[:top_k], {
+            "mode": "auto",
+            "effective": "hybrid",
+            "degraded": False,
+        }
+
+    monkeypatch.setattr(docs_search, "_search_local", fake_local)
     monkeypatch.setattr(docs_search, "_search_live", lambda query, top_k: live_results[:top_k])
 
     result = search_olive_documentation(query="calibration data", top_k=3, live=True)

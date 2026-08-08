@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "olive": {
+      "command": "python",
+      "args": ["olive-mcp-server/run.py"],
+      "cwd": ".."
+    }
+  }
+}

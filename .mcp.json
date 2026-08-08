@@ -3,8 +3,12 @@
     "olive": {
       "type": "stdio",
       "command": "python",
-      "args": ["olive-mcp-server/run.py"]
+      "args": ["olive-mcp-server/run.py"],
+      "env": {
+        "OLIVE_MCP_RETRIEVAL_MODE": "auto"
+      }
     },
+
     "serena": {
       "type": "stdio",
       "command": "uvx",

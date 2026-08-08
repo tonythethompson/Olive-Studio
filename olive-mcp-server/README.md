@@ -114,6 +114,22 @@ Optional env for local feedback storage:
 | `validate_ui_state_recipe`        | Validate a (partial) Studio UIState via local bridge (no Olive run) |
 | `get_recipe_for_ui_state`         | Same bridge evaluation plus built `olive_recipe` JSON          |
 | `record_troubleshoot_feedback`    | Local aggregate thumbs feedback for a matched KB entry         |
+| `get_mcp_capabilities`            | Capability state for agents (not transport/process health)     |
+
+### Agent clients (Phase 0)
+
+- **Launcher:** start via `python olive-mcp-server/run.py` (prefers project `.venv`).
+- **Retrieval:** `OLIVE_MCP_RETRIEVAL_MODE=auto|keyword|semantic` (default `auto`). Cold semantic work is budgeted (`OLIVE_MCP_SEMANTIC_BUDGET_MS`, default 8000); timeout yields keyword results with `retrieval.degraded=true`.
+- **Smoke:** from repo root, `pnpm mcp:native-smoke` and `pnpm mcp:agent-smoke` (pinned mcporter canary).
+- **mcporter example:** `config/mcporter.example.json` uses the same launcher.
+
+Optional env (in addition to Studio bridge vars above):
+
+| Variable | Purpose |
+| -------- | ------- |
+| `OLIVE_MCP_RETRIEVAL_MODE` | `auto` (default), `keyword`, or `semantic` |
+| `OLIVE_MCP_SEMANTIC_BUDGET_MS` | Cold semantic budget under `auto` (default 8000; 0 = unlimited) |
+| `OLIVE_MCP_REQUIRE_VENV` | If `1`, launcher exits when no project venv is found |
 
 ### Studio UIState bridge tools
 

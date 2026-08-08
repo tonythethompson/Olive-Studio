@@ -19,7 +19,14 @@ from .embeddings import (
     DEFAULT_THRESHOLD,
     EMBEDDING_DIM,
     build_kb_index,
+    is_model_loaded,
     semantic_search,
+)
+from .retrieval import (
+    get_retrieval_mode,
+    get_semantic_budget_ms,
+    retrieval_meta,
+    run_with_budget,
 )
 
 
@@ -192,11 +199,26 @@ def _keyword_search(
     return scored[:top_k]
 
 
-def _search_local(query: str, top_k: int) -> list[dict[str, Any]]:
-    """Semantic search over the local KB, with keyword fallback."""
+def _search_local(
+    query: str,
+    top_k: int,
+    *,
+    mode: str | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Search local KB under retrieval mode; return (results, retrieval_meta)."""
     terms = [t.lower() for t in query.split() if t]
+    resolved = get_retrieval_mode(mode)
 
-    try:
+    if resolved == "keyword":
+        return (
+            _keyword_search(_load_kb_text(), terms, top_k),
+            retrieval_meta(mode=resolved, effective="keyword"),
+        )
+
+    use_budget = resolved == "auto" and not is_model_loaded()
+    budget_ms = get_semantic_budget_ms() if use_budget else 0
+
+    def _semantic() -> list[dict[str, Any]]:
         kb_texts, embeddings = get_or_build_kb_index()
         results = semantic_search(
             query,
@@ -208,10 +230,35 @@ def _search_local(query: str, top_k: int) -> list[dict[str, Any]]:
         if results:
             return results
         return _keyword_search(kb_texts, terms, top_k)
+
+    try:
+        result, timed_out = run_with_budget(_semantic, budget_ms)
+        if timed_out or result is None:
+            logger.warning(
+                "Semantic local search exceeded budget (%sms); keyword fallback",
+                budget_ms,
+            )
+            return (
+                _keyword_search(_load_kb_text(), terms, top_k),
+                retrieval_meta(
+                    mode=resolved,
+                    effective="keyword",
+                    degraded=True,
+                    reason="semantic_budget_exceeded",
+                ),
+            )
+        return result, retrieval_meta(mode=resolved, effective="hybrid")
     except Exception:
         logger.debug("Semantic local KB search failed; falling back to keyword search", exc_info=True)
-        return _keyword_search(_load_kb_text(), terms, top_k)
-
+        return (
+            _keyword_search(_load_kb_text(), terms, top_k),
+            retrieval_meta(
+                mode=resolved,
+                effective="keyword",
+                degraded=True,
+                reason="semantic_error",
+            ),
+        )
 
 def _fetch_live_docs() -> tuple[dict[str, str], float]:
     """Fetch (and cache) the live Olive docs landing page.
@@ -332,29 +379,56 @@ def _search_live(query: str, top_k: int) -> list[dict[str, Any]]:
             return []
 
 
-def search_olive_documentation(query: str, top_k: int = 5, live: bool = True) -> dict[str, Any]:
+def search_olive_documentation(
+    query: str,
+    top_k: int = 5,
+    live: bool = True,
+    mode: str = "",
+) -> dict[str, Any]:
     """Full-text search across the local Olive knowledge base and live docs.
 
     Args:
         query: Search query, e.g. "calibrate static quantization".
         top_k: Maximum number of results (must be >= 0).
         live: Whether to include live results from https://microsoft.github.io/Olive/.
+        mode: Retrieval mode override (``auto`` / ``keyword`` / ``semantic``).
 
     Returns:
         Ranked results with snippet, source path, and relevance score.
         ``relevance`` is in roughly [0, 1] for both semantic and keyword modes.
+        Includes ``retrieval`` metadata (mode / degraded).
     """
     if top_k < 0:
         raise ValueError(f"top_k must be >= 0, got {top_k}")
 
+    mode_arg = mode if (mode or "").strip() else None
     terms = [t.lower() for t in query.split() if t]
     if not terms:
-        return {"query": query, "count": 0, "results": [], "note": "Empty query."}
+        return {
+            "query": query,
+            "count": 0,
+            "results": [],
+            "note": "Empty query.",
+            "retrieval": retrieval_meta(
+                mode=get_retrieval_mode(mode_arg),
+                effective="none",
+            ),
+        }
     if top_k == 0:
-        return {"query": query, "count": 0, "results": [], "note": "No results requested."}
+        return {
+            "query": query,
+            "count": 0,
+            "results": [],
+            "note": "No results requested.",
+            "retrieval": retrieval_meta(
+                mode=get_retrieval_mode(mode_arg),
+                effective="none",
+            ),
+        }
 
     per_source = max(top_k * 2, 10)
-    local_results = _search_local(query, per_source)
+    local_results, retrieval = _search_local(query, per_source, mode=mode_arg)
+    # Live path keeps prior hybrid/keyword fallback; budget applies to local first.
     live_results = _search_live(query, per_source) if live else []
 
     combined = local_results + live_results
@@ -377,4 +451,5 @@ def search_olive_documentation(query: str, top_k: int = 5, live: bool = True) ->
             "Merged local knowledge base and live Olive docs results. "
             "Live docs are cached for one hour."
         ),
+        "retrieval": retrieval,
     }

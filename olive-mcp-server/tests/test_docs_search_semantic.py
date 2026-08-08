@@ -175,7 +175,14 @@ def test_weak_live_result_does_not_displace_strong_local_top1(monkeypatch: pytes
     strong_local = [{"source": "passes.foo", "snippet": "strong", "relevance": 0.85}]
     weak_live = [{"source": "live:index", "snippet": "weak", "relevance": 0.31}]
 
-    monkeypatch.setattr(docs_search, "_search_local", lambda query, top_k: strong_local[:top_k])
+    def fake_local(query, top_k, mode=None):
+        return strong_local[:top_k], {
+            "mode": "auto",
+            "effective": "hybrid",
+            "degraded": False,
+        }
+
+    monkeypatch.setattr(docs_search, "_search_local", fake_local)
     monkeypatch.setattr(docs_search, "_search_live", lambda query, top_k: weak_live[:top_k])
 
     result = search_olive_documentation(query="quantization", top_k=1, live=True)
@@ -197,7 +204,7 @@ def test_return_shape_preserved(monkeypatch: pytest.MonkeyPatch):
         ],
     )
     result = search_olive_documentation(query="quantization", top_k=2, live=False)
-    assert set(result.keys()) == {"query", "count", "results", "note"}
+    assert set(result.keys()) >= {"query", "count", "results", "note", "retrieval"}
     for r in result["results"]:
         assert set(r.keys()) >= {"source", "snippet", "relevance"}
 
