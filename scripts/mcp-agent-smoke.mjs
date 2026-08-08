@@ -609,6 +609,7 @@ async function cleanup() {
 function failExitCode(signal) {
   if (signal === "SIGINT") return 130;
   if (signal === "SIGTERM") return 143;
+  if (signal === "SIGHUP") return 129;
   return STRICT ? 1 : 0;
 }
 

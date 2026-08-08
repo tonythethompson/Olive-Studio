@@ -8,7 +8,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
-  rmSync,
+  rmdirSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -87,13 +87,16 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
       try {
         const body = read(lockPath, "utf8");
         const holder = Number.parseInt(String(body).trim().split(/\r?\n/)[0] ?? "", 10);
-        if (Number.isFinite(holder) && !alive(holder)) {
+        // Empty/malformed bodies and dead holders are reclaimable. Only skip the
+        // poll sleep after unlink succeeds so failed reclaim cannot busy-spin.
+        const reclaimable = !Number.isFinite(holder) || !alive(holder);
+        if (reclaimable) {
           try {
             unlink(lockPath);
+            continue;
           } catch {
-            /* lost race to another reclaim */
+            /* lost race / still held — fall through to poll */
           }
-          continue;
         }
       } catch {
         /* lock vanished mid-read */
@@ -110,12 +113,12 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
 /**
  * Best-effort removal of an empty `.olive-studio` dir after the lock file is gone.
  * @param {string} dir
- * @param {{ rmSync?: typeof rmSync }} [deps]
+ * @param {{ rmdirSync?: typeof rmdirSync }} [deps]
  */
 export function tryRemoveEmptyStudioConfigDir(dir, deps = {}) {
-  const rm = deps.rmSync ?? rmSync;
+  const rmdir = deps.rmdirSync ?? rmdirSync;
   try {
-    rm(dir, { recursive: false });
+    rmdir(dir);
   } catch {
     /* not empty, missing, or busy */
   }

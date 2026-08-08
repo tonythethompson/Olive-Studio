@@ -1,11 +1,23 @@
 /**
  * Concurrent MCP submit locking + idempotent reuse via startOliveJob.
+ * Keeps setup CPU-only: mocked spawn/fs, drained detached setup before cleanup.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "fs";
 import { preflightOliveRecipe } from "./jobPreflight.ts";
-import { mcpSubmitLockTailCount, startOliveJob } from "./jobRunner.ts";
 import { clearIdempotencyIndex } from "./jobIdempotency.ts";
 import { jobRegistry } from "./state.ts";
+
+const childProcessMocks = vi.hoisted(() => ({
+  execFileImpl: null as null | ((...args: unknown[]) => unknown),
+  spawnImpl: null as null | ((...args: unknown[]) => unknown),
+  execFileCalls: [] as unknown[][],
+}));
+
+vi.mock("child_process", async (importOriginal) => {
+  const { childProcessVitestMockFactory } = await import("../../__tests__/childProcessTestMocks.ts");
+  return childProcessVitestMockFactory(childProcessMocks, { includeSpawn: true })(importOriginal);
+});
 
 vi.mock("./jobPreflight.ts", () => ({
   preflightOliveRecipe: vi.fn(() => ({
@@ -25,14 +37,35 @@ vi.mock("../venv/index.ts", () => ({
     python: "python",
     family: "default",
   })),
-  buildOliveRunEnvironment: vi.fn(() => ({})),
+  buildOliveRunEnvironment: vi.fn(async () => ({})),
   resolveOliveCommand: vi.fn(() => ({ executable: "echo", args: ["ok"] })),
 }));
 
-afterEach(() => {
+const { mcpSubmitLockTailCount, startOliveJob } = await import("./jobRunner.ts");
+
+/** Waiters that ensure detached MCP setup has left `setting_up` before registry clear. */
+const pendingSetups: Promise<unknown>[] = [];
+
+async function drainPendingSetups(): Promise<void> {
+  for (let i = 0; i < 20; i += 1) {
+    if (pendingSetups.length === 0) return;
+    const batch = pendingSetups.splice(0, pendingSetups.length);
+    await Promise.allSettled(batch);
+    await Promise.resolve();
+  }
+}
+
+beforeEach(() => {
+  vi.spyOn(fs, "mkdirSync").mockReturnValue(undefined as unknown as string);
+  vi.spyOn(fs, "writeFileSync").mockReturnValue(undefined);
+});
+
+afterEach(async () => {
+  await drainPendingSetups();
   jobRegistry.clear();
   clearIdempotencyIndex();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
   vi.mocked(preflightOliveRecipe).mockImplementation(() => ({
     valid: true,
     provider: "CPUExecutionProvider",
@@ -44,12 +77,37 @@ afterEach(() => {
   }));
 });
 
+/** Track fire-and-forget MCP setup so afterEach can drain before clearing the registry. */
+async function startOliveJobTracked(
+  ...args: Parameters<typeof startOliveJob>
+): ReturnType<typeof startOliveJob> {
+  const before = new Set(jobRegistry.keys());
+  const result = await startOliveJob(...args);
+  if (result.ok && !result.reused) {
+    const job = jobRegistry.get(result.jobId);
+    if (job && !before.has(result.jobId)) {
+      const settled = (async () => {
+        const deadline = Date.now() + 5_000;
+        while (Date.now() < deadline) {
+          const current = jobRegistry.get(result.jobId);
+          if (!current || current.finishedAt != null || current.status !== "setting_up") {
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 10));
+        }
+      })();
+      pendingSetups.push(settled);
+    }
+  }
+  return result;
+}
+
 describe("startOliveJob MCP idempotency lock", () => {
   it("serializes concurrent submits with the same idempotency key into one job", async () => {
     const recipe = { input_model: {}, passes: {}, engine: {}, systems: {} } as never;
     const [a, b] = await Promise.all([
-      startOliveJob({ recipe, source: "mcp", idempotencyKey: "same-key" }),
-      startOliveJob({ recipe, source: "mcp", idempotencyKey: "same-key" }),
+      startOliveJobTracked({ recipe, source: "mcp", idempotencyKey: "same-key" }),
+      startOliveJobTracked({ recipe, source: "mcp", idempotencyKey: "same-key" }),
     ]);
     expect(a.ok).toBe(true);
     expect(b.ok).toBe(true);
@@ -64,8 +122,8 @@ describe("startOliveJob MCP idempotency lock", () => {
   it("serializes key-bearing and fingerprint-only submits for the same recipe", async () => {
     const recipe = { input_model: {}, passes: {}, engine: {}, systems: {} } as never;
     const [withKey, fpOnly] = await Promise.all([
-      startOliveJob({ recipe, source: "mcp", idempotencyKey: "agent-key-1" }),
-      startOliveJob({ recipe, source: "mcp" }),
+      startOliveJobTracked({ recipe, source: "mcp", idempotencyKey: "agent-key-1" }),
+      startOliveJobTracked({ recipe, source: "mcp" }),
     ]);
     expect(withKey.ok).toBe(true);
     expect(fpOnly.ok).toBe(true);
@@ -78,8 +136,8 @@ describe("startOliveJob MCP idempotency lock", () => {
 
   it("reuses a fingerprint-only admission when a keyed submit arrives afterward", async () => {
     const recipe = { input_model: {}, passes: {}, engine: {}, systems: {} } as never;
-    const fpOnly = await startOliveJob({ recipe, source: "mcp" });
-    const withKey = await startOliveJob({
+    const fpOnly = await startOliveJobTracked({ recipe, source: "mcp" });
+    const withKey = await startOliveJobTracked({
       recipe,
       source: "mcp",
       idempotencyKey: "after-fp-key",
@@ -91,7 +149,7 @@ describe("startOliveJob MCP idempotency lock", () => {
     expect(withKey.reused).toBe(true);
 
     // Same adopted key must replay onto the fingerprint-only job.
-    const replay = await startOliveJob({
+    const replay = await startOliveJobTracked({
       recipe,
       source: "mcp",
       idempotencyKey: "after-fp-key",
@@ -106,8 +164,8 @@ describe("startOliveJob MCP idempotency lock", () => {
 
   it("still allows a distinct idempotency key to start a new job after the first settles", async () => {
     const recipe = { input_model: {}, passes: {}, engine: {}, systems: {} } as never;
-    const first = await startOliveJob({ recipe, source: "mcp", idempotencyKey: "key-a" });
-    const second = await startOliveJob({ recipe, source: "mcp", idempotencyKey: "key-b" });
+    const first = await startOliveJobTracked({ recipe, source: "mcp", idempotencyKey: "key-a" });
+    const second = await startOliveJobTracked({ recipe, source: "mcp", idempotencyKey: "key-b" });
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
     if (!first.ok || !second.ok) return;
@@ -133,7 +191,7 @@ describe("startOliveJob MCP idempotency lock", () => {
     });
 
     for (let i = 0; i < 20; i += 1) {
-      const result = await startOliveJob({
+      const result = await startOliveJobTracked({
         recipe,
         source: "mcp",
         idempotencyKey: `unique-key-${i}`,
@@ -160,12 +218,20 @@ describe("startOliveJob MCP idempotency lock", () => {
 
     // Distinct keys share fp:fp-hold lock; second replaces the map entry while first still holds.
     // First release must not delete the newer tail (ownership check); both finish and map is empty.
-    const results = await Promise.all([
-      startOliveJob({ recipe, source: "mcp", idempotencyKey: "hold-1" }),
-      startOliveJob({ recipe, source: "mcp", idempotencyKey: "hold-2" }),
-      startOliveJob({ recipe, source: "mcp" }), // fingerprint-only overlaps fp lock
+    // Serialized waiters: hold-1 then hold-2 create distinct jobs; fingerprint-only reuses hold-2.
+    const [hold1, hold2, fpOnly] = await Promise.all([
+      startOliveJobTracked({ recipe, source: "mcp", idempotencyKey: "hold-1" }),
+      startOliveJobTracked({ recipe, source: "mcp", idempotencyKey: "hold-2" }),
+      startOliveJobTracked({ recipe, source: "mcp" }),
     ]);
-    expect(results.every((r) => r.ok)).toBe(true);
+    expect(hold1.ok && hold2.ok && fpOnly.ok).toBe(true);
+    if (!hold1.ok || !hold2.ok || !fpOnly.ok) return;
+    expect(hold1.jobId).not.toBe(hold2.jobId);
+    expect(hold1.reused).toBe(false);
+    expect(hold2.reused).toBe(false);
+    expect(fpOnly.reused).toBe(true);
+    expect(fpOnly.jobId).toBe(hold2.jobId);
+    expect([...jobRegistry.keys()].sort()).toEqual([hold1.jobId, hold2.jobId].sort());
     expect(mcpSubmitLockTailCount()).toBe(0);
   });
 });

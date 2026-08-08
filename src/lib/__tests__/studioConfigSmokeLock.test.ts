@@ -53,6 +53,12 @@ describe("studioConfigSmokeLock", () => {
       pollMs: 10,
     });
     expect(store.get("/tmp/lock")).toBe("4242\n");
+    // Foreign PID must not be unlinked by our release().
+    store.set("/tmp/lock", "9999\n");
+    lock.release();
+    expect(store.get("/tmp/lock")).toBe("9999\n");
+    // Restore ownership and confirm own-pid release clears the lock.
+    store.set("/tmp/lock", "4242\n");
     lock.release();
     expect(store.has("/tmp/lock")).toBe(false);
   });
@@ -102,9 +108,11 @@ describe("studioConfigSmokeLock", () => {
   });
 
   it("tryRemoveEmptyStudioConfigDir ignores busy dirs", () => {
-    const rmSync = vi.fn(() => {
+    const rmdirSync = vi.fn(() => {
       throw Object.assign(new Error("ENOTEMPTY"), { code: "ENOTEMPTY" });
     });
-    expect(() => tryRemoveEmptyStudioConfigDir("/x", { rmSync: rmSync as never })).not.toThrow();
+    expect(() =>
+      tryRemoveEmptyStudioConfigDir("/x", { rmdirSync: rmdirSync as never }),
+    ).not.toThrow();
   });
 });
