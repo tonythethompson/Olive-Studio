@@ -287,7 +287,7 @@ studio.configured / reachable → get_mcp_capabilities
 
 - Idempotent `submit_optimization_job` → `POST /api/olive/jobs/submit`  
 - `cancel_optimization_job` → `POST /api/olive/agent/cancel`  
-- Studio policy: `GET/PUT /api/olive/agent-access` (browser UI; env overrides e.g. `OLIVE_MCP_ALLOW_JOBS` for Dev/CI; see §6.7)  
+- Studio policy: `GET /api/olive/agent-access` (any Studio browser session) + `PUT` loopback-only via `studioLocalOnly` (policy mutation is privileged; LAN peers cannot flip submission/MCP switches). Env overrides e.g. `OLIVE_MCP_ALLOW_JOBS` for Dev/CI; see §6.7. 
 - Shared `startOliveJob` runner for UI `/olive/run` and MCP submit  
 
 ### Later

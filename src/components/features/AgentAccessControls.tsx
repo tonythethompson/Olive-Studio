@@ -50,10 +50,23 @@ const TOGGLES: { key: PolicyKey; label: string; hint: string; danger?: boolean }
   },
 ];
 
+function isBrowserLoopbackHost(): boolean {
+  const host = window.location.hostname.toLowerCase();
+  return host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
+}
+
+function formatAgentAccessError(status: number, serverError: string | undefined): string {
+  if (status === 403) {
+    return "Policy changes require opening Studio on localhost (127.0.0.1).";
+  }
+  return serverError ?? `HTTP ${status}`;
+}
+
 /**
  * Header control: Studio-owned agent/MCP access policy (Phase 3).
- * Reads/writes GET|PUT /api/olive/agent-access. Env overrides (e.g. OLIVE_MCP_ALLOW_JOBS)
- * may still force submit/cancel on the server — UI shows when that is active.
+ * Reads GET /api/olive/agent-access from any Studio session; writes (PUT) are
+ * loopback-only on the server. Env overrides (e.g. OLIVE_MCP_ALLOW_JOBS) may
+ * still force submit/cancel — UI shows when that is active.
  */
 export const AgentAccessControls = memo(function AgentAccessControls() {
   const [policy, setPolicy] = useState<AgentAccessPolicyState | null>(null);
@@ -65,6 +78,7 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const firstToggleRef = useRef<HTMLInputElement | null>(null);
+  const canMutatePolicy = isBrowserLoopbackHost();
 
   const refresh = useCallback(async () => {
     try {
@@ -74,7 +88,7 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
         policy?: AgentAccessPolicyState;
         error?: string;
       };
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      if (!res.ok) throw new Error(formatAgentAccessError(res.status, data.error));
       if (!data.policy) throw new Error("Missing policy payload");
       setPolicy(data.policy);
       setError(null);
@@ -135,6 +149,10 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
   }, [open, updateMenuPos]);
 
   const patchPolicy = async (key: PolicyKey, value: boolean) => {
+    if (!canMutatePolicy) {
+      setError("Policy changes require opening Studio on localhost (127.0.0.1).");
+      return;
+    }
     setBusy(true);
     setMessage(null);
     try {
@@ -148,7 +166,7 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
         policy?: AgentAccessPolicyState;
         error?: string;
       };
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      if (!res.ok) throw new Error(formatAgentAccessError(res.status, data.error));
       if (!data.policy) throw new Error("Missing policy payload");
       setPolicy(data.policy);
       setMessage("Saved.");
@@ -215,6 +233,13 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
             </button>
           </div>
 
+          {!canMutatePolicy ? (
+            <p className="text-[10px] text-slate-300 font-sans rounded border border-slate-600/50 bg-slate-800/60 px-2 py-1.5">
+              Read-only here. Open Studio on <code className="font-mono">http://127.0.0.1:3000</code> to
+              change these toggles.
+            </p>
+          ) : null}
+
           {policy?.envOverrideActive ? (
             <p className="text-[10px] text-amber-300/90 font-sans rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5">
               Server env override active (e.g. <code className="font-mono">OLIVE_MCP_ALLOW_JOBS</code>
@@ -225,7 +250,11 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
           <ul className="space-y-2">
             {TOGGLES.map(({ key, label, hint, danger }, index) => {
               const checked = Boolean(policy?.[key]);
-              const disabled = busy || !policy || (key !== "mcpAccess" && policy.mcpAccess === false);
+              const disabled =
+                busy ||
+                !policy ||
+                !canMutatePolicy ||
+                (key !== "mcpAccess" && policy.mcpAccess === false);
               return (
                 <li key={key} className="flex items-start gap-2">
                   <input

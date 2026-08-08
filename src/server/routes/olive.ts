@@ -266,14 +266,16 @@ export function mountOliveRoutes(router: Router): void {
     return res.json({ ok: true, jobId: result.jobId, reused: result.reused });
   });
 
-  // ─── Agent access policy (Studio UI; same host trust as /olive/run) ────
-  // Not studioLocalOnly: LAN/hostname browser sessions must load/save toggles.
+  // ─── Agent access policy (Studio-owned; loopback write) ───────────────
+  // GET may be read from the Studio UI session; PUT is studioLocalOnly so a
+  // LAN peer cannot enable submission/cancel or disable MCP without local access.
   router.get("/olive/agent-access", (_req, res) => {
     return res.json({ ok: true, policy: getAgentAccessPublic() });
   });
 
-  router.put("/olive/agent-access", oliveRunRateLimit, (req, res) => {
+  router.put("/olive/agent-access", studioLocalOnly, oliveRunRateLimit, (req, res) => {
     // parseBody requires Record<string, unknown>; AgentAccessPolicy has no index signature.
+    // Trust boundary: studioLocalOnly (loopback) — policy mutation is privileged.
     type AgentAccessBody = AgentAccessPolicy & Record<string, unknown>;
     const body = parseBody<AgentAccessBody>(req.body ?? {}, {
       mcpAccess: { type: "boolean", required: false },

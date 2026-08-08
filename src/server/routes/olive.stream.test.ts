@@ -144,6 +144,32 @@ describe("GET /api/olive/status/:jobId finishedAt", () => {
   });
 });
 
+describe("PUT /api/olive/agent-access locality", () => {
+  it("rejects policy mutation when forwarded through a reverse proxy", async () => {
+    const res = await fetch(`${baseUrl}/api/olive/agent-access`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Forwarded-For": "203.0.113.10",
+      },
+      body: JSON.stringify({ allowJobSubmission: true }),
+    });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toMatch(/loopback/i);
+  });
+
+  it("allows GET without studioLocalOnly so LAN sessions can read policy", async () => {
+    const res = await fetch(`${baseUrl}/api/olive/agent-access`, {
+      headers: { "X-Forwarded-For": "203.0.113.10" },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok?: boolean; policy?: { mcpAccess?: boolean } };
+    expect(body.ok).toBe(true);
+    expect(body.policy).toBeDefined();
+  });
+});
+
 function sampleMetrics(label = "A100"): GpuMetrics {
   return {
     timestamp: new Date().toISOString(),
