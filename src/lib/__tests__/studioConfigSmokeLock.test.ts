@@ -132,7 +132,7 @@ describe("studioConfigSmokeLock", () => {
   it("reclaims an aged empty lock after the publish grace window", async () => {
     const store: Store = new Map([["/tmp/lock", ""]]);
     const fs = makeFs(store);
-    let t = 5_000;
+    const t = 5_000;
 
     const lock = await acquireStudioConfigSmokeLock("/tmp/lock", {
       writeFileSync: fs.writeFileSync as never,
