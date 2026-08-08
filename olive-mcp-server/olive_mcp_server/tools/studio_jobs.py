@@ -18,7 +18,7 @@ from urllib.parse import quote
 from .studio_loopback import DEFAULT_TIMEOUT_SECONDS, err, studio_request
 
 _JOBS_PATH = "/api/olive/jobs"
-_STATUS_PATH = "/api/olive/status"  # + /{job_id}
+_STATUS_PATH = "/api/olive/agent/status"  # + /{job_id}; always policy-gated
 
 # Heuristic paths mentioned in logs (metadata only — never file contents).
 _PATH_RE = re.compile(
@@ -291,7 +291,7 @@ def cancel_optimization_job(job_id: str) -> dict[str, Any]:
 
     payload = studio_request(
         "POST",
-        "/api/olive/cancel",
+        "/api/olive/agent/cancel",
         body={"jobId": jid, "client": "mcp"},
         timeout=DEFAULT_TIMEOUT_SECONDS,
     )

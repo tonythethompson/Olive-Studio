@@ -274,7 +274,7 @@ studio.configured / reachable → get_mcp_capabilities
 
 - Stage 1 job tools: `list_optimization_jobs`, `get_optimization_job`, `get_optimization_results`
 - Studio: `GET /api/olive/jobs` + `finishedAt` on status
-- **Inspection policy (implemented):** `allowJobInspection` gates **list** for all loopback callers, and **status** / **stream** for non-UI clients. Same-origin Studio UI (`Sec-Fetch-Site: same-origin`) stays usable when agent inspection is off. MCP `studio_request` and other non-browser loopback clients always hit the policy gate — omitting `X-Olive-MCP-Agent` is not a bypass. Routes remain loopback-only.
+- **Inspection policy (implemented):** `allowJobInspection` gates **list** (`GET /api/olive/jobs`) and the dedicated agent routes `GET /api/olive/agent/status/:jobId` and `GET /api/olive/agent/stream/:jobId`. Studio UI keeps using loopback-only `/api/olive/status` and `/api/olive/stream` without the agent policy switch. MCP job tools call the `/agent/*` paths, so disabling inspection denies agent detail/results/log tails. Cancellation uses `POST /api/olive/agent/cancel` (always `allowJobCancellation`) vs UI `POST /api/olive/cancel`.
 - Capabilities: `job_control.inspection=true`, `submission/cancellation=false`
 - Optional product UI (Copy Agent Setup) deferred  
 

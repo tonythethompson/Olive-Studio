@@ -157,7 +157,7 @@ def test_submit_job_ok(monkeypatch: pytest.MonkeyPatch):
 
 def test_cancel_job_ok(monkeypatch: pytest.MonkeyPatch):
     def fake_request(method, path, **kw):
-        assert path == "/api/olive/cancel"
+        assert path == "/api/olive/agent/cancel"
         assert kw.get("body", {}).get("client") == "mcp"
         return {"ok": True, "status": "cancelled"}
 

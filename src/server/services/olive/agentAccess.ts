@@ -128,16 +128,6 @@ export type DenyUnlessResult =
     };
 
 /**
- * True when the request looks like same-origin Studio UI (browser fetch / EventSource).
- *
- * Non-browser loopback clients (MCP, curl, scripts) omit Fetch Metadata, so omitting
- * `X-Olive-MCP-Agent` cannot bypass agent policy: those clients still hit `denyUnless`.
- */
-export function isStudioUiRequest(req: { get: (name: string) => string | undefined }): boolean {
-  return (req.get("sec-fetch-site") || "").toLowerCase() === "same-origin";
-}
-
-/**
  * Enforces the resolved MCP access policy for a request.
  *
  * @param predicate - Condition that the resolved policy must satisfy
@@ -161,19 +151,4 @@ export function denyUnless(
     return { ok: false, error: "forbidden", reason };
   }
   return { ok: true, policy };
-}
-
-/**
- * Apply agent policy unless the caller is same-origin Studio UI.
- * Loopback alone is not an agent identity boundary.
- */
-export function denyAgentUnlessUi(
-  req: { get: (name: string) => string | undefined },
-  predicate: (p: ResolvedAgentAccess) => boolean,
-  reason: string,
-): DenyUnlessResult | { ok: true; ui: true } {
-  if (isStudioUiRequest(req)) {
-    return { ok: true, ui: true };
-  }
-  return denyUnless(predicate, reason);
 }

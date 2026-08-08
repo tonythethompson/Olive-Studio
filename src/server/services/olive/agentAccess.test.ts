@@ -13,7 +13,7 @@ vi.mock("../../config.ts", () => {
   };
 });
 
-import { denyUnless, denyAgentUnlessUi, resolveAgentAccess, updateAgentAccess } from "./agentAccess.ts";
+import { denyUnless, resolveAgentAccess, updateAgentAccess } from "./agentAccess.ts";
 import { writeStudioConfig } from "../../config.ts";
 
 function resetAgentAccessEnvAndDisk(): void {
@@ -98,31 +98,6 @@ describe("denyUnless", () => {
     if (!gate.ok) {
       expect(gate.error).toBe("forbidden");
       expect(gate).not.toHaveProperty("policy");
-    }
-  });
-});
-
-describe("denyAgentUnlessUi", () => {
-  it("skips agent policy for same-origin Studio UI", () => {
-    writeStudioConfig({ agentAccess: { allowJobInspection: false } });
-    const gate = denyAgentUnlessUi(
-      { get: (n) => (n.toLowerCase() === "sec-fetch-site" ? "same-origin" : undefined) },
-      (p) => p.allowJobInspection,
-      "inspection off",
-    );
-    expect(gate).toEqual({ ok: true, ui: true });
-  });
-
-  it("applies agent policy when Sec-Fetch-Site is absent", () => {
-    writeStudioConfig({ agentAccess: { allowJobInspection: false } });
-    const gate = denyAgentUnlessUi(
-      { get: () => undefined },
-      (p) => p.allowJobInspection,
-      "inspection off",
-    );
-    expect(gate.ok).toBe(false);
-    if (!gate.ok) {
-      expect(gate.error).toBe("forbidden");
     }
   });
 });

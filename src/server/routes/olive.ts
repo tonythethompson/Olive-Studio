@@ -2,7 +2,7 @@
  * Olive execution route handlers.
  * Recipe validation, job execution, SSE streaming, GPU metrics.
  */
-import type { Router } from "express";
+import type { Request, Response, Router } from "express";
 
 import type { GpuMetrics } from "../../lib/gpuMetrics.ts";
 
@@ -19,7 +19,7 @@ import { isParseBodyError, parseBody } from "../middleware/bodyGuard.ts";
 import { studioLocalOnly } from "../middleware/localOnly.ts";
 import { preflightOliveRecipe } from "../services/olive/jobPreflight.ts";
 import { startOliveJob } from "../services/olive/jobRunner.ts";
-import { denyUnless, denyAgentUnlessUi, getAgentAccessPublic, updateAgentAccess } from "../services/olive/agentAccess.ts";
+import { denyUnless, getAgentAccessPublic, updateAgentAccess } from "../services/olive/agentAccess.ts";
 
 /** Grace period after SIGTERM before escalating cancel to SIGKILL. */
 export const CANCEL_SIGKILL_GRACE_MS = 10_000;
@@ -32,6 +32,183 @@ export function writeNamedSse(
 ): void {
   if (res.writableEnded) return;
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+
+function sendAgentDeny(
+  res: Response,
+  gate: Exclude<ReturnType<typeof denyUnless>, { ok: true }>,
+): void {
+  res.status(403).json({
+    ok: false,
+    error: gate.error,
+    reason: gate.reason,
+    ...("required" in gate && gate.required ? { required: gate.required } : {}),
+  });
+}
+
+function handleOliveStatus(req: Request, res: Response): void {
+  const jobIdParam = req.params.jobId;
+  const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
+  const job = jobId ? jobRegistry.get(jobId) : undefined;
+  if (!job) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+  res.json({
+    id: job.id,
+    status: job.status,
+    exitCode: job.exitCode,
+    logs: job.logs,
+    logsTruncated: Boolean(job.logsTruncated),
+    latestMetrics: job.latestMetrics,
+    finishedAt: job.finishedAt,
+  });
+}
+
+function handleOliveCancel(req: Request, res: Response): void {
+  // express.json() leaves body undefined when the client sends no payload;
+  // optional jobId means an empty object preserves the 404 "Job not found" contract.
+  // Preserve null so parseBody can reject an explicit JSON null body.
+  const body = parseBody<{ jobId?: string; client?: string }>(req.body === undefined ? {} : req.body, {
+    jobId: { type: "string", required: false },
+    client: { type: "string", required: false },
+  });
+  if (isParseBodyError(body)) {
+    res.status(400).json({ error: body.error });
+    return;
+  }
+  const { jobId } = body.parsed;
+
+  const job = jobId ? jobRegistry.get(jobId) : undefined;
+  if (!job) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+
+  // Already terminal — nothing to cancel.
+  if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
+    res.json({ ok: true, status: job.status });
+    return;
+  }
+
+  // Mark cancelled even during "setting_up" (no process yet). The /olive/run
+  // setup loop checks this status after each await and aborts before spawning.
+  job.status = "cancelled";
+  pushLog(job, "[cancel] Cancellation requested.");
+  // Detach from shared venv setup so the cancelled job stops receiving install
+  // output while setup (which may serve other jobs) keeps running.
+  if (job.venvListener) {
+    detachVenvListener(job.venvListener);
+    job.venvListener = undefined;
+  }
+  if (job.process) {
+    const proc = job.process;
+    proc.kill("SIGTERM");
+    // SIGTERM is best-effort; escalate so a stuck Olive child cannot outlive cancel.
+    const killTimer = setTimeout(() => {
+      if (proc.exitCode === null && proc.signalCode === null) {
+        proc.kill("SIGKILL");
+        pushLog(job, "[cancel] Process did not exit after SIGTERM; sent SIGKILL.");
+      }
+    }, CANCEL_SIGKILL_GRACE_MS);
+    if (typeof killTimer.unref === "function") killTimer.unref();
+    proc.once("close", () => clearTimeout(killTimer));
+    stopGpuMetricsTimer(job);
+  }
+  // Finalize so open SSE streams close now; the "close" handler (if a process
+  // is running) is idempotent — finishedAt is only stamped once.
+  finalizeJob(job);
+  res.json({ ok: true, status: job.status });
+}
+
+function handleOliveStream(req: Request, res: Response): void {
+  const jobIdParam = req.params.jobId;
+  const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
+  const job = jobId ? jobRegistry.get(jobId) : undefined;
+  if (!job) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  if (typeof res.flushHeaders === "function") res.flushHeaders();
+
+  if (job.logsTruncated) {
+    writeNamedSse(res, "log", {
+      line: `[info] Earlier log lines were trimmed to bound memory (retaining last ${MAX_JOB_LOG_LINES}).`,
+    });
+  }
+  for (const line of job.logs) {
+    writeNamedSse(res, "log", { line });
+  }
+  if (job.latestMetrics) {
+    writeNamedSse(res, "metrics", job.latestMetrics);
+  }
+
+  const isTerminal = () =>
+    job.status === "completed" || job.status === "failed" || job.status === "cancelled";
+
+  // If the job already finished, flush a terminal event and close immediately.
+  if (isTerminal()) {
+    writeNamedSse(res, "done", { done: true, status: job.status, exitCode: job.exitCode });
+    res.end();
+    return;
+  }
+
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+  const cleanup = () => {
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = null;
+    }
+    const subIdx = job.subscribers.indexOf(sub);
+    if (subIdx >= 0) job.subscribers.splice(subIdx, 1);
+    const metricIdx = job.metricSubscribers.indexOf(metricSub);
+    if (metricIdx >= 0) job.metricSubscribers.splice(metricIdx, 1);
+    const doneIdx = job.doneSubscribers.indexOf(onDone);
+    if (doneIdx >= 0) job.doneSubscribers.splice(doneIdx, 1);
+  };
+
+  const sub = (line: string) => {
+    writeNamedSse(res, "log", { line });
+  };
+  job.subscribers.push(sub);
+
+  const metricSub = (metrics: GpuMetrics) => {
+    writeNamedSse(res, "metrics", metrics);
+  };
+  job.metricSubscribers.push(metricSub);
+
+  // Fired the instant the job reaches a terminal state — closes the stream
+  // immediately rather than waiting up to one heartbeat interval.
+  const onDone = () => {
+    if (res.writableEnded) return;
+    writeNamedSse(res, "done", { done: true, status: job.status, exitCode: job.exitCode });
+    cleanup();
+    res.end();
+  };
+  job.doneSubscribers.push(onDone);
+
+  // Heartbeat keeps proxies from buffering/closing an idle stream, and acts as
+  // a fallback terminator if the done event was somehow missed.
+  heartbeat = setInterval(() => {
+    if (res.writableEnded) {
+      cleanup();
+      return;
+    }
+    if (isTerminal()) {
+      onDone();
+      return;
+    }
+    res.write(`: ping\n\n`);
+  }, 15_000);
+
+  req.on("close", cleanup);
 }
 
 /**
@@ -214,153 +391,32 @@ export function mountOliveRoutes(router: Router): void {
     });
   });
 
-  // ─── SSE Stream (loopback; non-UI clients need inspection policy) ─────
-  router.get("/olive/stream/:jobId", studioLocalOnly, (req, res) => {
-    // Same-origin Studio UI keeps working when agent inspection is off.
-    // MCP / scripts (no Sec-Fetch-Site: same-origin) always hit the policy gate —
-    // omitting X-Olive-MCP-Agent is not a bypass.
-    const gate = denyAgentUnlessUi(
-      req,
+  // ─── SSE Stream (loopback UI; agent path is /olive/agent/stream) ──────
+  router.get("/olive/stream/:jobId", studioLocalOnly, handleOliveStream);
+  router.get("/olive/agent/stream/:jobId", studioLocalOnly, (req, res) => {
+    const gate = denyUnless(
       (p) => p.allowJobInspection,
       "Job inspection is disabled in Studio agent access settings",
     );
-    if (!gate.ok) {
-      return res.status(403).json({
-        ok: false,
-        error: gate.error,
-        reason: gate.reason,
-        ...("required" in gate && gate.required ? { required: gate.required } : {}),
-      });
-    }
-    const jobIdParam = req.params.jobId;
-    const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
-    const job = jobId ? jobRegistry.get(jobId) : undefined;
-    if (!job) {
-      return res.status(404).json({ error: "Job not found" });
-    }
-
-    res.status(200);
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no");
-    if (typeof res.flushHeaders === "function") res.flushHeaders();
-
-    if (job.logsTruncated) {
-      writeNamedSse(res, "log", {
-        line: `[info] Earlier log lines were trimmed to bound memory (retaining last ${MAX_JOB_LOG_LINES}).`,
-      });
-    }
-    for (const line of job.logs) {
-      writeNamedSse(res, "log", { line });
-    }
-    if (job.latestMetrics) {
-      writeNamedSse(res, "metrics", job.latestMetrics);
-    }
-
-    const isTerminal = () =>
-      job.status === "completed" || job.status === "failed" || job.status === "cancelled";
-
-    // If the job already finished, flush a terminal event and close immediately.
-    if (isTerminal()) {
-      writeNamedSse(res, "done", { done: true, status: job.status, exitCode: job.exitCode });
-      return res.end();
-    }
-
-    let heartbeat: ReturnType<typeof setInterval> | null = null;
-    const cleanup = () => {
-      if (heartbeat) {
-        clearInterval(heartbeat);
-        heartbeat = null;
-      }
-      const subIdx = job.subscribers.indexOf(sub);
-      if (subIdx >= 0) job.subscribers.splice(subIdx, 1);
-      const metricIdx = job.metricSubscribers.indexOf(metricSub);
-      if (metricIdx >= 0) job.metricSubscribers.splice(metricIdx, 1);
-      const doneIdx = job.doneSubscribers.indexOf(onDone);
-      if (doneIdx >= 0) job.doneSubscribers.splice(doneIdx, 1);
-    };
-
-    const sub = (line: string) => {
-      writeNamedSse(res, "log", { line });
-    };
-    job.subscribers.push(sub);
-
-    const metricSub = (metrics: GpuMetrics) => {
-      writeNamedSse(res, "metrics", metrics);
-    };
-    job.metricSubscribers.push(metricSub);
-
-    // Fired the instant the job reaches a terminal state — closes the stream
-    // immediately rather than waiting up to one heartbeat interval.
-    const onDone = () => {
-      if (res.writableEnded) return;
-      writeNamedSse(res, "done", { done: true, status: job.status, exitCode: job.exitCode });
-      cleanup();
-      res.end();
-    };
-    job.doneSubscribers.push(onDone);
-
-    // Heartbeat keeps proxies from buffering/closing an idle stream, and acts as
-    // a fallback terminator if the done event was somehow missed.
-    heartbeat = setInterval(() => {
-      if (res.writableEnded) {
-        cleanup();
-        return;
-      }
-      if (isTerminal()) {
-        onDone();
-        return;
-      }
-      res.write(`: ping\n\n`);
-    }, 15_000);
-
-    req.on("close", cleanup);
+    if (!gate.ok) return sendAgentDeny(res, gate);
+    return handleOliveStream(req, res);
   });
 
-  // ─── Job Status (loopback; non-UI clients need inspection policy) ─────
-  router.get("/olive/status/:jobId", studioLocalOnly, (req, res) => {
-    const gate = denyAgentUnlessUi(
-      req,
+  // ─── Job Status (loopback UI; agent path always enforces inspection) ─
+  router.get("/olive/status/:jobId", studioLocalOnly, handleOliveStatus);
+  router.get("/olive/agent/status/:jobId", studioLocalOnly, (req, res) => {
+    const gate = denyUnless(
       (p) => p.allowJobInspection,
       "Job inspection is disabled in Studio agent access settings",
     );
-    if (!gate.ok) {
-      return res.status(403).json({
-        ok: false,
-        error: gate.error,
-        reason: gate.reason,
-        ...("required" in gate && gate.required ? { required: gate.required } : {}),
-      });
-    }
-    const jobIdParam = req.params.jobId;
-    const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
-    const job = jobId ? jobRegistry.get(jobId) : undefined;
-    if (!job) {
-      return res.status(404).json({ error: "Job not found" });
-    }
-    return res.json({
-      id: job.id,
-      status: job.status,
-      exitCode: job.exitCode,
-      logs: job.logs,
-      logsTruncated: Boolean(job.logsTruncated),
-      latestMetrics: job.latestMetrics,
-      finishedAt: job.finishedAt,
-    });
+    if (!gate.ok) return sendAgentDeny(res, gate);
+    return handleOliveStatus(req, res);
   });
 
-  // ─── Job list (in-memory registry; loopback + policy for MCP) ─────────
+  // ─── Job list (in-memory registry; always policy-gated for agents) ───
   router.get("/olive/jobs", studioLocalOnly, (_req, res) => {
     const gate = denyUnless((p) => p.allowJobInspection, "Job inspection is disabled in Studio agent access settings");
-    if (!gate.ok) {
-      return res.status(403).json({
-        ok: false,
-        error: gate.error,
-        reason: gate.reason,
-        ...("required" in gate && gate.required ? { required: gate.required } : {}),
-      });
-    }
+    if (!gate.ok) return sendAgentDeny(res, gate);
     const jobs = Array.from(jobRegistry.values())
       .map((job) => ({
         id: job.id,
@@ -378,70 +434,16 @@ export function mountOliveRoutes(router: Router): void {
     return res.json({ ok: true, count: jobs.length, jobs });
   });
 
-  // ─── Cancel (loopback; MCP agents need cancellation policy) ───────────
-  router.post("/olive/cancel", studioLocalOnly, (req, res) => {
-    // express.json() leaves body undefined when the client sends no payload;
-    // optional jobId means an empty object preserves the 404 "Job not found" contract.
-    // Preserve null so parseBody can reject an explicit JSON null body.
-    const body = parseBody<{ jobId?: string; client?: string }>(req.body === undefined ? {} : req.body, {
-      jobId: { type: "string", required: false },
-      client: { type: "string", required: false },
-    });
-    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
-    const { jobId } = body.parsed;
-
-    // Loopback blocks remote cancel. Same-origin Studio UI may cancel without the
-    // agent cancellation switch. MCP / scripts always require allowJobCancellation —
-    // omitting X-Olive-MCP-Agent is not a bypass. Body `client` is not authorization.
-    const gate = denyAgentUnlessUi(
-      req,
+  // ─── Cancel (loopback UI; agent path always enforces cancellation) ───
+  router.post("/olive/cancel", studioLocalOnly, handleOliveCancel);
+  router.post("/olive/agent/cancel", studioLocalOnly, (req, res) => {
+    // Body `client` is not authorization — agent route always requires policy.
+    const gate = denyUnless(
       (p) => p.allowJobCancellation,
       "Job cancellation is disabled in Studio agent access settings",
     );
-    if (!gate.ok) {
-      return res.status(403).json({
-        ok: false,
-        error: gate.error,
-        reason: gate.reason,
-        ...("required" in gate && gate.required ? { required: gate.required } : {}),
-      });
-    }
-
-    const job = jobId ? jobRegistry.get(jobId) : undefined;
-    if (!job) return res.status(404).json({ error: "Job not found" });
-
-    // Already terminal — nothing to cancel.
-    if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
-      return res.json({ ok: true, status: job.status });
-    }
-
-    // Mark cancelled even during "setting_up" (no process yet). The /olive/run
-    // setup loop checks this status after each await and aborts before spawning.
-    job.status = "cancelled";
-    pushLog(job, "[cancel] Cancellation requested.");
-    // Detach from shared venv setup so the cancelled job stops receiving install
-    // output while setup (which may serve other jobs) keeps running.
-    if (job.venvListener) {
-      detachVenvListener(job.venvListener);
-      job.venvListener = undefined;
-    }
-    if (job.process) {
-      const proc = job.process;
-      proc.kill("SIGTERM");
-      // SIGTERM is best-effort; escalate so a stuck Olive child cannot outlive cancel.
-      const killTimer = setTimeout(() => {
-        if (proc.exitCode === null && proc.signalCode === null) {
-          proc.kill("SIGKILL");
-          pushLog(job, "[cancel] Process did not exit after SIGTERM; sent SIGKILL.");
-        }
-      }, CANCEL_SIGKILL_GRACE_MS);
-      if (typeof killTimer.unref === "function") killTimer.unref();
-      proc.once("close", () => clearTimeout(killTimer));
-      stopGpuMetricsTimer(job);
-    }
-    // Finalize so open SSE streams close now; the "close" handler (if a process
-    // is running) is idempotent — finishedAt is only stamped once.
-    finalizeJob(job);
-    return res.json({ ok: true, status: job.status });
+    if (!gate.ok) return sendAgentDeny(res, gate);
+    return handleOliveCancel(req, res);
   });
 }
+
