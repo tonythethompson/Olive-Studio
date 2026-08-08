@@ -34,6 +34,9 @@ export function writeNamedSse(
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
+/**
+ * Mounts HTTP routes for Olive job execution, inspection, validation, submission, streaming, cancellation, and agent-access policy management.
+ */
 export function mountOliveRoutes(router: Router): void {
   // Reclaim finished jobs + their temp recipe files on a timer.
   startJobRegistrySweeper();

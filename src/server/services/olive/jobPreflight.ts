@@ -23,6 +23,11 @@ export type PreflightResult = {
   cudaVersion: string;
 };
 
+/**
+ * Serializes a value deterministically for consistent comparisons and fingerprints.
+ *
+ * @returns A JSON-compatible string with object keys sorted and properties with `undefined` values omitted.
+ */
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
@@ -34,14 +39,24 @@ function stableStringify(value: unknown): string {
   return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
 }
 
-/** SHA-256 fingerprint of canonical recipe + cudaVersion. */
+/**
+ * Computes a deterministic SHA-256 fingerprint for a recipe and CUDA version.
+ *
+ * @param recipe - The recipe to fingerprint
+ * @param cudaVersion - The CUDA version associated with the recipe
+ * @returns The hexadecimal SHA-256 fingerprint
+ */
 export function fingerprintRecipe(recipe: unknown, cudaVersion = "auto"): string {
   const payload = `${stableStringify(recipe)}\0${cudaVersion}`;
   return createHash("sha256").update(payload).digest("hex");
 }
 
 /**
- * Structural validation + static provider checks. Does not touch venv or spawn Olive.
+ * Validates an Olive recipe and performs static execution-provider checks.
+ *
+ * @param recipeInput - The Olive recipe to validate and normalize.
+ * @param cudaVersion - The CUDA version token used for fingerprinting and diagnostics.
+ * @returns Validation status, diagnostics, normalized provider and recipe, fingerprint, and CUDA version.
  */
 export function preflightOliveRecipe(
   recipeInput: OliveRecipe,

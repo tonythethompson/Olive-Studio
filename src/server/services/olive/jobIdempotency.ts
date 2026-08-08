@@ -22,10 +22,21 @@ export type IdempotencyLookup =
   | { kind: "conflict"; job: OliveJob; reason: string }
   | { kind: "miss" };
 
+/**
+ * Determines whether a job originated from MCP.
+ *
+ * @param job - The job to inspect
+ * @returns `true` if the job source is `"mcp"`, `false` otherwise.
+ */
 function isMcpJob(job: OliveJob): boolean {
   return job.source === "mcp";
 }
 
+/**
+ * Indexes an MCP job for reuse by its idempotency key and recipe fingerprint.
+ *
+ * @param job - The job to index; jobs from other sources are ignored.
+ */
 export function rememberIdempotencyKeys(job: OliveJob): void {
   // UI jobs are intentionally excluded from agent idempotency reuse.
   if (!isMcpJob(job)) return;
@@ -33,6 +44,12 @@ export function rememberIdempotencyKeys(job: OliveJob): void {
   if (job.fingerprint) keyToJobId.set(`fp:${job.fingerprint}`, job.id);
 }
 
+/**
+ * Resolves an indexed MCP job by its idempotency index key.
+ *
+ * @param indexKey - The key used to locate the job
+ * @returns The matching MCP job, or `undefined` when no valid indexed job exists
+ */
 function resolveJobForIndexKey(indexKey: string): OliveJob | undefined {
   const id = keyToJobId.get(indexKey);
   if (!id) return undefined;
@@ -44,6 +61,14 @@ function resolveJobForIndexKey(indexKey: string): OliveJob | undefined {
   return job;
 }
 
+/**
+ * Finds an MCP job using an idempotency key and recipe fingerprint.
+ *
+ * An idempotency key match with a different fingerprint produces a conflict.
+ *
+ * @param opts - Lookup values, including an optional client idempotency key and recipe fingerprint
+ * @returns A hit with the matching job, a conflict when a key is reused with a different fingerprint, or a miss when no job matches
+ */
 export function findJobByIdempotency(opts: {
   idempotencyKey?: string;
   fingerprint?: string;

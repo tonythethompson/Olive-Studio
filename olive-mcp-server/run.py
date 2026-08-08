@@ -20,10 +20,15 @@ from pathlib import Path
 
 
 def find_venv_python(script_dir: Path, project_root: Path) -> Path | None:
-    """Return the venv Python executable if one exists.
-
-    Checks the olive-mcp-server local venv first (matching the setup documented
-    in AGENTS.md), then the repository-root venv, preserving existing behavior.
+    """
+    Find the first existing virtual-environment Python executable.
+    
+    Parameters:
+        script_dir (Path): Directory containing the launcher.
+        project_root (Path): Repository root containing shared virtual environments.
+    
+    Returns:
+        Path | None: The first matching executable path, or `None` when no supported virtual environment exists.
     """
     candidates = [
         # olive-mcp-server/.venv (created by the documented setup flow)
@@ -42,10 +47,25 @@ def find_venv_python(script_dir: Path, project_root: Path) -> Path | None:
 
 
 def _truthy(name: str) -> bool:
+    """
+    Determine whether an environment variable represents an enabled setting.
+    
+    Parameters:
+        name (str): Name of the environment variable.
+    
+    Returns:
+        bool: `true` if the value is `1`, `true`, `yes`, or `on`, ignoring case and surrounding whitespace; `false` otherwise.
+    """
     return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
 
 
 def main() -> int:
+    """
+    Launch the Olive MCP server with the selected project Python interpreter.
+    
+    Returns:
+    	int: The exit code of the Olive MCP server process, or `1` when a required project virtual environment is unavailable.
+    """
     script_dir = Path(__file__).resolve().parent
     project_root = script_dir.parent
 

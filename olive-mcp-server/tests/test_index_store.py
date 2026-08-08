@@ -44,6 +44,7 @@ def test_get_or_build_uses_shipped_without_encode(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(docs_search, "_KB_INDEX_MTIME", (-1.0, -1))
 
     def boom(*_a, **_k):
+        """Raise an assertion error to ensure embedding encoding is not invoked."""
         raise AssertionError("should not encode when shipped index matches")
 
     monkeypatch.setattr(docs_search, "build_kb_index", boom)
@@ -53,6 +54,7 @@ def test_get_or_build_uses_shipped_without_encode(monkeypatch: pytest.MonkeyPatc
 
 
 def test_ts_olive_shipped_index():
+    """Verify that the shipped troubleshooting index contains one embedding for each troubleshooting entry."""
     entries = load_troubleshooting()
     fp = ts._entries_fingerprint(entries)
     emb = load_entry_embeddings("ts_olive", fp)

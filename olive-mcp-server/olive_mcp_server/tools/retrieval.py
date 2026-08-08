@@ -39,7 +39,15 @@ _INFLIGHT_FUTURE: concurrent.futures.Future[Any] | None = None
 
 
 def get_retrieval_mode(override: str | None = None) -> str:
-    """Return effective retrieval mode from override or environment."""
+    """
+    Determine the effective retrieval mode from an override or environment setting.
+    
+    Parameters:
+    	override (str | None): Optional mode value that takes precedence over the environment setting.
+    
+    Returns:
+    	str: A supported retrieval mode, or the default mode when the selected value is empty or invalid.
+    """
     if override is not None and str(override).strip():
         raw = str(override).strip().lower()
     else:
@@ -50,7 +58,12 @@ def get_retrieval_mode(override: str | None = None) -> str:
 
 
 def get_semantic_budget_ms() -> int:
-    """Max ms for cold semantic work under auto mode (0 = unlimited)."""
+    """
+    Determine the time budget for cold semantic retrieval work.
+    
+    Returns:
+    	int: A nonnegative budget in milliseconds; zero means unlimited. Invalid configuration values use the default budget.
+    """
     raw = os.environ.get("OLIVE_MCP_SEMANTIC_BUDGET_MS", str(DEFAULT_SEMANTIC_BUDGET_MS))
     try:
         return max(0, int(raw))
@@ -59,6 +72,12 @@ def get_semantic_budget_ms() -> int:
 
 
 def _clear_inflight_if_current(future: concurrent.futures.Future[Any]) -> None:
+    """
+    Clear the tracked in-flight future when it matches the specified future.
+    
+    Parameters:
+    	future (concurrent.futures.Future[Any]): Future to compare with the tracked in-flight operation.
+    """
     global _INFLIGHT_FUTURE
     with _INFLIGHT_LOCK:
         if _INFLIGHT_FUTURE is future:
@@ -66,17 +85,21 @@ def _clear_inflight_if_current(future: concurrent.futures.Future[Any]) -> None:
 
 
 def run_with_budget(fn: Callable[[], T], budget_ms: int) -> tuple[T | None, bool]:
-    """Run *fn* with an optional wall-clock budget.
-
+    """
+    Run a callable synchronously or within a wall-clock time budget.
+    
+    Parameters:
+        fn (Callable[[], T]): Callable to execute.
+        budget_ms (int): Maximum execution time in milliseconds; nonpositive values
+            allow unlimited execution.
+    
     Returns:
-        (result, timed_out). On timeout (or while another budgeted call is still
-        in flight), result is None and timed_out is True — callers treat that as
-        the keyword-fallback signal. On success, timed_out is False. Exceptions
-        from *fn* propagate.
-
-    On timeout the shared worker is not cancelled mid-flight (MiniLM load may
-    still finish). Only one in-flight future is tracked; additional calls during
-    that window do not submit another callable.
+        tuple[T | None, bool]: The callable result and a timeout indicator. The
+        indicator is `True` when execution times out or another budgeted call is
+        already running; otherwise, it is `False`.
+    
+    Exceptions:
+        Exception: Propagates exceptions raised by the callable.
     """
     if budget_ms <= 0:
         return fn(), False

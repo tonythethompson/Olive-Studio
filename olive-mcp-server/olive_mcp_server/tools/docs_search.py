@@ -124,13 +124,10 @@ def _kb_max_mtime() -> tuple[float, int]:
 
 
 def get_or_build_kb_index() -> tuple[list[tuple[str, str]], np.ndarray]:
-    """Public helper: load shipped index or lazy-build local KB embeddings.
-
-    Used by docs search and passive context so both share one cache.
-    Prefer precomputed ``knowledge_base/indexes/docs_kb`` when content hash matches.
-    Encode work runs outside the lock; the cache is only stamped when the KB
-    mtime is unchanged from the value observed at load time (avoids publishing
-    stale texts under a newer mtime after a mid-build hot-reload).
+    """Loads or builds the local knowledge-base text and embedding index, using a matching shipped index when available.
+    
+    Returns:
+        tuple[list[tuple[str, str]], np.ndarray]: The knowledge-base text entries and their embedding matrix.
     """
     global _KB_TEXTS, _KB_EMBEDDINGS, _KB_INDEX_MTIME
 
@@ -193,10 +190,16 @@ def _keyword_search(
     terms: list[str],
     top_k: int,
 ) -> list[dict[str, Any]]:
-    """Keyword fallback: substring term matching against (source, text) pairs.
-
-    Relevance is normalized to [0, 1] as hits / max(1, len(terms)) so it is
-    commensurate with semantic cosine scores when sources are merged.
+    """
+    Find entries whose text contains one or more search terms.
+    
+    Parameters:
+        entries (list[tuple[str, str]]): Source and text pairs to search.
+        terms (list[str]): Terms to match as case-insensitive substrings.
+        top_k (int): Maximum number of results to return.
+    
+    Returns:
+        list[dict[str, Any]]: Matching results ranked by the proportion of terms found, each containing the source, a text snippet, and its relevance score.
     """
     if not terms or top_k <= 0:
         return []
@@ -221,7 +224,16 @@ def _search_local(
     *,
     mode: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Search local KB under retrieval mode; return (results, retrieval_meta)."""
+    """Search the local knowledge base using the selected retrieval mode.
+    
+    Parameters:
+    	query (str): Search terms.
+    	top_k (int): Maximum number of results to return.
+    	mode (str | None): Retrieval mode override.
+    
+    Returns:
+    	tuple[list[dict[str, Any]], dict[str, Any]]: Search results and metadata describing the effective retrieval mode and any fallback.
+    """
     terms = [t.lower() for t in query.split() if t]
     resolved = get_retrieval_mode(mode)
 
@@ -235,6 +247,11 @@ def _search_local(
     budget_ms = get_semantic_budget_ms() if use_budget else 0
 
     def _semantic() -> list[dict[str, Any]]:
+        """Searches the local knowledge base semantically, falling back to keyword matches when needed.
+        
+        Returns:
+        	list[dict[str, Any]]: Relevance-ranked matching knowledge-base entries.
+        """
         kb_texts, embeddings = get_or_build_kb_index()
         results = semantic_search(
             query,
@@ -277,10 +294,14 @@ def _search_local(
         )
 
 def _fetch_live_docs() -> tuple[dict[str, str], float]:
-    """Fetch (and cache) the live Olive docs landing page.
-
-    Concurrent fetches take a generation token; only the latest generation may
-    publish, so a slow older response cannot overwrite a fresher one.
+    """
+    Fetch and cache the live Olive documentation landing page.
+    
+    Concurrent fetches publish only results from the latest completed generation.
+    
+    Returns:
+        tuple[dict[str, str], float]: The cached documentation pages and their
+        cache timestamp. Stale cached pages are returned when fetching fails.
     """
     global _LIVE_CACHE, _LAST_FETCH_TIME, _LIVE_FETCH_GENERATION, _LIVE_FETCH_PUBLISHED_GENERATION
 
@@ -330,13 +351,10 @@ def _split_live_snippets(pages: dict[str, str]) -> list[tuple[str, str]]:
 
 
 def _get_live_index() -> tuple[list[tuple[str, str]], np.ndarray]:
-    """Return live snippets and their embeddings, rebuilding on cache refresh.
-
-    Cache-hit and publish checks use ``_LIVE_EMBEDDINGS is not None`` (not
-    truthiness of ``_LIVE_SNIPPETS``) so an empty-but-built live index is
-    still cached rather than rebuilt on every call. Publication also refuses
-    to overwrite a newer generation's cache with a stale (smaller
-    ``fetch_time``) build that raced behind it.
+    """Retrieve live documentation snippets and their embeddings, rebuilding the index when cached content changes.
+    
+    Returns:
+        A tuple containing live documentation snippets and their embedding matrix.
     """
     global _LIVE_SNIPPETS, _LIVE_EMBEDDINGS, _LIVE_EMBED_CACHE_TIME
 
@@ -372,16 +390,27 @@ def _search_live(
     *,
     mode: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Search live Olive docs under the resolved retrieval mode.
-
-    ``keyword`` never builds the live embedding index or calls semantic_search.
-    ``auto`` budgets cold semantic work via ``run_with_budget`` and falls back
-    to live keyword retrieval (no embeddings) on timeout. ``semantic`` waits.
+    """
+    Search live Olive documentation using the resolved retrieval mode.
+    
+    Parameters:
+        query (str): Text to search for.
+        top_k (int): Maximum number of results to return.
+        mode (str | None): Retrieval mode, such as keyword, semantic, or automatic.
+    
+    Returns:
+        list[dict[str, Any]]: Matching live documentation results.
     """
     terms = [t.lower() for t in query.split() if t]
     resolved = get_retrieval_mode(mode)
 
     def _keyword_live() -> list[dict[str, Any]]:
+        """
+        Searches live documentation using keyword matching.
+        
+        Returns:
+        	list[dict[str, Any]]: The highest-ranked matching live documentation snippets.
+        """
         try:
             pages, _ = _fetch_live_docs()
             if not pages:
@@ -398,6 +427,11 @@ def _search_live(
     budget_ms = get_semantic_budget_ms() if use_budget else 0
 
     def _semantic_live() -> list[dict[str, Any]]:
+        """Search live documentation semantically, falling back to keyword matches when needed.
+        
+        Returns:
+        	list[dict[str, Any]]: Relevant live documentation results.
+        """
         snippets, embeddings = _get_live_index()
         if not snippets:
             return []
@@ -432,18 +466,21 @@ def search_olive_documentation(
     live: bool = True,
     mode: str = "",
 ) -> dict[str, Any]:
-    """Full-text search across the local Olive knowledge base and live docs.
-
+    """Search the local Olive knowledge base and optionally the live Olive documentation.
+    
     Args:
-        query: Search query, e.g. "calibrate static quantization".
-        top_k: Maximum number of results (must be >= 0).
-        live: Whether to include live results from https://microsoft.github.io/Olive/.
-        mode: Retrieval mode override (``auto`` / ``keyword`` / ``semantic``).
-
+        query: Search terms, such as ``"calibrate static quantization"``.
+        top_k: Maximum number of results to return; must be greater than or equal to zero.
+        live: Whether to include results from the live Olive documentation.
+        mode: Retrieval mode: ``"auto"``, ``"keyword"``, or ``"semantic"``. An empty
+            value uses the default mode.
+    
     Returns:
-        Ranked results with snippet, source path, and relevance score.
-        ``relevance`` is in roughly [0, 1] for both semantic and keyword modes.
-        Includes ``retrieval`` metadata (mode / degraded).
+        A dictionary containing the query, ranked results, result count, explanatory
+        note, and retrieval metadata.
+    
+    Raises:
+        ValueError: If ``top_k`` is negative.
     """
     if top_k < 0:
         raise ValueError(f"top_k must be >= 0, got {top_k}")

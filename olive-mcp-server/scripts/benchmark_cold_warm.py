@@ -17,10 +17,25 @@ if str(SERVER_DIR) not in sys.path:
 
 
 def _ms(t0: float, t1: float) -> int:
+    """Convert an elapsed time interval from seconds to integer milliseconds.
+    
+    Parameters:
+        t0 (float): Start time in seconds.
+        t1 (float): End time in seconds.
+    
+    Returns:
+        int: The elapsed interval in milliseconds, truncated to an integer.
+    """
     return int((t1 - t0) * 1000)
 
 
 def main() -> int:
+    """
+    Run cold and warm in-process benchmarks for Olive MCP tools and print the results as formatted JSON.
+    
+    Returns:
+    	int: Zero after the benchmark results are printed.
+    """
     from olive_mcp_server.mcp_server import call_tool
     from olive_mcp_server.tools import embeddings as emb
 

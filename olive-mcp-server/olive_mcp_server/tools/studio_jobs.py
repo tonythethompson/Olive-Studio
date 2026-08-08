@@ -33,11 +33,29 @@ _TERMINAL = frozenset({"completed", "failed", "cancelled"})
 
 
 def _is_error(payload: dict[str, Any]) -> bool:
+    """
+    Determine whether a payload contains a nonempty error message.
+    
+    Parameters:
+    	payload (dict[str, Any]): Response payload to inspect.
+    
+    Returns:
+    	bool: `true` if the payload's `error` field is a nonempty string, `false` otherwise.
+    """
     err_val = payload.get("error")
     return isinstance(err_val, str) and bool(err_val)
 
 
 def _normalize_job_id(job_id: str) -> str | None:
+    """
+    Normalize a job identifier for use with the Studio job API.
+    
+    Parameters:
+    	job_id (str): The job identifier to trim and validate.
+    
+    Returns:
+    	str | None: The normalized job identifier, or `None` if it is empty or contains invalid characters.
+    """
     jid = (job_id or "").strip()
     if not jid or not _JOB_ID_RE.fullmatch(jid):
         return None
@@ -45,6 +63,14 @@ def _normalize_job_id(job_id: str) -> str | None:
 
 
 def _status_path(job_id: str) -> str:
+    """Build the URL path for an optimization job's status.
+    
+    Parameters:
+    	job_id (str): The job identifier to encode in the path.
+    
+    Returns:
+    	str: The URL-encoded job status path.
+    """
     return f"{_STATUS_PATH}/{quote(job_id, safe='')}"
 
 
@@ -142,16 +168,16 @@ def validate_optimization_job(
     recipe_json: str = "",
     cuda_version: str = "auto",
 ) -> dict[str, Any]:
-    """Validate a recipe via Studio preflight (no Olive spawn).
-
-    Args:
-        recipe: Olive recipe object.
-        recipe_json: Alternative JSON string form of the recipe.
-        cuda_version: Optional CUDA wheel token (default ``auto``).
-
+    """
+    Validate an Olive recipe through Studio preflight without starting a job.
+    
+    Parameters:
+    	recipe (dict[str, Any] | None): Recipe object to validate.
+    	recipe_json (str): JSON string containing the recipe when `recipe` is not provided.
+    	cuda_version (str): CUDA wheel version token used for validation.
+    
     Returns:
-        ``valid``, ``fingerprint``, ``errors``, ``warnings``, etc.
-        Never starts a job.
+    	dict[str, Any]: Validation status, fingerprint, provider, errors, warnings, CUDA version, and recipe summary.
     """
     body: dict[str, Any] = {"cudaVersion": cuda_version or "auto"}
     if recipe is not None:
@@ -185,10 +211,20 @@ def submit_optimization_job(
     fingerprint: str = "",
     idempotency_key: str = "",
 ) -> dict[str, Any]:
-    """Submit a job through Studio (policy-gated). Always means execute.
-
-    Idempotency: pass ``idempotency_key`` and/or ``fingerprint`` from validate.
-    Replays return the same ``job_id`` without starting a second run.
+    """
+    Submit an optimization job through Olive Studio.
+    
+    Parameters:
+        recipe (dict[str, Any] | None): Recipe object to submit.
+        recipe_json (str): JSON-encoded recipe used when ``recipe`` is not provided.
+        cuda_version (str): CUDA version requested for the job.
+        fingerprint (str): Optional validated recipe fingerprint used for reuse.
+        idempotency_key (str): Optional key that allows a submission to reuse an existing job.
+    
+    Returns:
+        dict[str, Any]: Submission status, job ID, state, fingerprint, reuse status, and execution metadata. Policy, availability, and submission failures are returned as structured errors.
+    
+    The operation starts or reuses a job and therefore has side effects.
     """
     body: dict[str, Any] = {"cudaVersion": cuda_version or "auto"}
     if recipe is not None:
@@ -240,7 +276,15 @@ def submit_optimization_job(
 
 
 def cancel_optimization_job(job_id: str) -> dict[str, Any]:
-    """Cancel a Studio job (policy-gated when called as MCP client)."""
+    """
+    Cancel a submitted Olive Studio optimization job.
+    
+    Parameters:
+    	job_id (str): The Studio job identifier to cancel.
+    
+    Returns:
+    	dict[str, Any]: The cancellation result, including the job ID, status, and whether the operation has side effects. Invalid identifiers, missing jobs, and cancellation failures include structured error details.
+    """
     jid = _normalize_job_id(job_id)
     if not jid:
         return err("invalid_job_id", "job_id is required and must be a plain id token.")
@@ -274,14 +318,14 @@ def cancel_optimization_job(job_id: str) -> dict[str, Any]:
 
 
 def get_optimization_results(job_id: str, log_tail: int = 40) -> dict[str, Any]:
-    """Return metadata-only results for a Studio job (read-only).
-
-    Does **not** return model file bytes. Includes status, metrics, a log tail,
-    and path-like references scraped from logs when present.
-
-    Args:
-        job_id: Studio job id.
-        log_tail: Number of trailing log lines to include (0..200).
+    """Return metadata-only results for a Studio job, including status, metrics, log excerpts, and artifact path references.
+    
+    Parameters:
+    	job_id (str): Studio job identifier.
+    	log_tail (int): Maximum number of trailing log lines to include, clamped to 0–200.
+    
+    Returns:
+    	dict[str, Any]: Job status, completion metadata, metrics, log information, heuristic artifact path references, and read-only operation metadata.
     """
     jid = _normalize_job_id(job_id)
     if not jid:

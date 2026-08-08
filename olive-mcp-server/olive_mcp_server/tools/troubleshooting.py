@@ -154,14 +154,14 @@ def _troubleshooting_kb_mtime() -> float:
 def get_troubleshooting_index(
     entries: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], np.ndarray]:
-    """Lazy-build embeddings for a troubleshooting entry list (thread-safe).
-
-    Cache is keyed by content fingerprint so olive and studio pools coexist.
-    Invalidates when fingerprint or KB mtime changes. Callers must score using
-    the returned entries list so embeddings stay position-aligned.
-
-    Public for warm-path preload and external warmers; prefer this over private
-    module attributes.
+    """
+    Prepare embeddings for troubleshooting entries and reuse compatible cached indexes.
+    
+    Parameters:
+        entries (list[dict[str, Any]] | None): Troubleshooting entries to index. When omitted, loads the default troubleshooting entries.
+    
+    Returns:
+        tuple[list[dict[str, Any]], np.ndarray]: The entries used to build the index and their position-aligned embedding matrix.
     """
     if entries is None:
         entries = load_troubleshooting()
@@ -410,13 +410,17 @@ def _best_match(
     require_keyword: bool = False,
     mode: str | None = None,
 ) -> tuple[dict[str, Any] | None, float, dict[str, Any]]:
-    """Select the highest-scoring troubleshooting entry (hybrid semantic+keyword).
-
-    Empty/whitespace error_message never matches — pass_name/config_context alone
-    must not diagnose (pattern-token pass names like TensorRT/AWQ).
-
-    Under ``mode=auto``, cold semantic work is budgeted; timeout yields keyword-only
-    scoring with ``retrieval.degraded=true``.
+    """
+    Select the highest-scoring troubleshooting entry for an error.
+    
+    Parameters:
+        require_keyword (bool): Require at least one matching keyword or pattern.
+        mode (str | None): Retrieval mode, such as ``"auto"``, ``"keyword"``, or
+            ``"semantic"``.
+    
+    Returns:
+        tuple: The selected entry, its score, and retrieval metadata. The entry is
+        ``None`` with a score of ``0.0`` when no qualifying match exists.
     """
     resolved_mode = get_retrieval_mode(mode)
     empty_meta = retrieval_meta(mode=resolved_mode, effective="none")
@@ -441,6 +445,12 @@ def _best_match(
         budget_ms = get_semantic_budget_ms() if use_budget else 0
 
         def _load() -> tuple[list[dict[str, Any]], np.ndarray]:
+            """
+            Load semantic scores for the candidate entries.
+            
+            Returns:
+                A tuple containing the candidate entries and their semantic scores.
+            """
             return _semantic_scores_for_entries(entries, error_only)
 
         try:
@@ -544,7 +554,21 @@ def _build_diagnosis_payload(
     freq: dict[str, Any],
     retrieval: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Assemble the diagnosis response shared by the matched and no-match paths."""
+    """
+    Assemble a diagnosis response containing match details, troubleshooting guidance, frequency metadata, and optional retrieval metadata.
+    
+    Parameters:
+    	best (dict[str, Any]): Diagnosis details used to populate the response.
+    	matched_entry (str | None): Identifier of the matched knowledge-base entry, or `None` for no match.
+    	matched_domain (str | None): Domain associated with the matched entry.
+    	applyable (bool): Whether the matched diagnosis can be applied.
+    	pass_name (str): Name of the pass associated with the diagnosis.
+    	freq (dict[str, Any]): Frequency information for the diagnosed error.
+    	retrieval (dict[str, Any] | None): Optional metadata describing how the diagnosis was retrieved.
+    
+    Returns:
+    	dict[str, Any]: A structured diagnosis payload.
+    """
     updated_config = best.get("updated_config", {}) or {}
     payload: dict[str, Any] = {
         "matched_entry": matched_entry,
@@ -569,10 +593,16 @@ def _build_diagnosis_payload(
 
 
 def _merge_retrieval_meta(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
-    """Merge pool metas: any degraded → keyword/degraded; else prefer hybrid.
-
-    Prefer a real retrieval mode over ``\"none\"`` so an empty pool does not
-    hide keyword/hybrid work that ran on the other pool.
+    """
+    Merge retrieval metadata from two search pools.
+    
+    Parameters:
+    	a (dict[str, Any]): Retrieval metadata from the first pool.
+    	b (dict[str, Any]): Retrieval metadata from the second pool.
+    
+    Returns:
+    	dict[str, Any]: Combined metadata that reflects degradation across either
+    	pool and selects the most informative effective retrieval mode.
     """
     mode = a.get("mode") or b.get("mode") or get_retrieval_mode()
     degraded = bool(a.get("degraded") or b.get("degraded"))
@@ -606,21 +636,21 @@ def troubleshoot_olive_error(
     domain: str = "auto",
     mode: str = "",
 ) -> dict[str, Any]:
-    """Diagnose an Olive or Olive Studio error using the selected knowledge base.
-
+    """Diagnose an Olive or Olive Studio error using the selected retrieval mode and knowledge base.
+    
     Args:
         error_message: Error message or traceback snippet to diagnose.
         pass_name: Name of the pass where the error occurred, if known.
         config_context: Additional configuration context used for matching.
         domain: Knowledge-base domain to search: ``"auto"``, ``"olive"``, or
-            ``"studio"``. Invalid values default to ``"auto"``.
-        mode: Retrieval mode override: ``auto``, ``keyword``, or ``semantic``.
-            Empty uses ``OLIVE_MCP_RETRIEVAL_MODE`` (default ``auto``).
-
+            ``"studio"``. Invalid values use automatic domain selection.
+        mode: Retrieval mode: ``"auto"``, ``"keyword"``, or ``"semantic"``.
+            An empty value uses the configured default.
+    
     Returns:
-        A diagnosis containing the matched entry, domain, title, root cause,
-        workaround, updated configuration, applicability, related entry,
-        relevant quirks, occurrence frequency metadata, and ``retrieval`` info.
+        A diagnosis containing the matched entry or generic guidance, along with
+        domain, applicability, troubleshooting details, frequency metadata, and
+        retrieval metadata.
     """
     mode_arg = mode if (mode or "").strip() else None
     # Empty body: never match from pass_name/config_context alone (TensorRT/AWQ/…).

@@ -32,6 +32,12 @@ export const ALLOWED_MCP_TOOL_NAMES = new Set([
   "cancel_optimization_job",
 ]);
 
+/**
+ * Determines whether an MCP tool name is allowed.
+ *
+ * @param toolName - The MCP tool name to check
+ * @returns `true` if the tool name is allowed, `false` otherwise
+ */
 export function isAllowedMcpToolName(toolName: string): boolean {
   return ALLOWED_MCP_TOOL_NAMES.has(toolName);
 }

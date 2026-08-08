@@ -24,6 +24,11 @@ if (!configPath) {
   process.exit(1);
 }
 
+/**
+ * Runs a pinned mcporter command with the selected configuration.
+ * @param {string[]} args - Arguments to pass to mcporter.
+ * @param {number} [timeoutMs=90000] - Maximum execution time in milliseconds.
+ */
 function run(args, timeoutMs = 90_000) {
   const full = ["--yes", MCPORTER, ...args, "--config", configPath];
   console.log(`$ npx ${full.join(" ")}`);

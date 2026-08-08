@@ -15,17 +15,33 @@ export type ResolvedAgentAccess = {
   envOverrideActive: boolean;
 };
 
+/**
+ * Determines whether an environment variable contains a recognized truthy value.
+ *
+ * @param name - The environment variable name
+ * @returns `true` if the value is `1`, `true`, `yes`, or `on`, ignoring case and surrounding whitespace; `false` otherwise.
+ */
 function truthyEnv(name: string): boolean {
   const v = process.env[name]?.trim().toLowerCase();
   return v === "1" || v === "true" || v === "yes" || v === "on";
 }
 
+/**
+ * Determines whether an environment variable contains a recognized false-like value.
+ *
+ * @param name - The environment variable name
+ * @returns `true` if the value is `0`, `false`, `no`, or `off`, ignoring surrounding whitespace and letter case; `false` otherwise.
+ */
 function falsyEnv(name: string): boolean {
   const v = process.env[name]?.trim().toLowerCase();
   return v === "0" || v === "false" || v === "no" || v === "off";
 }
 
-/** Resolve effective policy: disk defaults + optional env overrides. */
+/**
+ * Resolves the effective agent access policy from Studio configuration and environment overrides.
+ *
+ * @returns The resolved access policy, including whether an environment override was applied
+ */
 export function resolveAgentAccess(): ResolvedAgentAccess {
   const disk = readStudioConfig().agentAccess ?? {};
   let mcpAccess = disk.mcpAccess !== false;
@@ -64,10 +80,21 @@ export function resolveAgentAccess(): ResolvedAgentAccess {
   };
 }
 
+/**
+ * Retrieves the effective Studio agent access policy for public consumption.
+ *
+ * @returns The resolved agent access policy with `source` set to `"studio"`
+ */
 export function getAgentAccessPublic(): ResolvedAgentAccess & { source: "studio" } {
   return { ...resolveAgentAccess(), source: "studio" };
 }
 
+/**
+ * Updates the configured agent access policy with the supplied boolean settings.
+ *
+ * @param patch - Policy fields to update; only supported boolean values are applied.
+ * @returns The resolved agent access policy with its source identified as `"studio"`.
+ */
 export function updateAgentAccess(patch: AgentAccessPolicy): ResolvedAgentAccess & { source: "studio" } {
   const current = readStudioConfig().agentAccess ?? {};
   const next: AgentAccessPolicy = { ...current };
@@ -100,6 +127,13 @@ export type DenyUnlessResult =
       >;
     };
 
+/**
+ * Enforces the resolved MCP access policy for a request.
+ *
+ * @param predicate - Condition that the resolved policy must satisfy
+ * @param reason - Explanation returned when the policy does not satisfy the condition
+ * @returns The resolved policy when access is allowed, or a structured denial with an error and reason
+ */
 export function denyUnless(
   predicate: (p: ResolvedAgentAccess) => boolean,
   reason: string,

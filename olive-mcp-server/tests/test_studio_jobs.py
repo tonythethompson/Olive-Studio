@@ -46,6 +46,7 @@ def test_list_jobs_ok(monkeypatch: pytest.MonkeyPatch):
 
 def test_get_job_not_found(monkeypatch: pytest.MonkeyPatch):
     def fake_request(method, path, **_kw):
+        """Return a job-not-found error response for a simulated request."""
         return {"error": "Job not found"}
 
     monkeypatch.setattr(studio_jobs, "studio_request", fake_request)
@@ -77,6 +78,12 @@ def test_get_job_ok(monkeypatch: pytest.MonkeyPatch):
 
 def test_get_results_metadata_only(monkeypatch: pytest.MonkeyPatch):
     def fake_request(method, path, **_kw):
+        """
+        Provide a completed optimization job fixture for request tests.
+        
+        Returns:
+        	dict: A completed job with logs and no latest metrics.
+        """
         return {
             "id": "jid-2",
             "status": "completed",
@@ -162,6 +169,7 @@ def test_cancel_job_ok(monkeypatch: pytest.MonkeyPatch):
 
 def test_cancel_job_reports_refusal(monkeypatch: pytest.MonkeyPatch):
     def fake_request(method, path, **kw):
+        """Return a refusal response indicating that job cancellation is disabled."""
         return {"ok": False, "error": "forbidden", "reason": "Job cancellation is disabled"}
 
     monkeypatch.setattr(studio_jobs, "studio_request", fake_request)

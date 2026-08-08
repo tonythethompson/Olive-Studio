@@ -24,7 +24,13 @@ _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", "[::1]"})
 
 
 def _kb_version() -> str:
-    """Content fingerprint surrogate: max mtime of KB JSON files."""
+    """
+    Report a version marker for the knowledge-base JSON files.
+    
+    Returns:
+    	str: A modification-time marker, ``"empty"`` when no JSON files exist, or
+    		``"unknown"`` when the directory cannot be accessed.
+    """
     mtimes: list[float] = []
     try:
         # Sorted for stable iteration (mtime aggregate is order-independent,
@@ -52,7 +58,12 @@ def _semantic_available() -> bool:
 
 
 def _studio_url_status() -> tuple[bool, str | None]:
-    """Return (configured_and_loopback_valid, reason_if_not)."""
+    """
+    Validate the configured Studio API URL for supported schemes, loopback hosts, and absent credentials.
+    
+    Returns:
+    	tuple[bool, str | None]: A validity flag and an explanatory reason when the URL is invalid.
+    """
     raw = (os.environ.get("OLIVE_STUDIO_API_URL") or "").strip()
     if not raw:
         return False, "OLIVE_STUDIO_API_URL is not set"
@@ -191,7 +202,15 @@ def get_mcp_capabilities(probe_studio: bool = False) -> dict[str, Any]:
 
 
 def _probe_studio(timeout_s: float = 2.0) -> bool:
-    """Best-effort GET against Studio base URL."""
+    """
+    Check whether the configured Studio endpoint is reachable.
+    
+    Parameters:
+        timeout_s (float): Maximum time in seconds allowed for the health check.
+    
+    Returns:
+        bool: `True` if Studio responds successfully, `False` if it is unavailable or unreachable.
+    """
     try:
         from .studio_loopback import studio_request
 
@@ -205,7 +224,12 @@ def _probe_studio(timeout_s: float = 2.0) -> bool:
 
 
 def _fetch_studio_policy() -> dict[str, Any] | None:
-    """Load Studio agent-access policy when reachable."""
+    """
+    Retrieve Studio's agent-access policy when available.
+    
+    Returns:
+    	dict[str, Any] | None: The agent-access policy, or `None` if Studio is unavailable or the response is invalid.
+    """
     try:
         from .studio_loopback import studio_request
 

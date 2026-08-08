@@ -54,8 +54,10 @@ export type StartOliveJobResult =
     };
 
 /**
- * Create a job, run provider/env setup, and spawn Olive (async).
- * Returns immediately after spawn (or reuse) with jobId.
+ * Validates a recipe, prepares its execution environment, and starts an Olive job or reuses an idempotent MCP submission.
+ *
+ * @param opts - Recipe, provider, client fingerprint, idempotency, and submission-source options
+ * @returns The job identifier and status, or details of the validation, setup, or execution failure
  */
 export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOliveJobResult> {
   const cudaVersion = opts.cudaVersion ?? "auto";

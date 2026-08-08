@@ -100,6 +100,12 @@ def test_run_with_budget_timeout():
     import time
 
     def slow():
+        """
+        Pause briefly before returning a completion marker.
+        
+        Returns:
+        	str: The string "done".
+        """
         time.sleep(0.5)
         return "done"
 
@@ -123,6 +129,7 @@ def test_run_with_budget_single_flight_during_timeout():
     started: list[int] = []
 
     def slow():
+        """Simulate a slow operation for budget timeout tests."""
         started.append(1)
         time.sleep(0.4)
         return "done"
@@ -168,6 +175,14 @@ def test_troubleshoot_auto_budget_degraded(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("OLIVE_MCP_SEMANTIC_BUDGET_MS", "50")
 
     def slow_scores(entries, error_only):
+        """Generate zero-valued score vectors after a deliberate delay.
+        
+        Parameters:
+        	entries: Entries to return and score.
+        	error_only: Whether to restrict scoring to error-related entries.
+        
+        Returns:
+        	A tuple containing the entries and an array of zero-valued score vectors."""
         time.sleep(0.4)
         n = len(list(entries))
         return list(entries), np.zeros((n, 384), dtype=np.float32)

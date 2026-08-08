@@ -22,11 +22,13 @@ REPO_ROOT = SERVER_DIR.parent
 
 
 def _ensure_path() -> None:
+    """Ensure the MCP server directory is available on the Python module search path."""
     if str(SERVER_DIR) not in sys.path:
         sys.path.insert(0, str(SERVER_DIR))
 
 
 def main() -> int:
+    """Run native MCP contract checks and return an exit status indicating whether they passed."""
     _ensure_path()
     from olive_mcp_server.mcp_server import _TOOL_IMPORTS, call_tool
 
