@@ -2,6 +2,7 @@
  * resolvePython: first executable candidate wins (no blind python3 fallback).
  */
 import { describe, expect, it, vi } from "vitest";
+import type { PathLike } from "node:fs";
 import path from "node:path";
 import { commandOnPath, resolvePython } from "../../../scripts/resolvePython.mjs";
 
@@ -10,7 +11,7 @@ describe("resolvePython", () => {
 
   it("returns the first existing venv python", () => {
     const wanted = path.join(root, "olive-mcp-server", ".venv", "bin", "python");
-    const existsSync = vi.fn((p: string) => p === wanted);
+    const existsSync = vi.fn((p: PathLike) => String(p) === wanted);
     expect(
       resolvePython(root, {
         existsSync,

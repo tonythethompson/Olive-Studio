@@ -18,10 +18,8 @@ import {
 } from "../../../scripts/studioConfigSnapshot.mjs";
 
 describe("studioConfigSnapshot", () => {
-  /** @type {string} */
-  let root;
-  /** @type {string} */
-  let configPath;
+  let root: string;
+  let configPath: string;
 
   beforeEach(() => {
     root = mkdtempSync(path.join(tmpdir(), "olive-studio-cfg-snap-"));
