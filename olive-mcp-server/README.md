@@ -130,7 +130,7 @@ Optional env for local feedback storage:
 - **Warm path:** `OLIVE_MCP_PRELOAD_EMBEDDINGS=1` loads model + indexes at process start.
 - **Jobs (Phases 2–3):** with Studio + `OLIVE_STUDIO_API_URL`, agents can **list/get/results**, **validate** (fingerprint), and optionally **submit/cancel** when Studio agent-access policy allows. MCP never spawns Olive itself — all execution goes through Studio.
 - **Policy:** `GET/PUT /api/olive/agent-access` (Studio-owned). Dev override: `OLIVE_MCP_ALLOW_JOBS=1` **escalates** effective submit+cancel on (see env table). Prefer the Agent Access UI for product defaults.
-- **Results privacy:** `get_optimization_results` may include `artifact_path_refs` scraped from logs. Those can be absolute paths that embed local usernames; treat as sensitive until basename-default hardening lands.
+- **Results privacy:** `get_optimization_results` returns `artifact_path_refs` as basenames/relative forms by default. Absolute paths require `include_absolute_artifact_paths=true` and local env `OLIVE_MCP_ALLOW_ABSOLUTE_ARTIFACT_PATHS=1`.
 - **Smoke:** from repo root, `pnpm mcp:native-smoke` and `pnpm mcp:agent-smoke` (pinned mcporter canary).
 - **mcporter example:** `config/mcporter.example.json` uses the same launcher.
 

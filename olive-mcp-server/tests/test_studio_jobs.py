@@ -96,17 +96,74 @@ def test_get_results_metadata_only(monkeypatch: pytest.MonkeyPatch):
         }
 
     monkeypatch.setattr(studio_jobs, "studio_request", fake_request)
+    monkeypatch.delenv("OLIVE_MCP_ALLOW_ABSOLUTE_ARTIFACT_PATHS", raising=False)
     result = studio_jobs.get_optimization_results("jid-2", log_tail=1)
     assert result["log_tail"] == ["done"]
-    assert any(p.endswith("model.onnx") for p in result["artifact_path_refs"])
+    assert result["artifact_path_refs"] == ["model.onnx"]
+    assert result["artifact_paths_absolute"] is False
     assert "Metadata only" in result["note"]
     assert result["side_effect"] is False
+
+
+def test_get_results_redacts_absolute_paths_by_default(monkeypatch: pytest.MonkeyPatch):
+    def fake_request(method, path, **_kw):
+        return {
+            "id": "jid-redact",
+            "status": "completed",
+            "exitCode": 0,
+            "logs": [
+                "saved /home/alice/models/out.onnx",
+                "also C:\\Users\\bob\\cache\\weights.safetensors",
+                "relative models/foo.onnx kept",
+            ],
+            "latestMetrics": None,
+        }
+
+    monkeypatch.setattr(studio_jobs, "studio_request", fake_request)
+    monkeypatch.delenv("OLIVE_MCP_ALLOW_ABSOLUTE_ARTIFACT_PATHS", raising=False)
+    result = studio_jobs.get_optimization_results("jid-redact", log_tail=3)
+    assert result["artifact_path_refs"] == ["out.onnx", "weights.safetensors", "models/foo.onnx"]
+    assert all("alice" not in p and "bob" not in p for p in result["artifact_path_refs"])
+    assert all("alice" not in line and "bob" not in line for line in result["log_tail"])
+    assert "out.onnx" in result["log_tail"][0]
+    assert result["artifact_paths_absolute"] is False
+
+
+def test_get_results_absolute_paths_require_env_opt_in(monkeypatch: pytest.MonkeyPatch):
+    def fake_request(method, path, **_kw):
+        return {
+            "id": "jid-abs",
+            "status": "completed",
+            "exitCode": 0,
+            "logs": ["wrote /home/alice/out/model.onnx"],
+            "latestMetrics": None,
+        }
+
+    monkeypatch.setattr(studio_jobs, "studio_request", fake_request)
+    monkeypatch.delenv("OLIVE_MCP_ALLOW_ABSOLUTE_ARTIFACT_PATHS", raising=False)
+    denied = studio_jobs.get_optimization_results(
+        "jid-abs",
+        log_tail=1,
+        include_absolute_artifact_paths=True,
+    )
+    assert denied["artifact_path_refs"] == ["model.onnx"]
+    assert denied["artifact_paths_absolute"] is False
+    assert "OLIVE_MCP_ALLOW_ABSOLUTE_ARTIFACT_PATHS" in denied["note"]
+
+    monkeypatch.setenv("OLIVE_MCP_ALLOW_ABSOLUTE_ARTIFACT_PATHS", "1")
+    allowed = studio_jobs.get_optimization_results(
+        "jid-abs",
+        log_tail=1,
+        include_absolute_artifact_paths=True,
+    )
+    assert allowed["artifact_path_refs"] == ["/home/alice/out/model.onnx"]
+    assert allowed["artifact_paths_absolute"] is True
+    assert "/home/alice/out/model.onnx" in allowed["log_tail"][0]
 
 
 def test_get_job_empty_id():
     result = studio_jobs.get_optimization_job("  ")
     assert result["error"] == "invalid_job_id"
-
 
 def test_call_tool_list_jobs_unavailable(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("OLIVE_STUDIO_API_URL", raising=False)

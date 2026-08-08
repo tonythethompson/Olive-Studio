@@ -11,7 +11,9 @@ Tools:
 
 from __future__ import annotations
 
+import os
 import re
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 from urllib.parse import quote
 
@@ -31,6 +33,57 @@ _JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 _TERMINAL = frozenset({"completed", "failed", "cancelled"})
 
+# Local-only gate for returning unredacted absolute artifact paths to agents.
+_ALLOW_ABS_PATHS_ENV = "OLIVE_MCP_ALLOW_ABSOLUTE_ARTIFACT_PATHS"
+
+
+def _truthy_env(name: str) -> bool:
+    v = (os.environ.get(name) or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def _looks_absolute_fs_path(path: str) -> bool:
+    if path.startswith(("/", "~")):
+        return True
+    if re.match(r"^[A-Za-z]:[\\/]", path):
+        return True
+    return False
+
+
+def _path_basename(path: str) -> str:
+    if re.match(r"^[A-Za-z]:[\\/]", path) or "\\" in path:
+        name = PureWindowsPath(path).name
+    else:
+        name = PurePosixPath(path).name
+    return name or path
+
+
+def absolute_artifact_paths_enabled(include_absolute_artifact_paths: bool) -> bool:
+    """Full paths require both the tool flag and a local host env opt-in."""
+    return bool(include_absolute_artifact_paths) and _truthy_env(_ALLOW_ABS_PATHS_ENV)
+
+
+def format_artifact_path_ref(path: str, *, include_absolute: bool) -> str:
+    """
+    Return an agent-safe path reference.
+
+    Default: basename (or already-relative form) so home-dir / account segments
+    are not sent to remote agents. Absolute paths only when ``include_absolute``.
+    """
+    if include_absolute:
+        return path
+    if not _looks_absolute_fs_path(path):
+        return path.replace("\\", "/")
+    return _path_basename(path)
+
+
+def redact_paths_in_log_line(line: str, *, include_absolute: bool) -> str:
+    """Replace heuristic artifact paths in a log line with display forms."""
+
+    def _repl(match: re.Match[str]) -> str:
+        return format_artifact_path_ref(match.group("path"), include_absolute=include_absolute)
+
+    return _PATH_RE.sub(_repl, line)
 
 def _is_error(payload: dict[str, Any]) -> bool:
     """
@@ -317,12 +370,19 @@ def cancel_optimization_job(job_id: str) -> dict[str, Any]:
     }
 
 
-def get_optimization_results(job_id: str, log_tail: int = 40) -> dict[str, Any]:
+def get_optimization_results(
+    job_id: str,
+    log_tail: int = 40,
+    include_absolute_artifact_paths: bool = False,
+) -> dict[str, Any]:
     """Return metadata-only results for a Studio job, including status, metrics, log excerpts, and artifact path references.
     
     Parameters:
     	job_id (str): Studio job identifier.
     	log_tail (int): Maximum number of trailing log lines to include, clamped to 0–200.
+    	include_absolute_artifact_paths (bool): Request unredacted absolute paths. Honored only when
+    	    the local host sets ``OLIVE_MCP_ALLOW_ABSOLUTE_ARTIFACT_PATHS`` (local opt-in). Default
+    	    agent-facing results use basenames / relative forms only.
     
     Returns:
     	dict[str, Any]: Job status, completion metadata, metrics, log information, heuristic artifact path references, and read-only operation metadata.
@@ -336,6 +396,8 @@ def get_optimization_results(job_id: str, log_tail: int = 40) -> dict[str, Any]:
     if log_tail > 200:
         log_tail = 200
 
+    include_absolute = absolute_artifact_paths_enabled(include_absolute_artifact_paths)
+
     payload = studio_request(
         "GET",
         _status_path(jid),
@@ -348,18 +410,33 @@ def get_optimization_results(job_id: str, log_tail: int = 40) -> dict[str, Any]:
 
     logs = payload.get("logs") if isinstance(payload.get("logs"), list) else []
     log_lines = [str(line) for line in logs]
-    tail = log_lines[-log_tail:] if log_tail else []
+    raw_tail = log_lines[-log_tail:] if log_tail else []
+    tail = [redact_paths_in_log_line(line, include_absolute=include_absolute) for line in raw_tail]
 
     artifact_refs: list[str] = []
     seen: set[str] = set()
     for line in log_lines:
         for match in _PATH_RE.finditer(line):
-            p = match.group("path")
-            if p not in seen and len(artifact_refs) < 20:
-                seen.add(p)
-                artifact_refs.append(p)
+            display = format_artifact_path_ref(match.group("path"), include_absolute=include_absolute)
+            if display not in seen and len(artifact_refs) < 20:
+                seen.add(display)
+                artifact_refs.append(display)
 
     status = payload.get("status")
+    path_note = (
+        "Absolute artifact paths included (local opt-in)."
+        if include_absolute
+        else (
+            "artifact_path_refs and log_tail paths are redacted to basenames/relative forms by default. "
+            f"Full paths require include_absolute_artifact_paths=true and {_ALLOW_ABS_PATHS_ENV}=1 on the MCP host."
+        )
+    )
+    if include_absolute_artifact_paths and not include_absolute:
+        path_note = (
+            "include_absolute_artifact_paths was requested but ignored: set "
+            f"{_ALLOW_ABS_PATHS_ENV}=1 on the local MCP host to allow unredacted paths."
+        )
+
     return {
         "id": payload.get("id", jid),
         "status": status,
@@ -371,9 +448,11 @@ def get_optimization_results(job_id: str, log_tail: int = 40) -> dict[str, Any]:
         "log_tail": tail,
         "latest_metrics": payload.get("latestMetrics", payload.get("latest_metrics")),
         "artifact_path_refs": artifact_refs,
+        "artifact_paths_absolute": include_absolute,
         "note": (
             "Metadata only — model artifacts and full logs are not transferred over MCP. "
-            "Paths are heuristic references from log lines."
+            "Paths are heuristic references from log lines. "
+            + path_note
         ),
         "side_effect": False,
     }

@@ -163,7 +163,7 @@ Agent retries are normal. `submit_optimization_job` **must** accept an **idempot
 
 Idempotency matters more than rate limiting for avoiding duplicate GPU work (rate limits remain useful as a backstop).
 
-**Current Studio behavior (MCP-origin only):** `findJobByIdempotency` reuses the prior MCP job for the same key and/or fingerprint while that job remains in the process registry, **including terminal** `completed` / `failed` / `cancelled` states. That matches HTTP idempotency (same request → same outcome) and avoids accidental duplicate GPU work. Callers that need a **new** run after a terminal job must supply a **new idempotency key** (and typically a changed recipe fingerprint). UI submissions are never entered into this index.
+**Current Studio behavior (MCP-origin only):** `findJobByIdempotency` reuses the prior MCP job for the same key and/or fingerprint while that job remains in the process registry for **in-progress** and **completed** states. **Failed** / **cancelled** indexed jobs are treated as a miss so agents can retry. Callers that need a **new** run after a successful completed job must supply a **new idempotency key** (and typically a changed recipe fingerprint). UI submissions are never entered into this index.
 
 ### 6.5 Long-running jobs and artifacts
 
@@ -171,7 +171,7 @@ Idempotency matters more than rate limiting for avoiding duplicate GPU work (rat
 - **Poll** `get_optimization_job` for structured progress.
 - MCP must **never** hold a transport call open for an entire optimization.
 - **Results** return status, output path/reference, metrics, passes, EP, duration, warnings, structured failure, log tail/reference, artifact **metadata** — not ONNX blobs or multi‑GB logs.
-- **`artifact_path_refs` privacy:** `get_optimization_results` may return heuristic path tokens scraped from log lines (up to 20). Those strings can be absolute and may embed local account names (e.g. `/home/<user>/...`, `C:\Users\<name>\...`). They are references only (no file bytes). A future hardening pass should default to basenames (or relative display forms) and gate full paths behind an explicit opt-in; until then, treat path refs as potentially sensitive in remote-agent contexts.
+- **`artifact_path_refs` privacy (default):** `get_optimization_results` scrapes heuristic path tokens from log lines (up to 20) and returns **basenames** (or already-relative forms) by default. Absolute paths and local account segments (`/home/<user>/...`, `C:\Users\<name>\...`, `/Users/<name>/...`) are **not** included in `artifact_path_refs` or `log_tail` unless both are true: tool arg `include_absolute_artifact_paths=true` **and** local MCP host env `OLIVE_MCP_ALLOW_ABSOLUTE_ARTIFACT_PATHS=1`. Response field `artifact_paths_absolute` reports whether full paths were actually returned. References only (no file bytes).
 
 ### 6.6 Capability model (richer than bool)
 
