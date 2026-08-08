@@ -212,7 +212,11 @@ async function startServer() {
         orderPreference: ["gz"],
         serveStatic: {
           setHeaders: (res, filePath) => {
-            if (filePath.endsWith("index.html")) {
+            if (/index\.html(\.gz)?$/.test(filePath)) {
+              // express-static-gzip rewrites the served path to the .gz
+              // variant when the client accepts it, so a plain endsWith
+              // check on "index.html" misses it — the SPA shell would fall
+              // through to the hashed-asset branch below and get cached.
               res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
               return;
             }
