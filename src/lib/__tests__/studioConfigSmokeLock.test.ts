@@ -128,6 +128,64 @@ describe("studioConfigSmokeLock", () => {
     expect(store.get("/tmp/lock")).toBe("111\n");
   });
 
+  it("clears an orphaned reclaim mutex and recovers the main lock", async () => {
+    const store: Store = new Map([
+      ["/tmp/lock", "111\n"],
+      ["/tmp/lock.reclaim", "222\n"],
+    ]);
+    const fs = makeFs(store);
+
+    const lock = await acquireStudioConfigSmokeLock("/tmp/lock", {
+      writeFileSync: fs.writeFileSync as never,
+      linkSync: fs.linkSync as never,
+      readFileSync: fs.readFileSync as never,
+      unlinkSync: fs.unlinkSync as never,
+      mkdirSync: fs.mkdirSync as never,
+      isProcessAlive: (pid) => pid !== 111 && pid !== 222,
+      pid: 999,
+      timeoutMs: 1_000,
+      pollMs: 5,
+      sleep: async () => undefined,
+      randomId: () => "orphan",
+    });
+    expect(store.get("/tmp/lock")).toBe("999\n");
+    expect(store.has("/tmp/lock.reclaim")).toBe(false);
+    lock.release();
+  });
+
+  it("does not steal a live reclaim mutex", async () => {
+    const store: Store = new Map([
+      ["/tmp/lock", "111\n"],
+      ["/tmp/lock.reclaim", "222\n"],
+    ]);
+    const fs = makeFs(store);
+    let t = 0;
+    const sleep = vi.fn(async (ms: number) => {
+      t += ms;
+    });
+
+    await expect(
+      acquireStudioConfigSmokeLock("/tmp/lock", {
+        writeFileSync: fs.writeFileSync as never,
+        linkSync: fs.linkSync as never,
+        readFileSync: fs.readFileSync as never,
+        unlinkSync: fs.unlinkSync as never,
+        mkdirSync: fs.mkdirSync as never,
+        isProcessAlive: (pid) => pid === 222, // reclaim holder still live
+        pid: 999,
+        timeoutMs: 30,
+        pollMs: 10,
+        now: () => t,
+        sleep,
+        randomId: () => "live-reclaim",
+      }),
+    ).rejects.toThrow(/could not acquire/);
+
+    expect(store.get("/tmp/lock")).toBe("111\n");
+    expect(store.get("/tmp/lock.reclaim")).toBe("222\n");
+    expect(sleep).toHaveBeenCalled();
+  });
+
   it("does not unlink a peer lock published between classify and reclaim", async () => {
     // Both waiters saw the same aged incomplete body; the first already
     // reclaimed and published before the second's body compare under reclaim gate.

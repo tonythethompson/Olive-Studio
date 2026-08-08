@@ -103,6 +103,46 @@ function publishLockFile(lockPath, body, deps) {
 }
 
 /**
+ * Drop an abandoned `lockPath.reclaim` gate so later smokers are not stuck
+ * waiting for a dead owner's mutex forever.
+ * @param {string} reclaimPath
+ * @param {{
+ *   readFileSync: typeof readFileSync,
+ *   unlinkSync: typeof unlinkSync,
+ *   statSync: typeof statSync,
+ *   isProcessAlive: (pid: number) => boolean,
+ *   now: () => number,
+ *   publishGraceMs: number,
+ * }} deps
+ * @returns {boolean}
+ */
+function tryClearOrphanedReclaimMutex(reclaimPath, deps) {
+  const {
+    readFileSync: read,
+    unlinkSync: unlink,
+    statSync: stat,
+    isProcessAlive: alive,
+    now,
+    publishGraceMs,
+  } = deps;
+  try {
+    const body = read(reclaimPath, "utf8");
+    const holder = parsePublishedLockPid(body);
+    if (holder != null) {
+      if (alive(holder)) return false;
+      unlink(reclaimPath);
+      return true;
+    }
+    const ageMs = now() - stat(reclaimPath).mtimeMs;
+    if (ageMs < publishGraceMs) return false;
+    unlink(reclaimPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Serialize reclaimers so only one waiter may unlink a classified body.
  * @param {string} lockPath
  * @param {string} observed
@@ -112,26 +152,58 @@ function publishLockFile(lockPath, body, deps) {
  *   readFileSync: typeof readFileSync,
  *   unlinkSync: typeof unlinkSync,
  *   mkdirSync: typeof mkdirSync,
+ *   statSync: typeof statSync,
+ *   isProcessAlive: (pid: number) => boolean,
+ *   now: () => number,
+ *   publishGraceMs: number,
  * }} deps
  * @returns {boolean}
  */
 function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
-  const { writeFileSync: write, readFileSync: read, unlinkSync: unlink, mkdirSync: mkdir } = deps;
+  const {
+    writeFileSync: write,
+    readFileSync: read,
+    unlinkSync: unlink,
+    mkdirSync: mkdir,
+    statSync: stat,
+    isProcessAlive: alive,
+    now,
+    publishGraceMs,
+  } = deps;
   const reclaimPath = `${lockPath}.reclaim`;
-  try {
+
+  const tryAcquireReclaimGate = () => {
     try {
       write(reclaimPath, `${myPid}\n`, { flag: "wx" });
+      return true;
     } catch (e) {
       if (errorCode(e) === "ENOENT") {
         mkdir(path.dirname(lockPath), { recursive: true });
         write(reclaimPath, `${myPid}\n`, { flag: "wx" });
-      } else {
-        throw e;
+        return true;
       }
+      throw e;
     }
+  };
+
+  try {
+    if (!tryAcquireReclaimGate()) return false;
   } catch (e) {
-    if (errorCode(e) === "EEXIST") return false;
-    throw e;
+    if (errorCode(e) !== "EEXIST") throw e;
+    const cleared = tryClearOrphanedReclaimMutex(reclaimPath, {
+      readFileSync: read,
+      unlinkSync: unlink,
+      statSync: stat,
+      isProcessAlive: alive,
+      now,
+      publishGraceMs,
+    });
+    if (!cleared) return false;
+    try {
+      if (!tryAcquireReclaimGate()) return false;
+    } catch {
+      return false;
+    }
   }
   try {
     const still = read(lockPath, "utf8");
@@ -254,6 +326,10 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
             readFileSync: read,
             unlinkSync: unlink,
             mkdirSync: mkdir,
+            statSync: stat,
+            isProcessAlive: alive,
+            now,
+            publishGraceMs,
           })
         ) {
           continue;
