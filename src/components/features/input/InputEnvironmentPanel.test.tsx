@@ -156,8 +156,13 @@ describe("InputEnvironmentPanel", () => {
       expect(await screen.findByText(/couldn't check token status/i)).toBeTruthy();
     });
 
-    it("does not clear the cached token status on a failed DELETE", async () => {
+    it("does not clear the cached token status on a failed DELETE and recovers on successful save", async () => {
       let deleteCalled = false;
+      let resolveDelete!: (res: Response) => void;
+      const deletePromise = new Promise<Response>((resolve) => {
+        resolveDelete = resolve;
+      });
+
       vi.spyOn(globalThis, "fetch").mockImplementation((url: unknown, init?: RequestInit) => {
         const urlStr = String(url);
         if (urlStr.includes("hf-token-status")) {
@@ -165,7 +170,7 @@ describe("InputEnvironmentPanel", () => {
         }
         if (urlStr.includes("/api/env/hf-token") && init?.method === "DELETE") {
           deleteCalled = true;
-          return Promise.resolve(new Response("Internal Error", { status: 500 }));
+          return deletePromise;
         }
         return Promise.resolve(new Response("{}", { status: 200 }));
       });
@@ -181,14 +186,43 @@ describe("InputEnvironmentPanel", () => {
 
       expect(await screen.findByText(/set for this session/i)).toBeTruthy();
       const clearButton = screen.getByRole("button", { name: /clear/i });
-      await act(async () => {
+
+      act(() => {
         fireEvent.click(clearButton);
+      });
+
+      // Assert button becomes disabled and shows spinner/loading accessible name while pending
+      const pendingButton = await screen.findByRole("button", { name: /clearing token/i });
+      expect(pendingButton.hasAttribute("disabled")).toBe(true);
+      expect(deleteCalled).toBe(true);
+
+      // Resolve DELETE with failure
+      await act(async () => {
+        resolveDelete(new Response("Internal Error", { status: 500 }));
         await Promise.resolve();
       });
 
-      expect(deleteCalled).toBe(true);
       // Status stays "runtime" — a failed DELETE must not optimistically clear the cache.
       expect(screen.getByText(/set for this session/i)).toBeTruthy();
+
+      // Assert error alert is displayed
+      const alert = await screen.findByRole("alert");
+      expect(alert).toBeTruthy();
+      expect(alert.textContent).toMatch(/couldn't clear the token/i);
+
+      // Perform a successful Save after the failure and verify recovery
+      const input = screen.getByPlaceholderText("hf_...") as HTMLInputElement;
+      fireEvent.change(input, { target: { value: "hf_new_token_123" } });
+      const saveButton = screen.getByRole("button", { name: /save/i });
+
+      await act(async () => {
+        fireEvent.click(saveButton);
+        await Promise.resolve();
+      });
+
+      // Verify the alert recovers (is removed) and token input is cleared
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(input.value).toBe("");
     });
   });
 });

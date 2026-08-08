@@ -48,23 +48,60 @@ function loadCodexSdk(): Promise<CodexSdkModule> {
   return dynamicImport("@openai/codex-sdk");
 }
 
-async function getCodex(): Promise<CodexClient> {
+/** True only for Node's "can't resolve @openai/codex-sdk" errors, not transitive module or evaluation/export failures. */
+export function isModuleNotFoundError(err: unknown): boolean {
+  if (
+    !(
+      err instanceof Error &&
+      "code" in err &&
+      (err.code === "ERR_MODULE_NOT_FOUND" || err.code === "MODULE_NOT_FOUND")
+    )
+  ) {
+    return false;
+  }
+  const specifier =
+    ("specifier" in err && typeof err.specifier === "string" && err.specifier
+      ? err.specifier
+      : "url" in err && typeof err.url === "string" && err.url
+        ? err.url
+        : err.message.match(/Cannot find (?:package|module) ['"]([^'\"]+)['\"]/)?.[1]) ??
+    "";
+
+  return specifier === "@openai/codex-sdk";
+}
+
+export function _resetCodexStateForTests(): void {
+  codexSingleton = null;
+  codexModulePromise = null;
+}
+
+export async function getCodex(): Promise<CodexClient> {
   if (!codexSingleton) {
     codexModulePromise ??= loadCodexSdk();
-    let Codex: CodexSdkModule["Codex"];
     try {
-      ({ Codex } = await codexModulePromise);
+      const mod = await codexModulePromise;
+      const Codex = mod?.Codex;
+      if (typeof Codex !== "function") {
+        throw new Error("Module '@openai/codex-sdk' does not export a valid Codex constructor.");
+      }
+      // Construct inside the guarded path so ctor failures also clear caches for retry.
+      codexSingleton = new Codex({
+        codexPathOverride: process.env.CODEX_PATH || undefined,
+      });
     } catch (err) {
-      // Reset so a later install doesn't require a server restart.
+      // Reset so a later install (or a transient failure) doesn't require a server restart.
+      codexSingleton = null;
       codexModulePromise = null;
-      throw new Error(
-        "Codex provider unavailable: @openai/codex-sdk (optionalDependencies) is not installed. Run `pnpm add @openai/codex-sdk` to enable it.",
-        { cause: err },
-      );
+      if (isModuleNotFoundError(err)) {
+        throw new Error(
+          "Codex provider unavailable: @openai/codex-sdk (optionalDependencies) is not installed. Run `pnpm add --save-optional @openai/codex-sdk` to enable it.",
+          { cause: err },
+        );
+      }
+      // Module resolved but failed to evaluate/export/construct correctly — a missing-package
+      // message here would be misleading.
+      throw new Error("Codex provider failed to load.", { cause: err });
     }
-    codexSingleton = new Codex({
-      codexPathOverride: process.env.CODEX_PATH || undefined,
-    });
   }
   return codexSingleton;
 }
