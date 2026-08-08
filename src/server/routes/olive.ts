@@ -286,6 +286,13 @@ export function mountOliveRoutes(router: Router): void {
 
   // ─── Job Status ───────────────────────────────────────────────────────
   router.get("/olive/status/:jobId", (req, res) => {
+    const isMcp = req.get("x-olive-mcp-agent") === "1";
+    if (isMcp) {
+      const gate = denyUnless((p) => p.allowJobInspection, "Job inspection is disabled in Studio agent access settings");
+      if (!gate.ok) {
+        return res.status(403).json({ ok: false, error: gate.error, reason: gate.reason, policy: gate.policy });
+      }
+    }
     const job = jobRegistry.get(req.params.jobId);
     if (!job) {
       return res.status(404).json({ error: "Job not found" });
@@ -334,10 +341,11 @@ export function mountOliveRoutes(router: Router): void {
       client: { type: "string", required: false },
     });
     if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
-    const { jobId, client } = body.parsed;
+    const { jobId } = body.parsed;
 
-    // MCP cancel is policy-gated; UI cancel (no client / client=ui) remains open.
-    if (client === "mcp") {
+    // Only the server-established MCP header selects the policy-gated path;
+    // the body marker is retained for compatibility but is not authorization.
+    if (req.get("x-olive-mcp-agent") === "1") {
       const gate = denyUnless(
         (p) => p.allowJobCancellation,
         "Job cancellation is disabled in Studio agent access settings",

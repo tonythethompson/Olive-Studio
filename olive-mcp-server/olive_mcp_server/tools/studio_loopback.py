@@ -158,7 +158,9 @@ def studio_request(
         path = "/" + path
     endpoint = f"{base}{path}"
 
-    headers = {"Accept": "application/json"}
+    # Trusted by Studio routes as the MCP bridge context; request bodies are not
+    # used to establish agent identity.
+    headers = {"Accept": "application/json", "X-Olive-MCP-Agent": "1"}
     data: bytes | None = None
     if body is not None:
         data = json.dumps(body).encode("utf-8")
