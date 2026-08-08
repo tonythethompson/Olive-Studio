@@ -79,10 +79,7 @@ skills-lock.json
 install.sh
 
 # Serena (machine-local cache/logs)
-/.serena/cache
-/.serena/logs
-/.serena/memories
-/.serena/project.local.yml
+/.serena/
 
 # Storybook config (not maintained)
 .storybook/
