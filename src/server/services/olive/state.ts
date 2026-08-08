@@ -78,6 +78,15 @@ export function resetJobRegistry(): void {
     }
     stopGpuMetricsTimer(job);
     job.sampling = false;
+    // Mark cancelled before finalize so stub/setup loops watching
+    // `status === "setting_up"` exit even when no child process exists.
+    if (
+      job.status !== "completed" &&
+      job.status !== "failed" &&
+      job.status !== "cancelled"
+    ) {
+      job.status = "cancelled";
+    }
     const proc = job.process;
     if (proc) {
       try {

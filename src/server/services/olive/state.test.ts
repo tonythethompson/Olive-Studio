@@ -203,6 +203,22 @@ describe("olive job registry cleanup", () => {
       expect(job.venvListener).toBeUndefined();
       expect(job.metricsTimer).toBeNull();
       expect(job.sampling).toBe(false);
+      expect(job.status).toBe("cancelled");
+      expect(jobRegistry.size).toBe(0);
+    });
+
+    it("cancels setting_up jobs so stub setup loops can exit", () => {
+      const job = makeJob("setting-up", {
+        status: "setting_up",
+        finishedAt: null,
+        process: null,
+      });
+      jobRegistry.set(job.id, job);
+
+      resetJobRegistry();
+
+      expect(job.status).toBe("cancelled");
+      expect(job.finishedAt).toBeTypeOf("number");
       expect(jobRegistry.size).toBe(0);
     });
   });

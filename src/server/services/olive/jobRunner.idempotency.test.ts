@@ -2,6 +2,10 @@
  * Concurrent MCP submit locking + idempotent reuse via startOliveJob.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { preflightOliveRecipe } from "./jobPreflight.ts";
+import { mcpSubmitLockTailCount, startOliveJob } from "./jobRunner.ts";
+import { clearIdempotencyIndex } from "./jobIdempotency.ts";
+import { jobRegistry } from "./state.ts";
 
 vi.mock("./jobPreflight.ts", () => ({
   preflightOliveRecipe: vi.fn(() => ({
@@ -24,11 +28,6 @@ vi.mock("../venv/index.ts", () => ({
   buildOliveRunEnvironment: vi.fn(() => ({})),
   resolveOliveCommand: vi.fn(() => ({ executable: "echo", args: ["ok"] })),
 }));
-
-import { preflightOliveRecipe } from "./jobPreflight.ts";
-import { mcpSubmitLockTailCount, startOliveJob } from "./jobRunner.ts";
-import { clearIdempotencyIndex } from "./jobIdempotency.ts";
-import { jobRegistry } from "./state.ts";
 
 afterEach(() => {
   jobRegistry.clear();
