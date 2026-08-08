@@ -1,7 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { resolveQnnHostMode } from "../../../lib/qnnDeps.ts";
 import { fingerprintRecipe, preflightOliveRecipe } from "./jobPreflight.ts";
 import type { OliveRecipe } from "../../types.ts";
+
+vi.mock("../../../lib/qnnDeps.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../lib/qnnDeps.ts")>();
+  return {
+    ...actual,
+    resolveQnnHostMode: vi.fn(actual.resolveQnnHostMode),
+  };
+});
 
 function minimalRecipe(ep = "CPUExecutionProvider"): OliveRecipe {
   // Cast via unknown: server OliveRecipe accelerators omit optional `device`.
@@ -113,16 +121,22 @@ describe("preflightOliveRecipe", () => {
     expect(fingerprintRecipe(withUndef, "auto")).toBe(fingerprintRecipe(without, "auto"));
   });
 
-  it("QNN validate stays structural: no probe means no NPU/runtime hard-fail here", () => {
+  it("QNN validate stays structural: deferred readiness warning on local-inference", () => {
+    vi.mocked(resolveQnnHostMode).mockReturnValue("local-inference");
     const pre = preflightOliveRecipe(minimalRecipe("QNNExecutionProvider"));
     // Missing NPU/runtime must not fail sync validate (probe is deferred to startOliveJob).
     expect(pre.errors.some((e) => /npu|runtime not ready/i.test(e))).toBe(false);
-    // On local-inference hosts, surface an explicit deferred-probe warning.
-    const mode = resolveQnnHostMode({ platform: process.platform, arch: process.arch });
-    if (mode === "local-inference") {
-      expect(pre.warnings.some((w) => /npu\/runtime readiness is not checked at validate/i.test(w))).toBe(
-        true,
-      );
-    }
+    expect(pre.warnings.some((w) => /npu\/runtime readiness is not checked at validate/i.test(w))).toBe(
+      true,
+    );
+  });
+
+  it("QNN out-of-scope host skips deferred-readiness warning without NPU hard-fail", () => {
+    vi.mocked(resolveQnnHostMode).mockReturnValue("out-of-scope");
+    const pre = preflightOliveRecipe(minimalRecipe("QNNExecutionProvider"));
+    expect(pre.errors.some((e) => /npu|runtime not ready/i.test(e))).toBe(false);
+    expect(pre.warnings.some((w) => /npu\/runtime readiness is not checked at validate/i.test(w))).toBe(
+      false,
+    );
   });
 });

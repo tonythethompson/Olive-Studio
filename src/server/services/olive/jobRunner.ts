@@ -62,8 +62,54 @@ export type StartOliveJobResult =
       jobId?: string;
     };
 
-/** In-flight MCP submits keyed by idempotency key or fingerprint (serialize check-then-act). */
-const mcpSubmitLocks = new Map<string, Promise<StartOliveJobResult>>();
+/** Per-key promise tails that serialize MCP submit critical sections. */
+const mcpSubmitLockTails = new Map<string, Promise<void>>();
+
+/** Test helper: number of live MCP submit-lock tails (should be 0 when idle). */
+export function mcpSubmitLockTailCount(): number {
+  return mcpSubmitLockTails.size;
+}
+
+/**
+ * Acquire exclusive tails for the given lock keys (sorted to avoid deadlocks).
+ * Callers with overlapping fingerprint/key sets cannot both pass lookup-and-register.
+ */
+async function withMcpSubmitLocks<T>(keys: string[], fn: () => Promise<T>): Promise<T> {
+  const sorted = [...new Set(keys)].sort();
+  const releases: Array<() => void> = [];
+  /** Tails we installed; delete only if still ours (a newer waiter may have replaced them). */
+  const installed: Array<{ key: string; tail: Promise<void> }> = [];
+  try {
+    for (const key of sorted) {
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const prev = mcpSubmitLockTails.get(key) ?? Promise.resolve();
+      // Chain: next waiter awaits prev, then our held promise until we release.
+      const tail = prev.then(
+        () => held,
+        () => held,
+      );
+      mcpSubmitLockTails.set(key, tail);
+      installed.push({ key, tail });
+      await prev;
+      releases.push(release);
+    }
+    return await fn();
+  } finally {
+    while (releases.length > 0) {
+      releases.pop()!();
+    }
+    // Evict only our installed tails. If a newer waiter replaced the map entry,
+    // leave theirs in place so cleanup never drops an active chain link.
+    for (const { key, tail } of installed) {
+      if (mcpSubmitLockTails.get(key) === tail) {
+        mcpSubmitLockTails.delete(key);
+      }
+    }
+  }
+}
 
 /**
  * Validates a recipe, prepares its execution environment, and starts an Olive job or reuses an idempotent MCP submission.
@@ -101,30 +147,20 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
 
   // Idempotency is for MCP/agent submit only — UI re-runs should always spawn.
   if (opts.source === "mcp") {
+    // Always lock the recipe fingerprint so key-bearing and fingerprint-only
+    // callers cannot both observe a miss and spawn duplicate jobs. Also lock
+    // the idempotency key when present so same-key conflict checks serialize.
     const lockKeys = [`fp:${fingerprint}`];
     if (opts.idempotencyKey) lockKeys.push(`key:${opts.idempotencyKey}`);
-
-    for (const lockKey of lockKeys) {
-      const inflight = mcpSubmitLocks.get(lockKey);
-      if (inflight) return inflight;
-    }
-
-    const work = startMcpOliveJobLocked({
-      recipe,
-      provider,
-      cudaVersion,
-      fingerprint,
-      idempotencyKey: opts.idempotencyKey,
-    });
-    for (const lockKey of lockKeys) mcpSubmitLocks.set(lockKey, work);
-    try {
-      return await work;
-    } finally {
-      // Only clear slots we still own (avoid deleting a newer waiter's promise).
-      for (const lockKey of lockKeys) {
-        if (mcpSubmitLocks.get(lockKey) === work) mcpSubmitLocks.delete(lockKey);
-      }
-    }
+    return withMcpSubmitLocks(lockKeys, () =>
+      startMcpOliveJobLocked({
+        recipe,
+        provider,
+        cudaVersion,
+        fingerprint,
+        idempotencyKey: opts.idempotencyKey,
+      }),
+    );
   }
 
   return registerAndStartOliveJob({
@@ -158,6 +194,12 @@ async function startMcpOliveJobLocked(opts: {
     };
   }
   if (lookup.kind === "hit") {
+    // Attach the arriving key onto a fingerprint-only job so later same-key
+    // replays hit the key index directly.
+    if (opts.idempotencyKey && !lookup.job.idempotencyKey) {
+      lookup.job.idempotencyKey = opts.idempotencyKey;
+      rememberIdempotencyKeys(lookup.job);
+    }
     const submittedAt = lookup.job.submittedAt ?? Date.now();
     if (lookup.job.submittedAt == null) lookup.job.submittedAt = submittedAt;
     return {
@@ -263,6 +305,28 @@ async function continueOliveJobSetup(
   const jobId = job.id;
   const submittedAt = job.submittedAt ?? Date.now();
   const bailIfCancelled = (): boolean => job.status === "cancelled";
+
+  // Smoke/CI: park in setting_up without venv/model downloads or `olive run`.
+  // Cancel (or external finalize) ends the wait. See scripts/mcp-agent-smoke.mjs.
+  const stubSetup = ["1", "true", "yes", "on"].includes(
+    (process.env.OLIVE_JOB_SETUP_STUB ?? "").trim().toLowerCase(),
+  );
+  if (stubSetup) {
+    pushLog(job, "[stub] Olive job setup stubbed; waiting for cancel.");
+    while (job.status === "setting_up") {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    cleanupJobArtifacts(job);
+    finalizeJob(job);
+    return {
+      ok: true,
+      jobId,
+      reused: false,
+      fingerprint,
+      status: job.status,
+      submittedAt,
+    };
+  }
 
   try {
     const venvListener = (line: string) => pushLog(job, line);

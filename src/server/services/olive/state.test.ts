@@ -1,15 +1,24 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { jobRegistry, cleanupJobArtifacts, sweepJobRegistry, finalizeJob } from "./state.ts";
+import type { OliveJob } from "../../types.ts";
+import fs from "fs";
+import os from "os";
+import path from "path";
+
+const { detachVenvListener } = vi.hoisted(() => ({
+  detachVenvListener: vi.fn(),
+}));
+
+vi.mock("../venv/index.ts", () => ({
+  detachVenvListener: (...args: unknown[]) => detachVenvListener(...args),
+}));
+
+import { jobRegistry, cleanupJobArtifacts, sweepJobRegistry, finalizeJob, resetJobRegistry } from "./state.ts";
 import {
   clearIdempotencyIndex,
   findJobByIdempotency,
   idempotencyIndexSize,
   rememberIdempotencyKeys,
 } from "./jobIdempotency.ts";
-import type { OliveJob } from "../../types.ts";
-import fs from "fs";
-import os from "os";
-import path from "path";
 
 function makeJob(id: string, overrides: Partial<OliveJob> = {}): OliveJob {
   return {
@@ -34,11 +43,13 @@ describe("olive job registry cleanup", () => {
   beforeEach(() => {
     jobRegistry.clear();
     clearIdempotencyIndex();
+    detachVenvListener.mockClear();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     clearIdempotencyIndex();
+    resetJobRegistry();
   });
 
   describe("sweepJobRegistry", () => {
@@ -139,6 +150,60 @@ describe("olive job registry cleanup", () => {
       vi.spyOn(fs, "rmSync").mockImplementation(() => undefined);
       expect(sweepJobRegistry(now)).toBe(1);
       expect(jobRegistry.has("stuck")).toBe(false);
+    });
+  });
+
+  describe("resetJobRegistry", () => {
+    it("kills active children, clears artifacts, registry, and MCP idempotency keys", () => {
+      const kill = vi.fn();
+      const tmp = path.join(os.tmpdir(), `olive-reset-test-${Date.now()}.json`);
+      fs.writeFileSync(tmp, "{}", "utf-8");
+      const job = makeJob("live", {
+        status: "running",
+        finishedAt: null,
+        exitCode: null,
+        source: "mcp",
+        fingerprint: "fp-reset",
+        idempotencyKey: "k-reset",
+        tempRecipePath: tmp,
+        process: {
+          kill,
+          exitCode: null,
+          signalCode: null,
+        } as unknown as OliveJob["process"],
+      });
+      jobRegistry.set(job.id, job);
+      rememberIdempotencyKeys(job);
+      expect(idempotencyIndexSize()).toBeGreaterThan(0);
+
+      resetJobRegistry();
+
+      expect(kill).toHaveBeenCalledWith("SIGKILL");
+      expect(jobRegistry.size).toBe(0);
+      expect(idempotencyIndexSize()).toBe(0);
+      expect(fs.existsSync(tmp)).toBe(false);
+      expect(findJobByIdempotency({ idempotencyKey: "k-reset" }).kind).toBe("miss");
+    });
+
+    it("detaches venv listeners and clears GPU metrics timers before finalize", () => {
+      const listener = vi.fn();
+      const handle = setInterval(() => {}, 60_000);
+      const job = makeJob("reset-resources", {
+        status: "running",
+        finishedAt: null,
+        venvListener: listener as unknown as OliveJob["venvListener"],
+        metricsTimer: handle,
+        sampling: true,
+      });
+      jobRegistry.set(job.id, job);
+
+      resetJobRegistry();
+
+      expect(detachVenvListener).toHaveBeenCalledWith(listener);
+      expect(job.venvListener).toBeUndefined();
+      expect(job.metricsTimer).toBeNull();
+      expect(job.sampling).toBe(false);
+      expect(jobRegistry.size).toBe(0);
     });
   });
 

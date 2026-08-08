@@ -411,18 +411,7 @@ def test_live_auto_budgets_even_when_model_is_warm(monkeypatch: pytest.MonkeyPat
     """Warm model must not skip the auto budget: live fetch/index can still be cold."""
     import time
 
-    from olive_mcp_server.tools import retrieval
     from olive_mcp_server.tools.retrieval import retrieval_meta
-
-    # Ensure no abandoned budget worker from a prior test blocks single-flight.
-    deadline = time.monotonic() + 2.0
-    while time.monotonic() < deadline:
-        with retrieval._INFLIGHT_LOCK:
-            fut = retrieval._INFLIGHT_FUTURE
-            if fut is None or fut.done():
-                retrieval._INFLIGHT_FUTURE = None
-                break
-        time.sleep(0.05)
 
     monkeypatch.setenv("OLIVE_MCP_SEMANTIC_BUDGET_MS", "50")
 
@@ -480,9 +469,6 @@ def test_live_auto_budgets_even_when_model_is_warm(monkeypatch: pytest.MonkeyPat
     assert again
     assert all(r["source"].startswith("live:") for r in again)
     assert again_meta.get("effective") == "keyword"
-
-    # Drain abandoned budget worker for subsequent tests.
-    time.sleep(0.55)
 
 
 def test_shared_semantic_budget_zero_remaining_forces_live_keyword(

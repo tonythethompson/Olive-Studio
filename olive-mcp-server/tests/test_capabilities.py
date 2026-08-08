@@ -112,8 +112,6 @@ def test_run_with_budget_timeout():
     result, outcome = run_with_budget(slow, budget_ms=50)
     assert outcome == "timeout"
     assert result is None
-    # Drain abandoned worker so later tests are not blocked by single-flight.
-    time.sleep(0.55)
 
 
 def test_run_with_budget_ok():
@@ -122,7 +120,7 @@ def test_run_with_budget_ok():
     assert result == 42
 
 
-def test_run_with_budget_single_flight_during_timeout():
+def test_run_with_budget_single_flight_during_timeout(wait_inflight_semantic_clear):
     """Consecutive calls during a timeout must not start a second callable."""
     import time
 
@@ -141,8 +139,8 @@ def test_run_with_budget_single_flight_during_timeout():
     assert o2 == "busy" and r2 is None
     assert started == [1]
 
-    time.sleep(0.5)
     # After the in-flight work finishes, a new callable may start.
+    wait_inflight_semantic_clear()
     r3, o3 = run_with_budget(lambda: "fresh", budget_ms=5000)
     assert o3 == "ok" and r3 == "fresh"
     assert started == [1]
@@ -201,5 +199,3 @@ def test_troubleshoot_auto_budget_degraded(monkeypatch: pytest.MonkeyPatch):
     assert result["retrieval"]["effective"] == "keyword"
     # Keyword path should still diagnose OOM (may match oom-quantization)
     assert isinstance(result.get("title"), str)
-    # Drain abandoned budget worker for subsequent tests.
-    time.sleep(0.5)

@@ -16,12 +16,20 @@
 import { EventEmitter } from "events";
 import { vi } from "vitest";
 
+/** Recorded child_process launches for assertions (MCP injection tests, etc.). */
+export const childProcessLaunchLog: { fn: "execFile" | "spawn"; args: unknown[] }[] = [];
+
+export function clearChildProcessLaunchLog(): void {
+  childProcessLaunchLog.length = 0;
+}
+
 // ─── child_process: mock execFile + spawn ─────────────────────────────────
 
 vi.mock("child_process", async (importOriginal) => {
   const actual = await importOriginal<typeof import("child_process")>();
 
   function mockExecFile(...execArgs: unknown[]): ReturnType<typeof actual.execFile> {
+    childProcessLaunchLog.push({ fn: "execFile", args: execArgs });
     const lastArg = execArgs[execArgs.length - 1];
     if (typeof lastArg === "function") {
       lastArg(null, "", "");
@@ -31,7 +39,8 @@ vi.mock("child_process", async (importOriginal) => {
     return (actual.execFile as any)(...execArgs);
   }
 
-  function mockSpawn(): ReturnType<typeof actual.spawn> {
+  function mockSpawn(...spawnArgs: unknown[]): ReturnType<typeof actual.spawn> {
+    childProcessLaunchLog.push({ fn: "spawn", args: spawnArgs });
     const proc = new EventEmitter() as unknown as ReturnType<typeof actual.spawn>;
     proc.stdout = new EventEmitter() as unknown as ReturnType<typeof actual.spawn>["stdout"];
     proc.stderr = new EventEmitter() as unknown as ReturnType<typeof actual.spawn>["stderr"];

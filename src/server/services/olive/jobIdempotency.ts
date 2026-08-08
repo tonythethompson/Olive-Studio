@@ -11,6 +11,8 @@
  * - Fingerprint only: reuse an MCP job with that recipe fingerprint.
  * - Key + fingerprint: key wins; if the stored job has a different fingerprint,
  *   treat as conflict (caller should return 409) — never reuse the wrong job.
+ * - Key miss + fingerprint that maps to a fingerprint-only job: hit (adopt).
+ * - Key miss + fingerprint owned by a different keyed job: miss (new run).
  * - Failed/cancelled indexed jobs are treated as a miss so agents can retry.
  */
 import { jobRegistry } from "./state.ts";
@@ -124,8 +126,16 @@ export function findJobByIdempotency(opts: {
       }
       return { kind: "hit", job: byKey };
     }
-    // Explicit key with no prior mapping: do not fall through to fingerprint
-    // reuse — a new key must start a new run even for the same recipe.
+    // Key miss: reuse a fingerprint-only MCP job (no attached key) so a later
+    // keyed submit can adopt the in-flight admission. Do not reuse when the
+    // fingerprint is already owned by a different keyed job — that keeps
+    // sequential distinct-key behavior intact.
+    if (opts.fingerprint) {
+      const byFp = resolveJobForIndexKey(`fp:${opts.fingerprint}`);
+      if (byFp && !byFp.idempotencyKey) {
+        return { kind: "hit", job: byFp };
+      }
+    }
     return { kind: "miss" };
   }
 

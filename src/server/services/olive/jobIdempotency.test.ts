@@ -88,7 +88,7 @@ describe("jobIdempotency", () => {
     expect(findJobByIdempotency({ fingerprint: "fp-shared" })).toEqual({ kind: "hit", job: mcp });
   });
 
-  it("does not fall back to fingerprint when an explicit new key misses", () => {
+  it("does not fall back to fingerprint when an explicit new key misses a keyed job", () => {
     const job = makeJob("j-old", {
       fingerprint: "fp-rerun",
       idempotencyKey: "old-key",
@@ -100,6 +100,19 @@ describe("jobIdempotency", () => {
     expect(
       findJobByIdempotency({ idempotencyKey: "new-key", fingerprint: "fp-rerun" }),
     ).toEqual({ kind: "miss" });
+  });
+
+  it("reuses a fingerprint-only job when a keyed submit arrives later", () => {
+    const job = makeJob("j-fp-only", {
+      fingerprint: "fp-adopt",
+      source: "mcp",
+      status: "setting_up",
+    });
+    jobRegistry.set(job.id, job);
+    rememberIdempotencyKeys(job);
+    expect(
+      findJobByIdempotency({ idempotencyKey: "late-key", fingerprint: "fp-adopt" }),
+    ).toEqual({ kind: "hit", job });
   });
 
   it("ignores default/undefined source as non-MCP", () => {

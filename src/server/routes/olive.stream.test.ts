@@ -8,10 +8,12 @@ import express from "express";
 import type { Server } from "http";
 import type { OliveJob } from "../types.ts";
 import type { GpuMetrics } from "../../lib/gpuMetrics.ts";
+import { writeStudioConfig } from "../config.ts";
 import { pushGpuMetrics, pushLog } from "../services/olive/gpu.ts";
 import { finalizeJob, jobRegistry } from "../services/olive/state.ts";
 
 // Keep agent-access policy mutations out of the real `.olive-studio/config.json`.
+// vi.mock is hoisted, so the static import above resolves to this fake.
 vi.mock("../config.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../config.ts")>();
   let cfg: Record<string, unknown> = {};
@@ -24,8 +26,6 @@ vi.mock("../config.ts", async (importOriginal) => {
     },
   };
 });
-
-import { writeStudioConfig } from "../config.ts";
 
 const { mountOliveRoutes } = await import("./olive.ts");
 

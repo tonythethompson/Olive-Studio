@@ -230,8 +230,14 @@ describe("POST /api/mcp/tool", () => {
 });
 
 describe("POST /api/mcp/studio-recipe mcpAccess", () => {
+  const previousOliveMcpAccess = process.env.OLIVE_MCP_ACCESS;
+
   afterEach(() => {
-    delete process.env.OLIVE_MCP_ACCESS;
+    if (previousOliveMcpAccess === undefined) {
+      delete process.env.OLIVE_MCP_ACCESS;
+    } else {
+      process.env.OLIVE_MCP_ACCESS = previousOliveMcpAccess;
+    }
   });
 
   it("returns 403 when master mcpAccess is disabled", async () => {
