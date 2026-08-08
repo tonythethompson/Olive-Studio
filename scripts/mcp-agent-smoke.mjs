@@ -36,6 +36,7 @@ import {
   acquireStudioConfigSmokeLock,
   tryRemoveEmptyStudioConfigDir,
 } from "./studioConfigSmokeLock.mjs";
+import { stopStudioThenAlways } from "./stopStudioThenAlways.mjs";
 import { resolvePython } from "./resolvePython.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -200,7 +201,11 @@ function callToolAsync(selector, toolArgs, opts = {}) {
       }
       killEscalation = setTimeout(() => {
         try {
-          if (!child.killed) child.kill("SIGKILL");
+          // `killed` can be true after SIGTERM even while the process is still running;
+          // exit/signal codes are the authoritative "already exited" check.
+          if (child.exitCode === null && child.signalCode === null) {
+            child.kill("SIGKILL");
+          }
         } catch {
           /* ignore */
         }
@@ -538,42 +543,55 @@ let cleanupPromise = null;
 async function cleanup() {
   if (cleanupPromise) return cleanupPromise;
   cleanupPromise = (async () => {
-    await stopStudio(studioChild);
-    studioChild = null;
-    try {
-      if (lastSmokeConfigBytes !== undefined) {
-        restoreStudioConfigFile(STUDIO_CONFIG_PATH, configSnapshot, {
-          expectedContents: lastSmokeConfigBytes,
-        });
-      } else {
-        restoreStudioConfigFile(STUDIO_CONFIG_PATH, configSnapshot);
-      }
-      configRestoreError = null;
-    } catch (e) {
-      configRestoreError = e;
-      console.warn(
-        "restore Studio config failed:",
-        e instanceof Error ? e.message : e,
-      );
-    }
-    // Drop the lock only after restore so another smoke cannot snapshot mid-restore.
-    if (releaseSmokeConfigLock) {
-      try {
-        releaseSmokeConfigLock();
-      } catch {
-        /* ignore */
-      }
-      releaseSmokeConfigLock = null;
-    }
-    // Restore may have left `.olive-studio/` because the lock file still existed.
-    if (configSnapshot && !configSnapshot.existed) {
-      tryRemoveEmptyStudioConfigDir(path.dirname(STUDIO_CONFIG_PATH));
-    }
-    try {
-      rmSync(smokeConfigDir, { recursive: true, force: true });
-    } catch {
-      /* ignore */
-    }
+    await stopStudioThenAlways(
+      async () => {
+        try {
+          await stopStudio(studioChild);
+        } catch (e) {
+          console.warn(
+            "stop Studio failed:",
+            e instanceof Error ? e.message : e,
+          );
+        }
+      },
+      async () => {
+        studioChild = null;
+        try {
+          if (lastSmokeConfigBytes !== undefined) {
+            restoreStudioConfigFile(STUDIO_CONFIG_PATH, configSnapshot, {
+              expectedContents: lastSmokeConfigBytes,
+            });
+          } else {
+            restoreStudioConfigFile(STUDIO_CONFIG_PATH, configSnapshot);
+          }
+          configRestoreError = null;
+        } catch (e) {
+          configRestoreError = e;
+          console.warn(
+            "restore Studio config failed:",
+            e instanceof Error ? e.message : e,
+          );
+        }
+        // Drop the lock only after restore so another smoke cannot snapshot mid-restore.
+        if (releaseSmokeConfigLock) {
+          try {
+            releaseSmokeConfigLock();
+          } catch {
+            /* ignore */
+          }
+          releaseSmokeConfigLock = null;
+        }
+        // Restore may have left `.olive-studio/` because the lock file still existed.
+        if (configSnapshot && !configSnapshot.existed) {
+          tryRemoveEmptyStudioConfigDir(path.dirname(STUDIO_CONFIG_PATH));
+        }
+        try {
+          rmSync(smokeConfigDir, { recursive: true, force: true });
+        } catch {
+          /* ignore */
+        }
+      },
+    );
   })();
   return cleanupPromise;
 }

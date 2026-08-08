@@ -89,6 +89,17 @@ describe("startOliveJob MCP idempotency lock", () => {
     if (!fpOnly.ok || !withKey.ok) return;
     expect(withKey.jobId).toBe(fpOnly.jobId);
     expect(withKey.reused).toBe(true);
+
+    // Same adopted key must replay onto the fingerprint-only job.
+    const replay = await startOliveJob({
+      recipe,
+      source: "mcp",
+      idempotencyKey: "after-fp-key",
+    });
+    expect(replay.ok).toBe(true);
+    if (!replay.ok) return;
+    expect(replay.jobId).toBe(fpOnly.jobId);
+    expect(replay.reused).toBe(true);
     expect([...jobRegistry.keys()]).toHaveLength(1);
     expect(mcpSubmitLockTailCount()).toBe(0);
   });

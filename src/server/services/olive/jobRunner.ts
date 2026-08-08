@@ -313,11 +313,12 @@ async function continueOliveJobSetup(
   );
   if (stubSetup) {
     pushLog(job, "[stub] Olive job setup stubbed; waiting for cancel.");
-    while (job.status === "setting_up") {
+    // Exit when cancelled or when another path finalizes the job without a status flip.
+    while (job.status === "setting_up" && job.finishedAt == null) {
       await new Promise((r) => setTimeout(r, 200));
     }
     cleanupJobArtifacts(job);
-    finalizeJob(job);
+    if (job.finishedAt == null) finalizeJob(job);
     return {
       ok: true,
       jobId,

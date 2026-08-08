@@ -188,6 +188,7 @@ describe("olive job registry cleanup", () => {
     it("detaches venv listeners and clears GPU metrics timers before finalize", () => {
       const listener = vi.fn();
       const handle = setInterval(() => {}, 60_000);
+      const clearSpy = vi.spyOn(globalThis, "clearInterval");
       const job = makeJob("reset-resources", {
         status: "running",
         finishedAt: null,
@@ -201,6 +202,7 @@ describe("olive job registry cleanup", () => {
 
       expect(detachVenvListener).toHaveBeenCalledWith(listener);
       expect(job.venvListener).toBeUndefined();
+      expect(clearSpy).toHaveBeenCalledWith(handle);
       expect(job.metricsTimer).toBeNull();
       expect(job.sampling).toBe(false);
       expect(job.status).toBe("cancelled");
