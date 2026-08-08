@@ -6,8 +6,12 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+/** Top-level marker written while mcp-agent-smoke owns policy patches. */
+export const SMOKE_OWNER_KEY = "__mcpAgentSmokeOwner";
+
 /**
  * @typedef {{ existed: false, contents: null } | { existed: true, contents: string }} StudioConfigSnapshot
+ * @typedef {{ pid: number, startedAt: string }} SmokeOwnerStamp
  */
 
 /**
@@ -33,6 +37,54 @@ export function snapshotStudioConfigFile(configPath) {
 export function readStudioConfigFileContents(configPath) {
   if (!existsSync(configPath)) return null;
   return readFileSync(configPath, "utf8");
+}
+
+/**
+ * @param {string} configPath
+ * @returns {SmokeOwnerStamp | null}
+ */
+export function readSmokeOwnerStamp(configPath) {
+  const raw = readStudioConfigFileContents(configPath);
+  if (raw == null) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    const stamp = parsed?.[SMOKE_OWNER_KEY];
+    if (!stamp || typeof stamp !== "object") return null;
+    const pid = Number(stamp.pid);
+    if (!Number.isFinite(pid) || pid <= 0) return null;
+    return {
+      pid,
+      startedAt: typeof stamp.startedAt === "string" ? stamp.startedAt : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Refuse to proceed when another live smoke still stamps this config.
+ * @param {string} configPath
+ * @param {number} myPid
+ * @param {(pid: number) => boolean} [isAlive]
+ */
+export function assertNoLiveForeignSmokeOwner(
+  configPath,
+  myPid,
+  isAlive = (pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+) {
+  const owner = readSmokeOwnerStamp(configPath);
+  if (!owner || owner.pid === myPid) return;
+  if (!isAlive(owner.pid)) return;
+  throw new Error(
+    `refusing to mutate Studio config: live mcp-agent-smoke owner pid=${owner.pid} still stamped on ${configPath}`,
+  );
 }
 
 /**

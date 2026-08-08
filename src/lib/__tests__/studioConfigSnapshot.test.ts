@@ -13,8 +13,10 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
+  assertNoLiveForeignSmokeOwner,
   restoreStudioConfigFile,
   snapshotStudioConfigFile,
+  SMOKE_OWNER_KEY,
 } from "../../../scripts/studioConfigSnapshot.mjs";
 
 describe("studioConfigSnapshot", () => {
@@ -90,5 +92,22 @@ describe("studioConfigSnapshot", () => {
       restoreStudioConfigFile(configPath, snap, { expectedContents: smokeWrite }),
     ).toThrow(/on-disk bytes changed/);
     expect(readFileSync(configPath, "utf8")).toBe('{\n  "hfToken": "admin"\n}\n');
+  });
+
+  it("refuses mutation when another live smoke owner is stamped", () => {
+    mkdirSync(path.dirname(configPath), { recursive: true });
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        [SMOKE_OWNER_KEY]: { pid: 12345, startedAt: "2026-01-01T00:00:00.000Z" },
+      }),
+      "utf8",
+    );
+    expect(() =>
+      assertNoLiveForeignSmokeOwner(configPath, 999, (pid) => pid === 12345),
+    ).toThrow(/live mcp-agent-smoke owner/);
+    expect(() =>
+      assertNoLiveForeignSmokeOwner(configPath, 999, () => false),
+    ).not.toThrow();
   });
 });

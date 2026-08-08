@@ -28,8 +28,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  assertNoLiveForeignSmokeOwner,
   readStudioConfigFileContents,
   restoreStudioConfigFile,
+  SMOKE_OWNER_KEY,
   snapshotStudioConfigFile,
 } from "./studioConfigSnapshot.mjs";
 import {
@@ -120,6 +122,10 @@ function readStudioDiskConfig() {
 function patchAgentAccessDisk(patch) {
   const cfg = readStudioDiskConfig();
   cfg.agentAccess = { ...(cfg.agentAccess || {}), ...patch };
+  cfg[SMOKE_OWNER_KEY] = {
+    pid: process.pid,
+    startedAt: new Date().toISOString(),
+  };
   mkdirSync(path.dirname(STUDIO_CONFIG_PATH), { recursive: true });
   writeFileSync(STUDIO_CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf8");
   // Remember exact bytes we wrote so cleanup can refuse to clobber concurrent edits.
@@ -390,6 +396,8 @@ async function runJobControlSmoke() {
 
   // Snapshot only after the lock is held (exact bytes + existence).
   configSnapshot = snapshotStudioConfigFile(STUDIO_CONFIG_PATH);
+  // Belt-and-suspenders with the pid lock: refuse if a live peer still stamps ownership.
+  assertNoLiveForeignSmokeOwner(STUDIO_CONFIG_PATH, process.pid);
 
   // Denied path: submission off before Studio boots (no PUT / rate-limit burn).
   patchAgentAccessDisk({
@@ -592,6 +600,8 @@ async function cleanup() {
         }
       },
     );
+    // Restoration errors must fail cleanup itself (not only a later flag check).
+    if (configRestoreError) throw configRestoreError;
   })();
   return cleanupPromise;
 }
@@ -616,19 +626,14 @@ try {
   await runJobControlSmoke();
   console.log("PASS: pinned mcporter agent smoke (incl. job policy path)");
   await cleanup();
-  if (configRestoreError) {
-    console.error(
-      "FAIL: Studio config restore failed after smoke:",
-      configRestoreError instanceof Error
-        ? configRestoreError.message
-        : configRestoreError,
-    );
-    process.exit(1);
-  }
   process.exit(0);
 } catch (err) {
   console.error("FAIL:", err instanceof Error ? err.message : err);
-  await cleanup();
+  try {
+    await cleanup();
+  } catch {
+    /* cleanup may already have rejected for restore failure */
+  }
   if (configRestoreError) {
     console.error(
       "FAIL: Studio config restore also failed:",
