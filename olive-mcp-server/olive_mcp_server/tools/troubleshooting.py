@@ -22,8 +22,17 @@ from .embeddings import (
     build_kb_index,
     cosine_similarity_scores,
     encode_query,
+    is_model_loaded,
 )
 from .feedback import FEEDBACK_MAX_ADJUSTMENT, feedback_score_delta
+from .retrieval import (
+    budget_degraded_reason,
+    get_retrieval_mode,
+    get_semantic_budget_ms,
+    merge_retrieval_meta,
+    retrieval_meta,
+    run_with_budget,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +134,9 @@ def _entries_fingerprint(entries: list[dict[str, Any]]) -> str:
         eid = str(entry.get("id") or "")
         h.update(eid.encode("utf-8"))
         h.update(b"\0")
-        h.update(_entry_embed_text(entry).encode("utf-8"))
+        # LF-normalize so Windows/Linux fingerprint the same text content.
+        text = _entry_embed_text(entry).replace("\r\n", "\n").replace("\r", "\n")
+        h.update(text.encode("utf-8"))
         h.update(b"\0")
     return h.hexdigest()
 
@@ -142,14 +153,17 @@ def _troubleshooting_kb_mtime() -> float:
     return max(mtimes) if mtimes else 0.0
 
 
-def _get_troubleshooting_index(
+def get_troubleshooting_index(
     entries: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], np.ndarray]:
-    """Lazy-build embeddings for a troubleshooting entry list (thread-safe).
-
-    Cache is keyed by content fingerprint so olive and studio pools coexist.
-    Invalidates when fingerprint or KB mtime changes. Callers must score using
-    the returned entries list so embeddings stay position-aligned.
+    """
+    Prepare embeddings for troubleshooting entries and reuse compatible cached indexes.
+    
+    Parameters:
+        entries (list[dict[str, Any]] | None): Troubleshooting entries to index. When omitted, loads the default troubleshooting entries.
+    
+    Returns:
+        tuple[list[dict[str, Any]], np.ndarray]: The entries used to build the index and their position-aligned embedding matrix.
     """
     if entries is None:
         entries = load_troubleshooting()
@@ -162,8 +176,23 @@ def _get_troubleshooting_index(
         if cached is not None and cached[2] == file_mtime:
             return cached[0], cached[1]
 
+    from .index_store import load_entry_embeddings
+
+    # Prefer shipped precomputed embeddings when content hash matches.
+    stem = "ts_studio" if (
+        entries_list
+        and all(str(e.get("domain") or "") == "studio" for e in entries_list)
+    ) else "ts_olive"
+    # Auto-domain pool mixes olive+studio — never use a single-domain shipped index.
+    mixed = bool(entries_list) and any(
+        str(e.get("domain") or "olive") == "studio" for e in entries_list
+    ) and any(str(e.get("domain") or "olive") != "studio" for e in entries_list)
+    shipped = None if mixed else load_entry_embeddings(stem, fingerprint)
+
     texts = [_entry_embed_text(e) for e in entries_list]
-    if not texts:
+    if shipped is not None:
+        embeddings = shipped
+    elif not texts:
         embeddings = np.zeros((0, EMBEDDING_DIM), dtype=np.float32)
     else:
         embeddings = build_kb_index(texts)
@@ -185,6 +214,10 @@ def _get_troubleshooting_index(
             if oldest_key != fingerprint:
                 del _ts_index_cache[oldest_key]
         return entries_list, embeddings
+
+
+# Private alias retained for older tests that patch the historical name.
+_get_troubleshooting_index = get_troubleshooting_index
 
 
 def _pattern_hit_count(entry: dict[str, Any], text: str) -> int:
@@ -357,6 +390,19 @@ def _pool_for_domain(domain: DomainName) -> list[dict[str, Any]]:
     return load_troubleshooting() + load_studio_troubleshooting()
 
 
+def _semantic_scores_for_entries(
+    entries: list[dict[str, Any]],
+    error_only: str,
+) -> tuple[list[dict[str, Any]], np.ndarray]:
+    """Build index + cosine scores (may load the embedding model)."""
+    # Use the private alias so unit tests can monkeypatch index construction
+    # without loading sentence-transformers.
+    index_entries, embeddings = _get_troubleshooting_index(entries)
+    query_vec = encode_query(error_only)
+    semantic_scores = cosine_similarity_scores(query_vec, embeddings)
+    return index_entries, semantic_scores
+
+
 def _best_match(
     entries: list[dict[str, Any]],
     error_message: str,
@@ -364,29 +410,86 @@ def _best_match(
     config_context: str,
     *,
     require_keyword: bool = False,
-) -> tuple[dict[str, Any] | None, float]:
-    """Select the highest-scoring troubleshooting entry (hybrid semantic+keyword).
-
-    Empty/whitespace error_message never matches — pass_name/config_context alone
-    must not diagnose (pattern-token pass names like TensorRT/AWQ).
+    mode: str | None = None,
+) -> tuple[dict[str, Any] | None, float, dict[str, Any]]:
     """
+    Select the highest-scoring troubleshooting entry for an error.
+    
+    Parameters:
+        require_keyword (bool): Require at least one matching keyword or pattern.
+        mode (str | None): Retrieval mode, such as ``"auto"``, ``"keyword"``, or
+            ``"semantic"``.
+    
+    Returns:
+        tuple: The selected entry, its score, and retrieval metadata. The entry is
+        ``None`` with a score of ``0.0`` when no qualifying match exists.
+    """
+    resolved_mode = get_retrieval_mode(mode)
+    empty_meta = retrieval_meta(mode=resolved_mode, effective="none")
+
     if not entries:
-        return None, 0.0
+        return None, 0.0, empty_meta
 
     error_only = (error_message or "").strip()
     if not error_only:
-        return None, 0.0
+        return None, 0.0, empty_meta
 
-    try:
-        index_entries, embeddings = _get_troubleshooting_index(entries)
-        query_vec = encode_query(error_only)
-        semantic_scores = cosine_similarity_scores(query_vec, embeddings)
-        # Prefer the index pair for position-aligned scoring.
-        score_entries = index_entries
-    except Exception:
-        logger.warning("Semantic scoring failed; falling back to keyword-only matching", exc_info=True)
-        score_entries = list(entries)
-        semantic_scores = np.zeros((len(score_entries),), dtype=np.float32)
+    score_entries = list(entries)
+    semantic_scores = np.zeros((len(score_entries),), dtype=np.float32)
+    effective = "keyword"
+    degraded = False
+    reason: str | None = None
+
+    if resolved_mode == "keyword":
+        effective = "keyword"
+    else:
+        use_budget = resolved_mode == "auto" and not is_model_loaded()
+        budget_ms = get_semantic_budget_ms() if use_budget else 0
+
+        def _load() -> tuple[list[dict[str, Any]], np.ndarray]:
+            """
+            Load semantic scores for the candidate entries.
+            
+            Returns:
+                A tuple containing the candidate entries and their semantic scores.
+            """
+            return _semantic_scores_for_entries(entries, error_only)
+
+        try:
+            result, outcome = run_with_budget(_load, budget_ms)
+            if outcome != "ok":
+                degraded = True
+                reason = budget_degraded_reason(outcome)
+                effective = "keyword"
+                if outcome == "busy":
+                    logger.warning(
+                        "Semantic scoring busy (single-flight in progress); keyword-only fallback",
+                    )
+                else:
+                    logger.warning(
+                        "Semantic scoring exceeded budget (%sms); keyword-only fallback",
+                        budget_ms,
+                    )
+            else:
+                score_entries, semantic_scores = result
+                effective = "hybrid"
+        except Exception:
+            logger.warning(
+                "Semantic scoring failed; falling back to keyword-only matching",
+                exc_info=True,
+            )
+            score_entries = list(entries)
+            semantic_scores = np.zeros((len(score_entries),), dtype=np.float32)
+            degraded = True
+            reason = "semantic_error"
+            effective = "keyword"
+
+    meta = retrieval_meta(
+        mode=resolved_mode,
+        effective=effective,
+        degraded=degraded,
+        reason=reason,
+    )
 
     keyword_text = f"{error_message} {pass_name or ''} {config_context or ''}".lower()
     scored: list[tuple[dict[str, Any], float, int]] = []
@@ -418,11 +521,11 @@ def _best_match(
     if require_keyword:
         candidates = [row for row in scored if row[2] > 0]
         if not candidates:
-            return None, 0.0
+            return None, 0.0, meta
     best_entry, best_score, _hits = candidates[0]
     if best_score <= 0:
-        return None, 0.0
-    return best_entry, best_score
+        return None, 0.0, meta
+    return best_entry, best_score, meta
 
 
 def _resolve_domain(domain: str | None) -> DomainName:
@@ -456,10 +559,25 @@ def _build_diagnosis_payload(
     applyable: bool,
     pass_name: str,
     freq: dict[str, Any],
+    retrieval: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Assemble the diagnosis response shared by the matched and no-match paths."""
+    """
+    Assemble a diagnosis response containing match details, troubleshooting guidance, frequency metadata, and optional retrieval metadata.
+    
+    Parameters:
+    	best (dict[str, Any]): Diagnosis details used to populate the response.
+    	matched_entry (str | None): Identifier of the matched knowledge-base entry, or `None` for no match.
+    	matched_domain (str | None): Domain associated with the matched entry.
+    	applyable (bool): Whether the matched diagnosis can be applied.
+    	pass_name (str): Name of the pass associated with the diagnosis.
+    	freq (dict[str, Any]): Frequency information for the diagnosed error.
+    	retrieval (dict[str, Any] | None): Optional metadata describing how the diagnosis was retrieved.
+    
+    Returns:
+    	dict[str, Any]: A structured diagnosis payload.
+    """
     updated_config = best.get("updated_config", {}) or {}
-    return {
+    payload: dict[str, Any] = {
         "matched_entry": matched_entry,
         "domain": matched_domain,
         "applyable": applyable if matched_entry else False,
@@ -476,6 +594,14 @@ def _build_diagnosis_payload(
             "label": _frequency_label(freq["occurrence_count"]),
         },
     }
+    if retrieval is not None:
+        payload["retrieval"] = retrieval
+    return payload
+
+
+def _merge_retrieval_meta(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
+    """Merge retrieval metadata from two search pools (thin alias for tests)."""
+    return merge_retrieval_meta(a, b)
 
 
 def troubleshoot_olive_error(
@@ -483,40 +609,68 @@ def troubleshoot_olive_error(
     pass_name: str = "",
     config_context: str = "",
     domain: str = "auto",
+    mode: str = "",
 ) -> dict[str, Any]:
-    """Diagnose an Olive or Olive Studio error using the selected knowledge base.
-
+    """Diagnose an Olive or Olive Studio error using the selected retrieval mode and knowledge base.
+    
     Args:
         error_message: Error message or traceback snippet to diagnose.
         pass_name: Name of the pass where the error occurred, if known.
         config_context: Additional configuration context used for matching.
         domain: Knowledge-base domain to search: ``"auto"``, ``"olive"``, or
-            ``"studio"``. Invalid values default to ``"auto"``.
-
+            ``"studio"``. Invalid values use automatic domain selection.
+        mode: Retrieval mode: ``"auto"``, ``"keyword"``, or ``"semantic"``.
+            An empty value uses the configured default.
+    
     Returns:
-        A diagnosis containing the matched entry, domain, title, root cause,
-        workaround, updated configuration, applicability, related entry,
-        relevant quirks, and occurrence frequency metadata.
+        A diagnosis containing the matched entry or generic guidance, along with
+        domain, applicability, troubleshooting details, frequency metadata, and
+        retrieval metadata.
     """
+    mode_arg = mode if (mode or "").strip() else None
     # Empty body: never match from pass_name/config_context alone (TensorRT/AWQ/…).
     if not (error_message or "").strip():
         best = _no_match_payload()
         freq_key = _get_frequency_key(None, error_message)
         freq = _record_occurrence(freq_key)
-        return _build_diagnosis_payload(best, None, None, False, pass_name, freq)
+        return _build_diagnosis_payload(
+            best,
+            None,
+            None,
+            False,
+            pass_name,
+            freq,
+            retrieval=retrieval_meta(
+                mode=get_retrieval_mode(mode_arg),
+                effective="none",
+            ),
+        )
 
     resolved = _resolve_domain(domain)
 
     best: dict[str, Any] | None = None
     matched_domain: str | None = None
+    retrieval: dict[str, Any] = retrieval_meta(
+        mode=get_retrieval_mode(mode_arg),
+        effective="keyword",
+    )
 
     if resolved == "auto":
-        olive_best, olive_score = _best_match(
-            load_troubleshooting(), error_message, pass_name, config_context
+        olive_best, olive_score, olive_meta = _best_match(
+            load_troubleshooting(),
+            error_message,
+            pass_name,
+            config_context,
+            mode=mode_arg,
         )
-        studio_best, studio_score = _best_match(
-            load_studio_troubleshooting(), error_message, pass_name, config_context
+        studio_best, studio_score, studio_meta = _best_match(
+            load_studio_troubleshooting(),
+            error_message,
+            pass_name,
+            config_context,
+            mode=mode_arg,
         )
+        retrieval = _merge_retrieval_meta(olive_meta, studio_meta)
         # Score both pools; Olive wins ties so generic Olive guidance stays stable.
         if studio_score > olive_score and studio_best is not None and studio_score > 0:
             best = studio_best
@@ -529,12 +683,13 @@ def troubleshoot_olive_error(
             matched_domain = "studio"
     else:
         pool = _pool_for_domain(resolved)
-        hit, score = _best_match(
+        hit, score, retrieval = _best_match(
             pool,
             error_message,
             pass_name,
             config_context,
             require_keyword=True,
+            mode=mode_arg,
         )
         if hit is not None and score > 0:
             best = hit
@@ -553,7 +708,15 @@ def troubleshoot_olive_error(
     freq_key = _get_frequency_key(matched_entry, error_message)
     freq = _record_occurrence(freq_key)
 
-    return _build_diagnosis_payload(best, matched_entry, matched_domain, applyable, pass_name, freq)
+    return _build_diagnosis_payload(
+        best,
+        matched_entry,
+        matched_domain,
+        applyable,
+        pass_name,
+        freq,
+        retrieval=retrieval,
+    )
 
 
 def diagnose_error(
@@ -561,6 +724,7 @@ def diagnose_error(
     pass_name: str = "",
     config_context: str = "",
     domain: str = "auto",
+    mode: str = "",
 ) -> dict[str, Any]:
     """Alias for troubleshoot_olive_error."""
     return troubleshoot_olive_error(
@@ -568,6 +732,7 @@ def diagnose_error(
         pass_name=pass_name,
         config_context=config_context,
         domain=domain,
+        mode=mode,
     )
 
 

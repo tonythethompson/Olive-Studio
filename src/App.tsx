@@ -12,6 +12,7 @@ import type { ReportArea } from "@/lib/issueReport";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { KbSyncIndicator } from "@/components/features/KbSyncIndicator";
 import { RuntimeEnvControls } from "@/components/features/RuntimeEnvControls";
+import { AgentAccessControls } from "@/components/features/AgentAccessControls";
 import { TitleBar } from "@/components/TitleBar";
 import { DesktopMinimumViewport } from "@/components/DesktopMinimumViewport";
 import { cn } from "@/lib/utils";
@@ -287,6 +288,8 @@ function Dashboard() {
                   <KbSyncIndicator />
                   <span className="hidden sm:block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />
                   <RuntimeEnvControls />
+                  <span className="hidden sm:block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />
+                  <AgentAccessControls />
                 </div>
                 <div className="justify-self-end">
                   <button

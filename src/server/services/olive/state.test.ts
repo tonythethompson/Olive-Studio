@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { jobRegistry, cleanupJobArtifacts, sweepJobRegistry, finalizeJob } from "./state.ts";
+import {
+  clearIdempotencyIndex,
+  findJobByIdempotency,
+  idempotencyIndexSize,
+  rememberIdempotencyKeys,
+} from "./jobIdempotency.ts";
 import type { OliveJob } from "../../types.ts";
 import fs from "fs";
 import os from "os";
@@ -27,10 +33,12 @@ function makeJob(id: string, overrides: Partial<OliveJob> = {}): OliveJob {
 describe("olive job registry cleanup", () => {
   beforeEach(() => {
     jobRegistry.clear();
+    clearIdempotencyIndex();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    clearIdempotencyIndex();
   });
 
   describe("sweepJobRegistry", () => {
@@ -45,6 +53,25 @@ describe("olive job registry cleanup", () => {
       expect(removed).toBe(1);
       expect(jobRegistry.has("old")).toBe(false);
       expect(jobRegistry.has("recent")).toBe(true);
+    });
+
+    it("clears idempotency index entries when sweeping MCP jobs", () => {
+      const now = 10_000_000_000;
+      const oldMs = now - 31 * 60_000;
+      const job = makeJob("mcp-old", {
+        status: "completed",
+        finishedAt: oldMs,
+        source: "mcp",
+        fingerprint: "fp-old",
+        idempotencyKey: "k-old",
+      });
+      jobRegistry.set(job.id, job);
+      rememberIdempotencyKeys(job);
+      expect(idempotencyIndexSize()).toBe(2);
+
+      expect(sweepJobRegistry(now)).toBe(1);
+      expect(idempotencyIndexSize()).toBe(0);
+      expect(findJobByIdempotency({ fingerprint: "fp-old" })).toEqual({ kind: "miss" });
     });
 
     it("never removes running or setting_up jobs", () => {

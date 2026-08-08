@@ -21,6 +21,14 @@ from .embeddings import (
     build_kb_index,
     semantic_search,
 )
+from .retrieval import (
+    budget_degraded_reason,
+    get_retrieval_mode,
+    get_semantic_budget_ms,
+    merge_retrieval_meta,
+    retrieval_meta,
+    run_with_budget,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -69,6 +77,18 @@ def _flatten(obj: Any, prefix: str = "") -> list[tuple[str, str]]:
     return results
 
 
+def _iter_kb_json_files():
+    """Yield searchable KB JSON paths in a stable, sorted order.
+
+    ``Path.glob`` order is OS-dependent; indexing and content hashing must
+    iterate in a deterministic order so shipped indexes match across platforms.
+    """
+    for file in sorted(KB_DIR.glob("*.json"), key=lambda p: p.name):
+        if file.name in _EXCLUDED_KB_FILES:
+            continue
+        yield file
+
+
 def _load_kb_text() -> list[tuple[str, str]]:
     """
     Load and flatten searchable JSON knowledge-base files.
@@ -77,9 +97,7 @@ def _load_kb_text() -> list[tuple[str, str]]:
     	list[tuple[str, str]]: Key-path and text pairs extracted from successfully loaded files.
     """
     all_text: list[tuple[str, str]] = []
-    for file in KB_DIR.glob("*.json"):
-        if file.name in _EXCLUDED_KB_FILES:
-            continue
+    for file in _iter_kb_json_files():
         try:
             with open(file, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -98,9 +116,7 @@ def _kb_max_mtime() -> tuple[float, int]:
     deletion alone would otherwise leave the max mtime unchanged.
     """
     mtimes: list[float] = []
-    for file in KB_DIR.glob("*.json"):
-        if file.name in _EXCLUDED_KB_FILES:
-            continue
+    for file in _iter_kb_json_files():
         try:
             mtimes.append(file.stat().st_mtime)
         except OSError:
@@ -109,12 +125,10 @@ def _kb_max_mtime() -> tuple[float, int]:
 
 
 def get_or_build_kb_index() -> tuple[list[tuple[str, str]], np.ndarray]:
-    """Public helper: lazy-build (and mtime-invalidate) the local KB embedding index.
-
-    Used by docs search and passive context so both share one cache.
-    Encode work runs outside the lock; the cache is only stamped when the KB
-    mtime is unchanged from the value observed at load time (avoids publishing
-    stale texts under a newer mtime after a mid-build hot-reload).
+    """Loads or builds the local knowledge-base text and embedding index, using a matching shipped index when available.
+    
+    Returns:
+        tuple[list[tuple[str, str]], np.ndarray]: The knowledge-base text entries and their embedding matrix.
     """
     global _KB_TEXTS, _KB_EMBEDDINGS, _KB_INDEX_MTIME
 
@@ -130,8 +144,15 @@ def get_or_build_kb_index() -> tuple[list[tuple[str, str]], np.ndarray]:
     # Capture mtime at load time; only publish if it is still current later.
     build_mtime = _kb_max_mtime()
     texts = _load_kb_text()
-    if not texts:
-        embeddings: np.ndarray = np.zeros((0, EMBEDDING_DIM), dtype=np.float32)
+
+    from .index_store import content_hash_pairs, load_pair_index
+
+    expected = content_hash_pairs(texts)
+    shipped = load_pair_index("docs_kb", expected)
+    if shipped is not None:
+        texts, embeddings = shipped
+    elif not texts:
+        embeddings = np.zeros((0, EMBEDDING_DIM), dtype=np.float32)
     else:
         embeddings = build_kb_index([t for _, t in texts])
 
@@ -170,10 +191,16 @@ def _keyword_search(
     terms: list[str],
     top_k: int,
 ) -> list[dict[str, Any]]:
-    """Keyword fallback: substring term matching against (source, text) pairs.
-
-    Relevance is normalized to [0, 1] as hits / max(1, len(terms)) so it is
-    commensurate with semantic cosine scores when sources are merged.
+    """
+    Find entries whose text contains one or more search terms.
+    
+    Parameters:
+        entries (list[tuple[str, str]]): Source and text pairs to search.
+        terms (list[str]): Terms to match as case-insensitive substrings.
+        top_k (int): Maximum number of results to return.
+    
+    Returns:
+        list[dict[str, Any]]: Matching results ranked by the proportion of terms found, each containing the source, a text snippet, and its relevance score.
     """
     if not terms or top_k <= 0:
         return []
@@ -192,11 +219,61 @@ def _keyword_search(
     return scored[:top_k]
 
 
-def _search_local(query: str, top_k: int) -> list[dict[str, Any]]:
-    """Semantic search over the local KB, with keyword fallback."""
+def _search_local(
+    query: str,
+    top_k: int,
+    *,
+    mode: str | None = None,
+    budget_ms: int | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Search the local knowledge base using the selected retrieval mode.
+    
+    Parameters:
+    	query (str): Search terms.
+    	top_k (int): Maximum number of results to return.
+    	mode (str | None): Retrieval mode override.
+    	budget_ms (int | None): Explicit auto-mode semantic budget in milliseconds.
+    	    ``None`` derives from ``OLIVE_MCP_SEMANTIC_BUDGET_MS`` (``0`` there means
+    	    unlimited). When the caller passes an explicit value, ``0`` means the
+    	    shared per-request budget is exhausted and forces the keyword path
+    	    (never treated as unlimited).
+    
+    Returns:
+    	tuple[list[dict[str, Any]], dict[str, Any]]: Search results and metadata describing the effective retrieval mode and any fallback.
+    """
     terms = [t.lower() for t in query.split() if t]
+    resolved = get_retrieval_mode(mode)
 
-    try:
+    if resolved == "keyword":
+        return (
+            _keyword_search(_load_kb_text(), terms, top_k),
+            retrieval_meta(mode=resolved, effective="keyword"),
+        )
+
+    # Auto must budget even when the embedding model is already warm: a missing,
+    # stale, or force-rebuilt local index can still encode the full KB.
+    use_budget = resolved == "auto"
+    if use_budget:
+        if budget_ms is None:
+            effective_budget_ms = get_semantic_budget_ms()
+        elif budget_ms == 0:
+            # Shared request budget exhausted — keyword only (not unlimited).
+            return (
+                _keyword_search(_load_kb_text(), terms, top_k),
+                retrieval_meta(
+                    mode=resolved,
+                    effective="keyword",
+                    degraded=True,
+                    reason="semantic_budget_exceeded",
+                ),
+            )
+        else:
+            effective_budget_ms = budget_ms
+    else:
+        effective_budget_ms = 0  # semantic mode: unlimited via run_with_budget
+
+    def _semantic() -> tuple[list[dict[str, Any]], str]:
+        """Semantic local search; returns (hits, effective_mode)."""
         kb_texts, embeddings = get_or_build_kb_index()
         results = semantic_search(
             query,
@@ -206,18 +283,54 @@ def _search_local(query: str, top_k: int) -> list[dict[str, Any]]:
             threshold=DEFAULT_THRESHOLD,
         )
         if results:
-            return results
-        return _keyword_search(kb_texts, terms, top_k)
+            return results, "hybrid"
+        return _keyword_search(kb_texts, terms, top_k), "keyword"
+
+    try:
+        result, outcome = run_with_budget(_semantic, effective_budget_ms)
+        if outcome != "ok":
+            reason = budget_degraded_reason(outcome)
+            if outcome == "busy":
+                logger.warning(
+                    "Semantic local search busy (single-flight in progress); keyword fallback",
+                )
+            else:
+                logger.warning(
+                    "Semantic local search exceeded budget (%sms); keyword fallback",
+                    effective_budget_ms,
+                )
+            return (
+                _keyword_search(_load_kb_text(), terms, top_k),
+                retrieval_meta(
+                    mode=resolved,
+                    effective="keyword",
+                    degraded=True,
+                    reason=reason,
+                ),
+            )
+        hits, effective = result
+        return hits, retrieval_meta(mode=resolved, effective=effective)
     except Exception:
         logger.debug("Semantic local KB search failed; falling back to keyword search", exc_info=True)
-        return _keyword_search(_load_kb_text(), terms, top_k)
-
+        return (
+            _keyword_search(_load_kb_text(), terms, top_k),
+            retrieval_meta(
+                mode=resolved,
+                effective="keyword",
+                degraded=True,
+                reason="semantic_error",
+            ),
+        )
 
 def _fetch_live_docs() -> tuple[dict[str, str], float]:
-    """Fetch (and cache) the live Olive docs landing page.
-
-    Concurrent fetches take a generation token; only the latest generation may
-    publish, so a slow older response cannot overwrite a fresher one.
+    """
+    Fetch and cache the live Olive documentation landing page.
+    
+    Concurrent fetches publish only results from the latest completed generation.
+    
+    Returns:
+        tuple[dict[str, str], float]: The cached documentation pages and their
+        cache timestamp. Stale cached pages are returned when fetching fails.
     """
     global _LIVE_CACHE, _LAST_FETCH_TIME, _LIVE_FETCH_GENERATION, _LIVE_FETCH_PUBLISHED_GENERATION
 
@@ -267,13 +380,10 @@ def _split_live_snippets(pages: dict[str, str]) -> list[tuple[str, str]]:
 
 
 def _get_live_index() -> tuple[list[tuple[str, str]], np.ndarray]:
-    """Return live snippets and their embeddings, rebuilding on cache refresh.
-
-    Cache-hit and publish checks use ``_LIVE_EMBEDDINGS is not None`` (not
-    truthiness of ``_LIVE_SNIPPETS``) so an empty-but-built live index is
-    still cached rather than rebuilt on every call. Publication also refuses
-    to overwrite a newer generation's cache with a stale (smaller
-    ``fetch_time``) build that raced behind it.
+    """Retrieve live documentation snippets and their embeddings, rebuilding the index when cached content changes.
+    
+    Returns:
+        A tuple containing live documentation snippets and their embedding matrix.
     """
     global _LIVE_SNIPPETS, _LIVE_EMBEDDINGS, _LIVE_EMBED_CACHE_TIME
 
@@ -303,13 +413,70 @@ def _get_live_index() -> tuple[list[tuple[str, str]], np.ndarray]:
         return _LIVE_SNIPPETS, _LIVE_EMBEDDINGS
 
 
-def _search_live(query: str, top_k: int) -> list[dict[str, Any]]:
-    """Semantic search over live docs snippets, with keyword fallback."""
+def _search_live(
+    query: str,
+    top_k: int,
+    *,
+    mode: str | None = None,
+    budget_ms: int | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Search live Olive documentation using the resolved retrieval mode.
+
+    ``mode="keyword"`` fetches and splits live pages, then runs
+    :func:`_keyword_search` only — it must not build the live embedding index
+    or call :func:`semantic_search`.
+
+    ``budget_ms`` is the remaining auto-mode semantic budget for this request.
+    An explicit ``0`` forces the keyword path (shared budget exhausted). ``None``
+    derives from ``OLIVE_MCP_SEMANTIC_BUDGET_MS`` (where ``0`` means unlimited).
+
+    Returns results plus retrieval metadata so callers can surface live
+    degradation (budget/timeout) in the merged response.
+    """
     terms = [t.lower() for t in query.split() if t]
-    try:
+    resolved = get_retrieval_mode(mode)
+
+    def _keyword_live() -> list[dict[str, Any]]:
+        """Fetch live pages and rank snippets by keyword overlap (no embeddings)."""
+        try:
+            pages, _ = _fetch_live_docs()
+            if not pages:
+                return []
+            return _keyword_search(_split_live_snippets(pages), terms, top_k)
+        except Exception:
+            logger.debug("Live-doc keyword search failed", exc_info=True)
+            return []
+
+    # Keyword mode: never touch MiniLM / live embedding index.
+    if resolved == "keyword":
+        return _keyword_live(), retrieval_meta(mode=resolved, effective="keyword")
+
+    # Auto budgets even when the model is warm: live fetch/index build can still
+    # be cold after local search already loaded MiniLM.
+    use_budget = resolved == "auto"
+    if use_budget:
+        if budget_ms is None:
+            effective_budget_ms = get_semantic_budget_ms()
+        elif budget_ms == 0:
+            # Shared request budget exhausted — keyword only (not unlimited).
+            return (
+                _keyword_live(),
+                retrieval_meta(
+                    mode=resolved,
+                    effective="keyword",
+                    degraded=True,
+                    reason="semantic_budget_exceeded",
+                ),
+            )
+        else:
+            effective_budget_ms = budget_ms
+    else:
+        effective_budget_ms = 0  # semantic mode: unlimited via run_with_budget
+
+    def _semantic_live() -> tuple[list[dict[str, Any]], str]:
         snippets, embeddings = _get_live_index()
         if not snippets:
-            return []
+            return [], "keyword"
         results = semantic_search(
             query,
             snippets,
@@ -318,44 +485,132 @@ def _search_live(query: str, top_k: int) -> list[dict[str, Any]]:
             threshold=DEFAULT_THRESHOLD,
         )
         if results:
-            return results
-        return _keyword_search(snippets, terms, top_k)
+            return results, "hybrid"
+        return _keyword_search(snippets, terms, top_k), "keyword"
+
+    try:
+        result, outcome = run_with_budget(_semantic_live, effective_budget_ms)
+        if outcome != "ok":
+            reason = budget_degraded_reason(outcome)
+            if outcome == "busy":
+                logger.warning(
+                    "Semantic live search busy (single-flight in progress); keyword fallback",
+                )
+            else:
+                logger.warning(
+                    "Semantic live search exceeded budget (%sms); keyword fallback",
+                    effective_budget_ms,
+                )
+            return (
+                _keyword_live(),
+                retrieval_meta(
+                    mode=resolved,
+                    effective="keyword",
+                    degraded=True,
+                    reason=reason,
+                ),
+            )
+        hits, effective = result
+        return hits, retrieval_meta(mode=resolved, effective=effective)
     except Exception:
         logger.debug("Semantic live-doc search failed; falling back to keyword search", exc_info=True)
-        try:
-            pages, _ = _fetch_live_docs()
-            if not pages:
-                return []
-            return _keyword_search(_split_live_snippets(pages), terms, top_k)
-        except Exception:
-            logger.debug("Live-doc keyword fallback also failed", exc_info=True)
-            return []
+        return (
+            _keyword_live(),
+            retrieval_meta(
+                mode=resolved,
+                effective="keyword",
+                degraded=True,
+                reason="semantic_error",
+            ),
+        )
 
 
-def search_olive_documentation(query: str, top_k: int = 5, live: bool = True) -> dict[str, Any]:
-    """Full-text search across the local Olive knowledge base and live docs.
-
+def search_olive_documentation(
+    query: str,
+    top_k: int = 5,
+    live: bool = True,
+    mode: str = "",
+) -> dict[str, Any]:
+    """Search the local Olive knowledge base and optionally the live Olive documentation.
+    
     Args:
-        query: Search query, e.g. "calibrate static quantization".
-        top_k: Maximum number of results (must be >= 0).
-        live: Whether to include live results from https://microsoft.github.io/Olive/.
-
+        query: Search terms, such as ``"calibrate static quantization"``.
+        top_k: Maximum number of results to return; must be greater than or equal to zero.
+        live: Whether to include results from the live Olive documentation.
+        mode: Retrieval mode: ``"auto"``, ``"keyword"``, or ``"semantic"``. An empty
+            value uses the default mode. The resolved mode is passed to both the
+            local and live search paths so ``keyword`` never starts embedding work
+            on either side.
+    
     Returns:
-        Ranked results with snippet, source path, and relevance score.
-        ``relevance`` is in roughly [0, 1] for both semantic and keyword modes.
+        A dictionary containing the query, ranked results, result count, explanatory
+        note, and retrieval metadata.
+    
+    Raises:
+        ValueError: If ``top_k`` is negative.
     """
     if top_k < 0:
         raise ValueError(f"top_k must be >= 0, got {top_k}")
 
+    mode_arg = mode if (mode or "").strip() else None
+    resolved_mode = get_retrieval_mode(mode_arg)
     terms = [t.lower() for t in query.split() if t]
     if not terms:
-        return {"query": query, "count": 0, "results": [], "note": "Empty query."}
+        return {
+            "query": query,
+            "count": 0,
+            "results": [],
+            "note": "Empty query.",
+            "retrieval": retrieval_meta(
+                mode=resolved_mode,
+                effective="none",
+            ),
+        }
     if top_k == 0:
-        return {"query": query, "count": 0, "results": [], "note": "No results requested."}
+        return {
+            "query": query,
+            "count": 0,
+            "results": [],
+            "note": "No results requested.",
+            "retrieval": retrieval_meta(
+                mode=resolved_mode,
+                effective="none",
+            ),
+        }
 
     per_source = max(top_k * 2, 10)
-    local_results = _search_local(query, per_source)
-    live_results = _search_live(query, per_source) if live else []
+
+    # One per-request semantic deadline for auto mode (local + live share it).
+    # Env budget 0 stays unlimited (shared_deadline=None → budget_ms=None).
+    shared_deadline: float | None = None
+    if resolved_mode == "auto":
+        total_budget_ms = get_semantic_budget_ms()
+        if total_budget_ms > 0:
+            shared_deadline = time.monotonic() + (total_budget_ms / 1000.0)
+
+    def _remaining_budget_ms() -> int | None:
+        if shared_deadline is None:
+            return None
+        return max(0, int((shared_deadline - time.monotonic()) * 1000))
+
+    # Pass the already-resolved mode so local + live stay in lockstep (e.g. keyword
+    # never loads embeddings even when OLIVE_MCP_RETRIEVAL_MODE would differ).
+    local_results, retrieval = _search_local(
+        query,
+        per_source,
+        mode=resolved_mode,
+        budget_ms=_remaining_budget_ms(),
+    )
+    if live:
+        live_results, live_retrieval = _search_live(
+            query,
+            per_source,
+            mode=resolved_mode,
+            budget_ms=_remaining_budget_ms(),
+        )
+        retrieval = merge_retrieval_meta(retrieval, live_retrieval)
+    else:
+        live_results = []
 
     combined = local_results + live_results
     combined.sort(
@@ -377,4 +632,5 @@ def search_olive_documentation(query: str, top_k: int = 5, live: bool = True) ->
             "Merged local knowledge base and live Olive docs results. "
             "Live docs are cached for one hour."
         ),
+        "retrieval": retrieval,
     }

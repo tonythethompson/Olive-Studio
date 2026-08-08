@@ -19,6 +19,12 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
 ]
+# Semantic stack is a core dep today; keep the extra for explicit installs /
+# future slim core splits.
+semantic = [
+    "sentence-transformers>=3.0.0,<6",
+    "numpy>=1.24.0,<3",
+]
 
 [project.scripts]
 olive-mcp-server = "olive_mcp_server.mcp_server:main"
@@ -28,7 +34,10 @@ where = ["."]
 include = ["olive_mcp_server*"]
 
 [tool.setuptools.package-data]
-olive_mcp_server = ["knowledge_base/*.json"]
+olive_mcp_server = [
+    "knowledge_base/*.json",
+    "knowledge_base/indexes/*",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
