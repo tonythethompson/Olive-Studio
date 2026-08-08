@@ -147,7 +147,10 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
       const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
       if (code !== "EEXIST") throw e;
       try {
-        const holder = parsePublishedLockPid(read(lockPath, "utf8"));
+        // Snapshot the exact bytes we classified. Concurrent reclaim must only
+        // unlink that same body — never a peer's newly published PID lock.
+        const observed = read(lockPath, "utf8");
+        const holder = parsePublishedLockPid(observed);
         // Incomplete bodies (empty, partial digits, parseInt prefixes) may mean
         // a concurrent publisher is still writing. Only reclaim after grace.
         // Fully published finite dead PIDs reclaim immediately.
@@ -165,8 +168,13 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
         // cannot busy-spin.
         if (reclaimable) {
           try {
-            unlink(lockPath);
-            continue;
+            const still = read(lockPath, "utf8");
+            if (still !== observed) {
+              /* peer replaced the lock between classify and reclaim */
+            } else {
+              unlink(lockPath);
+              continue;
+            }
           } catch {
             /* lost race / still held — fall through to poll */
           }

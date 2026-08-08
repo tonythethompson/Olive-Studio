@@ -128,6 +128,51 @@ describe("studioConfigSmokeLock", () => {
     expect(store.get("/tmp/lock")).toBe("111\n");
   });
 
+  it("does not unlink a peer lock published between classify and reclaim", async () => {
+    // Both waiters saw the same aged incomplete body; the first already
+    // reclaimed and published before the second's pathname unlink.
+    const store: Store = new Map([["/tmp/lock", ""]]);
+    const fs = makeFs(store);
+    let lockReads = 0;
+    let t = 5_000;
+    const sleep = vi.fn(async (ms: number) => {
+      t += ms;
+    });
+    const readFileSync = vi.fn((p: string) => {
+      if (p !== "/tmp/lock") {
+        if (!store.has(p)) {
+          throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+        }
+        return store.get(p) ?? "";
+      }
+      lockReads += 1;
+      // Classify against aged empty, then observe the peer's published PID.
+      return lockReads === 1 ? "" : "4242\n";
+    });
+
+    await expect(
+      acquireStudioConfigSmokeLock("/tmp/lock", {
+        writeFileSync: fs.writeFileSync as never,
+        linkSync: fs.linkSync as never,
+        readFileSync: readFileSync as never,
+        unlinkSync: fs.unlinkSync as never,
+        mkdirSync: fs.mkdirSync as never,
+        statSync: vi.fn(() => ({ mtimeMs: 1_000 })) as never,
+        isProcessAlive: () => true,
+        pid: 999,
+        timeoutMs: 30,
+        pollMs: 10,
+        publishGraceMs: 1_000,
+        now: () => t,
+        sleep,
+        randomId: () => "cas",
+      }),
+    ).rejects.toThrow(/could not acquire/);
+
+    expect(fs.unlinkSync).not.toHaveBeenCalledWith("/tmp/lock");
+    expect(sleep).toHaveBeenCalled();
+  });
+
   it("does not reclaim a partial numeric PID body before the publish grace window", async () => {
     // Mid-publish body "12" must not be treated as live PID 12 via parseInt.
     const store: Store = new Map([["/tmp/lock", "12"]]);
