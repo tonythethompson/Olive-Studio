@@ -92,6 +92,42 @@ describe("studioConfigSmokeLock", () => {
     lock.release();
   });
 
+  it("polls via sleep when reclaim unlink fails with EPERM", async () => {
+    const store: Store = new Map([["/tmp/lock", "111\n"]]);
+    const fs = makeFs(store);
+    let t = 0;
+    const sleep = vi.fn(async (ms: number) => {
+      t += ms;
+    });
+    const unlinkSync = vi.fn((p: string) => {
+      if (p === "/tmp/lock") {
+        throw Object.assign(new Error("EPERM"), { code: "EPERM" });
+      }
+      store.delete(p);
+    });
+
+    await expect(
+      acquireStudioConfigSmokeLock("/tmp/lock", {
+        writeFileSync: fs.writeFileSync as never,
+        linkSync: fs.linkSync as never,
+        readFileSync: fs.readFileSync as never,
+        unlinkSync: unlinkSync as never,
+        mkdirSync: fs.mkdirSync as never,
+        isProcessAlive: (pid) => pid !== 111,
+        pid: 999,
+        timeoutMs: 30,
+        pollMs: 10,
+        now: () => t,
+        sleep,
+        randomId: () => "eperm",
+      }),
+    ).rejects.toThrow(/could not acquire/);
+
+    expect(unlinkSync).toHaveBeenCalledWith("/tmp/lock");
+    expect(sleep).toHaveBeenCalled();
+    expect(store.get("/tmp/lock")).toBe("111\n");
+  });
+
   it("does not reclaim a partial numeric PID body before the publish grace window", async () => {
     // Mid-publish body "12" must not be treated as live PID 12 via parseInt.
     const store: Store = new Map([["/tmp/lock", "12"]]);
