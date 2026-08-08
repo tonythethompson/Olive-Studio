@@ -77,7 +77,7 @@ def main() -> int:
             "olive-mcp-server: no project .venv found under "
             f"{script_dir / '.venv'} or {project_root / '.venv'}. "
             "Create one with: python -m venv olive-mcp-server/.venv "
-            '&& pip install -e "olive-mcp-server.[dev]" "mcp<2"'
+            '&& pip install -e "olive-mcp-server[dev]" "mcp<2"'
         )
         if require_venv:
             print(msg, file=sys.stderr)
