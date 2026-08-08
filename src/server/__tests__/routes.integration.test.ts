@@ -10,11 +10,12 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import type { Server } from "http";
 
-import { stubGlobalFetch, restoreGlobalFetch } from "./setup.integration.ts";
+import { stubGlobalFetch, restoreGlobalFetch, clearChildProcessLaunchLog, childProcessLaunchLog } from "./setup.integration.ts";
 import { resetMcpBreaker } from "../services/mcp/breaker.ts";
 import { resetLocalEngineRuntime } from "../services/ai/localEngineState.ts";
 import { app, markServerReady } from "../../../server.ts";
 import { jobRegistry } from "../services/olive/state.ts";
+import { isAllowedMcpToolName } from "../services/mcp/allowedTools.ts";
 
 let server: Server;
 let baseUrl: string;
@@ -54,6 +55,7 @@ afterAll(async () => {
 beforeEach(() => {
   resetMcpBreaker();
   resetLocalEngineRuntime();
+  clearChildProcessLaunchLog();
 });
 
 describe("Route integration tests", () => {
@@ -620,18 +622,32 @@ describe("Route integration tests", () => {
     });
 
     it("rejects toolName with command injection characters", async () => {
+      const unsafeToolName = "pass_catalog; rm -rf /";
+      // Allowlist is exact-match; sanitizer strips metacharacters to a non-allowlisted token.
+      const sanitizedToolName = unsafeToolName.replace(/[^a-zA-Z0-9_-]/g, "");
+      expect(sanitizedToolName).toBe("pass_catalogrm-rf");
+      expect(sanitizedToolName).not.toMatch(/[;|&`$]/);
+      expect(isAllowedMcpToolName(unsafeToolName)).toBe(false);
+      expect(isAllowedMcpToolName(sanitizedToolName)).toBe(false);
+
+      const launchesBefore = childProcessLaunchLog.length;
       const res = await fetch(`${baseUrl}/api/mcp/tool`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toolName: "pass_catalog; rm -rf /", args: {} }),
+        body: JSON.stringify({ toolName: unsafeToolName, args: {} }),
       });
 
-      // The sanitizer strips special chars, so the resulting tool name "pass_catalogrmrf"
-      // won't be found, but it should still be a valid call (will fail at Python level).
-      // The server should not return 400 for the toolName itself after sanitization.
-      // It may return an error from Python execution (500) or succeed.
-      expect(res.status).toBeGreaterThanOrEqual(200);
-      expect(res.status).toBeLessThan(600);
+      // Rejected at the allowlist gate — no Python/MCP launch.
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "Unknown toolName" });
+      expect(childProcessLaunchLog.slice(launchesBefore)).toEqual([]);
+
+      for (const launch of childProcessLaunchLog) {
+        const encoded = JSON.stringify(launch.args);
+        expect(encoded).not.toContain(unsafeToolName);
+        expect(encoded).not.toContain("rm -rf");
+        expect(encoded).not.toMatch(/;|\|\s*|`|\$\(/);
+      }
     });
 
     it("attempts to call a valid tool and returns JSON", async () => {
