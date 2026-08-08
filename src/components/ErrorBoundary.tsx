@@ -55,12 +55,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               <h3 className="text-sm font-semibold text-rose-200">
                 {this.props.label ?? "Section"} encountered an error
               </h3>
-              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+              <p className="text-sm text-slate-400 mt-1 leading-relaxed">
                 {this.state.error?.message ||
                   "An unexpected error occurred. This is likely a temporary issue."}
               </p>
               {this.state.frequencyInfo && this.state.frequencyInfo.count > 1 && (
-                <p className="text-xs text-amber-400/80 mt-2 font-medium">
+                <p className="text-sm text-amber-400/80 mt-2 font-medium">
                   {formatFrequencyDisplay(this.state.frequencyInfo)}
                 </p>
               )}
@@ -69,7 +69,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               <button
                 type="button"
                 onClick={this.handleRetry}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 hover:text-rose-200 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 hover:text-rose-200 transition-colors cursor-pointer"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
                 Retry
@@ -85,7 +85,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                       frequencyInfo: this.state.frequencyInfo ?? undefined,
                     })
                   }
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 hover:text-amber-200 transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 hover:text-amber-200 transition-colors cursor-pointer"
                 >
                   <Bug className="h-3.5 w-3.5" />
                   Report this error

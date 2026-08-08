@@ -18,7 +18,7 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
       : `Pass catalog last updated ${new Date(syncTime).toLocaleString()}. Older than ${STALE_AFTER_DAYS} days; sync to reload the local Olive docs.`;
 
   return (
-    <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400">
+    <div className="flex items-center gap-3 text-xs font-mono text-slate-400">
       <div className="flex items-center gap-1.5 min-w-0">
         <Database className="h-3 w-3 text-slate-500 shrink-0" aria-hidden />
         {status?.available ? (

@@ -176,6 +176,7 @@ export function InputEnvironmentPanel({
   const [hideIncompatibleRecipes, setHideIncompatibleRecipes] = useState(true);
   const { data: hardwareProbe = null, isLoading: hardwareProbeLoading } = useHardwareProbe();
   const [recipeSort, setRecipeSort] = useState<RecipeSortMode>("recommended");
+  const [expandedRecipeGroups, setExpandedRecipeGroups] = useState<Set<string>>(new Set());
 
   const recipeRailCollapsed = Boolean(appliedRecipeLabel) && !recipeRailExpanded;
 
@@ -694,7 +695,7 @@ export function InputEnvironmentPanel({
       {recipeSuccessMsg && (
         <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-4 rounded-xl flex items-start gap-3 animate-in slide-in-from-top-4 duration-300">
           <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
-          <div className="text-xs sm:text-sm font-medium">{recipeSuccessMsg}</div>
+          <div className="text-sm sm:text-sm font-medium">{recipeSuccessMsg}</div>
         </div>
       )}
 
@@ -712,21 +713,21 @@ export function InputEnvironmentPanel({
                   <CheckCircle2 className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs text-electric-blue font-medium">Applied recipe</p>
+                  <p className="text-sm text-electric-blue font-medium">Applied recipe</p>
                   <p
                     className="truncate text-sm font-semibold text-slate-200"
                     title={appliedRecipeLabel ?? undefined}
                   >
                     {appliedRecipeLabel}
                   </p>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
+                  <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
                     Source fields below are pre-filled — edit anytime before running.
                   </p>
                 </div>
               </div>
               <Button
                 type="button"
-                className="h-8 shrink-0 self-start px-3 text-[11px] bg-electric-blue hover:bg-electric-blue-dark text-slate-950 sm:self-center"
+                className="h-8 shrink-0 self-start px-3 text-xs bg-electric-blue hover:bg-electric-blue-dark text-slate-950 sm:self-center"
                 onClick={() => {
                   setRecipeRailExpanded(true);
                   setActiveRecipeTab("starter");
@@ -746,7 +747,7 @@ export function InputEnvironmentPanel({
                     <button
                       type="button"
                       onClick={() => setRecipeRailExpanded(false)}
-                      className="flex cursor-pointer items-center gap-1 text-[10px] font-mono text-slate-500 hover:text-slate-300"
+                      className="flex cursor-pointer items-center gap-1 text-[11px] font-mono text-slate-500 hover:text-slate-300"
                     >
                       <ChevronUp className="h-3 w-3" />
                       Collapse
@@ -763,21 +764,21 @@ export function InputEnvironmentPanel({
                     <TabsList className="grid w-full grid-cols-3 h-auto rounded-lg p-1 bg-slate-950 border border-slate-900 mb-4">
                       <TabsTrigger
                         value="starter"
-                        className="text-[10px] sm:text-xs py-1.5 px-1.5 sm:px-2 rounded-md cursor-pointer"
+                        className="text-[11px] sm:text-sm py-1.5 px-1.5 sm:px-2 rounded-md cursor-pointer"
                       >
                         <Activity className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 text-electric-blue" />
                         Presets
                       </TabsTrigger>
                       <TabsTrigger
                         value="github"
-                        className="text-[10px] sm:text-xs py-1.5 px-1.5 sm:px-2 rounded-md cursor-pointer"
+                        className="text-[11px] sm:text-sm py-1.5 px-1.5 sm:px-2 rounded-md cursor-pointer"
                       >
                         <Globe className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 text-electric-blue" />
                         GitHub
                       </TabsTrigger>
                       <TabsTrigger
                         value="editor"
-                        className="text-[10px] sm:text-xs py-1.5 px-1.5 sm:px-2 rounded-md cursor-pointer"
+                        className="text-[11px] sm:text-sm py-1.5 px-1.5 sm:px-2 rounded-md cursor-pointer"
                       >
                         <FileJson className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 text-amber-400" />
                         JSON
@@ -785,7 +786,7 @@ export function InputEnvironmentPanel({
                     </TabsList>
 
                     {activeRecipeTab === "starter" && (
-                      <p className="text-[11px] text-slate-400 font-mono mb-3">
+                      <p className="text-xs text-slate-400 font-mono mb-3">
                         {curatedRecipesWithMatch.length} of {SUGGESTED_RECIPES.length} presets
                         {localModelHints && !localHintsLoading
                           ? ` · ${localMatchSummary?.match ?? 0} match local upload`
@@ -808,11 +809,11 @@ export function InputEnvironmentPanel({
                       <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5 space-y-2">
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400">
+                            <p className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">
                               Hardware compatibility
                             </p>
                             {hardwareProbeLoading ? (
-                              <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
+                              <p className="text-sm text-slate-400 mt-1 flex items-center gap-1.5">
                                 <Loader2 className="h-3.5 w-3.5 animate-spin text-electric-blue" />
                                 Probing this machine…
                               </p>
@@ -822,7 +823,7 @@ export function InputEnvironmentPanel({
                                   compatible={hardwareMatchSummary?.compatible ?? 0}
                                   incompatible={hardwareMatchSummary?.unavailable ?? 0}
                                 />
-                                <p className="text-[11px] text-slate-400">
+                                <p className="text-xs text-slate-400">
                                   Detected:{" "}
                                   {hardwareProbe.detectedProviders
                                     .map((p) => p.replace("ExecutionProvider", ""))
@@ -830,13 +831,13 @@ export function InputEnvironmentPanel({
                                 </p>
                               </div>
                             ) : (
-                              <p className="text-xs text-slate-500 mt-1">
+                              <p className="text-sm text-slate-500 mt-1">
                                 Hardware probe unavailable — compatibility not verified.
                               </p>
                             )}
                           </div>
                           {hardwareProbe && !hardwareProbeLoading && (
-                            <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer shrink-0">
+                            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer shrink-0">
                               <input
                                 type="checkbox"
                                 checked={hideIncompatibleRecipes}
@@ -850,7 +851,7 @@ export function InputEnvironmentPanel({
                       </div>
 
                       {syncStatus === "error" && syncError && (
-                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs flex items-start gap-2">
+                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-sm flex items-start gap-2">
                           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                           <span>{syncError}</span>
                         </div>
@@ -860,16 +861,16 @@ export function InputEnvironmentPanel({
                         <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5 space-y-2">
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <p className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400">
+                              <p className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">
                                 Local model recipe match
                               </p>
                               {localHintsLoading ? (
-                                <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
+                                <p className="text-sm text-slate-400 mt-1 flex items-center gap-1.5">
                                   <Loader2 className="h-3.5 w-3.5 animate-spin text-electric-blue" />
                                   Reading upload…
                                 </p>
                               ) : localModelHints ? (
-                                <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                                <p className="text-sm text-slate-300 mt-1 leading-relaxed">
                                   <span className="text-slate-200 font-semibold">
                                     {localModelHints.displayName}
                                   </span>
@@ -893,7 +894,7 @@ export function InputEnvironmentPanel({
                               ) : null}
                               {localModelHints?.hfModelIds[0] && (
                                 <p
-                                  className="text-[10px] font-mono text-slate-500 mt-1 truncate"
+                                  className="text-[11px] font-mono text-slate-500 mt-1 truncate"
                                   title={localModelHints.hfModelIds[0]}
                                 >
                                   From config: {localModelHints.hfModelIds[0]}
@@ -901,7 +902,7 @@ export function InputEnvironmentPanel({
                               )}
                             </div>
                             {localModelHints && !localHintsLoading && (localMatchSummary?.match ?? 0) > 0 && (
-                              <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer shrink-0">
+                              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer shrink-0">
                                 <input
                                   type="checkbox"
                                   checked={showLocalRecipeMatchesOnly}
@@ -919,7 +920,7 @@ export function InputEnvironmentPanel({
                           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
                           <Input
                             placeholder="Search recipes..."
-                            className="pl-9 h-9 text-xs"
+                            className="pl-9 h-9 text-sm"
                             value={recipeSearch}
                             onChange={(e) => setRecipeSearch(e.target.value)}
                           />
@@ -941,7 +942,7 @@ export function InputEnvironmentPanel({
                             aria-label="Architecture filter"
                             value={selectedArchitecture}
                             onChange={(e) => setSelectedArchitecture(e.target.value)}
-                            className="h-9 text-xs py-1"
+                            className="h-9 text-sm py-1"
                           >
                             <option value="All">All Architectures</option>
                             <option value="Llama">Llama series</option>
@@ -959,7 +960,7 @@ export function InputEnvironmentPanel({
                             aria-label="Platform filter"
                             value={selectedDevice}
                             onChange={(e) => setSelectedDevice(e.target.value)}
-                            className="h-9 text-xs py-1"
+                            className="h-9 text-sm py-1"
                           >
                             <option value="All">All Platforms / EPs</option>
                             <option value="CUDA">NVIDIA CUDA GPU</option>
@@ -975,7 +976,7 @@ export function InputEnvironmentPanel({
                             aria-label="Sort recipes"
                             value={recipeSort}
                             onChange={(e) => setRecipeSort(e.target.value as RecipeSortMode)}
-                            className="h-9 text-xs py-1"
+                            className="h-9 text-sm py-1"
                           >
                             <option value="recommended">Sort: Recommended</option>
                             <option value="name-asc">Sort: Name A-Z</option>
@@ -987,161 +988,201 @@ export function InputEnvironmentPanel({
                       </div>
 
                       <div className="max-h-[420px] overflow-y-auto rounded border border-slate-800 divide-y divide-slate-800/80">
-                        {groupedRecipes.map(({ title: modelTitle, rows }) => (
-                          <div key={modelTitle} className="bg-slate-950/20">
-                            <div className="sticky top-0 z-[1] flex items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2">
-                              <h3 className="text-sm font-semibold text-slate-100 truncate">{modelTitle}</h3>
-                              <span className="shrink-0 text-[11px] font-mono text-slate-400">
-                                {rows.length} target{rows.length === 1 ? "" : "s"}
-                              </span>
-                            </div>
-                            <div className="divide-y divide-slate-900/80">
-                              {rows.map(({ item, match, hardware }) => {
-                                const hwBlocked = hardware.tier === "unavailable";
-                                const { meta } = presetDisplayName(item.name);
-                                const vramEst = estimateVramForCatalogPreset(item, hardwareProbe);
-                                const statusParts: string[] = [];
-                                if (localModelHints && match?.tier === "match")
-                                  statusParts.push("Matches upload");
-                                else if (localModelHints && match?.tier === "possible")
-                                  statusParts.push("Possible match");
-                                if (item.metadataSource !== "recipe") statusParts.push("Approx. metadata");
-
-                                return (
-                                  <div
-                                    key={item.repoPath}
-                                    title={hardware.reason}
-                                    className={cn(
-                                      "px-3 py-2 flex items-start gap-3 text-left",
-                                      hwBlocked && "opacity-90",
-                                    )}
-                                  >
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="inline-flex items-center rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[11px] font-mono text-slate-100">
-                                          {item.device}
-                                        </span>
-                                        <CompatStatusPill tier={hardware.tier} />
-                                        {meta && (
-                                          <span className="text-[11px] text-slate-400 truncate">{meta}</span>
-                                        )}
-                                      </div>
-                                      <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
-                                        {item.description}
-                                      </p>
-                                      <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                                        {vramEst.summaryLine}
-                                        <span className="text-slate-600"> · </span>
-                                        {item.architecture}
-                                        {statusParts.length > 0 ? ` · ${statusParts.join(" · ")}` : ""}
-                                      </p>
-                                      {vramEst.fitHint && (
-                                        <p className="text-[11px] text-amber-500/90 mt-0.5">
-                                          {vramEst.fitHint}
-                                        </p>
-                                      )}
-                                      {hardware.requiresInstall && (
-                                        <div
-                                          className="mt-1.5 flex items-start gap-1.5 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5"
-                                          title={hardware.requiresInstall.hint}
+                        {groupedRecipes.map(({ title: modelTitle, rows }) => {
+                          const isExpanded = expandedRecipeGroups.has(modelTitle);
+                          const toggleGroup = () => {
+                            setExpandedRecipeGroups((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(modelTitle)) next.delete(modelTitle);
+                              else next.add(modelTitle);
+                              return next;
+                            });
+                          };
+                          // Deduplicate EP badges for the collapsed summary
+                          const uniqueDevices = [...new Set(rows.map((r) => r.item.device))];
+                          return (
+                            <div key={modelTitle} className="bg-slate-950/20">
+                              <button
+                                type="button"
+                                onClick={toggleGroup}
+                                className="sticky top-0 z-[1] w-full flex items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2 cursor-pointer hover:bg-slate-900/80 transition-colors text-left"
+                                aria-expanded={isExpanded}
+                              >
+                                <h3 className="text-sm font-semibold text-slate-100 truncate">{modelTitle}</h3>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {!isExpanded && (
+                                    <div className="flex items-center gap-1 flex-wrap justify-end">
+                                      {uniqueDevices.map((device) => (
+                                        <span
+                                          key={device}
+                                          className="inline-flex items-center rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[11px] font-mono text-slate-300"
                                         >
-                                          <DownloadCloud className="h-3 w-3 text-amber-400 shrink-0 mt-0.5" />
-                                          <div className="flex-1 min-w-0">
-                                            <p className="text-[11px] text-amber-300/95 leading-snug">
-                                              {/* Use the hint directly so the label and
+                                          {device}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <span className="text-xs font-mono text-slate-400">
+                                    {rows.length} target{rows.length === 1 ? "" : "s"}
+                                  </span>
+                                  <ChevronDown
+                                    className={cn(
+                                      "h-3.5 w-3.5 text-slate-500 transition-transform",
+                                      isExpanded && "rotate-180",
+                                    )}
+                                  />
+                                </div>
+                              </button>
+                              {isExpanded && (
+                                <div className="divide-y divide-slate-900/80">
+                                  {rows.map(({ item, match, hardware }) => {
+                                    const hwBlocked = hardware.tier === "unavailable";
+                                    const { meta } = presetDisplayName(item.name);
+                                    const vramEst = estimateVramForCatalogPreset(item, hardwareProbe);
+                                    const statusParts: string[] = [];
+                                    if (localModelHints && match?.tier === "match")
+                                      statusParts.push("Matches upload");
+                                    else if (localModelHints && match?.tier === "possible")
+                                      statusParts.push("Possible match");
+                                    if (item.metadataSource !== "recipe") statusParts.push("Approx. metadata");
+
+                                    return (
+                                      <div
+                                        key={item.repoPath}
+                                        title={hardware.reason}
+                                        className={cn(
+                                          "px-3 py-2 flex items-start gap-3 text-left",
+                                          hwBlocked && "opacity-90",
+                                        )}
+                                      >
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="inline-flex items-center rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-xs font-mono text-slate-100">
+                                              {item.device}
+                                            </span>
+                                            <CompatStatusPill tier={hardware.tier} />
+                                            {meta && (
+                                              <span className="text-xs text-slate-400 truncate">{meta}</span>
+                                            )}
+                                          </div>
+                                          <p className="text-xs text-slate-400 mt-1 line-clamp-1">
+                                            {item.description}
+                                          </p>
+                                          <p className="text-xs text-slate-400 font-mono mt-0.5">
+                                            {vramEst.summaryLine}
+                                            <span className="text-slate-600"> · </span>
+                                            {item.architecture}
+                                            {statusParts.length > 0 ? ` · ${statusParts.join(" · ")}` : ""}
+                                          </p>
+                                          {vramEst.fitHint && (
+                                            <p className="text-xs text-amber-500/90 mt-0.5">
+                                              {vramEst.fitHint}
+                                            </p>
+                                          )}
+                                          {hardware.requiresInstall && (
+                                            <div
+                                              className="mt-1.5 flex items-start gap-1.5 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5"
+                                              title={hardware.requiresInstall.hint}
+                                            >
+                                              <DownloadCloud className="h-3 w-3 text-amber-400 shrink-0 mt-0.5" />
+                                              <div className="flex-1 min-w-0">
+                                                <p className="text-xs text-amber-300/95 leading-snug">
+                                                  {/* Use the hint directly so the label and
                                                   install command always agree — the old
                                                   code branched on `kind` and only swapped
                                                   between two hardcoded labels, so the CUDA
                                                   case silently printed the TensorRT label
                                                   next to the onnxruntime install command. */}
-                                              {hardware.requiresInstall.hint}{" "}
-                                              <button
-                                                type="button"
-                                                onClick={() => navigatePipeline("ihv")}
-                                                className="text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer"
-                                              >
-                                                Install in Hardware (step 02) →
-                                              </button>
+                                                  {hardware.requiresInstall.hint}{" "}
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => navigatePipeline("ihv")}
+                                                    className="text-electric-blue hover:text-white underline underline-offset-2 cursor-pointer"
+                                                  >
+                                                    Install in Hardware (step 02) →
+                                                  </button>
+                                                </p>
+                                                <p className="text-[11px] font-mono text-slate-500 mt-0.5 truncate">
+                                                  {hardware.requiresInstall.installCommand}
+                                                </p>
+                                              </div>
+                                            </div>
+                                          )}
+                                          {hwBlocked && (
+                                            <p className="text-xs text-rose-400/80 mt-0.5 line-clamp-1">
+                                              {hardware.reason}
                                             </p>
-                                            <p className="text-[10px] font-mono text-slate-500 mt-0.5 truncate">
-                                              {hardware.requiresInstall.installCommand}
-                                            </p>
-                                          </div>
+                                          )}
                                         </div>
-                                      )}
-                                      {hwBlocked && (
-                                        <p className="text-[11px] text-rose-400/80 mt-0.5 line-clamp-1">
-                                          {hardware.reason}
-                                        </p>
-                                      )}
-                                    </div>
-                                    <div className="flex gap-1.5 shrink-0 pt-0.5">
-                                      <Button
-                                        variant="outline"
-                                        type="button"
-                                        className="h-7 px-2 text-[10px] bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
-                                        disabled={applyingRecipePath === item.repoPath}
-                                        onClick={async () => {
-                                          try {
-                                            const json = await fetchOliveRecipesCatalogItem(item);
-                                            setImportJson(JSON.stringify(json, null, 2));
-                                            setActiveRecipeTab("editor");
-                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                          } catch (err: any) {
-                                            setSyncStatus("error");
-                                            setSyncError(err.message || "Failed to load recipe JSON.");
-                                          }
-                                        }}
-                                      >
-                                        JSON
-                                      </Button>
-                                      {hwBlocked ? (
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          className="h-7 px-2 text-[10px] border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
-                                          disabled={applyingRecipePath === item.repoPath}
-                                          onClick={() => handleApplyCuratedRecipeAnyway(item)}
-                                        >
-                                          {applyingRecipePath === item.repoPath ? (
-                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                        <div className="flex gap-1.5 shrink-0 pt-0.5">
+                                          <Button
+                                            variant="outline"
+                                            type="button"
+                                            className="h-7 px-2 text-[11px] bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
+                                            disabled={applyingRecipePath === item.repoPath}
+                                            onClick={async () => {
+                                              try {
+                                                const json = await fetchOliveRecipesCatalogItem(item);
+                                                setImportJson(JSON.stringify(json, null, 2));
+                                                setActiveRecipeTab("editor");
+                                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                              } catch (err: any) {
+                                                setSyncStatus("error");
+                                                setSyncError(err.message || "Failed to load recipe JSON.");
+                                              }
+                                            }}
+                                          >
+                                            JSON
+                                          </Button>
+                                          {hwBlocked ? (
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              className="h-7 px-2 text-[11px] border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
+                                              disabled={applyingRecipePath === item.repoPath}
+                                              onClick={() => handleApplyCuratedRecipeAnyway(item)}
+                                            >
+                                              {applyingRecipePath === item.repoPath ? (
+                                                <Loader2 className="h-3 w-3 animate-spin" />
+                                              ) : (
+                                                "Apply anyway"
+                                              )}
+                                            </Button>
                                           ) : (
-                                            "Apply anyway"
+                                            <Button
+                                              type="button"
+                                              className="h-7 px-2.5 text-[11px] bg-electric-blue hover:bg-electric-blue-dark text-slate-950"
+                                              disabled={applyingRecipePath === item.repoPath}
+                                              onClick={() => handleApplyCuratedRecipe(item)}
+                                            >
+                                              {applyingRecipePath === item.repoPath ? (
+                                                <Loader2 className="h-3 w-3 animate-spin" />
+                                              ) : (
+                                                "Apply"
+                                              )}
+                                            </Button>
                                           )}
-                                        </Button>
-                                      ) : (
-                                        <Button
-                                          type="button"
-                                          className="h-7 px-2.5 text-[10px] bg-electric-blue hover:bg-electric-blue-dark text-slate-950"
-                                          disabled={applyingRecipePath === item.repoPath}
-                                          onClick={() => handleApplyCuratedRecipe(item)}
-                                        >
-                                          {applyingRecipePath === item.repoPath ? (
-                                            <Loader2 className="h-3 w-3 animate-spin" />
-                                          ) : (
-                                            "Apply"
-                                          )}
-                                        </Button>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
 
                         {groupedRecipes.length === 0 && (
                           <div className="p-6 text-center">
                             <Search className="h-6 w-6 text-slate-700 mx-auto mb-2" />
-                            <p className="text-xs font-semibold text-slate-400">
+                            <p className="text-sm font-semibold text-slate-400">
                               {showLocalRecipeMatchesOnly && localModelHints
                                 ? "No presets match your local upload with current filters"
                                 : hideIncompatibleRecipes && hardwareProbe
                                   ? "No presets compatible with this PC match your filters"
                                   : "No Presets Match Filters"}
                             </p>
-                            <p className="text-[11px] text-slate-500 mt-1 max-w-[280px] mx-auto">
+                            <p className="text-xs text-slate-500 mt-1 max-w-[280px] mx-auto">
                               {hideIncompatibleRecipes && hardwareProbe
                                 ? "Turn off “Hide incompatible” or relax search and device filters."
                                 : showLocalRecipeMatchesOnly && localModelHints
@@ -1164,7 +1205,7 @@ export function InputEnvironmentPanel({
                     >
                       <div className="space-y-3 bg-slate-950/30 p-3 rounded-xl border border-slate-900 max-h-[420px] overflow-y-auto">
                         <div className="space-y-2">
-                          <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                          <Label className="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
                             <Globe className="h-3.5 w-3.5 text-electric-blue" />
                             GitHub Repository URL (Public)
                           </Label>
@@ -1172,34 +1213,34 @@ export function InputEnvironmentPanel({
                             placeholder="e.g. microsoft/olive"
                             value={repoUrl}
                             onChange={(e) => setRepoUrl(e.target.value)}
-                            className="font-mono text-xs h-9"
+                            className="font-mono text-sm h-9"
                           />
-                          <p className="text-[10px] text-slate-550">
+                          <p className="text-[11px] text-slate-550">
                             Supports direct link format or path parsing.
                           </p>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-2">
-                            <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                            <Label className="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
                               <GitBranch className="h-3.5 w-3.5 text-electric-blue" />
                               Target Branch
                             </Label>
                             <Input
                               value={repoBranch}
                               onChange={(e) => setRepoBranch(e.target.value)}
-                              className="font-mono text-xs h-9"
+                              className="font-mono text-sm h-9"
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                            <Label className="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
                               <GitPullRequest className="h-3.5 w-3.5 text-pink-400" />
                               Recipe Path
                             </Label>
                             <Input
                               value={repoPath}
                               onChange={(e) => setRepoPath(e.target.value)}
-                              className="font-mono text-xs h-9"
+                              className="font-mono text-sm h-9"
                               list="olive-recipe-paths"
                             />
                             <datalist id="olive-recipe-paths">
@@ -1216,7 +1257,7 @@ export function InputEnvironmentPanel({
                           type="button"
                           onClick={() => void handleFetchRemote()}
                           disabled={syncStatus === "loading" || !repoUrl.trim()}
-                          className="w-full text-xs h-9 bg-electric-blue hover:bg-electric-blue-dark text-slate-950"
+                          className="w-full text-sm h-9 bg-electric-blue hover:bg-electric-blue-dark text-slate-950"
                         >
                           {syncStatus === "loading" ? (
                             <>
@@ -1232,13 +1273,13 @@ export function InputEnvironmentPanel({
                         </Button>
 
                         {syncStatus === "error" && (
-                          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs flex items-start gap-2">
+                          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-sm flex items-start gap-2">
                             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                             <span>{syncError}</span>
                           </div>
                         )}
 
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500 block pt-2 border-t border-slate-900">
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-slate-500 block pt-2 border-t border-slate-900">
                           Microsoft Olive shortcuts
                         </span>
                         <div className="grid grid-cols-1 gap-2">
@@ -1287,23 +1328,21 @@ export function InputEnvironmentPanel({
                                     path: sc.path,
                                   });
                                 }}
-                                className={`text-left p-2.5 rounded-lg text-xs transition-all font-sans cursor-pointer group disabled:opacity-50 disabled:cursor-wait border ${
-                                  isActive
-                                    ? "bg-electric-blue/10 border-electric-blue/40 text-slate-100"
-                                    : "bg-slate-950/80 hover:bg-slate-950 border-slate-900 hover:border-electric-blue/20 text-slate-300"
-                                }`}
+                                className={`text-left p-2.5 rounded-lg text-sm transition-all font-sans cursor-pointer group disabled:opacity-50 disabled:cursor-wait border ${isActive
+                                  ? "bg-electric-blue/10 border-electric-blue/40 text-slate-100"
+                                  : "bg-slate-950/80 hover:bg-slate-950 border-slate-900 hover:border-electric-blue/20 text-slate-300"
+                                  }`}
                               >
                                 <span
-                                  className={`font-semibold block transition-colors ${
-                                    isActive
-                                      ? "text-electric-blue"
-                                      : "text-slate-200 group-hover:text-electric-blue"
-                                  }`}
+                                  className={`font-semibold block transition-colors ${isActive
+                                    ? "text-electric-blue"
+                                    : "text-slate-200 group-hover:text-electric-blue"
+                                    }`}
                                 >
                                   {sc.label}
                                   {syncStatus === "loading" && repoPath === sc.path ? " · pulling…" : ""}
                                 </span>
-                                <span className="text-[10px] text-slate-500 block truncate font-mono mt-0.5">
+                                <span className="text-[11px] text-slate-500 block truncate font-mono mt-0.5">
                                   {sc.path}
                                 </span>
                               </button>
@@ -1324,7 +1363,7 @@ export function InputEnvironmentPanel({
                     >
                       <div className="flex flex-col gap-3">
                         {importError && (
-                          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs font-mono leading-relaxed flex items-start gap-1.5 animate-bounce">
+                          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-sm font-mono leading-relaxed flex items-start gap-1.5 animate-bounce">
                             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                             <span>{importError}</span>
                           </div>
@@ -1332,7 +1371,7 @@ export function InputEnvironmentPanel({
 
                         <div className="relative flex flex-col min-h-[180px]">
                           <textarea
-                            className="w-full flex-1 bg-slate-950 border border-slate-900 hover:border-slate-800 focus:border-electric-blue rounded-lg p-3 font-mono text-[11px] text-slate-300 focus-visible:outline-none focus:focus-visible:ring-1 focus-visible:ring-electric-blue/40 placeholder:text-slate-700 resize-none h-[180px]"
+                            className="w-full flex-1 bg-slate-950 border border-slate-900 hover:border-slate-800 focus:border-electric-blue rounded-lg p-3 font-mono text-xs text-slate-300 focus-visible:outline-none focus:focus-visible:ring-1 focus-visible:ring-electric-blue/40 placeholder:text-slate-700 resize-none h-[180px]"
                             placeholder={`{\n  "input_model": {\n    "type": "PyTorchModel",\n    "config": {\n      "hf_config": {\n        "model_name": "meta-llama/Meta-Llama-3-8B"\n      }\n    }\n  },\n  "passes": {\n    "conversion": { "type": "OnnxConversion" }\n  }\n}`}
                             value={importJson}
                             onChange={(e) => {
@@ -1343,7 +1382,7 @@ export function InputEnvironmentPanel({
                         </div>
 
                         <div className="flex flex-col sm:flex-row justify-end items-stretch sm:items-center bg-slate-950 px-4 py-3 border border-slate-900 rounded-lg gap-2">
-                          <span className="text-[10px] text-slate-500 font-mono sm:mr-auto">
+                          <span className="text-[11px] text-slate-500 font-mono sm:mr-auto">
                             Paste raw Olive JSON format schema above or load standard presets
                           </span>
                           <Button
@@ -1351,7 +1390,7 @@ export function InputEnvironmentPanel({
                             variant="outline"
                             onClick={() => handleImport(true)}
                             disabled={!importJson.trim()}
-                            className="text-xs h-8 border-rose-500/30 text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                            className="text-sm h-8 border-rose-500/30 text-rose-400 hover:bg-rose-500/10 cursor-pointer"
                           >
                             Apply anyway
                           </Button>
@@ -1359,7 +1398,7 @@ export function InputEnvironmentPanel({
                             type="button"
                             onClick={() => handleImport(false)}
                             disabled={!importJson.trim()}
-                            className="text-xs h-8 bg-electric-blue hover:bg-electric-blue-dark text-slate-950 cursor-pointer"
+                            className="text-sm h-8 bg-electric-blue hover:bg-electric-blue-dark text-slate-950 cursor-pointer"
                           >
                             <FileJson className="h-3.5 w-3.5 mr-1.5" />
                             Parse & Apply Configuration
@@ -1384,7 +1423,7 @@ export function InputEnvironmentPanel({
                       <DownloadCloud className="h-3.5 w-3.5 text-electric-blue" />
                       Configure model source
                     </p>
-                    <p className="mt-0.5 text-[11px] text-slate-500">
+                    <p className="mt-0.5 text-xs text-slate-500">
                       Optional custom path: Hugging Face, local files, or Azure ML. Prefer a recipe preset
                       above when you can.
                     </p>
@@ -1402,7 +1441,7 @@ export function InputEnvironmentPanel({
                       <button
                         type="button"
                         onClick={() => setSourceConfigExpanded(false)}
-                        className="flex cursor-pointer items-center gap-1 text-[10px] font-mono text-slate-500 hover:text-slate-300"
+                        className="flex cursor-pointer items-center gap-1 text-[11px] font-mono text-slate-500 hover:text-slate-300"
                       >
                         <ChevronUp className="h-3 w-3" />
                         Hide
@@ -1411,11 +1450,11 @@ export function InputEnvironmentPanel({
                   </div>
 
                   {appliedRecipeLabel && (
-                    <div className="mb-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5 text-xs text-slate-300">
+                    <div className="mb-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5 text-sm text-slate-300">
                       <span className="text-emerald-400 font-semibold">From recipe:</span>{" "}
                       {appliedRecipeLabel}
                       <span className="text-slate-500"> · </span>
-                      <span className="font-mono text-[11px] text-slate-400">
+                      <span className="font-mono text-xs text-slate-400">
                         {state.modelSource === "huggingface" && state.hfModelId
                           ? `HF · ${state.hfModelId}`
                           : state.modelSource === "local"
@@ -1436,7 +1475,7 @@ export function InputEnvironmentPanel({
                       <TabsTrigger
                         value="huggingface"
                         title="Hugging Face Hub"
-                        className="w-full rounded-lg px-2 py-2.5 text-[11px] sm:text-xs"
+                        className="w-full rounded-lg px-2 py-2.5 text-xs sm:text-sm"
                       >
                         <DownloadCloud className="mr-1.5 h-4 w-4 shrink-0" />
                         <span className="truncate">Hugging Face</span>
@@ -1444,7 +1483,7 @@ export function InputEnvironmentPanel({
                       <TabsTrigger
                         value="local"
                         title="Local Machine"
-                        className="w-full rounded-lg px-2 py-2.5 text-[11px] sm:text-xs"
+                        className="w-full rounded-lg px-2 py-2.5 text-xs sm:text-sm"
                       >
                         <HardDrive className="mr-1.5 h-4 w-4 shrink-0" />
                         <span className="truncate">Local</span>
@@ -1452,7 +1491,7 @@ export function InputEnvironmentPanel({
                       <TabsTrigger
                         value="azure"
                         title="Azure ML Model"
-                        className="w-full rounded-lg px-2 py-2.5 text-[11px] sm:text-xs"
+                        className="w-full rounded-lg px-2 py-2.5 text-xs sm:text-sm"
                       >
                         <Cloud className="mr-1.5 h-4 w-4 shrink-0" />
                         <span className="truncate">Azure ML</span>
@@ -1473,11 +1512,11 @@ export function InputEnvironmentPanel({
                           />
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                          <span className="text-[11px] text-slate-500 mr-1">Quick Select:</span>
+                          <span className="text-xs text-slate-500 mr-1">Quick Select:</span>
                           <button
                             type="button"
                             onClick={() => setState({ hfModelId: "meta-llama/Meta-Llama-3-8B" })}
-                            className="text-[11px] text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
+                            className="text-xs text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
                           >
                             Meta-Llama-3
                           </button>
@@ -1488,14 +1527,14 @@ export function InputEnvironmentPanel({
                                 hfModelId: "microsoft/Phi-3-mini-4k-instruct",
                               })
                             }
-                            className="text-[11px] text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
+                            className="text-xs text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
                           >
                             Phi-3 Mini
                           </button>
                           <button
                             type="button"
                             onClick={() => setState({ hfModelId: "openai/whisper-large-v3" })}
-                            className="text-[11px] text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
+                            className="text-xs text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
                           >
                             Whisper Large V3
                           </button>
@@ -1506,14 +1545,14 @@ export function InputEnvironmentPanel({
                                 hfModelId: "stabilityai/stable-diffusion-xl-base-1.0",
                               })
                             }
-                            className="text-[11px] text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
+                            className="text-xs text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
                           >
                             Stable Diffusion XL
                           </button>
                           <button
                             type="button"
                             onClick={() => setState({ hfModelId: "bert-base-uncased" })}
-                            className="text-[11px] text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
+                            className="text-xs text-slate-300 bg-slate-900 border border-slate-800 hover:border-electric-blue/50 hover:text-electric-blue px-2 py-1 rounded transition-colors cursor-pointer"
                           >
                             BERT Base
                           </button>
@@ -1528,25 +1567,25 @@ export function InputEnvironmentPanel({
                             HuggingFace Token
                           </Label>
                           {hfTokenStatus === "loading" && (
-                            <span className="text-[10px] text-slate-500 font-mono">Checking...</span>
+                            <span className="text-[11px] text-slate-500 font-mono">Checking...</span>
                           )}
                           {hfTokenStatus === "environment" && (
-                            <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono font-semibold">
+                            <span className="text-[11px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono font-semibold">
                               ✓ Found in environment
                             </span>
                           )}
                           {hfTokenStatus === "runtime" && (
-                            <span className="text-[10px] bg-electric-blue/10 border border-electric-blue/20 text-electric-blue px-2 py-0.5 rounded font-mono font-semibold">
+                            <span className="text-[11px] bg-electric-blue/10 border border-electric-blue/20 text-electric-blue px-2 py-0.5 rounded font-mono font-semibold">
                               ✓ Set for this session
                             </span>
                           )}
                           {hfTokenStatus === "none" && (
-                            <span className="text-[10px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-mono">
+                            <span className="text-[11px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-mono">
                               Not set — required for gated models
                             </span>
                           )}
                           {hfTokenStatus === "error" && (
-                            <span className="text-[10px] bg-rose-500/10 border border-rose-500/20 text-rose-400 px-2 py-0.5 rounded font-mono">
+                            <span className="text-[11px] bg-rose-500/10 border border-rose-500/20 text-rose-400 px-2 py-0.5 rounded font-mono">
                               Couldn&apos;t check token status
                             </span>
                           )}
@@ -1560,7 +1599,7 @@ export function InputEnvironmentPanel({
                                 type="password"
                                 placeholder="hf_..."
                                 autoComplete="off"
-                                className="w-full pl-9 pr-3 h-9 bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-electric-blue rounded-md font-mono text-xs text-slate-200 placeholder:text-slate-600 outline-none"
+                                className="w-full pl-9 pr-3 h-9 bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-electric-blue rounded-md font-mono text-sm text-slate-200 placeholder:text-slate-600 outline-none"
                                 value={hfTokenInput}
                                 onChange={(e) => setHfTokenInput(e.target.value)}
                                 onKeyDown={(e) => e.key === "Enter" && handleSubmitToken()}
@@ -1571,7 +1610,7 @@ export function InputEnvironmentPanel({
                               type="button"
                               onClick={handleSubmitToken}
                               disabled={!hfTokenInput.trim() || isTokenMutating}
-                              className="h-9 px-4 text-xs bg-electric-blue hover:bg-electric-blue/90 text-slate-950 font-bold"
+                              className="h-9 px-4 text-sm bg-electric-blue hover:bg-electric-blue/90 text-slate-950 font-bold"
                             >
                               {submitTokenMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
                             </Button>
@@ -1582,7 +1621,7 @@ export function InputEnvironmentPanel({
                                 onClick={handleClearToken}
                                 disabled={isTokenMutating}
                                 aria-label={clearTokenMutation.isPending ? "Clearing token" : undefined}
-                                className="h-9 px-3 text-xs border-red-500/30 text-red-400 hover:bg-red-500/10"
+                                className="h-9 px-3 text-sm border-red-500/30 text-red-400 hover:bg-red-500/10"
                               >
                                 {clearTokenMutation.isPending ? (
                                   <>
@@ -1597,12 +1636,12 @@ export function InputEnvironmentPanel({
                           </div>
                         )}
                         {clearTokenMutation.isError && (
-                          <p role="alert" className="text-[10px] text-rose-400">
+                          <p role="alert" className="text-[11px] text-rose-400">
                             Couldn&apos;t clear the token — try again.
                           </p>
                         )}
 
-                        <p className="text-[10px] text-slate-500 leading-relaxed">
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
                           Stored in server memory only — never written to disk or returned to the client. Set{" "}
                           <code className="text-slate-400 font-mono">HF_TOKEN</code> in environment
                           variables for persistent access without re-entering each session.
@@ -1630,7 +1669,7 @@ export function InputEnvironmentPanel({
                             <option value="sentence-similarity">Sentence Similarity</option>
                             <option value="conversational">Conversational</option>
                           </Select>
-                          <p className="text-[10px] text-slate-500 leading-relaxed">
+                          <p className="text-[11px] text-slate-500 leading-relaxed">
                             Written into Olive{" "}
                             <code className="font-mono text-slate-400">input_model.config.task</code>.
                             Embedding models (GTE, BGE, E5) should use Feature Extraction.
@@ -1655,7 +1694,7 @@ export function InputEnvironmentPanel({
                             value={state.userScript || ""}
                             onChange={(e) => setState({ userScript: e.target.value || undefined })}
                           />
-                          <p className="text-[10px] text-slate-500 leading-relaxed">
+                          <p className="text-[11px] text-slate-500 leading-relaxed">
                             Path to a Python script with eval/calibration functions required by some
                             optimization passes.
                           </p>
@@ -1698,13 +1737,12 @@ export function InputEnvironmentPanel({
                               return (
                                 <div
                                   key={file.name}
-                                  className={`flex items-center justify-between p-3 rounded-lg border group transition-all ${
-                                    isCurSelected
-                                      ? "bg-electric-blue/10 border-electric-blue/60 shadow-sm ring-1 ring-electric-blue/25"
-                                      : isChunk
-                                        ? "bg-slate-900 border-electric-blue/25 hover:border-slate-700 hover:bg-slate-900/80"
-                                        : "bg-slate-950 border-slate-800 hover:border-slate-700 hover:bg-slate-950/80"
-                                  }`}
+                                  className={`flex items-center justify-between p-3 rounded-lg border group transition-all ${isCurSelected
+                                    ? "bg-electric-blue/10 border-electric-blue/60 shadow-sm ring-1 ring-electric-blue/25"
+                                    : isChunk
+                                      ? "bg-slate-900 border-electric-blue/25 hover:border-slate-700 hover:bg-slate-900/80"
+                                      : "bg-slate-950 border-slate-800 hover:border-slate-700 hover:bg-slate-950/80"
+                                    }`}
                                 >
                                   <button
                                     type="button"
@@ -1722,7 +1760,7 @@ export function InputEnvironmentPanel({
                                       >
                                         {file.name}
                                       </p>
-                                      <p className="text-xs text-slate-500 font-mono">
+                                      <p className="text-sm text-slate-500 font-mono">
                                         {formatSize(file.size)}
                                       </p>
                                     </div>
@@ -1755,7 +1793,7 @@ export function InputEnvironmentPanel({
                                     <Layers className="h-4 w-4" />
                                     Model Reconstruction Available
                                   </h5>
-                                  <p className="text-xs text-slate-400">
+                                  <p className="text-sm text-slate-400">
                                     Detected {files.length} parts for <strong>{base}</strong> (
                                     {formatSize(files.reduce((a, b) => a + b.size, 0))}
                                     ).
@@ -1780,7 +1818,7 @@ export function InputEnvironmentPanel({
                                     <a
                                       href={downloadUrl}
                                       download={downloadName}
-                                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded text-xs text-emerald-400 font-semibold transition-all"
+                                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded text-sm text-emerald-400 font-semibold transition-all"
                                     >
                                       <DownloadCloud className="h-3.5 w-3.5" />
                                       Download {downloadName}
@@ -1791,7 +1829,7 @@ export function InputEnvironmentPanel({
 
                               {isReconstructing && (
                                 <div className="mt-4 space-y-1.5 animate-in fade-in">
-                                  <div className="flex justify-between text-xs text-electric-blue font-mono">
+                                  <div className="flex justify-between text-sm text-electric-blue font-mono">
                                     <span>Progress</span>
                                     <span>{Math.round(reconstructProgress)}%</span>
                                   </div>
@@ -1814,13 +1852,13 @@ export function InputEnvironmentPanel({
                                   <Activity className="h-4 w-4 text-emerald-400 animate-pulse" />
                                   Model File Metadata & Inspector
                                 </h4>
-                                <p className="text-xs text-slate-500">
+                                <p className="text-sm text-slate-500">
                                   Lists sizes, verified hash integrity signatures, and segment lineages for
                                   local resources.
                                 </p>
                               </div>
                               {selectedFileDetailed && (
-                                <div className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono font-medium">
+                                <div className="text-[11px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono font-medium">
                                   {selectedFileDetailed.status}
                                 </div>
                               )}
@@ -1830,7 +1868,7 @@ export function InputEnvironmentPanel({
                               {/* Left Column: Inspectable Items Selector */}
                               <div className="lg:col-span-12 xl:col-span-5 space-y-4 border-r border-slate-900 xl:pr-5">
                                 <div className="space-y-2">
-                                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
                                     Active Workspace Files ({state.localFiles.length})
                                   </span>
                                   <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
@@ -1844,19 +1882,18 @@ export function InputEnvironmentPanel({
                                           onClick={() => setSelectedFileName(file.name)}
                                           aria-label={`Select ${file.name}`}
                                           aria-pressed={isCurSelected}
-                                          className={`flex w-full items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
-                                            isCurSelected
-                                              ? "bg-electric-blue/10 border-electric-blue/60 text-white shadow-sm"
-                                              : "bg-slate-950/60 border-slate-900/60 text-slate-400 hover:border-slate-800 hover:bg-slate-950 hover:text-slate-200"
-                                          }`}
+                                          className={`flex w-full items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${isCurSelected
+                                            ? "bg-electric-blue/10 border-electric-blue/60 text-white shadow-sm"
+                                            : "bg-slate-950/60 border-slate-900/60 text-slate-400 hover:border-slate-800 hover:bg-slate-950 hover:text-slate-200"
+                                            }`}
                                         >
                                           <div className="flex items-center gap-2 overflow-hidden w-full">
                                             <FileIcon
                                               className={`h-3.5 w-3.5 shrink-0 ${isCurSelected ? "text-electric-blue" : isChunk ? "text-blue-400" : "text-slate-500"}`}
                                             />
                                             <div className="truncate flex-1">
-                                              <div className="text-xs font-medium truncate">{file.name}</div>
-                                              <div className="text-[10px] font-mono text-slate-500 leading-tight">
+                                              <div className="text-sm font-medium truncate">{file.name}</div>
+                                              <div className="text-[11px] font-mono text-slate-500 leading-tight">
                                                 {isChunk ? "Segment block" : "Active baseline"} •{" "}
                                                 {formatSize(file.size)}
                                               </div>
@@ -1873,12 +1910,12 @@ export function InputEnvironmentPanel({
 
                                 {/* Reconstructed Lineages Section */}
                                 <div className="space-y-2">
-                                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 pt-2 border-t border-slate-900/40">
+                                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 pt-2 border-t border-slate-900/40">
                                     <History className="h-3 w-3 text-amber-500" /> Reconstructed Lineages (
                                     {reconstructedHistory.length})
                                   </span>
                                   {reconstructedHistory.length === 0 ? (
-                                    <div className="p-3 text-center border border-dashed border-slate-900 rounded-lg bg-slate-950/20 text-[11px] text-slate-500 italic font-sans leading-relaxed">
+                                    <div className="p-3 text-center border border-dashed border-slate-900 rounded-lg bg-slate-950/20 text-xs text-slate-500 italic font-sans leading-relaxed">
                                       No reconstructions performed in this workspace session yet.
                                     </div>
                                   ) : (
@@ -1892,21 +1929,20 @@ export function InputEnvironmentPanel({
                                             onClick={() => setSelectedFileName(item.baseName)}
                                             aria-label={`Select reconstructed ${item.baseName}`}
                                             aria-pressed={isCurSelected}
-                                            className={`flex w-full items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
-                                              isCurSelected
-                                                ? "bg-amber-500/10 border-amber-500/50 text-white"
-                                                : "bg-slate-950/60 border-slate-900/60 text-slate-400 hover:border-slate-800 hover:bg-slate-950 hover:text-slate-200"
-                                            }`}
+                                            className={`flex w-full items-center justify-between p-2.5 rounded-lg border text-left cursor-pointer transition-all ${isCurSelected
+                                              ? "bg-amber-500/10 border-amber-500/50 text-white"
+                                              : "bg-slate-950/60 border-slate-900/60 text-slate-400 hover:border-slate-800 hover:bg-slate-950 hover:text-slate-200"
+                                              }`}
                                           >
                                             <div className="flex items-center gap-2 overflow-hidden w-full">
                                               <Cpu
                                                 className={`h-3.5 w-3.5 shrink-0 ${isCurSelected ? "text-amber-500" : "text-amber-400/80"}`}
                                               />
                                               <div className="truncate flex-1">
-                                                <div className="text-xs font-medium truncate">
+                                                <div className="text-sm font-medium truncate">
                                                   {item.baseName}
                                                 </div>
-                                                <div className="text-[10px] font-mono text-slate-500 leading-tight">
+                                                <div className="text-[11px] font-mono text-slate-500 leading-tight">
                                                   Reconstituted • {formatSize(item.totalSize)} (
                                                   {item.chunks.length} parts)
                                                 </div>
@@ -1930,14 +1966,14 @@ export function InputEnvironmentPanel({
                                     <div className="space-y-3">
                                       {/* File Details Title */}
                                       <div>
-                                        <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1.5">
+                                        <div className="text-[11px] text-slate-500 font-mono flex items-center gap-1.5">
                                           <FileCode className="h-3.5 w-3.5 text-slate-400" />
                                           {getFileFormatLabel(selectedFileDetailed.name)}
                                         </div>
                                         <h5 className="text-sm font-semibold text-slate-200 truncate mt-0.5">
                                           {selectedFileDetailed.name}
                                         </h5>
-                                        <p className="text-xs text-slate-400 leading-relaxed mt-1 italic">
+                                        <p className="text-sm text-slate-400 leading-relaxed mt-1 italic">
                                           "{getFileDescription(selectedFileDetailed.name)}"
                                         </p>
                                       </div>
@@ -1945,18 +1981,18 @@ export function InputEnvironmentPanel({
                                       {/* Detailed Metadata Grid */}
                                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950 border border-slate-900 rounded-lg p-3.5 font-sans">
                                         <div>
-                                          <span className="text-[10px] font-mono text-slate-500 uppercase block leading-none mb-1">
+                                          <span className="text-[11px] font-mono text-slate-500 uppercase block leading-none mb-1">
                                             Size Specification
                                           </span>
-                                          <span className="text-xs font-bold text-slate-300 font-mono">
+                                          <span className="text-sm font-bold text-slate-300 font-mono">
                                             {formatSize(selectedFileDetailed.size)}
                                           </span>
-                                          <span className="text-[10px] text-slate-500 block leading-none font-mono mt-0.5">
+                                          <span className="text-[11px] text-slate-500 block leading-none font-mono mt-0.5">
                                             {selectedFileDetailed.size.toLocaleString()} bytes
                                           </span>
                                         </div>
                                         <div>
-                                          <span className="text-[10px] font-mono text-slate-500 uppercase block leading-none mb-1">
+                                          <span className="text-[11px] font-mono text-slate-500 uppercase block leading-none mb-1">
                                             Verification Checksum
                                           </span>
                                           <div className="flex items-center gap-1.5 mt-0.5">
@@ -1964,7 +2000,7 @@ export function InputEnvironmentPanel({
                                               const displayHash = getDisplayHash(selectedFileDetailed.name);
                                               if (!displayHash) {
                                                 return (
-                                                  <span className="text-[11px] font-mono text-slate-500 px-1.5 py-0.5 border border-slate-800 rounded">
+                                                  <span className="text-xs font-mono text-slate-500 px-1.5 py-0.5 border border-slate-800 rounded">
                                                     not hashed
                                                   </span>
                                                 );
@@ -1972,7 +2008,7 @@ export function InputEnvironmentPanel({
                                               return (
                                                 <>
                                                   <span
-                                                    className="text-[11px] font-semibold font-mono text-emerald-400 bg-emerald-500/5 px-1.5 py-0.5 border border-emerald-500/10 rounded truncate max-w-[170px]"
+                                                    className="text-xs font-semibold font-mono text-emerald-400 bg-emerald-500/5 px-1.5 py-0.5 border border-emerald-500/10 rounded truncate max-w-[170px]"
                                                     title={displayHash}
                                                   >
                                                     {displayHash.substring(0, 24)}...
@@ -1995,7 +2031,7 @@ export function InputEnvironmentPanel({
                                           </div>
                                         </div>
                                         <div className="col-span-1 sm:col-span-2 border-t border-slate-900/60 pt-2.5 mt-1">
-                                          <span className="text-[10px] font-mono text-slate-500 uppercase block mb-1.5">
+                                          <span className="text-[11px] font-mono text-slate-500 uppercase block mb-1.5">
                                             Structural Analysis Properties
                                           </span>
                                           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
@@ -2005,7 +2041,7 @@ export function InputEnvironmentPanel({
                                             ).map((item, i) => (
                                               <div
                                                 key={i}
-                                                className="flex items-center justify-between text-[11px] border-b border-dashed border-slate-900 pb-1"
+                                                className="flex items-center justify-between text-xs border-b border-dashed border-slate-900 pb-1"
                                               >
                                                 <span className="text-slate-500 capitalize">
                                                   {item.key.replace(/_/g, " ")}
@@ -2022,14 +2058,14 @@ export function InputEnvironmentPanel({
                                       {/* Custom display based on lineage */}
                                       {selectedFileDetailed.lineage && selectedFileDetailed.reconstructed && (
                                         <div className="space-y-2 animate-in slide-in-from-bottom-1 duration-200">
-                                          <div className="text-[10px] font-mono text-amber-500 uppercase flex items-center gap-1">
+                                          <div className="text-[11px] font-mono text-amber-500 uppercase flex items-center gap-1">
                                             <History className="h-3 w-3" /> Reconnection Segment Lineage
                                             mapping
                                           </div>
                                           <div className="bg-amber-500/[0.02] border border-amber-500/15 rounded-lg p-3 space-y-2 max-h-[140px] overflow-y-auto">
-                                            <p className="text-[11px] text-amber-400/80 leading-relaxed">
+                                            <p className="text-xs text-amber-400/80 leading-relaxed">
                                               This model file was compiled locally at{" "}
-                                              <code className="text-white bg-slate-900 px-1 py-0.5 rounded font-mono text-[10px]">
+                                              <code className="text-white bg-slate-900 px-1 py-0.5 rounded font-mono text-[11px]">
                                                 {new Date(
                                                   selectedFileDetailed.lineage.reconstructedAt,
                                                 ).toLocaleTimeString()}
@@ -2043,7 +2079,7 @@ export function InputEnvironmentPanel({
                                                   key={ch.name}
                                                   onClick={() => setSelectedFileName(ch.name)}
                                                   aria-label={`Select chunk ${ch.name}`}
-                                                  className="flex w-full items-center justify-between text-[10px] font-mono p-1.5 bg-slate-950 rounded border border-slate-900 hover:border-slate-800 cursor-pointer transition-colors text-left"
+                                                  className="flex w-full items-center justify-between text-[11px] font-mono p-1.5 bg-slate-950 rounded border border-slate-900 hover:border-slate-800 cursor-pointer transition-colors text-left"
                                                 >
                                                   <div className="flex items-center gap-1.5 truncate">
                                                     <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse shrink-0" />
@@ -2068,7 +2104,7 @@ export function InputEnvironmentPanel({
                                       {selectedFileDetailed.status === "Archived Chunk Segment" &&
                                         selectedFileDetailed.lineage &&
                                         "parent" in selectedFileDetailed.lineage && (
-                                          <div className="p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between text-xs text-slate-400">
+                                          <div className="p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between text-sm text-slate-400">
                                             <span className="flex items-center gap-1.5">
                                               <Info className="h-3.5 w-3.5 text-emerald-400" />
                                               Component part of reconstructed model
@@ -2081,7 +2117,7 @@ export function InputEnvironmentPanel({
                                                   setSelectedFileName(lineage.parent);
                                                 }
                                               }}
-                                              className="text-[10px] font-mono text-emerald-400 hover:underline hover:text-emerald-300 font-semibold cursor-pointer"
+                                              className="text-[11px] font-mono text-emerald-400 hover:underline hover:text-emerald-300 font-semibold cursor-pointer"
                                             >
                                               Go to assembled model →
                                             </button>
@@ -2092,10 +2128,10 @@ export function InputEnvironmentPanel({
                                 ) : (
                                   <div className="flex flex-col items-center justify-center text-center p-8 border border-dashed border-slate-950 rounded-xl bg-slate-950/20 h-full">
                                     <FileIcon className="h-10 w-10 text-slate-700 mb-3 animate-pulse" />
-                                    <span className="text-xs text-slate-400 font-medium font-sans">
+                                    <span className="text-sm text-slate-400 font-medium font-sans">
                                       No File Selected for Analysis
                                     </span>
-                                    <p className="text-[11px] text-slate-600 max-w-xs mt-1 leading-normal">
+                                    <p className="text-xs text-slate-600 max-w-xs mt-1 leading-normal">
                                       Click on any file block or reconstruction lineage row in the index list
                                       to audit layer specifications, datatypes, and hash values.
                                     </p>
@@ -2161,7 +2197,7 @@ export function InputEnvironmentPanel({
                   id="azureStr"
                   type="password"
                   placeholder="DefaultEndpointsProtocol=https;AccountName=..."
-                  className="pl-9 font-mono text-xs"
+                  className="pl-9 font-mono text-sm"
                   value={state.azureStr}
                   onChange={(e) => setState({ azureStr: e.target.value })}
                 />

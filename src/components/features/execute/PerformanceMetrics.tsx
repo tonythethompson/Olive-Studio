@@ -44,7 +44,7 @@ export const PerformanceMetrics = memo(function PerformanceMetrics({ logs }: { l
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {parsedMetrics.map((m, i) => (
               <div key={i} className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
-                <span className="text-slate-500 text-[10px] block uppercase font-bold font-mono mb-1">
+                <span className="text-slate-500 text-[11px] block uppercase font-bold font-mono mb-1">
                   {m.label}
                 </span>
                 <span className={`text-lg font-bold font-mono ${m.color}`}>{m.value}</span>
@@ -56,7 +56,7 @@ export const PerformanceMetrics = memo(function PerformanceMetrics({ logs }: { l
             <Activity className="h-8 w-8 text-slate-600" />
             <div>
               <p className="text-sm font-semibold text-slate-400">No metrics yet</p>
-              <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+              <p className="text-sm text-slate-500 mt-1 max-w-xs mx-auto">
                 Click <strong>Execute Live</strong> to run Olive optimization. Metrics reported in the output
                 will be surfaced here automatically.
               </p>

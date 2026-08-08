@@ -40,8 +40,8 @@ export function ChatPanel({
   return (
     <div className="flex flex-col h-full space-y-3">
       <div className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
-        <p className="text-xs text-slate-500 mb-1">Live workspace</p>
-        <p className="text-[11px] text-slate-300 leading-relaxed font-mono" title={workspaceSummary}>
+        <p className="text-sm text-slate-500 mb-1">Live workspace</p>
+        <p className="text-xs text-slate-300 leading-relaxed font-mono" title={workspaceSummary}>
           {workspaceSummary}
         </p>
       </div>
@@ -49,9 +49,9 @@ export function ChatPanel({
         {chatMessages.map((msg, i) => (
           <div
             key={i}
-            className={`max-w-[90%] p-3 rounded-lg text-xs flex flex-col gap-1 ${msg.sender === "user" ? "bg-electric-blue/10 border border-electric-blue/20 ml-auto" : "bg-slate-900 border border-slate-800 mr-auto"}`}
+            className={`max-w-[90%] p-3 rounded-lg text-sm flex flex-col gap-1 ${msg.sender === "user" ? "bg-electric-blue/10 border border-electric-blue/20 ml-auto" : "bg-slate-900 border border-slate-800 mr-auto"}`}
           >
-            <span className="text-[10px] text-slate-500 mb-0.5 pb-0.5 border-b border-slate-800/40">
+            <span className="text-[11px] text-slate-500 mb-0.5 pb-0.5 border-b border-slate-800/40">
               {msg.sender === "user" ? "You" : "Assistant"}
             </span>
             <div>{renderMessageContent(msg.text)}</div>
@@ -66,7 +66,7 @@ export function ChatPanel({
                       disabled={applied}
                       title={summarizeChatPatch(action.patch)}
                       onClick={() => onApplyAction(i, action)}
-                      className="text-left text-[10px] px-2 py-1.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50 disabled:cursor-default cursor-pointer"
+                      className="text-left text-[11px] px-2 py-1.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50 disabled:cursor-default cursor-pointer"
                     >
                       {applied ? "Applied" : action.title}
                     </button>
@@ -79,7 +79,7 @@ export function ChatPanel({
         {isChatting && (
           <div className="p-3 bg-slate-900/60 border border-slate-850 rounded-lg flex items-center gap-2">
             <Bot className="h-3.5 w-3.5 text-electric-blue animate-spin" />
-            <span className="text-xs text-slate-400">Thinking…</span>
+            <span className="text-sm text-slate-400">Thinking…</span>
           </div>
         )}
         {chatError && <ProviderErrorBlock msg={chatError} onGoSettings={onGoSettings} />}
@@ -87,7 +87,7 @@ export function ChatPanel({
       </div>
 
       <div className="space-y-1.5 py-1">
-        <span className="text-xs text-slate-500 block">Quick queries</span>
+        <span className="text-sm text-slate-500 block">Quick queries</span>
         <div className="flex flex-wrap gap-1.5">
           {presetQueries.map((prompt, i) => (
             <button
@@ -96,7 +96,7 @@ export function ChatPanel({
               onClick={() => onSend(prompt)}
               disabled={isChatting}
               title={prompt}
-              className="text-[10px] px-2.5 py-0.5 bg-slate-950/80 hover:bg-slate-900 text-slate-400 hover:text-slate-100 border border-slate-800 rounded transition-all cursor-pointer text-left max-w-full truncate"
+              className="text-[11px] px-2.5 py-0.5 bg-slate-950/80 hover:bg-slate-900 text-slate-400 hover:text-slate-100 border border-slate-800 rounded transition-all cursor-pointer text-left max-w-full truncate"
             >
               {prompt}
             </button>
@@ -117,7 +117,7 @@ export function ChatPanel({
           value={inputQuestion}
           onChange={(e) => onInputChange(e.target.value)}
           disabled={isChatting}
-          className="flex-1 min-w-0 bg-slate-950 border border-slate-800 hover:border-slate-700/80 focus:border-electric-blue/40 text-xs px-3 py-2 rounded-lg text-slate-200 focus:outline-none transition-colors"
+          className="flex-1 min-w-0 bg-slate-950 border border-slate-800 hover:border-slate-700/80 focus:border-electric-blue/40 text-sm px-3 py-2 rounded-lg text-slate-200 focus:outline-none transition-colors"
         />
         <button
           type="submit"

@@ -186,7 +186,7 @@ export function GeminiSidebar({
             <div className="flex items-center gap-2 min-w-0">
               <Bot className="h-4 w-4 text-electric-blue shrink-0" />
               <span className="text-sm font-medium text-slate-100">Assistant</span>
-              <span className="text-[11px] text-slate-500 truncate hidden sm:inline">· {providerLabel}</span>
+              <span className="text-xs text-slate-500 truncate hidden sm:inline">· {providerLabel}</span>
             </div>
             <button
               type="button"
@@ -214,7 +214,7 @@ export function GeminiSidebar({
                   aria-controls={`assistant-panel-${id}`}
                   key={id}
                   onClick={() => handleTabChange(id)}
-                  className={`py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer border ${activeTab === id ? "bg-slate-900 text-electric-blue shadow-sm border-slate-800/40" : "text-slate-400 hover:text-slate-200 border-transparent"}`}
+                  className={`py-1.5 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer border ${activeTab === id ? "bg-slate-900 text-electric-blue shadow-sm border-slate-800/40" : "text-slate-400 hover:text-slate-200 border-transparent"}`}
                 >
                   <Icon
                     className={`h-3.5 w-3.5 ${activeTab === id ? "text-electric-blue" : "text-slate-500"}`}
@@ -288,20 +288,20 @@ export function GeminiSidebar({
 
           {/* Footer */}
           <div className="p-3.5 border-t border-slate-800 shrink-0 bg-slate-950/85 space-y-2">
-            <div className="flex items-center gap-2 text-[10px] text-slate-500 justify-center">
+            <div className="flex items-center gap-2 text-[11px] text-slate-500 justify-center">
               <Bot className="h-3 w-3 text-slate-600" />
               <span>
                 Target: <span className="text-slate-400 font-mono">{state.ihvProvider}</span>
               </span>
             </div>
-            <p className="text-[10px] text-slate-600 text-center leading-snug px-1">
+            <p className="text-[11px] text-slate-600 text-center leading-snug px-1">
               AI can be wrong. Verify Audit, Chat, and Apply changes against your model, EP, and Olive docs
               before running jobs.
             </p>
             <button
               type="button"
               onClick={() => setIsReportOpen(true)}
-              className="w-full flex items-center justify-center gap-1.5 text-[11px] text-slate-500 hover:text-electric-blue transition-colors cursor-pointer py-1.5 rounded hover:bg-slate-800/50"
+              className="w-full flex items-center justify-center gap-1.5 text-xs text-slate-500 hover:text-electric-blue transition-colors cursor-pointer py-1.5 rounded hover:bg-slate-800/50"
             >
               <Bug className="h-3 w-3" />
               Report an issue

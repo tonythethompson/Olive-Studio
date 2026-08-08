@@ -674,31 +674,31 @@ export function ExecutionWorkspace({
                 <div className="flex items-center justify-between px-4 py-2 border-b border-slate-900 bg-slate-900/40">
                   <div className="flex items-center gap-2">
                     <FileJson className="h-4 w-4 text-emerald-400" />
-                    <span className="text-xs font-mono text-slate-300">olive_recipe.json</span>
+                    <span className="text-sm font-mono text-slate-300">olive_recipe.json</span>
                   </div>
-                  <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono font-semibold">
+                  <span className="text-[11px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono font-semibold">
                     VALID OLIVE SCHEMA
                   </span>
                 </div>
                 <textarea
                   readOnly
-                  className="w-full flex-1 bg-transparent p-4 font-mono text-xs text-emerald-400 focus-visible:outline-none resize-none overflow-y-auto cursor-text"
+                  className="w-full flex-1 bg-transparent p-4 font-mono text-sm text-emerald-400 focus-visible:outline-none resize-none overflow-y-auto cursor-text"
                   value={JSON.stringify(recipe, null, 2)}
                   onClick={(e) => (e.target as HTMLTextAreaElement).select()}
                 />
               </div>
 
               <div className="flex justify-between items-center gap-3 pt-2">
-                <span className="text-xs text-slate-500 font-mono hidden sm:inline">
+                <span className="text-sm text-slate-500 font-mono hidden sm:inline">
                   Generated dynamic recipe mapping
                 </span>
                 <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-                  <Button variant="outline" className="text-xs h-9" onClick={() => setIsExportOpen(false)}>
+                  <Button variant="outline" className="text-sm h-9" onClick={() => setIsExportOpen(false)}>
                     Close
                   </Button>
                   <Button
                     variant="outline"
-                    className="text-xs h-9 border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
+                    className="text-sm h-9 border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
                     onClick={handleExportCopy}
                   >
                     {isExportCopied ? (
@@ -710,7 +710,7 @@ export function ExecutionWorkspace({
                   </Button>
                   <Button
                     variant="default"
-                    className="text-xs h-9 bg-electric-blue hover:bg-electric-blue/90 text-slate-950"
+                    className="text-sm h-9 bg-electric-blue hover:bg-electric-blue/90 text-slate-950"
                     onClick={handleExportDownload}
                   >
                     <Download className="h-4 w-4 mr-1.5" /> Save File (.json)
@@ -765,7 +765,7 @@ export function ExecutionWorkspace({
                   type="button"
                   aria-pressed={recipeView === "graph"}
                   onClick={() => setRecipeView("graph")}
-                  className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${recipeView === "graph"
+                  className={`px-2.5 py-1 text-xs font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${recipeView === "graph"
                     ? "bg-electric-blue text-slate-950"
                     : "text-slate-400 hover:text-slate-200"
                     }`}
@@ -776,7 +776,7 @@ export function ExecutionWorkspace({
                   type="button"
                   aria-pressed={recipeView === "json"}
                   onClick={() => setRecipeView("json")}
-                  className={`px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${recipeView === "json"
+                  className={`px-2.5 py-1 text-xs font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${recipeView === "json"
                     ? "bg-electric-blue text-slate-950"
                     : "text-slate-400 hover:text-slate-200"
                     }`}
@@ -800,7 +800,7 @@ export function ExecutionWorkspace({
               )}
               <Button
                 variant="outline"
-                className="h-8 px-3 text-xs border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
+                className="h-8 px-3 text-sm border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
                 onClick={() => setIsExportOpen(true)}
               >
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Export Recipe
@@ -809,7 +809,7 @@ export function ExecutionWorkspace({
                 <Button
                   ref={moreToolsTriggerRef}
                   variant="outline"
-                  className="h-8 px-2.5 text-xs border-slate-700 text-slate-300 hover:border-slate-500"
+                  className="h-8 px-2.5 text-sm border-slate-700 text-slate-300 hover:border-slate-500"
                   aria-expanded={moreToolsOpen}
                   aria-haspopup="menu"
                   onClick={() => setMoreToolsOpen((open) => !open)}
@@ -824,7 +824,7 @@ export function ExecutionWorkspace({
                     <button
                       type="button"
                       role="menuitem"
-                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer"
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-slate-300 hover:bg-slate-900 cursor-pointer"
                       onClick={() => {
                         setIsHistoryOpen(true);
                         setMoreToolsOpen(false);
@@ -835,7 +835,7 @@ export function ExecutionWorkspace({
                     <button
                       type="button"
                       role="menuitem"
-                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer"
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-slate-300 hover:bg-slate-900 cursor-pointer"
                       onClick={() => {
                         void getJobHistory()
                           .then((records) => downloadMarkdownReport(records))
@@ -853,7 +853,7 @@ export function ExecutionWorkspace({
                     <button
                       type="button"
                       role="menuitem"
-                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer"
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-slate-300 hover:bg-slate-900 cursor-pointer"
                       onClick={() => {
                         setIsOwrExportOpen(true);
                         setMoreToolsOpen(false);
@@ -886,7 +886,7 @@ export function ExecutionWorkspace({
               )}
               {view === "json" && (
                 <div className="overflow-auto bg-slate-950 p-4 m-6 mt-0 rounded-lg border border-slate-800 min-h-[360px]">
-                  <pre className="text-xs font-mono text-emerald-400">{JSON.stringify(recipe, null, 2)}</pre>
+                  <pre className="text-sm font-mono text-emerald-400">{JSON.stringify(recipe, null, 2)}</pre>
                 </div>
               )}
             </CardContent>
@@ -910,23 +910,23 @@ export function ExecutionWorkspace({
           badge={
             <div className="flex items-center gap-2 flex-wrap">
               {executionStatus === "running" && (
-                <span className="flex items-center gap-1.5 text-xs font-mono bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-2.5 py-1 rounded">
+                <span className="flex items-center gap-1.5 text-sm font-mono bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-2.5 py-1 rounded">
                   <RefreshCw className="h-3 w-3 animate-spin" /> Running
                 </span>
               )}
               {executionStatus === "completed" && (
-                <span className="flex items-center gap-1.5 text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded">
+                <span className="flex items-center gap-1.5 text-sm font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded">
                   <CheckCircle2 className="h-3 w-3" /> Done
                 </span>
               )}
               {executionStatus === "failed" && (
-                <span className="flex items-center gap-1.5 text-xs font-mono bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded">
+                <span className="flex items-center gap-1.5 text-sm font-mono bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded">
                   <AlertCircle className="h-3 w-3" /> Failed
                 </span>
               )}
               <Button
                 variant="ghost"
-                className="h-8 px-2.5 text-xs text-slate-400 hover:text-electric-blue"
+                className="h-8 px-2.5 text-sm text-slate-400 hover:text-electric-blue"
                 onClick={() => onOpenAiAudit?.()}
               >
                 Review with Assistant
@@ -941,7 +941,7 @@ export function ExecutionWorkspace({
               {schemaErrors.map((error) => (
                 <div key={error} className="flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-rose-200 leading-relaxed">{error}</p>
+                  <p className="text-xs text-rose-200 leading-relaxed">{error}</p>
                 </div>
               ))}
             </div>
@@ -952,8 +952,8 @@ export function ExecutionWorkspace({
                 <div key={issue.id} className="flex items-start gap-2">
                   <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-amber-300">{issue.title}</p>
-                    <p className="text-[11px] text-slate-400 leading-relaxed">{issue.description}</p>
+                    <p className="text-sm font-semibold text-amber-300">{issue.title}</p>
+                    <p className="text-xs text-slate-400 leading-relaxed">{issue.description}</p>
                   </div>
                 </div>
               ))}
@@ -969,7 +969,7 @@ export function ExecutionWorkspace({
                 <AlertCircle className="h-4 w-4 text-rose-400" />
               )}
               <span
-                className={`text-xs sm:text-sm font-medium ${validationTone === "success"
+                className={`text-sm sm:text-sm font-medium ${validationTone === "success"
                   ? "text-emerald-400"
                   : validationTone === "warning"
                     ? "text-amber-300"
@@ -984,17 +984,17 @@ export function ExecutionWorkspace({
                 <Button
                   variant="outline"
                   onClick={handleCancelJob}
-                  className="h-9 px-3 text-xs border-rose-500/40 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500 cursor-pointer"
+                  className="h-9 px-3 text-sm border-rose-500/40 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500 cursor-pointer"
                 >
                   <Square className="h-3.5 w-3.5 mr-1.5 fill-rose-400 text-rose-400" /> Cancel Run
                 </Button>
               )}
               {justQueued ? (
-                <span className="text-xs text-electric-blue font-semibold font-mono mr-2">Queued</span>
+                <span className="text-sm text-electric-blue font-semibold font-mono mr-2">Queued</span>
               ) : (
                 <Button
                   variant="outline"
-                  className="h-9 px-3 text-xs border-dashed border-slate-700 hover:border-electric-blue hover:text-electric-blue disabled:opacity-40"
+                  className="h-9 px-3 text-sm border-dashed border-slate-700 hover:border-electric-blue hover:text-electric-blue disabled:opacity-40"
                   onClick={handleQueueJob}
                   disabled={!isRunnable}
                 >
@@ -1005,7 +1005,7 @@ export function ExecutionWorkspace({
                 variant="success"
                 onClick={handleExecuteLive}
                 disabled={isRunning || !isRunnable}
-                className="h-9 text-xs"
+                className="h-9 text-sm"
               >
                 {isRunning ? (
                   <>
@@ -1027,12 +1027,12 @@ export function ExecutionWorkspace({
               {executionLogs.length > 0 && (
                 <div className="flex items-center justify-between gap-2 px-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-slate-400 font-mono">
+                    <span className="text-xs text-slate-400 font-mono">
                       {selectedLogIndices.size > 0
                         ? `${selectedLogIndices.size} line${selectedLogIndices.size > 1 ? "s" : ""} selected`
                         : `${executionLogs.length} lines`}
                     </span>
-                    <span className="text-[11px] text-slate-400 hidden sm:inline">
+                    <span className="text-xs text-slate-400 hidden sm:inline">
                       Click to select · Shift+click for range · Ctrl/Cmd+click for multi
                     </span>
                   </div>
@@ -1046,7 +1046,7 @@ export function ExecutionWorkspace({
                           ? `Diagnose ${selectedLogIndices.size} selected line(s)`
                           : "Diagnose full log (error lines are auto-selected on failure)"
                       }
-                      className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded border border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50 transition-all cursor-pointer disabled:opacity-50"
+                      className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded border border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50 transition-all cursor-pointer disabled:opacity-50"
                     >
                       <Wrench className="h-3 w-3" />{" "}
                       {selectedLogIndices.size > 0 ? `Diagnose (${selectedLogIndices.size})` : "Diagnose"}
@@ -1062,7 +1062,7 @@ export function ExecutionWorkspace({
                           setIsReportOpen(true);
                         }}
                         title="Report this failure as a GitHub issue"
-                        className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/50 transition-all cursor-pointer"
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/50 transition-all cursor-pointer"
                       >
                         <Bug className="h-3 w-3" /> Report
                       </button>
@@ -1084,7 +1084,7 @@ export function ExecutionWorkspace({
                             ]);
                           }}
                           title={`Explicit retry with ${provider} (no automatic EP fallback)`}
-                          className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded border border-slate-600/50 bg-slate-800/60 text-slate-300 hover:bg-slate-700/60 transition-all cursor-pointer"
+                          className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded border border-slate-600/50 bg-slate-800/60 text-slate-300 hover:bg-slate-700/60 transition-all cursor-pointer"
                         >
                           Retry with {provider === "DmlExecutionProvider" ? "DirectML" : "CPU"}
                         </button>
@@ -1094,7 +1094,7 @@ export function ExecutionWorkspace({
               )}
               <div
                 data-testid="execution-log-panel"
-                className="bg-slate-950 border border-slate-800 rounded-md p-4 font-mono text-xs text-emerald-400 space-y-0.5 h-[220px] overflow-y-auto"
+                className="bg-slate-950 border border-slate-800 rounded-md p-4 font-mono text-sm text-emerald-400 space-y-0.5 h-[220px] overflow-y-auto"
               >
                 {executionLogs.length === 0 ? (
                   <p className="text-slate-500 italic">

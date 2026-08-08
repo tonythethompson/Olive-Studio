@@ -147,8 +147,8 @@ function SlotDropZone({ file, onFile, onClear }: SlotDropZoneProps) {
         <div className="flex items-center gap-2.5 min-w-0">
           <Box className="h-4 w-4 text-electric-blue shrink-0" />
           <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-200 truncate">{file.name}</p>
-            <p className="text-[11px] text-slate-500">{formatFileSize(file.size)}</p>
+            <p className="text-sm font-medium text-slate-200 truncate">{file.name}</p>
+            <p className="text-xs text-slate-500">{formatFileSize(file.size)}</p>
           </div>
         </div>
         <Button
@@ -194,10 +194,10 @@ function SlotDropZone({ file, onFile, onClear }: SlotDropZoneProps) {
         )}
       />
       <div className="text-center">
-        <p className="text-xs font-medium text-slate-300">
+        <p className="text-sm font-medium text-slate-300">
           Drop a model here, or click to browse
         </p>
-        <p className="text-[11px] text-slate-500 mt-0.5">
+        <p className="text-xs text-slate-500 mt-0.5">
           Accepts{" "}
           <code className="text-electric-blue">.onnx</code> and{" "}
           <code className="text-electric-blue">.ort</code>
@@ -257,7 +257,7 @@ function SlotConfig({
           <Swords className="h-4 w-4 text-electric-blue shrink-0" />
           <span className="text-sm font-semibold text-slate-200">{label}</span>
           {slotType === "local" && file && (
-            <span className="text-[11px] text-slate-400 font-mono truncate max-w-[140px]">
+            <span className="text-xs text-slate-400 font-mono truncate max-w-[140px]">
               · {file.name} ({formatFileSize(file.size)})
             </span>
           )}
@@ -274,7 +274,7 @@ function SlotConfig({
             aria-pressed={slotType === "local"}
             onClick={() => onTypeChange("local")}
             className={cn(
-              "px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer",
+              "px-2.5 py-1 text-xs font-semibold rounded transition-all flex items-center gap-1 cursor-pointer",
               slotType === "local"
                 ? "bg-electric-blue text-slate-950"
                 : "text-slate-400 hover:text-slate-200",
@@ -288,7 +288,7 @@ function SlotConfig({
             aria-pressed={slotType === "cloud"}
             onClick={() => onTypeChange("cloud")}
             className={cn(
-              "px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer",
+              "px-2.5 py-1 text-xs font-semibold rounded transition-all flex items-center gap-1 cursor-pointer",
               slotType === "cloud"
                 ? "bg-electric-blue text-slate-950"
                 : "text-slate-400 hover:text-slate-200",
@@ -308,11 +308,11 @@ function SlotConfig({
           <div className="space-y-1.5">
             <Label
               htmlFor={`${label.replace(" ", "-").toLowerCase()}-tokenizer`}
-              className="text-[11px] text-slate-400 flex items-center gap-1"
+              className="text-xs text-slate-400 flex items-center gap-1"
             >
               <Cpu className="h-3 w-3" />
               Tokenizer (HF id)
-              <span className="text-slate-600 ml-0.5 text-[10px]">(NLP local)</span>
+              <span className="text-slate-600 ml-0.5 text-[11px]">(NLP local)</span>
             </Label>
             <Input
               id={`${label.replace(" ", "-").toLowerCase()}-tokenizer`}
@@ -320,9 +320,9 @@ function SlotConfig({
               placeholder={DEFAULT_ARENA_TOKENIZER_ID}
               value={tokenizerId}
               onChange={(e) => onTokenizerIdChange(e.target.value)}
-              className="h-9 text-xs font-mono"
+              className="h-9 text-sm font-mono"
             />
-            <p className="text-[10px] text-slate-600 leading-relaxed">
+            <p className="text-[11px] text-slate-600 leading-relaxed">
               Used when the ONNX graph looks like NLP (<code className="text-slate-500">input_ids</code>
               ). Loads via transformers.js; falls back to a prompt-derived encoding offline.
             </p>
@@ -335,7 +335,7 @@ function SlotConfig({
           <div className="space-y-1.5">
             <Label
               htmlFor={`${label.replace(" ", "-").toLowerCase()}-endpoint`}
-              className="text-[11px] text-slate-400 flex items-center gap-1"
+              className="text-xs text-slate-400 flex items-center gap-1"
             >
               <Link className="h-3 w-3" />
               Endpoint URL
@@ -349,7 +349,7 @@ function SlotConfig({
               placeholder="https://api.example.com/v1"
               value={endpointUrl}
               onChange={(e) => onEndpointChange(e.target.value)}
-              className="h-9 text-xs font-mono"
+              className="h-9 text-sm font-mono"
               aria-required="true"
             />
           </div>
@@ -358,11 +358,11 @@ function SlotConfig({
           <div className="space-y-1.5">
             <Label
               htmlFor={`${label.replace(" ", "-").toLowerCase()}-apikey`}
-              className="text-[11px] text-slate-400 flex items-center gap-1"
+              className="text-xs text-slate-400 flex items-center gap-1"
             >
               <KeyRound className="h-3 w-3" />
               API Key
-              <span className="text-slate-600 ml-0.5 text-[10px]">(optional)</span>
+              <span className="text-slate-600 ml-0.5 text-[11px]">(optional)</span>
             </Label>
             <Input
               id={`${label.replace(" ", "-").toLowerCase()}-apikey`}
@@ -370,7 +370,7 @@ function SlotConfig({
               placeholder="sk-..."
               value={apiKey}
               onChange={(e) => onApiKeyChange(e.target.value)}
-              className="h-9 text-xs font-mono"
+              className="h-9 text-sm font-mono"
               autoComplete="off"
             />
           </div>
@@ -379,11 +379,11 @@ function SlotConfig({
           <div className="space-y-1.5">
             <Label
               htmlFor={`${label.replace(" ", "-").toLowerCase()}-modelid`}
-              className="text-[11px] text-slate-400 flex items-center gap-1"
+              className="text-xs text-slate-400 flex items-center gap-1"
             >
               <Cpu className="h-3 w-3" />
               Model ID
-              <span className="text-slate-600 ml-0.5 text-[10px]">(optional)</span>
+              <span className="text-slate-600 ml-0.5 text-[11px]">(optional)</span>
             </Label>
             <Input
               id={`${label.replace(" ", "-").toLowerCase()}-modelid`}
@@ -391,7 +391,7 @@ function SlotConfig({
               placeholder="gpt-4o-mini"
               value={modelId}
               onChange={(e) => onModelIdChange(e.target.value)}
-              className="h-9 text-xs font-mono"
+              className="h-9 text-sm font-mono"
             />
           </div>
         </div>
@@ -442,27 +442,27 @@ export function SlotResultPanel({ label, result, isWinner }: SlotResultPanelProp
     switch (result.status) {
       case "idle":
         return (
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-slate-800 text-slate-400">
+          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-slate-800 text-slate-400">
             idle
           </span>
         );
       case "running":
         return (
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-electric-blue/10 text-electric-blue">
+          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-electric-blue/10 text-electric-blue">
             <span className="animate-spin"><Loader2 className="h-2.5 w-2.5" /></span>
             running
           </span>
         );
       case "done":
         return (
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-400">
+          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-emerald-500/10 text-emerald-400">
             <CheckCircle className="h-2.5 w-2.5" />
             done
           </span>
         );
       case "error":
         return (
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-500/10 text-red-400">
+          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-500/10 text-red-400">
             <XCircle className="h-2.5 w-2.5" />
             error
           </span>
@@ -473,14 +473,14 @@ export function SlotResultPanel({ label, result, isWinner }: SlotResultPanelProp
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-900/40 p-4">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-slate-300">{label} Result</span>
+        <span className="text-sm font-semibold text-slate-300">{label} Result</span>
         {statusBadge()}
       </div>
 
       {result.status === "error" && result.error && (
         <p
           data-testid={`${label.toLowerCase().replace(" ", "-")}-error`}
-          className="text-[11px] text-red-400 bg-red-500/5 border border-red-500/20 rounded p-2 max-h-24 overflow-y-auto"
+          className="text-xs text-red-400 bg-red-500/5 border border-red-500/20 rounded p-2 max-h-24 overflow-y-auto"
         >
           {result.error}
         </p>
@@ -488,11 +488,11 @@ export function SlotResultPanel({ label, result, isWinner }: SlotResultPanelProp
 
       {result.status === "done" && (
         <>
-          <pre className="text-[11px] text-slate-300 bg-slate-950/60 border border-slate-800 rounded p-3 overflow-auto max-h-40 whitespace-pre-wrap break-words">
+          <pre className="text-xs text-slate-300 bg-slate-950/60 border border-slate-800 rounded p-3 overflow-auto max-h-40 whitespace-pre-wrap break-words">
             {result.output || "(empty output)"}
           </pre>
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1 text-[11px]">
+            <div className="flex items-center gap-1 text-xs">
               <Clock className="h-3 w-3 shrink-0" />
               <span
                 className={cn(
@@ -504,14 +504,14 @@ export function SlotResultPanel({ label, result, isWinner }: SlotResultPanelProp
                 {result.elapsedMs.toFixed(1)} ms
               </span>
               {isWinner === true && (
-                <span className="ml-1 text-[10px] font-semibold text-emerald-400">
+                <span className="ml-1 text-[11px] font-semibold text-emerald-400">
                   · faster
                 </span>
               )}
             </div>
             <Button
               variant="ghost"
-              className="h-6 px-2 text-[10px] text-slate-400 hover:text-slate-200 shrink-0"
+              className="h-6 px-2 text-[11px] text-slate-400 hover:text-slate-200 shrink-0"
               onClick={handleCopy}
               aria-label={`Copy ${label} output`}
             >
@@ -522,11 +522,11 @@ export function SlotResultPanel({ label, result, isWinner }: SlotResultPanelProp
       )}
 
       {result.status === "idle" && (
-        <p className="text-[11px] text-slate-600 italic">Waiting…</p>
+        <p className="text-xs text-slate-600 italic">Waiting…</p>
       )}
 
       {result.status === "running" && (
-        <p className="text-[11px] text-slate-500 italic">Running inference…</p>
+        <p className="text-xs text-slate-500 italic">Running inference…</p>
       )}
     </div>
   );
@@ -902,7 +902,7 @@ export function ArenaPanel() {
         <div className="space-y-1.5">
           <Label
             htmlFor="arena-prompt"
-            className="text-xs font-semibold text-slate-300"
+            className="text-sm font-semibold text-slate-300"
           >
             Prompt{needsPrompt ? "" : " (optional seed for local)"}
           </Label>
@@ -921,19 +921,19 @@ export function ArenaPanel() {
               promptError ? "arena-prompt-error" : "arena-prompt-hint"
             }
             className={cn(
-              "w-full resize-y rounded-lg border bg-slate-950/60 px-3 py-2 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-1 transition-colors",
+              "w-full resize-y rounded-lg border bg-slate-950/60 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-1 transition-colors",
               promptError
                 ? "border-red-500 focus:ring-red-500"
                 : "border-slate-700 focus:ring-electric-blue hover:border-slate-600",
             )}
           />
           {promptError && (
-            <p id="arena-prompt-error" className="text-[11px] text-red-400" role="alert">
+            <p id="arena-prompt-error" className="text-xs text-red-400" role="alert">
               Prompt cannot be empty or whitespace only when a cloud slot is configured.
             </p>
           )}
           {!promptError && (
-            <p id="arena-prompt-hint" className="text-[11px] text-slate-500">
+            <p id="arena-prompt-hint" className="text-xs text-slate-500">
               {needsPrompt
                 ? "Cloud slots send this prompt to the chat API. Local NLP models tokenize the same prompt (transformers.js or prompt-derived fallback)."
                 : "Local NLP models tokenize this prompt into input_ids/attention_mask for both slots. Other models use seeded synthetic tensors."}

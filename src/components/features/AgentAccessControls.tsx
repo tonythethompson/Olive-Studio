@@ -187,7 +187,7 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
     : "Agent / MCP access policy";
 
   return (
-    <div ref={rootRef} className="relative text-[11px] font-mono overflow-visible">
+    <div ref={rootRef} className="relative text-xs font-mono overflow-visible">
       <button
         ref={triggerRef}
         type="button"
@@ -216,8 +216,8 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
         >
           <div className="flex items-start justify-between gap-2">
             <div>
-              <div className="text-xs font-semibold text-slate-200 font-sans">Agent / MCP access</div>
-              <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed font-sans">
+              <div className="text-sm font-semibold text-slate-200 font-sans">Agent / MCP access</div>
+              <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed font-sans">
                 Controls what coding agents may do through Olive MCP. Studio always owns execution;
                 agents never spawn Olive directly.
               </p>
@@ -234,14 +234,14 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
           </div>
 
           {!canMutatePolicy ? (
-            <p className="text-[10px] text-slate-300 font-sans rounded border border-slate-600/50 bg-slate-800/60 px-2 py-1.5">
+            <p className="text-[11px] text-slate-300 font-sans rounded border border-slate-600/50 bg-slate-800/60 px-2 py-1.5">
               Read-only here. Open Studio on <code className="font-mono">http://127.0.0.1:3000</code> to
               change these toggles.
             </p>
           ) : null}
 
           {policy?.envOverrideActive ? (
-            <p className="text-[10px] text-amber-300/90 font-sans rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5">
+            <p className="text-[11px] text-amber-300/90 font-sans rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5">
               Server env override active (e.g. <code className="font-mono">OLIVE_MCP_ALLOW_JOBS</code>
               ). Effective permissions may be higher than these toggles.
             </p>
@@ -268,23 +268,23 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
                   />
                   <label htmlFor={`agent-access-${key}`} className="min-w-0 font-sans cursor-pointer">
                     <span
-                      className={`text-[11px] font-medium ${
+                      className={`text-xs font-medium ${
                         danger && checked ? "text-amber-300" : "text-slate-200"
                       }`}
                     >
                       {label}
                     </span>
-                    <span className="block text-[10px] text-slate-500 leading-snug">{hint}</span>
+                    <span className="block text-[11px] text-slate-500 leading-snug">{hint}</span>
                   </label>
                 </li>
               );
             })}
           </ul>
 
-          {message ? <p className="text-[10px] text-emerald-400 font-sans">{message}</p> : null}
-          {error ? <p className="text-[10px] text-rose-400 font-sans">{error}</p> : null}
+          {message ? <p className="text-[11px] text-emerald-400 font-sans">{message}</p> : null}
+          {error ? <p className="text-[11px] text-rose-400 font-sans">{error}</p> : null}
 
-          <p className="text-[10px] text-slate-500 font-sans leading-relaxed border-t border-slate-800 pt-2">
+          <p className="text-[11px] text-slate-500 font-sans leading-relaxed border-t border-slate-800 pt-2">
             External agents need <code className="font-mono text-slate-400">OLIVE_STUDIO_API_URL</code>{" "}
             pointing at this Studio (e.g. <code className="font-mono text-slate-400">http://127.0.0.1:3000</code>
             ).

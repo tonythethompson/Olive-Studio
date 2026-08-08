@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Server tests on route/service change",
+      "trigger": "PostFileSave",
+      "description": "Runs server unit tests when server source files change",
+      "matcher": "src[\\\\/]server[\\\\/].*\\.ts$",
+      "action": {
+        "type": "command",
+        "command": "pnpm test:server",
+        "timeout": 120
+      }
+    }
+  ]
+}

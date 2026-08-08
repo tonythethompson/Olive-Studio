@@ -244,11 +244,11 @@ export function LocalModelManager({
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         {showTitle ? (
-          <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">
+          <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">
             Installed Models
           </p>
         ) : (
-          <span className="text-[10px] text-slate-500">
+          <span className="text-[11px] text-slate-500">
             {loading ? "Checking installed models…" : `${models.length} installed · pick one to enable`}
           </span>
         )}
@@ -256,13 +256,13 @@ export function LocalModelManager({
           type="button"
           onClick={() => void refresh()}
           disabled={loading}
-          className="text-[10px] text-slate-500 hover:text-electric-blue transition-colors cursor-pointer"
+          className="text-[11px] text-slate-500 hover:text-electric-blue transition-colors cursor-pointer"
         >
           {loading ? "Refreshing…" : "Refresh"}
         </button>
       </div>
       {!loading && models.length === 0 ? (
-        <p className="text-[11px] text-slate-500 leading-relaxed py-1">
+        <p className="text-xs text-slate-500 leading-relaxed py-1">
           {emptyHint ?? "No models installed for this engine yet."}
         </p>
       ) : null}
@@ -281,7 +281,7 @@ export function LocalModelManager({
                   searchInputRef.current?.blur();
                 }
               }}
-              className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 pr-5 text-[10px] text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-slate-600"
+              className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 pr-5 text-[11px] text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-slate-600"
             />
             {searchQuery && (
               <button
@@ -303,7 +303,7 @@ export function LocalModelManager({
                   type="button"
                   onClick={() => togglePublisher(publisher)}
                   aria-expanded={!isCollapsed}
-                  className="w-full flex items-center gap-1.5 text-[10px] text-slate-400 hover:text-slate-200 font-mono font-bold uppercase tracking-wider cursor-pointer py-0.5"
+                  className="w-full flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-200 font-mono font-bold uppercase tracking-wider cursor-pointer py-0.5"
                 >
                   {isCollapsed ? (
                     <ChevronRight className="h-3 w-3 shrink-0" />
@@ -320,7 +320,7 @@ export function LocalModelManager({
                       return (
                         <div
                           key={`${m.source}:${m.id}`}
-                          className={`flex items-center justify-between gap-2 p-2 rounded-lg border text-[11px] ${
+                          className={`flex items-center justify-between gap-2 p-2 rounded-lg border text-xs ${
                             active
                               ? "border-emerald-500/40 bg-emerald-950/20"
                               : "border-slate-800 bg-slate-950/60"
@@ -353,7 +353,7 @@ export function LocalModelManager({
                                 type="button"
                                 onClick={() => void handleUnload(m.id, m.source)}
                                 disabled={busy === m.id}
-                                className="text-[10px] px-2 py-0.5 rounded border border-slate-700 text-slate-400 hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50"
+                                className="text-[11px] px-2 py-0.5 rounded border border-slate-700 text-slate-400 hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50"
                               >
                                 {busy === m.id ? "…" : "Unload"}
                               </button>
@@ -363,7 +363,7 @@ export function LocalModelManager({
                                 type="button"
                                 onClick={() => void handleEnable(m.id, m.source, m.loaded)}
                                 disabled={busy === m.id}
-                                className="text-[10px] px-2 py-0.5 rounded border border-electric-blue/30 text-electric-blue hover:bg-electric-blue/10 transition-colors cursor-pointer disabled:opacity-50 font-semibold"
+                                className="text-[11px] px-2 py-0.5 rounded border border-electric-blue/30 text-electric-blue hover:bg-electric-blue/10 transition-colors cursor-pointer disabled:opacity-50 font-semibold"
                               >
                                 {busy === m.id ? "…" : m.loaded ? "Enable" : "Load & enable"}
                               </button>
@@ -379,12 +379,12 @@ export function LocalModelManager({
           })}
         </div>
         {searchQuery.trim() && filteredModels.length === 0 && (
-          <p className="text-[10px] text-slate-500 italic text-center py-1">
+          <p className="text-[11px] text-slate-500 italic text-center py-1">
             No models match &quot;{searchQuery}&quot;
           </p>
         )}
       </div>
-      {error ? <p className="text-[11px] text-rose-400">{error}</p> : null}
+      {error ? <p className="text-xs text-rose-400">{error}</p> : null}
     </div>
   );
 }

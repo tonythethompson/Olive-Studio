@@ -145,8 +145,8 @@ export function getProviderConflicts(providerId: IHVProvider, passes: UIState["p
 
   add(
     passes.conversion &&
-      passes.conversionFormat === "openvino" &&
-      !isConversionFormatAllowed("openvino", providerId),
+    passes.conversionFormat === "openvino" &&
+    !isConversionFormatAllowed("openvino", providerId),
     {
       passKey: "conversionFormat",
       passName: "OpenVINO IR Conversion",
@@ -190,8 +190,8 @@ export function getProviderConflicts(providerId: IHVProvider, passes: UIState["p
 
   add(
     passes.quantization &&
-      (passes.quantMethod === "spinquant" || passes.quantMethod === "quarot") &&
-      !isQuantMethodAllowed(passes.quantMethod, providerId),
+    (passes.quantMethod === "spinquant" || passes.quantMethod === "quarot") &&
+    !isQuantMethodAllowed(passes.quantMethod, providerId),
     {
       passKey: "quantMethod",
       passName: passes.quantMethod === "spinquant" ? "SpinQuant Quantization" : "QuaRot Quantization",
@@ -296,8 +296,8 @@ export function prepareProviderChange(
     ihvProvider: providerId,
     ...(providerId === "OpenVINOExecutionProvider"
       ? {
-          openvinoTargetDevice: pickOpenVinoTargetFromDevices(probe?.openvino?.devices),
-        }
+        openvinoTargetDevice: pickOpenVinoTargetFromDevices(probe?.openvino?.devices),
+      }
       : {}),
     ...(hasCritical
       ? { passes: applyProviderConflictAutofixes(providerId, state.passes) }
@@ -747,7 +747,15 @@ export function getLocalExecutionIssues(
 
   if (isPlatformLocalProvider(provider)) {
     const detected = Boolean(probe?.detectedProviders.includes(provider));
-    if (!detected) {
+    // QNN on x64 is "preparation" mode — not a local accelerator, but CAN run Olive
+    // for context binary generation. Allow execution only when the runtime is loadable
+    // AND the host is a recognized QNN-capable platform (Windows ARM64 or x64).
+    const qnnHostMode = probe?.qnn?.hostMode;
+    const qnnPreparationAllowed =
+      provider === "QNNExecutionProvider" &&
+      probe?.qnn?.loadable === true &&
+      (qnnHostMode === "preparation" || qnnHostMode === "local-inference");
+    if (!detected && !qnnPreparationAllowed) {
       return [
         {
           id: "platform-local-execution-unavailable",
@@ -898,8 +906,8 @@ export function coercePassFields(passes: UIState["passes"], provider: IHVProvide
 export function sanitizePipelineState(state: UIState): UIState {
   const openvinoTargetDevice =
     state.openvinoTargetDevice === "CPU" ||
-    state.openvinoTargetDevice === "GPU" ||
-    state.openvinoTargetDevice === "NPU"
+      state.openvinoTargetDevice === "GPU" ||
+      state.openvinoTargetDevice === "NPU"
       ? state.openvinoTargetDevice
       : "CPU";
 

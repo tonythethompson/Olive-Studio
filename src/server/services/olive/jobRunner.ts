@@ -45,22 +45,22 @@ export type StartOliveJobOpts = {
 
 export type StartOliveJobResult =
   | {
-      ok: true;
-      jobId: string;
-      reused: boolean;
-      fingerprint: string;
-      status: OliveJob["status"];
-      /** Epoch ms when the job was first registered (stable on idempotent replay). */
-      submittedAt: number;
-    }
+    ok: true;
+    jobId: string;
+    reused: boolean;
+    fingerprint: string;
+    status: OliveJob["status"];
+    /** Epoch ms when the job was first registered (stable on idempotent replay). */
+    submittedAt: number;
+  }
   | {
-      ok: false;
-      error: string;
-      httpStatus: number;
-      fingerprint?: string;
-      errors?: string[];
-      jobId?: string;
-    };
+    ok: false;
+    error: string;
+    httpStatus: number;
+    fingerprint?: string;
+    errors?: string[];
+    jobId?: string;
+  };
 
 /** Per-key promise tails that serialize MCP submit critical sections. */
 const mcpSubmitLockTails = new Map<string, Promise<void>>();
@@ -362,12 +362,12 @@ async function continueOliveJobSetup(
       venvListener,
       provider === "QNNExecutionProvider"
         ? {
-            usage:
-              resolveQnnHostMode({ platform: process.platform, arch: process.arch }) ===
+          usage:
+            resolveQnnHostMode({ platform: process.platform, arch: process.arch }) ===
               "local-inference"
-                ? "inference"
-                : "preparation",
-          }
+              ? "inference"
+              : "preparation",
+        }
         : undefined,
     );
     job.venvListener = undefined;
@@ -453,10 +453,29 @@ async function continueOliveJobSetup(
     job.status = "running";
 
     const { executable, args } = resolveOliveCommand(provider, configPath, false, capResult.family);
+    pushLog(job, `[info] Running: ${executable} ${args.join(" ").slice(0, 120)}${args.join(" ").length > 120 ? "…" : ""}`);
     const proc = spawn(executable, args, { stdio: "pipe", env });
     job.process = proc;
 
+    // Heartbeat: surface "still working" messages when Olive is silent for extended periods.
+    // Olive often goes quiet during model loading, tokenizer downloads, or calibration passes.
+    let lastOutputAt = Date.now();
+    const HEARTBEAT_INTERVAL_MS = 15_000; // check every 15s
+    const SILENCE_THRESHOLD_MS = 10_000; // report after 10s of silence
+    const heartbeatTimer = setInterval(() => {
+      if (job.status !== "running") {
+        clearInterval(heartbeatTimer);
+        return;
+      }
+      const silenceMs = Date.now() - lastOutputAt;
+      if (silenceMs >= SILENCE_THRESHOLD_MS) {
+        const seconds = Math.round(silenceMs / 1000);
+        pushLog(job, `[info] Olive is working (no output for ${seconds}s, process is alive)`);
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+
     proc.stdout.on("data", (data: Buffer) => {
+      lastOutputAt = Date.now();
       data
         .toString()
         .split(/\r?\n/)
@@ -464,6 +483,7 @@ async function continueOliveJobSetup(
         .forEach((line) => pushLog(job, line));
     });
     proc.stderr.on("data", (data: Buffer) => {
+      lastOutputAt = Date.now();
       data
         .toString()
         .split(/\r?\n/)
@@ -471,6 +491,7 @@ async function continueOliveJobSetup(
         .forEach((line) => pushLog(job, `[stderr] ${line}`));
     });
     proc.on("close", (code) => {
+      clearInterval(heartbeatTimer);
       job.exitCode = code;
       if (job.status !== "cancelled") {
         job.status = code === 0 ? "completed" : "failed";
@@ -482,6 +503,7 @@ async function continueOliveJobSetup(
       finalizeJob(job);
     });
     proc.on("error", (err) => {
+      clearInterval(heartbeatTimer);
       if (job.status !== "cancelled") {
         job.status = "failed";
       }

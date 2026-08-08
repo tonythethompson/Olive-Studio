@@ -326,7 +326,7 @@ export function GraphCanvas({
               {nd.icon}
             </div>
             <span
-              className={`text-[10px] font-mono px-1.5 py-0.5 rounded border uppercase whitespace-nowrap tracking-wide ${
+              className={`text-[11px] font-mono px-1.5 py-0.5 rounded border uppercase whitespace-nowrap tracking-wide ${
                 issueLevel === "critical"
                   ? "bg-rose-950/40 text-rose-400 border-rose-700/40"
                   : issueLevel === "warning"
@@ -346,13 +346,13 @@ export function GraphCanvas({
             </span>
           </div>
           <h4
-            className={`text-xs font-bold truncate leading-snug ${
+            className={`text-sm font-bold truncate leading-snug ${
               active || issueLevel ? "text-slate-100" : "text-slate-300"
             }`}
           >
             {nd.title}
           </h4>
-          <p className="text-[11px] leading-tight font-mono line-clamp-2 mt-1 min-h-[20px] text-slate-400">
+          <p className="text-xs leading-tight font-mono line-clamp-2 mt-1 min-h-[20px] text-slate-400">
             {active ? nd.desc : "Pass disabled · click to configure"}
           </p>
         </div>
@@ -368,7 +368,7 @@ export function GraphCanvas({
     return (
       <>
         <div className="w-full flex flex-col items-center">
-          <div className="text-xs text-slate-400 mb-2.5">Target device</div>
+          <div className="text-sm text-slate-400 mb-2.5">Target device</div>
           <button
             id="node-btn-provider"
             type="button"
@@ -401,13 +401,13 @@ export function GraphCanvas({
                 {providerNd.icon}
               </div>
             </div>
-            <h4 className="text-xs font-semibold text-slate-100">{providerNd.title}</h4>
-            <p className="text-[11px] font-mono text-slate-400 leading-snug truncate">{providerNd.desc}</p>
+            <h4 className="text-sm font-semibold text-slate-100">{providerNd.title}</h4>
+            <p className="text-xs font-mono text-slate-400 leading-snug truncate">{providerNd.desc}</p>
           </button>
         </div>
 
         <div className="w-full flex flex-col items-center">
-          <div className="text-xs text-slate-400 mb-2.5">Output</div>
+          <div className="text-sm text-slate-400 mb-2.5">Output</div>
           <button
             id="node-btn-output"
             type="button"
@@ -430,8 +430,8 @@ export function GraphCanvas({
                 {outputNd.badge}
               </span>
             </div>
-            <h4 className="text-xs font-semibold text-slate-100">{outputNd.title}</h4>
-            <p className="text-[11px] font-mono text-slate-400 leading-snug truncate">{outputNd.desc}</p>
+            <h4 className="text-sm font-semibold text-slate-100">{outputNd.title}</h4>
+            <p className="text-xs font-mono text-slate-400 leading-snug truncate">{outputNd.desc}</p>
           </button>
         </div>
       </>
@@ -457,7 +457,7 @@ export function GraphCanvas({
 
       <div className="grid grid-cols-1 wide:grid-cols-12 gap-y-5 wide:gap-3 relative z-10 items-center justify-between h-full w-full min-w-0 wide:min-w-[720px]">
         <div className="wide:col-span-2 flex flex-col justify-center items-center h-full w-full">
-          <div className="text-xs text-slate-400 mb-3">Input</div>
+          <div className="text-sm text-slate-400 mb-3">Input</div>
           {(() => {
             const nd = getNodePreviewData(state, "input");
             const isSelected = selectedNodeId === "input";
@@ -484,15 +484,15 @@ export function GraphCanvas({
                     {nd.badge}
                   </span>
                 </div>
-                <h4 className="text-xs font-semibold text-slate-100 mb-1 leading-tight">{nd.title}</h4>
-                <p className="text-[11px] font-mono text-slate-400 truncate leading-relaxed">{nd.desc}</p>
+                <h4 className="text-sm font-semibold text-slate-100 mb-1 leading-tight">{nd.title}</h4>
+                <p className="text-xs font-mono text-slate-400 truncate leading-relaxed">{nd.desc}</p>
               </button>
             );
           })()}
         </div>
 
         <div className="wide:col-span-7 flex flex-col items-center justify-center gap-4 wide:border-l wide:border-r border-slate-900/30 px-1 wide:px-4 w-full">
-          <div className="text-xs text-slate-400 mb-1">Optimization passes</div>
+          <div className="text-sm text-slate-400 mb-1">Optimization passes</div>
           <div className="grid grid-cols-2 wide:grid-cols-3 gap-3 wide:gap-4 w-full max-w-xl wide:max-w-none">
             {["splitting", "peft", "conversion", "pruning", "transformer_opt", "quantization"].map((id) =>
               renderPassNode(id),

@@ -8,6 +8,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/Tooltip";
+import { cn } from "@/lib/utils";
 import type { OpenVinoInstallState } from "@/components/features/ihv/useOpenVinoInstall";
 import type { DirectMlInstallState } from "@/components/features/ihv/useDirectMlInstall";
 import type { QnnInstallState } from "@/components/features/ihv/useQnnInstall";
@@ -26,6 +27,7 @@ import {
 import {
   isProviderDetectedLocally,
   computeDirectMlHardwareReady,
+  computeOpenVinoCompatibleHardware,
   type GpuInfo,
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
@@ -45,6 +47,7 @@ import {
   CUDA_SM_FLOOR,
   pinnedOrtGpuInstallCommand,
 } from "@/lib/cudaDeps";
+import { rocmDownloadUrlForOs } from "@/lib/rocmDeps";
 import type { IHVProvider, UIState } from "@/types";
 import {
   AlertTriangle,
@@ -221,10 +224,18 @@ function resolveCardChrome(input: {
   }
   if (needsPluginInstall && detectedLocally) {
     return {
-      cardClasses: base + "border-amber-900/40 bg-amber-950/10 opacity-95 hover:border-amber-500/40",
-      badgeText: "Plugin install needed",
-      BadgeIcon: AlertTriangle,
-      badgeColor: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+      cardClasses: base + "border-emerald-900/40 bg-emerald-950/10 opacity-95 hover:border-emerald-500/40",
+      badgeText: "Compatible, runtime available",
+      BadgeIcon: CheckCircle,
+      badgeColor: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    };
+  }
+  if (needsPluginInstall && !detectedLocally && !probeLoading) {
+    return {
+      cardClasses: base + "border-slate-800/80 bg-slate-900/40 opacity-90 hover:opacity-100 hover:border-slate-700",
+      badgeText: "Pre-install available",
+      BadgeIcon: AlertCircle,
+      badgeColor: "bg-slate-800/80 text-slate-400 border-slate-700/60",
     };
   }
   if (!detectedLocally && !probeLoading) {
@@ -312,8 +323,8 @@ function selectProvider(
       ihvProvider: providerId,
       ...(providerId === "OpenVINOExecutionProvider"
         ? {
-            openvinoTargetDevice: pickOpenVinoTargetFromDevices(hardwareProbe?.openvino?.devices),
-          }
+          openvinoTargetDevice: pickOpenVinoTargetFromDevices(hardwareProbe?.openvino?.devices),
+        }
         : {}),
     });
     return;
@@ -332,6 +343,7 @@ function PluginInstallBlock({
   onInstall,
   error,
   log,
+  variant = "compatible",
 }: {
   description: ReactNode;
   detail?: string | null;
@@ -342,12 +354,17 @@ function PluginInstallBlock({
   onInstall: () => void;
   error: string | null;
   log: string[];
+  /** "compatible" = green (hardware present), "cross-compile" = neutral (no local hardware). */
+  variant?: "compatible" | "cross-compile";
 }) {
+  const isGreen = variant === "compatible";
   return (
     <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
-      <p className="text-[11px] text-amber-400/90 leading-relaxed">{description}</p>
+      <p className={cn("text-xs leading-relaxed", isGreen ? "text-emerald-400/90" : "text-slate-400")}>
+        {description}
+      </p>
       {detail ? (
-        <p className="text-[10px] text-slate-500 font-mono break-all max-w-full" title={detail}>
+        <p className="text-[11px] text-slate-500 font-mono break-all max-w-full" title={detail}>
           {detail}
         </p>
       ) : null}
@@ -355,7 +372,12 @@ function PluginInstallBlock({
         type="button"
         disabled={busy}
         onClick={onInstall}
-        className="h-7 px-3 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
+        className={cn(
+          "h-7 px-3 rounded border text-xs font-bold disabled:opacity-50 flex items-center gap-1.5",
+          isGreen
+            ? "border-emerald-500/40 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20"
+            : "border-slate-600 text-slate-300 bg-slate-800/60 hover:bg-slate-800",
+        )}
       >
         {installing ? (
           <>
@@ -366,9 +388,9 @@ function PluginInstallBlock({
           installLabel
         )}
       </button>
-      {error ? <p className="text-[11px] text-rose-400 break-all">{error}</p> : null}
+      {error ? <p className="text-xs text-rose-400 break-all">{error}</p> : null}
       {log.length > 0 ? (
-        <pre className="text-[10px] text-slate-500 max-h-24 max-w-full overflow-auto font-mono whitespace-pre-wrap break-all">
+        <pre className="text-[11px] text-slate-500 max-h-24 max-w-full overflow-auto font-mono whitespace-pre-wrap break-all">
           {log.slice(-12).join("\n")}
         </pre>
       ) : null}
@@ -439,18 +461,19 @@ function ProviderPluginInstalls({
         description={
           <>
             GPU is compatible. The TensorRT RTX runtime is a separate package (not the full TensorRT
-            SDK). Install into the project <code className="text-slate-400">.venv</code> to enable
-            detection and runs.
+            SDK). Pre-install into the project <code className="text-slate-400">.venv</code> to enable
+            detection, or it will install automatically on first run.
           </>
         }
         detail={hardwareProbe?.tensorRtRtx?.detail}
         busy={hardwareInstallBusy}
         installing={installingTrtRtx}
-        installLabel="Install tensorrt-rtx into .venv"
+        installLabel="Pre-install tensorrt-rtx"
         installingLabel="Installing tensorrt-rtx…"
         onInstall={onInstallTensorRtRtx}
         error={installTrtRtxError}
         log={installTrtRtxLog}
+        variant="compatible"
       />
     );
   }
@@ -468,35 +491,41 @@ function ProviderPluginInstalls({
         detail={hardwareProbe?.tensorrt?.detail}
         busy={hardwareInstallBusy}
         installing={installingTrt}
-        installLabel="Install full TensorRT into .venv"
+        installLabel="Pre-install full TensorRT"
         installingLabel="Installing tensorrt…"
         onInstall={onInstallTensorRt}
         error={installTrtError}
         log={installTrtLog}
+        variant="compatible"
       />
     );
   }
   if (providerId === "OpenVINOExecutionProvider" && openvinoNeedsInstall) {
+    const hasIntelHardware = hardwareProbe ? computeOpenVinoCompatibleHardware({
+      cpuModel: hardwareProbe.platform.cpuModel,
+      openvinoDevices: hardwareProbe.openvino?.devices,
+    }) : false;
     return (
       <PluginInstallBlock
         description={
           <>
-            OpenVINOExecutionProvider is not ready. Install prepares the isolated{" "}
+            OpenVINOExecutionProvider is not ready. Pre-install prepares the isolated{" "}
             <code className="text-slate-400">.venvs/openvino</code> runtime with{" "}
             <code className="text-slate-400">onnxruntime-openvino</code>,{" "}
             <code className="text-slate-400">openvino</code>, and{" "}
-            <code className="text-slate-400">optimum-intel[openvino]</code>. Default and CUDA
-            runtimes keep their own ORT wheels.
+            <code className="text-slate-400">optimum-intel[openvino]</code>. Will also install
+            automatically on first run if needed.
           </>
         }
         detail={hardwareProbe?.openvino?.detail}
         busy={hardwareInstallBusy}
         installing={openvinoInstall.state.installing}
-        installLabel="Install OpenVINO runtime (.venvs/openvino)"
+        installLabel="Pre-install OpenVINO runtime"
         installingLabel="Installing OpenVINO runtime…"
         onInstall={() => void openvinoInstall.install()}
         error={openvinoInstall.state.error}
         log={openvinoInstall.state.log}
+        variant={hasIntelHardware ? "compatible" : "cross-compile"}
       />
     );
   }
@@ -536,7 +565,7 @@ function ProviderPluginInstalls({
             detail={hardwareProbe?.qnn?.detail}
             busy={hardwareInstallBusy || qnnInstall.state.testing}
             installing={qnnInstall.state.installing}
-            installLabel="Install QNN runtime (.venvs/qnn)"
+            installLabel="Pre-install QNN runtime"
             installingLabel="Installing QNN runtime…"
             onInstall={() => void qnnInstall.install()}
             error={qnnInstall.state.error}
@@ -548,7 +577,7 @@ function ProviderPluginInstalls({
             type="button"
             disabled={hardwareInstallBusy || qnnInstall.state.installing || qnnInstall.state.testing}
             onClick={() => void qnnInstall.testNpu()}
-            className="h-7 px-3 rounded border border-slate-600 text-slate-300 bg-slate-800/60 hover:bg-slate-800 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1.5"
+            className="h-7 px-3 rounded border border-slate-600 text-slate-300 bg-slate-800/60 hover:bg-slate-800 text-xs font-bold disabled:opacity-50 flex items-center gap-1.5"
           >
             {qnnInstall.state.testing ? (
               <>
@@ -564,7 +593,7 @@ function ProviderPluginInstalls({
           href={QNN_ADVANCED_QAIRT_DOCS_URL}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-300"
+          className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-300"
           onClick={(e) => e.stopPropagation()}
         >
           Advanced QAIRT / SDK tooling <ExternalLink className="h-3 w-3" />
@@ -577,27 +606,28 @@ function ProviderPluginInstalls({
       <PluginInstallBlock
         description={
           <>
-            DirectML EP not registered in the default Windows runtime. Install{" "}
+            DirectML EP not registered in the default Windows runtime. Pre-install{" "}
             <code className="text-slate-400">onnxruntime-directml</code> into{" "}
             <code className="text-slate-400">.venv</code> so{" "}
             <code className="text-slate-400">DmlExecutionProvider</code> loads for recipes and
-            live runs.
+            live runs, or it will install automatically on first run.
           </>
         }
         busy={hardwareInstallBusy}
         installing={directMlInstall.state.installing}
-        installLabel="Install onnxruntime-directml into .venv"
+        installLabel="Pre-install onnxruntime-directml"
         installingLabel="Installing onnxruntime-directml…"
         onInstall={() => void directMlInstall.install()}
         error={directMlInstall.state.error}
         log={directMlInstall.state.log}
+        variant="compatible"
       />
     );
   }
   if (providerId === "CUDAExecutionProvider" && isPreMaxwellBox) {
     return (
       <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
-        <p className="text-[11px] text-rose-400/90 leading-relaxed">
+        <p className="text-xs text-rose-400/90 leading-relaxed">
           {nvidiaGpus.map((g) => g.name).join(", ")} predates the CUDA 12 toolkit floor (compute
           capability ≥ {CUDA_SM_FLOOR}, Maxwell / RTX 20xx+). Installing the toolkit or the CUDA
           wheel cannot recover this — these cards cannot execute modern CUDA. Use the CPU provider,
@@ -619,24 +649,25 @@ function ProviderPluginInstalls({
                 {hardwareProbe?.onnxRuntimeProviders === undefined
                   ? "Onnxruntime-gpu isn't installed in the project "
                   : "Onnxruntime-gpu CUDA execution provider is not registered in the project "}
-                <code className="text-slate-400">.venv</code>. Click below to pip-install the pinned
+                <code className="text-slate-400">.venv</code>. Pre-install the pinned
                 wheel (
                 <code className="text-slate-400 font-mono break-all">{pinnedOrtGpuInstallCommand()}</code>
-                ); the panel re-probes after install.
+                ) or it will install automatically on first run.
               </>
             }
             detail={hardwareProbe?.cuda?.detail}
             busy={hardwareInstallBusy}
             installing={installingOrtGpu}
-            installLabel="Install onnxruntime-gpu into .venv"
+            installLabel="Pre-install onnxruntime-gpu"
             installingLabel="Installing onnxruntime-gpu…"
             onInstall={onInstallOrtGpu}
             error={installOrtGpuError}
             log={installOrtGpuLog}
+            variant="compatible"
           />
         ) : null}
         {cudaToolkitMissing && cudaEpInVenv ? (
-          <p className="text-[11px] text-amber-500/80 leading-relaxed">
+          <p className="text-xs text-amber-500/80 leading-relaxed">
             NVIDIA driver + onnxruntime-gpu CUDA EP detected, but the CUDA Toolkit (
             <code className="text-slate-400">nvcc</code>) is not installed. Inference via OLIVE
             recipes does not need it; for native CUDA builds, grab it from{" "}
@@ -655,6 +686,31 @@ function ProviderPluginInstalls({
       </div>
     );
   }
+  if (
+    providerId === "ROCMExecutionProvider" &&
+    Boolean(hardwareProbe?.rocm?.gpus.length) &&
+    !hardwareProbe?.onnxRuntimeProviders?.includes("ROCMExecutionProvider")
+  ) {
+    const rocmUrl = rocmDownloadUrlForOs(hardwareProbe?.platform.os);
+    return (
+      <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
+        <p className="text-xs text-emerald-400/90 leading-relaxed">
+          AMD GPU detected ({hardwareProbe?.rocm?.gpus.map((g) => g.name).join(", ")}). ROCm
+          runtime is required for the ROCM execution provider. Install from AMD, then re-probe.
+        </p>
+        <a
+          href={rocmUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 h-7 px-3 rounded border border-emerald-500/40 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 text-xs font-bold"
+          onClick={(e) => e.stopPropagation()}
+        >
+          Get ROCm from AMD
+          <ExternalLink className="h-3 w-3" />
+        </a>
+      </div>
+    );
+  }
   return null;
 }
 
@@ -662,7 +718,7 @@ function OpenVinoDeviceHint({ hardwareProbe }: { hardwareProbe: HardwareProbeRes
   const devices = hardwareProbe?.openvino?.devices ?? [];
   if (devices.length === 0 || devices.some((d) => /GPU|NPU/i.test(d))) return null;
   return (
-    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
       Only CPU detected. For GPU/NPU inference, install Intel drivers:{" "}
       <a
         href={OPEN_VINO_GPU_DRIVER_URL}
@@ -703,7 +759,7 @@ function ProviderConflictAssist({
 }) {
   return (
     <div className="mt-3.5 pt-3.5 border-t border-slate-800/60 flex flex-col gap-2.5 animate-in fade-in duration-200">
-      <p className="text-xs text-slate-500 flex items-center gap-1.5">
+      <p className="text-sm text-slate-500 flex items-center gap-1.5">
         <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
         {isSelected ? "Passes to fix on this target" : "Adjustments needed to use this target"}
       </p>
@@ -711,18 +767,16 @@ function ProviderConflictAssist({
         {pConflicts.map((c, idx) => (
           <div
             key={idx}
-            className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-900 flex items-start gap-2 text-xs"
+            className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-900 flex items-start gap-2 text-sm"
           >
             <span
-              className={`inline-block h-1.5 w-1.5 rounded-full mt-1.5 shrink-0 ${
-                c.severity === "critical" ? "bg-rose-500" : "bg-amber-400"
-              }`}
+              className={`inline-block h-1.5 w-1.5 rounded-full mt-1.5 shrink-0 ${c.severity === "critical" ? "bg-rose-500" : "bg-amber-400"
+                }`}
             />
             <div className="leading-tight">
               <span
-                className={`font-bold block text-[11px] mb-0.5 ${
-                  c.severity === "critical" ? "text-rose-300" : "text-amber-400"
-                }`}
+                className={`font-bold block text-xs mb-0.5 ${c.severity === "critical" ? "text-rose-300" : "text-amber-400"
+                  }`}
               >
                 {c.passName}
               </span>
@@ -738,11 +792,10 @@ function ProviderConflictAssist({
             e.stopPropagation();
             onAssist();
           }}
-          className={`text-[9.5px] uppercase tracking-wider font-extrabold px-3 py-1.5 rounded border transition-all cursor-pointer flex items-center gap-1.5 ${
-            cardHasCritical
-              ? "border-rose-550/30 text-rose-400 bg-rose-950/20 hover:text-white hover:bg-rose-500/20"
-              : "border-amber-500/30 text-amber-400 bg-amber-950/20 hover:text-white hover:bg-amber-550/20"
-          }`}
+          className={`text-[9.5px] uppercase tracking-wider font-extrabold px-3 py-1.5 rounded border transition-all cursor-pointer flex items-center gap-1.5 ${cardHasCritical
+            ? "border-rose-550/30 text-rose-400 bg-rose-950/20 hover:text-white hover:bg-rose-500/20"
+            : "border-amber-500/30 text-amber-400 bg-amber-950/20 hover:text-white hover:bg-amber-550/20"
+            }`}
         >
           <Wand2 className="h-3.5 w-3.5" />
           {isSelected ? "Fix passes for this target" : `Switch to ${shortName} (adjusts passes)`}
@@ -818,6 +871,11 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
     (p.id === "DmlExecutionProvider" && directMlNeedsInstall) ||
     (p.id === "CUDAExecutionProvider" && cudaNeedsOrtGpuInstall);
 
+  // DML on Windows: hardware is compatible (DX12 guaranteed) even though runtime isn't detected yet.
+  // This lets the badge show green "Compatible, runtime available" instead of gray "Not on this system".
+  const hardwareCompatibleNotDetected =
+    p.id === "DmlExecutionProvider" && directMlNeedsInstall && !detectedLocally;
+
   const { cardClasses, badgeText, BadgeIcon, badgeColor } = resolveCardChrome({
     isSelected,
     cardBlocked,
@@ -828,7 +886,7 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
     isExportTarget,
     isLegacyTarget,
     isPlatformTarget,
-    detectedLocally,
+    detectedLocally: detectedLocally || hardwareCompatibleNotDetected,
     probeLoading,
     needsPluginInstall,
   });
@@ -841,15 +899,14 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
     <div onClick={onSelect} className={cardClasses}>
       <div className="flex items-start gap-4 min-w-0">
         <div
-          className={`mt-0.5 shrink-0 rounded-xl p-2.5 transition-all ${
-            isSelected
-              ? cardHasCritical
-                ? "bg-rose-500/20 text-rose-400"
-                : cardHasWarning
-                  ? "bg-amber-500/20 text-amber-400"
-                  : "bg-electric-blue/20 text-electric-blue"
-              : "bg-slate-850 text-slate-400 group-hover:text-slate-300"
-          }`}
+          className={`mt-0.5 shrink-0 rounded-xl p-2.5 transition-all ${isSelected
+            ? cardHasCritical
+              ? "bg-rose-500/20 text-rose-400"
+              : cardHasWarning
+                ? "bg-amber-500/20 text-amber-400"
+                : "bg-electric-blue/20 text-electric-blue"
+            : "bg-slate-850 text-slate-400 group-hover:text-slate-300"
+            }`}
         >
           <Icon className="h-5 w-5" />
         </div>
@@ -866,7 +923,7 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
           </div>
           <Tooltip>
             <TooltipTrigger asChild>
-              <p className="text-xs text-slate-400 leading-relaxed pr-6 cursor-help border-b border-dashed border-slate-700 hover:border-slate-500 transition-colors">
+              <p className="text-sm text-slate-400 leading-relaxed pr-6 cursor-help border-b border-dashed border-slate-700 hover:border-slate-500 transition-colors">
                 {p.desc}
               </p>
             </TooltipTrigger>
@@ -876,25 +933,25 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
             >
               <div className="space-y-3">
                 <div className="border-b border-slate-900 pb-2">
-                  <p className="text-xs font-bold text-electric-blue uppercase tracking-wide">{p.name}</p>
+                  <p className="text-sm font-bold text-electric-blue uppercase tracking-wide">{p.name}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-mono uppercase text-slate-500 mb-1">Requirements</p>
-                  <p className="text-[11px] text-slate-300 leading-relaxed">{p.tooltip.requirements}</p>
+                  <p className="text-[11px] font-mono uppercase text-slate-500 mb-1">Requirements</p>
+                  <p className="text-xs text-slate-300 leading-relaxed">{p.tooltip.requirements}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-mono uppercase text-slate-500 mb-1">Quantization Methods</p>
-                  <p className="text-[11px] text-slate-300 leading-relaxed">{p.tooltip.quantMethods}</p>
+                  <p className="text-[11px] font-mono uppercase text-slate-500 mb-1">Quantization Methods</p>
+                  <p className="text-xs text-slate-300 leading-relaxed">{p.tooltip.quantMethods}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-mono uppercase text-slate-500 mb-1">Recommendation</p>
-                  <p className="text-[11px] text-emerald-400/90 leading-relaxed">{p.tooltip.recommendation}</p>
+                  <p className="text-[11px] font-mono uppercase text-slate-500 mb-1">Recommendation</p>
+                  <p className="text-xs text-emerald-400/90 leading-relaxed">{p.tooltip.recommendation}</p>
                 </div>
               </div>
             </TooltipContent>
           </Tooltip>
           {detectedLocally && hardwareDetail ? (
-            <p className="text-[11px] text-emerald-400/90 font-mono break-words">{hardwareDetail}</p>
+            <p className="text-xs text-emerald-400/90 font-mono break-words">{hardwareDetail}</p>
           ) : null}
           <ProviderPluginInstalls
             providerId={p.id}
@@ -929,30 +986,30 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
             <OpenVinoDeviceHint hardwareProbe={hardwareProbe} />
           ) : null}
           {isWebGpuTarget ? (
-            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
               Not a local Python EP. Select to build web-oriented recipes, then use{" "}
               <span className="text-slate-400">Recipe &amp; run → Browser Test</span> / WebGPU benchmark in
               Chrome or Edge 113+.
             </p>
           ) : null}
           {isExportTarget && !isWebGpuTarget ? (
-            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
               {isLegacyTarget
                 ? "Legacy export path (prefer QNN for Snapdragon). Not available for Studio Execute Live."
                 : "Export / deploy target only. Not a local Python EP — Execute Live stays blocked."}
             </p>
           ) : null}
           {isPlatformTarget && !detectedLocally && !probeLoading ? (
-            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
               Platform EP: selectable for recipes; Execute Live requires a matching ORT probe hit on this host.
             </p>
           ) : null}
           {!detectedLocally &&
-          !probeLoading &&
-          !isExportTarget &&
-          !isPlatformTarget &&
-          !needsPluginInstall ? (
-            <p className="text-[11px] text-slate-600">
+            !probeLoading &&
+            !isExportTarget &&
+            !isPlatformTarget &&
+            !needsPluginInstall ? (
+            <p className="text-xs text-slate-600">
               {p.id === "CPUExecutionProvider"
                 ? "Hardware detection unavailable — CPU status is unknown."
                 : "No matching hardware found locally — you can still select for remote/cross-compile targets."}
@@ -962,21 +1019,19 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
 
         <div className="flex items-center justify-center shrink-0">
           <div
-            className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-              isSelected
-                ? cardHasCritical
-                  ? "border-rose-500 text-rose-500"
-                  : cardHasWarning
-                    ? "border-amber-500 text-amber-500"
-                    : "border-electric-blue text-electric-blue"
-                : "border-slate-700 hover:border-slate-500"
-            }`}
+            className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected
+              ? cardHasCritical
+                ? "border-rose-500 text-rose-500"
+                : cardHasWarning
+                  ? "border-amber-500 text-amber-500"
+                  : "border-electric-blue text-electric-blue"
+              : "border-slate-700 hover:border-slate-500"
+              }`}
           >
             {isSelected ? (
               <div
-                className={`h-2.5 w-2.5 rounded-full ${
-                  cardHasCritical ? "bg-rose-500" : cardHasWarning ? "bg-amber-500" : "bg-electric-blue"
-                }`}
+                className={`h-2.5 w-2.5 rounded-full ${cardHasCritical ? "bg-rose-500" : cardHasWarning ? "bg-amber-500" : "bg-electric-blue"
+                  }`}
               />
             ) : null}
           </div>
@@ -994,7 +1049,7 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
       ) : null}
 
       {!isSelected && cardHasCritical && pConflicts.length > 0 ? (
-        <p className="mt-3 pt-3 border-t border-slate-800/60 text-[11px] text-slate-500 leading-relaxed">
+        <p className="mt-3 pt-3 border-t border-slate-800/60 text-xs text-slate-500 leading-relaxed">
           Incompatible with your current passes. Change passes in Optimization or select a compatible target
           above.
         </p>

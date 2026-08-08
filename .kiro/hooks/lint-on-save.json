@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Fast lint on TypeScript save",
+      "trigger": "PostFileSave",
+      "description": "Runs oxlint on src/ when any TypeScript file is saved for fast local feedback",
+      "matcher": "\\.(ts|tsx)$",
+      "action": {
+        "type": "command",
+        "command": "pnpm lint:quick",
+        "timeout": 30
+      }
+    }
+  ]
+}

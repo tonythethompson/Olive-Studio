@@ -121,7 +121,7 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
     <div className="rounded-lg border border-slate-800 bg-slate-950/40">
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold text-slate-300 hover:bg-slate-900/60 cursor-pointer"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-slate-300 hover:bg-slate-900/60 cursor-pointer"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={`olive-outputs-${slotLabel.replace(" ", "-").toLowerCase()}`}
@@ -137,19 +137,19 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
           className="border-t border-slate-800 px-3 py-2 space-y-2"
         >
           {loading && (
-            <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
+            <p className="flex items-center gap-1.5 text-xs text-slate-500">
               <Loader2 className="h-3 w-3 animate-spin" /> Scanning cache / output…
             </p>
           )}
 
           {error && (
-            <p className="text-[11px] text-red-400" role="alert">
+            <p className="text-xs text-red-400" role="alert">
               {error}
             </p>
           )}
 
           {isEmpty && !loading && (
-            <p className="text-[11px] text-slate-500">
+            <p className="text-xs text-slate-500">
               No <code className="text-slate-400">.onnx</code>/<code className="text-slate-400">.ort</code> files
               found under the Olive cache or output directories. Use the drop-zone above to pick a file manually.
             </p>
@@ -157,7 +157,7 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
 
           {!loading && recent.length > 0 && (
             <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-wide text-slate-600 font-semibold">Recent</p>
+              <p className="text-[11px] uppercase tracking-wide text-slate-600 font-semibold">Recent</p>
               <ul className="space-y-0.5">
                 {recent.map((entry) => (
                   <li key={`recent-${entry.id}`}>
@@ -165,7 +165,7 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
                       type="button"
                       disabled={fetchingId !== null}
                       onClick={() => void selectEntry(entry)}
-                      className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer disabled:opacity-50"
+                      className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-300 hover:bg-slate-900 cursor-pointer disabled:opacity-50"
                     >
                       <span className="truncate font-mono">{entry.displayPath}</span>
                       <span className="shrink-0 text-slate-600">{formatBytes(entry.sizeBytes)}</span>
@@ -178,7 +178,7 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
 
           {!loading && entries.length > 0 && (
             <div className="space-y-1 max-h-40 overflow-y-auto">
-              <p className="text-[10px] uppercase tracking-wide text-slate-600 font-semibold">Browse</p>
+              <p className="text-[11px] uppercase tracking-wide text-slate-600 font-semibold">Browse</p>
               <ul className="space-y-0.5">
                 {entries.map((entry) => (
                   <li key={`browse-${entry.id}`}>
@@ -186,7 +186,7 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
                       type="button"
                       disabled={fetchingId !== null}
                       onClick={() => void selectEntry(entry)}
-                      className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer disabled:opacity-50"
+                      className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-300 hover:bg-slate-900 cursor-pointer disabled:opacity-50"
                     >
                       <span className="truncate font-mono">
                         <span className="text-slate-600">{entry.rootLabel}/</span>
@@ -202,7 +202,7 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
 
           <button
             type="button"
-            className="text-[10px] text-electric-blue hover:underline cursor-pointer disabled:opacity-50"
+            className="text-[11px] text-electric-blue hover:underline cursor-pointer disabled:opacity-50"
             disabled={loading}
             onClick={() => void loadList()}
           >
@@ -261,7 +261,7 @@ export function UseAssistantProviderButton({ slotLabel, onApply }: UseAssistantP
       <Button
         type="button"
         variant="outline"
-        className="h-8 w-full text-[11px] border-slate-700 text-slate-300 hover:border-electric-blue/40"
+        className="h-8 w-full text-xs border-slate-700 text-slate-300 hover:border-electric-blue/40"
         onClick={() => void handleClick()}
         disabled={busy}
         aria-label={`Use active Assistant provider for ${slotLabel}`}
@@ -274,12 +274,12 @@ export function UseAssistantProviderButton({ slotLabel, onApply }: UseAssistantP
         Use active Assistant provider
       </Button>
       {reason && (
-        <p className="text-[11px] text-amber-400/90" role="status">
+        <p className="text-xs text-amber-400/90" role="status">
           {reason}
         </p>
       )}
       {okLabel && !reason && (
-        <p className="text-[11px] text-emerald-400/90" role="status">
+        <p className="text-xs text-emerald-400/90" role="status">
           {okLabel} — fields stay editable.
         </p>
       )}

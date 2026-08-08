@@ -269,7 +269,7 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
       <div className="flex flex-wrap items-center gap-3">
         <div
           className={cn(
-            "flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono border",
+            "flex items-center gap-1.5 px-2.5 py-1 rounded text-sm font-mono border",
             webgpuStatus === "available"
               ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
               : webgpuStatus === "unavailable"
@@ -288,7 +288,7 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
 
         <div
           className={cn(
-            "flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono border",
+            "flex items-center gap-1.5 px-2.5 py-1 rounded text-sm font-mono border",
             ortStatus === "available"
               ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
               : ortStatus === "unavailable"
@@ -302,7 +302,7 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
         </div>
 
         {modelFormat === "ort" && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono border border-blue-500/30 bg-blue-500/10 text-blue-400">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded text-sm font-mono border border-blue-500/30 bg-blue-500/10 text-blue-400">
             <FileCode className="h-3 w-3" />
             ORT Flatbuffer
           </div>
@@ -340,7 +340,7 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
             <p className="text-sm font-medium text-slate-300">
               Drop an ONNX model file here, or click to browse
             </p>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-sm text-slate-500 mt-1">
               Supports <code className="text-electric-blue">.onnx</code> and{" "}
               <code className="text-electric-blue">.ort</code> (ORT flatbuffer) formats
             </p>
@@ -352,7 +352,7 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
             <Box className="h-5 w-5 text-electric-blue shrink-0" />
             <div className="min-w-0">
               <p className="text-sm font-medium text-slate-200 truncate">{selectedFile.name}</p>
-              <p className="text-xs text-slate-500">
+              <p className="text-sm text-slate-500">
                 {(selectedFile.size / 1024).toFixed(1)} KB &middot; {modelFormat.toUpperCase()} format
               </p>
             </div>
@@ -367,12 +367,12 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
       {selectedFile && (
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
           <div className="sm:col-span-4 space-y-3 rounded-lg border border-slate-800 bg-slate-900/20 p-4">
-            <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+            <Label className="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
               <Gauge className="h-3.5 w-3.5 text-electric-blue" />
               Input Configuration
             </Label>
             <div className="space-y-1.5">
-              <Label htmlFor="batch-size" className="text-[11px] text-slate-400">
+              <Label htmlFor="batch-size" className="text-xs text-slate-400">
                 Batch size
               </Label>
               <input
@@ -382,11 +382,11 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
                 max={64}
                 value={batchSize}
                 onChange={(e) => setBatchSize(Math.max(1, Math.min(64, Number(e.target.value) || 1)))}
-                className="w-full h-9 rounded border border-slate-700 bg-slate-950 px-2.5 text-xs text-slate-200 font-mono outline-none focus:border-electric-blue"
+                className="w-full h-9 rounded border border-slate-700 bg-slate-950 px-2.5 text-sm text-slate-200 font-mono outline-none focus:border-electric-blue"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="seq-len" className="text-[11px] text-slate-400">
+              <Label htmlFor="seq-len" className="text-xs text-slate-400">
                 Sequence length
               </Label>
               <input
@@ -396,10 +396,10 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
                 max={4096}
                 value={seqLen}
                 onChange={(e) => setSeqLen(Math.max(1, Math.min(4096, Number(e.target.value) || 1)))}
-                className="w-full h-9 rounded border border-slate-700 bg-slate-950 px-2.5 text-xs text-slate-200 font-mono outline-none focus:border-electric-blue"
+                className="w-full h-9 rounded border border-slate-700 bg-slate-950 px-2.5 text-sm text-slate-200 font-mono outline-none focus:border-electric-blue"
               />
             </div>
-            <p className="text-[10px] text-slate-600 leading-tight">
+            <p className="text-[11px] text-slate-600 leading-tight">
               Random float32 input tensor of shape [{batchSize}, {seqLen}] will be fed to each model input.
             </p>
           </div>
@@ -437,7 +437,7 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
                 )}
               </Button>
               {metrics && (
-                <span className="text-xs text-emerald-400 font-mono flex items-center gap-1.5">
+                <span className="text-sm text-emerald-400 font-mono flex items-center gap-1.5">
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Last run: {formatMs(metrics.inferenceMs)}
                 </span>
@@ -447,14 +447,14 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
             {errorMessage && (
               <div className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-950/20 p-3">
                 <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-red-200 leading-relaxed">{errorMessage}</p>
+                <p className="text-sm text-red-200 leading-relaxed">{errorMessage}</p>
               </div>
             )}
 
             {sessionInfo && (
               <div className="flex items-start gap-2 rounded-lg border border-blue-500/20 bg-blue-950/10 p-2.5">
                 <Info className="h-3.5 w-3.5 text-blue-400 shrink-0 mt-0.5" />
-                <p className="text-[11px] text-blue-300 font-mono leading-relaxed">{sessionInfo}</p>
+                <p className="text-xs text-blue-300 font-mono leading-relaxed">{sessionInfo}</p>
               </div>
             )}
           </div>
@@ -465,7 +465,7 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
       {metrics && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="rounded-lg border border-emerald-500/20 bg-emerald-950/10 p-3">
-            <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 mb-1">
+            <div className="flex items-center gap-1.5 text-xs text-emerald-400 mb-1">
               <Clock className="h-3 w-3" />
               Inference Time
             </div>
@@ -474,7 +474,7 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
             </p>
           </div>
           <div className="rounded-lg border border-blue-500/20 bg-blue-950/10 p-3">
-            <div className="flex items-center gap-1.5 text-[11px] text-blue-400 mb-1">
+            <div className="flex items-center gap-1.5 text-xs text-blue-400 mb-1">
               <HardDrive className="h-3 w-3" />
               Session Init
             </div>
@@ -483,7 +483,7 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
             </p>
           </div>
           <div className="rounded-lg border border-electric-blue/20 bg-electric-blue/5 p-3">
-            <div className="flex items-center gap-1.5 text-[11px] text-electric-blue mb-1">
+            <div className="flex items-center gap-1.5 text-xs text-electric-blue mb-1">
               <Zap className="h-3 w-3" />
               Execution Provider
             </div>
@@ -492,7 +492,7 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
             </p>
           </div>
           <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-3">
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mb-1">
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
               <BarChart3 className="h-3 w-3" />
               Outputs
             </div>
@@ -506,7 +506,7 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
       {/* Output shapes detail */}
       {metrics && metrics.outputShapes.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1.5">
+          <p className="text-sm font-semibold text-slate-400 mb-2 flex items-center gap-1.5">
             <Box className="h-3 w-3" />
             Output Tensor Shapes
           </p>
@@ -516,7 +516,7 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
                 key={i}
                 className="flex items-center gap-2 rounded border border-slate-800 bg-slate-950/50 px-3 py-2"
               >
-                <span className="text-xs text-slate-500 font-mono">{shape}</span>
+                <span className="text-sm text-slate-500 font-mono">{shape}</span>
               </div>
             ))}
           </div>
@@ -527,11 +527,11 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
       {logOutput.length > 0 && (
         <div className="rounded-lg border border-slate-800 bg-slate-950">
           <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800">
-            <span className="text-[11px] font-semibold text-slate-500 font-mono">Session Log</span>
+            <span className="text-xs font-semibold text-slate-500 font-mono">Session Log</span>
             <button
               type="button"
               onClick={() => setLogOutput([])}
-              className="text-[10px] text-slate-600 hover:text-slate-400 cursor-pointer"
+              className="text-[11px] text-slate-600 hover:text-slate-400 cursor-pointer"
             >
               Clear
             </button>
@@ -541,7 +541,7 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
               <p
                 key={i}
                 className={cn(
-                  "text-[11px] font-mono leading-relaxed",
+                  "text-xs font-mono leading-relaxed",
                   line.includes("ERROR") ? "text-red-400" : "text-emerald-400/80",
                 )}
               >
@@ -555,7 +555,7 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
       {/* Recipe integration hint */}
       {recipeJson && (
         <div className="rounded-lg bg-electric-blue/5 border border-electric-blue/10 p-3">
-          <p className="text-xs text-slate-400 leading-relaxed">
+          <p className="text-sm text-slate-400 leading-relaxed">
             <Info className="h-3.5 w-3.5 inline mr-1 text-electric-blue" />
             This inference test runs against the model in your browser. The execution provider selection above
             matches the <code className="text-electric-blue font-mono">WebGpuExecutionProvider</code>{" "}

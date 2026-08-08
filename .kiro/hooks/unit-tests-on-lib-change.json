@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Unit tests on lib change",
+      "trigger": "PostFileSave",
+      "description": "Runs unit tests when library source files change",
+      "matcher": "src[\\\\/]lib[\\\\/].*\\.ts$",
+      "action": {
+        "type": "command",
+        "command": "pnpm test",
+        "timeout": 120
+      }
+    }
+  ]
+}

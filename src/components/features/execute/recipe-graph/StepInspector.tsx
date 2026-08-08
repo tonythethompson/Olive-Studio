@@ -51,7 +51,7 @@ export function StepInspector({ state, setState, selectedNodeId, pipelineSteps }
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <Settings className="h-4 w-4 text-electric-blue" />
-            <span className="text-xs font-medium text-slate-400">
+            <span className="text-sm font-medium text-slate-400">
               Step Inspector: <span className="text-white">{selectedStep?.label} Config</span>
             </span>
           </div>
@@ -59,16 +59,16 @@ export function StepInspector({ state, setState, selectedNodeId, pipelineSteps }
           {isPassNode && (
             <div className="flex items-center gap-2 flex-wrap">
               {toggleBlockReason && (
-                <span className="text-[10px] font-mono text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded">
+                <span className="text-[11px] font-mono text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded">
                   {toggleBlockReason}
                 </span>
               )}
-              <span className="text-xs text-slate-500 font-mono">Include in recipe:</span>
+              <span className="text-sm text-slate-500 font-mono">Include in recipe:</span>
               <Button
                 variant={selectedStep?.active ? "danger" : "success"}
                 onClick={handleTogglePass}
                 disabled={Boolean(toggleBlockReason)}
-                className="h-7 text-[10px] px-3 font-semibold"
+                className="h-7 text-[11px] px-3 font-semibold"
               >
                 {selectedStep?.active ? <X className="h-3 w-3 mr-1" /> : <Plus className="h-3 w-3 mr-1" />}
                 {selectedStep?.active ? "Skip Pass" : "Activate Pass"}
@@ -100,7 +100,7 @@ export function StepInspector({ state, setState, selectedNodeId, pipelineSteps }
           {selectedNodeId === "output" && <OutputInspector state={state} setState={setState} />}
         </div>
 
-        <div className="flex items-start gap-2 text-[11px] text-slate-500 bg-slate-900/30 px-3 py-2 rounded-md border border-slate-900 leading-relaxed font-sans mt-1">
+        <div className="flex items-start gap-2 text-xs text-slate-500 bg-slate-900/30 px-3 py-2 rounded-md border border-slate-900 leading-relaxed font-sans mt-1">
           <Info className="h-3.5 w-3.5 text-electric-blue shrink-0 mt-0.5" />
           <p>
             This live dependency network maps the active <strong>Microsoft Olive compiler pipeline</strong>.

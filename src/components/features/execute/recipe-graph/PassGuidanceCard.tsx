@@ -76,26 +76,26 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
   return (
     <div className="rounded-lg border border-slate-800/80 bg-slate-950/50 p-4 space-y-4">
       <div>
-        <p className="text-[10px] font-mono uppercase tracking-wider text-electric-blue/80 mb-1">
+        <p className="text-[11px] font-mono uppercase tracking-wider text-electric-blue/80 mb-1">
           About this pass
         </p>
         <h4 className="text-sm font-semibold text-slate-100 leading-snug">{guidance.title}</h4>
-        <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">{guidance.summary}</p>
+        <p className="text-sm text-slate-400 mt-1.5 leading-relaxed">{guidance.summary}</p>
       </div>
 
-      <p className="text-xs text-slate-500 leading-relaxed border-l-2 border-slate-700 pl-3">
+      <p className="text-sm text-slate-500 leading-relaxed border-l-2 border-slate-700 pl-3">
         {guidance.whatItDoes}
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <p className="text-[10px] font-mono uppercase tracking-wider text-emerald-500/90 flex items-center gap-1.5">
+          <p className="text-[11px] font-mono uppercase tracking-wider text-emerald-500/90 flex items-center gap-1.5">
             <CheckCircle2 className="h-3.5 w-3.5" />
             Use when
           </p>
           <ul className="space-y-1.5">
             {guidance.whenToUse.map((item) => (
-              <li key={item} className="text-xs text-slate-400 leading-relaxed pl-0.5">
+              <li key={item} className="text-sm text-slate-400 leading-relaxed pl-0.5">
                 {item}
               </li>
             ))}
@@ -104,13 +104,13 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
 
         {guidance.whenNotToUse.length > 0 && (
           <div className="space-y-2">
-            <p className="text-[10px] font-mono uppercase tracking-wider text-amber-500/90 flex items-center gap-1.5">
+            <p className="text-[11px] font-mono uppercase tracking-wider text-amber-500/90 flex items-center gap-1.5">
               <XCircle className="h-3.5 w-3.5" />
               Skip when
             </p>
             <ul className="space-y-1.5">
               {guidance.whenNotToUse.map((item) => (
-                <li key={item} className="text-xs text-slate-500 leading-relaxed pl-0.5">
+                <li key={item} className="text-sm text-slate-500 leading-relaxed pl-0.5">
                   {item}
                 </li>
               ))}
@@ -125,7 +125,7 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
           <button
             type="button"
             onClick={() => setParamsExpanded((v) => !v)}
-            className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-electric-blue/70 hover:text-electric-blue transition-colors cursor-pointer w-full"
+            className="flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-electric-blue/70 hover:text-electric-blue transition-colors cursor-pointer w-full"
           >
             <Database className="h-3 w-3" />
             <span>Olive Parameters: {guidance.passName}</span>
@@ -141,20 +141,20 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
           {paramsExpanded && hasParams && (
             <div className="mt-2 space-y-2.5">
               {params!.description && (
-                <p className="text-[11px] text-slate-400 leading-relaxed">{params!.description}</p>
+                <p className="text-xs text-slate-400 leading-relaxed">{params!.description}</p>
               )}
 
               {requiredParams.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-mono text-rose-400/80 mb-1">Required</p>
+                  <p className="text-[11px] font-mono text-rose-400/80 mb-1">Required</p>
                   <div className="space-y-1">
                     {requiredParams.map((name) => {
                       const doc = params!.parameters![name];
                       return (
-                        <div key={name} className="flex gap-2 text-[11px]">
+                        <div key={name} className="flex gap-2 text-xs">
                           <span className="font-mono text-slate-300 shrink-0">{name}</span>
                           {doc?.type && (
-                            <span className="text-slate-500 font-mono text-[10px]">:{doc.type}</span>
+                            <span className="text-slate-500 font-mono text-[11px]">:{doc.type}</span>
                           )}
                           {doc?.description && <span className="text-slate-400">— {doc.description}</span>}
                         </div>
@@ -166,36 +166,36 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
 
               {optionalParams.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-mono text-slate-500 mb-1">Optional</p>
+                  <p className="text-[11px] font-mono text-slate-500 mb-1">Optional</p>
                   <div className="space-y-1.5">
                     {optionalParams.map(([name, doc]) => (
                       <div
                         key={name}
                         className="rounded bg-slate-900/50 px-2 py-1.5 border border-slate-800/40"
                       >
-                        <div className="flex gap-2 text-[11px] items-baseline">
+                        <div className="flex gap-2 text-xs items-baseline">
                           <span className="font-mono text-slate-300 shrink-0">{name}</span>
                           {doc.type && (
-                            <span className="text-slate-500 font-mono text-[10px]">:{doc.type}</span>
+                            <span className="text-slate-500 font-mono text-[11px]">:{doc.type}</span>
                           )}
                           {doc.default !== undefined && (
-                            <span className="text-slate-600 font-mono text-[10px]">
+                            <span className="text-slate-600 font-mono text-[11px]">
                               default: {JSON.stringify(doc.default)}
                             </span>
                           )}
                         </div>
                         {doc.description && (
-                          <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
+                          <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
                             {doc.description}
                           </p>
                         )}
                         {doc.valid_range && (
-                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                          <p className="text-[11px] text-slate-500 font-mono mt-0.5">
                             range: {doc.valid_range}
                           </p>
                         )}
                         {doc.interactions && (
-                          <p className="text-[10px] text-amber-500/70 mt-0.5">⚠ {doc.interactions}</p>
+                          <p className="text-[11px] text-amber-500/70 mt-0.5">⚠ {doc.interactions}</p>
                         )}
                       </div>
                     ))}
@@ -205,12 +205,12 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
 
               {params!.gotchas && params!.gotchas!.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-mono text-amber-400/80 mb-1">Gotchas</p>
+                  <p className="text-[11px] font-mono text-amber-400/80 mb-1">Gotchas</p>
                   <ul className="space-y-0.5">
                     {params!.gotchas!.map((g, i) => (
                       <li
                         key={i}
-                        className="text-[10px] text-amber-500/70 leading-relaxed pl-2 border-l border-amber-500/20"
+                        className="text-[11px] text-amber-500/70 leading-relaxed pl-2 border-l border-amber-500/20"
                       >
                         {g}
                       </li>
@@ -223,11 +223,11 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
 
           {paramsExpanded && networkError && !isLoading && (
             <div className="mt-2 space-y-1.5">
-              <p className="text-[10px] text-amber-400/80 font-mono">Failed to load parameters</p>
+              <p className="text-[11px] text-amber-400/80 font-mono">Failed to load parameters</p>
               <button
                 type="button"
                 onClick={fetchParams}
-                className="text-[10px] text-electric-blue/80 hover:text-electric-blue transition-colors font-mono cursor-pointer"
+                className="text-[11px] text-electric-blue/80 hover:text-electric-blue transition-colors font-mono cursor-pointer"
               >
                 ↻ Retry
               </button>
@@ -235,7 +235,7 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
           )}
 
           {paramsExpanded && !hasParams && !networkError && !isLoading && (
-            <p className="text-[10px] text-slate-500 mt-2 italic">
+            <p className="text-[11px] text-slate-500 mt-2 italic">
               No parameter documentation available for this pass.
             </p>
           )}

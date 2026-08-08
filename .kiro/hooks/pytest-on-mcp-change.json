@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Pytest on MCP server change",
+      "trigger": "PostFileSave",
+      "description": "Runs Python MCP server tests when Python files change",
+      "matcher": "olive-mcp-server.*\\.py$",
+      "action": {
+        "type": "command",
+        "command": "cd olive-mcp-server && python -m pytest tests -q --tb=short",
+        "timeout": 60
+      }
+    }
+  ]
+}

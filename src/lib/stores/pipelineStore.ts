@@ -1,7 +1,10 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import { UIState } from "@/types";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import { commitUiStateUpdate } from "@/lib/pipelineValidation";
+
+const STORAGE_KEY = "olive:pipeline-state";
 
 /**
  * Pure factory for default pipeline UI state.
@@ -12,7 +15,7 @@ export function createDefaultPipelineState(): UIState {
     modelSource: "huggingface",
     localFiles: [],
     azureModelPath: "",
-    hfModelId: "meta-llama/Meta-Llama-3-8B",
+    hfModelId: "",
     hfTask: "",
     hfDataset: "",
     ihvProvider: "CPUExecutionProvider",
@@ -36,24 +39,57 @@ interface PipelineStore {
   resetState: () => void;
 }
 
-export const usePipelineStore = create<PipelineStore>((set) => ({
-  state: createDefaultPipelineState(),
+export const usePipelineStore = create<PipelineStore>()(
+  persist(
+    (set) => ({
+      state: createDefaultPipelineState(),
 
-  setState: (partial) =>
-    set((store) => ({
-      state: commitUiStateUpdate(store.state, partial),
-    })),
+      setState: (partial) =>
+        set((store) => ({
+          state: commitUiStateUpdate(store.state, partial),
+        })),
 
-  replaceState: (next) =>
-    set({
-      state: commitUiStateUpdate(next, {}),
+      replaceState: (next) =>
+        set({
+          state: commitUiStateUpdate(next, {}),
+        }),
+
+      resetState: () =>
+        set({
+          state: commitUiStateUpdate(createDefaultPipelineState(), {}),
+        }),
     }),
-
-  resetState: () =>
-    set({
-      state: commitUiStateUpdate(createDefaultPipelineState(), {}),
-    }),
-}));
+    {
+      name: STORAGE_KEY,
+      // Only persist the pipeline state, not the store methods.
+      // Strip credentials and runtime-only fields before writing to localStorage.
+      partialize: (store) => ({
+        state: {
+          ...store.state,
+          azureStr: "",
+          activeJobId: null,
+          localFiles: [],
+        },
+      }),
+      // On rehydration, run coercion to catch stale/incompatible persisted state.
+      merge: (persisted, current) => {
+        const saved = persisted as { state?: Partial<UIState> } | undefined;
+        if (!saved?.state) return current;
+        // Merge persisted state with defaults (handles new fields added after save).
+        const merged: UIState = {
+          ...createDefaultPipelineState(),
+          ...saved.state,
+          passes: { ...DEFAULT_PASSES, ...(saved.state.passes ?? {}) },
+          // Never persist runtime-only or credential fields.
+          activeJobId: null,
+          localFiles: [],
+          azureStr: "",
+        };
+        return { ...current, state: commitUiStateUpdate(merged, {}) };
+      },
+    },
+  ),
+);
 
 /**
  * Provides pipeline state and a partial state update function through the store.

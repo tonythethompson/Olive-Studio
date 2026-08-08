@@ -256,7 +256,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
       : "Runtime";
 
   return (
-    <div ref={rootRef} className="relative text-[11px] font-mono overflow-visible">
+    <div ref={rootRef} className="relative text-xs font-mono overflow-visible">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -297,8 +297,8 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
         >
           <div className="flex items-start justify-between gap-2">
             <div>
-              <div className="text-xs font-semibold text-slate-200 font-sans">Runtime &amp; PATH</div>
-              <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed font-sans">
+              <div className="text-sm font-semibold text-slate-200 font-sans">Runtime &amp; PATH</div>
+              <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed font-sans">
                 {status?.hint ?? "Checking…"}
               </p>
             </div>
@@ -313,7 +313,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
             </button>
           </div>
 
-          <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[10px]">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[11px]">
             <dt className="text-slate-500">System Python</dt>
             <dd className="text-slate-300 truncate" title={status?.systemPython ?? undefined}>
               {status?.systemPython ?? "not found"}
@@ -329,7 +329,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
           </dl>
 
           <div className="space-y-1.5">
-            <label className="block text-[10px] text-slate-400 font-sans" htmlFor="studio-python-path">
+            <label className="block text-[11px] text-slate-400 font-sans" htmlFor="studio-python-path">
               Python 3.10–3.13 (3.12 recommended)
             </label>
             <div className="flex gap-1">
@@ -341,13 +341,13 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
                 placeholder={
                   status?.platform === "win32" ? "C:\\Users\\…\\Python312\\python.exe" : "/usr/bin/python3.12"
                 }
-                className="flex-1 min-w-0 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-200 placeholder:text-slate-600 focus:border-electric-blue outline-none"
+                className="flex-1 min-w-0 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:border-electric-blue outline-none"
               />
               <button
                 type="button"
                 disabled={busy || !pythonPath.trim()}
                 onClick={() => void savePython()}
-                className="shrink-0 px-2 py-1 rounded border border-slate-600 text-slate-200 hover:border-electric-blue hover:text-electric-blue disabled:opacity-40 flex items-center gap-1 font-sans text-[10px]"
+                className="shrink-0 px-2 py-1 rounded border border-slate-600 text-slate-200 hover:border-electric-blue hover:text-electric-blue disabled:opacity-40 flex items-center gap-1 font-sans text-[11px]"
               >
                 <FolderOpen className="h-3 w-3" />
                 Save
@@ -358,7 +358,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
                 type="button"
                 disabled={busy}
                 onClick={() => void clearPython()}
-                className="text-[10px] text-slate-500 hover:text-slate-300 font-sans"
+                className="text-[11px] text-slate-500 hover:text-slate-300 font-sans"
               >
                 Clear saved path
               </button>
@@ -369,7 +369,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
             type="button"
             disabled={busy || Boolean(status?.oliveInstalled && status?.venvExists)}
             onClick={() => void ensureVenvNow()}
-            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-electric-blue/40 text-electric-blue hover:bg-electric-blue/10 disabled:opacity-40 font-sans text-[11px]"
+            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-electric-blue/40 text-electric-blue hover:bg-electric-blue/10 disabled:opacity-40 font-sans text-xs"
             title="Create project .venv and install olive-ai now (while you configure the pipeline)"
           >
             {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Terminal className="h-3.5 w-3.5" />}
@@ -380,7 +380,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
             type="button"
             disabled={busy || !status?.venvExists || status.venvOnUserPath}
             onClick={() => void addVenvToPath()}
-            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-slate-600 text-slate-300 hover:border-electric-blue hover:text-electric-blue disabled:opacity-40 font-sans text-[11px]"
+            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-slate-600 text-slate-300 hover:border-electric-blue hover:text-electric-blue disabled:opacity-40 font-sans text-xs"
             title={
               status?.venvOnUserPath
                 ? "Already on user PATH"
@@ -391,13 +391,13 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
             {status?.venvOnUserPath ? "Already on user PATH" : "Add project .venv to user PATH"}
           </button>
 
-          <p className="text-[10px] text-slate-500 leading-relaxed font-sans">
+          <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
             Install the Olive venv while you build the recipe. No need to wait for Execute Live. The app
             always uses the project <code className="text-slate-400">.venv</code> for runs.
           </p>
 
-          {message && <p className="text-[10px] text-emerald-500 font-sans">{message}</p>}
-          {error && <p className="text-[10px] text-red-400 font-sans">{error}</p>}
+          {message && <p className="text-[11px] text-emerald-500 font-sans">{message}</p>}
+          {error && <p className="text-[11px] text-red-400 font-sans">{error}</p>}
         </div>
       )}
     </div>

@@ -52,9 +52,9 @@ src/
   lib/                     Recipe builder, pipeline validation, AI response, hooks
   server/
     routes/                ai.ts, mcp.ts, olive.ts, env.ts, system.ts, github.ts
-    services/              ai/ (14+ providers), olive/ (venv, job registry), venv/
+    services/              ai/ (20 providers), olive/ (venv, job registry), venv/
     middleware/            Error handling, rate limiting
-olive-mcp-server/          Python FastMCP stdio server (14 tools, 84 passes, 14 HW profiles)
+olive-mcp-server/          Python FastMCP stdio server (27 tools, 84 passes, 22 HW profiles)
 src-tauri/                 Tauri 2 shell (optional — app runs without it)
 ```
 
@@ -122,3 +122,45 @@ The `.mcp.json` at repo root registers Olive MCP for AI coding agents using a re
 ## React Conventions
 
 See [docs/REACT_BEST_PRACTICES.md](docs/REACT_BEST_PRACTICES.md) for the full Vercel React performance guide (40+ rules across 8 categories). Key priorities: eliminate waterfalls, avoid barrel imports, defer non-critical third-party libraries.
+
+## Kiro IDE Configuration
+
+The `.kiro/` directory at repo root contains workspace-level Kiro configuration for intelligent development assistance. This directory is committed to the repo but `.kiro/settings/mcp.json` must be created manually (see below):
+
+| Path | Purpose |
+|------|---------|
+| `.kiro/settings/mcp.json` | Workspace MCP server (Olive MCP — 27 tools for pass catalog, validation, troubleshooting) — **create manually, not committed** |
+| `.kiro/steering/olive-studio-conventions.md` | Core development rules (pnpm, test strategy, architecture patterns, code style) |
+| `.kiro/steering/pipeline-validation-rules.md` | Rules for modifying the recipe builder and validation systems (conditional: loaded when editing pipelineValidation/oliveRecipeBuilder files) |
+| `.kiro/hooks/` | Automated quality gates (lint on save, recipe validation on builder change, targeted test runs, typecheck pre-task) |
+| `.kiro/powers/olive-studio-dev/` | Knowledge Base power — developer guide with architecture reference, pass/provider addition checklists, troubleshooting |
+| `.kiro/powers/olive-mcp-tools/` | Guided MCP power — documents all 27 MCP tools and connects Kiro to the project's MCP server |
+
+### Hooks (active on session start)
+
+- **lint-on-save** — `pnpm lint:quick` on `.ts`/`.tsx` saves
+- **validate-recipe-on-builder-change** — `pnpm validate:recipe` when `oliveRecipeBuilder.ts` changes
+- **unit-tests-on-lib-change** — `pnpm test` on `src/lib/**/*.ts` saves
+- **server-tests-on-route-change** — `pnpm test:server` on `src/server/**/*.ts` saves
+- **pytest-on-mcp-change** — pytest on `olive-mcp-server/**/*.py` saves
+- **typecheck-pre-task** — `tsc --noEmit` before spec task execution
+
+### Manual Setup Required
+
+`.kiro/settings/mcp.json` cannot be written by agents (protected scope). Create it manually:
+
+```json
+{
+  "mcpServers": {
+    "olive-mcp": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["olive-mcp-server/run.py"],
+      "env": {
+        "OLIVE_MCP_RETRIEVAL_MODE": "auto",
+        "PYTHONPATH": "olive-mcp-server"
+      }
+    }
+  }
+}
+```

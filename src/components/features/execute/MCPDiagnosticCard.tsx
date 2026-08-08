@@ -159,7 +159,7 @@ function DiagnosticFeedbackButtons({
   return (
     <div className="flex flex-col gap-1 pt-1">
       <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="text-[10px] text-slate-500 shrink-0">Helpful?</span>
+        <span className="text-[11px] text-slate-500 shrink-0">Helpful?</span>
         <FeedbackThumbButton
           kind="up"
           status={status}
@@ -179,14 +179,14 @@ function DiagnosticFeedbackButtons({
           }}
         />
         {status === "submitting" && (
-          <span className="text-[10px] text-slate-500 animate-pulse">Sending…</span>
+          <span className="text-[11px] text-slate-500 animate-pulse">Sending…</span>
         )}
         {status === "success" && (
-          <span className="text-[10px] text-emerald-400/80">Thanks for the feedback</span>
+          <span className="text-[11px] text-emerald-400/80">Thanks for the feedback</span>
         )}
       </div>
       {status === "error" && errorMessage ? (
-        <p className="text-[10px] text-rose-300/90" role="alert">
+        <p className="text-[11px] text-rose-300/90" role="alert">
           {errorMessage}{" "}
           <span className="text-slate-500">You can try again.</span>
         </p>
@@ -221,7 +221,7 @@ export function MCPDiagnosticCard({
   return (
     <div className="mt-2 p-3.5 rounded-lg border border-rose-500/30 bg-rose-950/20 text-slate-200 animate-in fade-in space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 font-semibold text-rose-300 text-xs">
+        <div className="flex items-center gap-2 font-semibold text-rose-300 text-sm">
           <Wrench className="h-4 w-4 text-rose-400 shrink-0" />
           <span>Olive MCP Error Diagnostic & Fix</span>
           {diagnostic?.domain === "studio" ? (
@@ -235,30 +235,30 @@ export function MCPDiagnosticCard({
           ) : null}
         </div>
         {isDiagnosing && (
-          <span className="text-[10px] text-slate-400 animate-pulse">Diagnosing with MCP KB...</span>
+          <span className="text-[11px] text-slate-400 animate-pulse">Diagnosing with MCP KB...</span>
         )}
       </div>
 
       {isDiagnosing ? (
-        <p className="text-[11px] text-slate-400 italic">
+        <p className="text-xs text-slate-400 italic">
           Querying Olive MCP Knowledge Base for matching error patterns...
         </p>
       ) : error ? (
         <div className="space-y-2">
-          <p className="text-[11px] text-rose-300/90">{error}</p>
+          <p className="text-xs text-rose-300/90">{error}</p>
           {onRunDiagnosis && (
             <button
               type="button"
               onClick={onRunDiagnosis}
               disabled={isDiagnosing}
-              className="text-[11px] text-slate-300 hover:text-rose-300 transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              className="text-xs text-slate-300 hover:text-rose-300 transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
             >
               <Wrench className="h-3 w-3" /> Retry diagnosis
             </button>
           )}
         </div>
       ) : diagnostic ? (
-        <div className="space-y-1.5 text-xs font-sans">
+        <div className="space-y-1.5 text-sm font-sans">
           <div>
             <span className="font-semibold text-rose-300">Issue: </span>
             <span className="text-slate-200">{diagnostic.title}</span>
@@ -275,7 +275,7 @@ export function MCPDiagnosticCard({
           {Array.isArray(diagnostic.evidence) && diagnostic.evidence.length > 0 && (
             <div className="pt-1">
               <span className="font-semibold text-slate-400">Found in log: </span>
-              <ul className="mt-1 space-y-0.5 rounded border border-slate-800 bg-slate-950/60 p-2 font-mono text-[10px] text-rose-200/90">
+              <ul className="mt-1 space-y-0.5 rounded border border-slate-800 bg-slate-950/60 p-2 font-mono text-[11px] text-rose-200/90">
                 {diagnostic.evidence.map((line, i) => (
                   <li key={i} className="break-all whitespace-pre-wrap">
                     {line}
@@ -286,7 +286,7 @@ export function MCPDiagnosticCard({
           )}
 
           {diagnostic.matched_entry && (
-            <div className="pt-0.5 text-[10px] text-slate-500">
+            <div className="pt-0.5 text-[11px] text-slate-500">
               Matcher: <code className="font-mono text-slate-400">{diagnostic.matched_entry}</code>
               {diagnostic.domain ? ` · ${diagnostic.domain}` : ""}
             </div>
@@ -295,7 +295,7 @@ export function MCPDiagnosticCard({
           {diagnostic.updated_config && (
             <div className="pt-1">
               <span className="font-semibold text-electric-blue">Config Changes: </span>
-              <span className="text-slate-400 font-mono text-[10px]">
+              <span className="text-slate-400 font-mono text-[11px]">
                 {Object.entries(diagnostic.updated_config)
                   .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
                   .join(", ")}
@@ -310,7 +310,7 @@ export function MCPDiagnosticCard({
                 {diagnostic.relevant_quirks.map((quirk, i) => {
                   const isActionable = matchActionableQuirks([quirk]).length > 0;
                   return (
-                    <li key={i} className="text-[10px] text-slate-400">
+                    <li key={i} className="text-[11px] text-slate-400">
                       • {quirk}
                       {isActionable && (
                         <span className="ml-1 text-emerald-500/80 font-semibold">(auto-fixable)</span>
@@ -320,7 +320,7 @@ export function MCPDiagnosticCard({
                 })}
               </ul>
               {actionableQuirkIds.length > 0 && (
-                <p className="mt-1 text-[10px] text-slate-500">
+                <p className="mt-1 text-[11px] text-slate-500">
                   Apply Fix also applies: {actionableQuirkIds.join(", ")}
                 </p>
               )}
@@ -347,7 +347,7 @@ export function MCPDiagnosticCard({
                     : "No auto-applyable config — follow Recommended Fix manually"
                   : "Apply recommended config into the pipeline UI"
               }
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold rounded border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                 fixApplied !== ""
                   ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400"
                   : "border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50"
@@ -367,14 +367,14 @@ export function MCPDiagnosticCard({
               )}
             </button>
             {fixApplied !== "" && (
-              <p className="text-[10px] text-emerald-400/80">
+              <p className="text-[11px] text-emerald-400/80">
                 {diagnostic.matched_entry === "studio-hf-task-speech-recognition"
                   ? "Task fix acknowledged. Rebuild/refresh the recipe, then run Execute Live again."
                   : "Pipeline updated (config + quirks). Re-run Execute so the recipe uses Convert → Optimize → Quantize order and any new cache_dir / output_name values."}
               </p>
             )}
             {!canApply && (
-              <p className="text-[10px] text-slate-500">
+              <p className="text-[11px] text-slate-500">
                 No auto-applyable config or quirks for this diagnostic. Follow Recommended Fix and the log
                 evidence above.
               </p>
@@ -384,7 +384,7 @@ export function MCPDiagnosticCard({
                 type="button"
                 onClick={onRunDiagnosis}
                 disabled={isDiagnosing}
-                className="text-[11px] text-slate-500 hover:text-rose-300 transition-colors cursor-pointer disabled:opacity-50"
+                className="text-xs text-slate-500 hover:text-rose-300 transition-colors cursor-pointer disabled:opacity-50"
               >
                 Re-run diagnosis
               </button>
@@ -395,12 +395,12 @@ export function MCPDiagnosticCard({
         <button
           type="button"
           onClick={onRunDiagnosis}
-          className="text-[11px] text-slate-400 hover:text-rose-300 transition-colors cursor-pointer flex items-center gap-1.5"
+          className="text-xs text-slate-400 hover:text-rose-300 transition-colors cursor-pointer flex items-center gap-1.5"
         >
           <Wrench className="h-3 w-3" /> Run MCP Diagnosis
         </button>
       ) : (
-        <p className="text-[11px] text-slate-500">
+        <p className="text-xs text-slate-500">
           No diagnosis yet. Use Diagnose on the log panel after a failed run.
         </p>
       )}

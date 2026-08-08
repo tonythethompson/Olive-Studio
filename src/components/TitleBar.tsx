@@ -71,10 +71,10 @@ export function TitleBar() {
           height={16}
           className="h-4 w-4 rounded object-contain pointer-events-none"
         />
-        <span className="text-[11px] font-semibold text-slate-200 truncate pointer-events-none">
+        <span className="text-xs font-semibold text-slate-200 truncate pointer-events-none">
           Olive Studio
         </span>
-        <span className="text-[10px] text-slate-600 hidden sm:inline pointer-events-none">
+        <span className="text-[11px] text-slate-600 hidden sm:inline pointer-events-none">
           Recipe builder
         </span>
       </div>

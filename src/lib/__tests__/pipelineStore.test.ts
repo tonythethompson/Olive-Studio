@@ -11,7 +11,7 @@ describe("pipelineStore", () => {
   it("initializes with default state", () => {
     const { state } = usePipelineStore.getState();
     expect(state.modelSource).toBe("huggingface");
-    expect(state.hfModelId).toBe("meta-llama/Meta-Llama-3-8B");
+    expect(state.hfModelId).toBe("");
     expect(state.ihvProvider).toBe("CPUExecutionProvider");
     expect(state.passes.conversion).toBe(true);
     expect(state.passes.quantization).toBe(false);
@@ -81,7 +81,7 @@ describe("pipelineStore", () => {
     usePipelineStore.getState().setState({ hfModelId: "test/model", ihvProvider: "CUDAExecutionProvider" });
     usePipelineStore.getState().resetState();
     const { state } = usePipelineStore.getState();
-    expect(state.hfModelId).toBe("meta-llama/Meta-Llama-3-8B");
+    expect(state.hfModelId).toBe("");
     expect(state.ihvProvider).toBe("CPUExecutionProvider");
   });
 

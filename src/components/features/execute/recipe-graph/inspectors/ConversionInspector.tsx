@@ -18,10 +18,10 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
 
   return (
     <div className="space-y-4">
-      <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">Pass settings</p>
+      <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500">Pass settings</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label htmlFor="conversion-source-format" className="text-xs text-slate-400">
+          <Label htmlFor="conversion-source-format" className="text-sm text-slate-400">
             Source framework
           </Label>
           <Select
@@ -35,7 +35,7 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
                 },
               })
             }
-            className="h-9 text-xs bg-slate-950"
+            className="h-9 text-sm bg-slate-950"
           >
             <option value="pytorch">PyTorch</option>
             <option value="tensorflow">TensorFlow</option>
@@ -43,7 +43,7 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="conversion-target-format" className="text-xs text-slate-400">
+          <Label htmlFor="conversion-target-format" className="text-sm text-slate-400">
             Target format
           </Label>
           <Select
@@ -57,7 +57,7 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
                 },
               })
             }
-            className="h-9 text-xs bg-slate-950"
+            className="h-9 text-sm bg-slate-950"
           >
             <option value="onnx">ONNX</option>
             {allowedConversionFormats.includes("openvino") && <option value="openvino">OpenVINO IR</option>}
@@ -65,7 +65,7 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
         </div>
         {state.passes.conversionFormat === "onnx" && (
           <div className="space-y-1.5">
-            <Label htmlFor="conversion-onnx-opset" className="text-xs text-slate-400">
+            <Label htmlFor="conversion-onnx-opset" className="text-sm text-slate-400">
               ONNX opset
             </Label>
             <Select
@@ -74,7 +74,7 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
               onChange={(e) =>
                 setState({ passes: { ...state.passes, conversionOpset: Number(e.target.value) } })
               }
-              className="h-9 text-xs bg-slate-950"
+              className="h-9 text-sm bg-slate-950"
             >
               <option value="13">13</option>
               <option value="14">14</option>
@@ -85,7 +85,7 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
           </div>
         )}
         <div className="space-y-1.5">
-          <Label htmlFor="conversion-io-dtypes" className="text-xs text-slate-400">
+          <Label htmlFor="conversion-io-dtypes" className="text-sm text-slate-400">
             I/O dtypes
           </Label>
           <Select
@@ -94,7 +94,7 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
             onChange={(e) =>
               setState({ passes: { ...state.passes, conversionInputTargetTypes: e.target.value } })
             }
-            className="h-9 text-xs bg-slate-950"
+            className="h-9 text-sm bg-slate-950"
           >
             {modelInfo.types.map((t) => (
               <option key={t.value} value={t.value}>
@@ -102,7 +102,7 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
               </option>
             ))}
           </Select>
-          <p className="text-[10px] text-electric-blue/90 font-mono">Detected: {modelInfo.family}</p>
+          <p className="text-[11px] text-electric-blue/90 font-mono">Detected: {modelInfo.family}</p>
         </div>
       </div>
     </div>

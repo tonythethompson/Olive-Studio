@@ -542,15 +542,7 @@ describe("mergeDetectedProviders OpenVINO", () => {
 });
 
 describe("mergeDetectedProviders DirectML", () => {
-  it("adds DmlExecutionProvider only when hasDirectMl is true", () => {
-    const without = mergeDetectedProviders({
-      hasNvidiaGpu: false,
-      hasRocmGpu: false,
-      hasOpenVino: false,
-      hasDirectMl: false,
-    });
-    expect(without).not.toContain("DmlExecutionProvider");
-
+  it("adds DmlExecutionProvider when hasDirectMl is true (ORT reports it)", () => {
     const withDml = mergeDetectedProviders({
       hasNvidiaGpu: false,
       hasRocmGpu: false,
@@ -558,6 +550,36 @@ describe("mergeDetectedProviders DirectML", () => {
       hasDirectMl: true,
     });
     expect(withDml).toContain("DmlExecutionProvider");
+  });
+
+  it("does not add DmlExecutionProvider on Windows without hasDirectMl (runtime not installed)", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      hasDirectMl: false,
+      os: "win32 10.0",
+    });
+    expect(detected).not.toContain("DmlExecutionProvider");
+  });
+
+  it("does not add DmlExecutionProvider on non-Windows without hasDirectMl", () => {
+    const without = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      hasDirectMl: false,
+      os: "linux 6.8",
+    });
+    expect(without).not.toContain("DmlExecutionProvider");
+
+    const withoutOs = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      hasDirectMl: false,
+    });
+    expect(withoutOs).not.toContain("DmlExecutionProvider");
   });
 
   it("maps DmlExecutionProvider from ORT provider list without hasDirectMl", () => {
@@ -593,11 +615,12 @@ describe("mergeDetectedProviders QNN", () => {
     expect(detected).toContain("QNNExecutionProvider");
   });
 
-  it("computeQnnCompatibleHardware is Windows ARM64/x64 only", () => {
+  it("computeQnnCompatibleHardware is Windows ARM64 only (local accelerator)", () => {
     expect(
       computeQnnCompatibleHardware({ os: "win32 10.0", arch: "arm64" }),
     ).toBe(true);
-    expect(computeQnnCompatibleHardware({ os: "win32 10.0", arch: "x64" })).toBe(true);
+    // Windows x64 is preparation-only (cross-compile), not a local accelerator
+    expect(computeQnnCompatibleHardware({ os: "win32 10.0", arch: "x64" })).toBe(false);
     expect(computeQnnCompatibleHardware({ os: "linux 6.8", arch: "x64" })).toBe(false);
     expect(
       computeQnnCompatibleHardware({

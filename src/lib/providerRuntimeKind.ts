@@ -21,6 +21,7 @@ export function getProviderRuntimeKind(provider: IHVProvider): ProviderRuntimeKi
       return "exportTarget";
     case "CoreMLExecutionProvider":
     case "VitisAIExecutionProvider":
+    case "QNNExecutionProvider":
       return "platformLocal";
     case "CPUExecutionProvider":
     case "CUDAExecutionProvider":
@@ -28,7 +29,6 @@ export function getProviderRuntimeKind(provider: IHVProvider): ProviderRuntimeKi
     case "NvTensorRTRTXExecutionProvider":
     case "DmlExecutionProvider":
     case "OpenVINOExecutionProvider":
-    case "QNNExecutionProvider":
     case "ROCMExecutionProvider":
       return "local";
     default: {
@@ -67,6 +67,7 @@ export function alwaysSelectableProviders(): IHVProvider[] {
       "WasmExecutionProvider",
       "CoreMLExecutionProvider",
       "VitisAIExecutionProvider",
+      "QNNExecutionProvider",
     ] as const
   ).slice();
 }

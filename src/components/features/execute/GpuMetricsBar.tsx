@@ -17,7 +17,7 @@ export const GpuMetricsBar = memo(function GpuMetricsBar({ metrics }: GpuMetrics
   if (!metrics || metrics.gpus.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2 rounded-md border border-slate-800 bg-slate-950/60 text-[11px] font-mono">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2 rounded-md border border-slate-800 bg-slate-950/60 text-xs font-mono">
       {metrics.gpus.map((gpu) => (
         <div key={gpu.index} className="flex items-center gap-x-3 gap-y-1 flex-wrap">
           <span className="text-slate-300 flex items-center gap-1">

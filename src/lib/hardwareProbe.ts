@@ -204,6 +204,11 @@ export function computeQnnCompatibleHardware(input: {
     arch: input.arch,
   });
   if (hostMode === "out-of-scope") return false;
+  // Only claim QNN as a *local accelerator* on ARM64 (actual Snapdragon NPU).
+  // Windows x64 "preparation" mode is for cross-compile / plugin AOT only — not
+  // a local accelerator. Those users can still select QNN as a recipe target via
+  // the platformLocal / alwaysSelectable path.
+  if (hostMode === "preparation") return false;
   return true;
 }
 
@@ -284,6 +289,8 @@ export function mergeDetectedProviders(input: {
   tensorRtRtxLoadable?: boolean;
   nvidiaTensorRtFamilyCapable?: boolean;
   cudaLoadable?: boolean;
+  /** Platform OS string for DirectML Windows detection. */
+  os?: string;
 }): IHVProvider[] {
   const detected = new Set<IHVProvider>(["CPUExecutionProvider"]);
   const tensorRtOk = input.tensorRtLoadable === true;
@@ -446,16 +453,15 @@ function undetectedProviderReason(
       const toolTip =
         toolkit?.available === true
           ? `toolkit ${toolkit.version ?? "available"}` +
-            (nvidia?.cudaVersion ? ` on driver CUDA ${nvidia.cudaVersion}` : "")
+          (nvidia?.cudaVersion ? ` on driver CUDA ${nvidia.cudaVersion}` : "")
           : toolkit?.available === false
             ? "toolkit (nvcc) not installed"
             : "toolkit status unknown";
       if (!cudaEpUsable) {
-        return `NVIDIA driver detected on ${gpus.map((g) => g.name).join(", ")}; ${toolTip}. The CUDA execution provider is not registered by onnxruntime-gpu in the project .venv — install the pinned wheel with \`${pinnedOrtGpuInstallCommand()}\` (you can also click "Install onnxruntime-gpu" in the Hardware panel).${
-          toolkit?.available === false
-            ? ` CUDA toolkit is also missing; for native builds grab it from ${CUDA_DOWNLOAD_LINKS.archive}.`
-            : ""
-        }`;
+        return `NVIDIA driver detected on ${gpus.map((g) => g.name).join(", ")}; ${toolTip}. The CUDA execution provider is not registered by onnxruntime-gpu in the project .venv — install the pinned wheel with \`${pinnedOrtGpuInstallCommand()}\` (you can also click "Install onnxruntime-gpu" in the Hardware panel).${toolkit?.available === false
+          ? ` CUDA toolkit is also missing; for native builds grab it from ${CUDA_DOWNLOAD_LINKS.archive}.`
+          : ""
+          }`;
       }
       // 4. Toolkit + driver + ORT installed but the CUDA EP isn't in
       // detectedProviders — likely driver/wheel mismatch (e.g. CUDA 13

@@ -5,12 +5,28 @@
 [![pnpm](https://img.shields.io/badge/package%20manager-pnpm%2011.17.0-f69203)](https://pnpm.io)
 [![CI](https://github.com/tonythethompson/Olive-Studio/actions/workflows/ci.yml/badge.svg)](https://github.com/tonythethompson/Olive-Studio/actions/workflows/ci.yml)
 
+<p align="center">
+  <img src="docs/assets/hero.png" alt="Olive Studio recipe builder showing a quantization pipeline with graph flow, AI audit sidebar, and VRAM estimates" width="900" />
+</p>
+
 **A visual recipe builder and local runner for [Microsoft Olive](https://github.com/microsoft/Olive).**  
 Author ONNX optimization pipelines, then execute them on your hardware with live logs, dependency auto-install, and validation before the run starts.
 
-> **Local-first.** No cloud account required for optimization runs. Optional AI Copilot uses your own API keys.
+> No cloud account required for optimization runs. Optional AI Copilot uses your own API keys.
 
 [About Olive Studio](ABOUT.md) · [Microsoft Olive docs](https://microsoft.github.io/Olive/) · [Olive recipes catalog](https://github.com/microsoft/olive-recipes)
+
+---
+
+## Screenshots
+
+| Recipe catalog | Hardware detection |
+|:-:|:-:|
+| ![Recipe catalog with presets and AI audit](public/screenshots/01-recipe-catalog.png) | ![Hardware probe with VRAM estimation](public/screenshots/02-hardware-detection.png) |
+
+| Hardware VRAM & providers | Recipe graph flow |
+|:-:|:-:|
+| ![Provider cards with VRAM estimates](public/screenshots/02-hardware-vram.png) | ![Pipeline graph with AI suggestions](public/screenshots/03-recipe-graph.png) |
 
 ---
 

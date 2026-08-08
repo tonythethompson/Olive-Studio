@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Validate recipe on builder change",
+      "trigger": "PostFileSave",
+      "description": "Runs the recipe builder smoke test when the core recipe builder file changes",
+      "matcher": "oliveRecipeBuilder",
+      "action": {
+        "type": "command",
+        "command": "pnpm validate:recipe",
+        "timeout": 60
+      }
+    }
+  ]
+}

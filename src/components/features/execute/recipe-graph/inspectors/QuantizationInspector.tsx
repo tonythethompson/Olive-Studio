@@ -31,14 +31,14 @@ interface SelectRowProps {
 function SelectRow({ id, label, value, onChange, children }: SelectRowProps) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id} className="text-xs text-slate-400">
+      <Label htmlFor={id} className="text-sm text-slate-400">
         {label}
       </Label>
       <Select
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-9 text-xs bg-slate-950"
+        className="h-9 text-sm bg-slate-950"
       >
         {children}
       </Select>
@@ -68,12 +68,12 @@ interface SwitchRowProps {
 function SwitchRow({ id, label, checked, onCheckedChange, labelOn, labelOff }: SwitchRowProps) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id} className="text-xs text-slate-400">
+      <Label htmlFor={id} className="text-sm text-slate-400">
         {label}
       </Label>
       <div className="flex items-center gap-2 h-9 pt-0.5">
         <Switch id={id} aria-label={label} checked={checked} onCheckedChange={onCheckedChange} />
-        <span className="text-[11px] text-slate-500">{checked ? labelOn : labelOff}</span>
+        <span className="text-xs text-slate-500">{checked ? labelOn : labelOff}</span>
       </div>
     </div>
   );
@@ -88,7 +88,7 @@ function AdvancedDropdown({ title, children }: AdvancedDropdownProps) {
   return (
     <>
       <hr className="border-slate-800" />
-      <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">{title}</p>
+      <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500">{title}</p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">{children}</div>
     </>
   );
@@ -391,14 +391,14 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
 
   return (
     <div className="space-y-4">
-      <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">Pass settings</p>
+      <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500">Pass settings</p>
 
       {/* Presets dropdown */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <Label className="text-xs text-slate-400">Quick presets</Label>
+          <Label className="text-sm text-slate-400">Quick presets</Label>
           {aiLoading && (
-            <span className="text-[10px] text-electric-blue flex items-center gap-1">
+            <span className="text-[11px] text-electric-blue flex items-center gap-1">
               <RefreshCw className="h-3 w-3 animate-spin" />
               AI thinking…
             </span>
@@ -415,7 +415,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
                 e.target.value = "";
               }
             }}
-            className="h-9 text-xs bg-slate-950 flex-1 min-w-0"
+            className="h-9 text-sm bg-slate-950 flex-1 min-w-0"
             disabled={aiLoading}
           >
             <option value="" disabled>
@@ -505,13 +505,13 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
           />
         )}
         {importError && (
-          <div className="flex items-start gap-1.5 text-[10px] text-amber-400 mt-1">
+          <div className="flex items-start gap-1.5 text-[11px] text-amber-400 mt-1">
             <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
             <span>{importError}</span>
           </div>
         )}
         {aiError && (
-          <div className="flex items-start gap-1.5 text-[10px] text-rose-400 mt-1">
+          <div className="flex items-start gap-1.5 text-[11px] text-rose-400 mt-1">
             <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
             <span>{aiError}</span>
           </div>
@@ -537,7 +537,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
           <option value="fp16">FP16 — half precision</option>
         </SelectRow>
         <div className="space-y-1.5">
-          <Label htmlFor="quant-method" className="text-xs text-slate-400">
+          <Label htmlFor="quant-method" className="text-sm text-slate-400">
             Method
           </Label>
           <Select
@@ -548,7 +548,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
                 passes: { ...state.passes, quantMethod: e.target.value as UIState["passes"]["quantMethod"] },
               })
             }
-            className="h-9 text-xs bg-slate-950"
+            className="h-9 text-sm bg-slate-950"
           >
             {allowedQuantMethods.includes("ptq") && <option value="ptq">PTQ — post-training</option>}
             {allowedQuantMethods.includes("awq") && <option value="awq">AWQ — activation-aware</option>}
@@ -683,7 +683,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
       {/* HQQ info (OnnxHqqQuantization) */}
       {isHqq && (
         <AdvancedDropdown title="HQQ advanced settings">
-          <p className="text-[11px] text-slate-500 col-span-full -mt-2 mb-1">
+          <p className="text-xs text-slate-500 col-span-full -mt-2 mb-1">
             Uses OnnxHqqQuantization — half-quadratic quantization for ONNX MatMul weight-only 4-bit
             compression on any provider.
           </p>
@@ -693,7 +693,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
       {/* RTN info (OnnxBlockWiseRtnQuantization) */}
       {isRtn && (
         <AdvancedDropdown title="RTN settings">
-          <p className="text-[11px] text-slate-500 col-span-full -mt-2 mb-1">
+          <p className="text-xs text-slate-500 col-span-full -mt-2 mb-1">
             Uses OnnxBlockWiseRtnQuantization — block-wise round-to-nearest for ONNX MatMul/Gather weight-only
             4/8-bit quantization. Fastest setup, no calibration needed.
           </p>
@@ -703,7 +703,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
       {/* SpinQuant info */}
       {isSpinQuant && (
         <AdvancedDropdown title="SpinQuant info">
-          <p className="text-[11px] text-slate-500 col-span-full -mt-2 mb-1">
+          <p className="text-xs text-slate-500 col-span-full -mt-2 mb-1">
             Dedicated SpinQuant pass — learns orthogonal rotation matrices to eliminate outliers in
             weights/activations. Supports HuggingFace transformer PyTorch models only.
           </p>
@@ -713,7 +713,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
       {/* QuaRot info */}
       {isQuaRot && (
         <AdvancedDropdown title="QuaRot info">
-          <p className="text-[11px] text-slate-500 col-span-full -mt-2 mb-1">
+          <p className="text-xs text-slate-500 col-span-full -mt-2 mb-1">
             Dedicated QuaRot pass — applies Hadamard-domain rotations to whiten weights. Supports HuggingFace
             transformer PyTorch models only.
           </p>

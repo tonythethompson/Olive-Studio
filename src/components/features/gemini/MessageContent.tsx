@@ -10,7 +10,7 @@ export function renderMessageContent(text: string) {
       return (
         <pre
           key={i}
-          className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-[10px] font-mono text-emerald-400 my-1.5 overflow-x-auto whitespace-pre-wrap"
+          className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-[11px] font-mono text-emerald-400 my-1.5 overflow-x-auto whitespace-pre-wrap"
         >
           {lines.slice(1, -1).join("\n")}
         </pre>
@@ -32,7 +32,7 @@ export function renderMessageContent(text: string) {
           elems.push(
             <code
               key={k}
-              className="bg-slate-950 border border-slate-800 px-1 py-0.5 rounded text-[10px] font-mono text-cyan-400"
+              className="bg-slate-950 border border-slate-800 px-1 py-0.5 rounded text-[11px] font-mono text-cyan-400"
             >
               {bp.slice(1, -1)}
             </code>,
@@ -41,14 +41,14 @@ export function renderMessageContent(text: string) {
       });
       if (isBullet)
         return (
-          <div key={`${i}-${j}`} className="ml-3.5 text-xs text-slate-300 leading-relaxed my-0.5 flex gap-1">
+          <div key={`${i}-${j}`} className="ml-3.5 text-sm text-slate-300 leading-relaxed my-0.5 flex gap-1">
             <span aria-hidden="true">•</span>
             <span>{elems}</span>
           </div>
         );
       if (line.trim().startsWith("### "))
         return (
-          <h5 key={`${i}-${j}`} className="text-xs font-semibold text-electric-blue mt-2.5 mb-1">
+          <h5 key={`${i}-${j}`} className="text-sm font-semibold text-electric-blue mt-2.5 mb-1">
             {line.trim().substring(4)}
           </h5>
         );
@@ -56,13 +56,13 @@ export function renderMessageContent(text: string) {
         return (
           <h4
             key={`${i}-${j}`}
-            className="text-xs font-bold text-slate-100 mt-3 mb-1.5 pb-0.5 border-b border-slate-800/80"
+            className="text-sm font-bold text-slate-100 mt-3 mb-1.5 pb-0.5 border-b border-slate-800/80"
           >
             {line.trim().substring(3)}
           </h4>
         );
       return (
-        <p key={`${i}-${j}`} className="text-xs text-slate-300 leading-relaxed my-0.5">
+        <p key={`${i}-${j}`} className="text-sm text-slate-300 leading-relaxed my-0.5">
           {elems}
         </p>
       );

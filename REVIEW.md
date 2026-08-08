@@ -70,7 +70,7 @@ Key files: `recipePipeline.ts`, `pipelineValidation.ts` (~761), `oliveRecipeBuil
 
 ### 4. Olive MCP (Python)
 
-- Stdio FastMCP in `olive-mcp-server/` (14 tools, KB JSON, pytest).
+- Stdio FastMCP in `olive-mcp-server/` (27 tools, KB JSON, pytest).
 - Pin: `mcp<2` (2.x removes `mcp.server.fastmcp`).
 - In-app proxy is separate and currently broken (see Findings).
 

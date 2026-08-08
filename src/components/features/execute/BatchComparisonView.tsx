@@ -33,7 +33,7 @@ function StatusBadge({ status }: { status: string }) {
   const Icon = config.icon;
   return (
     <span
-      className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${config.cls}`}
+      className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border font-medium ${config.cls}`}
     >
       <Icon className="h-3 w-3" />
       {status}
@@ -95,7 +95,7 @@ export function BatchComparisonView({ records, onClose }: BatchComparisonViewPro
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-xs text-left">
+        <table className="w-full text-sm text-left">
           <thead>
             <tr className="border-b border-slate-800">
               {columns.map((col) => (
@@ -153,7 +153,7 @@ export function BatchComparisonView({ records, onClose }: BatchComparisonViewPro
         </table>
       </div>
 
-      <p className="text-[10px] text-slate-500">
+      <p className="text-[11px] text-slate-500">
         Δ Duration relative to first row (baseline). Click column headers to sort.
       </p>
     </div>

@@ -179,7 +179,7 @@ export function ModelCombobox({
           className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-slate-700 bg-slate-900 shadow-lg"
         >
           {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-xs text-slate-500">
+            <li className="px-3 py-2 text-sm text-slate-500">
               No catalog matches. Keep typing to use a freehand model id.
             </li>
           ) : (
@@ -205,19 +205,19 @@ export function ModelCombobox({
                 >
                   <span className="block truncate">{m.label}</span>
                   {m.label !== m.id && (
-                    <span className="block truncate text-[10px] text-slate-500">{m.id}</span>
+                    <span className="block truncate text-[11px] text-slate-500">{m.id}</span>
                   )}
                 </li>
               );
             })
           )}
           {!filterText && options.length > MAX_VISIBLE && (
-            <li className="px-3 py-1.5 text-[10px] text-slate-500 border-t border-slate-800">
+            <li className="px-3 py-1.5 text-[11px] text-slate-500 border-t border-slate-800">
               Showing first {MAX_VISIBLE} models. Type to search the full catalog.
             </li>
           )}
           {filterText && options.length > MAX_VISIBLE && filtered.length === MAX_VISIBLE && (
-            <li className="px-3 py-1.5 text-[10px] text-slate-500 border-t border-slate-800">
+            <li className="px-3 py-1.5 text-[11px] text-slate-500 border-t border-slate-800">
               Showing first {MAX_VISIBLE} matches. Type to narrow further.
             </li>
           )}
@@ -225,7 +225,7 @@ export function ModelCombobox({
       )}
 
       {!open && !modelsLoading && membershipLabel && (
-        <p className="text-[10px] leading-snug text-amber-400/90" role="status">
+        <p className="text-[11px] leading-snug text-amber-400/90" role="status">
           {membershipLabel}
         </p>
       )}

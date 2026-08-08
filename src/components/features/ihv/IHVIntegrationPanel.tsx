@@ -360,12 +360,12 @@ export function IHVIntegrationPanel({
                 <div className="flex items-center gap-2">
                   <HardDrive className="h-4 w-4 text-electric-blue shrink-0" />
                   <h3 className="text-sm font-medium text-slate-200">Detected on this machine</h3>
-                  {probeLoading && <span className="text-[10px] font-mono text-slate-500">Scanning…</span>}
+                  {probeLoading && <span className="text-[11px] font-mono text-slate-500">Scanning…</span>}
                 </div>
                 {probeError ? (
-                  <p className="text-xs text-rose-400 break-all">{probeError}</p>
+                  <p className="text-sm text-rose-400 break-all">{probeError}</p>
                 ) : hardwareProbe ? (
-                  <div className="space-y-1.5 text-xs text-slate-400">
+                  <div className="space-y-1.5 text-sm text-slate-400">
                     <p>
                       <span className="text-slate-500">CPU:</span>{" "}
                       <span className="text-slate-200">{hardwareProbe.platform.cpuModel}</span>
@@ -430,12 +430,12 @@ export function IHVIntegrationPanel({
                     {hardwareProbe.onnxRuntimeProviders?.length ? (
                       <p>
                         <span className="text-slate-500">ONNX Runtime EPs:</span>{" "}
-                        <span className="font-mono text-[11px] text-emerald-400">
+                        <span className="font-mono text-xs text-emerald-400">
                           {hardwareProbe.onnxRuntimeProviders.join(", ")}
                         </span>
                       </p>
                     ) : null}
-                    <p className="text-[11px] text-slate-500 pt-1">
+                    <p className="text-xs text-slate-500 pt-1">
                       Recommended target:{" "}
                       <span className="text-electric-blue font-semibold">
                         {providers.find((p) => p.id === hardwareProbe.recommendedProvider)?.name ??
@@ -453,7 +453,7 @@ export function IHVIntegrationPanel({
                               ) ?? { ihvProvider: hardwareProbe.recommendedProvider },
                             )
                           }
-                          className="ml-2 text-xs text-electric-blue hover:text-white cursor-pointer"
+                          className="ml-2 text-sm text-electric-blue hover:text-white cursor-pointer"
                         >
                           Apply
                         </button>
@@ -461,14 +461,14 @@ export function IHVIntegrationPanel({
                     </p>
                   </div>
                 ) : !probeLoading ? (
-                  <p className="text-xs text-slate-500">No hardware data yet.</p>
+                  <p className="text-sm text-slate-500">No hardware data yet.</p>
                 ) : null}
               </div>
               <button
                 type="button"
                 onClick={() => void runHardwareProbe(true)}
                 disabled={probeLoading}
-                className="flex items-center gap-1.5 self-start rounded border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 hover:border-slate-600 hover:text-white disabled:opacity-50 cursor-pointer shrink-0"
+                className="flex items-center gap-1.5 self-start rounded border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-300 hover:border-slate-600 hover:text-white disabled:opacity-50 cursor-pointer shrink-0"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${probeLoading ? "animate-spin" : ""}`} />
                 Re-scan hardware
@@ -506,7 +506,7 @@ export function IHVIntegrationPanel({
                     >
                       Pipeline conflict ({selectedConflicts.length})
                     </h4>
-                    <p className="text-[11px] text-slate-400 leading-normal">
+                    <p className="text-xs text-slate-400 leading-normal">
                       The execution passes currently configured in your recipe are incompatible with the
                       selected
                       <span className="text-white font-semibold">
@@ -524,7 +524,7 @@ export function IHVIntegrationPanel({
                       passes: applyProviderConflictAutofixes(state.ihvProvider, state.passes),
                     });
                   }}
-                  className={`text-xs px-3 py-1.5 rounded border transition-all cursor-pointer flex items-center gap-1.5 hover:text-white ${
+                  className={`text-sm px-3 py-1.5 rounded border transition-all cursor-pointer flex items-center gap-1.5 hover:text-white ${
                     hasSelectedCritical
                       ? "border-rose-500/30 bg-rose-950/20 text-rose-400 hover:bg-rose-500/20"
                       : "border-amber-500/30 bg-amber-950/20 text-amber-400 hover:bg-amber-500/20"
@@ -536,7 +536,7 @@ export function IHVIntegrationPanel({
             </div>
           )}
 
-          <p className="text-[11px] text-slate-500 mb-3">
+          <p className="text-xs text-slate-500 mb-3">
             {probeLoading
               ? "Detecting local execution providers…"
               : `Showing all ${selectableProviders.length} providers. ${locallyDetectedCount} detected locally — undetected targets are still selectable for cross-compile / remote builds.`}
@@ -556,7 +556,7 @@ export function IHVIntegrationPanel({
                     { label: "Export & platform targets", items: exportAndPlatformTargets },
                   ] as const).map((section) => (
                     <div key={section.label} className="space-y-3">
-                      <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">
+                      <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500">
                         {section.label}
                       </p>
                       <div className="grid gap-4 min-w-0 w-full">
@@ -580,13 +580,13 @@ export function IHVIntegrationPanel({
                     <HardDrive className="h-4 w-4 text-electric-blue" />
                     Hybrid memory offload
                   </p>
-                  <p className="text-xs text-slate-500 leading-relaxed max-w-xl">
+                  <p className="text-sm text-slate-500 leading-relaxed max-w-xl">
                     Spreads <span className="font-mono text-slate-400">{state.hfModelId}</span> across GPU
                     VRAM and system RAM during optimization (
                     <code className="text-slate-400">device_map: auto</code>).
                   </p>
                   {!isMemoryOffloadAvailable(state) && (
-                    <p className="text-[11px] text-amber-500/90 leading-relaxed">
+                    <p className="text-xs text-amber-500/90 leading-relaxed">
                       Select <strong className="font-semibold">NVIDIA CUDA</strong>,{" "}
                       <strong className="font-semibold">TensorRT RTX</strong>,{" "}
                       <strong className="font-semibold">TensorRT</strong>, or{" "}
@@ -625,7 +625,7 @@ export function IHVIntegrationPanel({
           )}
 
           {state.modelSource !== "huggingface" && isGpuProvider(state.ihvProvider) && (
-            <p className="mt-4 text-[11px] text-slate-600 px-1">
+            <p className="mt-4 text-xs text-slate-600 px-1">
               Hybrid memory offload needs a Hugging Face model in step 01 (Local/Azure sources are not
               supported).
             </p>
@@ -645,7 +645,7 @@ export function IHVIntegrationPanel({
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div>
                     <p className="text-sm font-medium text-slate-200">PyTorch CUDA Version</p>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-sm text-slate-500 mt-0.5">
                       {hardwareProbe?.nvidia?.cudaTag ? (
                         <>
                           Probed: CUDA {hardwareProbe.nvidia.cudaVersion} (
@@ -695,7 +695,7 @@ export function IHVIntegrationPanel({
                     <Activity className="h-4.5 w-4.5 text-electric-blue shrink-0" />
                     Pass ↔ Provider Compatibility Matrix
                   </h3>
-                  <p className="text-xs text-slate-500 mt-1 max-w-2xl">
+                  <p className="text-sm text-slate-500 mt-1 max-w-2xl">
                     Rule-based pass compatibility for each execution provider. Green cells mean the pass is
                     allowed on that backend; hardware availability is shown separately in the probe banner and
                     column headers.
@@ -707,7 +707,7 @@ export function IHVIntegrationPanel({
                   <button
                     type="button"
                     onClick={() => setActiveTab("matrix")}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap cursor-pointer transition-all ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap cursor-pointer transition-all ${
                       activeTab === "matrix"
                         ? "bg-electric-blue text-white font-bold"
                         : "text-slate-400 hover:text-slate-205"
@@ -719,7 +719,7 @@ export function IHVIntegrationPanel({
                   <button
                     type="button"
                     onClick={() => setActiveTab("cards")}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap cursor-pointer transition-all ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap cursor-pointer transition-all ${
                       activeTab === "cards"
                         ? "bg-electric-blue text-white font-bold"
                         : "text-slate-400 hover:text-slate-205"
@@ -741,13 +741,13 @@ export function IHVIntegrationPanel({
                     placeholder="Search compiler passes..."
                     value={passSearch}
                     onChange={(e) => setPassSearch(e.target.value)}
-                    className="w-full h-9 bg-slate-950 border border-slate-800/80 rounded-lg pl-9 pr-4 text-xs font-medium text-slate-200 placeholder-slate-500 outline-none focus:border-electric-blue/50 focus:ring-1 focus:ring-electric-blue/30 transition-all font-sans"
+                    className="w-full h-9 bg-slate-950 border border-slate-800/80 rounded-lg pl-9 pr-4 text-sm font-medium text-slate-200 placeholder-slate-500 outline-none focus:border-electric-blue/50 focus:ring-1 focus:ring-electric-blue/30 transition-all font-sans"
                   />
                   {passSearch && (
                     <button
                       type="button"
                       onClick={() => setPassSearch("")}
-                      className="absolute right-2.5 top-2 text-[10px] bg-slate-850 hover:bg-slate-700 text-slate-400 p-1 px-1.5 rounded cursor-pointer"
+                      className="absolute right-2.5 top-2 text-[11px] bg-slate-850 hover:bg-slate-700 text-slate-400 p-1 px-1.5 rounded cursor-pointer"
                     >
                       Clear
                     </button>
@@ -756,7 +756,7 @@ export function IHVIntegrationPanel({
 
                 {/* Categories badges filter */}
                 <div className="md:col-span-7 flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] font-mono text-slate-500 uppercase font-black tracking-wider mr-1">
+                  <span className="text-[11px] font-mono text-slate-500 uppercase font-black tracking-wider mr-1">
                     Filter:
                   </span>
                   {(["All", "Conversion", "Quantization", "Compression", "PEFT"] as const).map((cat) => (
@@ -784,7 +784,7 @@ export function IHVIntegrationPanel({
                 <p className="text-sm font-semibold text-slate-350">
                   No optimization passes match your filter criteria
                 </p>
-                <p className="text-xs text-slate-505 mt-1 max-w-md mx-auto">
+                <p className="text-sm text-slate-505 mt-1 max-w-md mx-auto">
                   Try clearing your search query or choosing "All Passes" to display the full compatibility
                   matrix.
                 </p>
@@ -795,7 +795,7 @@ export function IHVIntegrationPanel({
                       setPassSearch("");
                       setSelectedCategory("All");
                     }}
-                    className="text-xs bg-electric-blue hover:bg-electric-blue-dark text-white font-bold p-2 px-4 rounded-lg cursor-pointer"
+                    className="text-sm bg-electric-blue hover:bg-electric-blue-dark text-white font-bold p-2 px-4 rounded-lg cursor-pointer"
                   >
                     Reset Active Filters
                   </button>
@@ -833,24 +833,24 @@ export function IHVIntegrationPanel({
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="flag-use-fp16">Use fp16</Label>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-sm text-slate-500">
                         Enable Tensor Core math. Always on for this target.
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono text-slate-500">Always on</span>
+                      <span className="text-[11px] font-mono text-slate-500">Always on</span>
                       <Switch id="flag-use-fp16" aria-label="Use fp16 (always on)" checked disabled />
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="flag-trt-graph-opts">Enable TensorRT Graph Optimizations</Label>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-sm text-slate-500">
                         Build TensorRT engines dynamically. Always on for this target.
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono text-slate-500">Always on</span>
+                      <span className="text-[11px] font-mono text-slate-500">Always on</span>
                       <Switch
                         id="flag-trt-graph-opts"
                         aria-label="Enable TensorRT Graph Optimizations (always on)"
@@ -865,7 +865,7 @@ export function IHVIntegrationPanel({
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="openvino-target-device">Target Device</Label>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-sm text-slate-500">
                         OpenVINO silicon target (CPU, Intel GPU, or NPU)
                       </p>
                     </div>

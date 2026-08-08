@@ -254,7 +254,7 @@ export function ReportIssueModal({
         <CardContent className="flex-1 overflow-y-auto space-y-5">
           {/* Category dropdown */}
           <div className="space-y-1.5">
-            <Label htmlFor="report-category" className="text-xs font-semibold text-slate-300">
+            <Label htmlFor="report-category" className="text-sm font-semibold text-slate-300">
               Category
             </Label>
             <div className="relative">
@@ -276,7 +276,7 @@ export function ReportIssueModal({
 
           {/* Severity dropdown */}
           <div className="space-y-1.5">
-            <Label htmlFor="report-severity" className="text-xs font-semibold text-slate-300">
+            <Label htmlFor="report-severity" className="text-sm font-semibold text-slate-300">
               Severity
             </Label>
             <div className="relative">
@@ -298,7 +298,7 @@ export function ReportIssueModal({
 
           {/* Area dropdown */}
           <div className="space-y-1.5">
-            <Label htmlFor="report-area" className="text-xs font-semibold text-slate-300">
+            <Label htmlFor="report-area" className="text-sm font-semibold text-slate-300">
               Area
             </Label>
             <div className="relative">
@@ -320,7 +320,7 @@ export function ReportIssueModal({
 
           {/* Description textarea */}
           <div className="space-y-1.5">
-            <Label htmlFor="report-description" className="text-xs font-semibold text-slate-300">
+            <Label htmlFor="report-description" className="text-sm font-semibold text-slate-300">
               Description <span className="text-rose-400">*</span>
             </Label>
             <textarea
@@ -335,7 +335,7 @@ export function ReportIssueModal({
 
           {/* Telemetry checkboxes */}
           <div className="space-y-2">
-            <Label className="text-xs font-semibold text-slate-300">
+            <Label className="text-sm font-semibold text-slate-300">
               Include Telemetry <span className="text-slate-500 font-normal">(optional, helps debug)</span>
             </Label>
             <div className="space-y-2">
@@ -357,7 +357,7 @@ export function ReportIssueModal({
                   />
                   <div className="min-w-0">
                     <span className="text-sm text-slate-200 font-medium">{opt.label}</span>
-                    <p className="text-[11px] text-slate-500 leading-relaxed">{opt.description}</p>
+                    <p className="text-xs text-slate-500 leading-relaxed">{opt.description}</p>
                   </div>
                 </label>
               ))}
@@ -370,13 +370,13 @@ export function ReportIssueModal({
               <button
                 type="button"
                 onClick={() => setShowPreview(!showPreview)}
-                className="flex items-center gap-1.5 text-xs text-electric-blue hover:text-electric-blue/80 transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 text-sm text-electric-blue hover:text-electric-blue/80 transition-colors cursor-pointer"
               >
                 <AlertTriangle className="h-3 w-3" />
                 {showPreview ? "Hide" : "Preview"} telemetry data
               </button>
               {showPreview && (
-                <div className="bg-slate-950 border border-slate-800 rounded-md p-3 text-xs font-mono text-slate-400 max-h-40 overflow-y-auto">
+                <div className="bg-slate-950 border border-slate-800 rounded-md p-3 text-sm font-mono text-slate-400 max-h-40 overflow-y-auto">
                   {Array.from(selectedTelemetry).map((key) => {
                     const telemetry = collectTelemetry([key], { state, hardwareProbe, executionLogs });
                     const value = telemetry[key] ?? "N/A";
@@ -398,10 +398,10 @@ export function ReportIssueModal({
             <div className="flex items-start gap-2 p-3 rounded-md border border-amber-500/30 bg-amber-500/5">
               <Repeat className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-xs font-semibold text-amber-300">
+                <p className="text-sm font-semibold text-amber-300">
                   This error has occurred {frequencyInfo.count} times
                 </p>
-                <p className="text-[11px] text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-400 mt-0.5">
                   {frequencyInfo.frequencyLabel}
                 </p>
               </div>
@@ -409,7 +409,7 @@ export function ReportIssueModal({
           )}
 
           {/* Privacy notice */}
-          <p className="text-[10px] text-slate-600 leading-relaxed">
+          <p className="text-[11px] text-slate-600 leading-relaxed">
             Sensitive data (tokens, API keys, file paths) is automatically redacted before inclusion.
             Telemetry is only sent if you choose to include it.
           </p>
@@ -418,13 +418,13 @@ export function ReportIssueModal({
         {/* Footer with actions */}
         <div className="p-4 border-t border-slate-800 space-y-2">
           {urlExceededBudget && (
-            <p className="text-[10px] text-amber-400/90 leading-relaxed">
+            <p className="text-[11px] text-amber-400/90 leading-relaxed">
               Report is too large for a prefilled GitHub URL. Opening GitHub will copy the full report
               to your clipboard so you can paste it into the issue body.
             </p>
           )}
           <div className="flex items-center justify-between gap-3">
-          <Button variant="outline" onClick={onClose} className="text-xs h-9">
+          <Button variant="outline" onClick={onClose} className="text-sm h-9">
             Cancel
           </Button>
           <div className="flex items-center gap-2">
@@ -432,7 +432,7 @@ export function ReportIssueModal({
               variant="outline"
               onClick={handleCopy}
               disabled={!description.trim()}
-              className="text-xs h-9 border-slate-700 text-slate-300 hover:border-slate-500"
+              className="text-sm h-9 border-slate-700 text-slate-300 hover:border-slate-500"
             >
               {copied ? (
                 <>
@@ -447,7 +447,7 @@ export function ReportIssueModal({
             <Button
               onClick={handleOpenGithub}
               disabled={!description.trim()}
-              className="text-xs h-9 bg-electric-blue hover:bg-electric-blue/90 text-slate-950"
+              className="text-sm h-9 bg-electric-blue hover:bg-electric-blue/90 text-slate-950"
             >
               <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Open GitHub Issue
             </Button>

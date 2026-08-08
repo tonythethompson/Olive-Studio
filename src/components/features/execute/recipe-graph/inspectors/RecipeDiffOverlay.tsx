@@ -27,7 +27,7 @@ function DiffLineRow({ line }: { line: DiffLine }) {
   const prefix = line.kind === "added" ? "+" : line.kind === "removed" ? "−" : " ";
 
   return (
-    <pre className={`${bg} ${textColor} px-2 py-px text-[10px] font-mono leading-4 whitespace-pre`}>
+    <pre className={`${bg} ${textColor} px-2 py-px text-[11px] font-mono leading-4 whitespace-pre`}>
       <span className="select-none w-4 inline-block shrink-0">{prefix}</span>
       {line.line}
     </pre>
@@ -99,7 +99,7 @@ export function RecipeDiffOverlay({ state }: DiffOverlayProps) {
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-900/80">
         <div className="flex items-center gap-2">
           <Code2 className="h-3.5 w-3.5 text-electric-blue" />
-          <span className="text-[10px] font-mono font-semibold text-slate-300">Recipe diff</span>
+          <span className="text-[11px] font-mono font-semibold text-slate-300">Recipe diff</span>
           <span className="text-[9px] font-mono text-slate-600">Quantization pass config changed</span>
         </div>
         <button

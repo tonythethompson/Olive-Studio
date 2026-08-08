@@ -63,7 +63,7 @@ export function HardwareCompatibilityMatrix({
             <thead>
               <tr className="border-b border-slate-800/80 bg-slate-900/30">
                 {/* Header Cell 1 */}
-                <th className="p-2 px-3 text-[10px] font-mono font-semibold tracking-wider text-slate-400 w-[200px]">
+                <th className="p-2 px-3 text-[11px] font-mono font-semibold tracking-wider text-slate-400 w-[200px]">
                   PASS
                 </th>
 
@@ -110,7 +110,7 @@ export function HardwareCompatibilityMatrix({
                             <HIcon className="h-3 w-3" />
                           </div>
                           <span
-                            className={`text-[10px] font-mono font-semibold leading-none text-center ${
+                            className={`text-[11px] font-mono font-semibold leading-none text-center ${
                               isSelectedProvider
                                 ? "text-electric-blue"
                                 : detectedLocally
@@ -181,7 +181,7 @@ export function HardwareCompatibilityMatrix({
                         <p className="text-sm font-semibold text-slate-100 leading-snug pr-2">
                           {v.name}
                         </p>
-                        <p className="text-xs text-slate-400 leading-relaxed pr-2">{v.description}</p>
+                        <p className="text-sm text-slate-400 leading-relaxed pr-2">{v.description}</p>
                       </div>
                     </td>
 
@@ -308,46 +308,46 @@ export function HardwareCompatibilityMatrix({
                                   <p className="text-[11.5px] font-mono font-bold text-electric-blue uppercase tracking-wide">
                                     {v.name}
                                   </p>
-                                  <p className="text-slate-400 text-xs leading-relaxed">
+                                  <p className="text-slate-400 text-sm leading-relaxed">
                                     {comp.reason}
                                   </p>
                                 </div>
 
                                 {/* Estimated heuristics — not measured on this machine */}
                                 <div className="grid grid-cols-3 gap-1.5 border-t border-slate-900 pt-3">
-                                  <div className="text-[10px] bg-slate-900/65 p-2 rounded-lg border border-slate-900 text-center font-mono">
+                                  <div className="text-[11px] bg-slate-900/65 p-2 rounded-lg border border-slate-900 text-center font-mono">
                                     <span className="text-[8.5px] text-slate-500 block uppercase font-bold tracking-tight mb-1">
                                       Est. speed
                                     </span>
                                     <span
-                                      className={`text-xs font-black block ${comp.status === "supported" ? "text-emerald-400" : "text-slate-400"}`}
+                                      className={`text-sm font-black block ${comp.status === "supported" ? "text-emerald-400" : "text-slate-400"}`}
                                     >
                                       {comp.speedup}
                                     </span>
                                   </div>
-                                  <div className="text-[10px] bg-slate-900/65 p-2 rounded-lg border border-slate-900 text-center font-mono">
+                                  <div className="text-[11px] bg-slate-900/65 p-2 rounded-lg border border-slate-900 text-center font-mono">
                                     <span className="text-[8.5px] text-slate-500 block uppercase font-bold tracking-tight mb-1">
                                       Est. VRAM
                                     </span>
                                     <span
-                                      className={`text-xs font-black block ${comp.status === "supported" ? "text-emerald-400" : "text-slate-400"}`}
+                                      className={`text-sm font-black block ${comp.status === "supported" ? "text-emerald-400" : "text-slate-400"}`}
                                     >
                                       {comp.vram}
                                     </span>
                                   </div>
-                                  <div className="text-[10px] bg-slate-900/65 p-2 rounded-lg border border-slate-900 text-center font-mono">
+                                  <div className="text-[11px] bg-slate-900/65 p-2 rounded-lg border border-slate-900 text-center font-mono">
                                     <span className="text-[8.5px] text-slate-500 block uppercase font-bold tracking-tight mb-1">
                                       Heuristic
                                     </span>
                                     <span
-                                      className={`text-xs font-black block ${comp.status === "supported" ? "text-electric-blue" : "text-slate-400"}`}
+                                      className={`text-sm font-black block ${comp.status === "supported" ? "text-electric-blue" : "text-slate-400"}`}
                                     >
                                       {comp.efficiency}
                                     </span>
                                   </div>
                                 </div>
 
-                                <div className="text-[10px] text-slate-500 font-sans border-t border-slate-900 pt-2.5 leading-snug">
+                                <div className="text-[11px] text-slate-500 font-sans border-t border-slate-900 pt-2.5 leading-snug">
                                   {comp.status === "unsupported"
                                     ? `${v.name} is completely incompatible with the target instruction architecture.`
                                     : isSelectedProvider
@@ -368,9 +368,9 @@ export function HardwareCompatibilityMatrix({
         </div>
 
         {/* Matrix Footer Legend */}
-        <div className="flex flex-wrap items-center justify-between gap-4 p-4 border-t border-slate-900 bg-slate-900/20 text-[11px] text-slate-400">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 border-t border-slate-900 bg-slate-900/20 text-xs text-slate-400">
           <div className="flex items-center gap-4 flex-wrap">
-            <span className="text-xs text-slate-500">Legend</span>
+            <span className="text-sm text-slate-500">Legend</span>
             <span className="flex items-center gap-1.5 font-sans">
               <span className="h-3.5 w-3.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400">
                 <Check className="h-2 w-2" />

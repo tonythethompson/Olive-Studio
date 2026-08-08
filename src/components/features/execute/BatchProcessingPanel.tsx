@@ -442,7 +442,7 @@ function BatchJobList({
       <div className="text-center py-12 border border-dashed border-slate-800 rounded-xl bg-slate-950/20 text-slate-500">
         <Layers className="h-10 w-10 mx-auto mb-3 opacity-30 text-slate-400" />
         <h5 className="font-semibold text-slate-400 mb-1">Queue Empty</h5>
-        <p className="text-xs text-slate-500 max-w-sm mx-auto">
+        <p className="text-sm text-slate-500 max-w-sm mx-auto">
           Configure your source models and trigger passes to queue jobs or add a custom sequence
           manually.
         </p>
@@ -518,7 +518,7 @@ function BatchJobCard({
               {job.name}
             </h4>
             <span
-              className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full font-bold ${
+              className={`text-[11px] uppercase tracking-wider px-1.5 py-0.5 rounded-full font-bold ${
                 job.status === "completed"
                   ? "bg-emerald-500/10 text-emerald-400"
                   : job.status === "running"
@@ -530,7 +530,7 @@ function BatchJobCard({
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-1">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500 mt-1">
             <span className="flex items-center gap-1 font-mono text-slate-450">
               <Database className="h-3 w-3" /> {job.modelIdentifier.split("/").pop()}
             </span>
@@ -544,7 +544,7 @@ function BatchJobCard({
             {job.passes.map((p, idx) => (
               <span
                 key={idx}
-                className="text-[10px] font-mono bg-slate-950 px-1.5 py-0.5 rounded border border-slate-850 text-slate-400"
+                className="text-[11px] font-mono bg-slate-950 px-1.5 py-0.5 rounded border border-slate-850 text-slate-400"
               >
                 {p}
               </span>
@@ -558,7 +558,7 @@ function BatchJobCard({
           <div className="flex flex-col items-end gap-1.5 w-24">
             {job.progress >= 0 ? (
               <>
-                <span className="text-[10px] font-mono text-electric-blue">
+                <span className="text-[11px] font-mono text-electric-blue">
                   {job.progress}%
                 </span>
                 <div className="h-1 w-full bg-slate-950 rounded-full overflow-hidden">
@@ -570,7 +570,7 @@ function BatchJobCard({
               </>
             ) : (
               <>
-                <span className="text-[10px] font-mono text-electric-blue">running…</span>
+                <span className="text-[11px] font-mono text-electric-blue">running…</span>
                 <div className="h-1 w-full bg-slate-950 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-electric-blue animate-pulse"
@@ -583,8 +583,8 @@ function BatchJobCard({
         )}
 
         {job.status === "completed" && job.metrics && (
-          <div className="text-right text-xs bg-emerald-500/5 px-2.5 py-1.5 rounded-md border border-emerald-500/10">
-            <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider font-mono">
+          <div className="text-right text-sm bg-emerald-500/5 px-2.5 py-1.5 rounded-md border border-emerald-500/10">
+            <span className="text-slate-500 block text-[11px] uppercase font-bold tracking-wider font-mono">
               LATENCY
             </span>
             <span className="font-semibold text-emerald-400 font-mono">
@@ -865,7 +865,7 @@ export function BatchProcessingPanel({
             badge={
               <Button
                 variant="default"
-                className="h-8 text-xs bg-electric-blue text-white shrink-0"
+                className="h-8 text-sm bg-electric-blue text-white shrink-0"
                 onClick={handleToggleAddForm}
               >
                 <Plus className="h-4 w-4 mr-1" /> Custom Job
@@ -875,7 +875,7 @@ export function BatchProcessingPanel({
 
           <CardContent className="space-y-4">
             {/* Info Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl border border-slate-800 bg-slate-900/40 text-xs font-mono">
+            <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl border border-slate-800 bg-slate-900/40 text-sm font-mono">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full bg-slate-500" /> {counts.queued} Queued
@@ -891,7 +891,7 @@ export function BatchProcessingPanel({
               <div className="flex items-center gap-2">
                 <Button
                   variant={isProcessing ? "outline" : "default"}
-                  className="h-8 text-xs font-semibold px-4"
+                  className="h-8 text-sm font-semibold px-4"
                   onClick={handleStartQueue}
                   disabled={counts.queued === 0 && counts.running === 0 && !isProcessing}
                 >
@@ -926,7 +926,7 @@ export function BatchProcessingPanel({
                   </h4>
                   <button
                     type="button"
-                    className="text-slate-500 hover:text-slate-300 text-xs cursor-pointer"
+                    className="text-slate-500 hover:text-slate-300 text-sm cursor-pointer"
                     onClick={handleCancelAddJob}
                   >
                     Cancel
@@ -982,11 +982,11 @@ export function BatchProcessingPanel({
 
                 {/* Active Passes for manual additions */}
                 <fieldset className="space-y-2 border-t border-slate-900 pt-4 border-x-0 border-b-0 p-0 m-0 min-w-0">
-                  <legend className="text-xs text-slate-400 uppercase tracking-wider px-0">
+                  <legend className="text-sm text-slate-400 uppercase tracking-wider px-0">
                     Pass Pipeline Elements
                   </legend>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <label className="flex items-center gap-2 p-2.5 rounded bg-slate-900 border border-slate-800 text-xs text-slate-300 cursor-pointer hover:border-slate-700">
+                    <label className="flex items-center gap-2 p-2.5 rounded bg-slate-900 border border-slate-800 text-sm text-slate-300 cursor-pointer hover:border-slate-700">
                       <input
                         type="checkbox"
                         checked={passConv}
@@ -995,7 +995,7 @@ export function BatchProcessingPanel({
                       />
                       <span>Conversion</span>
                     </label>
-                    <label className="flex items-center gap-2 p-2.5 rounded bg-slate-900 border border-slate-800 text-xs text-slate-300 cursor-pointer hover:border-slate-700">
+                    <label className="flex items-center gap-2 p-2.5 rounded bg-slate-900 border border-slate-800 text-sm text-slate-300 cursor-pointer hover:border-slate-700">
                       <input
                         type="checkbox"
                         checked={passQuant}
@@ -1004,7 +1004,7 @@ export function BatchProcessingPanel({
                       />
                       <span>Quantization</span>
                     </label>
-                    <label className="flex items-center gap-2 p-2.5 rounded bg-slate-900 border border-slate-800 text-xs text-slate-300 cursor-pointer hover:border-slate-700">
+                    <label className="flex items-center gap-2 p-2.5 rounded bg-slate-900 border border-slate-800 text-sm text-slate-300 cursor-pointer hover:border-slate-700">
                       <input
                         type="checkbox"
                         checked={passPruning}
@@ -1013,7 +1013,7 @@ export function BatchProcessingPanel({
                       />
                       <span>Weight Pruning</span>
                     </label>
-                    <label className="flex items-center gap-2 p-2.5 rounded bg-slate-900 border border-slate-800 text-xs text-slate-300 cursor-pointer hover:border-slate-700">
+                    <label className="flex items-center gap-2 p-2.5 rounded bg-slate-900 border border-slate-800 text-sm text-slate-300 cursor-pointer hover:border-slate-700">
                       <input
                         type="checkbox"
                         checked={passTransformer}
@@ -1028,7 +1028,7 @@ export function BatchProcessingPanel({
                 <div className="flex justify-end pt-2">
                   <Button
                     variant="default"
-                    className="px-6 text-xs bg-electric-blue text-white"
+                    className="px-6 text-sm bg-electric-blue text-white"
                     disabled={!newModelName.trim()}
                     onClick={handleAddCustom}
                   >
@@ -1063,22 +1063,22 @@ export function BatchProcessingPanel({
           <CardContent className="flex-1 overflow-y-auto space-y-5 flex flex-col p-6 pt-0">
             {selectedJob ? (
               <>
-                <div className="space-y-3.5 bg-slate-950/40 p-4 border border-slate-900 rounded-xl text-xs">
+                <div className="space-y-3.5 bg-slate-950/40 p-4 border border-slate-900 rounded-xl text-sm">
                   <div className="flex justify-between items-center text-slate-450 border-b border-slate-900 pb-2">
                     <span className="font-semibold text-slate-300">Run Configuration Overview</span>
                   </div>
                   <div className="grid grid-cols-2 gap-3 font-mono">
                     <div>
-                      <span className="text-slate-500 text-[10px] block uppercase font-bold">Model Base</span>
-                      <span className="text-slate-350 text-xs truncate block mt-0.5">
+                      <span className="text-slate-500 text-[11px] block uppercase font-bold">Model Base</span>
+                      <span className="text-slate-350 text-sm truncate block mt-0.5">
                         {selectedJob.modelIdentifier}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-500 text-[10px] block uppercase font-bold">
+                      <span className="text-slate-500 text-[11px] block uppercase font-bold">
                         Provider target
                       </span>
-                      <span className="text-slate-350 text-xs truncate block mt-0.5">
+                      <span className="text-slate-350 text-sm truncate block mt-0.5">
                         {selectedJob.provider}
                       </span>
                     </div>
@@ -1088,7 +1088,7 @@ export function BatchProcessingPanel({
                 {selectedJob.status === "completed" && selectedJob.metrics ? (
                   <div className="grid grid-cols-2 gap-2.5 animate-in fade-in">
                     <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
-                      <span className="text-slate-500 text-[10px] block uppercase font-bold font-mono">
+                      <span className="text-slate-500 text-[11px] block uppercase font-bold font-mono">
                         Latency
                       </span>
                       <span className="text-base font-bold text-slate-200 block mt-0.5 font-mono">
@@ -1096,7 +1096,7 @@ export function BatchProcessingPanel({
                       </span>
                     </div>
                     <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
-                      <span className="text-slate-500 text-[10px] block uppercase font-bold font-mono">
+                      <span className="text-slate-500 text-[11px] block uppercase font-bold font-mono">
                         Throughput
                       </span>
                       <span className="text-base font-bold text-emerald-400 block mt-0.5 font-mono">
@@ -1104,7 +1104,7 @@ export function BatchProcessingPanel({
                       </span>
                     </div>
                     <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
-                      <span className="text-slate-500 text-[10px] block uppercase font-bold font-mono font-mono">
+                      <span className="text-slate-500 text-[11px] block uppercase font-bold font-mono font-mono">
                         VRAM Size
                       </span>
                       <span className="text-base font-bold text-electric-blue block mt-0.5 font-mono">
@@ -1112,7 +1112,7 @@ export function BatchProcessingPanel({
                       </span>
                     </div>
                     <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center font-mono">
-                      <span className="text-slate-500 text-[10px] block uppercase font-bold">
+                      <span className="text-slate-500 text-[11px] block uppercase font-bold">
                         Compression
                       </span>
                       <span className="text-base font-bold text-electric-blue block mt-0.5 font-mono">
@@ -1121,12 +1121,12 @@ export function BatchProcessingPanel({
                     </div>
                   </div>
                 ) : selectedJob.status === "completed" ? (
-                  <div className="p-4 rounded-lg bg-slate-900 border border-slate-850 flex items-center gap-3 text-xs text-slate-450">
+                  <div className="p-4 rounded-lg bg-slate-900 border border-slate-850 flex items-center gap-3 text-sm text-slate-450">
                     <Sparkles className="h-4 w-4 text-emerald-500 shrink-0" />
                     <span>Metrics will appear when Olive reports them in output.</span>
                   </div>
                 ) : selectedJob.status === "running" ? (
-                  <div className="p-4 rounded-lg bg-electric-blue/5 border border-electric-blue/10 flex items-center justify-between gap-3 text-xs text-electric-blue">
+                  <div className="p-4 rounded-lg bg-electric-blue/5 border border-electric-blue/10 flex items-center justify-between gap-3 text-sm text-electric-blue">
                     <span className="flex items-center gap-2 font-semibold">
                       <Play className="h-4 w-4 fill-electric-blue" />
                       Serial runner active...
@@ -1136,7 +1136,7 @@ export function BatchProcessingPanel({
                     </span>
                   </div>
                 ) : (
-                  <div className="p-4 rounded-lg bg-slate-900 border border-slate-850 flex items-center gap-3 text-xs text-slate-450">
+                  <div className="p-4 rounded-lg bg-slate-900 border border-slate-850 flex items-center gap-3 text-sm text-slate-450">
                     <AlertCircle className="h-4.5 w-4.5 text-slate-500 shrink-0" />
                     <span>Execution logs will stream in live once queue is triggered.</span>
                   </div>
@@ -1183,10 +1183,10 @@ export function BatchProcessingPanel({
 
                 {/* Logs terminal */}
                 <div className="flex-1 flex flex-col min-h-[220px]">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-450 mb-1.5 block font-mono">
+                  <span className="text-[11px] uppercase font-bold tracking-wider text-slate-450 mb-1.5 block font-mono">
                     Sequential Log Output
                   </span>
-                  <div className="flex-1 bg-slate-950 rounded-lg p-3 border border-slate-850 overflow-auto font-mono text-[11px] leading-relaxed text-emerald-400/80">
+                  <div className="flex-1 bg-slate-950 rounded-lg p-3 border border-slate-850 overflow-auto font-mono text-xs leading-relaxed text-emerald-400/80">
                     {selectedJob.logs.map((log, i) => (
                       <div key={i} className="mb-1 text-balance">
                         {log}
@@ -1198,7 +1198,7 @@ export function BatchProcessingPanel({
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-center text-slate-500">
                 <Layers className="h-8 w-8 mb-2 opacity-30" />
-                <p className="text-xs">
+                <p className="text-sm">
                   No job selected. Click any job to inspect its serialization performance.
                 </p>
               </div>

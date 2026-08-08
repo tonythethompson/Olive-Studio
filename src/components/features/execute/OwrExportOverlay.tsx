@@ -193,13 +193,13 @@ export function OwrExportOverlay({
           <div className="md:col-span-4 flex flex-col gap-4 border-r border-slate-900/60 pr-4">
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <Label className="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
                   <Globe className="h-3.5 w-3.5 text-electric-blue" /> Target Platform Runtime
                 </Label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    className={`p-2.5 rounded-lg border text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${platform === "web"
+                    className={`p-2.5 rounded-lg border text-sm font-semibold flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${platform === "web"
                       ? "bg-electric-blue/15 border-electric-blue/50 text-electric-blue font-semibold"
                       : "bg-slate-950 border-slate-850 text-slate-400 hover:border-slate-800"
                       }`}
@@ -215,7 +215,7 @@ export function OwrExportOverlay({
                   </button>
                   <button
                     type="button"
-                    className={`p-2.5 rounded-lg border text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${platform === "mobile"
+                    className={`p-2.5 rounded-lg border text-sm font-semibold flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${platform === "mobile"
                       ? "bg-electric-blue/15 border-electric-blue/50 text-electric-blue font-semibold"
                       : "bg-slate-950 border-slate-850 text-slate-400 hover:border-slate-800"
                       }`}
@@ -235,7 +235,7 @@ export function OwrExportOverlay({
               <div className="space-y-1.5 pt-2">
                 <Label
                   htmlFor="owr-thread-allocation"
-                  className="text-xs font-semibold text-slate-300 flex items-center gap-1.5"
+                  className="text-sm font-semibold text-slate-300 flex items-center gap-1.5"
                 >
                   <Cpu className="h-3.5 w-3.5 text-electric-blue" /> Runtime Thread Allocation
                 </Label>
@@ -244,14 +244,14 @@ export function OwrExportOverlay({
                   aria-label="Runtime thread allocation"
                   value={threads}
                   onChange={(e) => onThreadsChange(e.target.value)}
-                  className="w-full text-xs bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 font-sans justify-between text-slate-200 outline-none hover:border-slate-700 cursor-pointer"
+                  className="w-full text-sm bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 font-sans justify-between text-slate-200 outline-none hover:border-slate-700 cursor-pointer"
                 >
                   <option value="1">1 Thread (Battery-safe)</option>
                   <option value="2">2 Threads (Optimized)</option>
                   <option value="4">4 Threads (Standard Core)</option>
                   <option value="8">8 Threads (Performance Rig)</option>
                 </select>
-                <span className="text-[11px] text-slate-400 block leading-tight">
+                <span className="text-xs text-slate-400 block leading-tight">
                   Determines maximum browser/mobile parallel worker operations.
                 </span>
               </div>
@@ -259,7 +259,7 @@ export function OwrExportOverlay({
               <div className="space-y-1.5 pt-2">
                 <Label
                   htmlFor="owr-vram-mode"
-                  className="text-xs font-semibold text-slate-300 flex items-center gap-1.5"
+                  className="text-sm font-semibold text-slate-300 flex items-center gap-1.5"
                 >
                   <Sliders className="h-3.5 w-3.5 text-electric-blue" /> VRAM Optimizer Mode
                 </Label>
@@ -268,19 +268,19 @@ export function OwrExportOverlay({
                   aria-label="VRAM optimizer mode"
                   value={vramMode}
                   onChange={(e) => onVramModeChange(e.target.value as "performance" | "memory")}
-                  className="w-full text-xs bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 font-sans justify-between text-slate-200 outline-none hover:border-slate-700 cursor-pointer"
+                  className="w-full text-sm bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 font-sans justify-between text-slate-200 outline-none hover:border-slate-700 cursor-pointer"
                 >
                   <option value="performance">Performance Focus (Accelerated)</option>
                   <option value="memory">Memory Conservative (Low-Memory)</option>
                 </select>
-                <span className="text-[11px] text-slate-400 block leading-tight">
+                <span className="text-xs text-slate-400 block leading-tight">
                   Configured to leverage WebGPU execution providers or WASM pipelines.
                 </span>
               </div>
             </div>
 
             <div className="mt-auto pt-4 border-t border-slate-900/60 space-y-2">
-              <div className="p-3 rounded-lg bg-electric-blue/5 border border-electric-blue/10 text-[11px] text-slate-400 leading-relaxed font-sans">
+              <div className="p-3 rounded-lg bg-electric-blue/5 border border-electric-blue/10 text-xs text-slate-400 leading-relaxed font-sans">
                 <strong>Olive OWR Cross-compile:</strong> Generates structural session configs mapped
                 dynamically to the model's weight format, execution steps, and target drivers.
               </div>
@@ -292,7 +292,7 @@ export function OwrExportOverlay({
             <div className="flex bg-slate-950 p-1 border border-slate-850 rounded-lg overflow-x-auto shrink-0 gap-1 scrollbar-none">
               <button
                 type="button"
-                className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${selectedFile === "onnx_model_manifest.json"
+                className={`px-3 py-1.5 text-sm font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${selectedFile === "onnx_model_manifest.json"
                   ? "bg-electric-blue text-slate-950 font-medium"
                   : "text-slate-400 hover:text-slate-200"
                   }`}
@@ -302,7 +302,7 @@ export function OwrExportOverlay({
               </button>
               <button
                 type="button"
-                className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${selectedFile === "ort_config.json"
+                className={`px-3 py-1.5 text-sm font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${selectedFile === "ort_config.json"
                   ? "bg-electric-blue text-slate-950 font-medium"
                   : "text-slate-400 hover:text-slate-200"
                   }`}
@@ -313,7 +313,7 @@ export function OwrExportOverlay({
               {platform === "web" ? (
                 <button
                   type="button"
-                  className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${selectedFile === "web_init.js"
+                  className={`px-3 py-1.5 text-sm font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${selectedFile === "web_init.js"
                     ? "bg-electric-blue text-slate-950 font-medium"
                     : "text-slate-400 hover:text-slate-200"
                     }`}
@@ -324,7 +324,7 @@ export function OwrExportOverlay({
               ) : (
                 <button
                   type="button"
-                  className={`px-3 py-1.5 text-xs font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${selectedFile === "mobile_init.kt"
+                  className={`px-3 py-1.5 text-sm font-semibold rounded transition-all whitespace-nowrap cursor-pointer ${selectedFile === "mobile_init.kt"
                     ? "bg-electric-blue text-slate-950 font-medium"
                     : "text-slate-400 hover:text-slate-200"
                     }`}
@@ -337,11 +337,11 @@ export function OwrExportOverlay({
 
             <div className="flex-1 min-h-[250px] relative flex flex-col overflow-hidden bg-slate-950 border border-slate-850 rounded-lg">
               <div className="flex items-center justify-between px-4 py-2 border-b border-slate-900 bg-slate-900/40 shrink-0">
-                <div className="flex items-center gap-1.5 text-xs font-mono text-slate-300">
+                <div className="flex items-center gap-1.5 text-sm font-mono text-slate-300">
                   <FileCode className="h-4 w-4 text-electric-blue" />
                   <span>{fileTitle}</span>
                 </div>
-                <span className="text-[10px] bg-electric-blue/10 border border-electric-blue/20 text-electric-blue px-2 py-0.5 rounded font-mono">
+                <span className="text-[11px] bg-electric-blue/10 border border-electric-blue/20 text-electric-blue px-2 py-0.5 rounded font-mono">
                   ORT export
                 </span>
               </div>
@@ -350,27 +350,27 @@ export function OwrExportOverlay({
                 readOnly
                 id="owr-export-active-file"
                 aria-label={`Contents of ${fileTitle}`}
-                className="w-full flex-1 bg-transparent p-4 font-mono text-xs text-electric-blue focus-visible:outline-none resize-none overflow-y-auto cursor-text whitespace-pre bg-transparent select-text"
+                className="w-full flex-1 bg-transparent p-4 font-mono text-sm text-electric-blue focus-visible:outline-none resize-none overflow-y-auto cursor-text whitespace-pre bg-transparent select-text"
                 value={fileContent}
                 onClick={(e) => (e.target as HTMLTextAreaElement).select()}
               />
             </div>
 
             <div className="flex justify-between items-center gap-3 pt-2 shrink-0">
-              <span className="text-xs text-slate-500 font-mono hidden sm:inline">
+              <span className="text-sm text-slate-500 font-mono hidden sm:inline">
                 Includes boilerplate loaders & execution environment configs
               </span>
               <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                 <Button
                   variant="outline"
-                  className="text-xs h-9"
+                  className="text-sm h-9"
                   onClick={onClose}
                 >
                   Cancel
                 </Button>
                 <Button
                   variant="outline"
-                  className="text-xs h-9 border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
+                  className="text-sm h-9 border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
                   onClick={handleCopyActiveCode}
                 >
                   {isOwrCopied ? (
@@ -382,7 +382,7 @@ export function OwrExportOverlay({
                 </Button>
                 <Button
                   variant="default"
-                  className="text-xs h-9 bg-electric-blue hover:bg-electric-blue-dark text-slate-950 font-bold"
+                  className="text-sm h-9 bg-electric-blue hover:bg-electric-blue-dark text-slate-950 font-bold"
                   onClick={onDownloadBundle}
                   disabled={isDownloading}
                 >
@@ -390,7 +390,7 @@ export function OwrExportOverlay({
                 </Button>
               </div>
               {downloadError && (
-                <p role="alert" className="text-xs text-rose-400 text-right">
+                <p role="alert" className="text-sm text-rose-400 text-right">
                   {downloadError}
                 </p>
               )}

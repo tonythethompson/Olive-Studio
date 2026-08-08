@@ -173,7 +173,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
               <h2 className="text-base font-semibold text-slate-100">
                 Run History & Side-by-Side Comparison
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-sm text-slate-400">
                 Persisted in local IndexedDB. Select up to 6 runs to compare side-by-side.
               </p>
             </div>
@@ -200,7 +200,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
                 <button
                   type="button"
                   onClick={() => setSelectedIds([])}
-                  className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                  className="text-sm text-slate-400 hover:text-slate-200 transition-colors"
                 >
                   Clear Comparison
                 </button>
@@ -210,11 +210,11 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
                 {selectedRecords.map((rec) => (
                   <div key={rec.id} className="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-mono text-slate-400">
+                      <span className="text-sm font-mono text-slate-400">
                         {new Date(rec.timestamp).toLocaleTimeString()}
                       </span>
                       <span
-                        className={`text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${
+                        className={`text-sm px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${
                           rec.status === "completed"
                             ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                             : rec.status === "cancelled"
@@ -237,7 +237,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
                       {rec.modelId}
                     </div>
 
-                    <div className="space-y-1.5 text-xs text-slate-300">
+                    <div className="space-y-1.5 text-sm text-slate-300">
                       <div className="flex justify-between py-1 border-b border-slate-800/60">
                         <span className="text-slate-500 flex items-center gap-1">
                           <Cpu className="h-3.5 w-3.5" /> Provider
@@ -265,12 +265,12 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
                     </div>
 
                     <div className="space-y-1">
-                      <span className="text-[11px] text-slate-500 font-medium">Passes Configured:</span>
+                      <span className="text-xs text-slate-500 font-medium">Passes Configured:</span>
                       <div className="flex flex-wrap gap-1">
                         {rec.passNames.map((p, idx) => (
                           <span
                             key={idx}
-                            className="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded font-mono"
+                            className="text-[11px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded font-mono"
                           >
                             {p}
                           </span>
@@ -285,7 +285,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
                           onSelectRecipe(rec.recipeJson);
                           onClose();
                         }}
-                        className="w-full mt-2 py-1.5 bg-electric-blue/10 hover:bg-electric-blue/20 text-electric-blue text-xs rounded font-medium transition-colors"
+                        className="w-full mt-2 py-1.5 bg-electric-blue/10 hover:bg-electric-blue/20 text-electric-blue text-sm rounded font-medium transition-colors"
                       >
                         Load Recipe in Editor
                       </button>
@@ -299,13 +299,13 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
           {/* Controls Bar */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400 font-medium">Filter:</span>
+              <span className="text-sm text-slate-400 font-medium">Filter:</span>
               {(["all", "completed", "failed", "cancelled"] as const).map((st) => (
                 <button
                   key={st}
                   type="button"
                   onClick={() => setFilterStatus(st)}
-                  className={`text-xs px-2.5 py-1 rounded-md font-medium capitalize transition-colors ${
+                  className={`text-sm px-2.5 py-1 rounded-md font-medium capitalize transition-colors ${
                     filterStatus === st
                       ? "bg-electric-blue text-white"
                       : "bg-slate-800 text-slate-400 hover:text-slate-200"
@@ -320,7 +320,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
               <button
                 type="button"
                 onClick={handleExport}
-                className="text-xs text-slate-300 hover:text-slate-200 hover:bg-slate-800 px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors"
+                className="text-sm text-slate-300 hover:text-slate-200 hover:bg-slate-800 px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors"
                 title="Export job history as JSON"
               >
                 <Download className="h-3.5 w-3.5" /> Export
@@ -328,7 +328,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
               <button
                 type="button"
                 onClick={handleImportClick}
-                className="text-xs text-slate-300 hover:text-slate-200 hover:bg-slate-800 px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors"
+                className="text-sm text-slate-300 hover:text-slate-200 hover:bg-slate-800 px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors"
                 title="Import job history from JSON"
               >
                 <Upload className="h-3.5 w-3.5" /> Import
@@ -337,7 +337,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
                 <button
                   type="button"
                   onClick={handleClearAll}
-                  className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors"
+                  className="text-sm text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors"
                 >
                   <Trash2 className="h-3.5 w-3.5" /> Clear History
                 </button>
@@ -347,7 +347,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
 
           {importNotice && (
             <div
-              className={`text-xs px-3 py-2 rounded-md flex items-center gap-2 border ${
+              className={`text-sm px-3 py-2 rounded-md flex items-center gap-2 border ${
                 noticeType === "error"
                   ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
                   : noticeType === "warning"
@@ -403,7 +403,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-slate-200 text-sm truncate">{rec.modelId}</span>
                           <span
-                            className={`text-[11px] px-2 py-0.5 rounded font-medium ${
+                            className={`text-xs px-2 py-0.5 rounded font-medium ${
                               rec.status === "completed"
                                 ? "bg-emerald-500/10 text-emerald-400"
                                 : rec.status === "cancelled"
@@ -414,7 +414,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
                             {rec.status}
                           </span>
                         </div>
-                        <div className="text-xs text-slate-400 flex items-center gap-3 mt-1 font-mono">
+                        <div className="text-sm text-slate-400 flex items-center gap-3 mt-1 font-mono">
                           <span>{new Date(rec.timestamp).toLocaleString()}</span>
                           <span>•</span>
                           <span>{rec.ihvProvider}</span>
@@ -435,7 +435,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
                             onSelectRecipe(rec.recipeJson);
                             onClose();
                           }}
-                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded font-medium transition-colors"
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm rounded font-medium transition-colors"
                         >
                           Load
                         </button>
@@ -457,7 +457,7 @@ export function JobHistoryModal({ isOpen, onClose, onSelectRecipe }: JobHistoryM
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-3 border-t border-slate-800 bg-slate-900/60 flex items-center justify-between text-xs text-slate-400">
+        <div className="px-6 py-3 border-t border-slate-800 bg-slate-900/60 flex items-center justify-between text-sm text-slate-400">
           <div>
             Showing {filteredHistory.length} of {history.length} runs. Select up to 6 runs to compare.
           </div>

@@ -49,7 +49,7 @@ export function DesktopMinimumViewport({
         {WIDE_SHELL_MIN_WIDTH_PX}
         px the shell rearranges for a narrow desktop; below {minWidthPx}px it is not supported.
       </p>
-      <p className="mt-4 text-[11px] font-mono text-slate-400">Current layout: phone / too narrow</p>
+      <p className="mt-4 text-xs font-mono text-slate-400">Current layout: phone / too narrow</p>
     </div>
   );
 }

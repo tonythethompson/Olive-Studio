@@ -34,11 +34,11 @@ export const ModelMemoryCompare = memo(function ModelMemoryCompare({
   if (size === "sm") {
     return (
       <div className={cn("space-y-1", className)}>
-        <p className="text-[10px] text-slate-500 truncate" title={modelLabel}>
+        <p className="text-[11px] text-slate-500 truncate" title={modelLabel}>
           <span className="text-slate-400">Model:</span>{" "}
           <span className="text-slate-300 font-mono">{modelShortName}</span>
         </p>
-        <p className="text-[11px] text-slate-400 leading-snug">
+        <p className="text-xs text-slate-400 leading-snug">
           <span className="text-slate-500">Before opt.</span>{" "}
           <span className="font-mono text-slate-300 tabular-nums">~{formatMemoryGb(beforeGb)}</span>
           <ArrowRight className="inline h-3 w-3 mx-1 text-slate-600 align-middle" />
@@ -57,20 +57,20 @@ export const ModelMemoryCompare = memo(function ModelMemoryCompare({
     <div className={cn("rounded border border-slate-800 bg-slate-900/40 p-3", className)}>
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0">
-          <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">
+          <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500">
             AI model · {memoryKind} footprint
           </p>
-          <p className="text-xs font-mono text-slate-200 truncate mt-0.5" title={modelLabel}>
+          <p className="text-sm font-mono text-slate-200 truncate mt-0.5" title={modelLabel}>
             {modelShortName}
           </p>
         </div>
         {showSavings && (
-          <span className="shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded border border-emerald-500/25 bg-emerald-500/10 text-emerald-400">
+          <span className="shrink-0 text-[11px] font-mono px-1.5 py-0.5 rounded border border-emerald-500/25 bg-emerald-500/10 text-emerald-400">
             −{savedPct}% est.
           </span>
         )}
         {showGrowth && !showSavings && (
-          <span className="shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded border border-amber-500/25 bg-amber-500/10 text-amber-400">
+          <span className="shrink-0 text-[11px] font-mono px-1.5 py-0.5 rounded border border-amber-500/25 bg-amber-500/10 text-amber-400">
             +{grewPct}% est.
           </span>
         )}
@@ -78,13 +78,13 @@ export const ModelMemoryCompare = memo(function ModelMemoryCompare({
 
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex-1 min-w-[100px] rounded border border-slate-800 bg-slate-950/80 px-2.5 py-2">
-          <p className="text-[10px] text-slate-500">Before optimization</p>
+          <p className="text-[11px] text-slate-500">Before optimization</p>
           <p className="text-sm font-mono text-slate-300 tabular-nums mt-0.5">~{formatMemoryGb(beforeGb)}</p>
           <p className="text-[9px] text-slate-600 mt-0.5">Base weights loaded</p>
         </div>
         <ArrowRight className="h-4 w-4 text-slate-600 shrink-0" aria-hidden />
         <div className="flex-1 min-w-[100px] rounded border border-electric-blue/20 bg-electric-blue/5 px-2.5 py-2">
-          <p className="text-[10px] text-electric-blue/80">After optimization</p>
+          <p className="text-[11px] text-electric-blue/80">After optimization</p>
           <p className="text-sm font-mono text-slate-100 tabular-nums mt-0.5">~{formatMemoryGb(afterGb)}</p>
           <p className="text-[9px] text-slate-600 mt-0.5">
             {showGrowth ? "Larger than base — enable quantization to shrink" : "Deployed inference size"}

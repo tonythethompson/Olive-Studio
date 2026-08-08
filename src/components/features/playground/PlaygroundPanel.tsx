@@ -138,7 +138,7 @@ export function PlaygroundPanel() {
                 onClick={() => handleSubViewChange(id)}
                 onKeyDown={(event) => handleTabKeyDown(event, id)}
                 className={cn(
-                  "px-2.5 py-1 text-[11px] font-semibold rounded transition-all flex items-center gap-1 cursor-pointer",
+                  "px-2.5 py-1 text-xs font-semibold rounded transition-all flex items-center gap-1 cursor-pointer",
                   selected
                     ? "bg-electric-blue text-slate-950"
                     : "text-slate-400 hover:text-slate-200",

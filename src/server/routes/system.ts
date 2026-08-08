@@ -425,7 +425,7 @@ function buildQnnNotes(
     } else if (input.qnn?.npuDevice) {
       notes.push(
         `QNN runtime installed with NPU EpDevice${input.qnn.pluginVersion ? ` (${input.qnn.pluginVersion})` : ""}. “QNN NPU ready” waits on the Snapdragon release gate` +
-          (input.qnn.htpSmoke?.status === "passed" ? " (HTP diagnostic already cached)." : " + Test QNN NPU."),
+        (input.qnn.htpSmoke?.status === "passed" ? " (HTP diagnostic already cached)." : " + Test QNN NPU."),
       );
     } else {
       notes.push(
@@ -742,6 +742,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     tensorRtRtxLoadable: tensorRtRtxVenvLoadable,
     nvidiaTensorRtFamilyCapable,
     cudaLoadable: cudaVenvLoadable,
+    os: platform.os,
   });
 
   return {
@@ -754,35 +755,35 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
       : undefined,
     qnn: qnn
       ? {
-          ...qnn,
-          available: qnnVenvLoadable,
-          loadable: qnnVenvLoadable,
-          hostMode: qnn.hostMode ?? qnnHostMode,
-        }
+        ...qnn,
+        available: qnnVenvLoadable,
+        loadable: qnnVenvLoadable,
+        hostMode: qnn.hostMode ?? qnnHostMode,
+      }
       : qnnHostMode !== "out-of-scope"
         ? {
-            available: false,
-            loadable: false,
-            preparation: false,
-            npuDevice: false,
-            potentialInference: false,
-            verifiedInference: false,
-            hostMode: qnnHostMode,
-            detail:
-              qnnHostMode === "preparation"
-                ? "QNN runtime not installed (.venvs/qnn) — Windows x64 preparation / plugin AOT only"
-                : "QNN runtime not installed (.venvs/qnn)",
-          }
+          available: false,
+          loadable: false,
+          preparation: false,
+          npuDevice: false,
+          potentialInference: false,
+          verifiedInference: false,
+          hostMode: qnnHostMode,
+          detail:
+            qnnHostMode === "preparation"
+              ? "QNN runtime not installed (.venvs/qnn) — Windows x64 preparation / plugin AOT only"
+              : "QNN runtime not installed (.venvs/qnn)",
+        }
         : {
-            available: false,
-            loadable: false,
-            preparation: false,
-            npuDevice: false,
-            potentialInference: false,
-            verifiedInference: false,
-            hostMode: qnnHostMode,
-            detail: "QNN plugin install/UX is Windows-first in this release",
-          },
+          available: false,
+          loadable: false,
+          preparation: false,
+          npuDevice: false,
+          potentialInference: false,
+          verifiedInference: false,
+          hostMode: qnnHostMode,
+          detail: "QNN plugin install/UX is Windows-first in this release",
+        },
     // UI consumers (IHV panel) read `.loadable`; keep it aligned with .venv readiness.
     tensorrt: tensorrt ? { ...tensorrt, loadable: tensorRtVenvLoadable } : tensorrt,
     tensorRtRtx: tensorRtRtx ? { ...tensorRtRtx, loadable: tensorRtRtxVenvLoadable } : tensorRtRtx,

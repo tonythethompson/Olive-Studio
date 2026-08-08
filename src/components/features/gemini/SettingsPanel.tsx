@@ -32,9 +32,9 @@ function ActiveProviderCard({ providers }: ActiveProviderCardProps) {
   return (
     <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-2.5 py-1.5">
       {providerStatus.source === "none" ? (
-        <p className="truncate text-xs text-slate-500 italic">No provider. AI features disabled.</p>
+        <p className="truncate text-sm text-slate-500 italic">No provider. AI features disabled.</p>
       ) : (
-        <p className="min-w-0 truncate text-xs text-slate-200">
+        <p className="min-w-0 truncate text-sm text-slate-200">
           <span className="font-medium text-slate-100">{providerName}</span>
           <span className="text-slate-500">:</span>{" "}
           <span className="font-mono text-slate-300">{providerStatus.model}</span>
@@ -45,7 +45,7 @@ function ActiveProviderCard({ providers }: ActiveProviderCardProps) {
         <button
           type="button"
           onClick={() => void providers.clearProvider()}
-          className="shrink-0 text-[10px] text-rose-400 hover:text-rose-200 border border-rose-500/20 rounded px-2 py-0.5 font-bold transition-all cursor-pointer"
+          className="shrink-0 text-[11px] text-rose-400 hover:text-rose-200 border border-rose-500/20 rounded px-2 py-0.5 font-bold transition-all cursor-pointer"
         >
           Clear
         </button>
@@ -74,7 +74,7 @@ function SettingsModeTabs({ mode, onChange }: SettingsModeTabsProps) {
         aria-label="Local settings"
         aria-pressed={mode === "local"}
         onClick={() => onChange("local")}
-        className={`flex-1 cursor-pointer rounded-md px-3 py-2 text-xs font-bold transition-all ${
+        className={`flex-1 cursor-pointer rounded-md px-3 py-2 text-sm font-bold transition-all ${
           mode === "local"
             ? "border border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
             : "border border-transparent text-slate-500 hover:text-slate-300"
@@ -87,7 +87,7 @@ function SettingsModeTabs({ mode, onChange }: SettingsModeTabsProps) {
         aria-label="Cloud settings"
         aria-pressed={mode === "cloud"}
         onClick={() => onChange("cloud")}
-        className={`flex-1 cursor-pointer rounded-md px-3 py-2 text-xs font-bold transition-all ${
+        className={`flex-1 cursor-pointer rounded-md px-3 py-2 text-sm font-bold transition-all ${
           mode === "cloud"
             ? "border border-electric-blue/40 bg-electric-blue/15 text-electric-blue"
             : "border border-transparent text-slate-500 hover:text-slate-300"

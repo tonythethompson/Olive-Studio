@@ -311,7 +311,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
       >
         <div className="flex items-center gap-2 text-emerald-400">
           <CheckCircle className="h-4 w-4 shrink-0" />
-          <span className="text-xs font-medium">Local checks passed. No issues found.</span>
+          <span className="text-sm font-medium">Local checks passed. No issues found.</span>
         </div>
       </div>
     );
@@ -338,7 +338,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
           ) : (
             <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />
           )}
-          <span className="text-xs font-medium text-slate-300">
+          <span className="text-sm font-medium text-slate-300">
             {criticalCount > 0
               ? `${criticalCount} blocking issue${criticalCount !== 1 ? "s" : ""}`
               : warningCount > 0
@@ -346,10 +346,10 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
                 : "All checks passed"}
           </span>
           {compatLoading && (
-            <span className="text-[10px] text-slate-500 animate-pulse">Checking compatibility...</span>
+            <span className="text-[11px] text-slate-500 animate-pulse">Checking compatibility...</span>
           )}
           {mcpParamLoading && (
-            <span className="text-[10px] text-slate-500 animate-pulse">Validating parameters...</span>
+            <span className="text-[11px] text-slate-500 animate-pulse">Validating parameters...</span>
           )}
           {expanded ? (
             <ChevronDown className="h-3.5 w-3.5 text-slate-500 ml-auto shrink-0" />
@@ -393,14 +393,14 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
                       <Info className="h-3 w-3 text-amber-400 shrink-0" />
                     )}
                     <span
-                      className={`text-[11px] font-medium ${
+                      className={`text-xs font-medium ${
                         issue.severity === "critical" ? "text-rose-300" : "text-amber-300"
                       }`}
                     >
                       {issue.title}
                     </span>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">{issue.description}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">{issue.description}</p>
                 </div>
                 {"autofix" in issue && issue.autofix && (
                   <button
@@ -422,7 +422,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
               <button
                 type="button"
                 onClick={() => setShowCompatDetails(!showCompatDetails)}
-                className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-400 transition-colors"
+                className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-400 transition-colors"
               >
                 {showCompatDetails ? (
                   <ChevronDown className="h-3 w-3" />
@@ -434,7 +434,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
               {showCompatDetails && (
                 <div className="mt-2 space-y-1">
                   {compatResult.selected_hardware && (
-                    <div className="text-[10px]">
+                    <div className="text-[11px]">
                       <span className="text-slate-500">Hardware: </span>
                       <span className="text-slate-300">{compatResult.selected_hardware}</span>
                     </div>
@@ -442,7 +442,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
                   {compatResult.hardware_compatibility &&
                     Object.entries(compatResult.hardware_compatibility).map(
                       ([passName, info]: [string, PassCompat]) => (
-                        <div key={passName} className="flex items-start gap-2 text-[10px]">
+                        <div key={passName} className="flex items-start gap-2 text-[11px]">
                           <span
                             className={info.support === "supported" ? "text-emerald-400" : "text-amber-400"}
                           >
@@ -460,7 +460,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
                       ),
                     )}
                   {compatResult.note && (
-                    <div className="text-[10px] text-slate-400 mt-1">{compatResult.note}</div>
+                    <div className="text-[11px] text-slate-400 mt-1">{compatResult.note}</div>
                   )}
                 </div>
               )}
@@ -468,7 +468,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
           )}
           {/* Compatibility errors */}
           {compatError && (
-            <div className="px-3 py-2 text-[10px] text-slate-500">
+            <div className="px-3 py-2 text-[11px] text-slate-500">
               {compatError && <div>Compatibility check: {compatError}</div>}
             </div>
           )}

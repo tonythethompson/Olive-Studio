@@ -32,7 +32,7 @@ export function ProviderErrorBlock({
 
   if (isJsonModelErr) {
     return (
-      <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-xs text-amber-200/90 flex items-start gap-2">
+      <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-sm text-amber-200/90 flex items-start gap-2">
         <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-400" />
         <div>
           <span className="font-bold block text-amber-100">Model returned invalid JSON</span>
@@ -40,14 +40,14 @@ export function ProviderErrorBlock({
             This model struggled to format the audit response. Try Analyze again, or pick a larger model in
             Settings.
           </p>
-          <p className="mt-2 text-[10px] text-slate-500 font-mono break-words">{msg}</p>
+          <p className="mt-2 text-[11px] text-slate-500 font-mono break-words">{msg}</p>
         </div>
       </div>
     );
   }
 
   return isProviderErr ? (
-    <div className="p-4 bg-slate-900 border border-slate-700 rounded-xl text-xs flex flex-col gap-2.5">
+    <div className="p-4 bg-slate-900 border border-slate-700 rounded-xl text-sm flex flex-col gap-2.5">
       <div className="flex items-center gap-2 text-amber-400">
         <AlertTriangle className="h-4 w-4 shrink-0" />
         <span className="font-bold text-sm">No AI Provider Configured</span>
@@ -59,7 +59,7 @@ export function ProviderErrorBlock({
         </button>
         .
       </p>
-      <p className="text-slate-500 text-[10px]">
+      <p className="text-slate-500 text-[11px]">
         Or set an env var (
         <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">GEMINI_API_KEY</code>,{" "}
         <code className="bg-slate-800 px-1 rounded font-mono text-slate-300">OPENAI_API_KEY</code>,{" "}
@@ -78,12 +78,12 @@ export function ProviderErrorBlock({
       </p>
     </div>
   ) : (
-    <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-lg text-xs text-rose-400 flex items-start gap-2">
+    <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-lg text-sm text-rose-400 flex items-start gap-2">
       <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-500" />
       <div>
         <span className="font-bold block text-rose-200">Error</span>
         <p className="mt-1 leading-relaxed">{msg}</p>
-        <p className="mt-2 text-[10px] text-slate-500 leading-relaxed">
+        <p className="mt-2 text-[11px] text-slate-500 leading-relaxed">
           If retrying fails, verify the configured endpoint in Settings.
         </p>
       </div>

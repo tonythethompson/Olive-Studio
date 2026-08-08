@@ -52,11 +52,11 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <h4 className="text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
+        <h4 className="text-sm font-semibold text-slate-300 mb-1 flex items-center gap-1">
           <TargetIcon className="h-3.5 w-3.5 text-electric-blue" />
           Target Hardware System Accelerator
         </h4>
-        <p className="text-xs text-slate-400 leading-relaxed">
+        <p className="text-sm text-slate-400 leading-relaxed">
           Only execution providers detected on this machine are listed. Cross-compile targets are not
           selectable here.
         </p>
@@ -66,7 +66,7 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
           disabled={ihvNavBlocked}
           title={ihvNavBlocked ? PIPELINE_NAV_BLOCKED_MESSAGE : undefined}
           aria-disabled={ihvNavBlocked}
-          className={`mt-2 text-[10px] underline underline-offset-2 ${
+          className={`mt-2 text-[11px] underline underline-offset-2 ${
             ihvNavBlocked
               ? "text-slate-600 cursor-not-allowed no-underline"
               : "text-electric-blue hover:text-white cursor-pointer"
@@ -77,14 +77,14 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
       </div>
       <div className="grid grid-cols-1 gap-3 border-l border-slate-800/50 pl-4">
         <div>
-          <Label htmlFor="graph-provider-driver" className="text-[10px] font-mono text-slate-400">
+          <Label htmlFor="graph-provider-driver" className="text-[11px] font-mono text-slate-400">
             Active Platform Driver
           </Label>
           <Select
             id="graph-provider-driver"
             value={state.ihvProvider}
             onChange={(e) => handleProviderChange(e.target.value as UIState["ihvProvider"])}
-            className="h-8 text-xs bg-slate-950"
+            className="h-8 text-sm bg-slate-950"
             disabled={probeLoading}
           >
             {probeLoading ? (
@@ -102,7 +102,7 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
             )}
           </Select>
           {probeLoading && (
-            <p className="mt-1.5 text-[10px] text-slate-500 flex items-center gap-1.5">
+            <p className="mt-1.5 text-[11px] text-slate-500 flex items-center gap-1.5">
               <Loader2 className="h-3 w-3 animate-spin" />
               Probing local GPUs and runtimes…
             </p>
@@ -111,15 +111,15 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
         {currentHardwareBlock && (
           <div className="flex items-start gap-2 rounded border border-rose-500/30 bg-rose-950/20 px-2.5 py-2">
             <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0 mt-0.5" />
-            <p className="text-[10px] text-rose-300 leading-relaxed">{currentHardwareBlock.reason}</p>
+            <p className="text-[11px] text-rose-300 leading-relaxed">{currentHardwareBlock.reason}</p>
           </div>
         )}
         {!probeLoading && selectableProviders.length <= 1 && (
-          <p className="text-[10px] font-mono text-amber-400/90">
+          <p className="text-[11px] font-mono text-amber-400/90">
             Only CPU was detected. Install CUDA, OpenVINO, or ROCm runtimes to unlock more targets.
           </p>
         )}
-        <p className="text-[10px] font-mono text-slate-500">
+        <p className="text-[11px] font-mono text-slate-500">
           Hybrid offload, CUDA version, and provider matrix live in step 02.
         </p>
       </div>

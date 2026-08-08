@@ -42,7 +42,7 @@ export function ImportConfirmDialog<T extends ImportConfirmPreset>({
         if (e.key === "Escape") onCancel();
       }}
     >
-      <p className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
+      <p className="text-[11px] font-mono uppercase tracking-wider text-slate-400">
         Import {importedPresets.length} preset{importedPresets.length !== 1 ? "s" : ""}
       </p>
       <div className="space-y-1.5 max-h-40 overflow-y-auto">
@@ -53,7 +53,7 @@ export function ImportConfirmDialog<T extends ImportConfirmPreset>({
               key={preset.label}
               className={`rounded px-2 py-1 ${isCollision ? "bg-amber-500/5" : "bg-slate-800/50"}`}
             >
-              <div className="flex items-center gap-1.5 text-[11px]">
+              <div className="flex items-center gap-1.5 text-xs">
                 <span
                   className={`w-1.5 h-1.5 rounded-full shrink-0 ${isCollision ? "bg-amber-400" : "bg-emerald-400"}`}
                 />
@@ -68,7 +68,7 @@ export function ImportConfirmDialog<T extends ImportConfirmPreset>({
         })}
       </div>
       {collisions.length > 0 && (
-        <p className="text-[10px] text-amber-400/80">
+        <p className="text-[11px] text-amber-400/80">
           {collisions.length} preset{collisions.length !== 1 ? "s" : ""} will overwrite existing custom
           presets with the same name.
         </p>
@@ -77,7 +77,7 @@ export function ImportConfirmDialog<T extends ImportConfirmPreset>({
         <button
           type="button"
           onClick={() => onImport(mergedPresets)}
-          className="h-7 px-3 text-[10px] font-medium rounded border border-electric-blue/50 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 transition-colors"
+          className="h-7 px-3 text-[11px] font-medium rounded border border-electric-blue/50 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 transition-colors"
         >
           Import
         </button>
@@ -85,7 +85,7 @@ export function ImportConfirmDialog<T extends ImportConfirmPreset>({
           ref={cancelBtnRef}
           type="button"
           onClick={onCancel}
-          className="h-7 px-3 text-[10px] font-medium rounded border border-slate-600 bg-slate-800 text-slate-400 hover:text-slate-300 hover:border-slate-500 transition-colors"
+          className="h-7 px-3 text-[11px] font-medium rounded border border-slate-600 bg-slate-800 text-slate-400 hover:text-slate-300 hover:border-slate-500 transition-colors"
         >
           Cancel
         </button>

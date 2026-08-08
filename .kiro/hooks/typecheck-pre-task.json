@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Typecheck before task execution",
+      "trigger": "PreTaskExec",
+      "description": "Full TypeScript type check before any task execution begins to catch type errors early",
+      "action": {
+        "type": "command",
+        "command": "tsc --noEmit",
+        "timeout": 60
+      }
+    }
+  ]
+}

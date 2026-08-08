@@ -38,7 +38,7 @@ export function LicenseNotice({ open, onClose }: LicenseNoticeProps) {
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="space-y-3 text-xs text-slate-400 leading-relaxed">
+        <div className="space-y-3 text-sm text-slate-400 leading-relaxed">
           <p>
             <span className="text-slate-200">Olive Studio</span> is free software licensed under the{" "}
             <button
@@ -54,12 +54,12 @@ export function LicenseNotice({ open, onClose }: LicenseNoticeProps) {
             You may use, study, modify, and redistribute this program under the terms of that license.
             Modified versions may be relicensed under a different license at your discretion.
           </p>
-          <p className="text-[11px] text-slate-500">
+          <p className="text-xs text-slate-500">
             Copyright © 2026 Anthony Thompson. Source:{" "}
             <button
               type="button"
               onClick={() => void openExternal(REPO_URL)}
-              className="text-electric-blue hover:underline cursor-pointer bg-transparent border-none p-0 inline text-[11px]"
+              className="text-electric-blue hover:underline cursor-pointer bg-transparent border-none p-0 inline text-xs"
             >
               GitHub
             </button>
@@ -67,7 +67,7 @@ export function LicenseNotice({ open, onClose }: LicenseNoticeProps) {
             <button
               type="button"
               onClick={() => void openExternal(LICENSE_URL)}
-              className="text-electric-blue hover:underline cursor-pointer bg-transparent border-none p-0 inline text-[11px]"
+              className="text-electric-blue hover:underline cursor-pointer bg-transparent border-none p-0 inline text-xs"
             >
               full license text
             </button>

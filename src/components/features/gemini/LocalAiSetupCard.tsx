@@ -48,7 +48,7 @@ function EngineToggle({ preferredEngine, onSelect }: EngineToggleProps) {
       <button
         type="button"
         onClick={() => onSelect("lms")}
-        className={`flex-1 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+        className={`flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
           preferredEngine === "lms"
             ? "bg-electric-blue/20 text-electric-blue border border-electric-blue/30"
             : "text-slate-500 hover:text-slate-300 border border-transparent"
@@ -59,7 +59,7 @@ function EngineToggle({ preferredEngine, onSelect }: EngineToggleProps) {
       <button
         type="button"
         onClick={() => onSelect("ollama")}
-        className={`flex-1 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+        className={`flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
           preferredEngine === "ollama"
             ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
             : "text-slate-500 hover:text-slate-300 border border-transparent"
@@ -98,7 +98,7 @@ function EngineMissingBanner({
 }: EngineMissingBannerProps) {
   return (
     <div className="rounded-lg border border-amber-500/25 bg-amber-950/20 p-2.5 space-y-2">
-      <p className="text-[11px] text-amber-200/90 leading-relaxed">
+      <p className="text-xs text-amber-200/90 leading-relaxed">
         {isLms
           ? "LM Studio is not running yet. Use Download & enable on a starter model. Olive Studio will install LM Studio (if needed), start the local server, and pull the model."
           : "Ollama is not running yet. Use Download & enable on a starter model. Olive Studio will install Ollama (if needed), start the Ollama app, and pull the model."}
@@ -108,7 +108,7 @@ function EngineMissingBanner({
           type="button"
           disabled={disabled}
           onClick={onInstall}
-          className={`h-7 px-2.5 rounded text-[11px] font-bold border flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${accentBg}`}
+          className={`h-7 px-2.5 rounded text-xs font-bold border flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${accentBg}`}
         >
           {installing ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
           Setup {isLms ? "LM Studio" : "Ollama"} now
@@ -116,7 +116,7 @@ function EngineMissingBanner({
         <button
           type="button"
           onClick={() => void openExternal(isLms ? "https://lmstudio.ai" : "https://ollama.com")}
-          className={`text-[11px] underline cursor-pointer bg-transparent border-none p-0 ${accentText}`}
+          className={`text-xs underline cursor-pointer bg-transparent border-none p-0 ${accentText}`}
         >
           Manual install
         </button>
@@ -163,14 +163,14 @@ function StarterModelCard({
   return (
     <div className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60 flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-semibold text-xs text-slate-100">{model.name}</span>
-        <span className="text-[10px] font-mono text-slate-400 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded">
+        <span className="font-semibold text-sm text-slate-100">{model.name}</span>
+        <span className="text-[11px] font-mono text-slate-400 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded">
           {displaySize}
         </span>
       </div>
-      <p className="text-[10px] text-slate-400 leading-normal">{model.desc}</p>
+      <p className="text-[11px] text-slate-400 leading-normal">{model.desc}</p>
       {installed ? (
-        <p className="text-[10px] text-emerald-400/90 font-mono truncate" title={installedId ?? undefined}>
+        <p className="text-[11px] text-emerald-400/90 font-mono truncate" title={installedId ?? undefined}>
           Installed · {installedId}
         </p>
       ) : null}
@@ -178,7 +178,7 @@ function StarterModelCard({
         type="button"
         onClick={installed ? onEnable : onPull}
         disabled={disabled}
-        className={`mt-1 w-full h-7 border rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 ${accentBg}`}
+        className={`mt-1 w-full h-7 border rounded text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 ${accentBg}`}
       >
         {isPulling ? (
           <>
@@ -216,7 +216,7 @@ function LocalPullProgress({
   return (
     <div className="mt-2 rounded-lg border border-slate-800 bg-slate-950/80 p-2.5 space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] text-slate-200 leading-snug flex items-center gap-1.5 min-w-0">
+        <p className="text-xs text-slate-200 leading-snug flex items-center gap-1.5 min-w-0">
           {pullingModel ? <RefreshCw className="h-3 w-3 animate-spin shrink-0 text-electric-blue" /> : null}
           <span className="truncate">
             {localInstallInfo || (pullingModel ? `Working on ${pullingModel}…` : "Ready")}
@@ -224,7 +224,7 @@ function LocalPullProgress({
         </p>
         <div className="flex items-center gap-2 shrink-0">
           {localPullPercent !== null && (
-            <span className="text-[10px] font-mono text-slate-400">
+            <span className="text-[11px] font-mono text-slate-400">
               {Math.round(localPullPercent)}%
             </span>
           )}
@@ -232,7 +232,7 @@ function LocalPullProgress({
             <button
               type="button"
               onClick={onCancel}
-              className="text-[10px] font-semibold px-2 py-0.5 rounded border border-rose-500/35 text-rose-300 hover:bg-rose-500/10 cursor-pointer"
+              className="text-[11px] font-semibold px-2 py-0.5 rounded border border-rose-500/35 text-rose-300 hover:bg-rose-500/10 cursor-pointer"
             >
               Cancel
             </button>
@@ -248,7 +248,7 @@ function LocalPullProgress({
         </div>
       )}
       {localPullLog.length > 0 && (
-        <div className="max-h-24 overflow-y-auto rounded border border-slate-800/80 bg-black/30 px-2 py-1.5 font-mono text-[10px] text-slate-500 space-y-0.5">
+        <div className="max-h-24 overflow-y-auto rounded border border-slate-800/80 bg-black/30 px-2 py-1.5 font-mono text-[11px] text-slate-500 space-y-0.5">
           {localPullLog.map((line, i) => (
             <div key={`${i}-${line.slice(0, 24)}`} className="truncate">
               {line}
@@ -294,7 +294,7 @@ export function LocalAiSetupCard({ local, activeModel, isOpen, onActivate }: Loc
       <EngineToggle preferredEngine={local.preferredEngine} onSelect={local.selectPreferredEngine} />
 
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] text-slate-300 leading-relaxed">
+        <p className="text-xs text-slate-300 leading-relaxed">
           Offline AI via {engineName}. Models for this engine stay on this machine (separate from the other
           engine).
         </p>
@@ -324,7 +324,7 @@ export function LocalAiSetupCard({ local, activeModel, isOpen, onActivate }: Loc
       )}
 
       <div className="space-y-2">
-        <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">
+        <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-extrabold">
           Installed models
         </p>
         <LocalModelManager
@@ -350,10 +350,10 @@ export function LocalAiSetupCard({ local, activeModel, isOpen, onActivate }: Loc
         />
       )}
       {local.localPullError && (
-        <p className="text-xs text-rose-400 mt-1 leading-relaxed">{local.localPullError}</p>
+        <p className="text-sm text-rose-400 mt-1 leading-relaxed">{local.localPullError}</p>
       )}
 
-      <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-extrabold pt-1">
+      <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-extrabold pt-1">
         Starter downloads
       </p>
       <div className="space-y-2">

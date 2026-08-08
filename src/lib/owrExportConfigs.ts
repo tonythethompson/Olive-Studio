@@ -140,8 +140,6 @@ ort.env.wasm.numThreads = ${threads};
 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/";
 
 export async function initializeOrtSession() {
-  console.log("Loading OWR model pipeline from memory...");
-  
   const sessionOptions = {
     executionProviders: ${executionProviders},
     graphOptimizationLevel: "all",
@@ -151,7 +149,6 @@ export async function initializeOrtSession() {
 
   try {
     const session = await ort.InferenceSession.create("./models/optimized/model.onnx", sessionOptions);
-    console.log("Session init success! Available Inputs:", session.inputNames);
     return session;
   } catch (err) {
     console.error("Failed to boot ONNX Runtime session:", err);

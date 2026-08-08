@@ -1,5 +1,6 @@
 import express, { Router } from "express";
 import expressStaticGzip from "express-static-gzip";
+import helmet from "helmet";
 import path from "path";
 import fs from "fs";
 import { ANY_DOT_VENV_DIR } from "./src/server/shared/anyDotVenvDir.ts";
@@ -25,6 +26,15 @@ const app = express();
 // strict:false lets top-level JSON null/primitives reach parseBody, which
 // rejects non-objects. Omitted bodies stay undefined (defaulted per-route).
 app.use(express.json({ limit: "10mb", strict: false }));
+
+// Security headers (CSP disabled — local-first app loads scripts from self)
+app.use(helmet({ contentSecurityPolicy: false }));
+
+// Prevent indexing if accidentally exposed to the public internet
+app.use((_req, res, next) => {
+  res.setHeader("X-Robots-Tag", "noindex");
+  next();
+});
 
 /** Shared readiness flag: false until listen succeeds (or tests call markServerReady). */
 let serverReady = false;
@@ -208,11 +218,11 @@ async function startServer() {
       staticServeRateLimit,
       expressStaticGzip(distPath, {
         index: "index.html",
-        enableBrotli: false,
-        orderPreference: ["gz"],
+        enableBrotli: true,
+        orderPreference: ["br", "gz"],
         serveStatic: {
           setHeaders: (res, filePath) => {
-            if (/index\.html(\.gz)?$/.test(filePath)) {
+            if (/index\.html(\.(gz|br))?$/.test(filePath)) {
               // express-static-gzip rewrites the served path to the .gz
               // variant when the client accepts it, so a plain endsWith
               // check on "index.html" misses it — the SPA shell would fall
@@ -227,7 +237,7 @@ async function startServer() {
             // hash suffix. Everything else under dist/ (logo.png, fonts,
             // favicon) has a stable URL and must be revalidated, not served
             // from a 1-year cache untouched.
-            const isHashedBuildOutput = /-[\w-]{8}\.(js|css)(\.gz)?$/.test(filePath);
+            const isHashedBuildOutput = /-[\w-]{8}\.(js|css)(\.(gz|br))?$/.test(filePath);
             res.setHeader(
               "Cache-Control",
               isHashedBuildOutput ? "public, max-age=31536000, immutable" : "public, max-age=3600",

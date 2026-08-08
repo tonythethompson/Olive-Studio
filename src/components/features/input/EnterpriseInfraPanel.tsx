@@ -40,7 +40,7 @@ export function EnterpriseInfraPanel({
                 value={state.cacheDir}
                 onChange={(e) => setState({ cacheDir: e.target.value })}
               />
-              <p className="text-xs text-slate-500">
+              <p className="text-sm text-slate-500">
                 Path to store downloaded weights and intermediate optimization artifacts.
               </p>
             </div>
@@ -52,11 +52,11 @@ export function EnterpriseInfraPanel({
                 id="azureStr"
                 type="password"
                 placeholder="DefaultEndpointsProtocol=https;AccountName=..."
-                className="font-mono text-xs"
+                className="font-mono text-sm"
                 value={state.azureStr}
                 onChange={(e) => setState({ azureStr: e.target.value })}
               />
-              <p className="text-xs text-slate-500">
+              <p className="text-sm text-slate-500">
                 Secure connection string for remote cache sharing across your enterprise.
               </p>
             </div>
@@ -66,7 +66,7 @@ export function EnterpriseInfraPanel({
             <div className="flex items-center justify-between">
               <div>
                 <Label>Enable Distributed Caching</Label>
-                <p className="text-xs text-slate-500">
+                <p className="text-sm text-slate-500">
                   When enabled, the Olive recipe will use Azure Blob storage as cache if a connection string
                   is provided; otherwise falls back to local cache.
                 </p>

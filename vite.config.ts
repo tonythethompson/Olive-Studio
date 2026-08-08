@@ -54,30 +54,29 @@ export default defineConfig(() => {
       // Bundle analysis — open http://localhost:1420 to view tree map
       ...(process.env.ANALYZE
         ? [
-            visualizer({
-              open: true,
-              gzipSize: true,
-              brotliSize: true,
-              filename: 'bundle-analysis.html',
-            }),
-          ]
+          visualizer({
+            open: true,
+            gzipSize: true,
+            brotliSize: true,
+            filename: 'bundle-analysis.html',
+          }),
+        ]
         : []),
       // Gzip compression for production deployment (~70% size reduction)
       compression({
         algorithm: 'gzip',
         ext: '.gz',
         threshold: 1024,
+        filter: /\.(js|css|html|svg|json)$/i,
       }),
       stripUnusedOrtWasm(),
-      // Brotli compression (additional ~15-20% over gzip, enabled separately)
-      // Disabled by default — uncomment when deploying to a server that
-      // prefers .br files and vite-plugin-compression confirms Vite 8/Rolldown
-      // compatibility in your Node.js version:
-      // compression({
-      //   algorithm: 'brotliCompress',
-      //   ext: '.br',
-      //   threshold: 1024,
-      // }),
+      // Brotli compression (additional ~15-20% over gzip)
+      compression({
+        algorithm: 'brotliCompress',
+        ext: '.br',
+        threshold: 1024,
+        filter: /\.(js|css|html|svg|json)$/i,
+      }),
     ],
     resolve: {
       alias: {
@@ -102,14 +101,14 @@ export default defineConfig(() => {
       watch: process.env.DISABLE_HMR === 'true'
         ? null
         : {
-            ignored: [
-              '**/.venv/**',
-              ANY_DOT_VENV_DIR,
-              '**/node_modules/**',
-              '**/models/**',
-              '**/.cache/**',
-            ],
-          },
+          ignored: [
+            '**/.venv/**',
+            ANY_DOT_VENV_DIR,
+            '**/node_modules/**',
+            '**/models/**',
+            '**/.cache/**',
+          ],
+        },
     },
     build: {
       rollupOptions: {

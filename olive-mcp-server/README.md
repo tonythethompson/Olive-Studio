@@ -11,7 +11,7 @@ Phase 1-4 plus Studio bridge + local feedback: registered tools (including
 knowledge base with Olive + Olive Studio domains.
 
 - 84 passes documented in `passes.json`
-- 18 hardware profiles in `hardware_profiles.json` (includes TensorRT RTX, OpenVINO NPU, DirectML, WebGPU)
+- 22 hardware profiles in `hardware_profiles.json` (includes TensorRT RTX, OpenVINO NPU, DirectML, WebGPU, XNNPACK, WASM, SNPE, TFLite)
 - 34 Olive troubleshooting entries in `troubleshooting.json` (`domain: olive`)
 - 12 Studio troubleshooting entries in `studio_troubleshooting.json` (`domain: studio`)
 - Evidence-backed model entries in `compatibility_matrix.json`

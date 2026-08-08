@@ -148,17 +148,17 @@ export function PruningInspector({ state, setState }: InspectorProps) {
   return (
     <div className="space-y-5">
       {awqBlocksPruning && (
-        <p className="text-xs text-amber-500/90 leading-relaxed rounded border border-amber-500/20 bg-amber-950/20 px-3 py-2">
+        <p className="text-sm text-amber-500/90 leading-relaxed rounded border border-amber-500/20 bg-amber-950/20 px-3 py-2">
           AWQ is active — pruning cannot run until you switch to PTQ or disable quantization.
         </p>
       )}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">Quick presets</p>
+          <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500">Quick presets</p>
           <button
             type="button"
             onClick={() => setShowSaveDialog(!showSaveDialog)}
-            className="text-[10px] text-slate-500 hover:text-amber-400 transition-colors flex items-center gap-1"
+            className="text-[11px] text-slate-500 hover:text-amber-400 transition-colors flex items-center gap-1"
             title="Save current settings as a custom preset"
           >
             <Plus className="h-3 w-3" />
@@ -173,7 +173,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
             type="button"
             onClick={handleExportPresets}
             disabled={exportEmpty}
-            className="text-[10px] text-slate-500 hover:text-electric-blue transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="text-[11px] text-slate-500 hover:text-electric-blue transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             title={exportEmpty ? "No custom presets to export" : "Export custom presets as JSON"}
             aria-label="Export presets"
           >
@@ -182,7 +182,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
           <button
             type="button"
             onClick={handleImportPresets}
-            className="text-[10px] text-slate-500 hover:text-electric-blue transition-colors"
+            className="text-[11px] text-slate-500 hover:text-electric-blue transition-colors"
             title="Import presets from JSON file"
             aria-label="Import presets"
           >
@@ -204,7 +204,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
           />
         )}
         {importError && (
-          <div className="flex items-start gap-1.5 text-[10px] text-amber-400 mt-1">
+          <div className="flex items-start gap-1.5 text-[11px] text-amber-400 mt-1">
             <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
             <span>{importError}</span>
           </div>
@@ -224,13 +224,13 @@ export function PruningInspector({ state, setState }: InspectorProps) {
               }}
               placeholder="Preset name…"
               maxLength={24}
-              className="flex-1 h-7 px-2 text-[10px] bg-slate-950 border border-slate-700 rounded text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50"
+              className="flex-1 h-7 px-2 text-[11px] bg-slate-950 border border-slate-700 rounded text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50"
             />
             <button
               type="button"
               onClick={handleSaveCustomPreset}
               disabled={!newPresetName.trim() || duplicateName || customPresets.length >= MAX_CUSTOM_PRESETS}
-              className={`h-7 px-2 text-[10px] font-medium rounded border transition-colors ${
+              className={`h-7 px-2 text-[11px] font-medium rounded border transition-colors ${
                 duplicateName
                   ? "border-red-500/50 bg-red-500/10 text-red-400"
                   : "border-amber-500/50 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
@@ -261,7 +261,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
                             },
                           })
                         }
-                        className={`px-2.5 py-1 text-[10px] font-medium rounded border transition-colors ${
+                        className={`px-2.5 py-1 text-[11px] font-medium rounded border transition-colors ${
                           isActive
                             ? "border-amber-500/50 bg-amber-500/10 text-amber-300"
                             : isCustom
@@ -296,10 +296,10 @@ export function PruningInspector({ state, setState }: InspectorProps) {
           })}
         </div>
       </div>
-      <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">Pass settings</p>
+      <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500">Pass settings</p>
       <div className="space-y-2">
         <div className="flex justify-between items-center">
-          <Label className="text-xs text-slate-400 flex items-center gap-1.5">
+          <Label className="text-sm text-slate-400 flex items-center gap-1.5">
             Sparsity ratio
             <TooltipProvider delayDuration={100}>
               <Tooltip>
@@ -327,7 +327,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label htmlFor="pruning-method" className="text-xs text-slate-400">
+          <Label htmlFor="pruning-method" className="text-sm text-slate-400">
             Method
           </Label>
           <Select
@@ -341,7 +341,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
                 },
               })
             }
-            className="h-9 text-xs bg-slate-950"
+            className="h-9 text-sm bg-slate-950"
           >
             <option value="sparsegpt">SparseGPT</option>
             <option value="wanda">Wanda</option>
@@ -349,7 +349,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="pruning-pattern" className="text-xs text-slate-400">
+          <Label htmlFor="pruning-pattern" className="text-sm text-slate-400">
             Sparsity pattern
           </Label>
           <Select
@@ -360,7 +360,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
                 passes: { ...state.passes, pruningType: e.target.value as UIState["passes"]["pruningType"] },
               })
             }
-            className="h-9 text-xs bg-slate-950"
+            className="h-9 text-sm bg-slate-950"
           >
             {allowedPruningTypes.includes("unstructured") && (
               <option value="unstructured">Unstructured</option>
@@ -370,7 +370,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
         </div>
         {state.passes.pruningMethod === "magnitude" && (
           <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="pruning-criteria" className="text-xs text-slate-400 flex items-center gap-1.5">
+            <Label htmlFor="pruning-criteria" className="text-sm text-slate-400 flex items-center gap-1.5">
               Pruning criteria
               <TooltipProvider delayDuration={100}>
                 <Tooltip>
@@ -402,12 +402,12 @@ export function PruningInspector({ state, setState }: InspectorProps) {
                   },
                 })
               }
-              className="h-9 text-xs bg-slate-950 max-w-xs"
+              className="h-9 text-sm bg-slate-950 max-w-xs"
             >
               <option value="l1_norm">L1 norm — aggressive</option>
               <option value="l2_norm">L2 norm — gentle</option>
             </Select>
-            <p className="text-[10px] text-slate-500 leading-relaxed">
+            <p className="text-[11px] text-slate-500 leading-relaxed">
               {state.passes.pruningCriteria === "l1_norm"
                 ? "Sparser, blockier weight distributions — aggressively zeros weights with smaller absolute magnitudes."
                 : "Smoother magnitude preservation — penalizes larger weights more heavily, gentler accuracy degradation."}

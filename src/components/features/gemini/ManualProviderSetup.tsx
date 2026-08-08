@@ -20,7 +20,7 @@ interface ProvidersProp {
 function ProviderSelect({ providers }: ProvidersProp) {
   return (
     <div>
-      <label htmlFor="gemini-settings-provider" className="text-xs text-slate-400 mb-1 block">
+      <label htmlFor="gemini-settings-provider" className="text-sm text-slate-400 mb-1 block">
         Provider
       </label>
       <select
@@ -57,21 +57,21 @@ function ModelSourceBadge({ providers }: ProvidersProp) {
   return (
     <div className="flex items-center gap-2">
       {modelsLoading ? (
-        <span className="text-[10px] text-slate-500 flex items-center gap-1">
+        <span className="text-[11px] text-slate-500 flex items-center gap-1">
           <RefreshCw className="h-2.5 w-2.5 animate-spin" />
           Refreshing…
         </span>
       ) : modelsSource === "live" ? (
-        <span className="text-[10px] text-emerald-500/80">Live catalog</span>
+        <span className="text-[11px] text-emerald-500/80">Live catalog</span>
       ) : modelsSource === "fallback" ? (
-        <span className="text-[10px] text-slate-500">Defaults</span>
+        <span className="text-[11px] text-slate-500">Defaults</span>
       ) : null}
       <button
         type="button"
         title="Refresh model list from provider"
         disabled={modelsLoading}
         onClick={() => providers.refreshModels()}
-        className="text-[10px] text-slate-400 hover:text-electric-blue disabled:opacity-40 flex items-center gap-0.5"
+        className="text-[11px] text-slate-400 hover:text-electric-blue disabled:opacity-40 flex items-center gap-0.5"
       >
         <RefreshCw className={cn("h-2.5 w-2.5", modelsLoading && "animate-spin")} />
         Refresh
@@ -143,14 +143,14 @@ function ModelField({ providers }: ProvidersProp) {
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-1">
-        <label htmlFor="gemini-settings-model" className="text-xs text-slate-400 block">
+        <label htmlFor="gemini-settings-model" className="text-sm text-slate-400 block">
           Model
         </label>
         <ModelSourceBadge providers={providers} />
       </div>
       <ModelInput providers={providers} />
       {providers.modelsHint && (
-        <p className="mt-1 text-[10px] text-slate-500 leading-snug">{providers.modelsHint}</p>
+        <p className="mt-1 text-[11px] text-slate-500 leading-snug">{providers.modelsHint}</p>
       )}
     </div>
   );
@@ -183,7 +183,7 @@ function ApiKeyForm({ providers }: ProvidersProp) {
     <>
       {isCompatMode && (
         <div>
-          <label htmlFor="gemini-settings-base-url" className="text-xs text-slate-400 mb-1 block">
+          <label htmlFor="gemini-settings-base-url" className="text-sm text-slate-400 mb-1 block">
             Base URL
           </label>
           <input
@@ -195,7 +195,7 @@ function ApiKeyForm({ providers }: ProvidersProp) {
             onBlur={() => providers.refreshModelsForTypedBaseUrl()}
             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
           />
-          <p className="text-[10px] text-slate-600 mt-1">
+          <p className="text-[11px] text-slate-600 mt-1">
             For OpenAI-compatible cloud or self-hosted endpoints (vLLM, SGLang, custom gateways). Local LM
             Studio / Ollama live under the Local tab.
           </p>
@@ -205,7 +205,7 @@ function ApiKeyForm({ providers }: ProvidersProp) {
       <div>
         <label
           htmlFor="gemini-settings-api-key"
-          className="text-xs text-slate-400 mb-1 flex flex-wrap items-center gap-1.5"
+          className="text-sm text-slate-400 mb-1 flex flex-wrap items-center gap-1.5"
         >
           <Key className="h-3 w-3" />
           API Key
@@ -238,7 +238,7 @@ function ApiKeyForm({ providers }: ProvidersProp) {
 
       {settingsProvider === "cloudflare" && (
         <div>
-          <label className="text-xs text-slate-400 mb-1 block" htmlFor="gemini-cf-account-id">
+          <label className="text-sm text-slate-400 mb-1 block" htmlFor="gemini-cf-account-id">
             Cloudflare Account ID
           </label>
           <input
@@ -251,7 +251,7 @@ function ApiKeyForm({ providers }: ProvidersProp) {
             onKeyDown={(e) => e.key === "Enter" && void providers.saveProvider()}
             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
           />
-          <p className="text-[10px] text-slate-600 mt-1">
+          <p className="text-[11px] text-slate-600 mt-1">
             Required with the API token. Workers AI is account-scoped.
           </p>
         </div>
@@ -261,7 +261,7 @@ function ApiKeyForm({ providers }: ProvidersProp) {
         type="button"
         onClick={() => void providers.saveProvider()}
         disabled={isSavingProvider}
-        className="w-full h-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer"
+        className="w-full h-9 bg-electric-blue hover:bg-electric-blue/90 disabled:opacity-40 rounded-lg text-sm font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer"
       >
         {isSavingProvider ? (
           <RefreshCw className="h-3.5 w-3.5 animate-spin" />
@@ -294,10 +294,10 @@ export function ManualProviderSetup({ providers }: ProvidersProp) {
         <ApiKeyForm providers={providers} />
       )}
 
-      {providerSaveError && <p className="text-xs text-rose-400">{providerSaveError}</p>}
+      {providerSaveError && <p className="text-sm text-rose-400">{providerSaveError}</p>}
 
       {"docsUrl" in providerOption && providerOption.docsUrl && (
-        <p className="text-[10px] text-slate-600 text-center">
+        <p className="text-[11px] text-slate-600 text-center">
           Docs: <span className="font-mono text-slate-500">{providerOption.docsUrl}</span>
         </p>
       )}

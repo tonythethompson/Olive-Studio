@@ -83,7 +83,7 @@ export function DiagnosisHistory({ entries, activeIndex, onSelect, onClear }: Di
         <>
           {/* Header */}
           <div className="flex items-center justify-between px-2 py-1.5 border-b border-slate-800/50">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500">
+            <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500">
               History ({entries.length})
             </span>
             <div className="flex items-center gap-1">
@@ -108,7 +108,7 @@ export function DiagnosisHistory({ entries, activeIndex, onSelect, onClear }: Di
                 .filter((r) => r.count > 1)
                 .slice(0, 3)
                 .map((r) => (
-                  <div key={r.pattern} className="flex items-center gap-1 text-[10px] text-amber-400/80">
+                  <div key={r.pattern} className="flex items-center gap-1 text-[11px] text-amber-400/80">
                     <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
                     <span className="truncate">{truncate(r.pattern, 40)}</span>
                     <span className="ml-auto text-[9px] text-amber-500/60 font-mono">×{r.count}</span>
@@ -143,7 +143,7 @@ export function DiagnosisHistory({ entries, activeIndex, onSelect, onClear }: Di
                   </div>
                   <div className="flex items-center gap-1">
                     <Wrench className="h-2.5 w-2.5 text-slate-600 shrink-0" />
-                    <span className="text-[10px] text-slate-300 truncate">
+                    <span className="text-[11px] text-slate-300 truncate">
                       {truncate(entry.diagnostic.title, 35)}
                     </span>
                   </div>

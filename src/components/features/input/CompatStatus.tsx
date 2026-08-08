@@ -42,7 +42,7 @@ export function CompatStatusPill({ tier, className, size = "sm" }: CompatStatusP
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded border font-mono",
-        size === "sm" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-[11px]",
+        size === "sm" ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-0.5 text-xs",
         tierClass,
         className,
       )}
@@ -70,7 +70,7 @@ export function CompatCountSummary({ compatible, incompatible, className }: Comp
   return (
     <p
       className={cn(
-        "text-xs text-slate-300 mt-1 leading-relaxed flex flex-wrap items-center gap-x-2 gap-y-1",
+        "text-sm text-slate-300 mt-1 leading-relaxed flex flex-wrap items-center gap-x-2 gap-y-1",
         className,
       )}
     >
