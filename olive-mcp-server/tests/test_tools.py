@@ -172,7 +172,7 @@ def test_search_olive_documentation_with_live_source(monkeypatch: pytest.MonkeyP
     local_results = [{"source": "passes.foo", "snippet": "local hit", "relevance": 0.5}]
     live_results = [{"source": "live:index", "snippet": "live hit", "relevance": 0.9}]
 
-    def fake_local(query, top_k, mode=None):
+    def fake_local(query, top_k, mode=None, budget_ms=None):
         """Return mocked local documentation search results and search metadata."""
         return local_results[:top_k], {
             "mode": "auto",
@@ -184,7 +184,7 @@ def test_search_olive_documentation_with_live_source(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(
         docs_search,
         "_search_live",
-        lambda query, top_k, mode=None: (
+        lambda query, top_k, mode=None, budget_ms=None: (
             live_results[:top_k],
             {"mode": "auto", "effective": "hybrid", "degraded": False},
         ),

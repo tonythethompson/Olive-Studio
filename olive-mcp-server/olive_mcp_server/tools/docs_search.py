@@ -223,6 +223,7 @@ def _search_local(
     top_k: int,
     *,
     mode: str | None = None,
+    budget_ms: int | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Search the local knowledge base using the selected retrieval mode.
     
@@ -230,6 +231,11 @@ def _search_local(
     	query (str): Search terms.
     	top_k (int): Maximum number of results to return.
     	mode (str | None): Retrieval mode override.
+    	budget_ms (int | None): Explicit auto-mode semantic budget in milliseconds.
+    	    ``None`` derives from ``OLIVE_MCP_SEMANTIC_BUDGET_MS`` (``0`` there means
+    	    unlimited). When the caller passes an explicit value, ``0`` means the
+    	    shared per-request budget is exhausted and forces the keyword path
+    	    (never treated as unlimited).
     
     Returns:
     	tuple[list[dict[str, Any]], dict[str, Any]]: Search results and metadata describing the effective retrieval mode and any fallback.
@@ -246,7 +252,24 @@ def _search_local(
     # Auto must budget even when the embedding model is already warm: a missing,
     # stale, or force-rebuilt local index can still encode the full KB.
     use_budget = resolved == "auto"
-    budget_ms = get_semantic_budget_ms() if use_budget else 0
+    if use_budget:
+        if budget_ms is None:
+            effective_budget_ms = get_semantic_budget_ms()
+        elif budget_ms == 0:
+            # Shared request budget exhausted — keyword only (not unlimited).
+            return (
+                _keyword_search(_load_kb_text(), terms, top_k),
+                retrieval_meta(
+                    mode=resolved,
+                    effective="keyword",
+                    degraded=True,
+                    reason="semantic_budget_exceeded",
+                ),
+            )
+        else:
+            effective_budget_ms = budget_ms
+    else:
+        effective_budget_ms = 0  # semantic mode: unlimited via run_with_budget
 
     def _semantic() -> tuple[list[dict[str, Any]], str]:
         """Semantic local search; returns (hits, effective_mode)."""
@@ -263,11 +286,11 @@ def _search_local(
         return _keyword_search(kb_texts, terms, top_k), "keyword"
 
     try:
-        result, timed_out = run_with_budget(_semantic, budget_ms)
+        result, timed_out = run_with_budget(_semantic, effective_budget_ms)
         if timed_out or result is None:
             logger.warning(
                 "Semantic local search exceeded budget (%sms); keyword fallback",
-                budget_ms,
+                effective_budget_ms,
             )
             return (
                 _keyword_search(_load_kb_text(), terms, top_k),
@@ -388,12 +411,17 @@ def _search_live(
     top_k: int,
     *,
     mode: str | None = None,
+    budget_ms: int | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Search live Olive documentation using the resolved retrieval mode.
 
     ``mode="keyword"`` fetches and splits live pages, then runs
     :func:`_keyword_search` only — it must not build the live embedding index
     or call :func:`semantic_search`.
+
+    ``budget_ms`` is the remaining auto-mode semantic budget for this request.
+    An explicit ``0`` forces the keyword path (shared budget exhausted). ``None``
+    derives from ``OLIVE_MCP_SEMANTIC_BUDGET_MS`` (where ``0`` means unlimited).
 
     Returns results plus retrieval metadata so callers can surface live
     degradation (budget/timeout) in the merged response.
@@ -419,7 +447,24 @@ def _search_live(
     # Auto budgets even when the model is warm: live fetch/index build can still
     # be cold after local search already loaded MiniLM.
     use_budget = resolved == "auto"
-    budget_ms = get_semantic_budget_ms() if use_budget else 0
+    if use_budget:
+        if budget_ms is None:
+            effective_budget_ms = get_semantic_budget_ms()
+        elif budget_ms == 0:
+            # Shared request budget exhausted — keyword only (not unlimited).
+            return (
+                _keyword_live(),
+                retrieval_meta(
+                    mode=resolved,
+                    effective="keyword",
+                    degraded=True,
+                    reason="semantic_budget_exceeded",
+                ),
+            )
+        else:
+            effective_budget_ms = budget_ms
+    else:
+        effective_budget_ms = 0  # semantic mode: unlimited via run_with_budget
 
     def _semantic_live() -> tuple[list[dict[str, Any]], str]:
         snippets, embeddings = _get_live_index()
@@ -437,11 +482,11 @@ def _search_live(
         return _keyword_search(snippets, terms, top_k), "keyword"
 
     try:
-        result, timed_out = run_with_budget(_semantic_live, budget_ms)
+        result, timed_out = run_with_budget(_semantic_live, effective_budget_ms)
         if timed_out or result is None:
             logger.warning(
                 "Semantic live search exceeded budget (%sms); keyword fallback",
-                budget_ms,
+                effective_budget_ms,
             )
             return (
                 _keyword_live(),
@@ -521,11 +566,35 @@ def search_olive_documentation(
         }
 
     per_source = max(top_k * 2, 10)
+
+    # One per-request semantic deadline for auto mode (local + live share it).
+    # Env budget 0 stays unlimited (shared_deadline=None → budget_ms=None).
+    shared_deadline: float | None = None
+    if resolved_mode == "auto":
+        total_budget_ms = get_semantic_budget_ms()
+        if total_budget_ms > 0:
+            shared_deadline = time.monotonic() + (total_budget_ms / 1000.0)
+
+    def _remaining_budget_ms() -> int | None:
+        if shared_deadline is None:
+            return None
+        return max(0, int((shared_deadline - time.monotonic()) * 1000))
+
     # Pass the already-resolved mode so local + live stay in lockstep (e.g. keyword
     # never loads embeddings even when OLIVE_MCP_RETRIEVAL_MODE would differ).
-    local_results, retrieval = _search_local(query, per_source, mode=resolved_mode)
+    local_results, retrieval = _search_local(
+        query,
+        per_source,
+        mode=resolved_mode,
+        budget_ms=_remaining_budget_ms(),
+    )
     if live:
-        live_results, live_retrieval = _search_live(query, per_source, mode=resolved_mode)
+        live_results, live_retrieval = _search_live(
+            query,
+            per_source,
+            mode=resolved_mode,
+            budget_ms=_remaining_budget_ms(),
+        )
         retrieval = merge_retrieval_meta(retrieval, live_retrieval)
     else:
         live_results = []

@@ -175,14 +175,14 @@ def test_weak_live_result_does_not_displace_strong_local_top1(monkeypatch: pytes
     strong_local = [{"source": "passes.foo", "snippet": "strong", "relevance": 0.85}]
     weak_live = [{"source": "live:index", "snippet": "weak", "relevance": 0.31}]
 
-    def fake_local(query, top_k, mode=None):
+    def fake_local(query, top_k, mode=None, budget_ms=None):
         return strong_local[:top_k], {
             "mode": "auto",
             "effective": "hybrid",
             "degraded": False,
         }
 
-    def fake_live(query, top_k, *, mode=None):
+    def fake_live(query, top_k, *, mode=None, budget_ms=None):
         return weak_live[:top_k], {
             "mode": "auto",
             "effective": "hybrid",
@@ -483,3 +483,81 @@ def test_live_auto_budgets_even_when_model_is_warm(monkeypatch: pytest.MonkeyPat
 
     # Drain abandoned budget worker for subsequent tests.
     time.sleep(0.55)
+
+
+def test_shared_semantic_budget_zero_remaining_forces_live_keyword(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """When local consumes the shared deadline, live gets budget_ms=0 → keyword only."""
+    import time
+
+    from olive_mcp_server.tools.retrieval import retrieval_meta
+
+    monkeypatch.setenv("OLIVE_MCP_SEMANTIC_BUDGET_MS", "80")
+
+    def slow_local(query, top_k, *, mode=None, budget_ms=None):
+        assert budget_ms is not None and budget_ms > 0
+        time.sleep(0.12)  # exceed shared 80ms deadline
+        return (
+            [{"source": "local.kb", "snippet": "local calibration", "relevance": 0.5}],
+            retrieval_meta(mode="auto", effective="hybrid"),
+        )
+
+    live_budgets: list[int | None] = []
+    live_index_calls = {"n": 0}
+    real_live = docs_search._search_live
+
+    def tracking_real_live(query, top_k, *, mode=None, budget_ms=None):
+        live_budgets.append(budget_ms)
+        return real_live(query, top_k, mode=mode, budget_ms=budget_ms)
+
+    def boom_live_index(*_a, **_k):
+        live_index_calls["n"] += 1
+        raise AssertionError("budget_ms=0 must not build live embeddings")
+
+    monkeypatch.setattr(docs_search, "_search_local", slow_local)
+    monkeypatch.setattr(docs_search, "_search_live", tracking_real_live)
+    monkeypatch.setattr(docs_search, "_get_live_index", boom_live_index)
+    monkeypatch.setattr(
+        docs_search,
+        "_fetch_live_docs",
+        lambda: ({"index": "live calibration for static quantization"}, 1.0),
+    )
+
+    result = search_olive_documentation(
+        query="calibration",
+        top_k=3,
+        live=True,
+        mode="auto",
+    )
+
+    assert live_budgets == [0]
+    assert live_index_calls["n"] == 0
+    assert result["retrieval"]["degraded"] is True
+    assert result["retrieval"]["reason"] == "semantic_budget_exceeded"
+    assert any(r["source"].startswith("live:") for r in result["results"])
+
+
+def test_explicit_budget_ms_zero_selects_keyword_not_unlimited():
+    """Explicit budget_ms=0 must not call run_with_budget(0) (unlimited)."""
+    hits, meta = docs_search._search_live(
+        "calibration",
+        3,
+        mode="auto",
+        budget_ms=0,
+    )
+    assert meta["effective"] == "keyword"
+    assert meta["degraded"] is True
+    assert meta["reason"] == "semantic_budget_exceeded"
+
+    hits_l, meta_l = docs_search._search_local(
+        "calibration",
+        3,
+        mode="auto",
+        budget_ms=0,
+    )
+    assert meta_l["effective"] == "keyword"
+    assert meta_l["degraded"] is True
+    assert meta_l["reason"] == "semantic_budget_exceeded"
+    assert isinstance(hits_l, list)
+    assert isinstance(hits, list)
