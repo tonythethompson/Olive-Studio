@@ -317,9 +317,11 @@ async function continueOliveJobSetup(
     const stubTimeoutMs =
       Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : 120_000;
     const deadline = Date.now() + stubTimeoutMs;
+    let timedOut = false;
     // Exit when cancelled, externally finalized, or the stub wait times out.
     while (job.status === "setting_up" && job.finishedAt == null) {
       if (Date.now() >= deadline) {
+        timedOut = true;
         job.status = "failed";
         pushLog(
           job,
@@ -331,6 +333,15 @@ async function continueOliveJobSetup(
     }
     cleanupJobArtifacts(job);
     if (job.finishedAt == null) finalizeJob(job);
+    if (timedOut) {
+      return {
+        ok: false,
+        error: `Setup stub timed out after ${stubTimeoutMs}ms waiting for cancel/finalize.`,
+        httpStatus: 504,
+        jobId,
+        fingerprint,
+      };
+    }
     return {
       ok: true,
       jobId,

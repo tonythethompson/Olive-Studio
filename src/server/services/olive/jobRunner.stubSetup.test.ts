@@ -136,4 +136,21 @@ describe("OLIVE_JOB_SETUP_STUB timeout", () => {
     expect(job.finishedAt).not.toBeNull();
     expect(job.logs.some((line) => line.includes("Setup stub timed out after 500ms"))).toBe(true);
   });
+
+  it("returns ok:false with 504 when the UI path awaits a stub timeout", async () => {
+    process.env.OLIVE_JOB_SETUP_STUB_TIMEOUT_MS = "500";
+    const recipe = { input_model: {}, passes: {}, engine: {}, systems: {} } as never;
+
+    const pending = startOliveJob({ recipe, source: "ui" });
+    await vi.advanceTimersByTimeAsync(700);
+    const result = await pending;
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    if (result.jobId) trackedJobIds.add(result.jobId);
+    expect(result.httpStatus).toBe(504);
+    expect(result.error).toMatch(/timed out after 500ms/);
+    const job = result.jobId ? jobRegistry.get(result.jobId) : undefined;
+    expect(job?.status).toBe("failed");
+    expect(job?.finishedAt).not.toBeNull();
+  });
 });

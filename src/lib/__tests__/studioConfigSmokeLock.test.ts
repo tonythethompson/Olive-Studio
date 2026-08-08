@@ -130,7 +130,7 @@ describe("studioConfigSmokeLock", () => {
 
   it("does not unlink a peer lock published between classify and reclaim", async () => {
     // Both waiters saw the same aged incomplete body; the first already
-    // reclaimed and published before the second's pathname unlink.
+    // reclaimed and published before the second's body compare under reclaim gate.
     const store: Store = new Map([["/tmp/lock", ""]]);
     const fs = makeFs(store);
     let lockReads = 0;
@@ -171,6 +171,39 @@ describe("studioConfigSmokeLock", () => {
 
     expect(fs.unlinkSync).not.toHaveBeenCalledWith("/tmp/lock");
     expect(sleep).toHaveBeenCalled();
+  });
+
+  it("recreates the lock directory when temp publish hits ENOENT", async () => {
+    const store: Store = new Map();
+    const fs = makeFs(store);
+    let mkdirCalls = 0;
+    const mkdirSync = vi.fn((dir: string, opts?: { recursive?: boolean }) => {
+      mkdirCalls += 1;
+      return fs.mkdirSync(dir, opts as never);
+    });
+    let tempWrites = 0;
+    const writeFileSync = vi.fn((p: string, body: string, opts?: { flag?: string }) => {
+      if (String(p).includes(".tmp") && tempWrites === 0) {
+        tempWrites += 1;
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
+      return fs.writeFileSync(p, body, opts as never);
+    });
+
+    const lock = await acquireStudioConfigSmokeLock("/tmp/olive/.lock", {
+      writeFileSync: writeFileSync as never,
+      linkSync: fs.linkSync as never,
+      readFileSync: fs.readFileSync as never,
+      unlinkSync: fs.unlinkSync as never,
+      mkdirSync: mkdirSync as never,
+      pid: 321,
+      timeoutMs: 1_000,
+      pollMs: 10,
+      randomId: () => "enoent",
+    });
+    expect(store.get("/tmp/olive/.lock")).toBe("321\n");
+    expect(mkdirCalls).toBeGreaterThanOrEqual(2);
+    lock.release();
   });
 
   it("does not reclaim a partial numeric PID body before the publish grace window", async () => {

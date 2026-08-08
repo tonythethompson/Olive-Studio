@@ -44,6 +44,14 @@ export function parsePublishedLockPid(raw) {
 }
 
 /**
+ * @param {unknown} err
+ * @returns {string | undefined}
+ */
+function errorCode(err) {
+  return err && typeof err === "object" && "code" in err ? /** @type {{ code?: string }} */ (err).code : undefined;
+}
+
+/**
  * Publish a fully-written lock file at `lockPath` without an empty-body window.
  * Prefer hard-linking a temp file (link fails with EEXIST and never overwrites).
  * Fall back to exclusive `write(..., { flag: "wx" })` of the same PID bytes when
@@ -55,27 +63,88 @@ export function parsePublishedLockPid(raw) {
  *   writeFileSync: typeof writeFileSync,
  *   linkSync: typeof linkSync,
  *   unlinkSync: typeof unlinkSync,
+ *   mkdirSync: typeof mkdirSync,
  *   tempPath: string,
  * }} deps
  */
 function publishLockFile(lockPath, body, deps) {
-  const { writeFileSync: write, linkSync: link, unlinkSync: unlink, tempPath } = deps;
-  write(tempPath, body);
+  const { writeFileSync: write, linkSync: link, unlinkSync: unlink, mkdirSync: mkdir, tempPath } =
+    deps;
+
+  const attempt = () => {
+    write(tempPath, body);
+    try {
+      try {
+        link(tempPath, lockPath);
+        return;
+      } catch (e) {
+        const code = errorCode(e);
+        if (code === "EEXIST") throw e;
+        // ENOTSUP / EPERM / EINVAL / EXDEV: still publish full content exclusively.
+        write(lockPath, body, { flag: "wx" });
+      }
+    } finally {
+      try {
+        unlink(tempPath);
+      } catch {
+        /* temp already gone */
+      }
+    }
+  };
+
+  try {
+    attempt();
+  } catch (e) {
+    // Peer cleanup may rmdir `.olive-studio` between our mkdir and temp create.
+    if (errorCode(e) !== "ENOENT") throw e;
+    mkdir(path.dirname(lockPath), { recursive: true });
+    attempt();
+  }
+}
+
+/**
+ * Serialize reclaimers so only one waiter may unlink a classified body.
+ * @param {string} lockPath
+ * @param {string} observed
+ * @param {number} myPid
+ * @param {{
+ *   writeFileSync: typeof writeFileSync,
+ *   readFileSync: typeof readFileSync,
+ *   unlinkSync: typeof unlinkSync,
+ *   mkdirSync: typeof mkdirSync,
+ * }} deps
+ * @returns {boolean}
+ */
+function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
+  const { writeFileSync: write, readFileSync: read, unlinkSync: unlink, mkdirSync: mkdir } = deps;
+  const reclaimPath = `${lockPath}.reclaim`;
   try {
     try {
-      link(tempPath, lockPath);
-      return;
+      write(reclaimPath, `${myPid}\n`, { flag: "wx" });
     } catch (e) {
-      const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
-      if (code === "EEXIST") throw e;
-      // ENOTSUP / EPERM / EINVAL / EXDEV: still publish full content exclusively.
-      write(lockPath, body, { flag: "wx" });
+      if (errorCode(e) === "ENOENT") {
+        mkdir(path.dirname(lockPath), { recursive: true });
+        write(reclaimPath, `${myPid}\n`, { flag: "wx" });
+      } else {
+        throw e;
+      }
     }
+  } catch (e) {
+    if (errorCode(e) === "EEXIST") return false;
+    throw e;
+  }
+  try {
+    const still = read(lockPath, "utf8");
+    if (still !== observed) return false;
+    unlink(lockPath);
+    return true;
+  } catch {
+    return false;
   } finally {
     try {
-      unlink(tempPath);
+      unlink(reclaimPath);
     } catch {
-      /* temp already gone */
+      /* already gone */
     }
   }
 }
@@ -131,8 +200,15 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
         writeFileSync: write,
         linkSync: link,
         unlinkSync: unlink,
+        mkdirSync: mkdir,
         tempPath,
       });
+      // Lost reclaim race? Another owner may have replaced the path after we linked.
+      const published = parsePublishedLockPid(read(lockPath, "utf8"));
+      if (published !== myPid) {
+        await sleep(pollMs);
+        continue;
+      }
       return {
         release() {
           try {
@@ -144,7 +220,12 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
         },
       };
     } catch (e) {
-      const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
+      const code = errorCode(e);
+      if (code === "ENOENT") {
+        mkdir(path.dirname(lockPath), { recursive: true });
+        await sleep(pollMs);
+        continue;
+      }
       if (code !== "EEXIST") throw e;
       try {
         // Snapshot the exact bytes we classified. Concurrent reclaim must only
@@ -164,20 +245,18 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
             /* unable to establish age — leave the lock in place */
           }
         }
-        // Only skip the poll sleep after unlink succeeds so failed reclaim
-        // cannot busy-spin.
-        if (reclaimable) {
-          try {
-            const still = read(lockPath, "utf8");
-            if (still !== observed) {
-              /* peer replaced the lock between classify and reclaim */
-            } else {
-              unlink(lockPath);
-              continue;
-            }
-          } catch {
-            /* lost race / still held — fall through to poll */
-          }
+        // Serialize reclaimers via lockPath.reclaim (wx). Only skip the poll
+        // sleep after unlink succeeds so failed reclaim cannot busy-spin.
+        if (
+          reclaimable &&
+          tryReclaimObservedLock(lockPath, observed, myPid, {
+            writeFileSync: write,
+            readFileSync: read,
+            unlinkSync: unlink,
+            mkdirSync: mkdir,
+          })
+        ) {
+          continue;
         }
       } catch {
         /* lock vanished mid-read */
