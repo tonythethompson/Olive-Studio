@@ -90,6 +90,22 @@ describe("preflightOliveRecipe", () => {
     expect(pre.errors.some((e) => /cannot run via local Olive/i.test(e))).toBe(true);
   });
 
+  it("rewrites non-canonical EP tokens in the preflight recipe", () => {
+    const pre = preflightOliveRecipe(minimalRecipe("cuda"));
+    expect(pre.valid).toBe(true);
+    expect(pre.provider).toBe("CUDAExecutionProvider");
+    const accel =
+      pre.recipe.systems?.local_system?.config?.accelerators?.[0] ??
+      pre.recipe.systems?.local_system?.accelerators?.[0];
+    expect(accel?.execution_providers?.[0]).toBe("CUDAExecutionProvider");
+  });
+
+  it("warns on unusual cudaVersion tokens without failing validation", () => {
+    const pre = preflightOliveRecipe(minimalRecipe(), "not-a-cuda-token");
+    expect(pre.valid).toBe(true);
+    expect(pre.warnings.some((w) => /unusual cudaversion token/i.test(w))).toBe(true);
+  });
+
   it("fingerprint omits undefined object values like JSON.stringify", () => {
     const withUndef = { a: 1, b: undefined as unknown as number, c: 2 };
     const without = { a: 1, c: 2 };

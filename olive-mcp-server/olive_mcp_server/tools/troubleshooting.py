@@ -567,7 +567,11 @@ def _build_diagnosis_payload(
 
 
 def _merge_retrieval_meta(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
-    """Merge pool metas: any degraded → keyword/degraded; else prefer hybrid."""
+    """Merge pool metas: any degraded → keyword/degraded; else prefer hybrid.
+
+    Prefer a real retrieval mode over ``\"none\"`` so an empty pool does not
+    hide keyword/hybrid work that ran on the other pool.
+    """
     mode = a.get("mode") or b.get("mode") or get_retrieval_mode()
     degraded = bool(a.get("degraded") or b.get("degraded"))
     reasons = [r for r in (a.get("reason"), b.get("reason")) if r]
@@ -578,9 +582,13 @@ def _merge_retrieval_meta(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any
             degraded=True,
             reason=reasons[0] if reasons else "semantic_budget_exceeded",
         )
-    effective = "hybrid" if "hybrid" in (a.get("effective"), b.get("effective")) else (
-        a.get("effective") or b.get("effective") or "keyword"
-    )
+    modes = [a.get("effective"), b.get("effective")]
+    if "hybrid" in modes:
+        effective = "hybrid"
+    elif "keyword" in modes:
+        effective = "keyword"
+    else:
+        effective = next((m for m in modes if m and m != "none"), None) or "keyword"
     return retrieval_meta(
         mode=str(mode),
         effective=str(effective),

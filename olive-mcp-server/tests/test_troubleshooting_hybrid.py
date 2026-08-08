@@ -501,3 +501,19 @@ def test_strong_keyword_not_overturned_by_negative_feedback(
 
     # Assert — keyword OR=1.0 hybrid (~0.4+) minus 0.05 still beats mild semantic
     assert result["matched_entry"] == "onnx-export-external-data"
+
+
+def test_merge_retrieval_meta_prefers_keyword_over_none():
+    """Empty-pool 'none' must not hide keyword scoring from the other pool."""
+    a = ts.retrieval_meta(mode="auto", effective="none")
+    b = ts.retrieval_meta(mode="auto", effective="keyword")
+    merged = ts._merge_retrieval_meta(a, b)
+    assert merged["effective"] == "keyword"
+    assert merged["degraded"] is False
+
+
+def test_merge_retrieval_meta_prefers_hybrid_over_keyword():
+    a = ts.retrieval_meta(mode="auto", effective="keyword")
+    b = ts.retrieval_meta(mode="auto", effective="hybrid")
+    merged = ts._merge_retrieval_meta(a, b)
+    assert merged["effective"] == "hybrid"

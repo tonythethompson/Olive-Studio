@@ -1,4 +1,18 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Isolate Studio config so these security-policy tests never touch the
+// developer's real `.olive-studio/config.json`.
+vi.mock("../../config.ts", () => {
+  let cfg: Record<string, unknown> = {};
+  return {
+    readStudioConfig: () => ({ ...cfg }),
+    writeStudioConfig: (patch: Record<string, unknown>) => {
+      cfg = { ...cfg, ...patch };
+      return cfg;
+    },
+  };
+});
+
 import { denyUnless, resolveAgentAccess, updateAgentAccess } from "./agentAccess.ts";
 import { writeStudioConfig } from "../../config.ts";
 
@@ -52,6 +66,16 @@ describe("resolveAgentAccess", () => {
     process.env.OLIVE_MCP_ACCESS = "0";
     const p = resolveAgentAccess();
     expect(p.mcpAccess).toBe(false);
+    expect(p.envOverrideActive).toBe(true);
+  });
+
+  it("OLIVE_MCP_ALLOW_JOBS does not re-enable inspection when inspection is denied", () => {
+    process.env.OLIVE_MCP_ALLOW_JOBS = "1";
+    process.env.OLIVE_MCP_ALLOW_JOB_INSPECTION = "0";
+    const p = resolveAgentAccess();
+    expect(p.allowJobSubmission).toBe(true);
+    expect(p.allowJobCancellation).toBe(true);
+    expect(p.allowJobInspection).toBe(false);
     expect(p.envOverrideActive).toBe(true);
   });
 });

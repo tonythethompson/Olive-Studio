@@ -3,13 +3,28 @@
  * replay of buffered log/metrics/done, live metric forwarding, immediate
  * terminal closure, and subscriber cleanup on client disconnect.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import express from "express";
 import type { Server } from "http";
 import type { OliveJob } from "../types.ts";
 import type { GpuMetrics } from "../../lib/gpuMetrics.ts";
 import { pushGpuMetrics, pushLog } from "../services/olive/gpu.ts";
 import { finalizeJob, jobRegistry } from "../services/olive/state.ts";
+
+// Keep agent-access policy mutations out of the real `.olive-studio/config.json`.
+vi.mock("../config.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../config.ts")>();
+  let cfg: Record<string, unknown> = {};
+  return {
+    ...actual,
+    readStudioConfig: () => ({ ...cfg }),
+    writeStudioConfig: (patch: Record<string, unknown>) => {
+      cfg = { ...cfg, ...patch };
+      return cfg;
+    },
+  };
+});
+
 import { writeStudioConfig } from "../config.ts";
 
 const { mountOliveRoutes } = await import("./olive.ts");

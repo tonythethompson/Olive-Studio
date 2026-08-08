@@ -15,12 +15,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const MCPORTER = "mcporter@0.13.0";
 const configCandidates = [
-  path.join(root, "config", "mcporter.example.json"),
   path.join(root, "config", "mcporter.json"),
+  path.join(root, "config", "mcporter.example.json"),
 ];
 const configPath = configCandidates.find((p) => existsSync(p));
 if (!configPath) {
-  console.error("No mcporter config found (config/mcporter.example.json)");
+  console.error("No mcporter config found (config/mcporter.json or config/mcporter.example.json)");
   process.exit(1);
 }
 

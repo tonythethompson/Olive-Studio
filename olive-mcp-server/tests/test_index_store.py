@@ -86,6 +86,7 @@ def test_hash_mismatch_skips_shipped(monkeypatch: pytest.MonkeyPatch):
 
 def test_slo_keyword_troubleshoot_fast():
     """Keyword path should stay well under a second of tool time."""
+    import os
     import time
 
     from olive_mcp_server.mcp_server import call_tool
@@ -97,10 +98,13 @@ def test_slo_keyword_troubleshoot_fast():
     )
     ms = (time.perf_counter() - t0) * 1000
     assert r.get("matched_entry") or r.get("title")
-    assert ms < 2000, f"keyword troubleshoot too slow: {ms:.0f}ms"
+    # Wall-clock SLO is opt-in: shared CI runners make hard latency asserts flaky.
+    if os.environ.get("OLIVE_MCP_ENFORCE_SLO") == "1":
+        assert ms < 2000, f"keyword troubleshoot too slow: {ms:.0f}ms"
 
 
 def test_slo_catalog_fast():
+    import os
     import time
 
     from olive_mcp_server.mcp_server import call_tool
@@ -109,4 +113,5 @@ def test_slo_catalog_fast():
     r = call_tool("get_olive_passes", {"filter": "quantization"})
     ms = (time.perf_counter() - t0) * 1000
     assert r.get("passes")
-    assert ms < 2000, f"catalog too slow: {ms:.0f}ms"
+    if os.environ.get("OLIVE_MCP_ENFORCE_SLO") == "1":
+        assert ms < 2000, f"catalog too slow: {ms:.0f}ms"
