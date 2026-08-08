@@ -133,6 +133,26 @@ describe("GET /api/olive/status/:jobId finishedAt", () => {
     expect(agent.status).toBe(403);
   });
 
+  it("UI stream/status/cancel hide MCP jobs (agent routes required)", async () => {
+    writeStudioConfig({ agentAccess: { allowJobInspection: true, allowJobCancellation: true } });
+    seedJob({ id: "mcp-secret", status: "running", exitCode: null, source: "mcp", logs: ["secret"] });
+    const status = await fetch(`${baseUrl}/api/olive/status/mcp-secret`);
+    expect(status.status).toBe(404);
+    const stream = await fetch(`${baseUrl}/api/olive/stream/mcp-secret`);
+    expect(stream.status).toBe(404);
+    const cancel = await fetch(`${baseUrl}/api/olive/cancel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobId: "mcp-secret" }),
+    });
+    expect(cancel.status).toBe(404);
+    const agentStatus = await fetch(`${baseUrl}/api/olive/agent/status/mcp-secret`);
+    expect(agentStatus.status).toBe(200);
+    const agentBody = (await agentStatus.json()) as { id: string; logs: string[] };
+    expect(agentBody.id).toBe("mcp-secret");
+    expect(agentBody.logs).toContain("secret");
+  });
+
   it("agent status allows MCP jobs when submission is on without inspection", async () => {
     writeStudioConfig({ agentAccess: { allowJobInspection: false, allowJobSubmission: true } });
     seedJob({ id: "mcp-poll", status: "running", exitCode: null, source: "mcp" });

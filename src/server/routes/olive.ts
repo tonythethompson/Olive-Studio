@@ -65,11 +65,18 @@ function agentMayInspectJob(
   return job.source === "mcp";
 }
 
-function handleOliveStatus(req: Request, res: Response): void {
+/** UI Execute routes must not expose MCP jobs (those use /olive/agent/* + policy). */
+function isMcpOriginJob(job: { source?: string }): boolean {
+  return job.source === "mcp";
+}
+
+type JobHttpSurface = "ui" | "agent";
+
+function handleOliveStatus(req: Request, res: Response, surface: JobHttpSurface = "ui"): void {
   const jobIdParam = req.params.jobId;
   const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
   const job = jobId ? jobRegistry.get(jobId) : undefined;
-  if (!job) {
+  if (!job || (surface === "ui" && isMcpOriginJob(job))) {
     res.status(404).json({ error: "Job not found" });
     return;
   }
@@ -84,7 +91,7 @@ function handleOliveStatus(req: Request, res: Response): void {
   });
 }
 
-function handleOliveCancel(req: Request, res: Response): void {
+function handleOliveCancel(req: Request, res: Response, surface: JobHttpSurface = "ui"): void {
   // express.json() leaves body undefined when the client sends no payload;
   // optional jobId means an empty object preserves the 404 "Job not found" contract.
   // Preserve null so parseBody can reject an explicit JSON null body.
@@ -99,7 +106,7 @@ function handleOliveCancel(req: Request, res: Response): void {
   const { jobId } = body.parsed;
 
   const job = jobId ? jobRegistry.get(jobId) : undefined;
-  if (!job) {
+  if (!job || (surface === "ui" && isMcpOriginJob(job))) {
     res.status(404).json({ error: "Job not found" });
     return;
   }
@@ -140,11 +147,11 @@ function handleOliveCancel(req: Request, res: Response): void {
   res.json({ ok: true, status: job.status });
 }
 
-function handleOliveStream(req: Request, res: Response): void {
+function handleOliveStream(req: Request, res: Response, surface: JobHttpSurface = "ui"): void {
   const jobIdParam = req.params.jobId;
   const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
   const job = jobId ? jobRegistry.get(jobId) : undefined;
-  if (!job) {
+  if (!job || (surface === "ui" && isMcpOriginJob(job))) {
     res.status(404).json({ error: "Job not found" });
     return;
   }
@@ -411,9 +418,10 @@ export function mountOliveRoutes(router: Router): void {
     });
   });
 
-  // ─── SSE Stream (UI browser; agent path is /olive/agent/stream) ───────
-  // Match /olive/run: no studioLocalOnly so LAN/hostname Studio sessions work.
-  router.get("/olive/stream/:jobId", handleOliveStream);
+  // ─── SSE Stream (UI Execute; agent path is /olive/agent/stream) ───────
+  // Match /olive/run: no studioLocalOnly / agent policy so LAN Studio works.
+  // MCP-origin jobs are hidden here — use /olive/agent/* (loopback + policy).
+  router.get("/olive/stream/:jobId", (req, res) => handleOliveStream(req, res, "ui"));
   router.get("/olive/agent/stream/:jobId", studioLocalOnly, (req, res) => {
     const gate = denyUnless(
       (p) => p.allowJobInspection || p.allowJobSubmission,
@@ -428,11 +436,11 @@ export function mountOliveRoutes(router: Router): void {
         required: { allowJobInspection: true },
       });
     }
-    return handleOliveStream(req, res);
+    return handleOliveStream(req, res, "agent");
   });
 
-  // ─── Job Status (UI browser; agent path enforces policy) ─────────────
-  router.get("/olive/status/:jobId", handleOliveStatus);
+  // ─── Job Status (UI Execute; agent path enforces policy) ─────────────
+  router.get("/olive/status/:jobId", (req, res) => handleOliveStatus(req, res, "ui"));
   router.get("/olive/agent/status/:jobId", studioLocalOnly, (req, res) => {
     const gate = denyUnless(
       (p) => p.allowJobInspection || p.allowJobSubmission,
@@ -447,7 +455,7 @@ export function mountOliveRoutes(router: Router): void {
         required: { allowJobInspection: true },
       });
     }
-    return handleOliveStatus(req, res);
+    return handleOliveStatus(req, res, "agent");
   });
 
   // ─── Job list (in-memory registry; always policy-gated for agents) ───
@@ -476,8 +484,8 @@ export function mountOliveRoutes(router: Router): void {
     return res.json({ ok: true, count: jobs.length, jobs });
   });
 
-  // ─── Cancel (UI browser; agent path always enforces cancellation) ───
-  router.post("/olive/cancel", handleOliveCancel);
+  // ─── Cancel (UI Execute; agent path always enforces cancellation) ───
+  router.post("/olive/cancel", (req, res) => handleOliveCancel(req, res, "ui"));
   router.post("/olive/agent/cancel", studioLocalOnly, (req, res) => {
     // Body `client` is not authorization — agent route always requires policy.
     const gate = denyUnless(
@@ -485,7 +493,7 @@ export function mountOliveRoutes(router: Router): void {
       "Job cancellation is disabled in Studio agent access settings",
     );
     if (!gate.ok) return sendAgentDeny(res, gate);
-    return handleOliveCancel(req, res);
+    return handleOliveCancel(req, res, "agent");
   });
 }
 
