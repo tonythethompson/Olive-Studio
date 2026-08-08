@@ -9,6 +9,7 @@ import {
   openSync,
   readFileSync,
   rmdirSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -35,6 +36,7 @@ export function isProcessAlive(pid) {
  *   closeSync?: typeof closeSync,
  *   writeFileSync?: typeof writeFileSync,
  *   readFileSync?: typeof readFileSync,
+ *   statSync?: typeof statSync,
  *   unlinkSync?: typeof unlinkSync,
  *   mkdirSync?: typeof mkdirSync,
  *   isProcessAlive?: (pid: number) => boolean,
@@ -50,6 +52,7 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
   const close = deps.closeSync ?? closeSync;
   const write = deps.writeFileSync ?? writeFileSync;
   const read = deps.readFileSync ?? readFileSync;
+  const stat = deps.statSync ?? statSync;
   const unlink = deps.unlinkSync ?? unlinkSync;
   const mkdir = deps.mkdirSync ?? mkdirSync;
   const alive = deps.isProcessAlive ?? isProcessAlive;
@@ -87,9 +90,21 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
       try {
         const body = read(lockPath, "utf8");
         const holder = Number.parseInt(String(body).trim().split(/\r?\n/)[0] ?? "", 10);
-        // Empty/malformed bodies and dead holders are reclaimable. Only skip the
-        // poll sleep after unlink succeeds so failed reclaim cannot busy-spin.
-        const reclaimable = !Number.isFinite(holder) || !alive(holder);
+        // A freshly-created lock can be temporarily empty before its creator
+        // writes the PID. Give malformed locks a grace period before reclaiming
+        // them, while still reclaiming dead finite holders immediately.
+        const malformed = !Number.isFinite(holder);
+        let reclaimable = !malformed && !alive(holder);
+        if (malformed) {
+          try {
+            const ageMs = Date.now() - stat(lockPath).mtimeMs;
+            reclaimable = ageMs >= Math.max(1_000, pollMs * 4);
+          } catch {
+            /* unable to establish age — leave the lock in place */
+          }
+        }
+        // Only skip the poll sleep after unlink succeeds so failed reclaim
+        // cannot busy-spin.
         if (reclaimable) {
           try {
             unlink(lockPath);
