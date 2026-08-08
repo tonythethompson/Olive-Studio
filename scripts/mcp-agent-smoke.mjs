@@ -10,6 +10,10 @@
  * Studio is started with OLIVE_JOB_SETUP_STUB=1 so submits never download models
  * or run Olive (AGENTS.md: no real Olive execute in CI/VM).
  *
+ * Mcporter is installed once into a unique temp prefix (mkdtemp), then invoked
+ * via `node <cli> …` with `shell: false` so Windows does not strip quotes from
+ * `--args` JSON (npx+cmd was corrupting submit payloads).
+ *
  * Usage (repo root):
  *   node scripts/mcp-agent-smoke.mjs
  *   pnpm mcp:agent-smoke
@@ -51,6 +55,100 @@ const STUDIO_CONFIG_SMOKE_LOCK = path.join(
   "mcp-agent-smoke.lock",
 );
 const STRICT = process.env.MCP_SMOKE_STRICT === "1";
+
+/** Resolved once: `node <cli> …` keeps argv intact on Windows (no cmd re-parse). */
+let mcporterCliPath = /** @type {string | null} */ (null);
+
+/**
+ * Install pinned mcporter into a unique per-run temp prefix and return its CLI.
+ * Invocations then use `process.execPath` with `shell: false` so `--args` JSON
+ * is not stripped by cmd.exe (which is what breaks submit on Windows).
+ * Uses mkdtempSync so concurrent smokes never share a half-installed tree.
+ * @returns {string}
+ */
+function ensureMcporterCli() {
+  if (mcporterCliPath) return mcporterCliPath;
+  const pinDir = mkdtempSync(path.join(tmpdir(), "olive-studio-mcporter-"));
+  const cli = path.join(pinDir, "node_modules", "mcporter", "dist", "cli.js");
+  // Fresh dir: install may need shell on Windows for npm.cmd only.
+  const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+  const install = spawnSync(
+    npmCmd,
+    [
+      "install",
+      "--prefix",
+      pinDir,
+      MCPORTER,
+      "--no-save",
+      "--no-package-lock",
+      "--no-fund",
+      "--no-audit",
+      "--loglevel=error",
+    ],
+    {
+      encoding: "utf8",
+      timeout: 180_000,
+      shell: process.platform === "win32",
+      env: { ...process.env },
+    },
+  );
+  if (install.status !== 0) {
+    try {
+      rmSync(pinDir, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
+    throw new Error(
+      `failed to install ${MCPORTER}: ${(install.stderr || install.stdout || "").slice(0, 800)}`,
+    );
+  }
+  if (!existsSync(cli)) {
+    try {
+      rmSync(pinDir, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
+    throw new Error(`mcporter CLI missing after install: ${cli}`);
+  }
+  mcporterCliPath = cli;
+  return cli;
+}
+
+/**
+ * Resolve the pinned CLI, append `--config`, and log the invocation banner.
+ * @param {string[]} args mcporter argv (without node/cli/`--config`)
+ * @returns {{ cli: string, full: string[] }}
+ */
+function prepareMcporterInvocation(args) {
+  const cli = ensureMcporterCli();
+  const full = [...args, "--config", smokeConfigPath];
+  console.log(
+    `$ node ${path.basename(path.dirname(path.dirname(cli)))}/dist/cli.js ${full.join(" ")}`,
+  );
+  return { cli, full };
+}
+
+/**
+ * @param {string[]} args mcporter argv (without node/cli)
+ * @param {{ timeoutMs?: number, env?: NodeJS.ProcessEnv, expectOk?: boolean }} [opts]
+ */
+function runMcporterSync(args, opts = {}) {
+  const { timeoutMs = 90_000, env = process.env, expectOk = true } = opts;
+  const { cli, full } = prepareMcporterInvocation(args);
+  const r = spawnSync(process.execPath, [cli, ...full], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: timeoutMs,
+    shell: false,
+    env: { ...env },
+  });
+  if (r.stdout) process.stdout.write(r.stdout);
+  if (r.stderr) process.stderr.write(r.stderr);
+  if (expectOk && r.status !== 0) {
+    throw new Error(`mcporter failed status=${r.status} signal=${r.signal}`);
+  }
+  return r;
+}
 
 /** Minimal CPU recipe accepted by Studio preflight (no real Olive execute required). */
 const SMOKE_RECIPE = {
@@ -139,22 +237,7 @@ function patchAgentAccessDisk(patch) {
  * @param {{ timeoutMs?: number, env?: NodeJS.ProcessEnv, expectOk?: boolean }} [opts]
  */
 function run(args, opts = {}) {
-  const { timeoutMs = 90_000, env = process.env, expectOk = true } = opts;
-  const full = ["--yes", MCPORTER, ...args, "--config", smokeConfigPath];
-  console.log(`$ npx ${full.join(" ")}`);
-  const r = spawnSync("npx", full, {
-    cwd: root,
-    encoding: "utf8",
-    timeout: timeoutMs,
-    shell: process.platform === "win32",
-    env: { ...env },
-  });
-  if (r.stdout) process.stdout.write(r.stdout);
-  if (r.stderr) process.stderr.write(r.stderr);
-  if (expectOk && r.status !== 0) {
-    throw new Error(`mcporter failed status=${r.status} signal=${r.signal}`);
-  }
-  return r;
+  return runMcporterSync(args, opts);
 }
 
 /** @param {string} stdout */
@@ -185,14 +268,13 @@ function callToolAsync(selector, toolArgs, opts = {}) {
     args.push("--args", JSON.stringify(toolArgs));
   }
   args.push("--timeout", String(timeoutMs), "--output", "json");
-  const full = ["--yes", MCPORTER, ...args, "--config", smokeConfigPath];
-  console.log(`$ npx ${full.join(" ")}`);
+  const { cli, full } = prepareMcporterInvocation(args);
 
   return new Promise((resolve, reject) => {
-    const child = spawn("npx", full, {
+    const child = spawn(process.execPath, [cli, ...full], {
       cwd: root,
       env: { ...(opts.env ?? process.env) },
-      shell: process.platform === "win32",
+      shell: false,
     });
     let stdout = "";
     let stderr = "";
@@ -609,6 +691,7 @@ async function cleanup() {
 function failExitCode(signal) {
   if (signal === "SIGINT") return 130;
   if (signal === "SIGTERM") return 143;
+  if (signal === "SIGHUP") return 129;
   return STRICT ? 1 : 0;
 }
 

@@ -5,7 +5,7 @@ import path from 'path';
 import { defineConfig, type Plugin } from 'vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import compression from 'vite-plugin-compression';
-import { ANY_DOT_VENV_DIR } from './src/server/shared/anyDotVenvDir';
+import { ANY_DOT_VENV_DIR } from './src/server/shared/anyDotVenvDir.ts';
 
 /**
  * onnxruntime-web's wasm binaries are never loaded from our own origin — every

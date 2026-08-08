@@ -313,12 +313,37 @@ async function continueOliveJobSetup(
   );
   if (stubSetup) {
     pushLog(job, "[stub] Olive job setup stubbed; waiting for cancel.");
-    // Exit when cancelled or when another path finalizes the job without a status flip.
+    const rawTimeout = Number(process.env.OLIVE_JOB_SETUP_STUB_TIMEOUT_MS);
+    const stubTimeoutMs =
+      Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : 120_000;
+    const deadline = Date.now() + stubTimeoutMs;
+    let timedOut = false;
+    // Exit when cancelled, externally finalized, or the stub wait times out.
     while (job.status === "setting_up" && job.finishedAt == null) {
-      await new Promise((r) => setTimeout(r, 200));
+      if (Date.now() >= deadline) {
+        timedOut = true;
+        job.status = "failed";
+        pushLog(
+          job,
+          `[stub] Setup stub timed out after ${stubTimeoutMs}ms waiting for cancel/finalize.`,
+        );
+        break;
+      }
+      const remainingMs = deadline - Date.now();
+      const sleepMs = Math.min(200, Math.max(0, remainingMs));
+      await new Promise((r) => setTimeout(r, sleepMs));
     }
     cleanupJobArtifacts(job);
     if (job.finishedAt == null) finalizeJob(job);
+    if (timedOut) {
+      return {
+        ok: false,
+        error: `Setup stub timed out after ${stubTimeoutMs}ms waiting for cancel/finalize.`,
+        httpStatus: 504,
+        jobId,
+        fingerprint,
+      };
+    }
     return {
       ok: true,
       jobId,

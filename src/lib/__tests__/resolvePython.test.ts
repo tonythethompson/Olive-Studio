@@ -57,6 +57,27 @@ describe("resolvePython", () => {
     ).toBe("python3");
   });
 
+  it("prefers python3 over python when both are on PATH", () => {
+    const spawnSync = vi.fn(() => ({ status: 0 }));
+    expect(
+      resolvePython(root, {
+        existsSync: () => false,
+        spawnSync: spawnSync as never,
+        platform: "linux",
+      }),
+    ).toBe("python3");
+    expect(spawnSync).toHaveBeenCalledWith(
+      "python3",
+      ["--version"],
+      expect.objectContaining({ encoding: "utf8" }),
+    );
+    expect(spawnSync).not.toHaveBeenCalledWith(
+      "python",
+      ["--version"],
+      expect.anything(),
+    );
+  });
+
   it("throws when no candidate is executable", () => {
     expect(() =>
       resolvePython(root, {

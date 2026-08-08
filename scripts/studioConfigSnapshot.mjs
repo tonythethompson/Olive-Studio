@@ -3,7 +3,14 @@
  * Used by mcp-agent-smoke so policy patches never leave lossy booleans or a
  * newly created config file behind.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 /** Top-level marker written while mcp-agent-smoke owns policy patches. */
@@ -115,7 +122,7 @@ export function restoreStudioConfigFile(configPath, snapshot, opts = {}) {
     // If smoke created `.olive-studio/` solely for the patch, drop the empty dir.
     const dir = path.dirname(configPath);
     try {
-      rmSync(dir, { recursive: false });
+      rmdirSync(dir);
     } catch {
       /* dir missing, not empty, or not removable — leave alone */
     }
