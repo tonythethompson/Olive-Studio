@@ -11,28 +11,16 @@ import {
 describe("studioConfigSmokeLock", () => {
   it("acquires with wx and releases only own pid", async () => {
     const store = new Map<string, string>();
-    let nextFd = 1;
-    const fds = new Map<number, string>();
 
-    const openSync = vi.fn((p: string, flag: string) => {
-      if (flag === "wx" && store.has(p)) {
-        const err = Object.assign(new Error("EEXIST"), { code: "EEXIST" });
-        throw err;
+    const writeFileSync = vi.fn((p: string, body: string, opts?: { flag?: string }) => {
+      if (opts?.flag === "wx" && store.has(p)) {
+        throw Object.assign(new Error("EEXIST"), { code: "EEXIST" });
       }
-      if (flag === "wx") store.set(p, "");
-      const fd = nextFd++;
-      fds.set(fd, p);
-      return fd;
+      store.set(p, body);
     });
-    const writeFileSync = vi.fn((fd: number, body: string) => {
-      const p = fds.get(fd);
-      if (p) store.set(p, body);
-    });
-    const closeSync = vi.fn();
     const readFileSync = vi.fn((p: string) => {
       if (!store.has(p)) {
-        const err = Object.assign(new Error("ENOENT"), { code: "ENOENT" });
-        throw err;
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
       }
       return store.get(p) ?? "";
     });
@@ -42,8 +30,6 @@ describe("studioConfigSmokeLock", () => {
     const mkdirSync = vi.fn();
 
     const lock = await acquireStudioConfigSmokeLock("/tmp/lock", {
-      openSync: openSync as never,
-      closeSync: closeSync as never,
       writeFileSync: writeFileSync as never,
       readFileSync: readFileSync as never,
       unlinkSync: unlinkSync as never,
@@ -65,24 +51,13 @@ describe("studioConfigSmokeLock", () => {
 
   it("reclaims a stale lock from a dead pid", async () => {
     const store = new Map<string, string>([["/tmp/lock", "111\n"]]);
-    let nextFd = 1;
-    const fds = new Map<number, string>();
-    const openSync = vi.fn((p: string, flag: string) => {
-      if (flag === "wx" && store.has(p)) {
-        throw Object.assign(new Error("EEXIST"), { code: "EEXIST" });
-      }
-      if (flag === "wx") store.set(p, "");
-      const fd = nextFd++;
-      fds.set(fd, p);
-      return fd;
-    });
 
     const lock = await acquireStudioConfigSmokeLock("/tmp/lock", {
-      openSync: openSync as never,
-      closeSync: vi.fn() as never,
-      writeFileSync: vi.fn((fd: number, body: string) => {
-        const p = fds.get(fd);
-        if (p) store.set(p, body);
+      writeFileSync: vi.fn((p: string, body: string, opts?: { flag?: string }) => {
+        if (opts?.flag === "wx" && store.has(p)) {
+          throw Object.assign(new Error("EEXIST"), { code: "EEXIST" });
+        }
+        store.set(p, body);
       }) as never,
       readFileSync: vi.fn((p: string) => {
         if (!store.has(p)) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
@@ -96,6 +71,79 @@ describe("studioConfigSmokeLock", () => {
       pid: 999,
       timeoutMs: 1_000,
       pollMs: 5,
+      sleep: async () => undefined,
+    });
+    expect(store.get("/tmp/lock")).toBe("999\n");
+    lock.release();
+  });
+
+  it("does not reclaim a freshly empty lock (publisher still writing)", async () => {
+    const store = new Map<string, string>([["/tmp/lock", ""]]);
+    const unlinkSync = vi.fn((p: string) => {
+      store.delete(p);
+    });
+    let t = 1_000;
+    const sleep = vi.fn(async () => {
+      // After the first poll, the publisher finishes writing its PID.
+      store.set("/tmp/lock", "4242\n");
+      t += 50;
+    });
+
+    await expect(
+      acquireStudioConfigSmokeLock("/tmp/lock", {
+        writeFileSync: vi.fn((p: string, _body: string, opts?: { flag?: string }) => {
+          if (opts?.flag === "wx" && store.has(p)) {
+            throw Object.assign(new Error("EEXIST"), { code: "EEXIST" });
+          }
+          store.set(p, _body);
+        }) as never,
+        readFileSync: vi.fn((p: string) => {
+          if (!store.has(p)) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+          return store.get(p) ?? "";
+        }) as never,
+        statSync: vi.fn(() => ({ mtimeMs: 1_000 })) as never,
+        unlinkSync: unlinkSync as never,
+        mkdirSync: vi.fn() as never,
+        isProcessAlive: () => true,
+        pid: 999,
+        timeoutMs: 500,
+        pollMs: 50,
+        publishGraceMs: 1_000,
+        now: () => t,
+        sleep,
+      }),
+    ).rejects.toThrow(/could not acquire/);
+
+    expect(unlinkSync).not.toHaveBeenCalled();
+    expect(store.get("/tmp/lock")).toBe("4242\n");
+    expect(sleep).toHaveBeenCalled();
+  });
+
+  it("reclaims an aged empty lock after the publish grace window", async () => {
+    const store = new Map<string, string>([["/tmp/lock", ""]]);
+    let t = 5_000;
+
+    const lock = await acquireStudioConfigSmokeLock("/tmp/lock", {
+      writeFileSync: vi.fn((p: string, body: string, opts?: { flag?: string }) => {
+        if (opts?.flag === "wx" && store.has(p)) {
+          throw Object.assign(new Error("EEXIST"), { code: "EEXIST" });
+        }
+        store.set(p, body);
+      }) as never,
+      readFileSync: vi.fn((p: string) => {
+        if (!store.has(p)) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+        return store.get(p) ?? "";
+      }) as never,
+      statSync: vi.fn(() => ({ mtimeMs: 1_000 })) as never,
+      unlinkSync: vi.fn((p: string) => {
+        store.delete(p);
+      }) as never,
+      mkdirSync: vi.fn() as never,
+      pid: 999,
+      timeoutMs: 1_000,
+      pollMs: 5,
+      publishGraceMs: 1_000,
+      now: () => t,
       sleep: async () => undefined,
     });
     expect(store.get("/tmp/lock")).toBe("999\n");

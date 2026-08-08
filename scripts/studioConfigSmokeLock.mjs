@@ -4,9 +4,7 @@
  * allowJobSubmission / cancellation policy patches.
  */
 import {
-  closeSync,
   mkdirSync,
-  openSync,
   readFileSync,
   rmdirSync,
   statSync,
@@ -32,8 +30,6 @@ export function isProcessAlive(pid) {
 /**
  * @param {string} lockPath
  * @param {{
- *   openSync?: typeof openSync,
- *   closeSync?: typeof closeSync,
  *   writeFileSync?: typeof writeFileSync,
  *   readFileSync?: typeof readFileSync,
  *   statSync?: typeof statSync,
@@ -43,13 +39,16 @@ export function isProcessAlive(pid) {
  *   pid?: number,
  *   timeoutMs?: number,
  *   pollMs?: number,
+ *   publishGraceMs?: number,
  *   sleep?: (ms: number) => Promise<void>,
+ *   now?: () => number,
  * }} [deps]
  * @returns {Promise<{ release: () => void }>}
  */
 export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
-  const open = deps.openSync ?? openSync;
-  const close = deps.closeSync ?? closeSync;
+  // Atomic create+publish: write PID with O_EXCL so waiters never observe an
+  // empty live lock from this process. Malformed bodies still get a grace
+  // window for abandoned mid-write files from older crash paths.
   const write = deps.writeFileSync ?? writeFileSync;
   const read = deps.readFileSync ?? readFileSync;
   const stat = deps.statSync ?? statSync;
@@ -59,20 +58,17 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
   const myPid = deps.pid ?? process.pid;
   const timeoutMs = deps.timeoutMs ?? 120_000;
   const pollMs = deps.pollMs ?? 250;
+  const publishGraceMs = deps.publishGraceMs ?? Math.max(1_000, pollMs * 4);
+  const now = deps.now ?? Date.now;
   const sleep =
     deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
 
   mkdir(path.dirname(lockPath), { recursive: true });
-  const deadline = Date.now() + timeoutMs;
+  const deadline = now() + timeoutMs;
 
-  while (Date.now() < deadline) {
+  while (now() < deadline) {
     try {
-      const fd = open(lockPath, "wx");
-      try {
-        write(fd, `${myPid}\n`);
-      } finally {
-        close(fd);
-      }
+      write(lockPath, `${myPid}\n`, { flag: "wx" });
       return {
         release() {
           try {
@@ -90,15 +86,14 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
       try {
         const body = read(lockPath, "utf8");
         const holder = Number.parseInt(String(body).trim().split(/\r?\n/)[0] ?? "", 10);
-        // A freshly-created lock can be temporarily empty before its creator
-        // writes the PID. Give malformed locks a grace period before reclaiming
-        // them, while still reclaiming dead finite holders immediately.
+        // Fresh empty/malformed bodies can mean "writer still publishing" (legacy
+        // open-then-write callers / crash mid-write). Only reclaim after grace.
         const malformed = !Number.isFinite(holder);
         let reclaimable = !malformed && !alive(holder);
         if (malformed) {
           try {
-            const ageMs = Date.now() - stat(lockPath).mtimeMs;
-            reclaimable = ageMs >= Math.max(1_000, pollMs * 4);
+            const ageMs = now() - stat(lockPath).mtimeMs;
+            reclaimable = ageMs >= publishGraceMs;
           } catch {
             /* unable to establish age — leave the lock in place */
           }
