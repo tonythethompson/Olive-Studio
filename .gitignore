@@ -65,7 +65,6 @@ bun.lock
 .env.example
 .storybook/
 .air/
-.kiro/
 /.playwright-mcp
 /.cursor/worktrees
 /.amazonq
