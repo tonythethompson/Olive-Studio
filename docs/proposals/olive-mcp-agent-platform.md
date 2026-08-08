@@ -2,7 +2,7 @@
 
 **Working title:** Olive MCP as agent intelligence/configuration today; **agent-facing control of Studio** when job APIs are connected  
 **Audience:** Olive Studio maintainers, MCP consumers, agent-tooling stakeholders  
-**Status:** Proposal — **Phases 0–2 implemented on branch `MCP_harden`** (2b submit/validate still later)  
+**Status:** Proposal — **Phases 0–3 implemented on branch `MCP_harden`**  
 **Date:** 2026-08-07  
 **Calibration:** Architecture **~9/10**; near-term plan **~8/10** → proceed. End-state job loop raises product value without a second executor.
 
@@ -266,17 +266,17 @@ studio.configured / reachable → get_mcp_capabilities
 - Capabilities: `job_control.inspection=true`, `submission/cancellation=false`
 - Optional product UI (Copy Agent Setup) deferred  
 
-### Phase 2b — Validation / preflight
+### Phase 2b — Validation / preflight ✅
 
-- `validate_optimization_job`  
-- Fingerprint + preflight mapping to existing Studio checks  
+- `validate_optimization_job` → `POST /api/olive/jobs/validate`  
+- Fingerprint + structural preflight (no env install / no spawn)  
 
-### Phase 3 — Capability-gated submit / cancel
+### Phase 3 — Capability-gated submit / cancel ✅
 
-- Idempotent `submit_optimization_job`  
-- `cancel_optimization_job`  
-- Studio settings for agent access policy  
-- Rich `job_control` capability states  
+- Idempotent `submit_optimization_job` → `POST /api/olive/jobs/submit`  
+- `cancel_optimization_job` → `POST /api/olive/cancel` with `client=mcp`  
+- Studio policy: `GET/PUT /api/olive/agent-access` (+ `OLIVE_MCP_ALLOW_JOBS` dev override)  
+- Shared `startOliveJob` runner for UI `/olive/run` and MCP submit  
 
 ### Later
 

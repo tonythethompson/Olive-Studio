@@ -120,6 +120,133 @@ def get_optimization_job(job_id: str) -> dict[str, Any]:
     }
 
 
+def validate_optimization_job(
+    recipe: dict[str, Any] | None = None,
+    recipe_json: str = "",
+    cuda_version: str = "auto",
+) -> dict[str, Any]:
+    """Validate a recipe via Studio preflight (no Olive spawn).
+
+    Args:
+        recipe: Olive recipe object.
+        recipe_json: Alternative JSON string form of the recipe.
+        cuda_version: Optional CUDA wheel token (default ``auto``).
+
+    Returns:
+        ``valid``, ``fingerprint``, ``errors``, ``warnings``, etc.
+        Never starts a job.
+    """
+    body: dict[str, Any] = {"cudaVersion": cuda_version or "auto"}
+    if recipe is not None:
+        body["recipe"] = recipe
+    elif (recipe_json or "").strip():
+        body["recipeJson"] = recipe_json
+    else:
+        return err("invalid_recipe", "recipe or recipe_json is required.")
+
+    payload = studio_request("POST", "/api/olive/jobs/validate", body=body, timeout=DEFAULT_TIMEOUT_SECONDS)
+    if _is_error(payload) and "valid" not in payload:
+        return payload
+
+    return {
+        "valid": bool(payload.get("valid")),
+        "fingerprint": payload.get("fingerprint"),
+        "provider": payload.get("provider"),
+        "errors": payload.get("errors") or [],
+        "warnings": payload.get("warnings") or [],
+        "cuda_version": payload.get("cudaVersion", cuda_version),
+        "recipe_summary": payload.get("recipe_summary"),
+        "side_effect": False,
+        "note": "Validation only — does not start Olive. Use submit_optimization_job to execute.",
+    }
+
+
+def submit_optimization_job(
+    recipe: dict[str, Any] | None = None,
+    recipe_json: str = "",
+    cuda_version: str = "auto",
+    fingerprint: str = "",
+    idempotency_key: str = "",
+) -> dict[str, Any]:
+    """Submit a job through Studio (policy-gated). Always means execute.
+
+    Idempotency: pass ``idempotency_key`` and/or ``fingerprint`` from validate.
+    Replays return the same ``job_id`` without starting a second run.
+    """
+    body: dict[str, Any] = {"cudaVersion": cuda_version or "auto"}
+    if recipe is not None:
+        body["recipe"] = recipe
+    elif (recipe_json or "").strip():
+        body["recipeJson"] = recipe_json
+    else:
+        return err("invalid_recipe", "recipe or recipe_json is required.")
+    if (fingerprint or "").strip():
+        body["fingerprint"] = fingerprint.strip()
+    if (idempotency_key or "").strip():
+        body["idempotencyKey"] = idempotency_key.strip()
+
+    payload = studio_request(
+        "POST",
+        "/api/olive/jobs/submit",
+        body=body,
+        timeout=120.0,  # env setup may take time before job_id returns
+    )
+    if _is_error(payload) and not payload.get("ok") and "job_id" not in payload and "jobId" not in payload:
+        # 403 policy etc.
+        if payload.get("error") in ("forbidden", "mcp_access_disabled"):
+            return payload
+        if payload.get("error") == "studio_unavailable":
+            return payload
+        # Keep structured submit failures
+        if payload.get("ok") is False:
+            return {
+                "ok": False,
+                "error": payload.get("error") or "submit_failed",
+                "message": payload.get("error") or payload.get("message"),
+                "job_id": payload.get("jobId") or payload.get("job_id"),
+                "fingerprint": payload.get("fingerprint"),
+                "side_effect": True,
+            }
+        return payload
+
+    job_id = payload.get("job_id") or payload.get("jobId")
+    return {
+        "ok": bool(payload.get("ok", True)),
+        "job_id": job_id,
+        "state": payload.get("state") or payload.get("status") or "queued",
+        "fingerprint": payload.get("fingerprint"),
+        "reused": bool(payload.get("reused")),
+        "submitted_at": payload.get("submitted_at"),
+        "side_effect": True,
+        "note": "Job submitted via Studio. Poll get_optimization_job; do not hold this call open for the full run.",
+    }
+
+
+def cancel_optimization_job(job_id: str) -> dict[str, Any]:
+    """Cancel a Studio job (policy-gated when called as MCP client)."""
+    jid = (job_id or "").strip()
+    if not jid:
+        return err("invalid_job_id", "job_id is required.")
+
+    payload = studio_request(
+        "POST",
+        "/api/olive/cancel",
+        body={"jobId": jid, "client": "mcp"},
+        timeout=DEFAULT_TIMEOUT_SECONDS,
+    )
+    if _is_error(payload) and payload.get("ok") is not True:
+        if payload.get("error") == "Job not found":
+            return err("job_not_found", "No job with that id in Studio's registry.", detail=jid)
+        return payload
+
+    return {
+        "ok": True,
+        "job_id": jid,
+        "status": payload.get("status"),
+        "side_effect": True,
+    }
+
+
 def get_optimization_results(job_id: str, log_tail: int = 40) -> dict[str, Any]:
     """Return metadata-only results for a Studio job (read-only).
 

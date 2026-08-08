@@ -142,9 +142,29 @@ export interface OliveJob {
   doneSubscribers: Array<() => void>;
   /** The venv-setup progress listener, retained so it can be detached on cancel. */
   venvListener?: (line: string) => void;
+  /** Stable recipe fingerprint used for MCP idempotency. */
+  fingerprint?: string;
+  /** Client-supplied idempotency key (optional). */
+  idempotencyKey?: string;
+  /** Who started the job. */
+  source?: "ui" | "mcp";
 }
 
 // ─── Venv / Config Types ──────────────────────────────────────────────────────
+
+/** Studio-owned agent/MCP access policy (persisted in .olive-studio/config.json). */
+export interface AgentAccessPolicy {
+  /** Master switch for MCP bridge features. Default true. */
+  mcpAccess?: boolean;
+  /** Allow list/get/results on jobs. Default true. */
+  allowJobInspection?: boolean;
+  /** Reserved for future recipe write-back. Default true. */
+  allowRecipeChanges?: boolean;
+  /** Allow submit_optimization_job / jobs/submit. Default false. */
+  allowJobSubmission?: boolean;
+  /** Allow cancel via MCP / olive/cancel when source is mcp. Default false. */
+  allowJobCancellation?: boolean;
+}
 
 export interface StudioConfig {
   /** Absolute path to a system Python interpreter (optional override). */
@@ -164,6 +184,8 @@ export interface StudioConfig {
    * Survives server restarts so the header does not flip back to "stale".
    */
   kbLastSync?: string;
+  /** Agent/MCP access policy (Studio is authoritative). */
+  agentAccess?: AgentAccessPolicy;
 }
 
 // ─── Recipe Dependency Types ──────────────────────────────────────────────────

@@ -1,0 +1,48 @@
+import { describe, expect, it } from "vitest";
+import { fingerprintRecipe, preflightOliveRecipe } from "./jobPreflight.ts";
+import type { OliveRecipe } from "../../types.ts";
+
+function minimalRecipe(ep = "CPUExecutionProvider"): OliveRecipe {
+  return {
+    input_model: { type: "PyTorchModel", config: {} },
+    systems: {
+      local_system: {
+        type: "LocalSystem",
+        config: {
+          accelerators: [{ device: "cpu", execution_providers: [ep] }],
+        },
+      },
+    },
+    passes: {
+      conversion: { type: "OnnxConversion", config: { target_opset: 20 } },
+    },
+    engine: {
+      search_strategy: false,
+      host: "local_system",
+      target: "local_system",
+      cache_dir: "./cache",
+      output_dir: "./out",
+    },
+  } as OliveRecipe;
+}
+
+describe("preflightOliveRecipe", () => {
+  it("accepts a minimal CPU recipe and returns fingerprint", () => {
+    const pre = preflightOliveRecipe(minimalRecipe());
+    expect(pre.valid).toBe(true);
+    expect(pre.provider).toBe("CPUExecutionProvider");
+    expect(pre.fingerprint).toMatch(/^[a-f0-9]{64}$/);
+    expect(pre.errors).toEqual([]);
+  });
+
+  it("fingerprint is stable for same recipe", () => {
+    const a = fingerprintRecipe(minimalRecipe(), "auto");
+    const b = fingerprintRecipe(minimalRecipe(), "auto");
+    expect(a).toBe(b);
+  });
+
+  it("fingerprint changes with cudaVersion", () => {
+    const r = minimalRecipe();
+    expect(fingerprintRecipe(r, "auto")).not.toBe(fingerprintRecipe(r, "cu124"));
+  });
+});

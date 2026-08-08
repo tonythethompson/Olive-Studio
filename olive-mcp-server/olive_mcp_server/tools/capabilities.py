@@ -17,7 +17,7 @@ from olive_mcp_server.tools.index_store import shipped_index_status
 from olive_mcp_server.tools.retrieval import get_retrieval_mode, get_semantic_budget_ms
 
 # Versioned agent contract; bump when required tools/schemas change intentionally.
-TOOLSET_VERSION = "2026.08.0-phase2"
+TOOLSET_VERSION = "2026.08.0-phase3"
 
 # Loopback hosts accepted for Studio bridge (mirrors studio bridge policy).
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", "[::1]"})
@@ -93,7 +93,13 @@ def get_mcp_capabilities(probe_studio: bool = False) -> dict[str, Any]:
     elif not studio_ok:
         studio_reachable = False
 
-    # Phase 2: inspection tools exist; submission/cancel still deferred.
+    # Phase 3: inspection/validate always advertised; submit/cancel follow Studio policy.
+    policy = _fetch_studio_policy() if studio_ok else None
+    inspection = True if policy is None else bool(policy.get("allowJobInspection", True))
+    submission = False if policy is None else bool(policy.get("allowJobSubmission", False))
+    cancellation = False if policy is None else bool(policy.get("allowJobCancellation", False))
+    mcp_access = True if policy is None else bool(policy.get("mcpAccess", True))
+
     if not studio_ok:
         job_control = {
             "supported": True,
@@ -101,6 +107,18 @@ def get_mcp_capabilities(probe_studio: bool = False) -> dict[str, Any]:
             "ready": False,
             "reason": "studio_unavailable",
             "inspection": True,
+            "validation": True,
+            "submission": False,
+            "cancellation": False,
+        }
+    elif not mcp_access:
+        job_control = {
+            "supported": True,
+            "enabled": False,
+            "ready": False,
+            "reason": "mcp_access_disabled",
+            "inspection": False,
+            "validation": False,
             "submission": False,
             "cancellation": False,
         }
@@ -110,30 +128,23 @@ def get_mcp_capabilities(probe_studio: bool = False) -> dict[str, Any]:
             "enabled": True,
             "ready": False,
             "reason": "studio_unreachable",
-            "inspection": True,
-            "submission": False,
-            "cancellation": False,
-        }
-    elif studio_reachable is True:
-        job_control = {
-            "supported": True,
-            "enabled": True,
-            "ready": True,
-            "reason": "ready",
-            "inspection": True,
-            "submission": False,
-            "cancellation": False,
+            "inspection": inspection,
+            "validation": inspection or submission,
+            "submission": submission,
+            "cancellation": cancellation,
         }
     else:
-        # Configured but not probed — inspection tools can still be attempted.
+        ready = bool(inspection or submission or cancellation)
         job_control = {
             "supported": True,
             "enabled": True,
-            "ready": None,
-            "reason": "studio_configured_unprobed",
-            "inspection": True,
-            "submission": False,
-            "cancellation": False,
+            "ready": ready if studio_reachable is not False else False,
+            "reason": "ready" if studio_reachable is True else "studio_configured_unprobed",
+            "inspection": inspection,
+            "validation": inspection or submission,
+            "submission": submission,
+            "cancellation": cancellation,
+            "policy": policy,
         }
 
     return {
@@ -167,17 +178,28 @@ def get_mcp_capabilities(probe_studio: bool = False) -> dict[str, Any]:
 
 
 def _probe_studio(timeout_s: float = 2.0) -> bool:
-    """Best-effort GET/HEAD against Studio base URL."""
-    base = (os.environ.get("OLIVE_STUDIO_API_URL") or "").strip().rstrip("/")
-    if not base:
-        return False
+    """Best-effort GET against Studio base URL."""
     try:
-        import urllib.request
+        from .studio_loopback import studio_request
 
-        # Prefer a cheap health-ish path if present; root is fine for reachability.
-        url = f"{base}/api/mcp/kb-status"
-        req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-            return 200 <= getattr(resp, "status", 200) < 500
+        payload = studio_request("GET", "/api/health", timeout=timeout_s)
+        # health may be plain {ok:true} or error shape
+        if isinstance(payload, dict) and payload.get("error") == "studio_unavailable":
+            return False
+        return True
     except Exception:
         return False
+
+
+def _fetch_studio_policy() -> dict[str, Any] | None:
+    """Load Studio agent-access policy when reachable."""
+    try:
+        from .studio_loopback import studio_request
+
+        payload = studio_request("GET", "/api/olive/agent-access", timeout=2.0)
+        if not isinstance(payload, dict) or payload.get("error"):
+            return None
+        policy = payload.get("policy")
+        return policy if isinstance(policy, dict) else None
+    except Exception:
+        return None

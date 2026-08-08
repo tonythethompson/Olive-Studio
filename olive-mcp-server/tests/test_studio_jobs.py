@@ -105,3 +105,65 @@ def test_call_tool_list_jobs_unavailable(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("OLIVE_STUDIO_API_URL", raising=False)
     result = call_tool("list_optimization_jobs", {})
     assert result.get("error") == "studio_unavailable"
+
+
+def test_validate_job_ok(monkeypatch: pytest.MonkeyPatch):
+    def fake_request(method, path, **kw):
+        assert method == "POST"
+        assert path == "/api/olive/jobs/validate"
+        return {
+            "ok": True,
+            "valid": True,
+            "fingerprint": "abc",
+            "provider": "CPUExecutionProvider",
+            "errors": [],
+            "warnings": [],
+            "cudaVersion": "auto",
+            "recipe_summary": {"pass_count": 0},
+        }
+
+    monkeypatch.setattr(studio_jobs, "studio_request", fake_request)
+    result = studio_jobs.validate_optimization_job(recipe={"passes": {}})
+    assert result["valid"] is True
+    assert result["fingerprint"] == "abc"
+    assert result["side_effect"] is False
+
+
+def test_submit_job_ok(monkeypatch: pytest.MonkeyPatch):
+    def fake_request(method, path, **kw):
+        assert path == "/api/olive/jobs/submit"
+        return {
+            "ok": True,
+            "job_id": "jid-9",
+            "state": "setting_up",
+            "fingerprint": "fp",
+            "reused": False,
+            "submitted_at": "t",
+        }
+
+    monkeypatch.setattr(studio_jobs, "studio_request", fake_request)
+    result = studio_jobs.submit_optimization_job(recipe={"passes": {}}, idempotency_key="k")
+    assert result["ok"] is True
+    assert result["job_id"] == "jid-9"
+    assert result["side_effect"] is True
+
+
+def test_cancel_job_ok(monkeypatch: pytest.MonkeyPatch):
+    def fake_request(method, path, **kw):
+        assert path == "/api/olive/cancel"
+        assert kw.get("body", {}).get("client") == "mcp"
+        return {"ok": True, "status": "cancelled"}
+
+    monkeypatch.setattr(studio_jobs, "studio_request", fake_request)
+    result = studio_jobs.cancel_optimization_job("jid-9")
+    assert result["ok"] is True
+    assert result["status"] == "cancelled"
+
+
+def test_phase3_tools_registered():
+    for name in (
+        "validate_optimization_job",
+        "submit_optimization_job",
+        "cancel_optimization_job",
+    ):
+        assert name in _TOOL_IMPORTS

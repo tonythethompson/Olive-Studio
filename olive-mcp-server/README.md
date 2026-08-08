@@ -118,14 +118,18 @@ Optional env for local feedback storage:
 | `list_optimization_jobs`          | Read-only list of Studio jobs (loopback Studio required)       |
 | `get_optimization_job`            | Read-only status for one Studio job                            |
 | `get_optimization_results`        | Metadata-only results + log tail (no model bytes)              |
+| `validate_optimization_job`       | Studio preflight + fingerprint (never starts Olive)            |
+| `submit_optimization_job`         | Policy-gated submit via Studio (idempotent)                    |
+| `cancel_optimization_job`         | Policy-gated cancel via Studio                                 |
 
-### Agent clients (Phases 0–2)
+### Agent clients (Phases 0–3)
 
 - **Launcher:** start via `python olive-mcp-server/run.py` (prefers project `.venv`).
 - **Retrieval:** `OLIVE_MCP_RETRIEVAL_MODE=auto|keyword|semantic` (default `auto`). Cold semantic work is budgeted (`OLIVE_MCP_SEMANTIC_BUDGET_MS`, default 8000); timeout yields keyword results with `retrieval.degraded=true`.
 - **Shipped indexes:** document embeddings under `knowledge_base/indexes/` (rebuild with `pnpm mcp:build-index` when KB JSON changes).
 - **Warm path:** `OLIVE_MCP_PRELOAD_EMBEDDINGS=1` loads model + indexes at process start.
-- **Job inspection (Phase 2):** with Studio running and `OLIVE_STUDIO_API_URL` set, agents can **list/get** in-memory jobs and pull **metadata-only** results. No submit/cancel yet — MCP never starts Olive.
+- **Jobs (Phases 2–3):** with Studio + `OLIVE_STUDIO_API_URL`, agents can **list/get/results**, **validate** (fingerprint), and optionally **submit/cancel** when Studio agent-access policy allows. MCP never spawns Olive itself — all execution goes through Studio.
+- **Policy:** `GET/PUT /api/olive/agent-access` (Studio-owned). Dev override: `OLIVE_MCP_ALLOW_JOBS=1` enables submit+cancel.
 - **Smoke:** from repo root, `pnpm mcp:native-smoke` and `pnpm mcp:agent-smoke` (pinned mcporter canary).
 - **mcporter example:** `config/mcporter.example.json` uses the same launcher.
 
