@@ -91,7 +91,7 @@ export function findJobByIdempotency(opts: {
     }
   }
 
-  if (opts.fingerprint) {
+  if (!opts.idempotencyKey && opts.fingerprint) {
     const byFp = resolveJobForIndexKey(`fp:${opts.fingerprint}`);
     if (byFp) return { kind: "hit", job: byFp };
   }
