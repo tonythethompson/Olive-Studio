@@ -200,12 +200,16 @@ def test_keyword_mode_with_live_does_not_start_semantic_loading(
     monkeypatch: pytest.MonkeyPatch,
 ):
     """mode=keyword + live=True must never build live embeddings or call semantic_search."""
+    fetch_calls = {"n": 0}
     monkeypatch.setattr(docs_search, "_load_kb_text", lambda: list(_FIXED_KB_TEXTS))
-    monkeypatch.setattr(
-        docs_search,
-        "_fetch_live_docs",
-        lambda: ({"index": "live calibration data for static quantization"}, 1.0),
-    )
+
+    def fake_fetch():
+        fetch_calls["n"] += 1
+        return ({"index": "live calibration data for static quantization"}, 1.0)
+
+    monkeypatch.setattr(docs_search, "_fetch_live_docs", fake_fetch)
+    # Env default must not override an explicit keyword mode on either path.
+    monkeypatch.setenv("OLIVE_MCP_RETRIEVAL_MODE", "semantic")
 
     def boom_semantic(*_a, **_k):
         raise AssertionError("semantic_search must not run under mode=keyword")
@@ -233,11 +237,21 @@ def test_keyword_mode_with_live_does_not_start_semantic_loading(
     assert result["retrieval"]["mode"] == "keyword"
     assert result["retrieval"]["effective"] == "keyword"
     assert result["count"] > 0
+    assert fetch_calls["n"] == 1
+    assert any(r["source"].startswith("live:") for r in result["results"])
     sources = " ".join(r["source"] for r in result["results"])
     # Local keyword and/or live keyword hits expected; no semantic path taken.
     assert "calibration" in sources.lower() or any(
         "calibration" in r["snippet"].lower() for r in result["results"]
     )
+
+    # Direct live helper: keyword path is fetch → split → _keyword_search only.
+    live_hits, live_meta = docs_search._search_live("calibration", 3, mode="keyword")
+    assert live_meta["mode"] == "keyword"
+    assert live_meta["effective"] == "keyword"
+    assert live_hits
+    assert all(r["source"].startswith("live:") for r in live_hits)
+    assert fetch_calls["n"] == 2
 
 
 def test_empty_query_unchanged():

@@ -391,6 +391,10 @@ def _search_live(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Search live Olive documentation using the resolved retrieval mode.
 
+    ``mode="keyword"`` fetches and splits live pages, then runs
+    :func:`_keyword_search` only — it must not build the live embedding index
+    or call :func:`semantic_search`.
+
     Returns results plus retrieval metadata so callers can surface live
     degradation (budget/timeout) in the merged response.
     """
@@ -398,12 +402,7 @@ def _search_live(
     resolved = get_retrieval_mode(mode)
 
     def _keyword_live() -> list[dict[str, Any]]:
-        """
-        Searches live documentation using keyword matching.
-        
-        Returns:
-        	list[dict[str, Any]]: The highest-ranked matching live documentation snippets.
-        """
+        """Fetch live pages and rank snippets by keyword overlap (no embeddings)."""
         try:
             pages, _ = _fetch_live_docs()
             if not pages:
@@ -413,6 +412,7 @@ def _search_live(
             logger.debug("Live-doc keyword search failed", exc_info=True)
             return []
 
+    # Keyword mode: never touch MiniLM / live embedding index.
     if resolved == "keyword":
         return _keyword_live(), retrieval_meta(mode=resolved, effective="keyword")
 
@@ -480,7 +480,9 @@ def search_olive_documentation(
         top_k: Maximum number of results to return; must be greater than or equal to zero.
         live: Whether to include results from the live Olive documentation.
         mode: Retrieval mode: ``"auto"``, ``"keyword"``, or ``"semantic"``. An empty
-            value uses the default mode.
+            value uses the default mode. The resolved mode is passed to both the
+            local and live search paths so ``keyword`` never starts embedding work
+            on either side.
     
     Returns:
         A dictionary containing the query, ranked results, result count, explanatory
@@ -493,6 +495,7 @@ def search_olive_documentation(
         raise ValueError(f"top_k must be >= 0, got {top_k}")
 
     mode_arg = mode if (mode or "").strip() else None
+    resolved_mode = get_retrieval_mode(mode_arg)
     terms = [t.lower() for t in query.split() if t]
     if not terms:
         return {
@@ -501,7 +504,7 @@ def search_olive_documentation(
             "results": [],
             "note": "Empty query.",
             "retrieval": retrieval_meta(
-                mode=get_retrieval_mode(mode_arg),
+                mode=resolved_mode,
                 effective="none",
             ),
         }
@@ -512,15 +515,17 @@ def search_olive_documentation(
             "results": [],
             "note": "No results requested.",
             "retrieval": retrieval_meta(
-                mode=get_retrieval_mode(mode_arg),
+                mode=resolved_mode,
                 effective="none",
             ),
         }
 
     per_source = max(top_k * 2, 10)
-    local_results, retrieval = _search_local(query, per_source, mode=mode_arg)
+    # Pass the already-resolved mode so local + live stay in lockstep (e.g. keyword
+    # never loads embeddings even when OLIVE_MCP_RETRIEVAL_MODE would differ).
+    local_results, retrieval = _search_local(query, per_source, mode=resolved_mode)
     if live:
-        live_results, live_retrieval = _search_live(query, per_source, mode=mode_arg)
+        live_results, live_retrieval = _search_live(query, per_source, mode=resolved_mode)
         retrieval = merge_retrieval_meta(retrieval, live_retrieval)
     else:
         live_results = []
