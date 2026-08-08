@@ -186,6 +186,90 @@ describe("studioConfigSmokeLock", () => {
     expect(sleep).toHaveBeenCalled();
   });
 
+  it("does not clear an aged incomplete reclaim mutex by age alone", async () => {
+    // Incomplete reclaim bodies must not be age-reaped: a live reclaimer could
+    // still be in its critical section. Only dead complete PIDs are cleared.
+    const store: Store = new Map([
+      ["/tmp/lock", "111\n"],
+      ["/tmp/lock.reclaim", ""],
+    ]);
+    const fs = makeFs(store);
+    let t = 5_000;
+    const sleep = vi.fn(async (ms: number) => {
+      t += ms;
+    });
+
+    await expect(
+      acquireStudioConfigSmokeLock("/tmp/lock", {
+        writeFileSync: fs.writeFileSync as never,
+        linkSync: fs.linkSync as never,
+        readFileSync: fs.readFileSync as never,
+        unlinkSync: fs.unlinkSync as never,
+        mkdirSync: fs.mkdirSync as never,
+        statSync: vi.fn(() => ({ mtimeMs: 1_000 })) as never,
+        isProcessAlive: () => false,
+        pid: 999,
+        timeoutMs: 30,
+        pollMs: 10,
+        publishGraceMs: 1_000,
+        now: () => t,
+        sleep,
+        randomId: () => "incomplete-reclaim",
+      }),
+    ).rejects.toThrow(/could not acquire/);
+
+    expect(store.get("/tmp/lock")).toBe("111\n");
+    expect(store.get("/tmp/lock.reclaim")).toBe("");
+    expect(fs.unlinkSync).not.toHaveBeenCalledWith("/tmp/lock");
+  });
+
+  it("does not unlink the main lock after losing reclaim gate ownership", async () => {
+    const store: Store = new Map([["/tmp/lock", "111\n"]]);
+    const fs = makeFs(store);
+    let reclaimReads = 0;
+    const readFileSync = vi.fn((p: string) => {
+      if (p === "/tmp/lock.reclaim") {
+        reclaimReads += 1;
+        // After we create the gate as 999, a peer replaces it before main unlink.
+        if (reclaimReads >= 2) return "4242\n";
+      }
+      if (!store.has(p)) {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
+      return store.get(p) ?? "";
+    });
+    const writeFileSync = vi.fn((p: string, body: string, opts?: { flag?: string }) => {
+      fs.writeFileSync(p, body, opts as never);
+      if (p === "/tmp/lock.reclaim") reclaimReads = 0;
+    });
+
+    await expect(
+      acquireStudioConfigSmokeLock("/tmp/lock", {
+        writeFileSync: writeFileSync as never,
+        linkSync: fs.linkSync as never,
+        readFileSync: readFileSync as never,
+        unlinkSync: fs.unlinkSync as never,
+        mkdirSync: fs.mkdirSync as never,
+        isProcessAlive: (pid) => pid !== 111,
+        pid: 999,
+        timeoutMs: 30,
+        pollMs: 10,
+        now: (() => {
+          let t = 0;
+          return () => {
+            t += 10;
+            return t;
+          };
+        })(),
+        sleep: async () => undefined,
+        randomId: () => "lost-gate",
+      }),
+    ).rejects.toThrow(/could not acquire/);
+
+    expect(fs.unlinkSync).not.toHaveBeenCalledWith("/tmp/lock");
+    expect(store.get("/tmp/lock")).toBe("111\n");
+  });
+
   it("does not unlink a peer lock published between classify and reclaim", async () => {
     // Both waiters saw the same aged incomplete body; the first already
     // reclaimed and published before the second's body compare under reclaim gate.
