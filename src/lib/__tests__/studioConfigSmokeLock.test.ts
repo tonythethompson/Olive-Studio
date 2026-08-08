@@ -483,7 +483,7 @@ describe("studioConfigSmokeLock", () => {
     lock.release();
   });
 
-  it("falls back to rename of a complete temp when hardlinks are unsupported", async () => {
+  it("on Windows falls back to rename of a complete temp when hardlinks fail", async () => {
     const store: Store = new Map();
     const fs = makeFs(store);
     const linkSync = vi.fn(() => {
@@ -497,6 +497,7 @@ describe("studioConfigSmokeLock", () => {
       readFileSync: fs.readFileSync as never,
       unlinkSync: fs.unlinkSync as never,
       mkdirSync: fs.mkdirSync as never,
+      platform: "win32",
       pid: 777,
       timeoutMs: 1_000,
       pollMs: 10,
@@ -510,6 +511,59 @@ describe("studioConfigSmokeLock", () => {
     expect(fs.writeFileSync).not.toHaveBeenCalledWith("/tmp/lock", "777\n", { flag: "wx" });
     expect([...store.keys()].some((k) => k.includes(".tmp"))).toBe(false);
     lock.release();
+  });
+
+  it("on POSIX uses exclusive wx write when hardlinks fail (never renames over a peer)", async () => {
+    const store: Store = new Map();
+    const fs = makeFs(store);
+    const linkSync = vi.fn(() => {
+      throw Object.assign(new Error("ENOTSUP"), { code: "ENOTSUP" });
+    });
+
+    const lock = await acquireStudioConfigSmokeLock("/tmp/lock", {
+      writeFileSync: fs.writeFileSync as never,
+      linkSync: linkSync as never,
+      renameSync: fs.renameSync as never,
+      readFileSync: fs.readFileSync as never,
+      unlinkSync: fs.unlinkSync as never,
+      mkdirSync: fs.mkdirSync as never,
+      platform: "linux",
+      pid: 778,
+      timeoutMs: 1_000,
+      pollMs: 10,
+      randomId: () => "fb-posix",
+    });
+    expect(store.get("/tmp/lock")).toBe("778\n");
+    expect(fs.renameSync).not.toHaveBeenCalled();
+    expect(fs.writeFileSync).toHaveBeenCalledWith("/tmp/lock", "778\n", { flag: "wx" });
+    lock.release();
+  });
+
+  it("on POSIX ENOTSUP fallback does not replace a live peer lock", async () => {
+    const store: Store = new Map([["/tmp/lock", "111\n"]]);
+    const fs = makeFs(store);
+    const linkSync = vi.fn(() => {
+      throw Object.assign(new Error("ENOTSUP"), { code: "ENOTSUP" });
+    });
+    // Peer stays alive so reclaim must not steal; acquire should time out.
+    await expect(
+      acquireStudioConfigSmokeLock("/tmp/lock", {
+        writeFileSync: fs.writeFileSync as never,
+        linkSync: linkSync as never,
+        renameSync: fs.renameSync as never,
+        readFileSync: fs.readFileSync as never,
+        unlinkSync: fs.unlinkSync as never,
+        mkdirSync: fs.mkdirSync as never,
+        isProcessAlive: () => true,
+        platform: "linux",
+        pid: 779,
+        timeoutMs: 80,
+        pollMs: 10,
+        randomId: () => "no-steal",
+      }),
+    ).rejects.toThrow(/could not acquire/);
+    expect(store.get("/tmp/lock")).toBe("111\n");
+    expect(fs.renameSync).not.toHaveBeenCalled();
   });
 
   it("reports process liveness via kill(pid, 0)", () => {

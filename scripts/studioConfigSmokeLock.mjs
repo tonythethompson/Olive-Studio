@@ -53,14 +53,15 @@ function errorCode(err) {
 }
 
 /**
- * Publish a fully-written lock file at `lockPath` without an empty-body window.
+ * Publish a fully-written lock file at `lockPath` without replacing a live peer.
  * Prefer hard-linking a temp file (link fails with EEXIST and never overwrites).
- * When hardlinks are unsupported, `renameSync` the already-complete temp onto
- * `lockPath` so the final pathname never exists with a partial body (unlike
- * `copyFile` / `wx` writes, which create the dest then stream bytes).
  *
- * Note: on POSIX, rename replaces an existing dest; exclusivity still relies on
- * hardlinks when available. On Windows, rename fails if dest exists (exclusive).
+ * When hardlinks are unsupported:
+ * - Windows: `renameSync` of the complete temp (fails if dest exists; dest appears
+ *   only with already-complete bytes).
+ * - POSIX: exclusive `write(..., { flag: "wx" })` of the full body. Never use
+ *   rename here — POSIX rename replaces an existing dest and would steal a live
+ *   peer lock.
  *
  * @param {string} lockPath
  * @param {string} body
@@ -71,6 +72,7 @@ function errorCode(err) {
  *   unlinkSync: typeof unlinkSync,
  *   mkdirSync: typeof mkdirSync,
  *   tempPath: string,
+ *   platform?: NodeJS.Platform,
  * }} deps
  */
 function publishLockFile(lockPath, body, deps) {
@@ -81,6 +83,7 @@ function publishLockFile(lockPath, body, deps) {
     unlinkSync: unlink,
     mkdirSync: mkdir,
     tempPath,
+    platform = process.platform,
   } = deps;
 
   const attempt = () => {
@@ -92,9 +95,14 @@ function publishLockFile(lockPath, body, deps) {
       } catch (e) {
         const code = errorCode(e);
         if (code === "EEXIST") throw e;
-        // ENOTSUP / EPERM / EINVAL / EXDEV: dest appears only with complete bytes.
-        rename(tempPath, lockPath);
-        return;
+        // ENOTSUP / EPERM / EINVAL / EXDEV
+        if (platform === "win32") {
+          // Exclusive on Windows; dest appears with complete temp bytes.
+          rename(tempPath, lockPath);
+          return;
+        }
+        // POSIX rename would overwrite a live peer — refuse that.
+        write(lockPath, body, { flag: "wx" });
       }
     } finally {
       try {
@@ -122,9 +130,8 @@ function publishLockFile(lockPath, body, deps) {
  * - Complete PID + alive: leave alone (active reclaimer).
  * - Complete PID + dead: clear (crashed after publishing ownership).
  * - Incomplete body: clear only after publishGraceMs (crash orphan). Safe for
- *   live publishers because the gate is published via temp+link (or rename of a
- *   fully written temp), so `reclaimPath` never appears with a partial body while
- *   a live owner is still copying into it.
+ *   live publishers on the hardlink / Windows-rename paths (final path never
+ *   appears mid-stream). POSIX `wx` fallback is exclusive (never steals a peer).
  * @param {string} reclaimPath
  * @param {{
  *   readFileSync: typeof readFileSync,
@@ -178,6 +185,7 @@ function tryClearOrphanedReclaimMutex(reclaimPath, deps) {
  *   now: () => number,
  *   publishGraceMs: number,
  *   randomId: () => string,
+ *   platform: NodeJS.Platform,
  * }} deps
  * @returns {boolean}
  */
@@ -194,6 +202,7 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
     now,
     publishGraceMs,
     randomId,
+    platform,
   } = deps;
   const reclaimPath = `${lockPath}.reclaim`;
 
@@ -211,6 +220,7 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
       unlinkSync: unlink,
       mkdirSync: mkdir,
       tempPath,
+      platform,
     });
     return true;
   };
@@ -272,6 +282,7 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
  *   sleep?: (ms: number) => Promise<void>,
  *   now?: () => number,
  *   randomId?: () => string,
+ *   platform?: NodeJS.Platform,
  * }} [deps]
  * @returns {Promise<{ release: () => void }>}
  */
@@ -290,6 +301,7 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
   const publishGraceMs = deps.publishGraceMs ?? Math.max(1_000, pollMs * 4);
   const now = deps.now ?? Date.now;
   const randomId = deps.randomId ?? (() => randomBytes(6).toString("hex"));
+  const platform = deps.platform ?? process.platform;
   const sleep =
     deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
 
@@ -310,6 +322,7 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
         unlinkSync: unlink,
         mkdirSync: mkdir,
         tempPath,
+        platform,
       });
       // Lost reclaim race? Another owner may have replaced the path after we linked.
       const published = parsePublishedLockPid(read(lockPath, "utf8"));
@@ -370,6 +383,7 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
             now,
             publishGraceMs,
             randomId,
+            platform,
           })
         ) {
           continue;
