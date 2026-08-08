@@ -1,6 +1,7 @@
 import fs from "fs";
 import type { OliveJob } from "../../types.ts";
 import { appConfig } from "../../config.ts";
+import { forgetIdempotencyKeysForJobId, pruneIdempotencyIndex } from "./jobIdempotency.ts";
 
 /** Central job registry — all active Olive jobs. */
 export const jobRegistry = new Map<string, OliveJob>();
@@ -78,11 +79,14 @@ export function sweepJobRegistry(now: number = Date.now()): number {
     ) {
       // Only evict once the temp file is gone; otherwise retain for retry.
       if (cleanupJobArtifacts(job)) {
+        forgetIdempotencyKeysForJobId(id);
         jobRegistry.delete(id);
         removed += 1;
       }
     }
   }
+  // Catch any orphans (e.g. registry cleared without going through forget).
+  pruneIdempotencyIndex();
   return removed;
 }
 

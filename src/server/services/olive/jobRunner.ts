@@ -62,6 +62,9 @@ export type StartOliveJobResult =
       jobId?: string;
     };
 
+/** In-flight MCP submits keyed by idempotency key or fingerprint (serialize check-then-act). */
+const mcpSubmitLocks = new Map<string, Promise<StartOliveJobResult>>();
+
 /**
  * Validates a recipe, prepares its execution environment, and starts an Olive job or reuses an idempotent MCP submission.
  *
@@ -98,33 +101,90 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
 
   // Idempotency is for MCP/agent submit only — UI re-runs should always spawn.
   if (opts.source === "mcp") {
-    const lookup = findJobByIdempotency({
-      idempotencyKey: opts.idempotencyKey,
+    const lockKey = opts.idempotencyKey
+      ? `key:${opts.idempotencyKey}`
+      : `fp:${fingerprint}`;
+    const inflight = mcpSubmitLocks.get(lockKey);
+    if (inflight) return inflight;
+
+    const work = startMcpOliveJobLocked({
+      recipe,
+      provider,
+      cudaVersion,
       fingerprint,
+      idempotencyKey: opts.idempotencyKey,
     });
-    if (lookup.kind === "conflict") {
-      return {
-        ok: false,
-        error: lookup.reason,
-        httpStatus: 409,
-        jobId: lookup.job.id,
-        fingerprint: lookup.job.fingerprint ?? fingerprint,
-      };
-    }
-    if (lookup.kind === "hit") {
-      const submittedAt = lookup.job.submittedAt ?? Date.now();
-      if (lookup.job.submittedAt == null) lookup.job.submittedAt = submittedAt;
-      return {
-        ok: true,
-        jobId: lookup.job.id,
-        reused: true,
-        fingerprint: lookup.job.fingerprint ?? fingerprint,
-        status: lookup.job.status,
-        submittedAt,
-      };
+    mcpSubmitLocks.set(lockKey, work);
+    try {
+      return await work;
+    } finally {
+      // Only clear if we still own the slot (avoid deleting a newer waiter's promise).
+      if (mcpSubmitLocks.get(lockKey) === work) mcpSubmitLocks.delete(lockKey);
     }
   }
 
+  return registerAndStartOliveJob({
+    recipe,
+    provider,
+    cudaVersion,
+    fingerprint,
+    idempotencyKey: opts.idempotencyKey,
+    source: opts.source ?? "ui",
+  });
+}
+
+async function startMcpOliveJobLocked(opts: {
+  recipe: OliveRecipe;
+  provider: IHVProvider;
+  cudaVersion: string;
+  fingerprint: string;
+  idempotencyKey?: string;
+}): Promise<StartOliveJobResult> {
+  const lookup = findJobByIdempotency({
+    idempotencyKey: opts.idempotencyKey,
+    fingerprint: opts.fingerprint,
+  });
+  if (lookup.kind === "conflict") {
+    return {
+      ok: false,
+      error: lookup.reason,
+      httpStatus: 409,
+      jobId: lookup.job.id,
+      fingerprint: lookup.job.fingerprint ?? opts.fingerprint,
+    };
+  }
+  if (lookup.kind === "hit") {
+    const submittedAt = lookup.job.submittedAt ?? Date.now();
+    if (lookup.job.submittedAt == null) lookup.job.submittedAt = submittedAt;
+    return {
+      ok: true,
+      jobId: lookup.job.id,
+      reused: true,
+      fingerprint: lookup.job.fingerprint ?? opts.fingerprint,
+      status: lookup.job.status,
+      submittedAt,
+    };
+  }
+
+  return registerAndStartOliveJob({
+    recipe: opts.recipe,
+    provider: opts.provider,
+    cudaVersion: opts.cudaVersion,
+    fingerprint: opts.fingerprint,
+    idempotencyKey: opts.idempotencyKey,
+    source: "mcp",
+  });
+}
+
+async function registerAndStartOliveJob(opts: {
+  recipe: OliveRecipe;
+  provider: IHVProvider;
+  cudaVersion: string;
+  fingerprint: string;
+  idempotencyKey?: string;
+  source: "ui" | "mcp";
+}): Promise<StartOliveJobResult> {
+  const { recipe, provider, cudaVersion, fingerprint } = opts;
   const jobId = uuidv4();
   const submittedAt = Date.now();
   const job: OliveJob = {
@@ -144,11 +204,11 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
     doneSubscribers: [],
     fingerprint,
     idempotencyKey: opts.idempotencyKey,
-    source: opts.source ?? "ui",
+    source: opts.source,
   };
   jobRegistry.set(jobId, job);
   // Index only MCP submissions so agent idempotency cannot absorb UI runs.
-  if ((opts.source ?? "ui") === "mcp") {
+  if (opts.source === "mcp") {
     rememberIdempotencyKeys(job);
   }
 

@@ -47,6 +47,24 @@ function sendAgentDeny(
   });
 }
 
+/**
+ * Submission alone may inspect MCP-origin jobs (lifecycle poll after submit).
+ * Broad inspection of UI jobs still requires allowJobInspection.
+ */
+function agentMayInspectJob(
+  req: Request,
+  policy: { allowJobInspection: boolean; allowJobSubmission: boolean },
+): boolean {
+  if (policy.allowJobInspection) return true;
+  if (!policy.allowJobSubmission) return false;
+  const jobIdParam = req.params.jobId;
+  const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
+  const job = jobId ? jobRegistry.get(jobId) : undefined;
+  // Missing job: let the handler return 404 (do not leak existence via policy).
+  if (!job) return true;
+  return job.source === "mcp";
+}
+
 function handleOliveStatus(req: Request, res: Response): void {
   const jobIdParam = req.params.jobId;
   const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
@@ -248,14 +266,14 @@ export function mountOliveRoutes(router: Router): void {
     return res.json({ ok: true, jobId: result.jobId, reused: result.reused });
   });
 
-  // ─── Agent access policy (Studio-owned; loopback-only) ────────────────
-  router.get("/olive/agent-access", studioLocalOnly, (_req, res) => {
+  // ─── Agent access policy (Studio UI; same host trust as /olive/run) ────
+  // Not studioLocalOnly: LAN/hostname browser sessions must load/save toggles.
+  router.get("/olive/agent-access", (_req, res) => {
     return res.json({ ok: true, policy: getAgentAccessPublic() });
   });
 
-  router.put("/olive/agent-access", studioLocalOnly, oliveRunRateLimit, (req, res) => {
+  router.put("/olive/agent-access", oliveRunRateLimit, (req, res) => {
     // parseBody requires Record<string, unknown>; AgentAccessPolicy has no index signature.
-    // Trust boundary: studioLocalOnly (loopback) — same as other Studio-owned agent routes.
     type AgentAccessBody = AgentAccessPolicy & Record<string, unknown>;
     const body = parseBody<AgentAccessBody>(req.body ?? {}, {
       mcpAccess: { type: "boolean", required: false },
@@ -391,33 +409,55 @@ export function mountOliveRoutes(router: Router): void {
     });
   });
 
-  // ─── SSE Stream (loopback UI; agent path is /olive/agent/stream) ──────
-  router.get("/olive/stream/:jobId", studioLocalOnly, handleOliveStream);
+  // ─── SSE Stream (UI browser; agent path is /olive/agent/stream) ───────
+  // Match /olive/run: no studioLocalOnly so LAN/hostname Studio sessions work.
+  router.get("/olive/stream/:jobId", handleOliveStream);
   router.get("/olive/agent/stream/:jobId", studioLocalOnly, (req, res) => {
     const gate = denyUnless(
-      (p) => p.allowJobInspection,
+      (p) => p.allowJobInspection || p.allowJobSubmission,
       "Job inspection is disabled in Studio agent access settings",
     );
     if (!gate.ok) return sendAgentDeny(res, gate);
+    if (!agentMayInspectJob(req, gate.policy)) {
+      return res.status(403).json({
+        ok: false,
+        error: "forbidden",
+        reason: "Job inspection is disabled in Studio agent access settings",
+        required: { allowJobInspection: true },
+      });
+    }
     return handleOliveStream(req, res);
   });
 
-  // ─── Job Status (loopback UI; agent path always enforces inspection) ─
-  router.get("/olive/status/:jobId", studioLocalOnly, handleOliveStatus);
+  // ─── Job Status (UI browser; agent path enforces policy) ─────────────
+  router.get("/olive/status/:jobId", handleOliveStatus);
   router.get("/olive/agent/status/:jobId", studioLocalOnly, (req, res) => {
     const gate = denyUnless(
-      (p) => p.allowJobInspection,
+      (p) => p.allowJobInspection || p.allowJobSubmission,
       "Job inspection is disabled in Studio agent access settings",
     );
     if (!gate.ok) return sendAgentDeny(res, gate);
+    if (!agentMayInspectJob(req, gate.policy)) {
+      return res.status(403).json({
+        ok: false,
+        error: "forbidden",
+        reason: "Job inspection is disabled in Studio agent access settings",
+        required: { allowJobInspection: true },
+      });
+    }
     return handleOliveStatus(req, res);
   });
 
   // ─── Job list (in-memory registry; always policy-gated for agents) ───
   router.get("/olive/jobs", studioLocalOnly, (_req, res) => {
-    const gate = denyUnless((p) => p.allowJobInspection, "Job inspection is disabled in Studio agent access settings");
+    const gate = denyUnless(
+      (p) => p.allowJobInspection || p.allowJobSubmission,
+      "Job inspection is disabled in Studio agent access settings",
+    );
     if (!gate.ok) return sendAgentDeny(res, gate);
+    const mcpOnly = !gate.policy.allowJobInspection;
     const jobs = Array.from(jobRegistry.values())
+      .filter((job) => !mcpOnly || job.source === "mcp")
       .map((job) => ({
         id: job.id,
         status: job.status,
@@ -434,8 +474,8 @@ export function mountOliveRoutes(router: Router): void {
     return res.json({ ok: true, count: jobs.length, jobs });
   });
 
-  // ─── Cancel (loopback UI; agent path always enforces cancellation) ───
-  router.post("/olive/cancel", studioLocalOnly, handleOliveCancel);
+  // ─── Cancel (UI browser; agent path always enforces cancellation) ───
+  router.post("/olive/cancel", handleOliveCancel);
   router.post("/olive/agent/cancel", studioLocalOnly, (req, res) => {
     // Body `client` is not authorization — agent route always requires policy.
     const gate = denyUnless(

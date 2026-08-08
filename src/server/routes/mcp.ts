@@ -284,6 +284,15 @@ export function mountMcpRoutes(router: Router): void {
     studioRecipeLocalOnly,
     studioRecipeRateLimit,
     (req, res) => {
+      const gate = denyUnless(() => true, "MCP access is disabled in Studio settings");
+      if (!gate.ok) {
+        return res.status(403).json({
+          ok: false,
+          error: gate.error,
+          reason: gate.reason,
+          ...("required" in gate && gate.required ? { required: gate.required } : {}),
+        });
+      }
       try {
         const result = evaluateStudioRecipeBridge(req.body);
         if (!result.ok) {

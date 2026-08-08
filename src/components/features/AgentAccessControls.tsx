@@ -39,7 +39,7 @@ const TOGGLES: { key: PolicyKey; label: string; hint: string; danger?: boolean }
   {
     key: "allowJobSubmission",
     label: "Job submission",
-    hint: "Allow agents to start Olive runs via Studio",
+    hint: "Allow agents to start Olive runs (also permits polling those MCP jobs)",
     danger: true,
   },
   {

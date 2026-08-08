@@ -92,8 +92,8 @@ describe("GET /api/olive/jobs", () => {
     expect(body).toEqual({ ok: true, count: 0, jobs: [] });
   });
 
-  it("returns 403 when job inspection is disabled", async () => {
-    writeStudioConfig({ agentAccess: { allowJobInspection: false } });
+  it("returns 403 when job inspection and submission are both disabled", async () => {
+    writeStudioConfig({ agentAccess: { allowJobInspection: false, allowJobSubmission: false } });
     seedJob({ id: "hidden", status: "running", exitCode: null });
     const res = await fetch(`${baseUrl}/api/olive/jobs`);
     expect(res.status).toBe(403);
@@ -101,6 +101,16 @@ describe("GET /api/olive/jobs", () => {
     expect(body.ok).toBe(false);
     expect(body.error).toBe("forbidden");
     expect(body.policy).toBeUndefined();
+  });
+
+  it("lists MCP jobs when submission is on but inspection is off", async () => {
+    writeStudioConfig({ agentAccess: { allowJobInspection: false, allowJobSubmission: true } });
+    seedJob({ id: "ui-hidden", status: "running", exitCode: null, source: "ui" });
+    seedJob({ id: "mcp-visible", status: "running", exitCode: null, source: "mcp" });
+    const res = await fetch(`${baseUrl}/api/olive/jobs`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; jobs: Array<{ id: string }> };
+    expect(body.jobs.map((j) => j.id)).toEqual(["mcp-visible"]);
   });
 });
 
@@ -121,6 +131,16 @@ describe("GET /api/olive/status/:jobId finishedAt", () => {
     expect(ui.status).toBe(200);
     const agent = await fetch(`${baseUrl}/api/olive/agent/status/ui-visible`);
     expect(agent.status).toBe(403);
+  });
+
+  it("agent status allows MCP jobs when submission is on without inspection", async () => {
+    writeStudioConfig({ agentAccess: { allowJobInspection: false, allowJobSubmission: true } });
+    seedJob({ id: "mcp-poll", status: "running", exitCode: null, source: "mcp" });
+    seedJob({ id: "ui-block", status: "running", exitCode: null, source: "ui" });
+    const mcp = await fetch(`${baseUrl}/api/olive/agent/status/mcp-poll`);
+    expect(mcp.status).toBe(200);
+    const ui = await fetch(`${baseUrl}/api/olive/agent/status/ui-block`);
+    expect(ui.status).toBe(403);
   });
 });
 
@@ -156,6 +176,9 @@ function seedJob(partial: Partial<OliveJob> & Pick<OliveJob, "id" | "status">): 
     tempRecipePath: null,
     finishedAt: partial.finishedAt ?? null,
     doneSubscribers: [],
+    source: partial.source,
+    fingerprint: partial.fingerprint,
+    idempotencyKey: partial.idempotencyKey,
   };
   jobRegistry.set(job.id, job);
   return job;

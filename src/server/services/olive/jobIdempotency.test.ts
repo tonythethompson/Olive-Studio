@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { clearIdempotencyIndex, findJobByIdempotency, rememberIdempotencyKeys } from "./jobIdempotency.ts";
+import { clearIdempotencyIndex, findJobByIdempotency, forgetIdempotencyKeysForJobId, idempotencyIndexSize, rememberIdempotencyKeys } from "./jobIdempotency.ts";
 import { jobRegistry } from "./state.ts";
 import type { OliveJob } from "../../types.ts";
 
@@ -107,5 +107,56 @@ describe("jobIdempotency", () => {
     jobRegistry.set(job.id, job);
     rememberIdempotencyKeys(job);
     expect(findJobByIdempotency({ fingerprint: "fp-ui" })).toEqual({ kind: "miss" });
+  });
+
+  it("treats failed and cancelled jobs as miss so agents can retry", () => {
+    const failed = makeJob("j-fail", {
+      fingerprint: "fp-retry",
+      idempotencyKey: "k-retry",
+      source: "mcp",
+      status: "failed",
+    });
+    jobRegistry.set(failed.id, failed);
+    rememberIdempotencyKeys(failed);
+    expect(findJobByIdempotency({ idempotencyKey: "k-retry", fingerprint: "fp-retry" })).toEqual({
+      kind: "miss",
+    });
+    expect(findJobByIdempotency({ fingerprint: "fp-retry" })).toEqual({ kind: "miss" });
+
+    const cancelled = makeJob("j-cancel", {
+      fingerprint: "fp-cancel",
+      idempotencyKey: "k-cancel",
+      source: "mcp",
+      status: "cancelled",
+    });
+    jobRegistry.set(cancelled.id, cancelled);
+    rememberIdempotencyKeys(cancelled);
+    expect(findJobByIdempotency({ idempotencyKey: "k-cancel" })).toEqual({ kind: "miss" });
+  });
+
+  it("still reuses completed jobs for idempotent success replay", () => {
+    const job = makeJob("j-ok", {
+      fingerprint: "fp-ok",
+      idempotencyKey: "k-ok",
+      source: "mcp",
+      status: "completed",
+    });
+    jobRegistry.set(job.id, job);
+    rememberIdempotencyKeys(job);
+    expect(findJobByIdempotency({ idempotencyKey: "k-ok" })).toEqual({ kind: "hit", job });
+  });
+
+  it("forgetIdempotencyKeysForJobId removes key and fingerprint entries", () => {
+    const job = makeJob("j-sweep", {
+      fingerprint: "fp-sweep",
+      idempotencyKey: "k-sweep",
+      source: "mcp",
+    });
+    jobRegistry.set(job.id, job);
+    rememberIdempotencyKeys(job);
+    expect(idempotencyIndexSize()).toBe(2);
+    forgetIdempotencyKeysForJobId("j-sweep");
+    expect(idempotencyIndexSize()).toBe(0);
+    expect(findJobByIdempotency({ fingerprint: "fp-sweep" })).toEqual({ kind: "miss" });
   });
 });

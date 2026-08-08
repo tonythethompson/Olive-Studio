@@ -274,7 +274,7 @@ studio.configured / reachable → get_mcp_capabilities
 
 - Stage 1 job tools: `list_optimization_jobs`, `get_optimization_job`, `get_optimization_results`
 - Studio: `GET /api/olive/jobs` + `finishedAt` on status
-- **Inspection policy (implemented):** `allowJobInspection` gates **list** (`GET /api/olive/jobs`) and the dedicated agent routes `GET /api/olive/agent/status/:jobId` and `GET /api/olive/agent/stream/:jobId`. Studio UI keeps using loopback-only `/api/olive/status` and `/api/olive/stream` without the agent policy switch. MCP job tools call the `/agent/*` paths, so disabling inspection denies agent detail/results/log tails. Cancellation uses `POST /api/olive/agent/cancel` (always `allowJobCancellation`) vs UI `POST /api/olive/cancel`.
+- **Inspection policy (implemented):** `allowJobInspection` gates **list** (`GET /api/olive/jobs`) and the dedicated agent routes `GET /api/olive/agent/status/:jobId` and `GET /api/olive/agent/stream/:jobId`. When `allowJobSubmission` is on but inspection is off, agents may still list/poll **MCP-origin** jobs only (submit lifecycle). Studio UI uses `/api/olive/status`, `/api/olive/stream`, and `POST /api/olive/cancel` without agent policy and without `studioLocalOnly` (same trust as `/olive/run` for LAN/hostname browsers). MCP job tools call the `/agent/*` paths (loopback + policy). Cancellation uses `POST /api/olive/agent/cancel` (always `allowJobCancellation`) vs UI `POST /api/olive/cancel`.
 - Capabilities: `job_control.inspection=true`, `submission/cancellation=false`
 - Optional product UI (Copy Agent Setup) deferred  
 
@@ -286,8 +286,8 @@ studio.configured / reachable → get_mcp_capabilities
 ### Phase 3 — Capability-gated submit / cancel ✅
 
 - Idempotent `submit_optimization_job` → `POST /api/olive/jobs/submit`  
-- `cancel_optimization_job` → `POST /api/olive/cancel` with `client=mcp`  
-- Studio policy: `GET/PUT /api/olive/agent-access` (+ escalate-only `OLIVE_MCP_ALLOW_JOBS` for Dev/CI; see §6.7)  
+- `cancel_optimization_job` → `POST /api/olive/agent/cancel`  
+- Studio policy: `GET/PUT /api/olive/agent-access` (browser UI; env overrides e.g. `OLIVE_MCP_ALLOW_JOBS` for Dev/CI; see §6.7)  
 - Shared `startOliveJob` runner for UI `/olive/run` and MCP submit  
 
 ### Later
