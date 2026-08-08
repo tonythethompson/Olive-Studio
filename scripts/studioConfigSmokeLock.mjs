@@ -9,7 +9,6 @@ import {
   mkdirSync,
   readFileSync,
   rmdirSync,
-  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -57,6 +56,8 @@ function errorCode(err) {
  * When hardlinks are unsupported, exclusive `write(..., { flag: "wx" })` of the
  * full body (all platforms). Never rename onto the final path — POSIX rename
  * replaces an existing dest, and a guarded exists-check would be TOCTOU.
+ * Incomplete bodies at the final path are never age-reclaimed (a paused wx
+ * publisher must keep exclusivity until timeout).
  *
  * @param {string} lockPath
  * @param {string} body
@@ -114,16 +115,14 @@ function publishLockFile(lockPath, body, deps) {
  *
  * - Complete PID + alive: leave alone (active reclaimer).
  * - Complete PID + dead: clear (crashed after publishing ownership).
- * - Incomplete body: clear only after publishGraceMs (crash orphan). Live
- *   publishers prefer temp+link (complete at appear); wx fallback is exclusive.
+ * - Incomplete body: never clear. A live `wx` publisher may be paused mid-write
+ *   past `publishGraceMs`; age-clearing would steal the name and break exclusivity.
+ *   Smokers wait out `timeoutMs` instead.
  * @param {string} reclaimPath
  * @param {{
  *   readFileSync: typeof readFileSync,
  *   unlinkSync: typeof unlinkSync,
- *   statSync: typeof statSync,
  *   isProcessAlive: (pid: number) => boolean,
- *   now: () => number,
- *   publishGraceMs: number,
  * }} deps
  * @returns {boolean}
  */
@@ -131,20 +130,13 @@ function tryClearOrphanedReclaimMutex(reclaimPath, deps) {
   const {
     readFileSync: read,
     unlinkSync: unlink,
-    statSync: stat,
     isProcessAlive: alive,
-    now,
-    publishGraceMs,
   } = deps;
   try {
     const holder = parsePublishedLockPid(read(reclaimPath, "utf8"));
-    if (holder != null) {
-      if (alive(holder)) return false;
-      unlink(reclaimPath);
-      return true;
-    }
-    const ageMs = now() - stat(reclaimPath).mtimeMs;
-    if (ageMs < publishGraceMs) return false;
+    // Incomplete: leave in place (may be a delayed live wx publish).
+    if (holder == null) return false;
+    if (alive(holder)) return false;
     unlink(reclaimPath);
     return true;
   } catch {
@@ -163,10 +155,7 @@ function tryClearOrphanedReclaimMutex(reclaimPath, deps) {
  *   readFileSync: typeof readFileSync,
  *   unlinkSync: typeof unlinkSync,
  *   mkdirSync: typeof mkdirSync,
- *   statSync: typeof statSync,
  *   isProcessAlive: (pid: number) => boolean,
- *   now: () => number,
- *   publishGraceMs: number,
  *   randomId: () => string,
  * }} deps
  * @returns {boolean}
@@ -178,10 +167,7 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
     readFileSync: read,
     unlinkSync: unlink,
     mkdirSync: mkdir,
-    statSync: stat,
     isProcessAlive: alive,
-    now,
-    publishGraceMs,
     randomId,
   } = deps;
   const reclaimPath = `${lockPath}.reclaim`;
@@ -209,10 +195,7 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
     const cleared = tryClearOrphanedReclaimMutex(reclaimPath, {
       readFileSync: read,
       unlinkSync: unlink,
-      statSync: stat,
       isProcessAlive: alive,
-      now,
-      publishGraceMs,
     });
     if (!cleared) return false;
     try {
@@ -247,14 +230,12 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
  *   writeFileSync?: typeof writeFileSync,
  *   linkSync?: typeof linkSync,
  *   readFileSync?: typeof readFileSync,
- *   statSync?: typeof statSync,
  *   unlinkSync?: typeof unlinkSync,
  *   mkdirSync?: typeof mkdirSync,
  *   isProcessAlive?: (pid: number) => boolean,
  *   pid?: number,
  *   timeoutMs?: number,
  *   pollMs?: number,
- *   publishGraceMs?: number,
  *   sleep?: (ms: number) => Promise<void>,
  *   now?: () => number,
  *   randomId?: () => string,
@@ -265,14 +246,12 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
   const write = deps.writeFileSync ?? writeFileSync;
   const link = deps.linkSync ?? linkSync;
   const read = deps.readFileSync ?? readFileSync;
-  const stat = deps.statSync ?? statSync;
   const unlink = deps.unlinkSync ?? unlinkSync;
   const mkdir = deps.mkdirSync ?? mkdirSync;
   const alive = deps.isProcessAlive ?? isProcessAlive;
   const myPid = deps.pid ?? process.pid;
   const timeoutMs = deps.timeoutMs ?? 120_000;
   const pollMs = deps.pollMs ?? 250;
-  const publishGraceMs = deps.publishGraceMs ?? Math.max(1_000, pollMs * 4);
   const now = deps.now ?? Date.now;
   const randomId = deps.randomId ?? (() => randomBytes(6).toString("hex"));
   const sleep =
@@ -324,19 +303,11 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
         // unlink that same body — never a peer's newly published PID lock.
         const observed = read(lockPath, "utf8");
         const holder = parsePublishedLockPid(observed);
-        // Incomplete bodies (empty, partial digits, parseInt prefixes) may mean
-        // a concurrent publisher is still writing. Only reclaim after grace.
+        // Incomplete bodies (empty, partial digits) may be a live wx publish.
+        // Never age-reclaim them — peers wait out timeoutMs instead.
         // Fully published finite dead PIDs reclaim immediately.
         const incomplete = holder == null;
-        let reclaimable = !incomplete && !alive(holder);
-        if (incomplete) {
-          try {
-            const ageMs = now() - stat(lockPath).mtimeMs;
-            reclaimable = ageMs >= publishGraceMs;
-          } catch {
-            /* unable to establish age — leave the lock in place */
-          }
-        }
+        const reclaimable = !incomplete && !alive(holder);
         // Serialize reclaimers via lockPath.reclaim (temp+link publish). Only
         // skip the poll sleep after unlink succeeds so failed reclaim cannot
         // busy-spin.
@@ -348,10 +319,7 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
             readFileSync: read,
             unlinkSync: unlink,
             mkdirSync: mkdir,
-            statSync: stat,
             isProcessAlive: alive,
-            now,
-            publishGraceMs,
             randomId,
           })
         ) {

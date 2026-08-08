@@ -186,13 +186,13 @@ describe("studioConfigSmokeLock", () => {
     expect(sleep).toHaveBeenCalled();
   });
 
-  it("does not clear a fresh incomplete reclaim mutex before publishGraceMs", async () => {
+  it("does not clear a fresh incomplete reclaim mutex", async () => {
     const store: Store = new Map([
       ["/tmp/lock", "111\n"],
       ["/tmp/lock.reclaim", ""],
     ]);
     const fs = makeFs(store);
-    let t = 1_050; // age 50ms with mtime 1000, grace 1000
+    let t = 1_050;
     const sleep = vi.fn(async (ms: number) => {
       t += ms;
     });
@@ -204,12 +204,10 @@ describe("studioConfigSmokeLock", () => {
         readFileSync: fs.readFileSync as never,
         unlinkSync: fs.unlinkSync as never,
         mkdirSync: fs.mkdirSync as never,
-        statSync: vi.fn(() => ({ mtimeMs: 1_000 })) as never,
         isProcessAlive: () => false,
         pid: 999,
         timeoutMs: 30,
         pollMs: 10,
-        publishGraceMs: 1_000,
         now: () => t,
         sleep,
         randomId: () => "fresh-incomplete-reclaim",
@@ -220,8 +218,9 @@ describe("studioConfigSmokeLock", () => {
     expect(fs.unlinkSync).not.toHaveBeenCalledWith("/tmp/lock");
   });
 
-  it("clears an aged incomplete orphaned reclaim mutex and recovers", async () => {
-    // Crash mid-write left an empty reclaim gate; after grace it must not pin smokers.
+  it("does not clear an aged incomplete reclaim mutex (wx may still be publishing)", async () => {
+    // Incomplete reclaim gates are never age-cleared: a paused wx publisher
+    // past any grace window must keep exclusivity until smokers time out.
     const store: Store = new Map([
       ["/tmp/lock", "111\n"],
       ["/tmp/lock.reclaim", ""],
@@ -229,28 +228,27 @@ describe("studioConfigSmokeLock", () => {
     const fs = makeFs(store);
     let nowMs = 5_000;
 
-    const lock = await acquireStudioConfigSmokeLock("/tmp/lock", {
-      writeFileSync: fs.writeFileSync as never,
-      linkSync: fs.linkSync as never,
-      readFileSync: fs.readFileSync as never,
-      unlinkSync: fs.unlinkSync as never,
-      mkdirSync: fs.mkdirSync as never,
-      statSync: vi.fn(() => ({ mtimeMs: 1_000 })) as never,
-      isProcessAlive: (pid) => pid !== 111,
-      pid: 999,
-      timeoutMs: 1_000,
-      pollMs: 5,
-      publishGraceMs: 1_000,
-      now: () => nowMs,
-      // Advance the fake clock on sleep so a regressing acquire cannot spin forever.
-      sleep: async (ms) => {
-        nowMs += ms;
-      },
-      randomId: () => "aged-incomplete-reclaim",
-    });
-    expect(store.get("/tmp/lock")).toBe("999\n");
-    expect(store.has("/tmp/lock.reclaim")).toBe(false);
-    lock.release();
+    await expect(
+      acquireStudioConfigSmokeLock("/tmp/lock", {
+        writeFileSync: fs.writeFileSync as never,
+        linkSync: fs.linkSync as never,
+        readFileSync: fs.readFileSync as never,
+        unlinkSync: fs.unlinkSync as never,
+        mkdirSync: fs.mkdirSync as never,
+        isProcessAlive: (pid) => pid !== 111,
+        pid: 999,
+        timeoutMs: 80,
+        pollMs: 10,
+        now: () => nowMs,
+        sleep: async (ms) => {
+          nowMs += ms;
+        },
+        randomId: () => "aged-incomplete-reclaim",
+      }),
+    ).rejects.toThrow(/could not acquire/);
+
+    expect(store.get("/tmp/lock.reclaim")).toBe("");
+    expect(store.get("/tmp/lock")).toBe("111\n");
   });
 
   it("does not unlink the main lock after losing reclaim gate ownership", async () => {
@@ -301,12 +299,12 @@ describe("studioConfigSmokeLock", () => {
   });
 
   it("does not unlink a peer lock published between classify and reclaim", async () => {
-    // Both waiters saw the same aged incomplete body; the first already
-    // reclaimed and published before the second's body compare under reclaim gate.
-    const store: Store = new Map([["/tmp/lock", ""]]);
+    // Waiter classified a dead complete PID; under the reclaim gate the body
+    // has already been replaced by a live peer publish.
+    const store: Store = new Map([["/tmp/lock", "111\n"]]);
     const fs = makeFs(store);
     let lockReads = 0;
-    let t = 5_000;
+    let t = 0;
     const sleep = vi.fn(async (ms: number) => {
       t += ms;
     });
@@ -318,8 +316,8 @@ describe("studioConfigSmokeLock", () => {
         return store.get(p) ?? "";
       }
       lockReads += 1;
-      // Classify against aged empty, then observe the peer's published PID.
-      return lockReads === 1 ? "" : "4242\n";
+      // First classify as dead 111; under reclaim gate observe peer's 4242.
+      return lockReads === 1 ? "111\n" : "4242\n";
     });
 
     await expect(
@@ -329,12 +327,10 @@ describe("studioConfigSmokeLock", () => {
         readFileSync: readFileSync as never,
         unlinkSync: fs.unlinkSync as never,
         mkdirSync: fs.mkdirSync as never,
-        statSync: vi.fn(() => ({ mtimeMs: 1_000 })) as never,
-        isProcessAlive: () => true,
+        isProcessAlive: (pid) => pid !== 111,
         pid: 999,
-        timeoutMs: 30,
+        timeoutMs: 80,
         pollMs: 10,
-        publishGraceMs: 1_000,
         now: () => t,
         sleep,
         randomId: () => "cas",
@@ -378,8 +374,9 @@ describe("studioConfigSmokeLock", () => {
     lock.release();
   });
 
-  it("does not reclaim a partial numeric PID body before the publish grace window", async () => {
-    // Mid-publish body "12" must not be treated as live PID 12 via parseInt.
+  it("does not reclaim a partial numeric PID body while a peer may still be publishing", async () => {
+    // Mid-publish body "12" must not be treated as live PID 12 via parseInt,
+    // and must not be age-cleared as incomplete.
     const store: Store = new Map([["/tmp/lock", "12"]]);
     const fs = makeFs(store);
     let t = 1_000;
@@ -395,12 +392,10 @@ describe("studioConfigSmokeLock", () => {
         readFileSync: fs.readFileSync as never,
         unlinkSync: fs.unlinkSync as never,
         mkdirSync: fs.mkdirSync as never,
-        statSync: vi.fn(() => ({ mtimeMs: 1_000 })) as never,
         isProcessAlive: (pid) => pid === 12 || pid === 12345,
         pid: 999,
         timeoutMs: 500,
         pollMs: 50,
-        publishGraceMs: 1_000,
         now: () => t,
         sleep,
         randomId: () => "partial",
@@ -413,8 +408,8 @@ describe("studioConfigSmokeLock", () => {
   });
 
   it("does not reclaim a freshly empty lock while process A delays PID publish", async () => {
-    // Process A created the final path (legacy open/write or crash remnant) but
-    // has not written the PID yet. Process B must poll through grace, not unlink.
+    // Process A created the final path (wx open) but has not finished writing.
+    // Process B must poll, not unlink, even past any former grace window.
     const store: Store = new Map([["/tmp/lock", ""]]);
     const fs = makeFs(store);
     let t = 1_000;
@@ -431,12 +426,10 @@ describe("studioConfigSmokeLock", () => {
         readFileSync: fs.readFileSync as never,
         unlinkSync: fs.unlinkSync as never,
         mkdirSync: fs.mkdirSync as never,
-        statSync: vi.fn(() => ({ mtimeMs: 1_000 })) as never,
         isProcessAlive: () => true,
         pid: 999,
         timeoutMs: 500,
         pollMs: 50,
-        publishGraceMs: 1_000,
         now: () => t,
         sleep,
         randomId: () => "b",
@@ -449,28 +442,31 @@ describe("studioConfigSmokeLock", () => {
     expect(sleep).toHaveBeenCalled();
   });
 
-  it("reclaims an aged empty lock after the publish grace window", async () => {
+  it("does not reclaim an aged empty lock (incomplete is never age-cleared)", async () => {
     const store: Store = new Map([["/tmp/lock", ""]]);
     const fs = makeFs(store);
-    const nowMs = 5_000;
+    let nowMs = 5_000;
 
-    const lock = await acquireStudioConfigSmokeLock("/tmp/lock", {
-      writeFileSync: fs.writeFileSync as never,
-      linkSync: fs.linkSync as never,
-      readFileSync: fs.readFileSync as never,
-      unlinkSync: fs.unlinkSync as never,
-      mkdirSync: fs.mkdirSync as never,
-      statSync: vi.fn(() => ({ mtimeMs: 1_000 })) as never,
-      pid: 999,
-      timeoutMs: 1_000,
-      pollMs: 5,
-      publishGraceMs: 1_000,
-      now: () => nowMs,
-      sleep: async () => undefined,
-      randomId: () => "aged",
-    });
-    expect(store.get("/tmp/lock")).toBe("999\n");
-    lock.release();
+    await expect(
+      acquireStudioConfigSmokeLock("/tmp/lock", {
+        writeFileSync: fs.writeFileSync as never,
+        linkSync: fs.linkSync as never,
+        readFileSync: fs.readFileSync as never,
+        unlinkSync: fs.unlinkSync as never,
+        mkdirSync: fs.mkdirSync as never,
+        pid: 999,
+        timeoutMs: 80,
+        pollMs: 10,
+        now: () => nowMs,
+        sleep: async (ms) => {
+          nowMs += ms;
+        },
+        randomId: () => "aged",
+      }),
+    ).rejects.toThrow(/could not acquire/);
+
+    expect(store.get("/tmp/lock")).toBe("");
+    expect(fs.unlinkSync).not.toHaveBeenCalledWith("/tmp/lock");
   });
 
   it("falls back to exclusive wx write when hardlinks are unsupported", async () => {
