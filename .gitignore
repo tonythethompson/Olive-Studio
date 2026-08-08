@@ -51,22 +51,38 @@ package-lock.json
 yarn.lock
 bun.lockb
 bun.lock
-/.cursor/hooks/state/continual-learning.json
-/.cursor/hooks/state/continual-learning-index.json
+
+# IDE / editor config (machine-specific)
+.vscode/
+.cursor/
+.agents/
+.commandcode/
+.amazonq/
+
+# Agent artifacts (generated, not source)
+semantic-review/
+skills-lock.json
 /.dirac-cache
 /.qoder
+/.air/
+/.playwright-mcp
+/.cursor/worktrees
+/.cursor/hooks/state/
+/.cursor/hooks/state/continual-learning.json
+/.cursor/hooks/state/continual-learning-index.json
+.review-threads.json
+.bobignore
+.clineignore
+.devinignore
+/dogfood-output/
+/node_modules.stale-body-guard
+install.sh
+
+# Serena (machine-local cache/logs)
 /.serena/cache
 /.serena/logs
 /.serena/memories
 /.serena/project.local.yml
-.bobignore
-.clineignore
-.devinignore
-.env.example
+
+# Storybook config (not maintained)
 .storybook/
-.air/
-/.playwright-mcp
-/.cursor/worktrees
-/.amazonq
-install.sh
-/node_modules.stale-body-guard
