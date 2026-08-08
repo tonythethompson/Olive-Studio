@@ -393,7 +393,9 @@ def _semantic_scores_for_entries(
     error_only: str,
 ) -> tuple[list[dict[str, Any]], np.ndarray]:
     """Build index + cosine scores (may load the embedding model)."""
-    index_entries, embeddings = get_troubleshooting_index(entries)
+    # Use the private alias so unit tests can monkeypatch index construction
+    # without loading sentence-transformers.
+    index_entries, embeddings = _get_troubleshooting_index(entries)
     query_vec = encode_query(error_only)
     semantic_scores = cosine_similarity_scores(query_vec, embeddings)
     return index_entries, semantic_scores
