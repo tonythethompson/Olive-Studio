@@ -32,12 +32,21 @@ import {
   restoreStudioConfigFile,
   snapshotStudioConfigFile,
 } from "./studioConfigSnapshot.mjs";
+import {
+  acquireStudioConfigSmokeLock,
+  tryRemoveEmptyStudioConfigDir,
+} from "./studioConfigSmokeLock.mjs";
 import { resolvePython } from "./resolvePython.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const MCPORTER = "mcporter@0.13.0";
 const STUDIO_CONFIG_PATH = path.join(root, ".olive-studio", "config.json");
+const STUDIO_CONFIG_SMOKE_LOCK = path.join(
+  root,
+  ".olive-studio",
+  "mcp-agent-smoke.lock",
+);
 const STRICT = process.env.MCP_SMOKE_STRICT === "1";
 
 /** Minimal CPU recipe accepted by Studio preflight (no real Olive execute required). */
@@ -365,9 +374,16 @@ let configSnapshot = null;
 let lastSmokeConfigBytes = undefined;
 /** Set when snapshot restore throws so callers cannot exit 0 with a dirty policy file. */
 let configRestoreError = /** @type {unknown | null} */ (null);
+/** @type {null | (() => void)} */
+let releaseSmokeConfigLock = null;
 
 async function runJobControlSmoke() {
-  // Snapshot before any disk mutation (exact bytes + existence).
+  // Serialize overlapping smokes so we never snapshot another run's temporary
+  // allowJobSubmission:true (or leave it restored afterward).
+  const lock = await acquireStudioConfigSmokeLock(STUDIO_CONFIG_SMOKE_LOCK);
+  releaseSmokeConfigLock = lock.release;
+
+  // Snapshot only after the lock is held (exact bytes + existence).
   configSnapshot = snapshotStudioConfigFile(STUDIO_CONFIG_PATH);
 
   // Denied path: submission off before Studio boots (no PUT / rate-limit burn).
@@ -539,6 +555,19 @@ async function cleanup() {
         "restore Studio config failed:",
         e instanceof Error ? e.message : e,
       );
+    }
+    // Drop the lock only after restore so another smoke cannot snapshot mid-restore.
+    if (releaseSmokeConfigLock) {
+      try {
+        releaseSmokeConfigLock();
+      } catch {
+        /* ignore */
+      }
+      releaseSmokeConfigLock = null;
+    }
+    // Restore may have left `.olive-studio/` because the lock file still existed.
+    if (configSnapshot && !configSnapshot.existed) {
+      tryRemoveEmptyStudioConfigDir(path.dirname(STUDIO_CONFIG_PATH));
     }
     try {
       rmSync(smokeConfigDir, { recursive: true, force: true });
