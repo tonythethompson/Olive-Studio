@@ -5,6 +5,8 @@
  */
 import { randomBytes } from "node:crypto";
 import {
+  constants as fsConstants,
+  copyFileSync,
   linkSync,
   mkdirSync,
   readFileSync,
@@ -54,22 +56,30 @@ function errorCode(err) {
 /**
  * Publish a fully-written lock file at `lockPath` without an empty-body window.
  * Prefer hard-linking a temp file (link fails with EEXIST and never overwrites).
- * Fall back to exclusive `write(..., { flag: "wx" })` of the same PID bytes when
- * hardlinks are unsupported.
+ * When hardlinks are unsupported, exclusively copy the already-complete temp
+ * file (`COPYFILE_EXCL`) so the final pathname never receives a streaming
+ * `wx` write that could expose an incomplete body to concurrent reclaimers.
  *
  * @param {string} lockPath
  * @param {string} body
  * @param {{
  *   writeFileSync: typeof writeFileSync,
  *   linkSync: typeof linkSync,
+ *   copyFileSync?: typeof copyFileSync,
  *   unlinkSync: typeof unlinkSync,
  *   mkdirSync: typeof mkdirSync,
  *   tempPath: string,
  * }} deps
  */
 function publishLockFile(lockPath, body, deps) {
-  const { writeFileSync: write, linkSync: link, unlinkSync: unlink, mkdirSync: mkdir, tempPath } =
-    deps;
+  const {
+    writeFileSync: write,
+    linkSync: link,
+    copyFileSync: copyFile = copyFileSync,
+    unlinkSync: unlink,
+    mkdirSync: mkdir,
+    tempPath,
+  } = deps;
 
   const attempt = () => {
     write(tempPath, body);
@@ -80,8 +90,9 @@ function publishLockFile(lockPath, body, deps) {
       } catch (e) {
         const code = errorCode(e);
         if (code === "EEXIST") throw e;
-        // ENOTSUP / EPERM / EINVAL / EXDEV: still publish full content exclusively.
-        write(lockPath, body, { flag: "wx" });
+        // ENOTSUP / EPERM / EINVAL / EXDEV: publish the complete temp bytes
+        // exclusively without a partial write at the final path.
+        copyFile(tempPath, lockPath, fsConstants.COPYFILE_EXCL);
       }
     } finally {
       try {
@@ -156,6 +167,7 @@ function tryClearOrphanedReclaimMutex(reclaimPath, deps) {
  * @param {{
  *   writeFileSync: typeof writeFileSync,
  *   linkSync: typeof linkSync,
+ *   copyFileSync: typeof copyFileSync,
  *   readFileSync: typeof readFileSync,
  *   unlinkSync: typeof unlinkSync,
  *   mkdirSync: typeof mkdirSync,
@@ -171,6 +183,7 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
   const {
     writeFileSync: write,
     linkSync: link,
+    copyFileSync: copyFile,
     readFileSync: read,
     unlinkSync: unlink,
     mkdirSync: mkdir,
@@ -191,6 +204,7 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
     );
     publishLockFile(reclaimPath, `${myPid}\n`, {
       writeFileSync: write,
+      copyFileSync: copyFile,
       linkSync: link,
       unlinkSync: unlink,
       mkdirSync: mkdir,
@@ -243,6 +257,7 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
  * @param {{
  *   writeFileSync?: typeof writeFileSync,
  *   linkSync?: typeof linkSync,
+ *   copyFileSync?: typeof copyFileSync,
  *   readFileSync?: typeof readFileSync,
  *   statSync?: typeof statSync,
  *   unlinkSync?: typeof unlinkSync,
@@ -261,6 +276,7 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
 export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
   const write = deps.writeFileSync ?? writeFileSync;
   const link = deps.linkSync ?? linkSync;
+  const copyFile = deps.copyFileSync ?? copyFileSync;
   const read = deps.readFileSync ?? readFileSync;
   const stat = deps.statSync ?? statSync;
   const unlink = deps.unlinkSync ?? unlinkSync;
@@ -288,6 +304,7 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
       publishLockFile(lockPath, body, {
         writeFileSync: write,
         linkSync: link,
+        copyFileSync: copyFile,
         unlinkSync: unlink,
         mkdirSync: mkdir,
         tempPath,
@@ -342,6 +359,7 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
           tryReclaimObservedLock(lockPath, observed, myPid, {
             writeFileSync: write,
             linkSync: link,
+            copyFileSync: copyFile,
             readFileSync: read,
             unlinkSync: unlink,
             mkdirSync: mkdir,

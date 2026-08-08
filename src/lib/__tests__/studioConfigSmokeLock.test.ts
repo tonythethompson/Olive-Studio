@@ -27,6 +27,19 @@ function makeFs(store: Store) {
     // Hard link: destination appears with the fully written temp contents.
     store.set(to, store.get(from)!);
   });
+  const copyFileSync = vi.fn((from: string, to: string, mode?: number) => {
+    if (!store.has(from)) {
+      throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+    }
+    // Mirror COPYFILE_EXCL: refuse when the destination already exists.
+    if (mode !== undefined && store.has(to)) {
+      throw Object.assign(new Error("EEXIST"), { code: "EEXIST" });
+    }
+    if (store.has(to)) {
+      throw Object.assign(new Error("EEXIST"), { code: "EEXIST" });
+    }
+    store.set(to, store.get(from)!);
+  });
   const readFileSync = vi.fn((p: string) => {
     if (!store.has(p)) {
       throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
@@ -37,7 +50,7 @@ function makeFs(store: Store) {
     store.delete(p);
   });
   const mkdirSync = vi.fn();
-  return { writeFileSync, linkSync, readFileSync, unlinkSync, mkdirSync };
+  return { writeFileSync, linkSync, copyFileSync, readFileSync, unlinkSync, mkdirSync };
 }
 
 describe("studioConfigSmokeLock", () => {
@@ -469,7 +482,7 @@ describe("studioConfigSmokeLock", () => {
     lock.release();
   });
 
-  it("falls back to exclusive write when hardlinks are unsupported", async () => {
+  it("falls back to exclusive copy when hardlinks are unsupported", async () => {
     const store: Store = new Map();
     const fs = makeFs(store);
     const linkSync = vi.fn(() => {
@@ -479,6 +492,7 @@ describe("studioConfigSmokeLock", () => {
     const lock = await acquireStudioConfigSmokeLock("/tmp/lock", {
       writeFileSync: fs.writeFileSync as never,
       linkSync: linkSync as never,
+      copyFileSync: fs.copyFileSync as never,
       readFileSync: fs.readFileSync as never,
       unlinkSync: fs.unlinkSync as never,
       mkdirSync: fs.mkdirSync as never,
@@ -488,7 +502,12 @@ describe("studioConfigSmokeLock", () => {
       randomId: () => "fb",
     });
     expect(store.get("/tmp/lock")).toBe("777\n");
-    expect(fs.writeFileSync).toHaveBeenCalledWith("/tmp/lock", "777\n", { flag: "wx" });
+    expect(fs.copyFileSync).toHaveBeenCalled();
+    const [from, to, mode] = fs.copyFileSync.mock.calls[0]!;
+    expect(String(from)).toContain(".tmp");
+    expect(to).toBe("/tmp/lock");
+    expect(typeof mode).toBe("number");
+    expect(fs.writeFileSync).not.toHaveBeenCalledWith("/tmp/lock", "777\n", { flag: "wx" });
     expect([...store.keys()].some((k) => k.includes(".tmp"))).toBe(false);
     lock.release();
   });
