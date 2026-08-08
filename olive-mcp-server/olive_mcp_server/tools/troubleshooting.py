@@ -26,6 +26,7 @@ from .embeddings import (
 )
 from .feedback import FEEDBACK_MAX_ADJUSTMENT, feedback_score_delta
 from .retrieval import (
+    budget_degraded_reason,
     get_retrieval_mode,
     get_semantic_budget_ms,
     merge_retrieval_meta,
@@ -455,15 +456,20 @@ def _best_match(
             return _semantic_scores_for_entries(entries, error_only)
 
         try:
-            result, timed_out = run_with_budget(_load, budget_ms)
-            if timed_out or result is None:
+            result, outcome = run_with_budget(_load, budget_ms)
+            if outcome != "ok":
                 degraded = True
-                reason = "semantic_budget_exceeded"
+                reason = budget_degraded_reason(outcome)
                 effective = "keyword"
-                logger.warning(
-                    "Semantic scoring exceeded budget (%sms); keyword-only fallback",
-                    budget_ms,
-                )
+                if outcome == "busy":
+                    logger.warning(
+                        "Semantic scoring busy (single-flight in progress); keyword-only fallback",
+                    )
+                else:
+                    logger.warning(
+                        "Semantic scoring exceeded budget (%sms); keyword-only fallback",
+                        budget_ms,
+                    )
             else:
                 score_entries, semantic_scores = result
                 effective = "hybrid"

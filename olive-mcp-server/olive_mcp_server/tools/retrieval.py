@@ -16,13 +16,15 @@ import concurrent.futures
 import os
 import threading
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
 T = TypeVar("T")
 
 VALID_MODES = frozenset({"auto", "keyword", "semantic"})
 DEFAULT_MODE = "auto"
 DEFAULT_SEMANTIC_BUDGET_MS = 8000
+
+BudgetOutcome = Literal["ok", "timeout", "busy"]
 
 # Single shared pool for budgeted semantic work so concurrent auto-mode
 # timeouts cannot stack many MiniLM loads (one per abandoned ThreadPoolExecutor).
@@ -84,7 +86,7 @@ def _clear_inflight_if_current(future: concurrent.futures.Future[Any]) -> None:
             _INFLIGHT_FUTURE = None
 
 
-def run_with_budget(fn: Callable[[], T], budget_ms: int) -> tuple[T | None, bool]:
+def run_with_budget(fn: Callable[[], T], budget_ms: int) -> tuple[T | None, BudgetOutcome]:
     """
     Run a callable synchronously or within a wall-clock time budget.
     
@@ -94,15 +96,15 @@ def run_with_budget(fn: Callable[[], T], budget_ms: int) -> tuple[T | None, bool
             allow unlimited execution.
     
     Returns:
-        tuple[T | None, bool]: The callable result and a timeout indicator. The
-        indicator is `True` when execution times out or another budgeted call is
-        already running; otherwise, it is `False`.
+        tuple[T | None, BudgetOutcome]: The callable result and an outcome:
+        ``ok`` on success, ``timeout`` when this call's budget expires, or ``busy``
+        when another budgeted callable is already in flight (single-flight).
     
     Exceptions:
         Exception: Propagates exceptions raised by the callable.
     """
     if budget_ms <= 0:
-        return fn(), False
+        return fn(), "ok"
 
     timeout_s = budget_ms / 1000.0
     global _INFLIGHT_FUTURE
@@ -112,7 +114,7 @@ def run_with_budget(fn: Callable[[], T], budget_ms: int) -> tuple[T | None, bool
             _INFLIGHT_FUTURE = None
         if _INFLIGHT_FUTURE is not None and not _INFLIGHT_FUTURE.done():
             # Already running (often a prior timeout). Do not queue another load.
-            return None, True
+            return None, "busy"
         future = _SEMANTIC_BUDGET_POOL.submit(fn)
         _INFLIGHT_FUTURE = future
 
@@ -120,13 +122,20 @@ def run_with_budget(fn: Callable[[], T], budget_ms: int) -> tuple[T | None, bool
         result = future.result(timeout=timeout_s)
     except concurrent.futures.TimeoutError:
         future.add_done_callback(_clear_inflight_if_current)
-        return None, True
+        return None, "timeout"
     except Exception:
         _clear_inflight_if_current(future)
         raise
     else:
         _clear_inflight_if_current(future)
-        return result, False
+        return result, "ok"
+
+
+def budget_degraded_reason(outcome: BudgetOutcome) -> str:
+    """Map a non-ok budget outcome to a stable retrieval ``reason`` code."""
+    if outcome == "busy":
+        return "semantic_busy"
+    return "semantic_budget_exceeded"
 
 
 def retrieval_meta(

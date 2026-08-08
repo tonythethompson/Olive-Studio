@@ -22,6 +22,7 @@ from .embeddings import (
     semantic_search,
 )
 from .retrieval import (
+    budget_degraded_reason,
     get_retrieval_mode,
     get_semantic_budget_ms,
     merge_retrieval_meta,
@@ -286,19 +287,25 @@ def _search_local(
         return _keyword_search(kb_texts, terms, top_k), "keyword"
 
     try:
-        result, timed_out = run_with_budget(_semantic, effective_budget_ms)
-        if timed_out or result is None:
-            logger.warning(
-                "Semantic local search exceeded budget (%sms); keyword fallback",
-                effective_budget_ms,
-            )
+        result, outcome = run_with_budget(_semantic, effective_budget_ms)
+        if outcome != "ok":
+            reason = budget_degraded_reason(outcome)
+            if outcome == "busy":
+                logger.warning(
+                    "Semantic local search busy (single-flight in progress); keyword fallback",
+                )
+            else:
+                logger.warning(
+                    "Semantic local search exceeded budget (%sms); keyword fallback",
+                    effective_budget_ms,
+                )
             return (
                 _keyword_search(_load_kb_text(), terms, top_k),
                 retrieval_meta(
                     mode=resolved,
                     effective="keyword",
                     degraded=True,
-                    reason="semantic_budget_exceeded",
+                    reason=reason,
                 ),
             )
         hits, effective = result
@@ -482,19 +489,25 @@ def _search_live(
         return _keyword_search(snippets, terms, top_k), "keyword"
 
     try:
-        result, timed_out = run_with_budget(_semantic_live, effective_budget_ms)
-        if timed_out or result is None:
-            logger.warning(
-                "Semantic live search exceeded budget (%sms); keyword fallback",
-                effective_budget_ms,
-            )
+        result, outcome = run_with_budget(_semantic_live, effective_budget_ms)
+        if outcome != "ok":
+            reason = budget_degraded_reason(outcome)
+            if outcome == "busy":
+                logger.warning(
+                    "Semantic live search busy (single-flight in progress); keyword fallback",
+                )
+            else:
+                logger.warning(
+                    "Semantic live search exceeded budget (%sms); keyword fallback",
+                    effective_budget_ms,
+                )
             return (
                 _keyword_live(),
                 retrieval_meta(
                     mode=resolved,
                     effective="keyword",
                     degraded=True,
-                    reason="semantic_budget_exceeded",
+                    reason=reason,
                 ),
             )
         hits, effective = result

@@ -109,16 +109,16 @@ def test_run_with_budget_timeout():
         time.sleep(0.5)
         return "done"
 
-    result, timed_out = run_with_budget(slow, budget_ms=50)
-    assert timed_out is True
+    result, outcome = run_with_budget(slow, budget_ms=50)
+    assert outcome == "timeout"
     assert result is None
     # Drain abandoned worker so later tests are not blocked by single-flight.
     time.sleep(0.55)
 
 
 def test_run_with_budget_ok():
-    result, timed_out = run_with_budget(lambda: 42, budget_ms=5000)
-    assert timed_out is False
+    result, outcome = run_with_budget(lambda: 42, budget_ms=5000)
+    assert outcome == "ok"
     assert result == 42
 
 
@@ -134,17 +134,17 @@ def test_run_with_budget_single_flight_during_timeout():
         time.sleep(0.4)
         return "done"
 
-    r1, t1 = run_with_budget(slow, budget_ms=50)
-    assert t1 is True and r1 is None
+    r1, o1 = run_with_budget(slow, budget_ms=50)
+    assert o1 == "timeout" and r1 is None
 
-    r2, t2 = run_with_budget(slow, budget_ms=50)
-    assert t2 is True and r2 is None
+    r2, o2 = run_with_budget(slow, budget_ms=50)
+    assert o2 == "busy" and r2 is None
     assert started == [1]
 
     time.sleep(0.5)
     # After the in-flight work finishes, a new callable may start.
-    r3, t3 = run_with_budget(lambda: "fresh", budget_ms=5000)
-    assert t3 is False and r3 == "fresh"
+    r3, o3 = run_with_budget(lambda: "fresh", budget_ms=5000)
+    assert o3 == "ok" and r3 == "fresh"
     assert started == [1]
 
 
