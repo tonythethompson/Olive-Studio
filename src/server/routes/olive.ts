@@ -19,7 +19,7 @@ import { isParseBodyError, parseBody } from "../middleware/bodyGuard.ts";
 import { studioLocalOnly } from "../middleware/localOnly.ts";
 import { preflightOliveRecipe } from "../services/olive/jobPreflight.ts";
 import { startOliveJob } from "../services/olive/jobRunner.ts";
-import { denyUnless, getAgentAccessPublic, updateAgentAccess } from "../services/olive/agentAccess.ts";
+import { denyUnless, denyAgentUnlessUi, getAgentAccessPublic, updateAgentAccess } from "../services/olive/agentAccess.ts";
 
 /** Grace period after SIGTERM before escalating cancel to SIGKILL. */
 export const CANCEL_SIGKILL_GRACE_MS = 10_000;
@@ -210,27 +210,27 @@ export function mountOliveRoutes(router: Router): void {
       status: result.status,
       fingerprint: result.fingerprint,
       reused: result.reused,
-      submitted_at: new Date().toISOString(),
+      submitted_at: new Date(result.submittedAt).toISOString(),
     });
   });
 
-  // ─── SSE Stream (loopback; MCP agents need inspection policy) ─────────
+  // ─── SSE Stream (loopback; non-UI clients need inspection policy) ─────
   router.get("/olive/stream/:jobId", studioLocalOnly, (req, res) => {
-    // Agents must not opt out of policy by omitting the MCP header: when the
-    // header is present, require inspection. UI (no header) is loopback-only.
-    if (req.get("x-olive-mcp-agent") === "1") {
-      const gate = denyUnless(
-        (p) => p.allowJobInspection,
-        "Job inspection is disabled in Studio agent access settings",
-      );
-      if (!gate.ok) {
-        return res.status(403).json({
+    // Same-origin Studio UI keeps working when agent inspection is off.
+    // MCP / scripts (no Sec-Fetch-Site: same-origin) always hit the policy gate —
+    // omitting X-Olive-MCP-Agent is not a bypass.
+    const gate = denyAgentUnlessUi(
+      req,
+      (p) => p.allowJobInspection,
+      "Job inspection is disabled in Studio agent access settings",
+    );
+    if (!gate.ok) {
+      return res.status(403).json({
         ok: false,
         error: gate.error,
         reason: gate.reason,
         ...("required" in gate && gate.required ? { required: gate.required } : {}),
       });
-      }
     }
     const jobIdParam = req.params.jobId;
     const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
@@ -318,23 +318,20 @@ export function mountOliveRoutes(router: Router): void {
     req.on("close", cleanup);
   });
 
-  // ─── Job Status (loopback; MCP agents need inspection policy) ─────────
+  // ─── Job Status (loopback; non-UI clients need inspection policy) ─────
   router.get("/olive/status/:jobId", studioLocalOnly, (req, res) => {
-    // Same pattern as stream: remote blocked by loopback; MCP header ⇒ policy.
-    // Omitting the header is not a remote bypass (studioLocalOnly already ran).
-    if (req.get("x-olive-mcp-agent") === "1") {
-      const gate = denyUnless(
-        (p) => p.allowJobInspection,
-        "Job inspection is disabled in Studio agent access settings",
-      );
-      if (!gate.ok) {
-        return res.status(403).json({
+    const gate = denyAgentUnlessUi(
+      req,
+      (p) => p.allowJobInspection,
+      "Job inspection is disabled in Studio agent access settings",
+    );
+    if (!gate.ok) {
+      return res.status(403).json({
         ok: false,
         error: gate.error,
         reason: gate.reason,
         ...("required" in gate && gate.required ? { required: gate.required } : {}),
       });
-      }
     }
     const jobIdParam = req.params.jobId;
     const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
@@ -393,23 +390,21 @@ export function mountOliveRoutes(router: Router): void {
     if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
     const { jobId } = body.parsed;
 
-    // Loopback blocks remote cancel. MCP agents (header set by Studio proxy /
-    // studio_request) still need allowJobCancellation — header cannot be used
-    // to *skip* policy; it only selects the stricter agent path. Body `client`
-    // is not authorization.
-    if (req.get("x-olive-mcp-agent") === "1") {
-      const gate = denyUnless(
-        (p) => p.allowJobCancellation,
-        "Job cancellation is disabled in Studio agent access settings",
-      );
-      if (!gate.ok) {
-        return res.status(403).json({
+    // Loopback blocks remote cancel. Same-origin Studio UI may cancel without the
+    // agent cancellation switch. MCP / scripts always require allowJobCancellation —
+    // omitting X-Olive-MCP-Agent is not a bypass. Body `client` is not authorization.
+    const gate = denyAgentUnlessUi(
+      req,
+      (p) => p.allowJobCancellation,
+      "Job cancellation is disabled in Studio agent access settings",
+    );
+    if (!gate.ok) {
+      return res.status(403).json({
         ok: false,
         error: gate.error,
         reason: gate.reason,
         ...("required" in gate && gate.required ? { required: gate.required } : {}),
       });
-      }
     }
 
     const job = jobId ? jobRegistry.get(jobId) : undefined;

@@ -29,6 +29,7 @@ import {
 import { parseBody, isParseBodyError } from "../middleware/bodyGuard.ts";
 import { readStudioConfig, writeStudioConfig } from "../config.ts";
 import type { KbStatusCache } from "../types.ts";
+import { denyUnless } from "../services/olive/agentAccess.ts";
 
 /**
  * Strict loopback gate for the MCP tool proxy (including write-capable tools
@@ -248,6 +249,17 @@ export function mountMcpRoutes(router: Router): void {
     if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
     if (!isAllowedMcpToolName(body.parsed.toolName)) {
       return res.status(400).json({ error: "Unknown toolName" });
+    }
+    // Master mcpAccess switch — allow capability discovery so agents can see why tools are blocked.
+    if (body.parsed.toolName !== "get_mcp_capabilities") {
+      const gate = denyUnless(() => true, "MCP access is disabled in Studio settings");
+      if (!gate.ok) {
+        return res.status(403).json({
+          error: gate.error,
+          reason: gate.reason,
+          ...("required" in gate && gate.required ? { required: gate.required } : {}),
+        });
+      }
     }
     try {
       const out = await callOliveMcpTool(body.parsed.toolName, body.parsed.args ?? {});

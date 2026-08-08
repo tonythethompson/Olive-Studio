@@ -19,12 +19,12 @@ from .embeddings import (
     DEFAULT_THRESHOLD,
     EMBEDDING_DIM,
     build_kb_index,
-    is_model_loaded,
     semantic_search,
 )
 from .retrieval import (
     get_retrieval_mode,
     get_semantic_budget_ms,
+    merge_retrieval_meta,
     retrieval_meta,
     run_with_budget,
 )
@@ -243,15 +243,13 @@ def _search_local(
             retrieval_meta(mode=resolved, effective="keyword"),
         )
 
-    use_budget = resolved == "auto"
+    # Auto must budget even when the embedding model is already warm: a missing,
+    # stale, or force-rebuilt local index can still encode the full KB.
+    use_budget = resolved == "auto"
     budget_ms = get_semantic_budget_ms() if use_budget else 0
 
-    def _semantic() -> list[dict[str, Any]]:
-        """Searches the local knowledge base semantically, falling back to keyword matches when needed.
-        
-        Returns:
-        	list[dict[str, Any]]: Relevance-ranked matching knowledge-base entries.
-        """
+    def _semantic() -> tuple[list[dict[str, Any]], str]:
+        """Semantic local search; returns (hits, effective_mode)."""
         kb_texts, embeddings = get_or_build_kb_index()
         results = semantic_search(
             query,
@@ -261,8 +259,8 @@ def _search_local(
             threshold=DEFAULT_THRESHOLD,
         )
         if results:
-            return results
-        return _keyword_search(kb_texts, terms, top_k)
+            return results, "hybrid"
+        return _keyword_search(kb_texts, terms, top_k), "keyword"
 
     try:
         result, timed_out = run_with_budget(_semantic, budget_ms)
@@ -280,7 +278,8 @@ def _search_local(
                     reason="semantic_budget_exceeded",
                 ),
             )
-        return result, retrieval_meta(mode=resolved, effective="hybrid")
+        hits, effective = result
+        return hits, retrieval_meta(mode=resolved, effective=effective)
     except Exception:
         logger.debug("Semantic local KB search failed; falling back to keyword search", exc_info=True)
         return (
@@ -389,17 +388,11 @@ def _search_live(
     top_k: int,
     *,
     mode: str | None = None,
-) -> list[dict[str, Any]]:
-    """
-    Search live Olive documentation using the resolved retrieval mode.
-    
-    Parameters:
-        query (str): Text to search for.
-        top_k (int): Maximum number of results to return.
-        mode (str | None): Retrieval mode, such as keyword, semantic, or automatic.
-    
-    Returns:
-        list[dict[str, Any]]: Matching live documentation results.
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Search live Olive documentation using the resolved retrieval mode.
+
+    Returns results plus retrieval metadata so callers can surface live
+    degradation (budget/timeout) in the merged response.
     """
     terms = [t.lower() for t in query.split() if t]
     resolved = get_retrieval_mode(mode)
@@ -421,20 +414,17 @@ def _search_live(
             return []
 
     if resolved == "keyword":
-        return _keyword_live()
+        return _keyword_live(), retrieval_meta(mode=resolved, effective="keyword")
 
-    use_budget = resolved == "auto" and not is_model_loaded()
+    # Auto budgets even when the model is warm: live fetch/index build can still
+    # be cold after local search already loaded MiniLM.
+    use_budget = resolved == "auto"
     budget_ms = get_semantic_budget_ms() if use_budget else 0
 
-    def _semantic_live() -> list[dict[str, Any]]:
-        """Search live documentation semantically, falling back to keyword matches when needed.
-        
-        Returns:
-        	list[dict[str, Any]]: Relevant live documentation results.
-        """
+    def _semantic_live() -> tuple[list[dict[str, Any]], str]:
         snippets, embeddings = _get_live_index()
         if not snippets:
-            return []
+            return [], "keyword"
         results = semantic_search(
             query,
             snippets,
@@ -443,8 +433,8 @@ def _search_live(
             threshold=DEFAULT_THRESHOLD,
         )
         if results:
-            return results
-        return _keyword_search(snippets, terms, top_k)
+            return results, "hybrid"
+        return _keyword_search(snippets, terms, top_k), "keyword"
 
     try:
         result, timed_out = run_with_budget(_semantic_live, budget_ms)
@@ -453,11 +443,28 @@ def _search_live(
                 "Semantic live search exceeded budget (%sms); keyword fallback",
                 budget_ms,
             )
-            return _keyword_live()
-        return result
+            return (
+                _keyword_live(),
+                retrieval_meta(
+                    mode=resolved,
+                    effective="keyword",
+                    degraded=True,
+                    reason="semantic_budget_exceeded",
+                ),
+            )
+        hits, effective = result
+        return hits, retrieval_meta(mode=resolved, effective=effective)
     except Exception:
         logger.debug("Semantic live-doc search failed; falling back to keyword search", exc_info=True)
-        return _keyword_live()
+        return (
+            _keyword_live(),
+            retrieval_meta(
+                mode=resolved,
+                effective="keyword",
+                degraded=True,
+                reason="semantic_error",
+            ),
+        )
 
 
 def search_olive_documentation(
@@ -512,8 +519,11 @@ def search_olive_documentation(
 
     per_source = max(top_k * 2, 10)
     local_results, retrieval = _search_local(query, per_source, mode=mode_arg)
-    # Live path honors the same mode; keyword never loads embeddings.
-    live_results = _search_live(query, per_source, mode=mode_arg) if live else []
+    if live:
+        live_results, live_retrieval = _search_live(query, per_source, mode=mode_arg)
+        retrieval = merge_retrieval_meta(retrieval, live_retrieval)
+    else:
+        live_results = []
 
     combined = local_results + live_results
     combined.sort(

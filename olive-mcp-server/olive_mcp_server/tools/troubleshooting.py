@@ -28,6 +28,7 @@ from .feedback import FEEDBACK_MAX_ADJUSTMENT, feedback_score_delta
 from .retrieval import (
     get_retrieval_mode,
     get_semantic_budget_ms,
+    merge_retrieval_meta,
     retrieval_meta,
     run_with_budget,
 )
@@ -593,40 +594,8 @@ def _build_diagnosis_payload(
 
 
 def _merge_retrieval_meta(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
-    """
-    Merge retrieval metadata from two search pools.
-    
-    Parameters:
-    	a (dict[str, Any]): Retrieval metadata from the first pool.
-    	b (dict[str, Any]): Retrieval metadata from the second pool.
-    
-    Returns:
-    	dict[str, Any]: Combined metadata that reflects degradation across either
-    	pool and selects the most informative effective retrieval mode.
-    """
-    mode = a.get("mode") or b.get("mode") or get_retrieval_mode()
-    degraded = bool(a.get("degraded") or b.get("degraded"))
-    reasons = [r for r in (a.get("reason"), b.get("reason")) if r]
-    if degraded:
-        return retrieval_meta(
-            mode=str(mode),
-            effective="keyword",
-            degraded=True,
-            reason=reasons[0] if reasons else "semantic_budget_exceeded",
-        )
-    modes = [a.get("effective"), b.get("effective")]
-    if "hybrid" in modes:
-        effective = "hybrid"
-    elif "keyword" in modes:
-        effective = "keyword"
-    else:
-        effective = next((m for m in modes if m and m != "none"), None) or "keyword"
-    return retrieval_meta(
-        mode=str(mode),
-        effective=str(effective),
-        degraded=False,
-        reason=None,
-    )
+    """Merge retrieval metadata from two search pools (thin alias for tests)."""
+    return merge_retrieval_meta(a, b)
 
 
 def troubleshoot_olive_error(

@@ -184,7 +184,10 @@ def test_search_olive_documentation_with_live_source(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(
         docs_search,
         "_search_live",
-        lambda query, top_k, mode=None: live_results[:top_k],
+        lambda query, top_k, mode=None: (
+            live_results[:top_k],
+            {"mode": "auto", "effective": "hybrid", "degraded": False},
+        ),
     )
 
     result = search_olive_documentation(query="calibration data", top_k=3, live=True)

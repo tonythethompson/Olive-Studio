@@ -89,6 +89,9 @@ export function findJobByIdempotency(opts: {
       }
       return { kind: "hit", job: byKey };
     }
+    // Explicit key with no prior mapping: do not fall through to fingerprint
+    // reuse — a new key must start a new run even for the same recipe.
+    return { kind: "miss" };
   }
 
   if (!opts.idempotencyKey && opts.fingerprint) {

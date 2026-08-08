@@ -88,6 +88,20 @@ describe("jobIdempotency", () => {
     expect(findJobByIdempotency({ fingerprint: "fp-shared" })).toEqual({ kind: "hit", job: mcp });
   });
 
+  it("does not fall back to fingerprint when an explicit new key misses", () => {
+    const job = makeJob("j-old", {
+      fingerprint: "fp-rerun",
+      idempotencyKey: "old-key",
+      source: "mcp",
+      status: "completed",
+    });
+    jobRegistry.set(job.id, job);
+    rememberIdempotencyKeys(job);
+    expect(
+      findJobByIdempotency({ idempotencyKey: "new-key", fingerprint: "fp-rerun" }),
+    ).toEqual({ kind: "miss" });
+  });
+
   it("ignores default/undefined source as non-MCP", () => {
     const job = makeJob("j-ui-default", { fingerprint: "fp-ui" }); // no source
     jobRegistry.set(job.id, job);

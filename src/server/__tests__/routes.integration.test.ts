@@ -1057,7 +1057,7 @@ describe("Route integration tests", () => {
     it("preserves the missing jobId 404 contract", async () => {
       const res = await fetch(`${baseUrl}/api/olive/cancel`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Sec-Fetch-Site": "same-origin" },
         body: JSON.stringify({}),
       });
 
@@ -1066,7 +1066,7 @@ describe("Route integration tests", () => {
     });
 
     it("preserves the bodyless cancel 404 contract", async () => {
-      const res = await fetch(`${baseUrl}/api/olive/cancel`, { method: "POST" });
+      const res = await fetch(`${baseUrl}/api/olive/cancel`, { method: "POST", headers: { "Sec-Fetch-Site": "same-origin" } });
 
       expect(res.status).toBe(404);
       await expect(res.json()).resolves.toEqual({ error: "Job not found" });
@@ -1075,7 +1075,7 @@ describe("Route integration tests", () => {
     it("rejects an explicit null cancel body", async () => {
       const res = await fetch(`${baseUrl}/api/olive/cancel`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Sec-Fetch-Site": "same-origin" },
         body: "null",
       });
 
@@ -1086,7 +1086,7 @@ describe("Route integration tests", () => {
     it("rejects a wrong-type jobId", async () => {
       const res = await fetch(`${baseUrl}/api/olive/cancel`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Sec-Fetch-Site": "same-origin" },
         body: JSON.stringify({ jobId: 42 }),
       });
 

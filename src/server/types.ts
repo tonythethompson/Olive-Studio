@@ -138,6 +138,8 @@ export interface OliveJob {
   tempRecipePath: string | null;
   /** Epoch ms when the job reached a terminal state (for TTL cleanup). */
   finishedAt: number | null;
+  /** Epoch ms when the job was first registered (stable across idempotent replays). */
+  submittedAt?: number;
   /** Listeners fired once when the job reaches a terminal state (SSE close). */
   doneSubscribers: Array<() => void>;
   /** The venv-setup progress listener, retained so it can be detached on cancel. */

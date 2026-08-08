@@ -29,6 +29,7 @@ import {
 } from "../venv/index.ts";
 import { preflightOliveRecipe } from "./jobPreflight.ts";
 import { findJobByIdempotency, rememberIdempotencyKeys } from "./jobIdempotency.ts";
+import type { IHVProvider } from "../../../types.ts";
 
 export type StartOliveJobOpts = {
   recipe: OliveRecipe;
@@ -43,7 +44,15 @@ export type StartOliveJobOpts = {
 };
 
 export type StartOliveJobResult =
-  | { ok: true; jobId: string; reused: boolean; fingerprint: string; status: OliveJob["status"] }
+  | {
+      ok: true;
+      jobId: string;
+      reused: boolean;
+      fingerprint: string;
+      status: OliveJob["status"];
+      /** Epoch ms when the job was first registered (stable on idempotent replay). */
+      submittedAt: number;
+    }
   | {
       ok: false;
       error: string;
@@ -103,17 +112,21 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
       };
     }
     if (lookup.kind === "hit") {
+      const submittedAt = lookup.job.submittedAt ?? Date.now();
+      if (lookup.job.submittedAt == null) lookup.job.submittedAt = submittedAt;
       return {
         ok: true,
         jobId: lookup.job.id,
         reused: true,
         fingerprint: lookup.job.fingerprint ?? fingerprint,
         status: lookup.job.status,
+        submittedAt,
       };
     }
   }
 
   const jobId = uuidv4();
+  const submittedAt = Date.now();
   const job: OliveJob = {
     id: jobId,
     status: "setting_up",
@@ -127,6 +140,7 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
     sampling: false,
     tempRecipePath: null,
     finishedAt: null,
+    submittedAt,
     doneSubscribers: [],
     fingerprint,
     idempotencyKey: opts.idempotencyKey,
@@ -138,6 +152,52 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
     rememberIdempotencyKeys(job);
   }
 
+  // MCP submit must return a queued job id quickly (agent contract / MCP timeouts).
+  // UI /olive/run keeps awaiting setup so the first response reflects spawn readiness.
+  if (opts.source === "mcp") {
+    void continueOliveJobSetup(job, {
+      recipe,
+      provider,
+      cudaVersion,
+      fingerprint,
+    }).catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (job.status === "cancelled") return;
+      job.status = "failed";
+      pushLog(job, `[error] ${msg}`);
+      cleanupJobArtifacts(job);
+      finalizeJob(job);
+    });
+    return {
+      ok: true,
+      jobId,
+      reused: false,
+      fingerprint,
+      status: "setting_up",
+      submittedAt,
+    };
+  }
+
+  return continueOliveJobSetup(job, {
+    recipe,
+    provider,
+    cudaVersion,
+    fingerprint,
+  });
+}
+
+async function continueOliveJobSetup(
+  job: OliveJob,
+  opts: {
+    recipe: OliveRecipe;
+    provider: IHVProvider;
+    cudaVersion: string;
+    fingerprint: string;
+  },
+): Promise<StartOliveJobResult> {
+  const { recipe, provider, cudaVersion, fingerprint } = opts;
+  const jobId = job.id;
+  const submittedAt = job.submittedAt ?? Date.now();
   const bailIfCancelled = (): boolean => job.status === "cancelled";
 
   try {
@@ -160,7 +220,7 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
     if (bailIfCancelled()) {
       cleanupJobArtifacts(job);
       finalizeJob(job);
-      return { ok: true, jobId, reused: false, fingerprint, status: "cancelled" };
+      return { ok: true, jobId, reused: false, fingerprint, status: "cancelled", submittedAt };
     }
     if (!capResult.ok) {
       const error = capResult.error ?? "Provider capability setup failed";
@@ -181,7 +241,7 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
         if (bailIfCancelled()) {
           cleanupJobArtifacts(job);
           finalizeJob(job);
-          return { ok: true, jobId, reused: false, fingerprint, status: "cancelled" };
+          return { ok: true, jobId, reused: false, fingerprint, status: "cancelled", submittedAt };
         }
         const inputModel = recipe.input_model as { io_config?: unknown } | undefined;
         const probe: HardwareProbeResult = {
@@ -218,7 +278,7 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
     if (bailIfCancelled()) {
       cleanupJobArtifacts(job);
       finalizeJob(job);
-      return { ok: true, jobId, reused: false, fingerprint, status: "cancelled" };
+      return { ok: true, jobId, reused: false, fingerprint, status: "cancelled", submittedAt };
     }
 
     if (cudaVersion !== "auto") {
@@ -278,14 +338,14 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
       startGpuMetricsTimer(job);
     }
 
-    return { ok: true, jobId, reused: false, fingerprint, status: job.status };
+    return { ok: true, jobId, reused: false, fingerprint, status: job.status, submittedAt };
   } catch (err: unknown) {
     cleanupJobArtifacts(job);
     // Prefer cancelled outcome over a setup failure if cancel won the race.
     if (job.status === "cancelled" || bailIfCancelled()) {
       job.status = "cancelled";
       finalizeJob(job);
-      return { ok: true, jobId, reused: false, fingerprint, status: "cancelled" };
+      return { ok: true, jobId, reused: false, fingerprint, status: "cancelled", submittedAt };
     }
     job.status = "failed";
     const msg = err instanceof Error ? err.message : String(err);

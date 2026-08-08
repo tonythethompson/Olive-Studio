@@ -109,7 +109,7 @@ describe("POST /api/olive/cancel during setup", () => {
   it("cancels a setting_up job and prevents Olive from spawning", async () => {
     const runPromise = fetch(`${baseUrl}/api/olive/run`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Sec-Fetch-Site": "same-origin" },
       body: JSON.stringify({ recipeJson: "{}" }),
     });
 
@@ -124,7 +124,7 @@ describe("POST /api/olive/cancel during setup", () => {
 
     const cancelRes = await fetch(`${baseUrl}/api/olive/cancel`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Sec-Fetch-Site": "same-origin" },
       body: JSON.stringify({ jobId }),
     });
     expect(cancelRes.status).toBe(200);
@@ -147,7 +147,7 @@ describe("POST /api/olive/cancel during setup", () => {
 
     const runPromise = fetch(`${baseUrl}/api/olive/run`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Sec-Fetch-Site": "same-origin" },
       body: JSON.stringify({ recipeJson: "{}" }),
     });
 
@@ -164,7 +164,7 @@ describe("POST /api/olive/cancel during setup", () => {
 
     const cancelRes = await fetch(`${baseUrl}/api/olive/cancel`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Sec-Fetch-Site": "same-origin" },
       body: JSON.stringify({ jobId }),
     });
     expect(await cancelRes.json()).toMatchObject({ ok: true, status: "cancelled" });
@@ -199,7 +199,7 @@ describe("POST /api/olive/cancel during setup", () => {
 
     const res = await fetch(`${baseUrl}/api/olive/cancel`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Sec-Fetch-Site": "same-origin" },
       body: JSON.stringify({ jobId: "done-job" }),
     });
     const body = await res.json();
@@ -250,7 +250,7 @@ describe("POST /api/olive/cancel during setup", () => {
     try {
       const res = await fetch(`${baseUrl}/api/olive/cancel`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Sec-Fetch-Site": "same-origin" },
         body: JSON.stringify({ jobId: "stuck-job" }),
       });
       expect(await res.json()).toMatchObject({ ok: true, status: "cancelled" });
@@ -278,7 +278,7 @@ describe("POST /api/olive/run temp-recipe write failure", () => {
 
     const runPromise = fetch(`${baseUrl}/api/olive/run`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Sec-Fetch-Site": "same-origin" },
       body: JSON.stringify({ recipeJson: "{}" }),
     });
 

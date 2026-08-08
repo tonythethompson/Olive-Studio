@@ -107,11 +107,24 @@ describe("GET /api/olive/jobs", () => {
 describe("GET /api/olive/status/:jobId finishedAt", () => {
   it("includes finishedAt on status payload", async () => {
     seedJob({ id: "done-1", status: "completed", exitCode: 0, finishedAt: 99 });
-    const res = await fetch(`${baseUrl}/api/olive/status/done-1`);
+    const res = await fetch(`${baseUrl}/api/olive/status/done-1`, {
+      headers: { "Sec-Fetch-Site": "same-origin" },
+    });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { id: string; finishedAt: number | null };
     expect(body.id).toBe("done-1");
     expect(body.finishedAt).toBe(99);
+  });
+
+  it("applies inspection policy to non-UI clients even without MCP header", async () => {
+    writeStudioConfig({ agentAccess: { allowJobInspection: false } });
+    seedJob({ id: "secret", status: "running", exitCode: null });
+    const agentish = await fetch(`${baseUrl}/api/olive/status/secret`);
+    expect(agentish.status).toBe(403);
+    const ui = await fetch(`${baseUrl}/api/olive/status/secret`, {
+      headers: { "Sec-Fetch-Site": "same-origin" },
+    });
+    expect(ui.status).toBe(200);
   });
 });
 
@@ -162,7 +175,10 @@ async function readSseEvents(
     idleMs?: number;
   } = {},
 ): Promise<SseEvent[]> {
-  const res = await fetch(url, { signal: opts.signal, headers: { Accept: "text/event-stream" } });
+  const res = await fetch(url, {
+    signal: opts.signal,
+    headers: { Accept: "text/event-stream", "Sec-Fetch-Site": "same-origin" },
+  });
   if (!res.ok || !res.body) {
     throw new Error(`SSE HTTP ${res.status}`);
   }

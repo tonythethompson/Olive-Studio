@@ -183,7 +183,11 @@ def test_weak_live_result_does_not_displace_strong_local_top1(monkeypatch: pytes
         }
 
     def fake_live(query, top_k, *, mode=None):
-        return weak_live[:top_k]
+        return weak_live[:top_k], {
+            "mode": "auto",
+            "effective": "hybrid",
+            "degraded": False,
+        }
 
     monkeypatch.setattr(docs_search, "_search_local", fake_local)
     monkeypatch.setattr(docs_search, "_search_live", fake_live)
@@ -389,8 +393,8 @@ def test_load_kb_text_skips_invalid_utf8_and_keeps_valid_files(
     assert "bad_utf8" not in sources
 
 
-def test_live_auto_cold_model_budget_falls_back_to_keyword(monkeypatch: pytest.MonkeyPatch):
-    """Cold auto+live must budget semantic work and keyword-fallback without embeddings."""
+def test_live_auto_budgets_even_when_model_is_warm(monkeypatch: pytest.MonkeyPatch):
+    """Warm model must not skip the auto budget: live fetch/index can still be cold."""
     import time
 
     import olive_mcp_server.tools.retrieval as retrieval
@@ -406,7 +410,6 @@ def test_live_auto_cold_model_budget_falls_back_to_keyword(monkeypatch: pytest.M
                 break
         time.sleep(0.05)
 
-    monkeypatch.setattr(docs_search, "is_model_loaded", lambda: False)
     monkeypatch.setenv("OLIVE_MCP_SEMANTIC_BUDGET_MS", "50")
 
     # Keep local out of the shared budget pool so live owns the single-flight slot.
@@ -459,9 +462,10 @@ def test_live_auto_cold_model_budget_falls_back_to_keyword(monkeypatch: pytest.M
         raise AssertionError("keyword fallback must not call _get_live_index")
 
     monkeypatch.setattr(docs_search, "_get_live_index", boom_if_keyword_hits_index)
-    again = docs_search._search_live("calibration", 3, mode="keyword")
+    again, again_meta = docs_search._search_live("calibration", 3, mode="keyword")
     assert again
     assert all(r["source"].startswith("live:") for r in again)
+    assert again_meta.get("effective") == "keyword"
 
     # Drain abandoned budget worker for subsequent tests.
     time.sleep(0.55)
