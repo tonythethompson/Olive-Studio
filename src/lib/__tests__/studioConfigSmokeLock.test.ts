@@ -225,35 +225,25 @@ describe("studioConfigSmokeLock", () => {
 
   it("falls back to exclusive write when hardlinks are unsupported", async () => {
     const store: Store = new Map();
-    const writeFileSync = vi.fn((p: string, body: string, opts?: { flag?: string }) => {
-      if (opts?.flag === "wx" && store.has(p)) {
-        throw Object.assign(new Error("EEXIST"), { code: "EEXIST" });
-      }
-      store.set(p, String(body));
-    });
+    const fs = makeFs(store);
     const linkSync = vi.fn(() => {
       throw Object.assign(new Error("ENOTSUP"), { code: "ENOTSUP" });
     });
-    const unlinkSync = vi.fn((p: string) => {
-      store.delete(p);
-    });
 
     const lock = await acquireStudioConfigSmokeLock("/tmp/lock", {
-      writeFileSync: writeFileSync as never,
+      writeFileSync: fs.writeFileSync as never,
       linkSync: linkSync as never,
-      readFileSync: vi.fn((p: string) => {
-        if (!store.has(p)) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
-        return store.get(p) ?? "";
-      }) as never,
-      unlinkSync: unlinkSync as never,
-      mkdirSync: vi.fn() as never,
+      readFileSync: fs.readFileSync as never,
+      unlinkSync: fs.unlinkSync as never,
+      mkdirSync: fs.mkdirSync as never,
       pid: 777,
       timeoutMs: 1_000,
       pollMs: 10,
       randomId: () => "fb",
     });
     expect(store.get("/tmp/lock")).toBe("777\n");
-    expect(writeFileSync).toHaveBeenCalledWith("/tmp/lock", "777\n", { flag: "wx" });
+    expect(fs.writeFileSync).toHaveBeenCalledWith("/tmp/lock", "777\n", { flag: "wx" });
+    expect([...store.keys()].some((k) => k.includes(".tmp"))).toBe(false);
     lock.release();
   });
 
