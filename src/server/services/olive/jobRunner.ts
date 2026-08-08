@@ -62,8 +62,41 @@ export type StartOliveJobResult =
       jobId?: string;
     };
 
-/** In-flight MCP submits keyed by idempotency key or fingerprint (serialize check-then-act). */
-const mcpSubmitLocks = new Map<string, Promise<StartOliveJobResult>>();
+/** Per-key promise tails that serialize MCP submit critical sections. */
+const mcpSubmitLockTails = new Map<string, Promise<void>>();
+
+/**
+ * Acquire exclusive tails for the given lock keys (sorted to avoid deadlocks).
+ * Callers with overlapping fingerprint/key sets cannot both pass lookup-and-register.
+ */
+async function withMcpSubmitLocks<T>(keys: string[], fn: () => Promise<T>): Promise<T> {
+  const sorted = [...new Set(keys)].sort();
+  const releases: Array<() => void> = [];
+  try {
+    for (const key of sorted) {
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const prev = mcpSubmitLockTails.get(key) ?? Promise.resolve();
+      // Chain: next waiter awaits prev, then our held promise until we release.
+      mcpSubmitLockTails.set(
+        key,
+        prev.then(
+          () => held,
+          () => held,
+        ),
+      );
+      await prev;
+      releases.push(release);
+    }
+    return await fn();
+  } finally {
+    while (releases.length > 0) {
+      releases.pop()!();
+    }
+  }
+}
 
 /**
  * Validates a recipe, prepares its execution environment, and starts an Olive job or reuses an idempotent MCP submission.
@@ -101,26 +134,20 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
 
   // Idempotency is for MCP/agent submit only — UI re-runs should always spawn.
   if (opts.source === "mcp") {
-    const lockKey = opts.idempotencyKey
-      ? `key:${opts.idempotencyKey}`
-      : `fp:${fingerprint}`;
-    const inflight = mcpSubmitLocks.get(lockKey);
-    if (inflight) return inflight;
-
-    const work = startMcpOliveJobLocked({
-      recipe,
-      provider,
-      cudaVersion,
-      fingerprint,
-      idempotencyKey: opts.idempotencyKey,
-    });
-    mcpSubmitLocks.set(lockKey, work);
-    try {
-      return await work;
-    } finally {
-      // Only clear if we still own the slot (avoid deleting a newer waiter's promise).
-      if (mcpSubmitLocks.get(lockKey) === work) mcpSubmitLocks.delete(lockKey);
-    }
+    // Always lock the recipe fingerprint so key-bearing and fingerprint-only
+    // callers cannot both observe a miss and spawn duplicate jobs. Also lock
+    // the idempotency key when present so same-key conflict checks serialize.
+    const lockKeys = [`fp:${fingerprint}`];
+    if (opts.idempotencyKey) lockKeys.push(`key:${opts.idempotencyKey}`);
+    return withMcpSubmitLocks(lockKeys, () =>
+      startMcpOliveJobLocked({
+        recipe,
+        provider,
+        cudaVersion,
+        fingerprint,
+        idempotencyKey: opts.idempotencyKey,
+      }),
+    );
   }
 
   return registerAndStartOliveJob({
