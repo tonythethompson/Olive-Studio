@@ -175,11 +175,83 @@ def test_weak_live_result_does_not_displace_strong_local_top1(monkeypatch: pytes
     strong_local = [{"source": "passes.foo", "snippet": "strong", "relevance": 0.85}]
     weak_live = [{"source": "live:index", "snippet": "weak", "relevance": 0.31}]
 
-    monkeypatch.setattr(docs_search, "_search_local", lambda query, top_k: strong_local[:top_k])
-    monkeypatch.setattr(docs_search, "_search_live", lambda query, top_k: weak_live[:top_k])
+    def fake_local(query, top_k, mode=None, budget_ms=None):
+        return strong_local[:top_k], {
+            "mode": "auto",
+            "effective": "hybrid",
+            "degraded": False,
+        }
+
+    def fake_live(query, top_k, *, mode=None, budget_ms=None):
+        return weak_live[:top_k], {
+            "mode": "auto",
+            "effective": "hybrid",
+            "degraded": False,
+        }
+
+    monkeypatch.setattr(docs_search, "_search_local", fake_local)
+    monkeypatch.setattr(docs_search, "_search_live", fake_live)
 
     result = search_olive_documentation(query="quantization", top_k=1, live=True)
     assert result["results"] == [strong_local[0]]
+
+
+def test_keyword_mode_with_live_does_not_start_semantic_loading(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """mode=keyword + live=True must never build live embeddings or call semantic_search."""
+    fetch_calls = {"n": 0}
+    monkeypatch.setattr(docs_search, "_load_kb_text", lambda: list(_FIXED_KB_TEXTS))
+
+    def fake_fetch():
+        fetch_calls["n"] += 1
+        return ({"index": "live calibration data for static quantization"}, 1.0)
+
+    monkeypatch.setattr(docs_search, "_fetch_live_docs", fake_fetch)
+    # Env default must not override an explicit keyword mode on either path.
+    monkeypatch.setenv("OLIVE_MCP_RETRIEVAL_MODE", "semantic")
+
+    def boom_semantic(*_a, **_k):
+        raise AssertionError("semantic_search must not run under mode=keyword")
+
+    def boom_live_index(*_a, **_k):
+        raise AssertionError("_get_live_index must not run under mode=keyword")
+
+    def boom_build(*_a, **_k):
+        raise AssertionError("build_kb_index must not run under mode=keyword")
+
+    def boom_kb_index(*_a, **_k):
+        raise AssertionError("get_or_build_kb_index must not run under mode=keyword")
+
+    monkeypatch.setattr(docs_search, "semantic_search", boom_semantic)
+    monkeypatch.setattr(docs_search, "_get_live_index", boom_live_index)
+    monkeypatch.setattr(docs_search, "build_kb_index", boom_build)
+    monkeypatch.setattr(docs_search, "get_or_build_kb_index", boom_kb_index)
+
+    result = search_olive_documentation(
+        query="calibration",
+        top_k=3,
+        live=True,
+        mode="keyword",
+    )
+    assert result["retrieval"]["mode"] == "keyword"
+    assert result["retrieval"]["effective"] == "keyword"
+    assert result["count"] > 0
+    assert fetch_calls["n"] == 1
+    assert any(r["source"].startswith("live:") for r in result["results"])
+    sources = " ".join(r["source"] for r in result["results"])
+    # Local keyword and/or live keyword hits expected; no semantic path taken.
+    assert "calibration" in sources.lower() or any(
+        "calibration" in r["snippet"].lower() for r in result["results"]
+    )
+
+    # Direct live helper: keyword path is fetch → split → _keyword_search only.
+    live_hits, live_meta = docs_search._search_live("calibration", 3, mode="keyword")
+    assert live_meta["mode"] == "keyword"
+    assert live_meta["effective"] == "keyword"
+    assert live_hits
+    assert all(r["source"].startswith("live:") for r in live_hits)
+    assert fetch_calls["n"] == 2
 
 
 def test_empty_query_unchanged():
@@ -197,7 +269,7 @@ def test_return_shape_preserved(monkeypatch: pytest.MonkeyPatch):
         ],
     )
     result = search_olive_documentation(query="quantization", top_k=2, live=False)
-    assert set(result.keys()) == {"query", "count", "results", "note"}
+    assert set(result.keys()) >= {"query", "count", "results", "note", "retrieval"}
     for r in result["results"]:
         assert set(r.keys()) >= {"source", "snippet", "relevance"}
 
@@ -333,3 +405,145 @@ def test_load_kb_text_skips_invalid_utf8_and_keeps_valid_files(
     assert "good" in sources
     assert "OnnxQuantization" in snippets
     assert "bad_utf8" not in sources
+
+
+def test_live_auto_budgets_even_when_model_is_warm(monkeypatch: pytest.MonkeyPatch):
+    """Warm model must not skip the auto budget: live fetch/index can still be cold."""
+    import time
+
+    from olive_mcp_server.tools.retrieval import retrieval_meta
+
+    monkeypatch.setenv("OLIVE_MCP_SEMANTIC_BUDGET_MS", "50")
+
+    # Keep local out of the shared budget pool so live owns the single-flight slot.
+    monkeypatch.setattr(
+        docs_search,
+        "_search_local",
+        lambda *_a, **_k: (
+            [{"source": "local.kb", "snippet": "local calibration note", "relevance": 0.4}],
+            retrieval_meta(
+                mode="auto",
+                effective="keyword",
+                degraded=True,
+                reason="semantic_budget_exceeded",
+            ),
+        ),
+    )
+
+    live_index_calls = {"n": 0}
+
+    def slow_live_index():
+        live_index_calls["n"] += 1
+        time.sleep(0.5)
+        return (
+            [("live:index", "live calibration for static quantization")],
+            np.zeros((1, 384), dtype=np.float32),
+        )
+
+    monkeypatch.setattr(docs_search, "_get_live_index", slow_live_index)
+    monkeypatch.setattr(
+        docs_search,
+        "_fetch_live_docs",
+        lambda: ({"index": "live calibration for static quantization"}, 1.0),
+    )
+
+    result = search_olive_documentation(
+        query="calibration",
+        top_k=3,
+        live=True,
+        mode="auto",
+    )
+
+    assert result["retrieval"]["mode"] == "auto"
+    assert result["retrieval"]["effective"] == "keyword"
+    assert result["retrieval"]["degraded"] is True
+    assert live_index_calls["n"] == 1
+    assert any(r["source"].startswith("live:") for r in result["results"])
+
+    # After timeout, further live keyword search must avoid embeddings.
+    def boom_if_keyword_hits_index(*_a, **_k):
+        raise AssertionError("keyword fallback must not call _get_live_index")
+
+    monkeypatch.setattr(docs_search, "_get_live_index", boom_if_keyword_hits_index)
+    again, again_meta = docs_search._search_live("calibration", 3, mode="keyword")
+    assert again
+    assert all(r["source"].startswith("live:") for r in again)
+    assert again_meta.get("effective") == "keyword"
+
+
+def test_shared_semantic_budget_zero_remaining_forces_live_keyword(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """When local consumes the shared deadline, live gets budget_ms=0 → keyword only."""
+    import time
+
+    from olive_mcp_server.tools.retrieval import retrieval_meta
+
+    monkeypatch.setenv("OLIVE_MCP_SEMANTIC_BUDGET_MS", "80")
+
+    def slow_local(query, top_k, *, mode=None, budget_ms=None):
+        assert budget_ms is not None and budget_ms > 0
+        time.sleep(0.12)  # exceed shared 80ms deadline
+        return (
+            [{"source": "local.kb", "snippet": "local calibration", "relevance": 0.5}],
+            retrieval_meta(mode="auto", effective="hybrid"),
+        )
+
+    live_budgets: list[int | None] = []
+    live_index_calls = {"n": 0}
+    real_live = docs_search._search_live
+
+    def tracking_real_live(query, top_k, *, mode=None, budget_ms=None):
+        live_budgets.append(budget_ms)
+        return real_live(query, top_k, mode=mode, budget_ms=budget_ms)
+
+    def boom_live_index(*_a, **_k):
+        live_index_calls["n"] += 1
+        raise AssertionError("budget_ms=0 must not build live embeddings")
+
+    monkeypatch.setattr(docs_search, "_search_local", slow_local)
+    monkeypatch.setattr(docs_search, "_search_live", tracking_real_live)
+    monkeypatch.setattr(docs_search, "_get_live_index", boom_live_index)
+    monkeypatch.setattr(
+        docs_search,
+        "_fetch_live_docs",
+        lambda: ({"index": "live calibration for static quantization"}, 1.0),
+    )
+
+    result = search_olive_documentation(
+        query="calibration",
+        top_k=3,
+        live=True,
+        mode="auto",
+    )
+
+    assert live_budgets == [0]
+    assert live_index_calls["n"] == 0
+    assert result["retrieval"]["degraded"] is True
+    assert result["retrieval"]["reason"] == "semantic_budget_exceeded"
+    assert any(r["source"].startswith("live:") for r in result["results"])
+
+
+def test_explicit_budget_ms_zero_selects_keyword_not_unlimited():
+    """Explicit budget_ms=0 must not call run_with_budget(0) (unlimited)."""
+    hits, meta = docs_search._search_live(
+        "calibration",
+        3,
+        mode="auto",
+        budget_ms=0,
+    )
+    assert meta["effective"] == "keyword"
+    assert meta["degraded"] is True
+    assert meta["reason"] == "semantic_budget_exceeded"
+
+    hits_l, meta_l = docs_search._search_local(
+        "calibration",
+        3,
+        mode="auto",
+        budget_ms=0,
+    )
+    assert meta_l["effective"] == "keyword"
+    assert meta_l["degraded"] is True
+    assert meta_l["reason"] == "semantic_budget_exceeded"
+    assert isinstance(hits_l, list)
+    assert isinstance(hits, list)

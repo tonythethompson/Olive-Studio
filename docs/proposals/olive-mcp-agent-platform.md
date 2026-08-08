@@ -2,7 +2,7 @@
 
 **Working title:** Olive MCP as agent intelligence/configuration today; **agent-facing control of Studio** when job APIs are connected  
 **Audience:** Olive Studio maintainers, MCP consumers, agent-tooling stakeholders  
-**Status:** Proposal (implementation-ready for Phases 0–1; job control is staged later)  
+**Status:** Proposal — Phases 0–3 **code complete** on branch `MCP_harden`; **CI / end-to-end verification still pending** (do not treat as fully signed-off until the matrix is green)  
 **Date:** 2026-08-07  
 **Calibration:** Architecture **~9/10**; near-term plan **~8/10** → proceed. End-state job loop raises product value without a second executor.
 
@@ -163,12 +163,15 @@ Agent retries are normal. `submit_optimization_job` **must** accept an **idempot
 
 Idempotency matters more than rate limiting for avoiding duplicate GPU work (rate limits remain useful as a backstop).
 
+**Current Studio behavior (MCP-origin only):** `findJobByIdempotency` reuses the prior MCP job for the same key and/or fingerprint while that job remains in the process registry for **in-progress** and **completed** states. **Failed** / **cancelled** indexed jobs are treated as a miss so agents can retry. Callers that need a **new** run after a successful completed job must supply a **new idempotency key** (and typically a changed recipe fingerprint). UI submissions are never entered into this index.
+
 ### 6.5 Long-running jobs and artifacts
 
 - **Submit** returns in seconds with `job_id` / `queued`.
 - **Poll** `get_optimization_job` for structured progress.
 - MCP must **never** hold a transport call open for an entire optimization.
 - **Results** return status, output path/reference, metrics, passes, EP, duration, warnings, structured failure, log tail/reference, artifact **metadata** — not ONNX blobs or multi‑GB logs.
+- **`artifact_path_refs` privacy (default):** `get_optimization_results` scrapes heuristic path tokens from log lines (up to 20) and returns **basenames** (or already-relative forms) by default. Absolute paths and local account segments (`/home/<user>/...`, `C:\Users\<name>\...`, `/Users/<name>/...`) are **not** included in `artifact_path_refs` or `log_tail` unless both are true: tool arg `include_absolute_artifact_paths=true` **and** local MCP host env `OLIVE_MCP_ALLOW_ABSOLUTE_ARTIFACT_PATHS=1`. Response field `artifact_paths_absolute` reports whether full paths were actually returned. References only (no file bytes).
 
 ### 6.6 Capability model (richer than bool)
 
@@ -198,9 +201,19 @@ Agents branch on these instead of treating every failure as `studio_unavailable`
 
 ### 6.7 Authorization: Studio owns policy
 
-`OLIVE_MCP_ALLOW_JOBS=1` is fine for **early dev/CI override**, not the long-term user model.
+Product policy lives in Studio (Agent Access UI / `GET|PUT /api/olive/agent-access`). MCP **receives** effective capabilities from Studio. Preflight (env, provider, paths, disk, model existence, concurrent jobs) stays Studio’s existing job path.
 
-**Product policy lives in Studio**, e.g.:
+**Dev/CI env overrides (not the long-term user model):**
+
+| Variable | Behavior |
+| -------- | -------- |
+| `OLIVE_MCP_ALLOW_JOBS` | **Escalate-only.** Truthy (`1`/`true`/`yes`/`on`) forces effective **submit + cancel** on. Falsy values (`0`/`false`) are a **no-op** (they do not force submission off). While set, effective policy from `getAgentAccessPublic` / PUT responses reflects the override even if disk UI toggles remain off. Disk writes from the UI are preserved; the env wins at resolve time. |
+| `OLIVE_MCP_ALLOW_JOB_INSPECTION` | Two-sided: falsy forces inspection off; truthy forces on. |
+| `OLIVE_MCP_ACCESS` | Falsy forces master MCP access off. |
+
+Prefer the Agent Access UI for product defaults. Do not rely on `OLIVE_MCP_ALLOW_JOBS=0` to disable submit in production; turn the UI toggles off (and unset the escalate env).
+
+**Product policy UI sketch:**
 
 ```text
 Settings → Developer / Agent Access
@@ -210,8 +223,6 @@ Settings → Developer / Agent Access
   Allow job submission       [off]
   Allow job cancellation     [off]
 ```
-
-MCP **receives** effective capabilities from Studio (or maps Studio responses into `job_control.*`). Studio remains authoritative on whether the operation is permitted. Preflight (env, provider, paths, disk, model existence, concurrent jobs) stays Studio’s existing job path.
 
 ### 6.8 Incremental rollout (prefer this order)
 
@@ -249,33 +260,35 @@ Deterministic launcher
   → semantic timeout → graceful degraded fallback under auto
 ```
 
-### Phase 1 — Fast retrieval
+### Phase 1 — Fast retrieval ✅ (branch `MCP_harden`)
 
 ```text
-precomputed KB index
-mode = auto | keyword | semantic (full)
-preload/warm path
-cold/warm SLO tests
-studio.configured / reachable on capabilities
+precomputed KB index          → knowledge_base/indexes/ + pnpm mcp:build-index
+mode = auto | keyword | semantic
+preload/warm path             → OLIVE_MCP_PRELOAD_EMBEDDINGS=1
+cold/warm SLO tests           → test_index_store + mcp:benchmark
+studio.configured / reachable → get_mcp_capabilities
 ```
 
-### Phase 2 — Read-only Studio job visibility (+ optional product polish)
+### Phase 2 — Read-only Studio job visibility ✅ (branch `MCP_harden`)
 
-- Stage 1 job tools via Studio API  
-- Optional: Studio MCP status / Copy Agent Setup  
-- Docs: advisory vs job-control planes  
+- Stage 1 job tools: `list_optimization_jobs`, `get_optimization_job`, `get_optimization_results`
+- Studio: `GET /api/olive/jobs` + `finishedAt` on status
+- **Inspection policy (implemented):** `allowJobInspection` gates **list** (`GET /api/olive/jobs`) and the dedicated agent routes `GET /api/olive/agent/status/:jobId` and `GET /api/olive/agent/stream/:jobId`. When `allowJobSubmission` is on but inspection is off, agents may still list/poll **MCP-origin** jobs only (submit lifecycle). Studio UI uses `/api/olive/status`, `/api/olive/stream`, and `POST /api/olive/cancel` without agent policy and without `studioLocalOnly` (same trust as `/olive/run` for LAN/hostname browsers), but those UI routes only serve **non-MCP** jobs so agent policy cannot be bypassed by hitting the Execute paths with an MCP job id. MCP job tools call the `/agent/*` paths (loopback + policy). Cancellation uses `POST /api/olive/agent/cancel` (always `allowJobCancellation`) vs UI `POST /api/olive/cancel`.
+- Capabilities: `job_control.inspection=true`, `submission/cancellation=false`
+- Optional product UI (Copy Agent Setup) deferred  
 
-### Phase 2b — Validation / preflight
+### Phase 2b — Validation / preflight ✅
 
-- `validate_optimization_job`  
-- Fingerprint + preflight mapping to existing Studio checks  
+- `validate_optimization_job` → `POST /api/olive/jobs/validate`  
+- Fingerprint + structural preflight (no env install / no spawn). QNN validate runs host-mode + static HTP shape checks only; NPU/`loadable` probe remains in `startOliveJob` after the QNN venv is ready.
 
-### Phase 3 — Capability-gated submit / cancel
+### Phase 3 — Capability-gated submit / cancel ✅
 
-- Idempotent `submit_optimization_job`  
-- `cancel_optimization_job`  
-- Studio settings for agent access policy  
-- Rich `job_control` capability states  
+- Idempotent `submit_optimization_job` → `POST /api/olive/jobs/submit`  
+- `cancel_optimization_job` → `POST /api/olive/agent/cancel`  
+- Studio policy: `GET /api/olive/agent-access` (any Studio browser session) + `PUT` loopback-only via `studioLocalOnly` (policy mutation is privileged; LAN peers cannot flip submission/MCP switches). Env overrides e.g. `OLIVE_MCP_ALLOW_JOBS` for Dev/CI; see §6.7. 
+- Shared `startOliveJob` runner for UI `/olive/run` and MCP submit  
 
 ### Later
 

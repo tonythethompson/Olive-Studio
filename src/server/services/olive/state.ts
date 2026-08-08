@@ -1,6 +1,13 @@
 import fs from "fs";
 import type { OliveJob } from "../../types.ts";
 import { appConfig } from "../../config.ts";
+import {
+  clearIdempotencyIndex,
+  forgetIdempotencyKeysForJobId,
+  pruneIdempotencyIndex,
+} from "./jobIdempotency.ts";
+import { detachVenvListener } from "../venv/index.ts";
+import { stopGpuMetricsTimer } from "./gpu.ts";
 
 /** Central job registry — all active Olive jobs. */
 export const jobRegistry = new Map<string, OliveJob>();
@@ -56,6 +63,49 @@ export function cleanupJobArtifacts(job: OliveJob): boolean {
 }
 
 /**
+ * Test helper: terminate active Olive children, reclaim artifacts, and clear
+ * the registry plus MCP idempotency index so cases cannot leak across tests.
+ */
+export function resetJobRegistry(): void {
+  for (const job of [...jobRegistry.values()]) {
+    if (job.venvListener) {
+      try {
+        detachVenvListener(job.venvListener);
+      } catch {
+        /* mock / already detached */
+      }
+      job.venvListener = undefined;
+    }
+    stopGpuMetricsTimer(job);
+    job.sampling = false;
+    // Mark cancelled before finalize so stub/setup loops watching
+    // `status === "setting_up"` exit even when no child process exists.
+    if (
+      job.status !== "completed" &&
+      job.status !== "failed" &&
+      job.status !== "cancelled"
+    ) {
+      job.status = "cancelled";
+    }
+    const proc = job.process;
+    if (proc) {
+      try {
+        if (proc.exitCode === null && proc.signalCode === null) {
+          proc.kill("SIGKILL");
+        }
+      } catch {
+        /* already exited / not killable in mocks */
+      }
+      job.process = null;
+    }
+    cleanupJobArtifacts(job);
+    finalizeJob(job);
+  }
+  jobRegistry.clear();
+  clearIdempotencyIndex();
+}
+
+/**
  * Whether the job's child process has actually exited. `/olive/cancel` stamps
  * `finishedAt` on SIGTERM before the process is confirmed dead, so the sweeper
  * must not evict a job whose process is still alive (that would orphan it).
@@ -78,11 +128,14 @@ export function sweepJobRegistry(now: number = Date.now()): number {
     ) {
       // Only evict once the temp file is gone; otherwise retain for retry.
       if (cleanupJobArtifacts(job)) {
+        forgetIdempotencyKeysForJobId(id);
         jobRegistry.delete(id);
         removed += 1;
       }
     }
   }
+  // Catch any orphans (e.g. registry cleared without going through forget).
+  pruneIdempotencyIndex();
   return removed;
 }
 

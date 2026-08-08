@@ -62,6 +62,34 @@ _TOOL_IMPORTS: dict[str, tuple[str, str]] = {
         "olive_mcp_server.tools.feedback",
         "record_troubleshoot_feedback",
     ),
+    "get_mcp_capabilities": (
+        "olive_mcp_server.tools.capabilities",
+        "get_mcp_capabilities",
+    ),
+    "list_optimization_jobs": (
+        "olive_mcp_server.tools.studio_jobs",
+        "list_optimization_jobs",
+    ),
+    "get_optimization_job": (
+        "olive_mcp_server.tools.studio_jobs",
+        "get_optimization_job",
+    ),
+    "get_optimization_results": (
+        "olive_mcp_server.tools.studio_jobs",
+        "get_optimization_results",
+    ),
+    "validate_optimization_job": (
+        "olive_mcp_server.tools.studio_jobs",
+        "validate_optimization_job",
+    ),
+    "submit_optimization_job": (
+        "olive_mcp_server.tools.studio_jobs",
+        "submit_optimization_job",
+    ),
+    "cancel_optimization_job": (
+        "olive_mcp_server.tools.studio_jobs",
+        "cancel_optimization_job",
+    ),
 }
 # Studio's HTTP POST /api/mcp/tool proxies these tools but is loopback-only
 # (mcpToolLocalOnly). That gate is required for write tools like feedback.
@@ -159,7 +187,20 @@ def main() -> None:
     Transport selection:
       - CLI flag: ``--sse`` or ``--stdio``
       - Environment: ``MCP_TRANSPORT=sse|stdio`` (default: stdio)
+
+    When ``OLIVE_MCP_PRELOAD_EMBEDDINGS=1``, warm the embedding model and
+    shipped/runtime KB indexes before accepting traffic.
     """
+    try:
+        from olive_mcp_server.tools.preload import maybe_preload_embeddings
+
+        maybe_preload_embeddings()
+    except Exception:
+        # Preload failures must not block the server; tools still lazy-load.
+        import logging
+
+        logging.getLogger(__name__).warning("Embedding preload failed", exc_info=True)
+
     mcp = _build_mcp()
     transport = os.environ.get("MCP_TRANSPORT", "stdio").lower()
     if "--sse" in sys.argv:

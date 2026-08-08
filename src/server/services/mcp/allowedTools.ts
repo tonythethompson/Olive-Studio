@@ -19,9 +19,25 @@ export const ALLOWED_MCP_TOOL_NAMES = new Set([
   // Write-capable / studio bridge tools: HTTP proxy is loopback-only (mcpToolLocalOnly).
   "validate_ui_state_recipe",
   "get_recipe_for_ui_state",
+  "get_runtime_ep_hints",
   "record_troubleshoot_feedback",
+  // Phase 0 capability discovery (not transport health).
+  "get_mcp_capabilities",
+  // Phase 2–3: Studio job tools (submit/cancel policy-gated on Studio).
+  "list_optimization_jobs",
+  "get_optimization_job",
+  "get_optimization_results",
+  "validate_optimization_job",
+  "submit_optimization_job",
+  "cancel_optimization_job",
 ]);
 
+/**
+ * Determines whether an MCP tool name is allowed.
+ *
+ * @param toolName - The MCP tool name to check
+ * @returns `true` if the tool name is allowed, `false` otherwise
+ */
 export function isAllowedMcpToolName(toolName: string): boolean {
   return ALLOWED_MCP_TOOL_NAMES.has(toolName);
 }

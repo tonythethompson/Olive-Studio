@@ -3,13 +3,29 @@
  * replay of buffered log/metrics/done, live metric forwarding, immediate
  * terminal closure, and subscriber cleanup on client disconnect.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import express from "express";
 import type { Server } from "http";
 import type { OliveJob } from "../types.ts";
 import type { GpuMetrics } from "../../lib/gpuMetrics.ts";
+import { writeStudioConfig } from "../config.ts";
 import { pushGpuMetrics, pushLog } from "../services/olive/gpu.ts";
 import { finalizeJob, jobRegistry } from "../services/olive/state.ts";
+
+// Keep agent-access policy mutations out of the real `.olive-studio/config.json`.
+// vi.mock is hoisted, so the static import above resolves to this fake.
+vi.mock("../config.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../config.ts")>();
+  let cfg: Record<string, unknown> = {};
+  return {
+    ...actual,
+    readStudioConfig: () => ({ ...cfg }),
+    writeStudioConfig: (patch: Record<string, unknown>) => {
+      cfg = { ...cfg, ...patch };
+      return cfg;
+    },
+  };
+});
 
 const { mountOliveRoutes } = await import("./olive.ts");
 
@@ -39,6 +55,139 @@ afterAll(async () => {
 
 beforeEach(() => {
   jobRegistry.clear();
+  writeStudioConfig({ agentAccess: {} });
+  delete process.env.OLIVE_MCP_ALLOW_JOBS;
+  delete process.env.OLIVE_MCP_ALLOW_JOB_INSPECTION;
+  delete process.env.OLIVE_MCP_ACCESS;
+});
+
+afterEach(() => {
+  writeStudioConfig({ agentAccess: {} });
+  delete process.env.OLIVE_MCP_ALLOW_JOBS;
+  delete process.env.OLIVE_MCP_ALLOW_JOB_INSPECTION;
+  delete process.env.OLIVE_MCP_ACCESS;
+});
+
+describe("GET /api/olive/jobs", () => {
+  it("lists jobs newest-first with safe summary fields", async () => {
+    seedJob({ id: "old", status: "completed", exitCode: 0, finishedAt: 1 });
+    seedJob({ id: "new", status: "running", exitCode: null });
+    const res = await fetch(`${baseUrl}/api/olive/jobs`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      count: number;
+      jobs: Array<{ id: string; status: string; logCount: number }>;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.count).toBe(2);
+    expect(body.jobs.map((j) => j.id)).toEqual(["new", "old"]);
+    expect(body.jobs[0]).toMatchObject({ id: "new", status: "running" });
+    expect(typeof body.jobs[0].logCount).toBe("number");
+  });
+
+  it("returns empty list when registry is empty", async () => {
+    const res = await fetch(`${baseUrl}/api/olive/jobs`);
+    const body = (await res.json()) as { ok: boolean; count: number; jobs: unknown[] };
+    expect(body).toEqual({ ok: true, count: 0, jobs: [] });
+  });
+
+  it("returns 403 when job inspection and submission are both disabled", async () => {
+    writeStudioConfig({ agentAccess: { allowJobInspection: false, allowJobSubmission: false } });
+    seedJob({ id: "hidden", status: "running", exitCode: null });
+    const res = await fetch(`${baseUrl}/api/olive/jobs`);
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { ok: boolean; error: string; reason: string; policy?: unknown };
+    expect(body.ok).toBe(false);
+    expect(body.error).toBe("forbidden");
+    expect(body.policy).toBeUndefined();
+  });
+
+  it("lists MCP jobs when submission is on but inspection is off", async () => {
+    writeStudioConfig({ agentAccess: { allowJobInspection: false, allowJobSubmission: true } });
+    seedJob({ id: "ui-hidden", status: "running", exitCode: null, source: "ui" });
+    seedJob({ id: "mcp-visible", status: "running", exitCode: null, source: "mcp" });
+    const res = await fetch(`${baseUrl}/api/olive/jobs`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; jobs: Array<{ id: string }> };
+    expect(body.jobs.map((j) => j.id)).toEqual(["mcp-visible"]);
+  });
+});
+
+describe("GET /api/olive/status/:jobId finishedAt", () => {
+  it("includes finishedAt on status payload", async () => {
+    seedJob({ id: "done-1", status: "completed", exitCode: 0, finishedAt: 99 });
+    const res = await fetch(`${baseUrl}/api/olive/status/done-1`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: string; finishedAt: number | null };
+    expect(body.id).toBe("done-1");
+    expect(body.finishedAt).toBe(99);
+  });
+
+  it("UI status stays available when agent inspection is disabled", async () => {
+    writeStudioConfig({ agentAccess: { allowJobInspection: false } });
+    seedJob({ id: "ui-visible", status: "running", exitCode: null });
+    const ui = await fetch(`${baseUrl}/api/olive/status/ui-visible`);
+    expect(ui.status).toBe(200);
+    const agent = await fetch(`${baseUrl}/api/olive/agent/status/ui-visible`);
+    expect(agent.status).toBe(403);
+  });
+
+  it("UI stream/status/cancel hide MCP jobs (agent routes required)", async () => {
+    writeStudioConfig({ agentAccess: { allowJobInspection: true, allowJobCancellation: true } });
+    seedJob({ id: "mcp-secret", status: "running", exitCode: null, source: "mcp", logs: ["secret"] });
+    const status = await fetch(`${baseUrl}/api/olive/status/mcp-secret`);
+    expect(status.status).toBe(404);
+    const stream = await fetch(`${baseUrl}/api/olive/stream/mcp-secret`);
+    expect(stream.status).toBe(404);
+    const cancel = await fetch(`${baseUrl}/api/olive/cancel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobId: "mcp-secret" }),
+    });
+    expect(cancel.status).toBe(404);
+    const agentStatus = await fetch(`${baseUrl}/api/olive/agent/status/mcp-secret`);
+    expect(agentStatus.status).toBe(200);
+    const agentBody = (await agentStatus.json()) as { id: string; logs: string[] };
+    expect(agentBody.id).toBe("mcp-secret");
+    expect(agentBody.logs).toContain("secret");
+  });
+
+  it("agent status allows MCP jobs when submission is on without inspection", async () => {
+    writeStudioConfig({ agentAccess: { allowJobInspection: false, allowJobSubmission: true } });
+    seedJob({ id: "mcp-poll", status: "running", exitCode: null, source: "mcp" });
+    seedJob({ id: "ui-block", status: "running", exitCode: null, source: "ui" });
+    const mcp = await fetch(`${baseUrl}/api/olive/agent/status/mcp-poll`);
+    expect(mcp.status).toBe(200);
+    const ui = await fetch(`${baseUrl}/api/olive/agent/status/ui-block`);
+    expect(ui.status).toBe(404);
+  });
+});
+
+describe("PUT /api/olive/agent-access locality", () => {
+  it("rejects policy mutation when forwarded through a reverse proxy", async () => {
+    const res = await fetch(`${baseUrl}/api/olive/agent-access`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Forwarded-For": "203.0.113.10",
+      },
+      body: JSON.stringify({ allowJobSubmission: true }),
+    });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toMatch(/loopback/i);
+  });
+
+  it("allows GET without studioLocalOnly so LAN sessions can read policy", async () => {
+    const res = await fetch(`${baseUrl}/api/olive/agent-access`, {
+      headers: { "X-Forwarded-For": "203.0.113.10" },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok?: boolean; policy?: { mcpAccess?: boolean } };
+    expect(body.ok).toBe(true);
+    expect(body.policy).toBeDefined();
+  });
 });
 
 function sampleMetrics(label = "A100"): GpuMetrics {
@@ -73,6 +222,9 @@ function seedJob(partial: Partial<OliveJob> & Pick<OliveJob, "id" | "status">): 
     tempRecipePath: null,
     finishedAt: partial.finishedAt ?? null,
     doneSubscribers: [],
+    source: partial.source,
+    fingerprint: partial.fingerprint,
+    idempotencyKey: partial.idempotencyKey,
   };
   jobRegistry.set(job.id, job);
   return job;
@@ -88,7 +240,10 @@ async function readSseEvents(
     idleMs?: number;
   } = {},
 ): Promise<SseEvent[]> {
-  const res = await fetch(url, { signal: opts.signal, headers: { Accept: "text/event-stream" } });
+  const res = await fetch(url, {
+    signal: opts.signal,
+    headers: { Accept: "text/event-stream" },
+  });
   if (!res.ok || !res.body) {
     throw new Error(`SSE HTTP ${res.status}`);
   }

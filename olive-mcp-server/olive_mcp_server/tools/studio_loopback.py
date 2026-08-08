@@ -138,17 +138,17 @@ def studio_request(
     body: dict[str, Any] | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
-    """HTTP request to a path under the validated Studio base URL.
-
-    Args:
-        method: HTTP method (GET, POST, …).
-        path: Absolute path on the Studio host (e.g. ``/api/system/hardware-probe``).
-        body: Optional JSON object body (encoded when provided).
-        timeout: Socket timeout in seconds.
-
+    """
+    Send a JSON request to a path under the validated Olive Studio base URL.
+    
+    Parameters:
+        method (str): HTTP method to use.
+        path (str): Studio path, with or without a leading slash.
+        body (dict[str, Any] | None): Optional JSON object to include in the request.
+        timeout (float): Request timeout in seconds.
+    
     Returns:
-        Parsed JSON object on success, or a structured error dict with an
-        ``error`` key (``studio_unavailable`` / ``invalid_bridge_response``).
+        dict[str, Any]: Parsed JSON object on success, or a structured error dictionary.
     """
     base, resolve_err = resolve_studio_base()
     if resolve_err is not None:
@@ -158,7 +158,9 @@ def studio_request(
         path = "/" + path
     endpoint = f"{base}{path}"
 
-    headers = {"Accept": "application/json"}
+    # Trusted by Studio routes as the MCP bridge context; request bodies are not
+    # used to establish agent identity.
+    headers = {"Accept": "application/json", "X-Olive-MCP-Agent": "1"}
     data: bytes | None = None
     if body is not None:
         data = json.dumps(body).encode("utf-8")

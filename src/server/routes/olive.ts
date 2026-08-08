@@ -2,42 +2,24 @@
  * Olive execution route handlers.
  * Recipe validation, job execution, SSE streaming, GPU metrics.
  */
-import type { Router } from "express";
-import { spawn } from "child_process";
-import path from "path";
-import fs from "fs";
-import { v4 as uuidv4 } from "uuid";
+import type { Request, Response, Router } from "express";
 
 import type { GpuMetrics } from "../../lib/gpuMetrics.ts";
-import { validateOliveRecipeStructure } from "../../lib/oliveRecipeSchema.ts";
-import { enrichRecipeMemoryOffloadForRun } from "../../lib/memoryOffload.ts";
-import { isGpuExecutionProvider } from "../../lib/oliveGpuRuntime.ts";
-import { normalizeIhvProvider } from "../../lib/venvFamily.ts";
-import { resolveQnnHostMode } from "../../lib/qnnDeps.ts";
-import { assessQnnRecipeReadiness } from "../../lib/qnnReadiness.ts";
-import { DEFAULT_PASSES } from "../../lib/defaultPasses.ts";
-import { isExportTargetProvider } from "../../lib/providerRuntimeKind.ts";
 
 import {
   jobRegistry,
-  getRuntimeHfToken,
-  cleanupJobArtifacts,
   startJobRegistrySweeper,
   finalizeJob,
 } from "../services/olive/state.ts";
-import { pushLog, startGpuMetricsTimer, stopGpuMetricsTimer, MAX_JOB_LOG_LINES } from "../services/olive/gpu.ts";
-import { probeQnn } from "../services/olive/qnn.ts";
-import { getVenvPython } from "../services/venv/paths.ts";
-import {
-  ensureProviderCapability,
-  buildOliveRunEnvironment,
-  resolveOliveCommand,
-  detachVenvListener,
-} from "../services/venv/index.ts";
-import type { OliveRecipe, OliveJob } from "../types.ts";
+import { pushLog, stopGpuMetricsTimer, MAX_JOB_LOG_LINES } from "../services/olive/gpu.ts";
+import { detachVenvListener } from "../services/venv/index.ts";
+import type { OliveRecipe, AgentAccessPolicy } from "../types.ts";
 import { oliveRunRateLimit } from "../middleware/rateLimit.ts";
 import { isParseBodyError, parseBody } from "../middleware/bodyGuard.ts";
-import type { HardwareProbeResult } from "../../lib/hardwareProbe.ts";
+import { studioLocalOnly } from "../middleware/localOnly.ts";
+import { preflightOliveRecipe } from "../services/olive/jobPreflight.ts";
+import { startOliveJob } from "../services/olive/jobRunner.ts";
+import { denyUnless, getAgentAccessPublic, updateAgentAccess } from "../services/olive/agentAccess.ts";
 
 /** Grace period after SIGTERM before escalating cancel to SIGKILL. */
 export const CANCEL_SIGKILL_GRACE_MS = 10_000;
@@ -52,6 +34,226 @@ export function writeNamedSse(
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
+
+function sendAgentDeny(
+  res: Response,
+  gate: Exclude<ReturnType<typeof denyUnless>, { ok: true }>,
+): void {
+  res.status(403).json({
+    ok: false,
+    error: gate.error,
+    reason: gate.reason,
+    ...("required" in gate && gate.required ? { required: gate.required } : {}),
+  });
+}
+
+/**
+ * Submission alone may inspect MCP-origin jobs (lifecycle poll after submit).
+ * Broad inspection of UI jobs still requires allowJobInspection.
+ */
+type AgentInspectGate = "allow" | "not_found" | "forbidden";
+
+function resolveAgentInspectGate(
+  req: Request,
+  policy: { allowJobInspection: boolean; allowJobSubmission: boolean },
+): AgentInspectGate {
+  if (policy.allowJobInspection) return "allow";
+  if (!policy.allowJobSubmission) return "forbidden";
+  const jobIdParam = req.params.jobId;
+  const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
+  const job = jobId ? jobRegistry.get(jobId) : undefined;
+  // Submission-only: return 404 for missing and UI jobs so agents cannot distinguish them.
+  if (!job || job.source !== "mcp") return "not_found";
+  return "allow";
+}
+
+function sendAgentInspectDeny(res: Response, gate: AgentInspectGate): void {
+  if (gate === "not_found") {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+  res.status(403).json({
+    ok: false,
+    error: "forbidden",
+    reason: "Job inspection is disabled in Studio agent access settings",
+    required: { allowJobInspection: true },
+  });
+}
+
+/** UI Execute routes must not expose MCP jobs (those use /olive/agent/* + policy). */
+function isMcpOriginJob(job: { source?: string }): boolean {
+  return job.source === "mcp";
+}
+
+type JobHttpSurface = "ui" | "agent";
+
+function handleOliveStatus(req: Request, res: Response, surface: JobHttpSurface = "ui"): void {
+  const jobIdParam = req.params.jobId;
+  const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
+  const job = jobId ? jobRegistry.get(jobId) : undefined;
+  if (!job || (surface === "ui" && isMcpOriginJob(job))) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+  res.json({
+    id: job.id,
+    status: job.status,
+    exitCode: job.exitCode,
+    logs: job.logs,
+    logsTruncated: Boolean(job.logsTruncated),
+    latestMetrics: job.latestMetrics,
+    finishedAt: job.finishedAt,
+  });
+}
+
+function handleOliveCancel(req: Request, res: Response, surface: JobHttpSurface = "ui"): void {
+  // express.json() leaves body undefined when the client sends no payload;
+  // optional jobId means an empty object preserves the 404 "Job not found" contract.
+  // Preserve null so parseBody can reject an explicit JSON null body.
+  const body = parseBody<{ jobId?: string; client?: string }>(req.body === undefined ? {} : req.body, {
+    jobId: { type: "string", required: false },
+    client: { type: "string", required: false },
+  });
+  if (isParseBodyError(body)) {
+    res.status(400).json({ error: body.error });
+    return;
+  }
+  const { jobId } = body.parsed;
+
+  const job = jobId ? jobRegistry.get(jobId) : undefined;
+  if (!job || (surface === "ui" && isMcpOriginJob(job))) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+
+  // Already terminal — nothing to cancel.
+  if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
+    res.json({ ok: true, status: job.status });
+    return;
+  }
+
+  // Mark cancelled even during "setting_up" (no process yet). The /olive/run
+  // setup loop checks this status after each await and aborts before spawning.
+  job.status = "cancelled";
+  pushLog(job, "[cancel] Cancellation requested.");
+  // Detach from shared venv setup so the cancelled job stops receiving install
+  // output while setup (which may serve other jobs) keeps running.
+  if (job.venvListener) {
+    detachVenvListener(job.venvListener);
+    job.venvListener = undefined;
+  }
+  if (job.process) {
+    const proc = job.process;
+    proc.kill("SIGTERM");
+    // SIGTERM is best-effort; escalate so a stuck Olive child cannot outlive cancel.
+    const killTimer = setTimeout(() => {
+      if (proc.exitCode === null && proc.signalCode === null) {
+        proc.kill("SIGKILL");
+        pushLog(job, "[cancel] Process did not exit after SIGTERM; sent SIGKILL.");
+      }
+    }, CANCEL_SIGKILL_GRACE_MS);
+    if (typeof killTimer.unref === "function") killTimer.unref();
+    proc.once("close", () => clearTimeout(killTimer));
+    stopGpuMetricsTimer(job);
+  }
+  // Finalize so open SSE streams close now; the "close" handler (if a process
+  // is running) is idempotent — finishedAt is only stamped once.
+  finalizeJob(job);
+  res.json({ ok: true, status: job.status });
+}
+
+function handleOliveStream(req: Request, res: Response, surface: JobHttpSurface = "ui"): void {
+  const jobIdParam = req.params.jobId;
+  const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
+  const job = jobId ? jobRegistry.get(jobId) : undefined;
+  if (!job || (surface === "ui" && isMcpOriginJob(job))) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  if (typeof res.flushHeaders === "function") res.flushHeaders();
+
+  if (job.logsTruncated) {
+    writeNamedSse(res, "log", {
+      line: `[info] Earlier log lines were trimmed to bound memory (retaining last ${MAX_JOB_LOG_LINES}).`,
+    });
+  }
+  for (const line of job.logs) {
+    writeNamedSse(res, "log", { line });
+  }
+  if (job.latestMetrics) {
+    writeNamedSse(res, "metrics", job.latestMetrics);
+  }
+
+  const isTerminal = () =>
+    job.status === "completed" || job.status === "failed" || job.status === "cancelled";
+
+  // If the job already finished, flush a terminal event and close immediately.
+  if (isTerminal()) {
+    writeNamedSse(res, "done", { done: true, status: job.status, exitCode: job.exitCode });
+    res.end();
+    return;
+  }
+
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+  const cleanup = () => {
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = null;
+    }
+    const subIdx = job.subscribers.indexOf(sub);
+    if (subIdx >= 0) job.subscribers.splice(subIdx, 1);
+    const metricIdx = job.metricSubscribers.indexOf(metricSub);
+    if (metricIdx >= 0) job.metricSubscribers.splice(metricIdx, 1);
+    const doneIdx = job.doneSubscribers.indexOf(onDone);
+    if (doneIdx >= 0) job.doneSubscribers.splice(doneIdx, 1);
+  };
+
+  const sub = (line: string) => {
+    writeNamedSse(res, "log", { line });
+  };
+  job.subscribers.push(sub);
+
+  const metricSub = (metrics: GpuMetrics) => {
+    writeNamedSse(res, "metrics", metrics);
+  };
+  job.metricSubscribers.push(metricSub);
+
+  // Fired the instant the job reaches a terminal state — closes the stream
+  // immediately rather than waiting up to one heartbeat interval.
+  const onDone = () => {
+    if (res.writableEnded) return;
+    writeNamedSse(res, "done", { done: true, status: job.status, exitCode: job.exitCode });
+    cleanup();
+    res.end();
+  };
+  job.doneSubscribers.push(onDone);
+
+  // Heartbeat keeps proxies from buffering/closing an idle stream, and acts as
+  // a fallback terminator if the done event was somehow missed.
+  heartbeat = setInterval(() => {
+    if (res.writableEnded) {
+      cleanup();
+      return;
+    }
+    if (isTerminal()) {
+      onDone();
+      return;
+    }
+    res.write(`: ping\n\n`);
+  }, 15_000);
+
+  req.on("close", cleanup);
+}
+
+/**
+ * Mounts HTTP routes for Olive job execution, inspection, validation, submission, streaming, cancellation, and agent-access policy management.
+ */
 export function mountOliveRoutes(router: Router): void {
   // Reclaim finished jobs + their temp recipe files on a timer.
   startJobRegistrySweeper();
@@ -72,377 +274,246 @@ export function mountOliveRoutes(router: Router): void {
       return res.status(400).json({ ok: false, error: "Invalid recipe JSON" });
     }
 
-    const validation = validateOliveRecipeStructure(recipe);
-    if (!validation.valid) {
-      return res.status(400).json({ ok: false, error: validation.errors.join("; ") });
-    }
-
-    const providerRaw =
-      recipe.systems?.local_system?.config?.accelerators?.[0]?.execution_providers?.[0] ??
-      "CPUExecutionProvider";
-    const provider = normalizeIhvProvider(providerRaw);
-    if (!provider) {
-      return res.status(400).json({
+    const result = await startOliveJob({ recipe, cudaVersion, source: "ui" });
+    if (!result.ok) {
+      return res.status(result.httpStatus).json({
         ok: false,
-        error: `Unknown execution provider: ${String(providerRaw)}`,
+        error: result.error,
+        jobId: "jobId" in result ? result.jobId : undefined,
+      });
+    }
+    if (result.status === "cancelled") {
+      return res.json({ ok: false, jobId: result.jobId, status: "cancelled" });
+    }
+    return res.json({ ok: true, jobId: result.jobId, reused: result.reused });
+  });
+
+  // ─── Agent access policy (Studio-owned; loopback write) ───────────────
+  // GET may be read from the Studio UI session; PUT is studioLocalOnly so a
+  // LAN peer cannot enable submission/cancel or disable MCP without local access.
+  router.get("/olive/agent-access", (_req, res) => {
+    return res.json({ ok: true, policy: getAgentAccessPublic() });
+  });
+
+  router.put("/olive/agent-access", studioLocalOnly, oliveRunRateLimit, (req, res) => {
+    // parseBody requires Record<string, unknown>; AgentAccessPolicy has no index signature.
+    // Trust boundary: studioLocalOnly (loopback) — policy mutation is privileged.
+    type AgentAccessBody = AgentAccessPolicy & Record<string, unknown>;
+    const body = parseBody<AgentAccessBody>(req.body ?? {}, {
+      mcpAccess: { type: "boolean", required: false },
+      allowJobInspection: { type: "boolean", required: false },
+      allowRecipeChanges: { type: "boolean", required: false },
+      allowJobSubmission: { type: "boolean", required: false },
+      allowJobCancellation: { type: "boolean", required: false },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ ok: false, error: body.error });
+    const policy = updateAgentAccess(body.parsed);
+    return res.json({ ok: true, policy });
+  });
+
+  // ─── POST /api/olive/jobs/validate (no Olive spawn; loopback + policy) ─
+  router.post("/olive/jobs/validate", studioLocalOnly, oliveRunRateLimit, (req, res) => {
+    const gate = denyUnless((p) => p.allowJobInspection || p.allowJobSubmission, "Job validation not allowed");
+    if (!gate.ok) {
+      return res.status(403).json({
+        ok: false,
+        error: gate.error,
+        reason: gate.reason,
+        ...("required" in gate && gate.required ? { required: gate.required } : {}),
       });
     }
 
-    if (isExportTargetProvider(provider)) {
-      return res.status(400).json({
-        ok: false,
-        error: `${provider} cannot run via local Olive Python; export the recipe for the target runtime instead`,
-      });
-    }
+    const body = parseBody<{ recipeJson?: string; recipe?: unknown; cudaVersion?: string }>(
+      req.body ?? {},
+      {
+        recipeJson: { type: "string", required: false },
+        recipe: { type: "object", required: false },
+        cudaVersion: { type: "string", required: false },
+      },
+    );
+    if (isParseBodyError(body)) return res.status(400).json({ ok: false, error: body.error });
 
-    if (provider === "QNNExecutionProvider") {
-      const inputModel = recipe.input_model as { io_config?: unknown } | undefined;
-      const hostMode = resolveQnnHostMode({ platform: process.platform, arch: process.arch });
-      const hardFailures = assessQnnRecipeReadiness({
-        state: { ihvProvider: provider, passes: DEFAULT_PASSES },
-        ioConfig: inputModel?.io_config,
-        hostMode,
-        platform: { platform: process.platform, arch: process.arch },
-      }).filter((issue) => issue.severity === "error");
-      if (hardFailures.length > 0) {
-        return res.status(400).json({
-          ok: false,
-          error: hardFailures.map((issue) => issue.message).join("; "),
-        });
-      }
-    }
-
-    // Canonicalize EP token before enrich/serialize so Olive never sees aliases (e.g. trt).
-    const accel = recipe.systems?.local_system?.config?.accelerators?.[0];
-    if (accel && Array.isArray(accel.execution_providers) && accel.execution_providers.length > 0) {
-      accel.execution_providers[0] = provider;
-    }
-
-    const jobId = uuidv4();
-    const job: OliveJob = {
-      id: jobId,
-      status: "setting_up",
-      exitCode: null,
-      logs: [],
-      subscribers: [],
-      metricSubscribers: [],
-      process: null,
-      latestMetrics: null,
-      metricsTimer: null,
-      sampling: false,
-      tempRecipePath: null,
-      finishedAt: null,
-      doneSubscribers: [],
-    };
-    jobRegistry.set(jobId, job);
-
-    // Cancellation can arrive during the long setup awaits below, before a
-    // process exists. Bail out (and respond) instead of spawning Olive anyway.
-    const bailIfCancelled = (): boolean => {
-      if (job.status !== "cancelled") return false;
-      pushLog(job, "[cancel] Cancelled during environment setup.");
-      cleanupJobArtifacts(job);
-      finalizeJob(job);
-      res.json({ ok: false, jobId, status: "cancelled" });
-      return true;
-    };
-
+    let recipe: OliveRecipe;
     try {
-      // Retain the listener so /olive/cancel can detach it if setup is pending.
-      const venvListener = (line: string) => pushLog(job, line);
-      job.venvListener = venvListener;
-      const capResult = await ensureProviderCapability(
-        provider,
-        venvListener,
-        provider === "QNNExecutionProvider"
-          ? {
-              usage:
-                resolveQnnHostMode({ platform: process.platform, arch: process.arch }) ===
-                "local-inference"
-                  ? "inference"
-                  : "preparation",
-            }
-          : undefined,
-      );
-      // Setup finished for this caller — the listener is no longer registered.
-      job.venvListener = undefined;
-      if (bailIfCancelled()) return;
-      if (!capResult.ok) {
-        job.status = "failed";
-        pushLog(job, `[error] ${capResult.error}`);
-        cleanupJobArtifacts(job);
-        finalizeJob(job);
-        return res.status(500).json({ ok: false, jobId, error: capResult.error });
+      if (typeof body.parsed.recipeJson === "string") {
+        recipe = JSON.parse(body.parsed.recipeJson) as OliveRecipe;
+      } else if (body.parsed.recipe && typeof body.parsed.recipe === "object") {
+        recipe = body.parsed.recipe as OliveRecipe;
+      } else {
+        return res.status(400).json({ ok: false, error: "Missing recipe or recipeJson" });
       }
-
-      const venvPython = capResult.python ?? getVenvPython(capResult.family);
-
-      if (provider === "QNNExecutionProvider" && venvPython) {
-        const hostMode = resolveQnnHostMode({ platform: process.platform, arch: process.arch });
-        if (hostMode === "local-inference") {
-          const qnn = await probeQnn(venvPython);
-          const inputModel = recipe.input_model as { io_config?: unknown } | undefined;
-          const probe: HardwareProbeResult = {
-            probedAt: new Date().toISOString(),
-            platform: {
-              os: process.platform,
-              arch: process.arch,
-              cpuModel: "",
-              cpuCores: 0,
-            },
-            detectedProviders: ["QNNExecutionProvider"],
-            recommendedProvider: "QNNExecutionProvider",
-            notes: [],
-            qnn,
-          };
-          const hardFailures = assessQnnRecipeReadiness({
-            state: { ihvProvider: provider, passes: DEFAULT_PASSES },
-            ioConfig: inputModel?.io_config,
-            hostMode,
-            probe,
-          }).filter((issue) => issue.severity === "error");
-          if (hardFailures.length > 0) {
-            const error = hardFailures.map((issue) => issue.message).join("; ");
-            job.status = "failed";
-            pushLog(job, `[error] ${error}`);
-            cleanupJobArtifacts(job);
-            finalizeJob(job);
-            return res.status(400).json({ ok: false, jobId, error });
-          }
-        }
-      }
-
-      const env = await buildOliveRunEnvironment(venvPython, provider, process.env, capResult.family);
-      if (bailIfCancelled()) return;
-
-      if (cudaVersion !== "auto") {
-        env.CUDA_VERSION = cudaVersion;
-      }
-
-      const hfToken = getRuntimeHfToken() ?? process.env.HF_TOKEN;
-      if (hfToken) env.HF_TOKEN = hfToken;
-
-      const enrichedRecipe = enrichRecipeMemoryOffloadForRun(recipe, 0, 0);
-      const tmpDir = path.join(process.cwd(), ".olive-runs");
-      fs.mkdirSync(tmpDir, { recursive: true });
-      const configPath = path.join(tmpDir, `recipe-${jobId}.json`);
-      // Record the path before writing so a failed/partial write is still
-      // reclaimable by cleanupJobArtifacts (rmSync force:true tolerates a
-      // never-created file).
-      job.tempRecipePath = configPath;
-      fs.writeFileSync(configPath, JSON.stringify(enrichedRecipe, null, 2), "utf-8");
-
-      pushLog(job, "[setup] Starting Olive optimization...");
-      job.status = "running";
-
-      const { executable, args } = resolveOliveCommand(provider, configPath, false, capResult.family);
-      const proc = spawn(executable, args, { stdio: "pipe", env });
-      job.process = proc;
-
-      proc.stdout.on("data", (data: Buffer) => {
-        data
-          .toString()
-          .split(/\r?\n/)
-          .filter(Boolean)
-          .forEach((line) => pushLog(job, line));
-      });
-      proc.stderr.on("data", (data: Buffer) => {
-        data
-          .toString()
-          .split(/\r?\n/)
-          .filter(Boolean)
-          .forEach((line) => pushLog(job, `[stderr] ${line}`));
-      });
-      proc.on("close", (code) => {
-        job.exitCode = code;
-        // Preserve intentional cancellation — do not overwrite with failed/completed.
-        if (job.status !== "cancelled") {
-          job.status = code === 0 ? "completed" : "failed";
-        }
-        stopGpuMetricsTimer(job);
-        cleanupJobArtifacts(job);
-        pushLog(job, `[done] Olive exited with code ${code ?? "unknown"}`);
-        // Process has exited — clear the handle so the sweeper may reclaim it.
-        job.process = null;
-        finalizeJob(job);
-      });
-      proc.on("error", (err) => {
-        if (job.status !== "cancelled") {
-          job.status = "failed";
-        }
-        pushLog(job, `[error] Failed to start Olive: ${err.message}`);
-        // Terminal cleanup (stop metrics, remove artifacts, clear the handle,
-        // finalize) is handled by the "close" listener, which fires after "error"
-        // for spawn failures. A post-spawn error (e.g. a failed kill) must not drop
-        // the process handle while the child may still be alive.
-      });
-
-      if (isGpuExecutionProvider(provider)) {
-        startGpuMetricsTimer(job);
-      }
-
-      return res.json({ ok: true, jobId });
-    } catch (err: unknown) {
-      // Preserve intentional cancellation — e.g. ensureProviderCapability /
-      // buildOliveRunEnvironment rejecting after /olive/cancel already stamped "cancelled".
-      if (job.status !== "cancelled") {
-        job.status = "failed";
-      }
-      cleanupJobArtifacts(job);
-      const msg = err instanceof Error ? err.message : String(err);
-      pushLog(job, `[error] ${msg}`);
-      finalizeJob(job);
-      return res.status(500).json({ ok: false, jobId, error: msg });
-    }
-  });
-
-  // ─── SSE Stream ───────────────────────────────────────────────────────
-  router.get("/olive/stream/:jobId", (req, res) => {
-    const job = jobRegistry.get(req.params.jobId);
-    if (!job) {
-      return res.status(404).json({ error: "Job not found" });
+    } catch {
+      return res.status(400).json({ ok: false, error: "Invalid recipe JSON" });
     }
 
-    res.status(200);
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no");
-    if (typeof res.flushHeaders === "function") res.flushHeaders();
-
-    if (job.logsTruncated) {
-      writeNamedSse(res, "log", {
-        line: `[info] Earlier log lines were trimmed to bound memory (retaining last ${MAX_JOB_LOG_LINES}).`,
-      });
-    }
-    for (const line of job.logs) {
-      writeNamedSse(res, "log", { line });
-    }
-    if (job.latestMetrics) {
-      writeNamedSse(res, "metrics", job.latestMetrics);
-    }
-
-    const isTerminal = () =>
-      job.status === "completed" || job.status === "failed" || job.status === "cancelled";
-
-    // If the job already finished, flush a terminal event and close immediately.
-    if (isTerminal()) {
-      writeNamedSse(res, "done", { done: true, status: job.status, exitCode: job.exitCode });
-      return res.end();
-    }
-
-    let heartbeat: ReturnType<typeof setInterval> | null = null;
-    const cleanup = () => {
-      if (heartbeat) {
-        clearInterval(heartbeat);
-        heartbeat = null;
-      }
-      const subIdx = job.subscribers.indexOf(sub);
-      if (subIdx >= 0) job.subscribers.splice(subIdx, 1);
-      const metricIdx = job.metricSubscribers.indexOf(metricSub);
-      if (metricIdx >= 0) job.metricSubscribers.splice(metricIdx, 1);
-      const doneIdx = job.doneSubscribers.indexOf(onDone);
-      if (doneIdx >= 0) job.doneSubscribers.splice(doneIdx, 1);
-    };
-
-    const sub = (line: string) => {
-      writeNamedSse(res, "log", { line });
-    };
-    job.subscribers.push(sub);
-
-    const metricSub = (metrics: GpuMetrics) => {
-      writeNamedSse(res, "metrics", metrics);
-    };
-    job.metricSubscribers.push(metricSub);
-
-    // Fired the instant the job reaches a terminal state — closes the stream
-    // immediately rather than waiting up to one heartbeat interval.
-    const onDone = () => {
-      if (res.writableEnded) return;
-      writeNamedSse(res, "done", { done: true, status: job.status, exitCode: job.exitCode });
-      cleanup();
-      res.end();
-    };
-    job.doneSubscribers.push(onDone);
-
-    // Heartbeat keeps proxies from buffering/closing an idle stream, and acts as
-    // a fallback terminator if the done event was somehow missed.
-    heartbeat = setInterval(() => {
-      if (res.writableEnded) {
-        cleanup();
-        return;
-      }
-      if (isTerminal()) {
-        onDone();
-        return;
-      }
-      res.write(`: ping\n\n`);
-    }, 15_000);
-
-    req.on("close", cleanup);
-  });
-
-  // ─── Job Status ───────────────────────────────────────────────────────
-  router.get("/olive/status/:jobId", (req, res) => {
-    const job = jobRegistry.get(req.params.jobId);
-    if (!job) {
-      return res.status(404).json({ error: "Job not found" });
-    }
+    const pre = preflightOliveRecipe(recipe, body.parsed.cudaVersion ?? "auto");
     return res.json({
-      id: job.id,
-      status: job.status,
-      exitCode: job.exitCode,
-      logs: job.logs,
-      logsTruncated: Boolean(job.logsTruncated),
-      latestMetrics: job.latestMetrics,
+      ok: true,
+      valid: pre.valid,
+      fingerprint: pre.fingerprint,
+      provider: pre.provider,
+      errors: pre.errors,
+      warnings: pre.warnings,
+      cudaVersion: pre.cudaVersion,
+      // Omit full recipe by default to keep payloads small; include when valid for submit.
+      recipe_summary: {
+        has_input_model: Boolean(pre.recipe.input_model),
+        pass_count: pre.recipe.passes ? Object.keys(pre.recipe.passes).length : 0,
+      },
     });
   });
 
-  // ─── Cancel ───────────────────────────────────────────────────────────
-  router.post("/olive/cancel", (req, res) => {
-    // express.json() leaves body undefined when the client sends no payload;
-    // optional jobId means an empty object preserves the 404 "Job not found" contract.
-    // Preserve null so parseBody can reject an explicit JSON null body.
-    const body = parseBody<{ jobId?: string }>(req.body === undefined ? {} : req.body, {
-      jobId: { type: "string", required: false },
+  // ─── POST /api/olive/jobs/submit (MCP / agents; loopback + policy) ────
+  router.post("/olive/jobs/submit", studioLocalOnly, oliveRunRateLimit, async (req, res) => {
+    const gate = denyUnless((p) => p.allowJobSubmission, "Job submission is disabled in Studio agent access settings");
+    if (!gate.ok) {
+      return res.status(403).json({
+        ok: false,
+        error: gate.error,
+        reason: gate.reason,
+        ...("required" in gate && gate.required ? { required: gate.required } : {}),
+      });
+    }
+
+    const body = parseBody<{
+      recipeJson?: string;
+      recipe?: unknown;
+      cudaVersion?: string;
+      fingerprint?: string;
+      idempotencyKey?: string;
+    }>(req.body ?? {}, {
+      recipeJson: { type: "string", required: false },
+      recipe: { type: "object", required: false },
+      cudaVersion: { type: "string", required: false },
+      fingerprint: { type: "string", required: false },
+      idempotencyKey: { type: "string", required: false },
     });
-    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
-    const { jobId } = body.parsed;
+    if (isParseBodyError(body)) return res.status(400).json({ ok: false, error: body.error });
+
+    let recipe: OliveRecipe;
+    try {
+      if (typeof body.parsed.recipeJson === "string") {
+        recipe = JSON.parse(body.parsed.recipeJson) as OliveRecipe;
+      } else if (body.parsed.recipe && typeof body.parsed.recipe === "object") {
+        recipe = body.parsed.recipe as OliveRecipe;
+      } else {
+        return res.status(400).json({ ok: false, error: "Missing recipe or recipeJson" });
+      }
+    } catch {
+      return res.status(400).json({ ok: false, error: "Invalid recipe JSON" });
+    }
+
+    const result = await startOliveJob({
+      recipe,
+      cudaVersion: body.parsed.cudaVersion ?? "auto",
+      fingerprint: body.parsed.fingerprint,
+      idempotencyKey: body.parsed.idempotencyKey,
+      source: "mcp",
+    });
+
+    if (!result.ok) {
+      return res.status(result.httpStatus).json({
+        ok: false,
+        error: result.error,
+        jobId: result.jobId,
+        fingerprint: result.fingerprint,
+        errors: result.errors,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      job_id: result.jobId,
+      jobId: result.jobId,
+      state: result.status,
+      status: result.status,
+      fingerprint: result.fingerprint,
+      reused: result.reused,
+      submitted_at: new Date(result.submittedAt).toISOString(),
+    });
+  });
+
+  // ─── SSE Stream (UI Execute; agent path is /olive/agent/stream) ───────
+  // Match /olive/run: no studioLocalOnly / agent policy so LAN Studio works.
+  // MCP-origin jobs are hidden here — use /olive/agent/* (loopback + policy).
+  router.get("/olive/stream/:jobId", (req, res) => handleOliveStream(req, res, "ui"));
+  router.get("/olive/agent/stream/:jobId", studioLocalOnly, (req, res) => {
+    const gate = denyUnless(
+      (p) => p.allowJobInspection || p.allowJobSubmission,
+      "Job inspection is disabled in Studio agent access settings",
+    );
+    if (!gate.ok) return sendAgentDeny(res, gate);
+    const inspect = resolveAgentInspectGate(req, gate.policy);
+    if (inspect !== "allow") return sendAgentInspectDeny(res, inspect);
+    return handleOliveStream(req, res, "agent");
+  });
+
+  // ─── Job Status (UI Execute; agent path enforces policy) ─────────────
+  router.get("/olive/status/:jobId", (req, res) => handleOliveStatus(req, res, "ui"));
+  router.get("/olive/agent/status/:jobId", studioLocalOnly, (req, res) => {
+    const gate = denyUnless(
+      (p) => p.allowJobInspection || p.allowJobSubmission,
+      "Job inspection is disabled in Studio agent access settings",
+    );
+    if (!gate.ok) return sendAgentDeny(res, gate);
+    const inspect = resolveAgentInspectGate(req, gate.policy);
+    if (inspect !== "allow") return sendAgentInspectDeny(res, inspect);
+    return handleOliveStatus(req, res, "agent");
+  });
+
+  // ─── Job list (in-memory registry; always policy-gated for agents) ───
+  router.get("/olive/jobs", studioLocalOnly, (_req, res) => {
+    const gate = denyUnless(
+      (p) => p.allowJobInspection || p.allowJobSubmission,
+      "Job inspection is disabled in Studio agent access settings",
+    );
+    if (!gate.ok) return sendAgentDeny(res, gate);
+    const mcpOnly = !gate.policy.allowJobInspection;
+    const jobs = Array.from(jobRegistry.values())
+      .filter((job) => !mcpOnly || job.source === "mcp")
+      .map((job) => ({
+        id: job.id,
+        status: job.status,
+        exitCode: job.exitCode,
+        finishedAt: job.finishedAt,
+        logsTruncated: Boolean(job.logsTruncated),
+        logCount: job.logs.length,
+        hasMetrics: job.latestMetrics != null,
+        fingerprint: job.fingerprint ?? null,
+        source: job.source ?? "ui",
+      }))
+      // Map insertion order is start order; reverse so newest jobs appear first.
+      .reverse();
+    return res.json({ ok: true, count: jobs.length, jobs });
+  });
+
+  // ─── Cancel (UI Execute; agent path always enforces cancellation) ───
+  router.post("/olive/cancel", (req, res) => handleOliveCancel(req, res, "ui"));
+  router.post("/olive/agent/cancel", studioLocalOnly, (req, res) => {
+    // Body `client` is not authorization — agent route always requires policy.
+    const gate = denyUnless(
+      (p) => p.allowJobCancellation,
+      "Job cancellation is disabled in Studio agent access settings",
+    );
+    if (!gate.ok) return sendAgentDeny(res, gate);
+    const body = parseBody<{ jobId?: string; client?: string }>(
+      req.body === undefined ? {} : req.body,
+      {
+        jobId: { type: "string", required: false },
+        client: { type: "string", required: false },
+      },
+    );
+    if (isParseBodyError(body)) {
+      res.status(400).json({ error: body.error });
+      return;
+    }
+    const jobId = body.parsed.jobId;
     const job = jobId ? jobRegistry.get(jobId) : undefined;
-    if (!job) return res.status(404).json({ error: "Job not found" });
-
-    // Already terminal — nothing to cancel.
-    if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
-      return res.json({ ok: true, status: job.status });
+    if (!job || job.source !== "mcp") {
+      res.status(404).json({ error: "Job not found" });
+      return;
     }
-
-    // Mark cancelled even during "setting_up" (no process yet). The /olive/run
-    // setup loop checks this status after each await and aborts before spawning.
-    job.status = "cancelled";
-    pushLog(job, "[cancel] Cancellation requested.");
-    // Detach from shared venv setup so the cancelled job stops receiving install
-    // output while setup (which may serve other jobs) keeps running.
-    if (job.venvListener) {
-      detachVenvListener(job.venvListener);
-      job.venvListener = undefined;
-    }
-    if (job.process) {
-      const proc = job.process;
-      proc.kill("SIGTERM");
-      // SIGTERM is best-effort; escalate so a stuck Olive child cannot outlive cancel.
-      const killTimer = setTimeout(() => {
-        if (proc.exitCode === null && proc.signalCode === null) {
-          proc.kill("SIGKILL");
-          pushLog(job, "[cancel] Process did not exit after SIGTERM; sent SIGKILL.");
-        }
-      }, CANCEL_SIGKILL_GRACE_MS);
-      if (typeof killTimer.unref === "function") killTimer.unref();
-      proc.once("close", () => clearTimeout(killTimer));
-      stopGpuMetricsTimer(job);
-    }
-    // Finalize so open SSE streams close now; the "close" handler (if a process
-    // is running) is idempotent — finishedAt is only stamped once.
-    finalizeJob(job);
-    return res.json({ ok: true, status: job.status });
+    return handleOliveCancel(req, res, "agent");
   });
 }
+

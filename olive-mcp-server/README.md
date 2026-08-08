@@ -114,6 +114,39 @@ Optional env for local feedback storage:
 | `validate_ui_state_recipe`        | Validate a (partial) Studio UIState via local bridge (no Olive run) |
 | `get_recipe_for_ui_state`         | Same bridge evaluation plus built `olive_recipe` JSON          |
 | `record_troubleshoot_feedback`    | Local aggregate thumbs feedback for a matched KB entry         |
+| `get_mcp_capabilities`            | Capability state for agents (not transport/process health)     |
+| `list_optimization_jobs`          | Read-only list of Studio jobs (loopback Studio required)       |
+| `get_optimization_job`            | Read-only status for one Studio job                            |
+| `get_optimization_results`        | Metadata-only results + log tail (no model bytes)              |
+| `validate_optimization_job`       | Studio preflight + fingerprint (never starts Olive)            |
+| `submit_optimization_job`         | Policy-gated submit via Studio (idempotent)                    |
+| `cancel_optimization_job`         | Policy-gated cancel via Studio                                 |
+
+### Agent clients (Phases 0–3)
+
+- **Launcher:** start via `python olive-mcp-server/run.py` (prefers project `.venv`).
+- **Retrieval:** `OLIVE_MCP_RETRIEVAL_MODE=auto|keyword|semantic` (default `auto`). Cold semantic work is budgeted (`OLIVE_MCP_SEMANTIC_BUDGET_MS`, default 8000); timeout yields keyword results with `retrieval.degraded=true`.
+- **Shipped indexes:** document embeddings under `knowledge_base/indexes/` (rebuild with `pnpm mcp:build-index` when KB JSON changes).
+- **Warm path:** `OLIVE_MCP_PRELOAD_EMBEDDINGS=1` loads model + indexes at process start.
+- **Jobs (Phases 2–3):** with Studio + `OLIVE_STUDIO_API_URL`, agents can **list/get/results**, **validate** (fingerprint), and optionally **submit/cancel** when Studio agent-access policy allows. MCP never spawns Olive itself — all execution goes through Studio.
+- **Policy:** `GET/PUT /api/olive/agent-access` (Studio-owned). Dev override: `OLIVE_MCP_ALLOW_JOBS=1` **escalates** effective submit+cancel on (see env table). Prefer the Agent Access UI for product defaults.
+- **Results privacy:** `get_optimization_results` returns `artifact_path_refs` as basenames/relative forms by default. Absolute paths require `include_absolute_artifact_paths=true` and local env `OLIVE_MCP_ALLOW_ABSOLUTE_ARTIFACT_PATHS=1`.
+- **Smoke:** from repo root, `pnpm mcp:native-smoke` and `pnpm mcp:agent-smoke` (pinned mcporter canary).
+- **mcporter example:** `config/mcporter.example.json` uses the same launcher.
+
+Optional env (in addition to Studio bridge vars above):
+
+| Variable | Purpose |
+| -------- | ------- |
+| `OLIVE_MCP_RETRIEVAL_MODE` | `auto` (default), `keyword`, or `semantic` |
+| `OLIVE_MCP_SEMANTIC_BUDGET_MS` | Cold semantic budget under `auto` (default 8000; 0 = unlimited) |
+| `OLIVE_MCP_PRELOAD_EMBEDDINGS` | If `1`, warm model + indexes before accepting MCP traffic |
+| `OLIVE_MCP_REBUILD_INDEX` | If `1`, ignore shipped indexes and re-encode at runtime |
+| `OLIVE_MCP_REQUIRE_VENV` | If `1`, launcher exits when no project venv is found |
+| `OLIVE_MCP_ALLOW_JOBS` | **Dev/CI escalate-only:** truthy forces Studio effective **submit + cancel** on. Falsy (`0`/`false`) is a **no-op** (does not force submit off). Overrides effective policy while set; does not rewrite disk UI toggles. Prefer Agent Access UI for product defaults. |
+| `OLIVE_MCP_ALLOW_JOB_INSPECTION` | Dev/CI: `0`/`false` forces inspection off; `1`/`true` forces on |
+| `OLIVE_MCP_ACCESS` | Dev/CI: `0`/`false` disables master MCP access regardless of disk policy |
+| `OLIVE_STUDIO_API_URL` | Base URL for Studio loopback bridge (e.g. `http://127.0.0.1:3000`) |
 
 ### Studio UIState bridge tools
 

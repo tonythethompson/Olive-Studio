@@ -228,3 +228,36 @@ describe("POST /api/mcp/tool", () => {
     expect(mcpToolMocks.execFileCalls).toHaveLength(1);
   });
 });
+
+describe("POST /api/mcp/studio-recipe mcpAccess", () => {
+  const previousOliveMcpAccess = process.env.OLIVE_MCP_ACCESS;
+
+  afterEach(() => {
+    if (previousOliveMcpAccess === undefined) {
+      delete process.env.OLIVE_MCP_ACCESS;
+    } else {
+      process.env.OLIVE_MCP_ACCESS = previousOliveMcpAccess;
+    }
+  });
+
+  it("returns 403 when master mcpAccess is disabled", async () => {
+    process.env.OLIVE_MCP_ACCESS = "0";
+    const res = await fetch(`${baseUrl}/api/mcp/studio-recipe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        uiState: {
+          modelSource: "huggingface",
+          hfModelId: "meta-llama/Meta-Llama-3-8B",
+          ihvProvider: "CPUExecutionProvider",
+          passes: { conversion: true, conversionFormat: "onnx", quantization: false },
+        },
+      }),
+    });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { ok?: boolean; error?: string; required?: { mcpAccess?: boolean } };
+    expect(body.ok).toBe(false);
+    expect(body.error).toBe("mcp_access_disabled");
+    expect(body.required).toEqual({ mcpAccess: true });
+  });
+});

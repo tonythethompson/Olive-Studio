@@ -325,6 +325,8 @@ def test_index_invalidates_on_reorder(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(ts, "build_kb_index", counting_build)
     monkeypatch.setattr(ts, "_troubleshooting_kb_mtime", lambda: 1.0)
+    # Force runtime encode so this test does not short-circuit via shipped index.
+    monkeypatch.setenv("OLIVE_MCP_REBUILD_INDEX", "1")
 
     entries = load_troubleshooting()
     e1, _emb1 = ts._get_troubleshooting_index(entries)
@@ -462,11 +464,12 @@ def test_feedback_adjustment_clamped_in_best_match(monkeypatch: pytest.MonkeyPat
     ]
 
     # Act
-    best, score = ts._best_match(
+    best, score, _meta = ts._best_match(
         entries,
         error_message="neutral wording with no pattern hits",
         pass_name="",
         config_context="",
+        mode="semantic",
     )
 
     # Assert — hybrid = 0.6 * 0.40 + clamped(99→0.05)
@@ -498,3 +501,34 @@ def test_strong_keyword_not_overturned_by_negative_feedback(
 
     # Assert — keyword OR=1.0 hybrid (~0.4+) minus 0.05 still beats mild semantic
     assert result["matched_entry"] == "onnx-export-external-data"
+
+
+def test_merge_retrieval_meta_prefers_keyword_over_none():
+    """Empty-pool 'none' must not hide keyword scoring from the other pool."""
+    a = ts.retrieval_meta(mode="auto", effective="none")
+    b = ts.retrieval_meta(mode="auto", effective="keyword")
+    merged = ts._merge_retrieval_meta(a, b)
+    assert merged["effective"] == "keyword"
+    assert merged["degraded"] is False
+
+
+def test_merge_retrieval_meta_prefers_hybrid_over_keyword():
+    a = ts.retrieval_meta(mode="auto", effective="keyword")
+    b = ts.retrieval_meta(mode="auto", effective="hybrid")
+    merged = ts._merge_retrieval_meta(a, b)
+    assert merged["effective"] == "hybrid"
+
+
+def test_merge_retrieval_meta_degraded_keeps_strongest_effective():
+    """Degraded merge must retain hybrid when either pool observed hybrid results."""
+    a = ts.retrieval_meta(mode="auto", effective="hybrid", degraded=False)
+    b = ts.retrieval_meta(
+        mode="auto",
+        effective="keyword",
+        degraded=True,
+        reason="semantic_budget_exceeded",
+    )
+    merged = ts._merge_retrieval_meta(a, b)
+    assert merged["degraded"] is True
+    assert merged["effective"] == "hybrid"
+    assert merged["reason"] == "semantic_budget_exceeded"
