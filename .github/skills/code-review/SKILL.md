@@ -78,7 +78,7 @@ Match changes to the existing tiers:
 | `src/server/` | `pnpm test:server` |
 | Express + mocked externals | `pnpm test:integration` |
 | React components | `pnpm test:component` |
-| `olive-mcp-server/` | `python -m pytest tests -q` (with `mcp<2`) |
+| `olive-mcp-server/` | `cd olive-mcp-server && python -m pytest tests -q` (with `mcp<2`) |
 | Recipe builder | `pnpm validate:recipe` |
 
 - Require tests for new critical paths (spawn, path/allowlist, auth/token, rate limit, recipe validation, MCP tool allowlist).
