@@ -20,7 +20,8 @@ def test_get_mcp_capabilities_shape():
     assert caps["server"]["name"] == "olive-mcp-server"
     assert "version" in caps["server"]
     assert "version" in caps["kb"]
-    assert caps["kb"]["index"]["shipped"] is False
+    # Phase 1 ships precomputed indexes with the package.
+    assert "shipped" in caps["kb"]["index"]
     assert "available" in caps["semantic"]
     assert "ready" in caps["semantic"]
     assert caps["retrieval"]["default_mode"] in ("auto", "keyword", "semantic")

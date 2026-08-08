@@ -163,7 +163,20 @@ def main() -> None:
     Transport selection:
       - CLI flag: ``--sse`` or ``--stdio``
       - Environment: ``MCP_TRANSPORT=sse|stdio`` (default: stdio)
+
+    When ``OLIVE_MCP_PRELOAD_EMBEDDINGS=1``, warm the embedding model and
+    shipped/runtime KB indexes before accepting traffic.
     """
+    try:
+        from olive_mcp_server.tools.preload import maybe_preload_embeddings
+
+        maybe_preload_embeddings()
+    except Exception:
+        # Preload failures must not block the server; tools still lazy-load.
+        import logging
+
+        logging.getLogger(__name__).warning("Embedding preload failed", exc_info=True)
+
     mcp = _build_mcp()
     transport = os.environ.get("MCP_TRANSPORT", "stdio").lower()
     if "--sse" in sys.argv:

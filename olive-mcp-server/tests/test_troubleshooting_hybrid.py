@@ -325,6 +325,8 @@ def test_index_invalidates_on_reorder(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(ts, "build_kb_index", counting_build)
     monkeypatch.setattr(ts, "_troubleshooting_kb_mtime", lambda: 1.0)
+    # Force runtime encode so this test does not short-circuit via shipped index.
+    monkeypatch.setenv("OLIVE_MCP_REBUILD_INDEX", "1")
 
     entries = load_troubleshooting()
     e1, _emb1 = ts._get_troubleshooting_index(entries)

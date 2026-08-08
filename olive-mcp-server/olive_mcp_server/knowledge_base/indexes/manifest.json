@@ -1,0 +1,18 @@
+{
+  "model": "all-MiniLM-L6-v2",
+  "dim": 384,
+  "indexes": {
+    "docs_kb": {
+      "content_hash": "2713dd7422486596ac7f76973a15a7333bc9b1e91e44bc72570fc6faa49401f4",
+      "count": 4035
+    },
+    "ts_olive": {
+      "content_hash": "f241e7934eb287ca49c3a8d7161e2280c964c38f136833787d4fa5f2df10422a",
+      "count": 34
+    },
+    "ts_studio": {
+      "content_hash": "36dcdf321ad6d99545edfbc4a9dea97d26e106de1ddcc2da7d7faa785a894c50",
+      "count": 12
+    }
+  }
+}

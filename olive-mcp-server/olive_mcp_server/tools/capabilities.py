@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 from olive_mcp_server import __version__
 from olive_mcp_server.tools import KB_DIR
 from olive_mcp_server.tools.embeddings import MODEL_NAME, is_model_loaded
+from olive_mcp_server.tools.index_store import shipped_index_status
 from olive_mcp_server.tools.retrieval import get_retrieval_mode, get_semantic_budget_ms
 
 # Versioned agent contract; bump when required tools/schemas change intentionally.
@@ -99,11 +100,7 @@ def get_mcp_capabilities(probe_studio: bool = False) -> dict[str, Any]:
         },
         "kb": {
             "version": _kb_version(),
-            # Phase 1 will ship a precomputed index; Phase 0 has none.
-            "index": {
-                "version": None,
-                "shipped": False,
-            },
+            "index": shipped_index_status(),
         },
         "semantic": {
             "available": sem_available,

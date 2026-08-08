@@ -2,7 +2,7 @@
 
 **Working title:** Olive MCP as agent intelligence/configuration today; **agent-facing control of Studio** when job APIs are connected  
 **Audience:** Olive Studio maintainers, MCP consumers, agent-tooling stakeholders  
-**Status:** Proposal — **Phase 0 implemented on branch `MCP_harden`** (Phases 1+ remaining; job control staged later)  
+**Status:** Proposal — **Phases 0–1 implemented on branch `MCP_harden`** (Phase 2+ remaining; job control staged later)  
 **Date:** 2026-08-07  
 **Calibration:** Architecture **~9/10**; near-term plan **~8/10** → proceed. End-state job loop raises product value without a second executor.
 
@@ -249,14 +249,14 @@ Deterministic launcher
   → semantic timeout → graceful degraded fallback under auto
 ```
 
-### Phase 1 — Fast retrieval
+### Phase 1 — Fast retrieval ✅ (branch `MCP_harden`)
 
 ```text
-precomputed KB index
-mode = auto | keyword | semantic (full)
-preload/warm path
-cold/warm SLO tests
-studio.configured / reachable on capabilities
+precomputed KB index          → knowledge_base/indexes/ + pnpm mcp:build-index
+mode = auto | keyword | semantic
+preload/warm path             → OLIVE_MCP_PRELOAD_EMBEDDINGS=1
+cold/warm SLO tests           → test_index_store + mcp:benchmark
+studio.configured / reachable → get_mcp_capabilities
 ```
 
 ### Phase 2 — Read-only Studio job visibility (+ optional product polish)

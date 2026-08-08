@@ -169,8 +169,23 @@ def _get_troubleshooting_index(
         if cached is not None and cached[2] == file_mtime:
             return cached[0], cached[1]
 
+    from .index_store import load_entry_embeddings
+
+    # Prefer shipped precomputed embeddings when content hash matches.
+    stem = "ts_studio" if (
+        entries_list
+        and all(str(e.get("domain") or "") == "studio" for e in entries_list)
+    ) else "ts_olive"
+    # Auto-domain pool mixes olive+studio — never use a single-domain shipped index.
+    mixed = bool(entries_list) and any(
+        str(e.get("domain") or "olive") == "studio" for e in entries_list
+    ) and any(str(e.get("domain") or "olive") != "studio" for e in entries_list)
+    shipped = None if mixed else load_entry_embeddings(stem, fingerprint)
+
     texts = [_entry_embed_text(e) for e in entries_list]
-    if not texts:
+    if shipped is not None:
+        embeddings = shipped
+    elif not texts:
         embeddings = np.zeros((0, EMBEDDING_DIM), dtype=np.float32)
     else:
         embeddings = build_kb_index(texts)

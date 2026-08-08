@@ -116,9 +116,10 @@ def _kb_max_mtime() -> tuple[float, int]:
 
 
 def get_or_build_kb_index() -> tuple[list[tuple[str, str]], np.ndarray]:
-    """Public helper: lazy-build (and mtime-invalidate) the local KB embedding index.
+    """Public helper: load shipped index or lazy-build local KB embeddings.
 
     Used by docs search and passive context so both share one cache.
+    Prefer precomputed ``knowledge_base/indexes/docs_kb`` when content hash matches.
     Encode work runs outside the lock; the cache is only stamped when the KB
     mtime is unchanged from the value observed at load time (avoids publishing
     stale texts under a newer mtime after a mid-build hot-reload).
@@ -137,8 +138,15 @@ def get_or_build_kb_index() -> tuple[list[tuple[str, str]], np.ndarray]:
     # Capture mtime at load time; only publish if it is still current later.
     build_mtime = _kb_max_mtime()
     texts = _load_kb_text()
-    if not texts:
-        embeddings: np.ndarray = np.zeros((0, EMBEDDING_DIM), dtype=np.float32)
+
+    from .index_store import content_hash_pairs, load_pair_index
+
+    expected = content_hash_pairs(texts)
+    shipped = load_pair_index("docs_kb", expected)
+    if shipped is not None:
+        texts, embeddings = shipped
+    elif not texts:
+        embeddings = np.zeros((0, EMBEDDING_DIM), dtype=np.float32)
     else:
         embeddings = build_kb_index([t for _, t in texts])
 
