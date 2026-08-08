@@ -1,6 +1,7 @@
 /**
  * Inter-process smoke lock for Studio config mutation.
  */
+import type { PathLike } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   acquireStudioConfigSmokeLock,
@@ -27,18 +28,22 @@ function makeFs(store: Store) {
     // Hard link: destination appears with the fully written temp contents.
     store.set(to, store.get(from)!);
   });
-  const copyFileSync = vi.fn((from: string, to: string, mode?: number) => {
-    if (!store.has(from)) {
+  // Match Node's copyFileSync PathLike params so deps typing accepts the mock
+  // when spread into acquireStudioConfigSmokeLock (tsc --noEmit in CI lint).
+  const copyFileSync = vi.fn((from: PathLike, to: PathLike, mode?: number) => {
+    const src = String(from);
+    const dest = String(to);
+    if (!store.has(src)) {
       throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
     }
     // Mirror COPYFILE_EXCL: refuse when the destination already exists.
-    if (mode !== undefined && store.has(to)) {
+    if (mode !== undefined && store.has(dest)) {
       throw Object.assign(new Error("EEXIST"), { code: "EEXIST" });
     }
-    if (store.has(to)) {
+    if (store.has(dest)) {
       throw Object.assign(new Error("EEXIST"), { code: "EEXIST" });
     }
-    store.set(to, store.get(from)!);
+    store.set(dest, store.get(src)!);
   });
   const readFileSync = vi.fn((p: string) => {
     if (!store.has(p)) {
@@ -62,6 +67,7 @@ describe("studioConfigSmokeLock", () => {
       ...fs,
       writeFileSync: fs.writeFileSync as never,
       linkSync: fs.linkSync as never,
+      copyFileSync: fs.copyFileSync as never,
       readFileSync: fs.readFileSync as never,
       unlinkSync: fs.unlinkSync as never,
       mkdirSync: fs.mkdirSync as never,
