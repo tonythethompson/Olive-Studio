@@ -186,15 +186,13 @@ describe("studioConfigSmokeLock", () => {
     expect(sleep).toHaveBeenCalled();
   });
 
-  it("does not clear an aged incomplete reclaim mutex by age alone", async () => {
-    // Incomplete reclaim bodies must not be age-reaped: a live reclaimer could
-    // still be in its critical section. Only dead complete PIDs are cleared.
+  it("does not clear a fresh incomplete reclaim mutex before publishGraceMs", async () => {
     const store: Store = new Map([
       ["/tmp/lock", "111\n"],
       ["/tmp/lock.reclaim", ""],
     ]);
     const fs = makeFs(store);
-    let t = 5_000;
+    let t = 1_050; // age 50ms with mtime 1000, grace 1000
     const sleep = vi.fn(async (ms: number) => {
       t += ms;
     });
@@ -214,13 +212,41 @@ describe("studioConfigSmokeLock", () => {
         publishGraceMs: 1_000,
         now: () => t,
         sleep,
-        randomId: () => "incomplete-reclaim",
+        randomId: () => "fresh-incomplete-reclaim",
       }),
     ).rejects.toThrow(/could not acquire/);
 
-    expect(store.get("/tmp/lock")).toBe("111\n");
     expect(store.get("/tmp/lock.reclaim")).toBe("");
     expect(fs.unlinkSync).not.toHaveBeenCalledWith("/tmp/lock");
+  });
+
+  it("clears an aged incomplete orphaned reclaim mutex and recovers", async () => {
+    // Crash mid-write left an empty reclaim gate; after grace it must not pin smokers.
+    const store: Store = new Map([
+      ["/tmp/lock", "111\n"],
+      ["/tmp/lock.reclaim", ""],
+    ]);
+    const fs = makeFs(store);
+
+    const lock = await acquireStudioConfigSmokeLock("/tmp/lock", {
+      writeFileSync: fs.writeFileSync as never,
+      linkSync: fs.linkSync as never,
+      readFileSync: fs.readFileSync as never,
+      unlinkSync: fs.unlinkSync as never,
+      mkdirSync: fs.mkdirSync as never,
+      statSync: vi.fn(() => ({ mtimeMs: 1_000 })) as never,
+      isProcessAlive: (pid) => pid !== 111,
+      pid: 999,
+      timeoutMs: 1_000,
+      pollMs: 5,
+      publishGraceMs: 1_000,
+      now: () => 5_000,
+      sleep: async () => undefined,
+      randomId: () => "aged-incomplete-reclaim",
+    });
+    expect(store.get("/tmp/lock")).toBe("999\n");
+    expect(store.has("/tmp/lock.reclaim")).toBe(false);
+    lock.release();
   });
 
   it("does not unlink the main lock after losing reclaim gate ownership", async () => {

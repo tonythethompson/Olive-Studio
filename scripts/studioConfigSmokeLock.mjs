@@ -106,22 +106,41 @@ function publishLockFile(lockPath, body, deps) {
  * Drop an abandoned `lockPath.reclaim` gate so later smokers are not stuck
  * waiting for a dead owner's mutex forever.
  *
- * Only complete published PIDs that are no longer alive are cleared. Incomplete
- * / age-only reclaim bodies are left alone so a live reclaimer mid-critical-
- * section is never stripped of its mutex by a concurrent waiter.
+ * - Complete PID + alive: leave alone (active reclaimer).
+ * - Complete PID + dead: clear (crashed after publishing ownership).
+ * - Incomplete body: clear only after publishGraceMs (crashed mid-write orphan).
+ *   Fresh incomplete markers are left alone so a concurrent writer is not
+ *   stripped mid-publish; reclaimers still re-verify gate ownership before
+ *   unlinking the main lock.
  * @param {string} reclaimPath
  * @param {{
  *   readFileSync: typeof readFileSync,
  *   unlinkSync: typeof unlinkSync,
+ *   statSync: typeof statSync,
  *   isProcessAlive: (pid: number) => boolean,
+ *   now: () => number,
+ *   publishGraceMs: number,
  * }} deps
  * @returns {boolean}
  */
 function tryClearOrphanedReclaimMutex(reclaimPath, deps) {
-  const { readFileSync: read, unlinkSync: unlink, isProcessAlive: alive } = deps;
+  const {
+    readFileSync: read,
+    unlinkSync: unlink,
+    statSync: stat,
+    isProcessAlive: alive,
+    now,
+    publishGraceMs,
+  } = deps;
   try {
     const holder = parsePublishedLockPid(read(reclaimPath, "utf8"));
-    if (holder == null || alive(holder)) return false;
+    if (holder != null) {
+      if (alive(holder)) return false;
+      unlink(reclaimPath);
+      return true;
+    }
+    const ageMs = now() - stat(reclaimPath).mtimeMs;
+    if (ageMs < publishGraceMs) return false;
     unlink(reclaimPath);
     return true;
   } catch {
@@ -152,7 +171,10 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
     readFileSync: read,
     unlinkSync: unlink,
     mkdirSync: mkdir,
+    statSync: stat,
     isProcessAlive: alive,
+    now,
+    publishGraceMs,
   } = deps;
   const reclaimPath = `${lockPath}.reclaim`;
 
@@ -179,7 +201,10 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
     const cleared = tryClearOrphanedReclaimMutex(reclaimPath, {
       readFileSync: read,
       unlinkSync: unlink,
+      statSync: stat,
       isProcessAlive: alive,
+      now,
+      publishGraceMs,
     });
     if (!cleared) return false;
     try {
