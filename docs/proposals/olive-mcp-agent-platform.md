@@ -163,12 +163,15 @@ Agent retries are normal. `submit_optimization_job` **must** accept an **idempot
 
 Idempotency matters more than rate limiting for avoiding duplicate GPU work (rate limits remain useful as a backstop).
 
+**Current Studio behavior (MCP-origin only):** `findJobByIdempotency` reuses the prior MCP job for the same key and/or fingerprint while that job remains in the process registry, **including terminal** `completed` / `failed` / `cancelled` states. That matches HTTP idempotency (same request → same outcome) and avoids accidental duplicate GPU work. Callers that need a **new** run after a terminal job must supply a **new idempotency key** (and typically a changed recipe fingerprint). UI submissions are never entered into this index.
+
 ### 6.5 Long-running jobs and artifacts
 
 - **Submit** returns in seconds with `job_id` / `queued`.
 - **Poll** `get_optimization_job` for structured progress.
 - MCP must **never** hold a transport call open for an entire optimization.
 - **Results** return status, output path/reference, metrics, passes, EP, duration, warnings, structured failure, log tail/reference, artifact **metadata** — not ONNX blobs or multi‑GB logs.
+- **`artifact_path_refs` privacy:** `get_optimization_results` may return heuristic path tokens scraped from log lines (up to 20). Those strings can be absolute and may embed local account names (e.g. `/home/<user>/...`, `C:\Users\<name>\...`). They are references only (no file bytes). A future hardening pass should default to basenames (or relative display forms) and gate full paths behind an explicit opt-in; until then, treat path refs as potentially sensitive in remote-agent contexts.
 
 ### 6.6 Capability model (richer than bool)
 
@@ -198,9 +201,19 @@ Agents branch on these instead of treating every failure as `studio_unavailable`
 
 ### 6.7 Authorization: Studio owns policy
 
-`OLIVE_MCP_ALLOW_JOBS=1` is fine for **early dev/CI override**, not the long-term user model.
+Product policy lives in Studio (Agent Access UI / `GET|PUT /api/olive/agent-access`). MCP **receives** effective capabilities from Studio. Preflight (env, provider, paths, disk, model existence, concurrent jobs) stays Studio’s existing job path.
 
-**Product policy lives in Studio**, e.g.:
+**Dev/CI env overrides (not the long-term user model):**
+
+| Variable | Behavior |
+| -------- | -------- |
+| `OLIVE_MCP_ALLOW_JOBS` | **Escalate-only.** Truthy (`1`/`true`/`yes`/`on`) forces effective **submit + cancel** on. Falsy values (`0`/`false`) are a **no-op** (they do not force submission off). While set, effective policy from `getAgentAccessPublic` / PUT responses reflects the override even if disk UI toggles remain off. Disk writes from the UI are preserved; the env wins at resolve time. |
+| `OLIVE_MCP_ALLOW_JOB_INSPECTION` | Two-sided: falsy forces inspection off; truthy forces on. |
+| `OLIVE_MCP_ACCESS` | Falsy forces master MCP access off. |
+
+Prefer the Agent Access UI for product defaults. Do not rely on `OLIVE_MCP_ALLOW_JOBS=0` to disable submit in production; turn the UI toggles off (and unset the escalate env).
+
+**Product policy UI sketch:**
 
 ```text
 Settings → Developer / Agent Access
@@ -210,8 +223,6 @@ Settings → Developer / Agent Access
   Allow job submission       [off]
   Allow job cancellation     [off]
 ```
-
-MCP **receives** effective capabilities from Studio (or maps Studio responses into `job_control.*`). Studio remains authoritative on whether the operation is permitted. Preflight (env, provider, paths, disk, model existence, concurrent jobs) stays Studio’s existing job path.
 
 ### 6.8 Incremental rollout (prefer this order)
 
@@ -263,7 +274,7 @@ studio.configured / reachable → get_mcp_capabilities
 
 - Stage 1 job tools: `list_optimization_jobs`, `get_optimization_job`, `get_optimization_results`
 - Studio: `GET /api/olive/jobs` + `finishedAt` on status
-- **Inspection policy:** list is always gated by `allowJobInspection`; status/stream are loopback-only and enforce the same policy when `X-Olive-MCP-Agent: 1` (MCP tools always send this header). UI browser polling stays loopback-only without the agent header.
+- **Inspection policy (implemented):** `allowJobInspection` gates **list**, and (when `X-Olive-MCP-Agent: 1`) **status** and **stream**. MCP job tools always send that header, so disabling inspection denies agent list/detail/results/log tails. Routes remain loopback-only; UI browser polling without the agent header stays loopback-only and is not the remote-agent path.
 - Capabilities: `job_control.inspection=true`, `submission/cancellation=false`
 - Optional product UI (Copy Agent Setup) deferred  
 
@@ -276,7 +287,7 @@ studio.configured / reachable → get_mcp_capabilities
 
 - Idempotent `submit_optimization_job` → `POST /api/olive/jobs/submit`  
 - `cancel_optimization_job` → `POST /api/olive/cancel` with `client=mcp`  
-- Studio policy: `GET/PUT /api/olive/agent-access` (+ `OLIVE_MCP_ALLOW_JOBS` dev override)  
+- Studio policy: `GET/PUT /api/olive/agent-access` (+ escalate-only `OLIVE_MCP_ALLOW_JOBS` for Dev/CI; see §6.7)  
 - Shared `startOliveJob` runner for UI `/olive/run` and MCP submit  
 
 ### Later
