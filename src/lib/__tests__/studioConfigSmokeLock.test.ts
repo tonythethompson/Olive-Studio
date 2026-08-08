@@ -27,19 +27,6 @@ function makeFs(store: Store) {
     // Hard link: destination appears with the fully written temp contents.
     store.set(to, store.get(from)!);
   });
-  // rename: destination appears with already-complete temp bytes (no partial body).
-  // Mirror Windows exclusivity (fail if dest exists); POSIX overwrite is rare here
-  // because callers only rename after link failed for reasons other than EEXIST.
-  const renameSync = vi.fn((from: string, to: string) => {
-    if (!store.has(from)) {
-      throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
-    }
-    if (store.has(to)) {
-      throw Object.assign(new Error("EEXIST"), { code: "EEXIST" });
-    }
-    store.set(to, store.get(from)!);
-    store.delete(from);
-  });
   const readFileSync = vi.fn((p: string) => {
     if (!store.has(p)) {
       throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
@@ -50,7 +37,7 @@ function makeFs(store: Store) {
     store.delete(p);
   });
   const mkdirSync = vi.fn();
-  return { writeFileSync, linkSync, renameSync, readFileSync, unlinkSync, mkdirSync };
+  return { writeFileSync, linkSync, readFileSync, unlinkSync, mkdirSync };
 }
 
 describe("studioConfigSmokeLock", () => {
@@ -62,7 +49,6 @@ describe("studioConfigSmokeLock", () => {
       ...fs,
       writeFileSync: fs.writeFileSync as never,
       linkSync: fs.linkSync as never,
-      renameSync: fs.renameSync as never,
       readFileSync: fs.readFileSync as never,
       unlinkSync: fs.unlinkSync as never,
       mkdirSync: fs.mkdirSync as never,
@@ -241,6 +227,7 @@ describe("studioConfigSmokeLock", () => {
       ["/tmp/lock.reclaim", ""],
     ]);
     const fs = makeFs(store);
+    let nowMs = 5_000;
 
     const lock = await acquireStudioConfigSmokeLock("/tmp/lock", {
       writeFileSync: fs.writeFileSync as never,
@@ -254,8 +241,11 @@ describe("studioConfigSmokeLock", () => {
       timeoutMs: 1_000,
       pollMs: 5,
       publishGraceMs: 1_000,
-      now: () => 5_000,
-      sleep: async () => undefined,
+      now: () => nowMs,
+      // Advance the fake clock on sleep so a regressing acquire cannot spin forever.
+      sleep: async (ms) => {
+        nowMs += ms;
+      },
       randomId: () => "aged-incomplete-reclaim",
     });
     expect(store.get("/tmp/lock")).toBe("999\n");
@@ -483,7 +473,7 @@ describe("studioConfigSmokeLock", () => {
     lock.release();
   });
 
-  it("on Windows falls back to rename of a complete temp when hardlinks fail", async () => {
+  it("falls back to exclusive wx write when hardlinks are unsupported", async () => {
     const store: Store = new Map();
     const fs = makeFs(store);
     const linkSync = vi.fn(() => {
@@ -493,77 +483,47 @@ describe("studioConfigSmokeLock", () => {
     const lock = await acquireStudioConfigSmokeLock("/tmp/lock", {
       writeFileSync: fs.writeFileSync as never,
       linkSync: linkSync as never,
-      renameSync: fs.renameSync as never,
       readFileSync: fs.readFileSync as never,
       unlinkSync: fs.unlinkSync as never,
       mkdirSync: fs.mkdirSync as never,
-      platform: "win32",
       pid: 777,
       timeoutMs: 1_000,
       pollMs: 10,
       randomId: () => "fb",
     });
     expect(store.get("/tmp/lock")).toBe("777\n");
-    expect(fs.renameSync).toHaveBeenCalled();
-    const [from, to] = fs.renameSync.mock.calls[0]!;
-    expect(String(from)).toContain(".tmp");
-    expect(to).toBe("/tmp/lock");
-    expect(fs.writeFileSync).not.toHaveBeenCalledWith("/tmp/lock", "777\n", { flag: "wx" });
+    expect(fs.writeFileSync).toHaveBeenCalledWith("/tmp/lock", "777\n", { flag: "wx" });
     expect([...store.keys()].some((k) => k.includes(".tmp"))).toBe(false);
     lock.release();
   });
 
-  it("on POSIX uses exclusive wx write when hardlinks fail (never renames over a peer)", async () => {
-    const store: Store = new Map();
-    const fs = makeFs(store);
-    const linkSync = vi.fn(() => {
-      throw Object.assign(new Error("ENOTSUP"), { code: "ENOTSUP" });
-    });
-
-    const lock = await acquireStudioConfigSmokeLock("/tmp/lock", {
-      writeFileSync: fs.writeFileSync as never,
-      linkSync: linkSync as never,
-      renameSync: fs.renameSync as never,
-      readFileSync: fs.readFileSync as never,
-      unlinkSync: fs.unlinkSync as never,
-      mkdirSync: fs.mkdirSync as never,
-      platform: "linux",
-      pid: 778,
-      timeoutMs: 1_000,
-      pollMs: 10,
-      randomId: () => "fb-posix",
-    });
-    expect(store.get("/tmp/lock")).toBe("778\n");
-    expect(fs.renameSync).not.toHaveBeenCalled();
-    expect(fs.writeFileSync).toHaveBeenCalledWith("/tmp/lock", "778\n", { flag: "wx" });
-    lock.release();
-  });
-
-  it("on POSIX ENOTSUP fallback does not replace a live peer lock", async () => {
+  it("ENOTSUP wx fallback does not replace a live peer lock", async () => {
     const store: Store = new Map([["/tmp/lock", "111\n"]]);
     const fs = makeFs(store);
     const linkSync = vi.fn(() => {
       throw Object.assign(new Error("ENOTSUP"), { code: "ENOTSUP" });
     });
+    let nowMs = 0;
     // Peer stays alive so reclaim must not steal; acquire should time out.
     await expect(
       acquireStudioConfigSmokeLock("/tmp/lock", {
         writeFileSync: fs.writeFileSync as never,
         linkSync: linkSync as never,
-        renameSync: fs.renameSync as never,
         readFileSync: fs.readFileSync as never,
         unlinkSync: fs.unlinkSync as never,
         mkdirSync: fs.mkdirSync as never,
         isProcessAlive: () => true,
-        platform: "linux",
         pid: 779,
         timeoutMs: 80,
         pollMs: 10,
+        now: () => nowMs,
+        sleep: async (ms) => {
+          nowMs += ms;
+        },
         randomId: () => "no-steal",
       }),
     ).rejects.toThrow(/could not acquire/);
     expect(store.get("/tmp/lock")).toBe("111\n");
-    expect(fs.renameSync).not.toHaveBeenCalled();
   });
 
   it("reports process liveness via kill(pid, 0)", () => {

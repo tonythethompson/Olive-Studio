@@ -10,8 +10,8 @@
  * Studio is started with OLIVE_JOB_SETUP_STUB=1 so submits never download models
  * or run Olive (AGENTS.md: no real Olive execute in CI/VM).
  *
- * Mcporter is installed once into a temp prefix, then invoked via
- * `node <cli> …` with `shell: false` so Windows does not strip quotes from
+ * Mcporter is installed once into a unique temp prefix (mkdtemp), then invoked
+ * via `node <cli> …` with `shell: false` so Windows does not strip quotes from
  * `--args` JSON (npx+cmd was corrupting submit payloads).
  *
  * Usage (repo root):
@@ -60,53 +60,72 @@ const STRICT = process.env.MCP_SMOKE_STRICT === "1";
 let mcporterCliPath = /** @type {string | null} */ (null);
 
 /**
- * Install pinned mcporter into a stable temp prefix and return its CLI entry.
+ * Install pinned mcporter into a unique per-run temp prefix and return its CLI.
  * Invocations then use `process.execPath` with `shell: false` so `--args` JSON
  * is not stripped by cmd.exe (which is what breaks submit on Windows).
+ * Uses mkdtempSync so concurrent smokes never share a half-installed tree.
  * @returns {string}
  */
 function ensureMcporterCli() {
   if (mcporterCliPath) return mcporterCliPath;
-  const pinDir = path.join(
-    tmpdir(),
-    `olive-studio-${MCPORTER.replace(/[^a-zA-Z0-9._-]+/g, "-")}`,
-  );
+  const pinDir = mkdtempSync(path.join(tmpdir(), "olive-studio-mcporter-"));
   const cli = path.join(pinDir, "node_modules", "mcporter", "dist", "cli.js");
-  if (!existsSync(cli)) {
-    mkdirSync(pinDir, { recursive: true });
-    // One-time prefix install may need shell on Windows for npm.cmd only.
-    const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
-    const install = spawnSync(
-      npmCmd,
-      [
-        "install",
-        "--prefix",
-        pinDir,
-        MCPORTER,
-        "--no-save",
-        "--no-package-lock",
-        "--no-fund",
-        "--no-audit",
-        "--loglevel=error",
-      ],
-      {
-        encoding: "utf8",
-        timeout: 180_000,
-        shell: process.platform === "win32",
-        env: { ...process.env },
-      },
-    );
-    if (install.status !== 0) {
-      throw new Error(
-        `failed to install ${MCPORTER}: ${(install.stderr || install.stdout || "").slice(0, 800)}`,
-      );
+  // Fresh dir: install may need shell on Windows for npm.cmd only.
+  const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+  const install = spawnSync(
+    npmCmd,
+    [
+      "install",
+      "--prefix",
+      pinDir,
+      MCPORTER,
+      "--no-save",
+      "--no-package-lock",
+      "--no-fund",
+      "--no-audit",
+      "--loglevel=error",
+    ],
+    {
+      encoding: "utf8",
+      timeout: 180_000,
+      shell: process.platform === "win32",
+      env: { ...process.env },
+    },
+  );
+  if (install.status !== 0) {
+    try {
+      rmSync(pinDir, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
     }
+    throw new Error(
+      `failed to install ${MCPORTER}: ${(install.stderr || install.stdout || "").slice(0, 800)}`,
+    );
   }
   if (!existsSync(cli)) {
+    try {
+      rmSync(pinDir, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
     throw new Error(`mcporter CLI missing after install: ${cli}`);
   }
   mcporterCliPath = cli;
   return cli;
+}
+
+/**
+ * Resolve the pinned CLI, append `--config`, and log the invocation banner.
+ * @param {string[]} args mcporter argv (without node/cli/`--config`)
+ * @returns {{ cli: string, full: string[] }}
+ */
+function prepareMcporterInvocation(args) {
+  const cli = ensureMcporterCli();
+  const full = [...args, "--config", smokeConfigPath];
+  console.log(
+    `$ node ${path.basename(path.dirname(path.dirname(cli)))}/dist/cli.js ${full.join(" ")}`,
+  );
+  return { cli, full };
 }
 
 /**
@@ -115,9 +134,7 @@ function ensureMcporterCli() {
  */
 function runMcporterSync(args, opts = {}) {
   const { timeoutMs = 90_000, env = process.env, expectOk = true } = opts;
-  const cli = ensureMcporterCli();
-  const full = [...args, "--config", smokeConfigPath];
-  console.log(`$ node ${path.basename(path.dirname(path.dirname(cli)))}/dist/cli.js ${full.join(" ")}`);
+  const { cli, full } = prepareMcporterInvocation(args);
   const r = spawnSync(process.execPath, [cli, ...full], {
     cwd: root,
     encoding: "utf8",
@@ -251,11 +268,7 @@ function callToolAsync(selector, toolArgs, opts = {}) {
     args.push("--args", JSON.stringify(toolArgs));
   }
   args.push("--timeout", String(timeoutMs), "--output", "json");
-  const cli = ensureMcporterCli();
-  const full = [...args, "--config", smokeConfigPath];
-  console.log(
-    `$ node ${path.basename(path.dirname(path.dirname(cli)))}/dist/cli.js ${full.join(" ")}`,
-  );
+  const { cli, full } = prepareMcporterInvocation(args);
 
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [cli, ...full], {

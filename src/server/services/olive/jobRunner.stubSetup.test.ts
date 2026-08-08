@@ -152,9 +152,14 @@ describe("OLIVE_JOB_SETUP_STUB timeout", () => {
     await vi.advanceTimersByTimeAsync(499);
     // Still inside the final shortened poll; UI promise has not settled.
     let settled = false;
-    void pending.then(() => {
-      settled = true;
-    });
+    void pending.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
     await Promise.resolve();
     expect(settled).toBe(false);
 
