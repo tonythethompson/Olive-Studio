@@ -182,11 +182,58 @@ def test_weak_live_result_does_not_displace_strong_local_top1(monkeypatch: pytes
             "degraded": False,
         }
 
+    def fake_live(query, top_k, *, mode=None):
+        return weak_live[:top_k]
+
     monkeypatch.setattr(docs_search, "_search_local", fake_local)
-    monkeypatch.setattr(docs_search, "_search_live", lambda query, top_k: weak_live[:top_k])
+    monkeypatch.setattr(docs_search, "_search_live", fake_live)
 
     result = search_olive_documentation(query="quantization", top_k=1, live=True)
     assert result["results"] == [strong_local[0]]
+
+
+def test_keyword_mode_with_live_does_not_start_semantic_loading(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """mode=keyword + live=True must never build live embeddings or call semantic_search."""
+    monkeypatch.setattr(docs_search, "_load_kb_text", lambda: list(_FIXED_KB_TEXTS))
+    monkeypatch.setattr(
+        docs_search,
+        "_fetch_live_docs",
+        lambda: ({"index": "live calibration data for static quantization"}, 1.0),
+    )
+
+    def boom_semantic(*_a, **_k):
+        raise AssertionError("semantic_search must not run under mode=keyword")
+
+    def boom_live_index(*_a, **_k):
+        raise AssertionError("_get_live_index must not run under mode=keyword")
+
+    def boom_build(*_a, **_k):
+        raise AssertionError("build_kb_index must not run under mode=keyword")
+
+    def boom_kb_index(*_a, **_k):
+        raise AssertionError("get_or_build_kb_index must not run under mode=keyword")
+
+    monkeypatch.setattr(docs_search, "semantic_search", boom_semantic)
+    monkeypatch.setattr(docs_search, "_get_live_index", boom_live_index)
+    monkeypatch.setattr(docs_search, "build_kb_index", boom_build)
+    monkeypatch.setattr(docs_search, "get_or_build_kb_index", boom_kb_index)
+
+    result = search_olive_documentation(
+        query="calibration",
+        top_k=3,
+        live=True,
+        mode="keyword",
+    )
+    assert result["retrieval"]["mode"] == "keyword"
+    assert result["retrieval"]["effective"] == "keyword"
+    assert result["count"] > 0
+    sources = " ".join(r["source"] for r in result["results"])
+    # Local keyword and/or live keyword hits expected; no semantic path taken.
+    assert "calibration" in sources.lower() or any(
+        "calibration" in r["snippet"].lower() for r in result["results"]
+    )
 
 
 def test_empty_query_unchanged():

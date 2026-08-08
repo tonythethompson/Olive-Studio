@@ -14,7 +14,7 @@ import {
 } from "../services/olive/state.ts";
 import { pushLog, stopGpuMetricsTimer, MAX_JOB_LOG_LINES } from "../services/olive/gpu.ts";
 import { detachVenvListener } from "../services/venv/index.ts";
-import type { OliveRecipe, OliveJob, AgentAccessPolicy } from "../types.ts";
+import type { OliveRecipe, AgentAccessPolicy } from "../types.ts";
 import { oliveRunRateLimit } from "../middleware/rateLimit.ts";
 import { isParseBodyError, parseBody } from "../middleware/bodyGuard.ts";
 import { studioLocalOnly } from "../middleware/localOnly.ts";
@@ -74,8 +74,9 @@ export function mountOliveRoutes(router: Router): void {
     return res.json({ ok: true, policy: getAgentAccessPublic() });
   });
 
-  router.put("/olive/agent-access", studioLocalOnly, (req, res) => {
+  router.put("/olive/agent-access", studioLocalOnly, oliveRunRateLimit, (req, res) => {
     // parseBody requires Record<string, unknown>; AgentAccessPolicy has no index signature.
+    // Trust boundary: studioLocalOnly (loopback) — same as other Studio-owned agent routes.
     type AgentAccessBody = AgentAccessPolicy & Record<string, unknown>;
     const body = parseBody<AgentAccessBody>(req.body ?? {}, {
       mcpAccess: { type: "boolean", required: false },
@@ -90,7 +91,7 @@ export function mountOliveRoutes(router: Router): void {
   });
 
   // ─── POST /api/olive/jobs/validate (no Olive spawn; loopback + policy) ─
-  router.post("/olive/jobs/validate", studioLocalOnly, (req, res) => {
+  router.post("/olive/jobs/validate", studioLocalOnly, oliveRunRateLimit, (req, res) => {
     const gate = denyUnless((p) => p.allowJobInspection || p.allowJobSubmission, "Job validation not allowed");
     if (!gate.ok) {
       return res.status(403).json({ ok: false, error: gate.error, reason: gate.reason, policy: gate.policy });
@@ -201,8 +202,19 @@ export function mountOliveRoutes(router: Router): void {
     });
   });
 
-  // ─── SSE Stream ───────────────────────────────────────────────────────
-  router.get("/olive/stream/:jobId", (req, res) => {
+  // ─── SSE Stream (loopback; MCP agents need inspection policy) ─────────
+  router.get("/olive/stream/:jobId", studioLocalOnly, (req, res) => {
+    // Agents must not opt out of policy by omitting the MCP header: when the
+    // header is present, require inspection. UI (no header) is loopback-only.
+    if (req.get("x-olive-mcp-agent") === "1") {
+      const gate = denyUnless(
+        (p) => p.allowJobInspection,
+        "Job inspection is disabled in Studio agent access settings",
+      );
+      if (!gate.ok) {
+        return res.status(403).json({ ok: false, error: gate.error, reason: gate.reason, policy: gate.policy });
+      }
+    }
     const job = jobRegistry.get(req.params.jobId);
     if (!job) {
       return res.status(404).json({ error: "Job not found" });
@@ -287,11 +299,15 @@ export function mountOliveRoutes(router: Router): void {
     req.on("close", cleanup);
   });
 
-  // ─── Job Status ───────────────────────────────────────────────────────
-  router.get("/olive/status/:jobId", (req, res) => {
-    const isMcp = req.get("x-olive-mcp-agent") === "1";
-    if (isMcp) {
-      const gate = denyUnless((p) => p.allowJobInspection, "Job inspection is disabled in Studio agent access settings");
+  // ─── Job Status (loopback; MCP agents need inspection policy) ─────────
+  router.get("/olive/status/:jobId", studioLocalOnly, (req, res) => {
+    // Same pattern as stream: remote blocked by loopback; MCP header ⇒ policy.
+    // Omitting the header is not a remote bypass (studioLocalOnly already ran).
+    if (req.get("x-olive-mcp-agent") === "1") {
+      const gate = denyUnless(
+        (p) => p.allowJobInspection,
+        "Job inspection is disabled in Studio agent access settings",
+      );
       if (!gate.ok) {
         return res.status(403).json({ ok: false, error: gate.error, reason: gate.reason, policy: gate.policy });
       }
@@ -334,8 +350,8 @@ export function mountOliveRoutes(router: Router): void {
     return res.json({ ok: true, count: jobs.length, jobs });
   });
 
-  // ─── Cancel ───────────────────────────────────────────────────────────
-  router.post("/olive/cancel", (req, res) => {
+  // ─── Cancel (loopback; MCP agents need cancellation policy) ───────────
+  router.post("/olive/cancel", studioLocalOnly, (req, res) => {
     // express.json() leaves body undefined when the client sends no payload;
     // optional jobId means an empty object preserves the 404 "Job not found" contract.
     // Preserve null so parseBody can reject an explicit JSON null body.
@@ -346,8 +362,10 @@ export function mountOliveRoutes(router: Router): void {
     if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
     const { jobId } = body.parsed;
 
-    // Only the server-established MCP header selects the policy-gated path;
-    // the body marker is retained for compatibility but is not authorization.
+    // Loopback blocks remote cancel. MCP agents (header set by Studio proxy /
+    // studio_request) still need allowJobCancellation — header cannot be used
+    // to *skip* policy; it only selects the stricter agent path. Body `client`
+    // is not authorization.
     if (req.get("x-olive-mcp-agent") === "1") {
       const gate = denyUnless(
         (p) => p.allowJobCancellation,

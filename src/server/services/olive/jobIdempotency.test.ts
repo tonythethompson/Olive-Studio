@@ -29,7 +29,7 @@ afterEach(() => {
 
 describe("jobIdempotency", () => {
   it("finds job by fingerprint and key", () => {
-    const job = makeJob("j1", { fingerprint: "fp1", idempotencyKey: "k1" });
+    const job = makeJob("j1", { fingerprint: "fp1", idempotencyKey: "k1", source: "mcp" });
     jobRegistry.set(job.id, job);
     rememberIdempotencyKeys(job);
     expect(findJobByIdempotency({ fingerprint: "fp1" })).toEqual({ kind: "hit", job });
@@ -37,7 +37,7 @@ describe("jobIdempotency", () => {
   });
 
   it("drops stale keys when job left registry", () => {
-    const job = makeJob("j2", { fingerprint: "fp2" });
+    const job = makeJob("j2", { fingerprint: "fp2", source: "mcp" });
     jobRegistry.set(job.id, job);
     rememberIdempotencyKeys(job);
     jobRegistry.delete("j2");
@@ -45,7 +45,7 @@ describe("jobIdempotency", () => {
   });
 
   it("returns conflict when key maps to a different fingerprint", () => {
-    const job = makeJob("j3", { fingerprint: "fp-a", idempotencyKey: "shared-key" });
+    const job = makeJob("j3", { fingerprint: "fp-a", idempotencyKey: "shared-key", source: "mcp" });
     jobRegistry.set(job.id, job);
     rememberIdempotencyKeys(job);
     const result = findJobByIdempotency({
@@ -60,7 +60,7 @@ describe("jobIdempotency", () => {
   });
 
   it("reuses when key and fingerprint both match", () => {
-    const job = makeJob("j4", { fingerprint: "fp-same", idempotencyKey: "k-same" });
+    const job = makeJob("j4", { fingerprint: "fp-same", idempotencyKey: "k-same", source: "mcp" });
     jobRegistry.set(job.id, job);
     rememberIdempotencyKeys(job);
     expect(
@@ -69,9 +69,29 @@ describe("jobIdempotency", () => {
   });
 
   it("reuses by key alone when fingerprint is omitted", () => {
-    const job = makeJob("j5", { fingerprint: "fp-only", idempotencyKey: "k-only" });
+    const job = makeJob("j5", { fingerprint: "fp-only", idempotencyKey: "k-only", source: "mcp" });
     jobRegistry.set(job.id, job);
     rememberIdempotencyKeys(job);
     expect(findJobByIdempotency({ idempotencyKey: "k-only" })).toEqual({ kind: "hit", job });
+  });
+
+  it("does not index UI jobs; MCP cannot absorb a matching UI fingerprint", () => {
+    const ui = makeJob("ui-1", { fingerprint: "fp-shared", source: "ui" });
+    jobRegistry.set(ui.id, ui);
+    rememberIdempotencyKeys(ui);
+    expect(findJobByIdempotency({ fingerprint: "fp-shared" })).toEqual({ kind: "miss" });
+
+    // Later MCP job with same fingerprint is the only reusable entry.
+    const mcp = makeJob("mcp-1", { fingerprint: "fp-shared", source: "mcp", idempotencyKey: "k" });
+    jobRegistry.set(mcp.id, mcp);
+    rememberIdempotencyKeys(mcp);
+    expect(findJobByIdempotency({ fingerprint: "fp-shared" })).toEqual({ kind: "hit", job: mcp });
+  });
+
+  it("ignores default/undefined source as non-MCP", () => {
+    const job = makeJob("j-ui-default", { fingerprint: "fp-ui" }); // no source
+    jobRegistry.set(job.id, job);
+    rememberIdempotencyKeys(job);
+    expect(findJobByIdempotency({ fingerprint: "fp-ui" })).toEqual({ kind: "miss" });
   });
 });

@@ -366,9 +366,30 @@ def _get_live_index() -> tuple[list[tuple[str, str]], np.ndarray]:
         return _LIVE_SNIPPETS, _LIVE_EMBEDDINGS
 
 
-def _search_live(query: str, top_k: int) -> list[dict[str, Any]]:
-    """Semantic search over live docs snippets, with keyword fallback."""
+def _search_live(
+    query: str,
+    top_k: int,
+    *,
+    mode: str | None = None,
+) -> list[dict[str, Any]]:
+    """Search live Olive docs under the resolved retrieval mode.
+
+    ``keyword`` never builds the live embedding index or calls semantic_search.
+    ``auto`` / ``semantic`` keep the hybrid path (semantic with keyword fallback).
+    """
     terms = [t.lower() for t in query.split() if t]
+    resolved = get_retrieval_mode(mode)
+
+    if resolved == "keyword":
+        try:
+            pages, _ = _fetch_live_docs()
+            if not pages:
+                return []
+            return _keyword_search(_split_live_snippets(pages), terms, top_k)
+        except Exception:
+            logger.debug("Live-doc keyword search failed", exc_info=True)
+            return []
+
     try:
         snippets, embeddings = _get_live_index()
         if not snippets:
@@ -444,8 +465,8 @@ def search_olive_documentation(
 
     per_source = max(top_k * 2, 10)
     local_results, retrieval = _search_local(query, per_source, mode=mode_arg)
-    # Live path keeps prior hybrid/keyword fallback; budget applies to local first.
-    live_results = _search_live(query, per_source) if live else []
+    # Live path honors the same mode; keyword never loads embeddings.
+    live_results = _search_live(query, per_source, mode=mode_arg) if live else []
 
     combined = local_results + live_results
     combined.sort(

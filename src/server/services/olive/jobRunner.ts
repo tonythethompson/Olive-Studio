@@ -13,7 +13,6 @@ import { assessQnnRecipeReadiness } from "../../../lib/qnnReadiness.ts";
 import { DEFAULT_PASSES } from "../../../lib/defaultPasses.ts";
 import type { HardwareProbeResult } from "../../../lib/hardwareProbe.ts";
 import type { OliveJob, OliveRecipe } from "../../types.ts";
-import type { IHVProvider } from "../../../types.ts";
 import {
   jobRegistry,
   getRuntimeHfToken,
@@ -34,12 +33,13 @@ import { findJobByIdempotency, rememberIdempotencyKeys } from "./jobIdempotency.
 export type StartOliveJobOpts = {
   recipe: OliveRecipe;
   cudaVersion?: string;
-  /** If omitted, derived from preflight. */
+  /**
+   * Optional client-supplied fingerprint (e.g. from prior validate).
+   * When set, must match the server-computed preflight fingerprint or start fails with 409.
+   */
   fingerprint?: string;
   idempotencyKey?: string;
   source?: "ui" | "mcp";
-  /** When false, skip preflight (caller already validated). Default true. */
-  runPreflight?: boolean;
 };
 
 export type StartOliveJobResult =
@@ -59,44 +59,31 @@ export type StartOliveJobResult =
  */
 export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOliveJobResult> {
   const cudaVersion = opts.cudaVersion ?? "auto";
-  const runPreflight = opts.runPreflight !== false;
+  const clientFingerprint = opts.fingerprint;
 
-  let recipe = opts.recipe;
-  let fingerprint = opts.fingerprint;
-  let provider: IHVProvider;
-
-  if (runPreflight) {
-    const pre = preflightOliveRecipe(recipe, cudaVersion);
-    fingerprint = pre.fingerprint;
-    if (!pre.valid || !pre.provider) {
-      return {
-        ok: false,
-        error: pre.errors.join("; ") || "Recipe preflight failed",
-        httpStatus: 400,
-        fingerprint: pre.fingerprint,
-        errors: pre.errors,
-      };
-    }
-    recipe = pre.recipe;
-    provider = pre.provider;
-  } else {
-    const pre = preflightOliveRecipe(recipe, cudaVersion);
-    fingerprint = fingerprint ?? pre.fingerprint;
-    if (!pre.provider) {
-      return { ok: false, error: "Unknown execution provider", httpStatus: 400, fingerprint };
-    }
-    recipe = pre.recipe;
-    provider = pre.provider;
-    if (!pre.valid) {
-      return {
-        ok: false,
-        error: pre.errors.join("; "),
-        httpStatus: 400,
-        fingerprint,
-        errors: pre.errors,
-      };
-    }
+  const pre = preflightOliveRecipe(opts.recipe, cudaVersion);
+  if (!pre.valid || !pre.provider) {
+    return {
+      ok: false,
+      error: pre.errors.join("; ") || "Recipe preflight failed",
+      httpStatus: 400,
+      fingerprint: pre.fingerprint,
+      errors: pre.errors,
+    };
   }
+  // Client fingerprint is a precondition: never let start overwrite a mismatch.
+  if (clientFingerprint && clientFingerprint !== pre.fingerprint) {
+    return {
+      ok: false,
+      error: "Recipe fingerprint mismatch",
+      httpStatus: 409,
+      fingerprint: pre.fingerprint,
+    };
+  }
+
+  const recipe = pre.recipe;
+  const fingerprint = pre.fingerprint;
+  const provider = pre.provider;
 
   // Idempotency is for MCP/agent submit only — UI re-runs should always spawn.
   if (opts.source === "mcp") {
@@ -110,7 +97,7 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
         error: lookup.reason,
         httpStatus: 409,
         jobId: lookup.job.id,
-        fingerprint: fingerprint ?? lookup.job.fingerprint,
+        fingerprint: lookup.job.fingerprint ?? fingerprint,
       };
     }
     if (lookup.kind === "hit") {
@@ -118,7 +105,7 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
         ok: true,
         jobId: lookup.job.id,
         reused: true,
-        fingerprint: fingerprint ?? lookup.job.fingerprint ?? "",
+        fingerprint: lookup.job.fingerprint ?? fingerprint,
         status: lookup.job.status,
       };
     }
@@ -144,7 +131,10 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
     source: opts.source ?? "ui",
   };
   jobRegistry.set(jobId, job);
-  rememberIdempotencyKeys(job);
+  // Index only MCP submissions so agent idempotency cannot absorb UI runs.
+  if ((opts.source ?? "ui") === "mcp") {
+    rememberIdempotencyKeys(job);
+  }
 
   const bailIfCancelled = (): boolean => job.status === "cancelled";
 
@@ -168,7 +158,7 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
     if (bailIfCancelled()) {
       cleanupJobArtifacts(job);
       finalizeJob(job);
-      return { ok: true, jobId, reused: false, fingerprint: fingerprint!, status: "cancelled" };
+      return { ok: true, jobId, reused: false, fingerprint, status: "cancelled" };
     }
     if (!capResult.ok) {
       const error = capResult.error ?? "Provider capability setup failed";
@@ -185,6 +175,12 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
       const hostMode = resolveQnnHostMode({ platform: process.platform, arch: process.arch });
       if (hostMode === "local-inference") {
         const qnn = await probeQnn(venvPython);
+        // Cancel may land during the awaited probe — do not mark failed after cancel.
+        if (bailIfCancelled()) {
+          cleanupJobArtifacts(job);
+          finalizeJob(job);
+          return { ok: true, jobId, reused: false, fingerprint, status: "cancelled" };
+        }
         const inputModel = recipe.input_model as { io_config?: unknown } | undefined;
         const probe: HardwareProbeResult = {
           probedAt: new Date().toISOString(),
@@ -220,7 +216,7 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
     if (bailIfCancelled()) {
       cleanupJobArtifacts(job);
       finalizeJob(job);
-      return { ok: true, jobId, reused: false, fingerprint: fingerprint!, status: "cancelled" };
+      return { ok: true, jobId, reused: false, fingerprint, status: "cancelled" };
     }
 
     if (cudaVersion !== "auto") {
@@ -280,12 +276,16 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
       startGpuMetricsTimer(job);
     }
 
-    return { ok: true, jobId, reused: false, fingerprint: fingerprint!, status: job.status };
+    return { ok: true, jobId, reused: false, fingerprint, status: job.status };
   } catch (err: unknown) {
-    if (job.status !== "cancelled") {
-      job.status = "failed";
-    }
     cleanupJobArtifacts(job);
+    // Prefer cancelled outcome over a setup failure if cancel won the race.
+    if (job.status === "cancelled" || bailIfCancelled()) {
+      job.status = "cancelled";
+      finalizeJob(job);
+      return { ok: true, jobId, reused: false, fingerprint, status: "cancelled" };
+    }
+    job.status = "failed";
     const msg = err instanceof Error ? err.message : String(err);
     pushLog(job, `[error] ${msg}`);
     finalizeJob(job);
