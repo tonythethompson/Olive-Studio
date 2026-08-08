@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, ChangeEvent, useMemo, useTransition } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -45,6 +44,7 @@ import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { navigatePipeline } from "@/lib/pipelineNavigation";
 import { estimateVramForCatalogPreset } from "@/lib/presetVramEstimate";
 import { CompatCountSummary, CompatStatusPill } from "@/components/features/input/CompatStatus";
+import { useHfToken } from "@/components/features/input/useHfToken";
 import {
   DownloadCloud,
   KeyRound,
@@ -119,7 +119,6 @@ export function InputEnvironmentPanel({
   const storeState = usePipelineState();
   const state = propState ?? storeState.state;
   const setState = propSetState ?? storeState.setState;
-  const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chunkFilesRef = useRef<Map<string, File>>(new Map());
   const [isReconstructing, setIsReconstructing] = useState(false);
@@ -130,71 +129,16 @@ export function InputEnvironmentPanel({
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [downloadName, setDownloadName] = useState<string | null>(null);
 
-  // HuggingFace token
-  const [hfTokenInput, setHfTokenInput] = useState("");
-
-  const hfTokenStatusQuery = useQuery({
-    queryKey: ["hf-token-status"],
-    queryFn: async (): Promise<"environment" | "runtime" | "none"> => {
-      const r = await fetch("/api/env/hf-token-status");
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const d = await r.json();
-      const source = d?.source;
-      return source === "environment" || source === "runtime" ? source : "none";
-    },
-    retry: false,
-  });
-  const hfTokenStatus = hfTokenStatusQuery.isLoading
-    ? "loading"
-    : hfTokenStatusQuery.isError
-      ? "error"
-      : (hfTokenStatusQuery.data ?? "none");
-
-  const submitTokenMutation = useMutation({
-    mutationFn: async (token: string) => {
-      const r = await fetch("/api/env/hf-token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    },
-    onSuccess: () => {
-      queryClient.setQueryData(["hf-token-status"], "runtime");
-      setHfTokenInput("");
-      clearTokenMutation.reset();
-    },
-  });
-
-  const clearTokenMutation = useMutation({
-    mutationFn: async () => {
-      const r = await fetch("/api/env/hf-token", { method: "DELETE" });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    },
-    onSuccess: () => {
-      queryClient.setQueryData(["hf-token-status"], "none");
-    },
-  });
-
-  const isTokenMutating = submitTokenMutation.isPending || clearTokenMutation.isPending;
-
-  const handleSubmitToken = async () => {
-    if (isTokenMutating || !hfTokenInput.trim()) return;
-    try {
-      await submitTokenMutation.mutateAsync(hfTokenInput.trim());
-    } catch {
-      /* ignore */
-    }
-  };
-
-  const handleClearToken = async () => {
-    if (isTokenMutating) return;
-    try {
-      await clearTokenMutation.mutateAsync();
-    } catch {
-      /* ignore — clearTokenMutation.error is rendered next to the Clear button */
-    }
-  };
+  const {
+    hfTokenInput,
+    setHfTokenInput,
+    hfTokenStatus,
+    submitTokenMutation,
+    clearTokenMutation,
+    isTokenMutating,
+    handleSubmitToken,
+    handleClearToken,
+  } = useHfToken();
 
   // States for the Olive Recipe Hub
   const [recipeSearch, setRecipeSearch] = useState("");
