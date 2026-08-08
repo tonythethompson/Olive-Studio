@@ -2,7 +2,7 @@
 
 **Working title:** Olive MCP as agent intelligence/configuration today; **agent-facing control of Studio** when job APIs are connected  
 **Audience:** Olive Studio maintainers, MCP consumers, agent-tooling stakeholders  
-**Status:** Proposal — **Phases 0–3 implemented on branch `MCP_harden`**  
+**Status:** Proposal — Phases 0–3 **code complete** on branch `MCP_harden`; **CI / end-to-end verification still pending** (do not treat as fully signed-off until the matrix is green)  
 **Date:** 2026-08-07  
 **Calibration:** Architecture **~9/10**; near-term plan **~8/10** → proceed. End-state job loop raises product value without a second executor.
 
