@@ -16,9 +16,13 @@ vi.mock("./jobPreflight.ts", () => ({
 }));
 
 vi.mock("../venv/index.ts", () => ({
-  ensureProviderCapability: vi.fn(async () => ({ ok: true })),
+  ensureProviderCapability: vi.fn(async () => ({
+    ok: true,
+    python: "python",
+    family: "default",
+  })),
   buildOliveRunEnvironment: vi.fn(() => ({})),
-  resolveOliveCommand: vi.fn(() => ({ cmd: "echo", args: ["ok"] })),
+  resolveOliveCommand: vi.fn(() => ({ executable: "echo", args: ["ok"] })),
 }));
 
 import { startOliveJob } from "./jobRunner.ts";
