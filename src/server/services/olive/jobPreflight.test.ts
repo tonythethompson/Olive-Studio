@@ -82,4 +82,17 @@ describe("preflightOliveRecipe", () => {
     expect(pre.provider).toBeNull();
     expect(pre.errors.some((e) => /unknown execution provider/i.test(e))).toBe(true);
   });
+
+  it("rejects export-target providers for local Olive runs", () => {
+    const pre = preflightOliveRecipe(minimalRecipe("WebGpuExecutionProvider"));
+    expect(pre.valid).toBe(false);
+    expect(pre.provider).toBe("WebGpuExecutionProvider");
+    expect(pre.errors.some((e) => /cannot run via local Olive/i.test(e))).toBe(true);
+  });
+
+  it("fingerprint omits undefined object values like JSON.stringify", () => {
+    const withUndef = { a: 1, b: undefined as unknown as number, c: 2 };
+    const without = { a: 1, c: 2 };
+    expect(fingerprintRecipe(withUndef, "auto")).toBe(fingerprintRecipe(without, "auto"));
+  });
 });

@@ -142,6 +142,10 @@ Optional env (in addition to Studio bridge vars above):
 | `OLIVE_MCP_PRELOAD_EMBEDDINGS` | If `1`, warm model + indexes before accepting MCP traffic |
 | `OLIVE_MCP_REBUILD_INDEX` | If `1`, ignore shipped indexes and re-encode at runtime |
 | `OLIVE_MCP_REQUIRE_VENV` | If `1`, launcher exits when no project venv is found |
+| `OLIVE_MCP_ALLOW_JOBS` | Dev/CI only: force Studio effective **submit + cancel** on (does not change disk UI toggles). Prefer Agent Access UI for product defaults. |
+| `OLIVE_MCP_ALLOW_JOB_INSPECTION` | Dev/CI: `0`/`false` forces inspection off; `1`/`true` forces on |
+| `OLIVE_MCP_ACCESS` | Dev/CI: `0`/`false` disables master MCP access regardless of disk policy |
+| `OLIVE_STUDIO_API_URL` | Base URL for Studio loopback bridge (e.g. `http://127.0.0.1:3000`) |
 
 ### Studio UIState bridge tools
 

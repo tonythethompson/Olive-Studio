@@ -25,12 +25,12 @@ def maybe_preload_embeddings() -> dict[str, bool]:
     from olive_mcp_server.tools import load_studio_troubleshooting, load_troubleshooting
     from olive_mcp_server.tools.docs_search import get_or_build_kb_index
     from olive_mcp_server.tools.embeddings import encode_query
-    from olive_mcp_server.tools.troubleshooting import _get_troubleshooting_index
+    from olive_mcp_server.tools.troubleshooting import get_troubleshooting_index
 
     # Touch model
     encode_query("preload")
     get_or_build_kb_index()
-    _get_troubleshooting_index(load_troubleshooting())
-    _get_troubleshooting_index(load_studio_troubleshooting())
+    get_troubleshooting_index(load_troubleshooting())
+    get_troubleshooting_index(load_studio_troubleshooting())
     logger.info("Embedding preload complete")
     return {"requested": True, "done": True}

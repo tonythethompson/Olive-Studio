@@ -85,16 +85,36 @@ export function updateAgentAccess(patch: AgentAccessPolicy): ResolvedAgentAccess
   return getAgentAccessPublic();
 }
 
+export type DenyUnlessResult =
+  | { ok: true; policy: ResolvedAgentAccess }
+  | {
+      ok: false;
+      error: string;
+      reason: string;
+      /** Which switch to flip — not the full resolved policy (avoids leaking env override detail on 403). */
+      required?: Partial<
+        Pick<
+          ResolvedAgentAccess,
+          "mcpAccess" | "allowJobInspection" | "allowJobSubmission" | "allowJobCancellation"
+        >
+      >;
+    };
+
 export function denyUnless(
   predicate: (p: ResolvedAgentAccess) => boolean,
   reason: string,
-): { ok: true; policy: ResolvedAgentAccess } | { ok: false; error: string; reason: string; policy: ResolvedAgentAccess } {
+): DenyUnlessResult {
   const policy = resolveAgentAccess();
   if (!policy.mcpAccess) {
-    return { ok: false, error: "mcp_access_disabled", reason: "MCP access is disabled in Studio settings", policy };
+    return {
+      ok: false,
+      error: "mcp_access_disabled",
+      reason: "MCP access is disabled in Studio settings",
+      required: { mcpAccess: true },
+    };
   }
   if (!predicate(policy)) {
-    return { ok: false, error: "forbidden", reason, policy };
+    return { ok: false, error: "forbidden", reason };
   }
   return { ok: true, policy };
 }

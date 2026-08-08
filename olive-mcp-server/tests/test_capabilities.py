@@ -135,7 +135,7 @@ def test_troubleshoot_auto_budget_degraded(monkeypatch: pytest.MonkeyPatch):
     import olive_mcp_server.tools.embeddings as emb
     import olive_mcp_server.tools.troubleshooting as ts
 
-    emb._model = None
+    monkeypatch.setattr(emb, "_model", None)
     monkeypatch.setenv("OLIVE_MCP_SEMANTIC_BUDGET_MS", "50")
 
     def slow_scores(entries, error_only):

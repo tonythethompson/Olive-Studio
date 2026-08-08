@@ -94,7 +94,12 @@ export function mountOliveRoutes(router: Router): void {
   router.post("/olive/jobs/validate", studioLocalOnly, oliveRunRateLimit, (req, res) => {
     const gate = denyUnless((p) => p.allowJobInspection || p.allowJobSubmission, "Job validation not allowed");
     if (!gate.ok) {
-      return res.status(403).json({ ok: false, error: gate.error, reason: gate.reason, policy: gate.policy });
+      return res.status(403).json({
+        ok: false,
+        error: gate.error,
+        reason: gate.reason,
+        ...("required" in gate && gate.required ? { required: gate.required } : {}),
+      });
     }
 
     const body = parseBody<{ recipeJson?: string; recipe?: unknown; cudaVersion?: string }>(
@@ -141,7 +146,12 @@ export function mountOliveRoutes(router: Router): void {
   router.post("/olive/jobs/submit", studioLocalOnly, oliveRunRateLimit, async (req, res) => {
     const gate = denyUnless((p) => p.allowJobSubmission, "Job submission is disabled in Studio agent access settings");
     if (!gate.ok) {
-      return res.status(403).json({ ok: false, error: gate.error, reason: gate.reason, policy: gate.policy });
+      return res.status(403).json({
+        ok: false,
+        error: gate.error,
+        reason: gate.reason,
+        ...("required" in gate && gate.required ? { required: gate.required } : {}),
+      });
     }
 
     const body = parseBody<{
@@ -212,7 +222,12 @@ export function mountOliveRoutes(router: Router): void {
         "Job inspection is disabled in Studio agent access settings",
       );
       if (!gate.ok) {
-        return res.status(403).json({ ok: false, error: gate.error, reason: gate.reason, policy: gate.policy });
+        return res.status(403).json({
+        ok: false,
+        error: gate.error,
+        reason: gate.reason,
+        ...("required" in gate && gate.required ? { required: gate.required } : {}),
+      });
       }
     }
     const job = jobRegistry.get(req.params.jobId);
@@ -309,7 +324,12 @@ export function mountOliveRoutes(router: Router): void {
         "Job inspection is disabled in Studio agent access settings",
       );
       if (!gate.ok) {
-        return res.status(403).json({ ok: false, error: gate.error, reason: gate.reason, policy: gate.policy });
+        return res.status(403).json({
+        ok: false,
+        error: gate.error,
+        reason: gate.reason,
+        ...("required" in gate && gate.required ? { required: gate.required } : {}),
+      });
       }
     }
     const job = jobRegistry.get(req.params.jobId);
@@ -331,7 +351,12 @@ export function mountOliveRoutes(router: Router): void {
   router.get("/olive/jobs", studioLocalOnly, (_req, res) => {
     const gate = denyUnless((p) => p.allowJobInspection, "Job inspection is disabled in Studio agent access settings");
     if (!gate.ok) {
-      return res.status(403).json({ ok: false, error: gate.error, reason: gate.reason, policy: gate.policy });
+      return res.status(403).json({
+        ok: false,
+        error: gate.error,
+        reason: gate.reason,
+        ...("required" in gate && gate.required ? { required: gate.required } : {}),
+      });
     }
     const jobs = Array.from(jobRegistry.values())
       .map((job) => ({
@@ -372,7 +397,12 @@ export function mountOliveRoutes(router: Router): void {
         "Job cancellation is disabled in Studio agent access settings",
       );
       if (!gate.ok) {
-        return res.status(403).json({ ok: false, error: gate.error, reason: gate.reason, policy: gate.policy });
+        return res.status(403).json({
+        ok: false,
+        error: gate.error,
+        reason: gate.reason,
+        ...("required" in gate && gate.required ? { required: gate.required } : {}),
+      });
       }
     }
 

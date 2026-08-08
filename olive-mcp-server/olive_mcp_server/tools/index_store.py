@@ -164,6 +164,14 @@ def load_pair_index(stem: str, expected_hash: str) -> tuple[list[tuple[str, str]
             return None
         data = np.load(npz_p, allow_pickle=False)
         emb = np.asarray(data["embeddings"], dtype=np.float32)
+        if emb.ndim != 2 or emb.shape[1] != EMBEDDING_DIM:
+            logger.warning(
+                "Shipped index %s bad embedding shape %s (want rank-2, dim=%s); rebuild",
+                stem,
+                emb.shape,
+                EMBEDDING_DIM,
+            )
+            return None
         sources = meta.get("sources") or []
         texts = meta.get("texts") or []
         if len(sources) != len(texts) or len(sources) != emb.shape[0]:
@@ -191,6 +199,14 @@ def load_entry_embeddings(stem: str, expected_hash: str) -> np.ndarray | None:
             return None
         data = np.load(npz_p, allow_pickle=False)
         emb = np.asarray(data["embeddings"], dtype=np.float32)
+        if emb.ndim != 2 or emb.shape[1] != EMBEDDING_DIM:
+            logger.warning(
+                "Shipped entry index %s bad embedding shape %s (want rank-2, dim=%s); rebuild",
+                stem,
+                emb.shape,
+                EMBEDDING_DIM,
+            )
+            return None
         if int(meta.get("count", -1)) != emb.shape[0]:
             return None
         return emb

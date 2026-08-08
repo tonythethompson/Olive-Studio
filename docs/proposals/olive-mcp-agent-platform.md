@@ -263,6 +263,7 @@ studio.configured / reachable → get_mcp_capabilities
 
 - Stage 1 job tools: `list_optimization_jobs`, `get_optimization_job`, `get_optimization_results`
 - Studio: `GET /api/olive/jobs` + `finishedAt` on status
+- **Inspection policy:** list is always gated by `allowJobInspection`; status/stream are loopback-only and enforce the same policy when `X-Olive-MCP-Agent: 1` (MCP tools always send this header). UI browser polling stays loopback-only without the agent header.
 - Capabilities: `job_control.inspection=true`, `submission/cancellation=false`
 - Optional product UI (Copy Agent Setup) deferred  
 

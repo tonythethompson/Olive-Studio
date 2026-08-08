@@ -39,9 +39,9 @@ def test_docs_shipped_index_loads():
 
 
 def test_get_or_build_uses_shipped_without_encode(monkeypatch: pytest.MonkeyPatch):
-    docs_search._KB_TEXTS = []
-    docs_search._KB_EMBEDDINGS = None
-    docs_search._KB_INDEX_MTIME = (-1.0, -1)
+    monkeypatch.setattr(docs_search, "_KB_TEXTS", [])
+    monkeypatch.setattr(docs_search, "_KB_EMBEDDINGS", None)
+    monkeypatch.setattr(docs_search, "_KB_INDEX_MTIME", (-1.0, -1))
 
     def boom(*_a, **_k):
         raise AssertionError("should not encode when shipped index matches")

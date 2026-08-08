@@ -3,13 +3,14 @@
  * replay of buffered log/metrics/done, live metric forwarding, immediate
  * terminal closure, and subscriber cleanup on client disconnect.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import express from "express";
 import type { Server } from "http";
 import type { OliveJob } from "../types.ts";
 import type { GpuMetrics } from "../../lib/gpuMetrics.ts";
 import { pushGpuMetrics, pushLog } from "../services/olive/gpu.ts";
 import { finalizeJob, jobRegistry } from "../services/olive/state.ts";
+import { writeStudioConfig } from "../config.ts";
 
 const { mountOliveRoutes } = await import("./olive.ts");
 
@@ -39,6 +40,17 @@ afterAll(async () => {
 
 beforeEach(() => {
   jobRegistry.clear();
+  writeStudioConfig({ agentAccess: {} });
+  delete process.env.OLIVE_MCP_ALLOW_JOBS;
+  delete process.env.OLIVE_MCP_ALLOW_JOB_INSPECTION;
+  delete process.env.OLIVE_MCP_ACCESS;
+});
+
+afterEach(() => {
+  writeStudioConfig({ agentAccess: {} });
+  delete process.env.OLIVE_MCP_ALLOW_JOBS;
+  delete process.env.OLIVE_MCP_ALLOW_JOB_INSPECTION;
+  delete process.env.OLIVE_MCP_ACCESS;
 });
 
 describe("GET /api/olive/jobs", () => {
@@ -63,6 +75,17 @@ describe("GET /api/olive/jobs", () => {
     const res = await fetch(`${baseUrl}/api/olive/jobs`);
     const body = (await res.json()) as { ok: boolean; count: number; jobs: unknown[] };
     expect(body).toEqual({ ok: true, count: 0, jobs: [] });
+  });
+
+  it("returns 403 when job inspection is disabled", async () => {
+    writeStudioConfig({ agentAccess: { allowJobInspection: false } });
+    seedJob({ id: "hidden", status: "running", exitCode: null });
+    const res = await fetch(`${baseUrl}/api/olive/jobs`);
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { ok: boolean; error: string; reason: string; policy?: unknown };
+    expect(body.ok).toBe(false);
+    expect(body.error).toBe("forbidden");
+    expect(body.policy).toBeUndefined();
   });
 });
 

@@ -151,7 +151,7 @@ def _troubleshooting_kb_mtime() -> float:
     return max(mtimes) if mtimes else 0.0
 
 
-def _get_troubleshooting_index(
+def get_troubleshooting_index(
     entries: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], np.ndarray]:
     """Lazy-build embeddings for a troubleshooting entry list (thread-safe).
@@ -159,6 +159,9 @@ def _get_troubleshooting_index(
     Cache is keyed by content fingerprint so olive and studio pools coexist.
     Invalidates when fingerprint or KB mtime changes. Callers must score using
     the returned entries list so embeddings stay position-aligned.
+
+    Public for warm-path preload and external warmers; prefer this over private
+    module attributes.
     """
     if entries is None:
         entries = load_troubleshooting()
@@ -209,6 +212,10 @@ def _get_troubleshooting_index(
             if oldest_key != fingerprint:
                 del _ts_index_cache[oldest_key]
         return entries_list, embeddings
+
+
+# Private alias retained for older tests that patch the historical name.
+_get_troubleshooting_index = get_troubleshooting_index
 
 
 def _pattern_hit_count(entry: dict[str, Any], text: str) -> int:
@@ -386,7 +393,7 @@ def _semantic_scores_for_entries(
     error_only: str,
 ) -> tuple[list[dict[str, Any]], np.ndarray]:
     """Build index + cosine scores (may load the embedding model)."""
-    index_entries, embeddings = _get_troubleshooting_index(entries)
+    index_entries, embeddings = get_troubleshooting_index(entries)
     query_vec = encode_query(error_only)
     semantic_scores = cosine_similarity_scores(query_vec, embeddings)
     return index_entries, semantic_scores

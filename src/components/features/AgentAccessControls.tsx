@@ -63,6 +63,8 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
   const [message, setMessage] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const firstToggleRef = useRef<HTMLInputElement | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -96,9 +98,15 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
   useEffect(() => {
     if (!open) {
       setMenuPos(null);
+      setMessage(null);
+      setError(null);
       return;
     }
     updateMenuPos();
+    // Move focus into the dialog for keyboard users; restore on close below.
+    const focusTimer = window.setTimeout(() => {
+      firstToggleRef.current?.focus();
+    }, 0);
     const handlePointerDown = (event: MouseEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) {
         const menu = document.getElementById("agent-access-menu");
@@ -114,10 +122,13 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
     document.addEventListener("mousedown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
+      window.clearTimeout(focusTimer);
       window.removeEventListener("resize", updateMenuPos);
       window.removeEventListener("scroll", updateMenuPos, { capture: true });
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
+      // Restore focus to the opener when the dialog unmounts/closes.
+      triggerRef.current?.focus();
     };
   }, [open, updateMenuPos]);
 
@@ -158,12 +169,14 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
   return (
     <div ref={rootRef} className="relative text-[11px] font-mono overflow-visible">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 text-slate-400 hover:text-slate-200 transition-colors px-1.5 py-1 rounded border border-transparent hover:border-slate-700/80"
         title={title}
         aria-expanded={open}
         aria-haspopup="dialog"
+        aria-controls={open ? "agent-access-menu" : undefined}
         aria-label={title}
       >
         <Bot className="h-3 w-3 text-slate-500" aria-hidden />
@@ -208,12 +221,13 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
           ) : null}
 
           <ul className="space-y-2">
-            {TOGGLES.map(({ key, label, hint, danger }) => {
+            {TOGGLES.map(({ key, label, hint, danger }, index) => {
               const checked = Boolean(policy?.[key]);
               const disabled = busy || !policy || (key !== "mcpAccess" && policy.mcpAccess === false);
               return (
                 <li key={key} className="flex items-start gap-2">
                   <input
+                    ref={index === 0 ? firstToggleRef : undefined}
                     id={`agent-access-${key}`}
                     type="checkbox"
                     className="mt-0.5 rounded border-slate-600 bg-slate-950 text-electric-blue focus:ring-electric-blue/40"
