@@ -8,7 +8,6 @@ import type { GpuMetrics } from "../../lib/gpuMetrics.ts";
 
 import {
   jobRegistry,
-  cleanupJobArtifacts,
   startJobRegistrySweeper,
   finalizeJob,
 } from "../services/olive/state.ts";
@@ -230,7 +229,9 @@ export function mountOliveRoutes(router: Router): void {
       });
       }
     }
-    const job = jobRegistry.get(req.params.jobId);
+    const jobIdParam = req.params.jobId;
+    const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
+    const job = jobId ? jobRegistry.get(jobId) : undefined;
     if (!job) {
       return res.status(404).json({ error: "Job not found" });
     }
@@ -332,7 +333,9 @@ export function mountOliveRoutes(router: Router): void {
       });
       }
     }
-    const job = jobRegistry.get(req.params.jobId);
+    const jobIdParam = req.params.jobId;
+    const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
+    const job = jobId ? jobRegistry.get(jobId) : undefined;
     if (!job) {
       return res.status(404).json({ error: "Job not found" });
     }
