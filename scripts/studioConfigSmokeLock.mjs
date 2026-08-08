@@ -3,7 +3,9 @@
  * Prevents overlapping smokes from snapshotting each other's temporary
  * allowJobSubmission / cancellation policy patches.
  */
+import { randomBytes } from "node:crypto";
 import {
+  linkSync,
   mkdirSync,
   readFileSync,
   rmdirSync,
@@ -28,9 +30,47 @@ export function isProcessAlive(pid) {
 }
 
 /**
+ * Publish a fully-written lock file at `lockPath` without an empty-body window.
+ * Prefer hard-linking a temp file (link fails with EEXIST and never overwrites).
+ * Fall back to exclusive `write(..., { flag: "wx" })` of the same PID bytes when
+ * hardlinks are unsupported.
+ *
+ * @param {string} lockPath
+ * @param {string} body
+ * @param {{
+ *   writeFileSync: typeof writeFileSync,
+ *   linkSync: typeof linkSync,
+ *   unlinkSync: typeof unlinkSync,
+ *   tempPath: string,
+ * }} deps
+ */
+function publishLockFile(lockPath, body, deps) {
+  const { writeFileSync: write, linkSync: link, unlinkSync: unlink, tempPath } = deps;
+  write(tempPath, body);
+  try {
+    try {
+      link(tempPath, lockPath);
+      return;
+    } catch (e) {
+      const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
+      if (code === "EEXIST") throw e;
+      // ENOTSUP / EPERM / EINVAL / EXDEV: still publish full content exclusively.
+      write(lockPath, body, { flag: "wx" });
+    }
+  } finally {
+    try {
+      unlink(tempPath);
+    } catch {
+      /* temp already gone */
+    }
+  }
+}
+
+/**
  * @param {string} lockPath
  * @param {{
  *   writeFileSync?: typeof writeFileSync,
+ *   linkSync?: typeof linkSync,
  *   readFileSync?: typeof readFileSync,
  *   statSync?: typeof statSync,
  *   unlinkSync?: typeof unlinkSync,
@@ -42,14 +82,13 @@ export function isProcessAlive(pid) {
  *   publishGraceMs?: number,
  *   sleep?: (ms: number) => Promise<void>,
  *   now?: () => number,
+ *   randomId?: () => string,
  * }} [deps]
  * @returns {Promise<{ release: () => void }>}
  */
 export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
-  // Atomic create+publish: write PID with O_EXCL so waiters never observe an
-  // empty live lock from this process. Malformed bodies still get a grace
-  // window for abandoned mid-write files from older crash paths.
   const write = deps.writeFileSync ?? writeFileSync;
+  const link = deps.linkSync ?? linkSync;
   const read = deps.readFileSync ?? readFileSync;
   const stat = deps.statSync ?? statSync;
   const unlink = deps.unlinkSync ?? unlinkSync;
@@ -60,20 +99,31 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
   const pollMs = deps.pollMs ?? 250;
   const publishGraceMs = deps.publishGraceMs ?? Math.max(1_000, pollMs * 4);
   const now = deps.now ?? Date.now;
+  const randomId = deps.randomId ?? (() => randomBytes(6).toString("hex"));
   const sleep =
     deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
 
   mkdir(path.dirname(lockPath), { recursive: true });
   const deadline = now() + timeoutMs;
+  const body = `${myPid}\n`;
 
   while (now() < deadline) {
+    const tempPath = path.join(
+      path.dirname(lockPath),
+      `.${path.basename(lockPath)}.${myPid}.${randomId()}.tmp`,
+    );
     try {
-      write(lockPath, `${myPid}\n`, { flag: "wx" });
+      publishLockFile(lockPath, body, {
+        writeFileSync: write,
+        linkSync: link,
+        unlinkSync: unlink,
+        tempPath,
+      });
       return {
         release() {
           try {
-            const body = read(lockPath, "utf8");
-            const holder = Number.parseInt(String(body).trim().split(/\r?\n/)[0] ?? "", 10);
+            const current = read(lockPath, "utf8");
+            const holder = Number.parseInt(String(current).trim().split(/\r?\n/)[0] ?? "", 10);
             if (holder === myPid) unlink(lockPath);
           } catch {
             /* already gone or not ours */
@@ -84,10 +134,11 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
       const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
       if (code !== "EEXIST") throw e;
       try {
-        const body = read(lockPath, "utf8");
-        const holder = Number.parseInt(String(body).trim().split(/\r?\n/)[0] ?? "", 10);
-        // Fresh empty/malformed bodies can mean "writer still publishing" (legacy
-        // open-then-write callers / crash mid-write). Only reclaim after grace.
+        const current = read(lockPath, "utf8");
+        const holder = Number.parseInt(String(current).trim().split(/\r?\n/)[0] ?? "", 10);
+        // Fresh empty/malformed bodies can mean a concurrent publisher has not
+        // finished yet (or a crash left an empty legacy lock). Only reclaim
+        // after publishGraceMs. Finite dead PIDs reclaim immediately.
         const malformed = !Number.isFinite(holder);
         let reclaimable = !malformed && !alive(holder);
         if (malformed) {
