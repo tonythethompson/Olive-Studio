@@ -1,7 +1,6 @@
 /**
  * Inter-process smoke lock for Studio config mutation.
  */
-import type { PathLike } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   acquireStudioConfigSmokeLock,
@@ -28,22 +27,18 @@ function makeFs(store: Store) {
     // Hard link: destination appears with the fully written temp contents.
     store.set(to, store.get(from)!);
   });
-  // Match Node's copyFileSync PathLike params so deps typing accepts the mock
-  // when spread into acquireStudioConfigSmokeLock (tsc --noEmit in CI lint).
-  const copyFileSync = vi.fn((from: PathLike, to: PathLike, mode?: number) => {
-    const src = String(from);
-    const dest = String(to);
-    if (!store.has(src)) {
+  // rename: destination appears with already-complete temp bytes (no partial body).
+  // Mirror Windows exclusivity (fail if dest exists); POSIX overwrite is rare here
+  // because callers only rename after link failed for reasons other than EEXIST.
+  const renameSync = vi.fn((from: string, to: string) => {
+    if (!store.has(from)) {
       throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
     }
-    // Mirror COPYFILE_EXCL: refuse when the destination already exists.
-    if (mode !== undefined && store.has(dest)) {
+    if (store.has(to)) {
       throw Object.assign(new Error("EEXIST"), { code: "EEXIST" });
     }
-    if (store.has(dest)) {
-      throw Object.assign(new Error("EEXIST"), { code: "EEXIST" });
-    }
-    store.set(dest, store.get(src)!);
+    store.set(to, store.get(from)!);
+    store.delete(from);
   });
   const readFileSync = vi.fn((p: string) => {
     if (!store.has(p)) {
@@ -55,7 +50,7 @@ function makeFs(store: Store) {
     store.delete(p);
   });
   const mkdirSync = vi.fn();
-  return { writeFileSync, linkSync, copyFileSync, readFileSync, unlinkSync, mkdirSync };
+  return { writeFileSync, linkSync, renameSync, readFileSync, unlinkSync, mkdirSync };
 }
 
 describe("studioConfigSmokeLock", () => {
@@ -67,7 +62,7 @@ describe("studioConfigSmokeLock", () => {
       ...fs,
       writeFileSync: fs.writeFileSync as never,
       linkSync: fs.linkSync as never,
-      copyFileSync: fs.copyFileSync as never,
+      renameSync: fs.renameSync as never,
       readFileSync: fs.readFileSync as never,
       unlinkSync: fs.unlinkSync as never,
       mkdirSync: fs.mkdirSync as never,
@@ -488,7 +483,7 @@ describe("studioConfigSmokeLock", () => {
     lock.release();
   });
 
-  it("falls back to exclusive copy when hardlinks are unsupported", async () => {
+  it("falls back to rename of a complete temp when hardlinks are unsupported", async () => {
     const store: Store = new Map();
     const fs = makeFs(store);
     const linkSync = vi.fn(() => {
@@ -498,7 +493,7 @@ describe("studioConfigSmokeLock", () => {
     const lock = await acquireStudioConfigSmokeLock("/tmp/lock", {
       writeFileSync: fs.writeFileSync as never,
       linkSync: linkSync as never,
-      copyFileSync: fs.copyFileSync as never,
+      renameSync: fs.renameSync as never,
       readFileSync: fs.readFileSync as never,
       unlinkSync: fs.unlinkSync as never,
       mkdirSync: fs.mkdirSync as never,
@@ -508,11 +503,10 @@ describe("studioConfigSmokeLock", () => {
       randomId: () => "fb",
     });
     expect(store.get("/tmp/lock")).toBe("777\n");
-    expect(fs.copyFileSync).toHaveBeenCalled();
-    const [from, to, mode] = fs.copyFileSync.mock.calls[0]!;
+    expect(fs.renameSync).toHaveBeenCalled();
+    const [from, to] = fs.renameSync.mock.calls[0]!;
     expect(String(from)).toContain(".tmp");
     expect(to).toBe("/tmp/lock");
-    expect(typeof mode).toBe("number");
     expect(fs.writeFileSync).not.toHaveBeenCalledWith("/tmp/lock", "777\n", { flag: "wx" });
     expect([...store.keys()].some((k) => k.includes(".tmp"))).toBe(false);
     lock.release();

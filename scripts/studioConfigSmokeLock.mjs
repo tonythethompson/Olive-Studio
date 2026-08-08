@@ -5,11 +5,10 @@
  */
 import { randomBytes } from "node:crypto";
 import {
-  constants as fsConstants,
-  copyFileSync,
   linkSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   rmdirSync,
   statSync,
   unlinkSync,
@@ -56,16 +55,19 @@ function errorCode(err) {
 /**
  * Publish a fully-written lock file at `lockPath` without an empty-body window.
  * Prefer hard-linking a temp file (link fails with EEXIST and never overwrites).
- * When hardlinks are unsupported, exclusively copy the already-complete temp
- * file (`COPYFILE_EXCL`) so the final pathname never receives a streaming
- * `wx` write that could expose an incomplete body to concurrent reclaimers.
+ * When hardlinks are unsupported, `renameSync` the already-complete temp onto
+ * `lockPath` so the final pathname never exists with a partial body (unlike
+ * `copyFile` / `wx` writes, which create the dest then stream bytes).
+ *
+ * Note: on POSIX, rename replaces an existing dest; exclusivity still relies on
+ * hardlinks when available. On Windows, rename fails if dest exists (exclusive).
  *
  * @param {string} lockPath
  * @param {string} body
  * @param {{
  *   writeFileSync: typeof writeFileSync,
  *   linkSync: typeof linkSync,
- *   copyFileSync?: typeof copyFileSync,
+ *   renameSync?: typeof renameSync,
  *   unlinkSync: typeof unlinkSync,
  *   mkdirSync: typeof mkdirSync,
  *   tempPath: string,
@@ -75,7 +77,7 @@ function publishLockFile(lockPath, body, deps) {
   const {
     writeFileSync: write,
     linkSync: link,
-    copyFileSync: copyFile = copyFileSync,
+    renameSync: rename = renameSync,
     unlinkSync: unlink,
     mkdirSync: mkdir,
     tempPath,
@@ -90,15 +92,15 @@ function publishLockFile(lockPath, body, deps) {
       } catch (e) {
         const code = errorCode(e);
         if (code === "EEXIST") throw e;
-        // ENOTSUP / EPERM / EINVAL / EXDEV: publish the complete temp bytes
-        // exclusively without a partial write at the final path.
-        copyFile(tempPath, lockPath, fsConstants.COPYFILE_EXCL);
+        // ENOTSUP / EPERM / EINVAL / EXDEV: dest appears only with complete bytes.
+        rename(tempPath, lockPath);
+        return;
       }
     } finally {
       try {
         unlink(tempPath);
       } catch {
-        /* temp already gone */
+        /* temp already moved or gone */
       }
     }
   };
@@ -120,9 +122,9 @@ function publishLockFile(lockPath, body, deps) {
  * - Complete PID + alive: leave alone (active reclaimer).
  * - Complete PID + dead: clear (crashed after publishing ownership).
  * - Incomplete body: clear only after publishGraceMs (crash orphan). Safe for
- *   live publishers because the gate is published via temp+link (or exclusive
- *   full-body `wx` fallback), so `reclaimPath` never appears incomplete while
- *   a live owner still holds the critical section.
+ *   live publishers because the gate is published via temp+link (or rename of a
+ *   fully written temp), so `reclaimPath` never appears with a partial body while
+ *   a live owner is still copying into it.
  * @param {string} reclaimPath
  * @param {{
  *   readFileSync: typeof readFileSync,
@@ -167,7 +169,7 @@ function tryClearOrphanedReclaimMutex(reclaimPath, deps) {
  * @param {{
  *   writeFileSync: typeof writeFileSync,
  *   linkSync: typeof linkSync,
- *   copyFileSync: typeof copyFileSync,
+ *   renameSync: typeof renameSync,
  *   readFileSync: typeof readFileSync,
  *   unlinkSync: typeof unlinkSync,
  *   mkdirSync: typeof mkdirSync,
@@ -183,7 +185,7 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
   const {
     writeFileSync: write,
     linkSync: link,
-    copyFileSync: copyFile,
+    renameSync: rename,
     readFileSync: read,
     unlinkSync: unlink,
     mkdirSync: mkdir,
@@ -204,7 +206,7 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
     );
     publishLockFile(reclaimPath, `${myPid}\n`, {
       writeFileSync: write,
-      copyFileSync: copyFile,
+      renameSync: rename,
       linkSync: link,
       unlinkSync: unlink,
       mkdirSync: mkdir,
@@ -257,7 +259,7 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
  * @param {{
  *   writeFileSync?: typeof writeFileSync,
  *   linkSync?: typeof linkSync,
- *   copyFileSync?: typeof copyFileSync,
+ *   renameSync?: typeof renameSync,
  *   readFileSync?: typeof readFileSync,
  *   statSync?: typeof statSync,
  *   unlinkSync?: typeof unlinkSync,
@@ -276,7 +278,7 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
 export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
   const write = deps.writeFileSync ?? writeFileSync;
   const link = deps.linkSync ?? linkSync;
-  const copyFile = deps.copyFileSync ?? copyFileSync;
+  const rename = deps.renameSync ?? renameSync;
   const read = deps.readFileSync ?? readFileSync;
   const stat = deps.statSync ?? statSync;
   const unlink = deps.unlinkSync ?? unlinkSync;
@@ -304,7 +306,7 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
       publishLockFile(lockPath, body, {
         writeFileSync: write,
         linkSync: link,
-        copyFileSync: copyFile,
+        renameSync: rename,
         unlinkSync: unlink,
         mkdirSync: mkdir,
         tempPath,
@@ -359,7 +361,7 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
           tryReclaimObservedLock(lockPath, observed, myPid, {
             writeFileSync: write,
             linkSync: link,
-            copyFileSync: copyFile,
+            renameSync: rename,
             readFileSync: read,
             unlinkSync: unlink,
             mkdirSync: mkdir,
