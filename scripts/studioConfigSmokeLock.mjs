@@ -108,10 +108,10 @@ function publishLockFile(lockPath, body, deps) {
  *
  * - Complete PID + alive: leave alone (active reclaimer).
  * - Complete PID + dead: clear (crashed after publishing ownership).
- * - Incomplete body: clear only after publishGraceMs (crashed mid-write orphan).
- *   Fresh incomplete markers are left alone so a concurrent writer is not
- *   stripped mid-publish; reclaimers still re-verify gate ownership before
- *   unlinking the main lock.
+ * - Incomplete body: clear only after publishGraceMs (crash orphan). Safe for
+ *   live publishers because the gate is published via temp+link (or exclusive
+ *   full-body `wx` fallback), so `reclaimPath` never appears incomplete while
+ *   a live owner still holds the critical section.
  * @param {string} reclaimPath
  * @param {{
  *   readFileSync: typeof readFileSync,
@@ -155,6 +155,7 @@ function tryClearOrphanedReclaimMutex(reclaimPath, deps) {
  * @param {number} myPid
  * @param {{
  *   writeFileSync: typeof writeFileSync,
+ *   linkSync: typeof linkSync,
  *   readFileSync: typeof readFileSync,
  *   unlinkSync: typeof unlinkSync,
  *   mkdirSync: typeof mkdirSync,
@@ -162,12 +163,14 @@ function tryClearOrphanedReclaimMutex(reclaimPath, deps) {
  *   isProcessAlive: (pid: number) => boolean,
  *   now: () => number,
  *   publishGraceMs: number,
+ *   randomId: () => string,
  * }} deps
  * @returns {boolean}
  */
 function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
   const {
     writeFileSync: write,
+    linkSync: link,
     readFileSync: read,
     unlinkSync: unlink,
     mkdirSync: mkdir,
@@ -175,23 +178,25 @@ function tryReclaimObservedLock(lockPath, observed, myPid, deps) {
     isProcessAlive: alive,
     now,
     publishGraceMs,
+    randomId,
   } = deps;
   const reclaimPath = `${lockPath}.reclaim`;
 
   const ownsReclaimGate = () => parsePublishedLockPid(read(reclaimPath, "utf8")) === myPid;
 
   const tryAcquireReclaimGate = () => {
-    try {
-      write(reclaimPath, `${myPid}\n`, { flag: "wx" });
-      return true;
-    } catch (e) {
-      if (errorCode(e) === "ENOENT") {
-        mkdir(path.dirname(lockPath), { recursive: true });
-        write(reclaimPath, `${myPid}\n`, { flag: "wx" });
-        return true;
-      }
-      throw e;
-    }
+    const tempPath = path.join(
+      path.dirname(reclaimPath),
+      `.${path.basename(reclaimPath)}.${myPid}.${randomId()}.tmp`,
+    );
+    publishLockFile(reclaimPath, `${myPid}\n`, {
+      writeFileSync: write,
+      linkSync: link,
+      unlinkSync: unlink,
+      mkdirSync: mkdir,
+      tempPath,
+    });
+    return true;
   };
 
   try {
@@ -329,12 +334,14 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
             /* unable to establish age — leave the lock in place */
           }
         }
-        // Serialize reclaimers via lockPath.reclaim (wx). Only skip the poll
-        // sleep after unlink succeeds so failed reclaim cannot busy-spin.
+        // Serialize reclaimers via lockPath.reclaim (temp+link publish). Only
+        // skip the poll sleep after unlink succeeds so failed reclaim cannot
+        // busy-spin.
         if (
           reclaimable &&
           tryReclaimObservedLock(lockPath, observed, myPid, {
             writeFileSync: write,
+            linkSync: link,
             readFileSync: read,
             unlinkSync: unlink,
             mkdirSync: mkdir,
@@ -342,6 +349,7 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
             isProcessAlive: alive,
             now,
             publishGraceMs,
+            randomId,
           })
         ) {
           continue;
