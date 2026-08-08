@@ -375,12 +375,13 @@ def _search_live(
     """Search live Olive docs under the resolved retrieval mode.
 
     ``keyword`` never builds the live embedding index or calls semantic_search.
-    ``auto`` / ``semantic`` keep the hybrid path (semantic with keyword fallback).
+    ``auto`` budgets cold semantic work via ``run_with_budget`` and falls back
+    to live keyword retrieval (no embeddings) on timeout. ``semantic`` waits.
     """
     terms = [t.lower() for t in query.split() if t]
     resolved = get_retrieval_mode(mode)
 
-    if resolved == "keyword":
+    def _keyword_live() -> list[dict[str, Any]]:
         try:
             pages, _ = _fetch_live_docs()
             if not pages:
@@ -390,7 +391,13 @@ def _search_live(
             logger.debug("Live-doc keyword search failed", exc_info=True)
             return []
 
-    try:
+    if resolved == "keyword":
+        return _keyword_live()
+
+    use_budget = resolved == "auto" and not is_model_loaded()
+    budget_ms = get_semantic_budget_ms() if use_budget else 0
+
+    def _semantic_live() -> list[dict[str, Any]]:
         snippets, embeddings = _get_live_index()
         if not snippets:
             return []
@@ -404,16 +411,19 @@ def _search_live(
         if results:
             return results
         return _keyword_search(snippets, terms, top_k)
+
+    try:
+        result, timed_out = run_with_budget(_semantic_live, budget_ms)
+        if timed_out or result is None:
+            logger.warning(
+                "Semantic live search exceeded budget (%sms); keyword fallback",
+                budget_ms,
+            )
+            return _keyword_live()
+        return result
     except Exception:
         logger.debug("Semantic live-doc search failed; falling back to keyword search", exc_info=True)
-        try:
-            pages, _ = _fetch_live_docs()
-            if not pages:
-                return []
-            return _keyword_search(_split_live_snippets(pages), terms, top_k)
-        except Exception:
-            logger.debug("Live-doc keyword fallback also failed", exc_info=True)
-            return []
+        return _keyword_live()
 
 
 def search_olive_documentation(

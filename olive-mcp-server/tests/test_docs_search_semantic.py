@@ -387,3 +387,81 @@ def test_load_kb_text_skips_invalid_utf8_and_keeps_valid_files(
     assert "good" in sources
     assert "OnnxQuantization" in snippets
     assert "bad_utf8" not in sources
+
+
+def test_live_auto_cold_model_budget_falls_back_to_keyword(monkeypatch: pytest.MonkeyPatch):
+    """Cold auto+live must budget semantic work and keyword-fallback without embeddings."""
+    import time
+
+    import olive_mcp_server.tools.retrieval as retrieval
+    from olive_mcp_server.tools.retrieval import retrieval_meta
+
+    # Ensure no abandoned budget worker from a prior test blocks single-flight.
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline:
+        with retrieval._INFLIGHT_LOCK:
+            fut = retrieval._INFLIGHT_FUTURE
+            if fut is None or fut.done():
+                retrieval._INFLIGHT_FUTURE = None
+                break
+        time.sleep(0.05)
+
+    monkeypatch.setattr(docs_search, "is_model_loaded", lambda: False)
+    monkeypatch.setenv("OLIVE_MCP_SEMANTIC_BUDGET_MS", "50")
+
+    # Keep local out of the shared budget pool so live owns the single-flight slot.
+    monkeypatch.setattr(
+        docs_search,
+        "_search_local",
+        lambda *_a, **_k: (
+            [{"source": "local.kb", "snippet": "local calibration note", "relevance": 0.4}],
+            retrieval_meta(
+                mode="auto",
+                effective="keyword",
+                degraded=True,
+                reason="semantic_budget_exceeded",
+            ),
+        ),
+    )
+
+    live_index_calls = {"n": 0}
+
+    def slow_live_index():
+        live_index_calls["n"] += 1
+        time.sleep(0.5)
+        return (
+            [("live:index", "live calibration for static quantization")],
+            np.zeros((1, 384), dtype=np.float32),
+        )
+
+    monkeypatch.setattr(docs_search, "_get_live_index", slow_live_index)
+    monkeypatch.setattr(
+        docs_search,
+        "_fetch_live_docs",
+        lambda: ({"index": "live calibration for static quantization"}, 1.0),
+    )
+
+    result = search_olive_documentation(
+        query="calibration",
+        top_k=3,
+        live=True,
+        mode="auto",
+    )
+
+    assert result["retrieval"]["mode"] == "auto"
+    assert result["retrieval"]["effective"] == "keyword"
+    assert result["retrieval"]["degraded"] is True
+    assert live_index_calls["n"] == 1
+    assert any(r["source"].startswith("live:") for r in result["results"])
+
+    # After timeout, further live keyword search must avoid embeddings.
+    def boom_if_keyword_hits_index(*_a, **_k):
+        raise AssertionError("keyword fallback must not call _get_live_index")
+
+    monkeypatch.setattr(docs_search, "_get_live_index", boom_if_keyword_hits_index)
+    again = docs_search._search_live("calibration", 3, mode="keyword")
+    assert again
+    assert all(r["source"].startswith("live:") for r in again)
+
+    # Drain abandoned budget worker for subsequent tests.
+    time.sleep(0.55)

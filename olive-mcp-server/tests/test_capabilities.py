@@ -97,21 +97,48 @@ def test_semantic_budget_env(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_run_with_budget_timeout():
-    def slow():
-        import time
+    import time
 
+    def slow():
         time.sleep(0.5)
         return "done"
 
     result, timed_out = run_with_budget(slow, budget_ms=50)
     assert timed_out is True
     assert result is None
+    # Drain abandoned worker so later tests are not blocked by single-flight.
+    time.sleep(0.55)
 
 
 def test_run_with_budget_ok():
     result, timed_out = run_with_budget(lambda: 42, budget_ms=5000)
     assert timed_out is False
     assert result == 42
+
+
+def test_run_with_budget_single_flight_during_timeout():
+    """Consecutive calls during a timeout must not start a second callable."""
+    import time
+
+    started: list[int] = []
+
+    def slow():
+        started.append(1)
+        time.sleep(0.4)
+        return "done"
+
+    r1, t1 = run_with_budget(slow, budget_ms=50)
+    assert t1 is True and r1 is None
+
+    r2, t2 = run_with_budget(slow, budget_ms=50)
+    assert t2 is True and r2 is None
+    assert started == [1]
+
+    time.sleep(0.5)
+    # After the in-flight work finishes, a new callable may start.
+    r3, t3 = run_with_budget(lambda: "fresh", budget_ms=5000)
+    assert t3 is False and r3 == "fresh"
+    assert started == [1]
 
 
 def test_troubleshoot_keyword_mode_has_retrieval():
@@ -130,6 +157,8 @@ def test_troubleshoot_keyword_mode_has_retrieval():
 
 def test_troubleshoot_auto_budget_degraded(monkeypatch: pytest.MonkeyPatch):
     """Force budget timeout path when model is not loaded."""
+    import time
+
     import numpy as np
 
     import olive_mcp_server.tools.embeddings as emb
@@ -139,9 +168,7 @@ def test_troubleshoot_auto_budget_degraded(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("OLIVE_MCP_SEMANTIC_BUDGET_MS", "50")
 
     def slow_scores(entries, error_only):
-        import time
-
-        time.sleep(2)
+        time.sleep(0.4)
         n = len(list(entries))
         return list(entries), np.zeros((n, 384), dtype=np.float32)
 
@@ -159,3 +186,5 @@ def test_troubleshoot_auto_budget_degraded(monkeypatch: pytest.MonkeyPatch):
     assert result["retrieval"]["effective"] == "keyword"
     # Keyword path should still diagnose OOM (may match oom-quantization)
     assert isinstance(result.get("title"), str)
+    # Drain abandoned budget worker for subsequent tests.
+    time.sleep(0.5)

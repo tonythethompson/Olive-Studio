@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import os
+import threading
 from collections.abc import Callable
 from typing import Any, TypeVar
 
@@ -29,6 +30,12 @@ _SEMANTIC_BUDGET_POOL = concurrent.futures.ThreadPoolExecutor(
     max_workers=1,
     thread_name_prefix="olive-mcp-semantic-budget",
 )
+
+# Single-flight: at most one budgeted callable is tracked. Timed-out work may
+# still be running; further callers get an immediate keyword-fallback signal
+# instead of queueing another MiniLM load behind it.
+_INFLIGHT_LOCK = threading.Lock()
+_INFLIGHT_FUTURE: concurrent.futures.Future[Any] | None = None
 
 
 def get_retrieval_mode(override: str | None = None) -> str:
@@ -51,26 +58,52 @@ def get_semantic_budget_ms() -> int:
         return DEFAULT_SEMANTIC_BUDGET_MS
 
 
+def _clear_inflight_if_current(future: concurrent.futures.Future[Any]) -> None:
+    global _INFLIGHT_FUTURE
+    with _INFLIGHT_LOCK:
+        if _INFLIGHT_FUTURE is future:
+            _INFLIGHT_FUTURE = None
+
+
 def run_with_budget(fn: Callable[[], T], budget_ms: int) -> tuple[T | None, bool]:
     """Run *fn* with an optional wall-clock budget.
 
     Returns:
-        (result, timed_out). On timeout, result is None and timed_out is True.
-        On success, timed_out is False. Exceptions from *fn* propagate.
+        (result, timed_out). On timeout (or while another budgeted call is still
+        in flight), result is None and timed_out is True — callers treat that as
+        the keyword-fallback signal. On success, timed_out is False. Exceptions
+        from *fn* propagate.
 
     On timeout the shared worker is not cancelled mid-flight (MiniLM load may
-    still finish); further budgeted work queues behind it (``max_workers=1``)
-    so concurrent timeouts do not stack multiple model loads.
+    still finish). Only one in-flight future is tracked; additional calls during
+    that window do not submit another callable.
     """
     if budget_ms <= 0:
         return fn(), False
 
     timeout_s = budget_ms / 1000.0
-    future = _SEMANTIC_BUDGET_POOL.submit(fn)
+    global _INFLIGHT_FUTURE
+
+    with _INFLIGHT_LOCK:
+        if _INFLIGHT_FUTURE is not None and _INFLIGHT_FUTURE.done():
+            _INFLIGHT_FUTURE = None
+        if _INFLIGHT_FUTURE is not None and not _INFLIGHT_FUTURE.done():
+            # Already running (often a prior timeout). Do not queue another load.
+            return None, True
+        future = _SEMANTIC_BUDGET_POOL.submit(fn)
+        _INFLIGHT_FUTURE = future
+
     try:
-        return future.result(timeout=timeout_s), False
+        result = future.result(timeout=timeout_s)
     except concurrent.futures.TimeoutError:
+        future.add_done_callback(_clear_inflight_if_current)
         return None, True
+    except Exception:
+        _clear_inflight_if_current(future)
+        raise
+    else:
+        _clear_inflight_if_current(future)
+        return result, False
 
 
 def retrieval_meta(
