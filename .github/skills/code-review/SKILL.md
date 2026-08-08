@@ -34,8 +34,9 @@ covers unless they change meaning or hide a bug.
 | Area | Paths |
 | --- | --- |
 | Olive spawn / jobs | `src/server/routes/olive.ts`, `src/server/services/venv/`, `src/server/services/olive/` |
-| MCP proxy / Python bridge | `src/server/routes/mcp.ts`, `olive-mcp-server/` |
-| AI keys / SSRF | `src/server/routes/ai.ts`, `src/server/services/ai/security.ts` |
+| MCP proxy / Python bridge | `src/server/routes/mcp.ts`, `src/server/services/mcp/`, `olive-mcp-server/` |
+| AI keys / SSRF | `src/server/routes/ai/` (entry `index.ts` + submodules), `src/server/services/ai/security.ts` |
+| GitHub proxy / SSRF | `src/server/routes/github.ts` |
 | Recipe correctness | `src/lib/pipelineValidation.ts`, `src/lib/oliveRecipeBuilder.ts`, `src/lib/schemaEngine.ts`, `src/lib/recipePipeline.ts` |
 | Tauri sidecar | `src-tauri/src/lib.rs`, `src-tauri/tauri.conf.json` |
 | Bind / auth / rate limits | `server.ts`, `src/server/middleware/` |
@@ -56,8 +57,8 @@ covers unless they change meaning or hide a bug.
 
 - **Never** require or introduce real Olive GPU/model downloads in CI or review validation. CPU-only flows are recipe build, JSON export, and validation.
 - Python `mcp` must stay pinned `<2` (`mcp.server.fastmcp` breaks on 2.x).
-- In-app MCP proxy must use a real allowlisted bridge (not a missing `call_tool` import or unsafe string-interpolated Python).
-- New AI providers must register on **both** server registry and UI catalog (`aiProviderCatalog` sync).
+- In-app MCP already invokes `call_tool` via `src/server/services/mcp/client.ts` (inline Python `-c` bridge); `olive_mcp_server/mcp_server.py` exports `call_tool`. Do not flag a missing `call_tool` import. Review tool allowlisting (`allowedTools.ts`), rate limits, admission/breaker behavior, and unsafe interpolation of untrusted args into the Python script instead.
+- New AI providers must land on **both** sides: server `registerProvider` / `ALLOWED_AI_PROVIDERS` in `src/server/services/ai/`, and UI `aiProviderCatalog` (`src/components/features/gemini/aiProviderCatalog.ts`). There is no dedicated cross-catalog guard test, so verify both catalogs manually on provider PRs.
 - Do not implement Assistant AI backburner providers unless the PR explicitly requests them (see `AGENTS.md`).
 
 ### Architecture and maintainability
@@ -95,9 +96,10 @@ Match changes to the existing tiers:
 
 When Copilot code review has MCP tools enabled:
 
-- Use the **GitHub MCP** server to resolve PR-linked issues, prior review threads, or check status when the PR description references issue keys or related PRs.
-- Prefer MCP-backed facts over guessing about issue intent or CI status.
-- Do not invent MCP tools or servers that are not configured for this repository.
+- Use the **GitHub MCP** server only if it is available and configured for the review environment. Prefer it for PR-linked issues, prior review threads, or check status when the PR description references issue keys or related PRs.
+- If GitHub MCP is unavailable, use another available GitHub integration (`gh`, REST), the PR description, or continue without that lookup. Do not fail the review solely because GitHub MCP is missing.
+- Prefer MCP-backed facts over guessing about issue intent or CI status when those tools are accessible.
+- Do not invent MCP tools or servers that are not configured for this repository. Repo `.mcp.json` registers Olive MCP for coding agents; that is optional and separate from GitHub MCP.
 
 ## Comment style
 
