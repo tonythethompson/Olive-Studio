@@ -28,6 +28,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  readStudioConfigFileContents,
   restoreStudioConfigFile,
   snapshotStudioConfigFile,
 } from "./studioConfigSnapshot.mjs";
@@ -111,6 +112,8 @@ function patchAgentAccessDisk(patch) {
   cfg.agentAccess = { ...(cfg.agentAccess || {}), ...patch };
   mkdirSync(path.dirname(STUDIO_CONFIG_PATH), { recursive: true });
   writeFileSync(STUDIO_CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf8");
+  // Remember exact bytes we wrote so cleanup can refuse to clobber concurrent edits.
+  lastSmokeConfigBytes = readStudioConfigFileContents(STUDIO_CONFIG_PATH);
   return cfg.agentAccess;
 }
 
@@ -354,6 +357,12 @@ const { dir: smokeConfigDir, configPath: smokeConfigPath } = writeSmokeMcporterC
 let studioChild = null;
 /** @type {import("./studioConfigSnapshot.mjs").StudioConfigSnapshot | null} */
 let configSnapshot = null;
+/**
+ * Exact bytes last written by this smoke (`null` if we observed absence after a write path).
+ * `undefined` means we have not mutated the file yet.
+ * @type {string | null | undefined}
+ */
+let lastSmokeConfigBytes = undefined;
 /** Set when snapshot restore throws so callers cannot exit 0 with a dirty policy file. */
 let configRestoreError = /** @type {unknown | null} */ (null);
 
@@ -516,7 +525,13 @@ async function cleanup() {
     await stopStudio(studioChild);
     studioChild = null;
     try {
-      restoreStudioConfigFile(STUDIO_CONFIG_PATH, configSnapshot);
+      if (lastSmokeConfigBytes !== undefined) {
+        restoreStudioConfigFile(STUDIO_CONFIG_PATH, configSnapshot, {
+          expectedContents: lastSmokeConfigBytes,
+        });
+      } else {
+        restoreStudioConfigFile(STUDIO_CONFIG_PATH, configSnapshot);
+      }
       configRestoreError = null;
     } catch (e) {
       configRestoreError = e;

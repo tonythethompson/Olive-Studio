@@ -69,4 +69,26 @@ describe("studioConfigSnapshot", () => {
     restoreStudioConfigFile(configPath, snap);
     expect(existsSync(configPath)).toBe(false);
   });
+
+  it("refuses to restore when on-disk bytes changed since the last smoke write", () => {
+    mkdirSync(path.dirname(configPath), { recursive: true });
+    const original = '{\n  "hfToken": null\n}\n';
+    writeFileSync(configPath, original, "utf8");
+    const snap = snapshotStudioConfigFile(configPath);
+
+    const smokeWrite = JSON.stringify(
+      { hfToken: null, agentAccess: { allowJobSubmission: true } },
+      null,
+      2,
+    );
+    writeFileSync(configPath, smokeWrite, "utf8");
+
+    // Concurrent update after smoke's last write.
+    writeFileSync(configPath, '{\n  "hfToken": "admin"\n}\n', "utf8");
+
+    expect(() =>
+      restoreStudioConfigFile(configPath, snap, { expectedContents: smokeWrite }),
+    ).toThrow(/on-disk bytes changed/);
+    expect(readFileSync(configPath, "utf8")).toBe('{\n  "hfToken": "admin"\n}\n');
+  });
 });
