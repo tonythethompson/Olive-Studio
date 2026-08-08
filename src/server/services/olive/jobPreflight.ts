@@ -10,11 +10,12 @@ import { resolveQnnHostMode } from "../../../lib/qnnDeps.ts";
 import { assessQnnRecipeReadiness } from "../../../lib/qnnReadiness.ts";
 import { DEFAULT_PASSES } from "../../../lib/defaultPasses.ts";
 import type { OliveRecipe } from "../../types.ts";
+import type { IHVProvider } from "../../../types.ts";
 
 export type PreflightResult = {
   valid: boolean;
   fingerprint: string;
-  provider: string | null;
+  provider: IHVProvider | null;
   errors: string[];
   warnings: string[];
   /** Recipe with canonical EP token applied (same object mutated safely). */

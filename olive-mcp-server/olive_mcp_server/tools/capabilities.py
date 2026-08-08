@@ -29,7 +29,7 @@ def _kb_version() -> str:
     try:
         # Sorted for stable iteration (mtime aggregate is order-independent,
         # but keep path walks consistent with docs_search indexing).
-        for path in sorted(KB_DIR.glob("*.json"), key=lambda p: p.name.lower()):
+        for path in sorted(KB_DIR.glob("*.json"), key=lambda p: p.name):
             try:
                 mtimes.append(path.stat().st_mtime)
             except OSError:

@@ -75,7 +75,9 @@ export function mountOliveRoutes(router: Router): void {
   });
 
   router.put("/olive/agent-access", studioLocalOnly, (req, res) => {
-    const body = parseBody<AgentAccessPolicy>(req.body ?? {}, {
+    // parseBody requires Record<string, unknown>; AgentAccessPolicy has no index signature.
+    type AgentAccessBody = AgentAccessPolicy & Record<string, unknown>;
+    const body = parseBody<AgentAccessBody>(req.body ?? {}, {
       mcpAccess: { type: "boolean", required: false },
       allowJobInspection: { type: "boolean", required: false },
       allowRecipeChanges: { type: "boolean", required: false },

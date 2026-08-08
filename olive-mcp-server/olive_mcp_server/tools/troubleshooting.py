@@ -132,7 +132,9 @@ def _entries_fingerprint(entries: list[dict[str, Any]]) -> str:
         eid = str(entry.get("id") or "")
         h.update(eid.encode("utf-8"))
         h.update(b"\0")
-        h.update(_entry_embed_text(entry).encode("utf-8"))
+        # LF-normalize so Windows/Linux fingerprint the same text content.
+        text = _entry_embed_text(entry).replace("\r\n", "\n").replace("\r", "\n")
+        h.update(text.encode("utf-8"))
         h.update(b"\0")
     return h.hexdigest()
 

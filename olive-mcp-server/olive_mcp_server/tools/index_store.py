@@ -41,13 +41,18 @@ def force_rebuild() -> bool:
     return _truthy("OLIVE_MCP_REBUILD_INDEX")
 
 
+def _normalize_text(text: str) -> str:
+    """Normalize line endings so Windows-built indexes match Linux hashes."""
+    return str(text).replace("\r\n", "\n").replace("\r", "\n")
+
+
 def content_hash_pairs(pairs: list[tuple[str, str]]) -> str:
-    """SHA-256 of ordered (source, text) pairs."""
+    """SHA-256 of ordered (source, text) pairs (LF-normalized text)."""
     h = hashlib.sha256()
     for source, text in pairs:
         h.update(str(source).encode("utf-8"))
         h.update(b"\0")
-        h.update(str(text).encode("utf-8"))
+        h.update(_normalize_text(text).encode("utf-8"))
         h.update(b"\0")
     return h.hexdigest()
 
@@ -55,7 +60,7 @@ def content_hash_pairs(pairs: list[tuple[str, str]]) -> str:
 def content_hash_texts(texts: list[str]) -> str:
     h = hashlib.sha256()
     for t in texts:
-        h.update(str(t).encode("utf-8"))
+        h.update(_normalize_text(t).encode("utf-8"))
         h.update(b"\0")
     return h.hexdigest()
 

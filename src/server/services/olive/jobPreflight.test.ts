@@ -3,6 +3,7 @@ import { fingerprintRecipe, preflightOliveRecipe } from "./jobPreflight.ts";
 import type { OliveRecipe } from "../../types.ts";
 
 function minimalRecipe(ep = "CPUExecutionProvider"): OliveRecipe {
+  // Cast via unknown: server OliveRecipe accelerators omit optional `device`.
   return {
     input_model: { type: "PyTorchModel", config: {} },
     systems: {
@@ -23,7 +24,7 @@ function minimalRecipe(ep = "CPUExecutionProvider"): OliveRecipe {
       cache_dir: "./cache",
       output_dir: "./out",
     },
-  } as OliveRecipe;
+  } as unknown as OliveRecipe;
 }
 
 describe("preflightOliveRecipe", () => {

@@ -13,6 +13,7 @@ import { assessQnnRecipeReadiness } from "../../../lib/qnnReadiness.ts";
 import { DEFAULT_PASSES } from "../../../lib/defaultPasses.ts";
 import type { HardwareProbeResult } from "../../../lib/hardwareProbe.ts";
 import type { OliveJob, OliveRecipe } from "../../types.ts";
+import type { IHVProvider } from "../../../types.ts";
 import {
   jobRegistry,
   getRuntimeHfToken,
@@ -62,7 +63,7 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
 
   let recipe = opts.recipe;
   let fingerprint = opts.fingerprint;
-  let provider: string;
+  let provider: IHVProvider;
 
   if (runPreflight) {
     const pre = preflightOliveRecipe(recipe, cudaVersion);
@@ -170,11 +171,12 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
       return { ok: true, jobId, reused: false, fingerprint: fingerprint!, status: "cancelled" };
     }
     if (!capResult.ok) {
+      const error = capResult.error ?? "Provider capability setup failed";
       job.status = "failed";
-      pushLog(job, `[error] ${capResult.error}`);
+      pushLog(job, `[error] ${error}`);
       cleanupJobArtifacts(job);
       finalizeJob(job);
-      return { ok: false, error: capResult.error, httpStatus: 500, jobId, fingerprint };
+      return { ok: false, error, httpStatus: 500, jobId, fingerprint };
     }
 
     const venvPython = capResult.python ?? getVenvPython(capResult.family);

@@ -82,7 +82,7 @@ def _iter_kb_json_files():
     ``Path.glob`` order is OS-dependent; indexing and content hashing must
     iterate in a deterministic order so shipped indexes match across platforms.
     """
-    for file in sorted(KB_DIR.glob("*.json"), key=lambda p: p.name.lower()):
+    for file in sorted(KB_DIR.glob("*.json"), key=lambda p: p.name):
         if file.name in _EXCLUDED_KB_FILES:
             continue
         yield file
