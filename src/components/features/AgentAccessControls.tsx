@@ -162,7 +162,7 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
 
   const submitOn = Boolean(policy?.allowJobSubmission);
   const cancelOn = Boolean(policy?.allowJobCancellation);
-  const elevated = submitOn || cancelOn;
+  const elevated = Boolean(policy?.mcpAccess) && (submitOn || cancelOn);
 
   const title = elevated
     ? "Agent access: job submission or cancellation is enabled"
