@@ -1,7 +1,11 @@
 import fs from "fs";
 import type { OliveJob } from "../../types.ts";
 import { appConfig } from "../../config.ts";
-import { forgetIdempotencyKeysForJobId, pruneIdempotencyIndex } from "./jobIdempotency.ts";
+import {
+  clearIdempotencyIndex,
+  forgetIdempotencyKeysForJobId,
+  pruneIdempotencyIndex,
+} from "./jobIdempotency.ts";
 
 /** Central job registry — all active Olive jobs. */
 export const jobRegistry = new Map<string, OliveJob>();
@@ -54,6 +58,33 @@ export function cleanupJobArtifacts(job: OliveJob): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Test helper: terminate active Olive children, reclaim artifacts, and clear
+ * the registry plus MCP idempotency index so cases cannot leak across tests.
+ */
+export function resetJobRegistry(): void {
+  for (const job of [...jobRegistry.values()]) {
+    if (job.venvListener) {
+      job.venvListener = undefined;
+    }
+    const proc = job.process;
+    if (proc) {
+      try {
+        if (proc.exitCode === null && proc.signalCode === null) {
+          proc.kill("SIGKILL");
+        }
+      } catch {
+        /* already exited / not killable in mocks */
+      }
+      job.process = null;
+    }
+    cleanupJobArtifacts(job);
+    finalizeJob(job);
+  }
+  jobRegistry.clear();
+  clearIdempotencyIndex();
 }
 
 /**

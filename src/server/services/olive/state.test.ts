@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { jobRegistry, cleanupJobArtifacts, sweepJobRegistry, finalizeJob } from "./state.ts";
+import { jobRegistry, cleanupJobArtifacts, sweepJobRegistry, finalizeJob, resetJobRegistry } from "./state.ts";
 import {
   clearIdempotencyIndex,
   findJobByIdempotency,
@@ -139,6 +139,39 @@ describe("olive job registry cleanup", () => {
       vi.spyOn(fs, "rmSync").mockImplementation(() => undefined);
       expect(sweepJobRegistry(now)).toBe(1);
       expect(jobRegistry.has("stuck")).toBe(false);
+    });
+  });
+
+  describe("resetJobRegistry", () => {
+    it("kills active children, clears artifacts, registry, and MCP idempotency keys", () => {
+      const kill = vi.fn();
+      const tmp = path.join(os.tmpdir(), `olive-reset-test-${Date.now()}.json`);
+      fs.writeFileSync(tmp, "{}", "utf-8");
+      const job = makeJob("live", {
+        status: "running",
+        finishedAt: null,
+        exitCode: null,
+        source: "mcp",
+        fingerprint: "fp-reset",
+        idempotencyKey: "k-reset",
+        tempRecipePath: tmp,
+        process: {
+          kill,
+          exitCode: null,
+          signalCode: null,
+        } as unknown as OliveJob["process"],
+      });
+      jobRegistry.set(job.id, job);
+      rememberIdempotencyKeys(job);
+      expect(idempotencyIndexSize()).toBeGreaterThan(0);
+
+      resetJobRegistry();
+
+      expect(kill).toHaveBeenCalledWith("SIGKILL");
+      expect(jobRegistry.size).toBe(0);
+      expect(idempotencyIndexSize()).toBe(0);
+      expect(fs.existsSync(tmp)).toBe(false);
+      expect(findJobByIdempotency({ idempotencyKey: "k-reset" }).kind).toBe("miss");
     });
   });
 

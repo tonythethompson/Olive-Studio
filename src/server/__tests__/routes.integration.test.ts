@@ -14,7 +14,7 @@ import { stubGlobalFetch, restoreGlobalFetch } from "./setup.integration.ts";
 import { resetMcpBreaker } from "../services/mcp/breaker.ts";
 import { resetLocalEngineRuntime } from "../services/ai/localEngineState.ts";
 import { app, markServerReady } from "../../../server.ts";
-import { jobRegistry } from "../services/olive/state.ts";
+import { jobRegistry, resetJobRegistry } from "../services/olive/state.ts";
 
 let server: Server;
 let baseUrl: string;
@@ -54,6 +54,7 @@ afterAll(async () => {
 beforeEach(() => {
   resetMcpBreaker();
   resetLocalEngineRuntime();
+  resetJobRegistry();
 });
 
 describe("Route integration tests", () => {
