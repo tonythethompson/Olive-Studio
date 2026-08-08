@@ -69,3 +69,15 @@ export function arenaLocalOnly(req: Request, res: Response, next: NextFunction):
 export function arenaStrictLocalOnly(req: Request, res: Response, next: NextFunction): void {
   enforceLoopbackOnly(req, res, next);
 }
+
+/**
+ * Strict loopback gate for Studio-local MCP / agent routes (policy, job control).
+ * Never honors `OLIVE_ARENA_ALLOW_REMOTE`. Rejects reverse-proxy hops and non-loopback.
+ */
+export function studioLocalOnly(req: Request, res: Response, next: NextFunction): void {
+  if (hasProxyForwardingHeaders(req) || !isLoopbackRemoteAddress(req.socket.remoteAddress)) {
+    res.status(403).json({ error: "This endpoint is only available from loopback" });
+    return;
+  }
+  next();
+}

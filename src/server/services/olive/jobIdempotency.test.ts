@@ -32,8 +32,8 @@ describe("jobIdempotency", () => {
     const job = makeJob("j1", { fingerprint: "fp1", idempotencyKey: "k1" });
     jobRegistry.set(job.id, job);
     rememberIdempotencyKeys(job);
-    expect(findJobByIdempotency({ fingerprint: "fp1" })?.id).toBe("j1");
-    expect(findJobByIdempotency({ idempotencyKey: "k1" })?.id).toBe("j1");
+    expect(findJobByIdempotency({ fingerprint: "fp1" })).toEqual({ kind: "hit", job });
+    expect(findJobByIdempotency({ idempotencyKey: "k1" })).toEqual({ kind: "hit", job });
   });
 
   it("drops stale keys when job left registry", () => {
@@ -41,6 +41,37 @@ describe("jobIdempotency", () => {
     jobRegistry.set(job.id, job);
     rememberIdempotencyKeys(job);
     jobRegistry.delete("j2");
-    expect(findJobByIdempotency({ fingerprint: "fp2" })).toBeUndefined();
+    expect(findJobByIdempotency({ fingerprint: "fp2" })).toEqual({ kind: "miss" });
+  });
+
+  it("returns conflict when key maps to a different fingerprint", () => {
+    const job = makeJob("j3", { fingerprint: "fp-a", idempotencyKey: "shared-key" });
+    jobRegistry.set(job.id, job);
+    rememberIdempotencyKeys(job);
+    const result = findJobByIdempotency({
+      idempotencyKey: "shared-key",
+      fingerprint: "fp-b",
+    });
+    expect(result.kind).toBe("conflict");
+    if (result.kind === "conflict") {
+      expect(result.job.id).toBe("j3");
+      expect(result.reason).toMatch(/fingerprint/i);
+    }
+  });
+
+  it("reuses when key and fingerprint both match", () => {
+    const job = makeJob("j4", { fingerprint: "fp-same", idempotencyKey: "k-same" });
+    jobRegistry.set(job.id, job);
+    rememberIdempotencyKeys(job);
+    expect(
+      findJobByIdempotency({ idempotencyKey: "k-same", fingerprint: "fp-same" }),
+    ).toEqual({ kind: "hit", job });
+  });
+
+  it("reuses by key alone when fingerprint is omitted", () => {
+    const job = makeJob("j5", { fingerprint: "fp-only", idempotencyKey: "k-only" });
+    jobRegistry.set(job.id, job);
+    rememberIdempotencyKeys(job);
+    expect(findJobByIdempotency({ idempotencyKey: "k-only" })).toEqual({ kind: "hit", job });
   });
 });

@@ -23,6 +23,13 @@ VALID_MODES = frozenset({"auto", "keyword", "semantic"})
 DEFAULT_MODE = "auto"
 DEFAULT_SEMANTIC_BUDGET_MS = 8000
 
+# Single shared pool for budgeted semantic work so concurrent auto-mode
+# timeouts cannot stack many MiniLM loads (one per abandoned ThreadPoolExecutor).
+_SEMANTIC_BUDGET_POOL = concurrent.futures.ThreadPoolExecutor(
+    max_workers=1,
+    thread_name_prefix="olive-mcp-semantic-budget",
+)
+
 
 def get_retrieval_mode(override: str | None = None) -> str:
     """Return effective retrieval mode from override or environment."""
@@ -51,27 +58,19 @@ def run_with_budget(fn: Callable[[], T], budget_ms: int) -> tuple[T | None, bool
         (result, timed_out). On timeout, result is None and timed_out is True.
         On success, timed_out is False. Exceptions from *fn* propagate.
 
-    On timeout the worker is abandoned (``shutdown(wait=False)``) so the tool
-    can return immediately; the OS reclaims the thread when work finishes.
+    On timeout the shared worker is not cancelled mid-flight (MiniLM load may
+    still finish); further budgeted work queues behind it (``max_workers=1``)
+    so concurrent timeouts do not stack multiple model loads.
     """
     if budget_ms <= 0:
         return fn(), False
 
     timeout_s = budget_ms / 1000.0
-    # Do not use context-manager executor: on TimeoutError, ``__exit__`` would
-    # wait for the still-running worker (defeating the budget).
-    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    future = pool.submit(fn)
+    future = _SEMANTIC_BUDGET_POOL.submit(fn)
     try:
-        result = future.result(timeout=timeout_s)
-        pool.shutdown(wait=False, cancel_futures=True)
-        return result, False
+        return future.result(timeout=timeout_s), False
     except concurrent.futures.TimeoutError:
-        pool.shutdown(wait=False, cancel_futures=True)
         return None, True
-    except Exception:
-        pool.shutdown(wait=False, cancel_futures=True)
-        raise
 
 
 def retrieval_meta(

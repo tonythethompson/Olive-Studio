@@ -43,7 +43,14 @@ export type StartOliveJobOpts = {
 
 export type StartOliveJobResult =
   | { ok: true; jobId: string; reused: boolean; fingerprint: string; status: OliveJob["status"] }
-  | { ok: false; error: string; httpStatus: number; fingerprint?: string; errors?: string[] };
+  | {
+      ok: false;
+      error: string;
+      httpStatus: number;
+      fingerprint?: string;
+      errors?: string[];
+      jobId?: string;
+    };
 
 /**
  * Create a job, run provider/env setup, and spawn Olive (async).
@@ -90,20 +97,30 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
     }
   }
 
-  const existing = opts.source === "mcp"
-    ? findJobByIdempotency({
-        idempotencyKey: opts.idempotencyKey,
-        fingerprint,
-      })
-    : undefined;
-  if (existing) {
-    return {
-      ok: true,
-      jobId: existing.id,
-      reused: true,
-      fingerprint: fingerprint ?? existing.fingerprint ?? "",
-      status: existing.status,
-    };
+  // Idempotency is for MCP/agent submit only — UI re-runs should always spawn.
+  if (opts.source === "mcp") {
+    const lookup = findJobByIdempotency({
+      idempotencyKey: opts.idempotencyKey,
+      fingerprint,
+    });
+    if (lookup.kind === "conflict") {
+      return {
+        ok: false,
+        error: lookup.reason,
+        httpStatus: 409,
+        jobId: lookup.job.id,
+        fingerprint: fingerprint ?? lookup.job.fingerprint,
+      };
+    }
+    if (lookup.kind === "hit") {
+      return {
+        ok: true,
+        jobId: lookup.job.id,
+        reused: true,
+        fingerprint: fingerprint ?? lookup.job.fingerprint ?? "",
+        status: lookup.job.status,
+      };
+    }
   }
 
   const jobId = uuidv4();

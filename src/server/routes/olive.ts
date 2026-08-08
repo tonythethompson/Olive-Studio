@@ -17,6 +17,7 @@ import { detachVenvListener } from "../services/venv/index.ts";
 import type { OliveRecipe, OliveJob, AgentAccessPolicy } from "../types.ts";
 import { oliveRunRateLimit } from "../middleware/rateLimit.ts";
 import { isParseBodyError, parseBody } from "../middleware/bodyGuard.ts";
+import { studioLocalOnly } from "../middleware/localOnly.ts";
 import { preflightOliveRecipe } from "../services/olive/jobPreflight.ts";
 import { startOliveJob } from "../services/olive/jobRunner.ts";
 import { denyUnless, getAgentAccessPublic, updateAgentAccess } from "../services/olive/agentAccess.ts";
@@ -68,12 +69,12 @@ export function mountOliveRoutes(router: Router): void {
     return res.json({ ok: true, jobId: result.jobId, reused: result.reused });
   });
 
-  // ─── Agent access policy (Studio-owned) ───────────────────────────────
-  router.get("/olive/agent-access", (_req, res) => {
+  // ─── Agent access policy (Studio-owned; loopback-only) ────────────────
+  router.get("/olive/agent-access", studioLocalOnly, (_req, res) => {
     return res.json({ ok: true, policy: getAgentAccessPublic() });
   });
 
-  router.put("/olive/agent-access", (req, res) => {
+  router.put("/olive/agent-access", studioLocalOnly, (req, res) => {
     const body = parseBody<AgentAccessPolicy>(req.body ?? {}, {
       mcpAccess: { type: "boolean", required: false },
       allowJobInspection: { type: "boolean", required: false },
@@ -86,8 +87,8 @@ export function mountOliveRoutes(router: Router): void {
     return res.json({ ok: true, policy });
   });
 
-  // ─── POST /api/olive/jobs/validate (no Olive spawn) ───────────────────
-  router.post("/olive/jobs/validate", (req, res) => {
+  // ─── POST /api/olive/jobs/validate (no Olive spawn; loopback + policy) ─
+  router.post("/olive/jobs/validate", studioLocalOnly, (req, res) => {
     const gate = denyUnless((p) => p.allowJobInspection || p.allowJobSubmission, "Job validation not allowed");
     if (!gate.ok) {
       return res.status(403).json({ ok: false, error: gate.error, reason: gate.reason, policy: gate.policy });
@@ -133,8 +134,8 @@ export function mountOliveRoutes(router: Router): void {
     });
   });
 
-  // ─── POST /api/olive/jobs/submit (MCP / agents; policy-gated) ─────────
-  router.post("/olive/jobs/submit", oliveRunRateLimit, async (req, res) => {
+  // ─── POST /api/olive/jobs/submit (MCP / agents; loopback + policy) ────
+  router.post("/olive/jobs/submit", studioLocalOnly, oliveRunRateLimit, async (req, res) => {
     const gate = denyUnless((p) => p.allowJobSubmission, "Job submission is disabled in Studio agent access settings");
     if (!gate.ok) {
       return res.status(403).json({ ok: false, error: gate.error, reason: gate.reason, policy: gate.policy });
@@ -308,8 +309,8 @@ export function mountOliveRoutes(router: Router): void {
     });
   });
 
-  // ─── Job list (in-memory registry; for agents / MCP inspection) ────────
-  router.get("/olive/jobs", (_req, res) => {
+  // ─── Job list (in-memory registry; loopback + policy for MCP) ─────────
+  router.get("/olive/jobs", studioLocalOnly, (_req, res) => {
     const gate = denyUnless((p) => p.allowJobInspection, "Job inspection is disabled in Studio agent access settings");
     if (!gate.ok) {
       return res.status(403).json({ ok: false, error: gate.error, reason: gate.reason, policy: gate.policy });

@@ -27,7 +27,9 @@ def _kb_version() -> str:
     """Content fingerprint surrogate: max mtime of KB JSON files."""
     mtimes: list[float] = []
     try:
-        for path in KB_DIR.glob("*.json"):
+        # Sorted for stable iteration (mtime aggregate is order-independent,
+        # but keep path walks consistent with docs_search indexing).
+        for path in sorted(KB_DIR.glob("*.json"), key=lambda p: p.name.lower()):
             try:
                 mtimes.append(path.stat().st_mtime)
             except OSError:

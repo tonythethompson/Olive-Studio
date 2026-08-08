@@ -30,7 +30,7 @@ export function resolveAgentAccess(): ResolvedAgentAccess {
   const disk = readStudioConfig().agentAccess ?? {};
   let mcpAccess = disk.mcpAccess !== false;
   let allowJobInspection = disk.allowJobInspection !== false;
-  let allowRecipeChanges = disk.allowRecipeChanges !== false;
+  const allowRecipeChanges = disk.allowRecipeChanges !== false;
   let allowJobSubmission = disk.allowJobSubmission === true;
   let allowJobCancellation = disk.allowJobCancellation === true;
   let envOverrideActive = false;

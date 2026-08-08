@@ -1,36 +1,67 @@
 /**
  * Idempotency index for optimization job submissions.
  * Keys are client idempotency keys and/or recipe fingerprints.
+ *
+ * Lookup rules (HTTP idempotency semantics):
+ * - Key only: reuse the prior job for that key.
+ * - Fingerprint only: reuse a job with that recipe fingerprint.
+ * - Key + fingerprint: key wins; if the stored job has a different fingerprint,
+ *   treat as conflict (caller should return 409) — never reuse the wrong job.
  */
 import { jobRegistry } from "./state.ts";
 import type { OliveJob } from "../../types.ts";
 
 const keyToJobId = new Map<string, string>();
 
+export type IdempotencyLookup =
+  | { kind: "hit"; job: OliveJob }
+  | { kind: "conflict"; job: OliveJob; reason: string }
+  | { kind: "miss" };
+
 export function rememberIdempotencyKeys(job: OliveJob): void {
   if (job.idempotencyKey) keyToJobId.set(`key:${job.idempotencyKey}`, job.id);
   if (job.fingerprint) keyToJobId.set(`fp:${job.fingerprint}`, job.id);
 }
 
+function resolveJobForIndexKey(indexKey: string): OliveJob | undefined {
+  const id = keyToJobId.get(indexKey);
+  if (!id) return undefined;
+  const job = jobRegistry.get(id);
+  if (!job) {
+    keyToJobId.delete(indexKey);
+    return undefined;
+  }
+  return job;
+}
+
 export function findJobByIdempotency(opts: {
   idempotencyKey?: string;
   fingerprint?: string;
-}): OliveJob | undefined {
-  const candidates: string[] = [];
-  if (opts.idempotencyKey) candidates.push(`key:${opts.idempotencyKey}`);
-  if (opts.fingerprint) candidates.push(`fp:${opts.fingerprint}`);
-
-  for (const k of candidates) {
-    const id = keyToJobId.get(k);
-    if (!id) continue;
-    const job = jobRegistry.get(id);
-    if (!job) {
-      keyToJobId.delete(k);
-      continue;
+}): IdempotencyLookup {
+  if (opts.idempotencyKey) {
+    const byKey = resolveJobForIndexKey(`key:${opts.idempotencyKey}`);
+    if (byKey) {
+      if (
+        opts.fingerprint &&
+        byKey.fingerprint &&
+        opts.fingerprint !== byKey.fingerprint
+      ) {
+        return {
+          kind: "conflict",
+          job: byKey,
+          reason: "Idempotency key reused with a different recipe fingerprint",
+        };
+      }
+      return { kind: "hit", job: byKey };
     }
-    return job;
   }
-  return undefined;
+
+  if (opts.fingerprint) {
+    const byFp = resolveJobForIndexKey(`fp:${opts.fingerprint}`);
+    if (byFp) return { kind: "hit", job: byFp };
+  }
+
+  return { kind: "miss" };
 }
 
 /** Test helper */

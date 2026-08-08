@@ -76,6 +76,18 @@ def _flatten(obj: Any, prefix: str = "") -> list[tuple[str, str]]:
     return results
 
 
+def _iter_kb_json_files():
+    """Yield searchable KB JSON paths in a stable, sorted order.
+
+    ``Path.glob`` order is OS-dependent; indexing and content hashing must
+    iterate in a deterministic order so shipped indexes match across platforms.
+    """
+    for file in sorted(KB_DIR.glob("*.json"), key=lambda p: p.name.lower()):
+        if file.name in _EXCLUDED_KB_FILES:
+            continue
+        yield file
+
+
 def _load_kb_text() -> list[tuple[str, str]]:
     """
     Load and flatten searchable JSON knowledge-base files.
@@ -84,9 +96,7 @@ def _load_kb_text() -> list[tuple[str, str]]:
     	list[tuple[str, str]]: Key-path and text pairs extracted from successfully loaded files.
     """
     all_text: list[tuple[str, str]] = []
-    for file in KB_DIR.glob("*.json"):
-        if file.name in _EXCLUDED_KB_FILES:
-            continue
+    for file in _iter_kb_json_files():
         try:
             with open(file, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -105,9 +115,7 @@ def _kb_max_mtime() -> tuple[float, int]:
     deletion alone would otherwise leave the max mtime unchanged.
     """
     mtimes: list[float] = []
-    for file in KB_DIR.glob("*.json"):
-        if file.name in _EXCLUDED_KB_FILES:
-            continue
+    for file in _iter_kb_json_files():
         try:
             mtimes.append(file.stat().st_mtime)
         except OSError:
