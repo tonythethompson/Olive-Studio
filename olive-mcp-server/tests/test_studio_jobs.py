@@ -160,6 +160,23 @@ def test_cancel_job_ok(monkeypatch: pytest.MonkeyPatch):
     assert result["status"] == "cancelled"
 
 
+def test_cancel_job_reports_refusal(monkeypatch: pytest.MonkeyPatch):
+    def fake_request(method, path, **kw):
+        return {"ok": False, "error": "forbidden", "reason": "Job cancellation is disabled"}
+
+    monkeypatch.setattr(studio_jobs, "studio_request", fake_request)
+    result = studio_jobs.cancel_optimization_job("jid-9")
+    assert result["ok"] is False
+    assert result["error"] == "forbidden"
+
+
+def test_job_id_rejects_path_segments():
+    result = studio_jobs.get_optimization_job("../etc/passwd")
+    assert result["error"] == "invalid_job_id"
+    result2 = studio_jobs.cancel_optimization_job("a/b")
+    assert result2["error"] == "invalid_job_id"
+
+
 def test_phase3_tools_registered():
     for name in (
         "validate_optimization_job",

@@ -28,7 +28,50 @@ def test_get_mcp_capabilities_shape():
     assert caps["job_control"]["supported"] is True
     assert caps["job_control"]["inspection"] is True
     assert caps["job_control"]["submission"] is False
+    assert "policy" in caps["job_control"]
     assert caps["toolset"]["version"] == TOOLSET_VERSION
+
+
+def test_capabilities_default_no_network(monkeypatch: pytest.MonkeyPatch):
+    """probe_studio=False must not call Studio even when URL is configured."""
+    monkeypatch.setenv("OLIVE_STUDIO_API_URL", "http://127.0.0.1:3000")
+    import olive_mcp_server.tools.capabilities as caps_mod
+
+    def boom(*_a, **_k):
+        raise AssertionError("network should not be used when probe_studio=False")
+
+    monkeypatch.setattr(caps_mod, "_probe_studio", boom)
+    monkeypatch.setattr(caps_mod, "_fetch_studio_policy", boom)
+    caps = get_mcp_capabilities(probe_studio=False)
+    assert caps["studio"]["configured"] is True
+    assert caps["studio"]["reachable"] is None
+    assert caps["job_control"]["reason"] == "studio_configured_unprobed"
+    assert caps["job_control"]["ready"] is False
+    assert caps["job_control"]["submission"] is False
+    assert caps["job_control"]["policy"] is None
+
+
+def test_capabilities_probe_loads_policy(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("OLIVE_STUDIO_API_URL", "http://127.0.0.1:3000")
+    import olive_mcp_server.tools.capabilities as caps_mod
+
+    monkeypatch.setattr(caps_mod, "_probe_studio", lambda: True)
+    monkeypatch.setattr(
+        caps_mod,
+        "_fetch_studio_policy",
+        lambda: {
+            "mcpAccess": True,
+            "allowJobInspection": True,
+            "allowJobSubmission": True,
+            "allowJobCancellation": False,
+        },
+    )
+    caps = get_mcp_capabilities(probe_studio=True)
+    assert caps["studio"]["reachable"] is True
+    assert caps["job_control"]["ready"] is True
+    assert caps["job_control"]["submission"] is True
+    assert caps["job_control"]["cancellation"] is False
+    assert caps["job_control"]["policy"]["allowJobSubmission"] is True
 
 
 def test_call_tool_capabilities():

@@ -54,14 +54,17 @@ export function preflightOliveRecipe(
     errors.push(...validation.errors);
   }
 
-  const providerRaw =
-    recipe.systems?.local_system?.config?.accelerators?.[0]?.execution_providers?.[0] ??
-    "CPUExecutionProvider";
+  // Olive recipes may place accelerators under systems.local_system.config
+  // or directly under systems.local_system (both shapes are in OliveRecipe).
+  const localSystem = recipe.systems?.local_system;
+  const accelFromConfig = localSystem?.config?.accelerators?.[0];
+  const accelFromTop = localSystem?.accelerators?.[0];
+  const accel = accelFromConfig ?? accelFromTop;
+  const providerRaw = accel?.execution_providers?.[0] ?? "CPUExecutionProvider";
   const provider = normalizeIhvProvider(providerRaw);
   if (!provider) {
     errors.push(`Unknown execution provider: ${String(providerRaw)}`);
   } else {
-    const accel = recipe.systems?.local_system?.config?.accelerators?.[0];
     if (accel && Array.isArray(accel.execution_providers) && accel.execution_providers.length > 0) {
       accel.execution_providers[0] = provider;
     }

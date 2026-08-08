@@ -77,11 +77,13 @@ def get_mcp_capabilities(probe_studio: bool = False) -> dict[str, Any]:
 
     Args:
         probe_studio: When True and Studio URL is configured, attempt a short
-            reachability check. Default False (no network).
+            reachability check and load agent-access policy. Default False
+            means no network I/O (config flags only; job_control uses
+            conservative defaults without live policy).
 
     Returns:
         Capability object: versions, semantic state, retrieval defaults,
-        studio config flags, and job_control (stub until job phase).
+        studio config flags, and job_control.
     """
     mode = get_retrieval_mode()
     budget_ms = get_semantic_budget_ms()
@@ -89,19 +91,24 @@ def get_mcp_capabilities(probe_studio: bool = False) -> dict[str, Any]:
     sem_ready = is_model_loaded()
     studio_ok, studio_reason = _studio_url_status()
 
+    # Network only when explicitly requested — never on the default path.
     studio_reachable: bool | None = None
+    policy: dict[str, Any] | None = None
     if probe_studio and studio_ok:
         studio_reachable = _probe_studio()
+        if studio_reachable:
+            policy = _fetch_studio_policy()
     elif not studio_ok:
         studio_reachable = False
 
-    # Phase 3: inspection/validate always advertised; submit/cancel follow Studio policy.
-    policy = _fetch_studio_policy() if studio_ok else None
+    # Without a live policy (unprobed or fetch failed): advertise read defaults
+    # and deny side-effect capabilities rather than inventing permissive submit.
     inspection = True if policy is None else bool(policy.get("allowJobInspection", True))
     submission = False if policy is None else bool(policy.get("allowJobSubmission", False))
     cancellation = False if policy is None else bool(policy.get("allowJobCancellation", False))
     mcp_access = True if policy is None else bool(policy.get("mcpAccess", True))
 
+    # Stable job_control shape across all branches (same keys always).
     if not studio_ok:
         job_control = {
             "supported": True,
@@ -112,8 +119,9 @@ def get_mcp_capabilities(probe_studio: bool = False) -> dict[str, Any]:
             "validation": True,
             "submission": False,
             "cancellation": False,
+            "policy": None,
         }
-    elif not mcp_access:
+    elif policy is not None and not mcp_access:
         job_control = {
             "supported": True,
             "enabled": False,
@@ -123,6 +131,7 @@ def get_mcp_capabilities(probe_studio: bool = False) -> dict[str, Any]:
             "validation": False,
             "submission": False,
             "cancellation": False,
+            "policy": policy,
         }
     elif studio_reachable is False:
         job_control = {
@@ -134,13 +143,15 @@ def get_mcp_capabilities(probe_studio: bool = False) -> dict[str, Any]:
             "validation": inspection or submission,
             "submission": submission,
             "cancellation": cancellation,
+            "policy": policy,
         }
     else:
-        ready = bool(inspection or submission or cancellation)
+        # studio_reachable is True (probed) or None (configured, unprobed).
+        ready = bool(inspection or submission or cancellation) and studio_reachable is True
         job_control = {
             "supported": True,
             "enabled": True,
-            "ready": ready if studio_reachable is not False else False,
+            "ready": ready,
             "reason": "ready" if studio_reachable is True else "studio_configured_unprobed",
             "inspection": inspection,
             "validation": inspection or submission,

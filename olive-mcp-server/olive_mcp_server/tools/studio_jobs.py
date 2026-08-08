@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from urllib.parse import quote
 
 from .studio_loopback import DEFAULT_TIMEOUT_SECONDS, err, studio_request
 
@@ -25,11 +26,26 @@ _PATH_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Studio job ids are uuid/nanoid-style tokens only — never path segments.
+_JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
 _TERMINAL = frozenset({"completed", "failed", "cancelled"})
 
 
 def _is_error(payload: dict[str, Any]) -> bool:
-    return isinstance(payload.get("error"), str) and payload["error"]
+    err_val = payload.get("error")
+    return isinstance(err_val, str) and bool(err_val)
+
+
+def _normalize_job_id(job_id: str) -> str | None:
+    jid = (job_id or "").strip()
+    if not jid or not _JOB_ID_RE.fullmatch(jid):
+        return None
+    return jid
+
+
+def _status_path(job_id: str) -> str:
+    return f"{_STATUS_PATH}/{quote(job_id, safe='')}"
 
 
 def list_optimization_jobs(limit: int = 50) -> dict[str, Any]:
@@ -63,11 +79,12 @@ def list_optimization_jobs(limit: int = 50) -> dict[str, Any]:
             "Olive Studio job list payload missing jobs array.",
         )
 
-    total = len(jobs)
+    studio_total = payload.get("count")
+    total = studio_total if isinstance(studio_total, int) else len(jobs)
     sliced = jobs[:limit]
     return {
         "count": len(sliced),
-        "total": total if isinstance(payload.get("count"), int) else total,
+        "total": total,
         "jobs": sliced,
         "side_effect": False,
         "note": "Read-only inspection of Studio's in-memory job registry.",
@@ -83,13 +100,13 @@ def get_optimization_job(job_id: str) -> dict[str, Any]:
     Returns:
         Job status projection, or a structured error.
     """
-    jid = (job_id or "").strip()
+    jid = _normalize_job_id(job_id)
     if not jid:
-        return err("invalid_job_id", "job_id is required.")
+        return err("invalid_job_id", "job_id is required and must be a plain id token.")
 
     payload = studio_request(
         "GET",
-        f"{_STATUS_PATH}/{jid}",
+        _status_path(jid),
         timeout=DEFAULT_TIMEOUT_SECONDS,
     )
     if _is_error(payload):
@@ -224,9 +241,9 @@ def submit_optimization_job(
 
 def cancel_optimization_job(job_id: str) -> dict[str, Any]:
     """Cancel a Studio job (policy-gated when called as MCP client)."""
-    jid = (job_id or "").strip()
+    jid = _normalize_job_id(job_id)
     if not jid:
-        return err("invalid_job_id", "job_id is required.")
+        return err("invalid_job_id", "job_id is required and must be a plain id token.")
 
     payload = studio_request(
         "POST",
@@ -234,10 +251,19 @@ def cancel_optimization_job(job_id: str) -> dict[str, Any]:
         body={"jobId": jid, "client": "mcp"},
         timeout=DEFAULT_TIMEOUT_SECONDS,
     )
-    if _is_error(payload) and payload.get("ok") is not True:
+    # Prefer explicit ok:false / error over assuming success.
+    if payload.get("ok") is False or _is_error(payload):
         if payload.get("error") == "Job not found":
             return err("job_not_found", "No job with that id in Studio's registry.", detail=jid)
-        return payload
+        return {
+            "ok": False,
+            "error": payload.get("error") or "cancel_failed",
+            "message": payload.get("message") or payload.get("reason") or payload.get("error"),
+            "reason": payload.get("reason"),
+            "job_id": jid,
+            "status": payload.get("status"),
+            "side_effect": True,
+        }
 
     return {
         "ok": True,
@@ -257,9 +283,9 @@ def get_optimization_results(job_id: str, log_tail: int = 40) -> dict[str, Any]:
         job_id: Studio job id.
         log_tail: Number of trailing log lines to include (0..200).
     """
-    jid = (job_id or "").strip()
+    jid = _normalize_job_id(job_id)
     if not jid:
-        return err("invalid_job_id", "job_id is required.")
+        return err("invalid_job_id", "job_id is required and must be a plain id token.")
 
     if log_tail < 0:
         log_tail = 0
@@ -268,7 +294,7 @@ def get_optimization_results(job_id: str, log_tail: int = 40) -> dict[str, Any]:
 
     payload = studio_request(
         "GET",
-        f"{_STATUS_PATH}/{jid}",
+        _status_path(jid),
         timeout=DEFAULT_TIMEOUT_SECONDS,
     )
     if _is_error(payload):
