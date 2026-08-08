@@ -517,3 +517,18 @@ def test_merge_retrieval_meta_prefers_hybrid_over_keyword():
     b = ts.retrieval_meta(mode="auto", effective="hybrid")
     merged = ts._merge_retrieval_meta(a, b)
     assert merged["effective"] == "hybrid"
+
+
+def test_merge_retrieval_meta_degraded_keeps_strongest_effective():
+    """Degraded merge must retain hybrid when either pool observed hybrid results."""
+    a = ts.retrieval_meta(mode="auto", effective="hybrid", degraded=False)
+    b = ts.retrieval_meta(
+        mode="auto",
+        effective="keyword",
+        degraded=True,
+        reason="semantic_budget_exceeded",
+    )
+    merged = ts._merge_retrieval_meta(a, b)
+    assert merged["degraded"] is True
+    assert merged["effective"] == "hybrid"
+    assert merged["reason"] == "semantic_budget_exceeded"

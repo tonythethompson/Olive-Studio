@@ -160,18 +160,13 @@ def merge_retrieval_meta(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]
     """Merge retrieval metadata from two search pools.
 
     Prefers the most informative effective mode and surfaces degradation from
-    either pool.
+    either pool. When degraded, keeps ``degraded=True`` and the existing reason
+    selection, but still retains the strongest observed effective mode (e.g.
+    ``hybrid`` if either pool reported hybrid results).
     """
     mode = a.get("mode") or b.get("mode") or get_retrieval_mode()
     degraded = bool(a.get("degraded") or b.get("degraded"))
     reasons = [r for r in (a.get("reason"), b.get("reason")) if r]
-    if degraded:
-        return retrieval_meta(
-            mode=str(mode),
-            effective="keyword",
-            degraded=True,
-            reason=str(reasons[0]) if reasons else "semantic_budget_exceeded",
-        )
     modes = [a.get("effective"), b.get("effective")]
     if "hybrid" in modes:
         effective = "hybrid"
@@ -179,6 +174,13 @@ def merge_retrieval_meta(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]
         effective = "keyword"
     else:
         effective = next((m for m in modes if m and m != "none"), None) or "keyword"
+    if degraded:
+        return retrieval_meta(
+            mode=str(mode),
+            effective=str(effective),
+            degraded=True,
+            reason=str(reasons[0]) if reasons else "semantic_budget_exceeded",
+        )
     return retrieval_meta(
         mode=str(mode),
         effective=str(effective),
