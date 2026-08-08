@@ -90,10 +90,12 @@ export async function startOliveJob(opts: StartOliveJobOpts): Promise<StartOlive
     }
   }
 
-  const existing = findJobByIdempotency({
-    idempotencyKey: opts.idempotencyKey,
-    fingerprint,
-  });
+  const existing = opts.source === "mcp"
+    ? findJobByIdempotency({
+        idempotencyKey: opts.idempotencyKey,
+        fingerprint,
+      })
+    : undefined;
   if (existing) {
     return {
       ok: true,
