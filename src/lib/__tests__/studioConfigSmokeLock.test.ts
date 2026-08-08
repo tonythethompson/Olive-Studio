@@ -92,6 +92,40 @@ describe("studioConfigSmokeLock", () => {
     lock.release();
   });
 
+  it("does not reclaim a partial numeric PID body before the publish grace window", async () => {
+    // Mid-publish body "12" must not be treated as live PID 12 via parseInt.
+    const store: Store = new Map([["/tmp/lock", "12"]]);
+    const fs = makeFs(store);
+    let t = 1_000;
+    const sleep = vi.fn(async () => {
+      store.set("/tmp/lock", "12345\n");
+      t += 50;
+    });
+
+    await expect(
+      acquireStudioConfigSmokeLock("/tmp/lock", {
+        writeFileSync: fs.writeFileSync as never,
+        linkSync: fs.linkSync as never,
+        readFileSync: fs.readFileSync as never,
+        unlinkSync: fs.unlinkSync as never,
+        mkdirSync: fs.mkdirSync as never,
+        statSync: vi.fn(() => ({ mtimeMs: 1_000 })) as never,
+        isProcessAlive: (pid) => pid === 12 || pid === 12345,
+        pid: 999,
+        timeoutMs: 500,
+        pollMs: 50,
+        publishGraceMs: 1_000,
+        now: () => t,
+        sleep,
+        randomId: () => "partial",
+      }),
+    ).rejects.toThrow(/could not acquire/);
+
+    expect(fs.unlinkSync).not.toHaveBeenCalledWith("/tmp/lock");
+    expect(store.get("/tmp/lock")).toBe("12345\n");
+    expect(sleep).toHaveBeenCalled();
+  });
+
   it("does not reclaim a freshly empty lock while process A delays PID publish", async () => {
     // Process A created the final path (legacy open/write or crash remnant) but
     // has not written the PID yet. Process B must poll through grace, not unlink.
@@ -132,7 +166,7 @@ describe("studioConfigSmokeLock", () => {
   it("reclaims an aged empty lock after the publish grace window", async () => {
     const store: Store = new Map([["/tmp/lock", ""]]);
     const fs = makeFs(store);
-    const t = 5_000;
+    const nowMs = 5_000;
 
     const lock = await acquireStudioConfigSmokeLock("/tmp/lock", {
       writeFileSync: fs.writeFileSync as never,
@@ -145,7 +179,7 @@ describe("studioConfigSmokeLock", () => {
       timeoutMs: 1_000,
       pollMs: 5,
       publishGraceMs: 1_000,
-      now: () => t,
+      now: () => nowMs,
       sleep: async () => undefined,
       randomId: () => "aged",
     });

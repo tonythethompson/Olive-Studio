@@ -1,12 +1,12 @@
 /**
  * Concurrent MCP submit locking + idempotent reuse via startOliveJob.
- * Keeps setup CPU-only: mocked spawn/fs, drained detached setup before cleanup.
+ * Keeps setup CPU-only: mocked spawn/fs, lifecycle teardown before registry clear.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 import { preflightOliveRecipe } from "./jobPreflight.ts";
 import { clearIdempotencyIndex } from "./jobIdempotency.ts";
-import { jobRegistry } from "./state.ts";
+import { finalizeJob, jobRegistry } from "./state.ts";
 
 const childProcessMocks = vi.hoisted(() => ({
   execFileImpl: null as null | ((...args: unknown[]) => unknown),
@@ -43,62 +43,86 @@ vi.mock("../venv/index.ts", () => ({
 
 const { mcpSubmitLockTailCount, startOliveJob } = await import("./jobRunner.ts");
 
-/** Waiters that ensure detached MCP setup has left `setting_up` before registry clear. */
-const pendingSetups: Promise<unknown>[] = [];
+/** Every job id created by this file's helpers (including reused lookups). */
+const trackedJobIds = new Set<string>();
 
-async function drainPendingSetups(): Promise<void> {
-  for (let i = 0; i < 20; i += 1) {
-    if (pendingSetups.length === 0) return;
-    const batch = pendingSetups.splice(0, pendingSetups.length);
-    await Promise.allSettled(batch);
-    await Promise.resolve();
+const TEARDOWN_DEADLINE_MS = 5_000;
+
+async function awaitTrackedJobsFinished(deadlineMs = TEARDOWN_DEADLINE_MS): Promise<void> {
+  const deadline = Date.now() + deadlineMs;
+  for (const id of trackedJobIds) {
+    const job = jobRegistry.get(id);
+    if (!job || job.finishedAt != null) continue;
+    if (job.status !== "completed" && job.status !== "failed" && job.status !== "cancelled") {
+      job.status = "cancelled";
+    }
+    const proc = job.process;
+    if (proc && proc.exitCode === null && proc.signalCode === null) {
+      try {
+        proc.kill("SIGKILL");
+      } catch {
+        /* mock already exited */
+      }
+    }
+  }
+
+  while (Date.now() < deadline) {
+    const unfinished = [...trackedJobIds].filter((id) => {
+      const job = jobRegistry.get(id);
+      return job != null && job.finishedAt == null;
+    });
+    if (unfinished.length === 0) return;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+
+  const stuck = [...trackedJobIds].filter((id) => {
+    const job = jobRegistry.get(id);
+    return job != null && job.finishedAt == null;
+  });
+  for (const id of stuck) {
+    const job = jobRegistry.get(id);
+    if (job) finalizeJob(job);
+  }
+  if (stuck.length > 0) {
+    throw new Error(
+      `jobRunner teardown deadline (${deadlineMs}ms): unfinished jobs ${stuck.join(", ")}`,
+    );
   }
 }
 
 beforeEach(() => {
+  trackedJobIds.clear();
   vi.spyOn(fs, "mkdirSync").mockReturnValue(undefined as unknown as string);
   vi.spyOn(fs, "writeFileSync").mockReturnValue(undefined);
 });
 
 afterEach(async () => {
-  await drainPendingSetups();
-  jobRegistry.clear();
-  clearIdempotencyIndex();
-  vi.clearAllMocks();
-  vi.restoreAllMocks();
-  vi.mocked(preflightOliveRecipe).mockImplementation(() => ({
-    valid: true,
-    provider: "CPUExecutionProvider",
-    fingerprint: "fp-concurrent",
-    errors: [] as string[],
-    warnings: [] as string[],
-    cudaVersion: "auto",
-    recipe: { input_model: {}, passes: {}, engine: {}, systems: {} },
-  }));
+  try {
+    await awaitTrackedJobsFinished();
+  } finally {
+    trackedJobIds.clear();
+    jobRegistry.clear();
+    clearIdempotencyIndex();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+    vi.mocked(preflightOliveRecipe).mockImplementation(() => ({
+      valid: true,
+      provider: "CPUExecutionProvider",
+      fingerprint: "fp-concurrent",
+      errors: [] as string[],
+      warnings: [] as string[],
+      cudaVersion: "auto",
+      recipe: { input_model: {}, passes: {}, engine: {}, systems: {} },
+    }));
+  }
 });
 
-/** Track fire-and-forget MCP setup so afterEach can drain before clearing the registry. */
+/** Track every created/reused job id so afterEach can cancel and await finishedAt. */
 async function startOliveJobTracked(
   ...args: Parameters<typeof startOliveJob>
 ): ReturnType<typeof startOliveJob> {
-  const before = new Set(jobRegistry.keys());
   const result = await startOliveJob(...args);
-  if (result.ok && !result.reused) {
-    const job = jobRegistry.get(result.jobId);
-    if (job && !before.has(result.jobId)) {
-      const settled = (async () => {
-        const deadline = Date.now() + 5_000;
-        while (Date.now() < deadline) {
-          const current = jobRegistry.get(result.jobId);
-          if (!current || current.finishedAt != null || current.status !== "setting_up") {
-            return;
-          }
-          await new Promise((r) => setTimeout(r, 10));
-        }
-      })();
-      pendingSetups.push(settled);
-    }
-  }
+  if (result.ok) trackedJobIds.add(result.jobId);
   return result;
 }
 

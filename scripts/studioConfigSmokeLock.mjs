@@ -30,6 +30,20 @@ export function isProcessAlive(pid) {
 }
 
 /**
+ * Parse a fully published lock body (`"<pid>\\n"`). Rejects parseInt prefixes and
+ * partial numeric writes (e.g. `"12"` while `"12345\\n"` is still publishing).
+ * @param {string} raw
+ * @returns {number | null} holder pid, or null when incomplete/malformed
+ */
+export function parsePublishedLockPid(raw) {
+  const match = String(raw).match(/^(\d+)\n$/);
+  if (!match) return null;
+  const pid = Number(match[1]);
+  if (!Number.isSafeInteger(pid) || pid <= 0) return null;
+  return pid;
+}
+
+/**
  * Publish a fully-written lock file at `lockPath` without an empty-body window.
  * Prefer hard-linking a temp file (link fails with EEXIST and never overwrites).
  * Fall back to exclusive `write(..., { flag: "wx" })` of the same PID bytes when
@@ -122,8 +136,7 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
       return {
         release() {
           try {
-            const current = read(lockPath, "utf8");
-            const holder = Number.parseInt(String(current).trim().split(/\r?\n/)[0] ?? "", 10);
+            const holder = parsePublishedLockPid(read(lockPath, "utf8"));
             if (holder === myPid) unlink(lockPath);
           } catch {
             /* already gone or not ours */
@@ -134,14 +147,13 @@ export async function acquireStudioConfigSmokeLock(lockPath, deps = {}) {
       const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
       if (code !== "EEXIST") throw e;
       try {
-        const current = read(lockPath, "utf8");
-        const holder = Number.parseInt(String(current).trim().split(/\r?\n/)[0] ?? "", 10);
-        // Fresh empty/malformed bodies can mean a concurrent publisher has not
-        // finished yet (or a crash left an empty legacy lock). Only reclaim
-        // after publishGraceMs. Finite dead PIDs reclaim immediately.
-        const malformed = !Number.isFinite(holder);
-        let reclaimable = !malformed && !alive(holder);
-        if (malformed) {
+        const holder = parsePublishedLockPid(read(lockPath, "utf8"));
+        // Incomplete bodies (empty, partial digits, parseInt prefixes) may mean
+        // a concurrent publisher is still writing. Only reclaim after grace.
+        // Fully published finite dead PIDs reclaim immediately.
+        const incomplete = holder == null;
+        let reclaimable = !incomplete && !alive(holder);
+        if (incomplete) {
           try {
             const ageMs = now() - stat(lockPath).mtimeMs;
             reclaimable = ageMs >= publishGraceMs;
