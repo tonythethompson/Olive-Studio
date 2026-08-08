@@ -52,12 +52,17 @@ afterEach(async () => {
   try {
     for (const id of trackedJobIds) {
       const job = jobRegistry.get(id);
-      if (job && job.finishedAt == null) {
-        if (job.status !== "failed" && job.status !== "cancelled" && job.status !== "completed") {
-          job.status = "cancelled";
-        }
-        finalizeJob(job);
+      if (!job || job.finishedAt != null) continue;
+      if (job.status !== "failed" && job.status !== "cancelled" && job.status !== "completed") {
+        job.status = "cancelled";
       }
+    }
+    // Let stub / detached continueOliveJobSetup observe cancel on one poll tick.
+    await vi.advanceTimersByTimeAsync(200);
+    await Promise.resolve();
+    for (const id of trackedJobIds) {
+      const job = jobRegistry.get(id);
+      if (job && job.finishedAt == null) finalizeJob(job);
     }
   } finally {
     trackedJobIds.clear();
@@ -89,7 +94,7 @@ describe("OLIVE_JOB_SETUP_STUB timeout", () => {
     expect(job.status).toBe("setting_up");
     expect(job.finishedAt).toBeNull();
 
-    await vi.advanceTimersByTimeAsync(200);
+    await vi.advanceTimersByTimeAsync(1);
     expect(job.status).toBe("failed");
     expect(job.finishedAt).not.toBeNull();
     expect(job.logs.some((line) => line.includes("Setup stub timed out after 120000ms"))).toBe(
@@ -109,7 +114,7 @@ describe("OLIVE_JOB_SETUP_STUB timeout", () => {
     expect(job).toBeDefined();
     if (!job) return;
 
-    await vi.advanceTimersByTimeAsync(120_200);
+    await vi.advanceTimersByTimeAsync(120_000);
     expect(job.status).toBe("failed");
     expect(job.finishedAt).not.toBeNull();
     expect(job.logs.some((line) => line.includes("Setup stub timed out after 120000ms"))).toBe(
@@ -117,7 +122,7 @@ describe("OLIVE_JOB_SETUP_STUB timeout", () => {
     );
   });
 
-  it("honors a positive OLIVE_JOB_SETUP_STUB_TIMEOUT_MS override", async () => {
+  it("honors a 500ms timeout without overshooting the final poll", async () => {
     process.env.OLIVE_JOB_SETUP_STUB_TIMEOUT_MS = "500";
     const recipe = { input_model: {}, passes: {}, engine: {}, systems: {} } as never;
 
@@ -131,7 +136,9 @@ describe("OLIVE_JOB_SETUP_STUB timeout", () => {
 
     await vi.advanceTimersByTimeAsync(499);
     expect(job.status).toBe("setting_up");
-    await vi.advanceTimersByTimeAsync(200);
+    expect(job.finishedAt).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(1);
     expect(job.status).toBe("failed");
     expect(job.finishedAt).not.toBeNull();
     expect(job.logs.some((line) => line.includes("Setup stub timed out after 500ms"))).toBe(true);
@@ -142,7 +149,16 @@ describe("OLIVE_JOB_SETUP_STUB timeout", () => {
     const recipe = { input_model: {}, passes: {}, engine: {}, systems: {} } as never;
 
     const pending = startOliveJob({ recipe, source: "ui" });
-    await vi.advanceTimersByTimeAsync(700);
+    await vi.advanceTimersByTimeAsync(499);
+    // Still inside the final shortened poll; UI promise has not settled.
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
     const result = await pending;
     expect(result.ok).toBe(false);
     if (result.ok) return;

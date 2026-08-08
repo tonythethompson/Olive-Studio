@@ -329,7 +329,9 @@ async function continueOliveJobSetup(
         );
         break;
       }
-      await new Promise((r) => setTimeout(r, 200));
+      const remainingMs = deadline - Date.now();
+      const sleepMs = Math.min(200, Math.max(0, remainingMs));
+      await new Promise((r) => setTimeout(r, sleepMs));
     }
     cleanupJobArtifacts(job);
     if (job.finishedAt == null) finalizeJob(job);
