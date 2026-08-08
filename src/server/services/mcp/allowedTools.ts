@@ -23,6 +23,10 @@ export const ALLOWED_MCP_TOOL_NAMES = new Set([
   "record_troubleshoot_feedback",
   // Phase 0 capability discovery (not transport health).
   "get_mcp_capabilities",
+  // Phase 2: read-only Studio job inspection (no submit/cancel).
+  "list_optimization_jobs",
+  "get_optimization_job",
+  "get_optimization_results",
 ]);
 
 export function isAllowedMcpToolName(toolName: string): boolean {

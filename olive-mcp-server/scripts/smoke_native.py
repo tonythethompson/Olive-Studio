@@ -58,7 +58,13 @@ def main() -> int:
     )
     if isinstance(caps, dict):
         jc = caps.get("job_control") or {}
-        check("job_control stub", jc.get("supported") is False, str(jc.get("reason")))
+        check(
+            "job_control inspection only",
+            jc.get("supported") is True
+            and jc.get("inspection") is True
+            and jc.get("submission") is False,
+            str(jc.get("reason")),
+        )
 
     t1 = time.perf_counter()
     passes = call_tool("get_olive_passes", {"filter": "quantization"})

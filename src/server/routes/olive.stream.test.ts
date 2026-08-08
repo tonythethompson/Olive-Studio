@@ -41,6 +41,42 @@ beforeEach(() => {
   jobRegistry.clear();
 });
 
+describe("GET /api/olive/jobs", () => {
+  it("lists jobs newest-first with safe summary fields", async () => {
+    seedJob({ id: "old", status: "completed", exitCode: 0, finishedAt: 1 });
+    seedJob({ id: "new", status: "running", exitCode: null });
+    const res = await fetch(`${baseUrl}/api/olive/jobs`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      count: number;
+      jobs: Array<{ id: string; status: string; logCount: number }>;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.count).toBe(2);
+    expect(body.jobs.map((j) => j.id)).toEqual(["new", "old"]);
+    expect(body.jobs[0]).toMatchObject({ id: "new", status: "running" });
+    expect(typeof body.jobs[0].logCount).toBe("number");
+  });
+
+  it("returns empty list when registry is empty", async () => {
+    const res = await fetch(`${baseUrl}/api/olive/jobs`);
+    const body = (await res.json()) as { ok: boolean; count: number; jobs: unknown[] };
+    expect(body).toEqual({ ok: true, count: 0, jobs: [] });
+  });
+});
+
+describe("GET /api/olive/status/:jobId finishedAt", () => {
+  it("includes finishedAt on status payload", async () => {
+    seedJob({ id: "done-1", status: "completed", exitCode: 0, finishedAt: 99 });
+    const res = await fetch(`${baseUrl}/api/olive/status/done-1`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: string; finishedAt: number | null };
+    expect(body.id).toBe("done-1");
+    expect(body.finishedAt).toBe(99);
+  });
+});
+
 function sampleMetrics(label = "A100"): GpuMetrics {
   return {
     timestamp: new Date().toISOString(),

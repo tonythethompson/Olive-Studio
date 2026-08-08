@@ -115,13 +115,17 @@ Optional env for local feedback storage:
 | `get_recipe_for_ui_state`         | Same bridge evaluation plus built `olive_recipe` JSON          |
 | `record_troubleshoot_feedback`    | Local aggregate thumbs feedback for a matched KB entry         |
 | `get_mcp_capabilities`            | Capability state for agents (not transport/process health)     |
+| `list_optimization_jobs`          | Read-only list of Studio jobs (loopback Studio required)       |
+| `get_optimization_job`            | Read-only status for one Studio job                            |
+| `get_optimization_results`        | Metadata-only results + log tail (no model bytes)              |
 
-### Agent clients (Phases 0–1)
+### Agent clients (Phases 0–2)
 
 - **Launcher:** start via `python olive-mcp-server/run.py` (prefers project `.venv`).
 - **Retrieval:** `OLIVE_MCP_RETRIEVAL_MODE=auto|keyword|semantic` (default `auto`). Cold semantic work is budgeted (`OLIVE_MCP_SEMANTIC_BUDGET_MS`, default 8000); timeout yields keyword results with `retrieval.degraded=true`.
 - **Shipped indexes:** document embeddings under `knowledge_base/indexes/` (rebuild with `pnpm mcp:build-index` when KB JSON changes).
 - **Warm path:** `OLIVE_MCP_PRELOAD_EMBEDDINGS=1` loads model + indexes at process start.
+- **Job inspection (Phase 2):** with Studio running and `OLIVE_STUDIO_API_URL` set, agents can **list/get** in-memory jobs and pull **metadata-only** results. No submit/cancel yet — MCP never starts Olive.
 - **Smoke:** from repo root, `pnpm mcp:native-smoke` and `pnpm mcp:agent-smoke` (pinned mcporter canary).
 - **mcporter example:** `config/mcporter.example.json` uses the same launcher.
 

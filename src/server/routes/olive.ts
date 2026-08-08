@@ -395,7 +395,25 @@ export function mountOliveRoutes(router: Router): void {
       logs: job.logs,
       logsTruncated: Boolean(job.logsTruncated),
       latestMetrics: job.latestMetrics,
+      finishedAt: job.finishedAt,
     });
+  });
+
+  // ─── Job list (in-memory registry; for agents / MCP inspection) ────────
+  router.get("/olive/jobs", (_req, res) => {
+    const jobs = Array.from(jobRegistry.values())
+      .map((job) => ({
+        id: job.id,
+        status: job.status,
+        exitCode: job.exitCode,
+        finishedAt: job.finishedAt,
+        logsTruncated: Boolean(job.logsTruncated),
+        logCount: job.logs.length,
+        hasMetrics: job.latestMetrics != null,
+      }))
+      // Map insertion order is start order; reverse so newest jobs appear first.
+      .reverse();
+    return res.json({ ok: true, count: jobs.length, jobs });
   });
 
   // ─── Cancel ───────────────────────────────────────────────────────────

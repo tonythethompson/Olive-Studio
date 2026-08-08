@@ -25,6 +25,9 @@ def test_server_lists_all_tools():
     assert "get_recipe_for_ui_state" in names
     assert "get_runtime_ep_hints" in names
     assert "get_mcp_capabilities" in names
+    assert "list_optimization_jobs" in names
+    assert "get_optimization_job" in names
+    assert "get_optimization_results" in names
 
 
 def test_get_olive_passes_via_server():

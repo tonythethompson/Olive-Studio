@@ -2,7 +2,7 @@
 
 **Working title:** Olive MCP as agent intelligence/configuration today; **agent-facing control of Studio** when job APIs are connected  
 **Audience:** Olive Studio maintainers, MCP consumers, agent-tooling stakeholders  
-**Status:** Proposal — **Phases 0–1 implemented on branch `MCP_harden`** (Phase 2+ remaining; job control staged later)  
+**Status:** Proposal — **Phases 0–2 implemented on branch `MCP_harden`** (2b submit/validate still later)  
 **Date:** 2026-08-07  
 **Calibration:** Architecture **~9/10**; near-term plan **~8/10** → proceed. End-state job loop raises product value without a second executor.
 
@@ -259,11 +259,12 @@ cold/warm SLO tests           → test_index_store + mcp:benchmark
 studio.configured / reachable → get_mcp_capabilities
 ```
 
-### Phase 2 — Read-only Studio job visibility (+ optional product polish)
+### Phase 2 — Read-only Studio job visibility ✅ (branch `MCP_harden`)
 
-- Stage 1 job tools via Studio API  
-- Optional: Studio MCP status / Copy Agent Setup  
-- Docs: advisory vs job-control planes  
+- Stage 1 job tools: `list_optimization_jobs`, `get_optimization_job`, `get_optimization_results`
+- Studio: `GET /api/olive/jobs` + `finishedAt` on status
+- Capabilities: `job_control.inspection=true`, `submission/cancellation=false`
+- Optional product UI (Copy Agent Setup) deferred  
 
 ### Phase 2b — Validation / preflight
 

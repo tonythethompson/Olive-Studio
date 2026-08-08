@@ -25,15 +25,17 @@ def test_get_mcp_capabilities_shape():
     assert "available" in caps["semantic"]
     assert "ready" in caps["semantic"]
     assert caps["retrieval"]["default_mode"] in ("auto", "keyword", "semantic")
-    assert caps["job_control"]["supported"] is False
-    assert caps["job_control"]["reason"] == "not_implemented"
+    assert caps["job_control"]["supported"] is True
+    assert caps["job_control"]["inspection"] is True
+    assert caps["job_control"]["submission"] is False
     assert caps["toolset"]["version"] == TOOLSET_VERSION
 
 
 def test_call_tool_capabilities():
     result = call_tool("get_mcp_capabilities", {})
     assert isinstance(result, dict)
-    assert result["job_control"]["supported"] is False
+    assert result["job_control"]["supported"] is True
+    assert result["job_control"]["submission"] is False
 
 
 def test_retrieval_mode_env(monkeypatch: pytest.MonkeyPatch):

@@ -66,6 +66,18 @@ _TOOL_IMPORTS: dict[str, tuple[str, str]] = {
         "olive_mcp_server.tools.capabilities",
         "get_mcp_capabilities",
     ),
+    "list_optimization_jobs": (
+        "olive_mcp_server.tools.studio_jobs",
+        "list_optimization_jobs",
+    ),
+    "get_optimization_job": (
+        "olive_mcp_server.tools.studio_jobs",
+        "get_optimization_job",
+    ),
+    "get_optimization_results": (
+        "olive_mcp_server.tools.studio_jobs",
+        "get_optimization_results",
+    ),
 }
 # Studio's HTTP POST /api/mcp/tool proxies these tools but is loopback-only
 # (mcpToolLocalOnly). That gate is required for write tools like feedback.

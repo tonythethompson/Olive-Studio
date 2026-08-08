@@ -17,7 +17,7 @@ from olive_mcp_server.tools.index_store import shipped_index_status
 from olive_mcp_server.tools.retrieval import get_retrieval_mode, get_semantic_budget_ms
 
 # Versioned agent contract; bump when required tools/schemas change intentionally.
-TOOLSET_VERSION = "2026.08.0-phase0"
+TOOLSET_VERSION = "2026.08.0-phase2"
 
 # Loopback hosts accepted for Studio bridge (mirrors studio bridge policy).
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", "[::1]"})
@@ -93,6 +93,49 @@ def get_mcp_capabilities(probe_studio: bool = False) -> dict[str, Any]:
     elif not studio_ok:
         studio_reachable = False
 
+    # Phase 2: inspection tools exist; submission/cancel still deferred.
+    if not studio_ok:
+        job_control = {
+            "supported": True,
+            "enabled": False,
+            "ready": False,
+            "reason": "studio_unavailable",
+            "inspection": True,
+            "submission": False,
+            "cancellation": False,
+        }
+    elif studio_reachable is False:
+        job_control = {
+            "supported": True,
+            "enabled": True,
+            "ready": False,
+            "reason": "studio_unreachable",
+            "inspection": True,
+            "submission": False,
+            "cancellation": False,
+        }
+    elif studio_reachable is True:
+        job_control = {
+            "supported": True,
+            "enabled": True,
+            "ready": True,
+            "reason": "ready",
+            "inspection": True,
+            "submission": False,
+            "cancellation": False,
+        }
+    else:
+        # Configured but not probed — inspection tools can still be attempted.
+        job_control = {
+            "supported": True,
+            "enabled": True,
+            "ready": None,
+            "reason": "studio_configured_unprobed",
+            "inspection": True,
+            "submission": False,
+            "cancellation": False,
+        }
+
     return {
         "server": {
             "name": "olive-mcp-server",
@@ -116,12 +159,7 @@ def get_mcp_capabilities(probe_studio: bool = False) -> dict[str, Any]:
             "reachable": studio_reachable,
             "reason": None if studio_ok else studio_reason,
         },
-        "job_control": {
-            "supported": False,
-            "enabled": False,
-            "ready": False,
-            "reason": "not_implemented",
-        },
+        "job_control": job_control,
         "toolset": {
             "version": TOOLSET_VERSION,
         },
