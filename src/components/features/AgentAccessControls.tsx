@@ -103,6 +103,8 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
       return;
     }
     updateMenuPos();
+    // Snapshot the opener node for cleanup; triggerRef.current may change later.
+    const triggerEl = triggerRef.current;
     // Move focus into the dialog for keyboard users; restore on close below.
     const focusTimer = window.setTimeout(() => {
       firstToggleRef.current?.focus();
@@ -128,7 +130,7 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
       // Restore focus to the opener when the dialog unmounts/closes.
-      triggerRef.current?.focus();
+      triggerEl?.focus();
     };
   }, [open, updateMenuPos]);
 
