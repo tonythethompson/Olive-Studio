@@ -281,7 +281,7 @@ studio.configured / reachable → get_mcp_capabilities
 ### Phase 2b — Validation / preflight ✅
 
 - `validate_optimization_job` → `POST /api/olive/jobs/validate`  
-- Fingerprint + structural preflight (no env install / no spawn)  
+- Fingerprint + structural preflight (no env install / no spawn). QNN validate runs host-mode + static HTP shape checks only; NPU/`loadable` probe remains in `startOliveJob` after the QNN venv is ready.
 
 ### Phase 3 — Capability-gated submit / cancel ✅
 

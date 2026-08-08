@@ -1,6 +1,12 @@
 /**
  * Sync structural preflight for Olive recipes (no env install, no Olive spawn).
  * Used by validate + submit before starting a job.
+ *
+ * QNN note: this path runs `assessQnnRecipeReadiness` **without** a live
+ * `probe` (no `probeQnn` / venv). Host-mode, dynamic-shape, and export-target
+ * failures still apply. NPU device and runtime-loadable checks require
+ * `probe.qnn` and are enforced later in `startOliveJob` after the QNN venv is
+ * ready — not here. Callers must not treat validate as hardware readiness.
  */
 import { createHash } from "crypto";
 import { validateOliveRecipeStructure } from "../../../lib/oliveRecipeSchema.ts";
@@ -54,6 +60,10 @@ export function fingerprintRecipe(recipe: unknown, cudaVersion = "auto"): string
 /**
  * Validates an Olive recipe and performs static execution-provider checks.
  *
+ * Does not install providers, probe GPUs/NPUs, or spawn Olive. For
+ * `QNNExecutionProvider` on local-inference hosts, structural HTP checks run
+ * here; NPU/runtime readiness is deferred to `startOliveJob` (see module note).
+ *
  * @param recipeInput - The Olive recipe to validate and normalize.
  * @param cudaVersion - The CUDA version token used for fingerprinting and diagnostics.
  * @returns Validation status, diagnostics, normalized provider and recipe, fingerprint, and CUDA version.
@@ -96,14 +106,27 @@ export function preflightOliveRecipe(
     if (provider === "QNNExecutionProvider") {
       const inputModel = recipe.input_model as { io_config?: unknown } | undefined;
       const hostMode = resolveQnnHostMode({ platform: process.platform, arch: process.arch });
-      const hardFailures = assessQnnRecipeReadiness({
+      // Intentionally omit `probe`: sync validate must not touch the QNN venv.
+      // assessQnnRecipeReadiness only emits npuDevice/loadable errors when probe
+      // is present; startOliveJob supplies probe after probeQnn().
+      const qnnIssues = assessQnnRecipeReadiness({
         state: { ihvProvider: provider, passes: DEFAULT_PASSES },
         ioConfig: inputModel?.io_config,
         hostMode,
         platform: { platform: process.platform, arch: process.arch },
-      }).filter((issue) => issue.severity === "error");
-      if (hardFailures.length > 0) {
-        errors.push(...hardFailures.map((issue) => issue.message));
+      });
+      errors.push(
+        ...qnnIssues.filter((issue) => issue.severity === "error").map((issue) => issue.message),
+      );
+      warnings.push(
+        ...qnnIssues
+          .filter((issue) => issue.severity === "warning")
+          .map((issue) => issue.message),
+      );
+      if (hostMode === "local-inference") {
+        warnings.push(
+          "QNN NPU/runtime readiness is not checked at validate time; startOliveJob probes the QNN venv before spawn and may still fail if NPU or onnxruntime-qnn is missing.",
+        );
       }
     }
   }

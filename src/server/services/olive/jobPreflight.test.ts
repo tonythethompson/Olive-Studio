@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveQnnHostMode } from "../../../lib/qnnDeps.ts";
 import { fingerprintRecipe, preflightOliveRecipe } from "./jobPreflight.ts";
 import type { OliveRecipe } from "../../types.ts";
 
@@ -110,5 +111,18 @@ describe("preflightOliveRecipe", () => {
     const withUndef = { a: 1, b: undefined as unknown as number, c: 2 };
     const without = { a: 1, c: 2 };
     expect(fingerprintRecipe(withUndef, "auto")).toBe(fingerprintRecipe(without, "auto"));
+  });
+
+  it("QNN validate stays structural: no probe means no NPU/runtime hard-fail here", () => {
+    const pre = preflightOliveRecipe(minimalRecipe("QNNExecutionProvider"));
+    // Missing NPU/runtime must not fail sync validate (probe is deferred to startOliveJob).
+    expect(pre.errors.some((e) => /npu|runtime not ready/i.test(e))).toBe(false);
+    // On local-inference hosts, surface an explicit deferred-probe warning.
+    const mode = resolveQnnHostMode({ platform: process.platform, arch: process.arch });
+    if (mode === "local-inference") {
+      expect(pre.warnings.some((w) => /npu\/runtime readiness is not checked at validate/i.test(w))).toBe(
+        true,
+      );
+    }
   });
 });
