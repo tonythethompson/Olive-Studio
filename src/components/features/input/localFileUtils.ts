@@ -101,5 +101,20 @@ export function getReconstructableGroups(
       groups[base].push(f);
     }
   }
-  return Object.entries(groups).filter(([, files]) => files.length > 0);
+  return Object.entries(groups).filter(([, files]) => {
+    if (files.length < 2) return false;
+    // Require consecutive numeric suffixes to prevent corrupted reconstruction
+    const indices = files
+      .map((f) => {
+        const m = f.name.match(/\.(\d{3,})$/);
+        return m ? parseInt(m[1], 10) : -1;
+      })
+      .filter((n) => n >= 0)
+      .sort((a, b) => a - b);
+    if (indices.length < 2) return false;
+    for (let i = 1; i < indices.length; i++) {
+      if (indices[i] !== indices[i - 1] + 1) return false;
+    }
+    return true;
+  });
 }

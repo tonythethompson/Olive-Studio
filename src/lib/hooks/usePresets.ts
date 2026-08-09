@@ -67,6 +67,9 @@ export function useImportPresets<T>(opts: {
           });
         }
       };
+      reader.onerror = () => {
+        setError(`Failed to read file: ${reader.error?.message ?? "unknown error"}`);
+      };
       reader.readAsText(file);
     };
     input.click();

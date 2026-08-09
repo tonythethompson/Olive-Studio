@@ -50,6 +50,7 @@ export function useMcpDiagnostic(): UseMcpDiagnosticReturn {
 
     setIsDiagnosing(true);
     setError(null);
+    setDiagnostic(null);
     try {
       const { diagnostic: result, error: fetchError } = await requestMcpDiagnostic(logs, controller.signal);
       if (controller.signal.aborted) return null;
