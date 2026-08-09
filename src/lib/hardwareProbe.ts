@@ -560,6 +560,24 @@ let _probeCache: HardwareProbeResult | null = null;
 const PROBE_CACHE_TTL_MS = 30_000; // 30s
 let _probeCacheTime = 0;
 
+/** Always issues a network request. Bypasses cache and in-flight dedup. */
+async function doFetchHardwareProbe(refresh: boolean): Promise<HardwareProbeResult> {
+  const url = refresh ? "/api/system/hardware-probe?refresh=1" : "/api/system/hardware-probe";
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `Hardware probe failed (${res.status})`);
+  }
+  return (await res.json()) as HardwareProbeResult;
+}
+
+/** Clears probe cache/inflight state. Exported for unit tests only. */
+export function resetHardwareProbeFetchStateForTests(): void {
+  _probeInflight = null;
+  _probeCache = null;
+  _probeCacheTime = 0;
+}
+
 export async function fetchHardwareProbe(refresh = false): Promise<HardwareProbeResult> {
   // Return cached result if fresh enough and not a forced refresh
   if (!refresh && _probeCache && Date.now() - _probeCacheTime < PROBE_CACHE_TTL_MS) {
@@ -573,16 +591,12 @@ export async function fetchHardwareProbe(refresh = false): Promise<HardwareProbe
 
   _probeInflight = (async () => {
     try {
-      const url = refresh ? "/api/system/hardware-probe?refresh=1" : "/api/system/hardware-probe";
-      const res = await fetch(url);
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? `Hardware probe failed (${res.status})`);
-      }
-      const result = (await res.json()) as HardwareProbeResult;
+      let result = await doFetchHardwareProbe(refresh);
 
+      // Retry once with refresh when RAM is missing/zero. Call doFetch directly
+      // so we do not re-enter the in-flight dedup guard (which would deadlock).
       if (!refresh && (result.platform.systemRamGb == null || result.platform.systemRamGb <= 0)) {
-        return fetchHardwareProbe(true);
+        result = await doFetchHardwareProbe(true);
       }
 
       _probeCache = result;
