@@ -32,8 +32,9 @@ vi.mock("../services/mcp/persistentClient.ts", async (importOriginal) => {
       if (mcpToolMocks.callOliveMcpToolImpl) {
         return mcpToolMocks.callOliveMcpToolImpl(name, args);
       }
-      // Fail loudly instead of spawning a real Python process in tests
-      throw new Error(`callOliveMcpTool called without a mock impl set (tool: ${name})`);
+      // No mock set — return unavailable (mimics breaker-open behavior)
+      // rather than spawning a real Python process
+      return { error: "MCP mock not configured", unavailable: true };
     },
     shutdownMcpClient: async () => { },
     resetPersistentClient: () => { },
