@@ -149,6 +149,7 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
   // ── Execute tool calls sequentially ──
   const results: McpToolCallResult[] = [];
   let hadInfraFailure = false;
+  const MCP_CALL_TIMEOUT_MS = 45_000;
 
   for (const req of requests) {
     // Check connection is still alive before each call
@@ -158,9 +159,19 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
       break;
     }
     try {
-      const toolResult = await activeClient.callTool({
-        name: sanitizeToolName(req.toolName),
-        arguments: req.args ?? {},
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      const toolResult = await Promise.race([
+        activeClient.callTool({
+          name: sanitizeToolName(req.toolName),
+          arguments: req.args ?? {},
+        }),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => {
+            reject(new Error(`MCP tool call timed out after ${MCP_CALL_TIMEOUT_MS / 1000} seconds`));
+          }, MCP_CALL_TIMEOUT_MS);
+        }),
+      ]).finally(() => {
+        if (timeout) clearTimeout(timeout);
       });
 
       // MCP callTool returns { content: [...], isError?: boolean }
@@ -176,6 +187,15 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
     } catch (err: unknown) {
       // Transport/protocol failure — infrastructure error
       const msg = err instanceof Error ? err.message : String(err);
+      if (msg.toLowerCase().includes("timed out")) {
+        // A timed-out request may still be in flight; close the session so it
+        // cannot poison subsequent calls on the persistent connection.
+        try {
+          void activeClient.close().catch(() => undefined);
+        } catch {
+          // Best effort — the connection is marked crashed below.
+        }
+      }
       if (isInfraError(msg)) {
         hadInfraFailure = true;
         results.push({ error: msg || `MCP tool ${req.toolName} failed`, unavailable: true });
