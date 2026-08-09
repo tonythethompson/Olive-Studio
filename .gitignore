@@ -21,6 +21,9 @@ storybook-static/
 # Local dev scripts
 start-server.bat
 
+# Kiro Crew steering (local agent config)
+.kiro/
+
 # Playwright
 /test-results/
 /playwright-report/
