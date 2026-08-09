@@ -72,8 +72,11 @@ async function connect(): Promise<void> {
         });
       }
 
+      // Capture instance ref so a stale transport's close event doesn't
+      // null out a replacement connection established after a timeout.
+      const thisTransport = transport;
       transport.onclose = () => {
-        if (state === "connected") {
+        if (state === "connected" && transport === thisTransport) {
           state = "crashed";
           client = null;
           transport = null;
@@ -215,8 +218,11 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
   // ── Update breaker ──
   if (hadInfraFailure) {
     mcpBreaker.recordFailure(epoch);
-    // Mark connection as crashed for next attempt
+    // Close the abandoned transport to free the child process, then clear refs.
     state = "crashed";
+    if (transport) {
+      try { void transport.close().catch(() => undefined); } catch { /* best-effort */ }
+    }
     client = null;
     transport = null;
   } else {

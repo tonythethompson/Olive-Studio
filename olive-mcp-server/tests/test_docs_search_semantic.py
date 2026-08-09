@@ -450,14 +450,20 @@ def test_search_query_sanitization(monkeypatch: pytest.MonkeyPatch):
     result = docs_search.search_olive_documentation(
         query="quant\x00ization", top_k=1, live=False, mode="keyword"
     )
-    assert result["count"] >= 0  # should not raise
+    assert result["query"] == "quantization"
 
-    # Very long query should be truncated (not crash)
+    # Whitespace controls should become spaces (preserve token boundaries)
+    result_ws = docs_search.search_olive_documentation(
+        query="quantization\ncalibration", top_k=1, live=False, mode="keyword"
+    )
+    assert result_ws["query"] == "quantization calibration"
+
+    # Very long query should be truncated to 2000 chars (not crash)
     long_query = "x" * 5000
     result2 = docs_search.search_olive_documentation(
         query=long_query, top_k=1, live=False, mode="keyword"
     )
-    assert result2["count"] >= 0
+    assert len(result2["query"]) == 2000
 
 
 def test_live_auto_budgets_even_when_model_is_warm(monkeypatch: pytest.MonkeyPatch):
