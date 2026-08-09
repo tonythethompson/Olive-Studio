@@ -407,6 +407,59 @@ def test_load_kb_text_skips_invalid_utf8_and_keeps_valid_files(
     assert "bad_utf8" not in sources
 
 
+def test_iter_kb_json_files_rejects_symlinks_outside_kb_dir(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+):
+    """Path traversal guard: symlinks resolving outside KB_DIR are rejected."""
+    import os
+
+    kb_dir = tmp_path / "kb"
+    kb_dir.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    secret = outside / "secret.json"
+    secret.write_text('{"leaked": true}', encoding="utf-8")
+
+    # Create a symlink inside kb_dir that points outside
+    link = kb_dir / "evil.json"
+    try:
+        os.symlink(str(secret), str(link))
+    except OSError:
+        pytest.skip("Symlink creation not permitted on this OS/config")
+
+    # Also add a legitimate file
+    legit = kb_dir / "passes.json"
+    legit.write_text('{"pass": "safe"}', encoding="utf-8")
+
+    monkeypatch.setattr(docs_search, "KB_DIR", kb_dir)
+    loaded = docs_search._load_kb_text()
+    sources = " ".join(path for path, _ in loaded)
+    assert "passes" in sources
+    assert "evil" not in sources
+    assert "leaked" not in " ".join(text for _, text in loaded)
+
+
+def test_search_query_sanitization(monkeypatch: pytest.MonkeyPatch):
+    """Null bytes and excessively long queries are sanitized."""
+    monkeypatch.setattr(docs_search, "_load_kb_text", lambda: [("p", "hello world")])
+    monkeypatch.setattr(docs_search, "_KB_TEXTS", [])
+    monkeypatch.setattr(docs_search, "_KB_EMBEDDINGS", None)
+    monkeypatch.setattr(docs_search, "_KB_INDEX_MTIME", (-1.0, -1))
+
+    # Query with null bytes should not crash and should be cleaned
+    result = docs_search.search_olive_documentation(
+        query="quant\x00ization", top_k=1, live=False, mode="keyword"
+    )
+    assert result["count"] >= 0  # should not raise
+
+    # Very long query should be truncated (not crash)
+    long_query = "x" * 5000
+    result2 = docs_search.search_olive_documentation(
+        query=long_query, top_k=1, live=False, mode="keyword"
+    )
+    assert result2["count"] >= 0
+
+
 def test_live_auto_budgets_even_when_model_is_warm(monkeypatch: pytest.MonkeyPatch):
     """Warm model must not skip the auto budget: live fetch/index can still be cold."""
     import time

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { AuditPanel } from "./AuditPanel";
-import type { AnalysisResult, Suggestion } from "./GeminiSidebar";
+import type { AnalysisResult, Suggestion } from "./AssistantSidebar";
 
 function makeAnalysis(overrides?: Partial<AnalysisResult>): AnalysisResult {
   return {
@@ -25,7 +25,7 @@ function makeSuggestion(overrides?: Partial<Suggestion>): Suggestion {
 }
 
 describe("AuditPanel", () => {
-  const noop = () => {};
+  const noop = () => { };
 
   it("renders pipeline efficiency and score when analysis is available", () => {
     render(

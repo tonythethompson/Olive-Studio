@@ -14,7 +14,8 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { UIState, type McpTroubleshootFeedbackRating } from "@/types";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
-import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";
+import { useAutoClearError } from "@/lib/hooks/useAutoClearError";
+import { useMcpDiagnosticKeyed } from "@/lib/hooks/useMcpDiagnostic";
 import { applyMcpDiagnosticToUiState, canApplyMcpDiagnostic } from "@/lib/mcpConfigMapping";
 import {
   expandLogSelection,
@@ -594,11 +595,11 @@ export function ExecutionWorkspace({
           : `[ERROR] Cannot queue batch job: recipe schema invalid.\n${freshSchemaErrors.map((e) => `[SCHEMA] ${e}`).join("\n")}`,
         ...(fresh.schema.valid
           ? [
-              ...fresh.validation.issues
-                .filter((issue) => issue.severity === "critical")
-                .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
-              ...freshBlockLines,
-            ]
+            ...fresh.validation.issues
+              .filter((issue) => issue.severity === "critical")
+              .map((issue) => `[BLOCK] ${issue.title}: ${issue.description}`),
+            ...freshBlockLines,
+          ]
           : []),
       ]);
       return;

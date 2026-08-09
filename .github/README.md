@@ -46,7 +46,7 @@ pnpm install
 pnpm dev
 ```
 
-Open http://localhost:3000. On the first Execute Live run, the server creates a `.venv/` and installs Olive automatically.
+Open <http://localhost:3000>. On the first Execute Live run, the server creates a `.venv/` and installs Olive automatically.
 
 ### Production build
 
@@ -68,7 +68,7 @@ pnpm start
 ### Optimization passes
 
 | Pass | What it does |
-|------|-------------|
+| ------ | ------------- |
 | **Conversion** | PyTorch / TensorFlow / JAX → ONNX, OpenVINO IR, QNN, or TensorRT |
 | **Quantization** | PTQ, AWQ, QAT, GPTQ, HQQ, RTN, SpinQuant, QuaRot (INT8/INT4/FP16) |
 | **Pruning** | Magnitude, SparseGPT, Wanda (structured or unstructured) |
@@ -81,7 +81,7 @@ Pass combinations are validated against your execution provider. Incompatible co
 ### Execution providers
 
 | Provider | Target |
-|----------|--------|
+| ---------- | -------- |
 | CPU | Broad compatibility |
 | CUDA | NVIDIA GPUs |
 | TensorRT | NVIDIA datacenter (full SDK) |
@@ -121,7 +121,7 @@ Set credentials in-app under Assistant → Settings, or via environment variable
 Create `.env` or `.env.local` in the project root. All are optional:
 
 | Variable | Purpose |
-|----------|---------|
+| ---------- | --------- |
 | `GEMINI_API_KEY` | Google Gemini |
 | `OPENAI_API_KEY` | OpenAI / compatible |
 | `ANTHROPIC_API_KEY` | Anthropic Claude |
@@ -180,7 +180,7 @@ Olive-Studio/
 ## Scripts
 
 | Command | Description |
-|---------|-------------|
+| --------- | ------------- |
 | `pnpm dev` | Development server (Vite + Express) |
 | `pnpm build` | Production build |
 | `pnpm start` | Serve production build |
@@ -203,12 +203,14 @@ Issues and pull requests welcome. See [CONTRIBUTING.md](../CONTRIBUTING.md).
 ## Roadmap
 
 **v0.2** (next)
+
 - Persistent MCP connection (replace subprocess spawn, ~5ms tool calls)
 - Typed pass configuration (discriminated union per pass type)
 - Component splits for large panels
 - GitHub issue triage and cleanup
 
 **Later**
+
 - Stateful Olive Agent (plan, execute, observe, auto-retry)
 - Published MCP server (PyPI / Docker, usable without the GUI)
 - Tauri desktop packaging (signed installer, auto-update)

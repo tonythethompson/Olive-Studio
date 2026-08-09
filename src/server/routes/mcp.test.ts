@@ -15,11 +15,30 @@ const mcpToolMocks = vi.hoisted(() => ({
   execFileImpl: null as null | ((...args: unknown[]) => unknown),
   spawnImpl: null as null | ((...args: unknown[]) => unknown),
   execFileCalls: [] as unknown[][],
+  callOliveMcpToolImpl: null as null | ((name: string, args: Record<string, unknown>) => Promise<unknown>),
 }));
 
 vi.mock("child_process", async (importOriginal) => {
   const { childProcessVitestMockFactory } = await import("../__tests__/childProcessTestMocks.ts");
   return childProcessVitestMockFactory(mcpToolMocks, { trackExecFileCalls: true })(importOriginal);
+});
+
+// Mock the persistent client so the route test doesn't spawn a real Python process.
+vi.mock("../services/mcp/persistentClient.ts", async (importOriginal) => {
+  const original = await importOriginal() as Record<string, unknown>;
+  return {
+    ...original,
+    callOliveMcpTool: async (name: string, args: Record<string, unknown> = {}) => {
+      if (mcpToolMocks.callOliveMcpToolImpl) {
+        return mcpToolMocks.callOliveMcpToolImpl(name, args);
+      }
+      // No mock set — return unavailable (mimics breaker-open behavior)
+      // rather than spawning a real Python process
+      return { error: "MCP mock not configured", unavailable: true };
+    },
+    shutdownMcpClient: async () => { },
+    resetPersistentClient: () => { },
+  };
 });
 
 import express from "express";
@@ -88,6 +107,7 @@ beforeEach(() => {
   resetMcpBreaker();
   mcpToolMocks.execFileImpl = null;
   mcpToolMocks.execFileCalls.length = 0;
+  mcpToolMocks.callOliveMcpToolImpl = null;
 });
 
 afterEach(() => {
@@ -193,8 +213,6 @@ describe("POST /api/mcp/tool", () => {
     expect(res.status).toBe(503);
     const body = await res.json();
     expect(body).toEqual({ available: false, error: expect.any(String) });
-    // The short-circuit must not spawn a Python subprocess.
-    expect(mcpToolMocks.execFileCalls).toHaveLength(0);
   });
 
   it("returns 400 for an unknown toolName", async () => {
@@ -206,12 +224,10 @@ describe("POST /api/mcp/tool", () => {
 
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "Unknown toolName" });
-    expect(mcpToolMocks.execFileCalls).toHaveLength(0);
   });
 
   it("returns 200 with the tool result when the closed breaker proxies valid JSON", async () => {
-    mcpToolMocks.execFileImpl = () =>
-      Promise.resolve({ stdout: '[{"tool":"get_olive_passes","result":{"ok":true}}]', stderr: "" });
+    mcpToolMocks.callOliveMcpToolImpl = async () => ({ result: { ok: true } });
 
     const res = await fetch(`${baseUrl}/api/mcp/tool`, {
       method: "POST",
@@ -223,9 +239,6 @@ describe("POST /api/mcp/tool", () => {
     const body = await res.json();
     // Clients expect the tool payload at the top level, not wrapped in `result`.
     expect(body).toEqual({ ok: true });
-    // The client's promisified execFile (custom-symbol handler) was actually
-    // invoked and settled — exercising the path that used to hang forever.
-    expect(mcpToolMocks.execFileCalls).toHaveLength(1);
   });
 });
 

@@ -15,9 +15,9 @@ vi.mock("./LocalModelManager", () => ({
   LocalModelManager: () => <div data-testid="lmm" />,
 }));
 
-import { GeminiSidebar } from "./GeminiSidebar";
+import { AssistantSidebar } from "./AssistantSidebar";
 
-describe("GeminiSidebar flows", () => {
+describe("AssistantSidebar flows", () => {
   beforeAll(() => {
     Element.prototype.scrollIntoView = vi.fn();
   });
@@ -53,7 +53,7 @@ describe("GeminiSidebar flows", () => {
       );
     });
 
-    render(<GeminiSidebar isOpen onClose={vi.fn()} />);
+    render(<AssistantSidebar isOpen onClose={vi.fn()} />);
 
     // Header reflects the active provider and the audit auto-runs
     await waitFor(() => expect(screen.getByText(/Google Gemini \/ gemini-2.5-flash/)).toBeTruthy());

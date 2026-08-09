@@ -3,7 +3,8 @@ import { Check, ThumbsDown, ThumbsUp, Wrench } from "lucide-react";
 import type { McpDiagnostic, McpTroubleshootFeedbackRating } from "@/types";
 import { canApplyMcpDiagnostic, matchActionableQuirks } from "@/lib/mcpConfigMapping";
 import type { LocalLogDiagnostic } from "@/lib/logFailurePatterns";
-import { hasMcpFeedbackTarget, requestMcpTroubleshootFeedback } from "@/lib/hooks";
+import { hasMcpFeedbackTarget } from "@/lib/mcpPayload";
+import { requestMcpTroubleshootFeedback } from "@/lib/mcpClient";
 
 export interface MCPDiagnosticCardProps {
   /** The diagnostic result from the MCP knowledge base. Null = no result yet. */
@@ -347,11 +348,10 @@ export function MCPDiagnosticCard({
                     : "No auto-applyable config — follow Recommended Fix manually"
                   : "Apply recommended config into the pipeline UI"
               }
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-                fixApplied !== ""
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${fixApplied !== ""
                   ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400"
                   : "border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50"
-              }`}
+                }`}
             >
               {fixApplied !== "" ? (
                 <>

@@ -8,7 +8,8 @@ import {
   type McpTroubleshootFeedbackRating,
 } from "@/types";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
-import { useAutoClearError, useMcpDiagnosticKeyed } from "@/lib/hooks";
+import { useAutoClearError } from "@/lib/hooks/useAutoClearError";
+import { useMcpDiagnosticKeyed } from "@/lib/hooks/useMcpDiagnostic";
 import { applyMcpDiagnosticToUiState, canApplyMcpDiagnostic } from "@/lib/mcpConfigMapping";
 import { buildRecipeJsonFromState, buildOliveRecipeFromBatchJob } from "@/lib/recipePipeline";
 import { parseOliveMetricsFromLogs } from "@/lib/oliveLogMetrics";
@@ -168,11 +169,11 @@ function applyBatchStreamDone(
     batchJobs: currentJobs.map((j) =>
       j.id === batchJobId
         ? {
-            ...j,
-            status: finalStatus,
-            progress: finalStatus === "completed" ? 100 : j.progress,
-            metrics: metrics ?? j.metrics,
-          }
+          ...j,
+          status: finalStatus,
+          progress: finalStatus === "completed" ? 100 : j.progress,
+          metrics: metrics ?? j.metrics,
+        }
         : j,
     ),
   });
@@ -197,10 +198,10 @@ function applyBatchStreamError(
       batchJobs: currentJobs.map((j) =>
         j.id === batchJobId
           ? {
-              ...j,
-              status: "cancelled",
-              logs: [...(j.logs || []), "[INFO] Halted by user."],
-            }
+            ...j,
+            status: "cancelled",
+            logs: [...(j.logs || []), "[INFO] Halted by user."],
+          }
           : j,
       ),
     });
@@ -338,11 +339,11 @@ async function applyHaltBeforeStream(
     batchJobs: (ctx.jobsRef.current ?? []).map((j) =>
       j.id === job.id
         ? {
-            ...j,
-            oliveJobId,
-            status: terminalStatus,
-            logs: [...(j.logs || []), haltLog],
-          }
+          ...j,
+          oliveJobId,
+          status: terminalStatus,
+          logs: [...(j.logs || []), haltLog],
+        }
         : j,
     ),
   });
@@ -486,11 +487,10 @@ function BatchJobCard({
 }) {
   return (
     <div
-      className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border transition-all ${
-        isSelected
+      className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border transition-all ${isSelected
           ? "border-electric-blue bg-electric-blue/5"
           : "border-slate-800/80 bg-slate-900/30 hover:border-slate-700 hover:bg-slate-900/50"
-      }`}
+        }`}
     >
       <button
         type="button"
@@ -518,13 +518,12 @@ function BatchJobCard({
               {job.name}
             </h4>
             <span
-              className={`text-[11px] uppercase tracking-wider px-1.5 py-0.5 rounded-full font-bold ${
-                job.status === "completed"
+              className={`text-[11px] uppercase tracking-wider px-1.5 py-0.5 rounded-full font-bold ${job.status === "completed"
                   ? "bg-emerald-500/10 text-emerald-400"
                   : job.status === "running"
                     ? "bg-electric-blue/10 text-electric-blue"
                     : "bg-slate-800 text-slate-400"
-              }`}
+                }`}
             >
               {job.status}
             </span>
@@ -705,10 +704,10 @@ export function BatchProcessingPanel({
       batchJobs: (jobsRef.current ?? []).map((j) =>
         j.status === "running" || j.oliveJobId === oliveJobId
           ? {
-              ...j,
-              status: "cancelled",
-              logs: [...(j.logs || []), "[INFO] Halted by user."],
-            }
+            ...j,
+            status: "cancelled",
+            logs: [...(j.logs || []), "[INFO] Halted by user."],
+          }
           : j,
       ),
     });

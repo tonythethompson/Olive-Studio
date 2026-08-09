@@ -16,7 +16,7 @@ import {
 import { isMemoryOffloadActive } from "@/lib/memoryOffload";
 import { ModelMemoryCompare } from "@/components/features/ModelMemoryCompare";
 import { cn } from "@/lib/utils";
-import { HardDrive } from "lucide-react";
+import { HardDrive, Trash2 } from "lucide-react";
 
 interface VramEstimateBannerProps {
   state?: UIState;
@@ -35,6 +35,7 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
 }: VramEstimateBannerProps) {
   const storeState = usePipelineState();
   const state = propState ?? storeState.state;
+  const setState = storeState.setState;
 
   // No prop passed → fall back to the shared, deduped probe query. When a
   // prop IS passed, skip this query entirely — otherwise it fires its own
@@ -204,30 +205,45 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
           showRunWarning ||
           (showOffloadGuidance && !offloadActive) ||
           (offloadActive && hybridPoolGb != null)) && (
-          <div className="border-t border-slate-800/90 pt-2.5 space-y-2">
-            {fitLabel && (
-              <span
-                className={cn(
-                  "inline-flex w-full items-center justify-center text-[11px] font-medium px-2 py-1 rounded border text-center leading-snug",
-                  fitClass,
-                )}
-              >
-                {fitLabel}
-              </span>
-            )}
-            {showRunWarning && (
-              <p className="text-[11px] text-amber-400/90 leading-relaxed">
-                Olive run may need ~{formatMemoryGb(estimate.peakRunGb)} peak VRAM for this model.
-              </p>
-            )}
-            {showOffloadGuidance && !offloadActive && (
-              <p className="text-[11px] text-slate-500 leading-relaxed">{offloadGuidance}</p>
-            )}
-            {offloadActive && hybridPoolGb != null && (
-              <p className="text-[11px] text-emerald-400/90 leading-relaxed">
-                Hybrid pool ~{formatMemoryGb(hybridPoolGb)} (GPU + RAM) for optimization run.
-              </p>
-            )}
+            <div className="border-t border-slate-800/90 pt-2.5 space-y-2">
+              {fitLabel && (
+                <span
+                  className={cn(
+                    "inline-flex w-full items-center justify-center text-[11px] font-medium px-2 py-1 rounded border text-center leading-snug",
+                    fitClass,
+                  )}
+                >
+                  {fitLabel}
+                </span>
+              )}
+              {showRunWarning && (
+                <p className="text-[11px] text-amber-400/90 leading-relaxed">
+                  Olive run may need ~{formatMemoryGb(estimate.peakRunGb)} peak VRAM for this model.
+                </p>
+              )}
+              {showOffloadGuidance && !offloadActive && (
+                <p className="text-[11px] text-slate-500 leading-relaxed">{offloadGuidance}</p>
+              )}
+              {offloadActive && hybridPoolGb != null && (
+                <p className="text-[11px] text-emerald-400/90 leading-relaxed">
+                  Hybrid pool ~{formatMemoryGb(hybridPoolGb)} (GPU + RAM) for optimization run.
+                </p>
+              )}
+            </div>
+          )}
+
+        {/* Clear model button */}
+        {(state.hfModelId.trim() || state.localFiles.length > 0 || state.azureModelPath.trim()) && (
+          <div className="border-t border-slate-800/90 pt-2">
+            <button
+              type="button"
+              onClick={() => setState({ hfModelId: "", hfDataset: "", hfTask: "", localFiles: [], azureModelPath: "" })}
+              className="flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+              title="Clear model selection"
+            >
+              <Trash2 className="h-3 w-3" />
+              Clear model
+            </button>
           </div>
         )}
       </div>

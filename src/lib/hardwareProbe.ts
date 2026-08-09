@@ -533,6 +533,12 @@ export function getProviderAvailabilityBlock(
   if (provider === "CPUExecutionProvider") {
     return null;
   }
+  // DirectML: on Windows, the hardware is always DX12-capable. The only missing
+  // piece is the onnxruntime-directml wheel — that's a runtime install, not a
+  // hardware incompatibility. Don't block it.
+  if (provider === "DmlExecutionProvider" && computeDirectMlHardwareReady({ os: probe?.platform?.os ?? "" })) {
+    return null;
+  }
   if (!probe) {
     return {
       reason: "Hardware detection is still running. Only CPU can be selected until probing finishes.",

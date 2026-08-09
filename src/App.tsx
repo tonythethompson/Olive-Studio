@@ -22,8 +22,8 @@ const BatchProcessingPanel = lazy(() =>
   import("@/components/features/execute/BatchProcessingPanel").then((m) => ({ default: m.BatchProcessingPanel })),
 );
 
-const GeminiSidebar = lazy(() =>
-  import("@/components/features/gemini/GeminiSidebar").then((m) => ({ default: m.GeminiSidebar })),
+const AssistantSidebar = lazy(() =>
+  import("@/components/features/assistant/AssistantSidebar").then((m) => ({ default: m.AssistantSidebar })),
 );
 
 const PlaygroundPanel = lazy(() =>
@@ -316,70 +316,70 @@ function Dashboard() {
                   {SECTIONS.map(({ id, step, label, desc }, index) => {
                     const isLast = index === SECTIONS.length - 1;
                     return (
-                    <section
-                      key={id}
-                      id={id}
-                      aria-labelledby={`${id}-heading`}
-                      data-pipeline-section={id}
-                      className={cn(
-                        "scroll-mt-4",
-                        index > 0 && "mt-12 pt-10 border-t border-slate-800",
-                        // The final pipeline section must be tall enough that
-                        // `scrollIntoView({block:"start"})` can land its top at
-                        // the scroll-container's top without being clamped to
-                        // `maxScroll`. Otherwise the user sees the tail of the
-                        // previous section (visible as empty gray) above the
-                        // playground header, which reads as "the app rolled
-                        // past the section". Height covers title bar + header
-                        // + post-section breathing room; uses the dynamic
-                        // viewport unit so browser chrome (URL bar, devtools)
-                        // does not leave the section short.
-                        isLast && "min-h-[calc(100dvh-3rem)] pb-16",
-                      )}
-                    >
-                      <header className="mb-5 pb-4 border-b border-slate-800/80">
-                        <p className="text-xs text-electric-blue mb-1">{step}</p>
-                        <h2 id={`${id}-heading`} className="text-lg font-semibold text-slate-100">
-                          {label}
-                        </h2>
-                        <p className="text-sm text-slate-400 mt-0.5">{desc}</p>
-                      </header>
-                      {id === "input" && (
-                        <ErrorBoundary label="Model source" onReportError={handleReportError}>
-                          <InputEnvironmentPanel />
-                        </ErrorBoundary>
-                      )}
-                      {id === "ihv" && (
-                        <ErrorBoundary label="Hardware" onReportError={handleReportError}>
-                          <IHVIntegrationPanel />
-                        </ErrorBoundary>
-                      )}
-                      {id === "execute" && (
-                        <div className="space-y-8">
-                          <ErrorBoundary label="Recipe & run" onReportError={handleReportError}>
-                            <ExecutionWorkspace
-                              onOpenAiAudit={handleOpenAiAudit}
-                              onRunStateChange={(running) => {
-                                setIsOliveRunning(running);
-                                if (running) scrollToSection("execute");
-                              }}
-                            />
+                      <section
+                        key={id}
+                        id={id}
+                        aria-labelledby={`${id}-heading`}
+                        data-pipeline-section={id}
+                        className={cn(
+                          "scroll-mt-4",
+                          index > 0 && "mt-12 pt-10 border-t border-slate-800",
+                          // The final pipeline section must be tall enough that
+                          // `scrollIntoView({block:"start"})` can land its top at
+                          // the scroll-container's top without being clamped to
+                          // `maxScroll`. Otherwise the user sees the tail of the
+                          // previous section (visible as empty gray) above the
+                          // playground header, which reads as "the app rolled
+                          // past the section". Height covers title bar + header
+                          // + post-section breathing room; uses the dynamic
+                          // viewport unit so browser chrome (URL bar, devtools)
+                          // does not leave the section short.
+                          isLast && "min-h-[calc(100dvh-3rem)] pb-16",
+                        )}
+                      >
+                        <header className="mb-5 pb-4 border-b border-slate-800/80">
+                          <p className="text-xs text-electric-blue mb-1">{step}</p>
+                          <h2 id={`${id}-heading`} className="text-lg font-semibold text-slate-100">
+                            {label}
+                          </h2>
+                          <p className="text-sm text-slate-400 mt-0.5">{desc}</p>
+                        </header>
+                        {id === "input" && (
+                          <ErrorBoundary label="Model source" onReportError={handleReportError}>
+                            <InputEnvironmentPanel />
                           </ErrorBoundary>
-                          <ErrorBoundary label="Batch queue" onReportError={handleReportError}>
-                            <Suspense fallback={<BatchPanelFallback />}>
-                              <BatchProcessingPanel />
+                        )}
+                        {id === "ihv" && (
+                          <ErrorBoundary label="Hardware" onReportError={handleReportError}>
+                            <IHVIntegrationPanel />
+                          </ErrorBoundary>
+                        )}
+                        {id === "execute" && (
+                          <div className="space-y-8">
+                            <ErrorBoundary label="Recipe & run" onReportError={handleReportError}>
+                              <ExecutionWorkspace
+                                onOpenAiAudit={handleOpenAiAudit}
+                                onRunStateChange={(running) => {
+                                  setIsOliveRunning(running);
+                                  if (running) scrollToSection("execute");
+                                }}
+                              />
+                            </ErrorBoundary>
+                            <ErrorBoundary label="Batch queue" onReportError={handleReportError}>
+                              <Suspense fallback={<BatchPanelFallback />}>
+                                <BatchProcessingPanel />
+                              </Suspense>
+                            </ErrorBoundary>
+                          </div>
+                        )}
+                        {id === "playground" && (
+                          <ErrorBoundary label="Playground" onReportError={handleReportError}>
+                            <Suspense fallback={<PlaygroundPanelFallback />}>
+                              <PlaygroundPanel />
                             </Suspense>
                           </ErrorBoundary>
-                        </div>
-                      )}
-                      {id === "playground" && (
-                        <ErrorBoundary label="Playground" onReportError={handleReportError}>
-                          <Suspense fallback={<PlaygroundPanelFallback />}>
-                            <PlaygroundPanel />
-                          </Suspense>
-                        </ErrorBoundary>
-                      )}
-                    </section>
+                        )}
+                      </section>
                     );
                   })}
                 </div>
@@ -388,7 +388,7 @@ function Dashboard() {
 
             <ErrorBoundary label="Assistant" onReportError={handleReportError}>
               <Suspense fallback={<SidebarFallback />}>
-                <GeminiSidebar
+                <AssistantSidebar
                   isOpen={isAiSidebarOpen}
                   onClose={() => setIsAiSidebarOpen(false)}
                   openToAudit={triggerAiAudit}

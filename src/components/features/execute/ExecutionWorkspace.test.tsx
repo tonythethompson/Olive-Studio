@@ -50,18 +50,25 @@ const mcpKeyedState = {
 
 const mockRequestFeedback = vi.fn();
 
-vi.mock("@/lib/hooks", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/hooks")>();
+vi.mock("@/lib/hooks/useAutoClearError", () => ({
+  useAutoClearError: () => ["", vi.fn()],
+}));
+
+vi.mock("@/lib/hooks/useMcpDiagnostic", () => ({
+  useMcpDiagnostic: () => ({ diagnostic: null, isDiagnosing: false, error: null, fetchDiagnostic: vi.fn() }),
+  useMcpDiagnosticKeyed: () => ({
+    fetchKeyedDiagnostic: mcpKeyedState.fetchKeyedDiagnostic,
+    diagnostics: mcpKeyedState.diagnostics,
+    diagnosingKeys: mcpKeyedState.diagnosingKeys,
+    errors: mcpKeyedState.errors,
+    diagnosticKey: mcpKeyedState.diagnosticKey,
+  }),
+}));
+
+vi.mock("@/lib/mcpClient", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/mcpClient")>();
   return {
     ...actual,
-    useAutoClearError: () => ["", vi.fn()],
-    useMcpDiagnosticKeyed: () => ({
-      fetchKeyedDiagnostic: mcpKeyedState.fetchKeyedDiagnostic,
-      diagnostics: mcpKeyedState.diagnostics,
-      diagnosingKeys: mcpKeyedState.diagnosingKeys,
-      errors: mcpKeyedState.errors,
-      diagnosticKey: mcpKeyedState.diagnosticKey,
-    }),
     requestMcpTroubleshootFeedback: (...args: unknown[]) => mockRequestFeedback(...args),
   };
 });

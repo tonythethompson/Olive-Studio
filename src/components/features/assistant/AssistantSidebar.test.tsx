@@ -31,14 +31,14 @@ vi.mock("./AuditPanel", () => ({
   AuditPanel: () => <div data-testid="audit-panel">AuditPanel</div>,
 }));
 
-import { GeminiSidebar } from "./GeminiSidebar";
+import { AssistantSidebar } from "./AssistantSidebar";
 
 const defaultProps = {
   isOpen: true,
   onClose: vi.fn(),
 };
 
-describe("GeminiSidebar", () => {
+describe("AssistantSidebar", () => {
   useFetchRoutesMock({
     "ai/providers": { providers: [] },
   });
@@ -50,7 +50,7 @@ describe("GeminiSidebar", () => {
 
   it("renders when isOpen is true", async () => {
     await act(async () => {
-      render(<GeminiSidebar {...defaultProps} />);
+      render(<AssistantSidebar {...defaultProps} />);
     });
     // Sidebar should be visible with tab content
     expect(screen.getAllByText(/audit/i).length).toBeGreaterThan(0);
@@ -58,7 +58,7 @@ describe("GeminiSidebar", () => {
 
   it("renders tab navigation (audit, chat, settings)", async () => {
     await act(async () => {
-      render(<GeminiSidebar {...defaultProps} />);
+      render(<AssistantSidebar {...defaultProps} />);
     });
     expect(screen.getAllByText(/chat/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/settings/i).length).toBeGreaterThan(0);
@@ -67,7 +67,7 @@ describe("GeminiSidebar", () => {
   it("calls onClose when close button is clicked", async () => {
     const onClose = vi.fn();
     await act(async () => {
-      render(<GeminiSidebar isOpen={true} onClose={onClose} />);
+      render(<AssistantSidebar isOpen={true} onClose={onClose} />);
     });
     const closeButton = screen.getByRole("button", { name: /close sidebar/i });
     fireEvent.click(closeButton);
@@ -77,7 +77,7 @@ describe("GeminiSidebar", () => {
   it("renders with controlled state props", async () => {
     const state = createMockUIState();
     await act(async () => {
-      render(<GeminiSidebar {...defaultProps} state={state} setState={mockSetState} />);
+      render(<AssistantSidebar {...defaultProps} state={state} setState={mockSetState} />);
     });
     expect(screen.getAllByText(/audit/i).length).toBeGreaterThan(0);
   });
@@ -85,7 +85,7 @@ describe("GeminiSidebar", () => {
   it("sets aria-hidden when isOpen is false", async () => {
     let container: HTMLElement | undefined;
     await act(async () => {
-      const result = render(<GeminiSidebar {...defaultProps} isOpen={false} />);
+      const result = render(<AssistantSidebar {...defaultProps} isOpen={false} />);
       container = result.container;
     });
     // The sidebar uses aria-hidden + w-0 rather than conditional rendering
@@ -98,7 +98,7 @@ describe("GeminiSidebar", () => {
     let view: ReturnType<typeof render> | undefined;
 
     await act(async () => {
-      view = render(<GeminiSidebar isOpen={true} onClose={onClose} />);
+      view = render(<AssistantSidebar isOpen={true} onClose={onClose} />);
     });
 
     const openAside = view!.container.querySelector("#assistant-panel");
@@ -117,7 +117,7 @@ describe("GeminiSidebar", () => {
     expect(onClose).toHaveBeenCalledTimes(2);
 
     await act(async () => {
-      view!.rerender(<GeminiSidebar isOpen={false} onClose={onClose} />);
+      view!.rerender(<AssistantSidebar isOpen={false} onClose={onClose} />);
     });
 
     const closedAside = view!.container.querySelector("#assistant-panel");

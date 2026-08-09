@@ -160,6 +160,57 @@ export function GraphCanvas({
     const numSegs = activeNodes.length - 1;
     const totalDur = Math.max(2, numSegs * 0.8);
 
+    /** Shared renderer for a single connection segment (normal or bypass). */
+    const renderSegment = (opts: {
+      key: string;
+      d: string;
+      hasSkip: boolean;
+      tStart: number;
+      tEnd: number;
+      tStartBefore: number;
+      tEndAfter: number;
+    }): ReactElement => (
+      <g key={opts.key}>
+        <path
+          d={opts.d}
+          fill="none"
+          stroke={opts.hasSkip ? "rgba(141, 168, 64, 0.08)" : "rgba(141, 168, 64, 0.12)"}
+          strokeWidth={opts.hasSkip ? 5 : 6}
+          className="transition-all duration-300"
+        />
+        <path
+          d={opts.d}
+          fill="none"
+          stroke="url(#wireGradient)"
+          strokeWidth={opts.hasSkip ? 1.5 : 2}
+          strokeDasharray="6 6"
+          strokeOpacity={opts.hasSkip ? 0.6 : 1}
+          className="transition-all duration-300"
+        >
+          <animate attributeName="stroke-dashoffset" from="12" to="0" dur="0.7s" repeatCount="indefinite" />
+        </path>
+        {showDot && (
+          <circle r={3.5} fill="#8DA840" opacity="0">
+            <animateMotion
+              dur={`${totalDur}s`}
+              repeatCount="indefinite"
+              path={opts.d}
+              calcMode="linear"
+              keyPoints="0;0;1;1"
+              keyTimes={`0;${opts.tStart};${opts.tEnd};1`}
+            />
+            <animate
+              attributeName="opacity"
+              dur={`${totalDur}s`}
+              repeatCount="indefinite"
+              values="0;0;1;1;0;0"
+              keyTimes={`0;${opts.tStartBefore};${opts.tStart};${opts.tEnd};${opts.tEndAfter};1`}
+            />
+          </circle>
+        )}
+      </g>
+    );
+
     for (let i = 0; i < numSegs; i++) {
       const fromNode = activeNodes[i];
       const toNode = activeNodes[i + 1];
@@ -216,47 +267,15 @@ export function GraphCanvas({
         d = buildSegmentCurve(points.from, points.to);
       }
 
-      paths.push(
-        <g key={`${fromNode.id}-${toNode.id}`}>
-          <path
-            d={d}
-            fill="none"
-            stroke={hasSkip ? "rgba(141, 168, 64, 0.08)" : "rgba(141, 168, 64, 0.12)"}
-            strokeWidth={hasSkip ? 5 : 6}
-            className="transition-all duration-300"
-          />
-          <path
-            d={d}
-            fill="none"
-            stroke="url(#wireGradient)"
-            strokeWidth={hasSkip ? 1.5 : 2}
-            strokeDasharray="6 6"
-            strokeOpacity={hasSkip ? 0.6 : 1}
-            className="transition-all duration-300"
-          >
-            <animate attributeName="stroke-dashoffset" from="12" to="0" dur="0.7s" repeatCount="indefinite" />
-          </path>
-          {showDot && (
-            <circle r={3.5} fill="#8DA840" opacity="0">
-              <animateMotion
-                dur={`${totalDur}s`}
-                repeatCount="indefinite"
-                path={d}
-                calcMode="linear"
-                keyPoints="0;0;1;1"
-                keyTimes={`0;${tStart};${tEnd};1`}
-              />
-              <animate
-                attributeName="opacity"
-                dur={`${totalDur}s`}
-                repeatCount="indefinite"
-                values="0;0;1;1;0;0"
-                keyTimes={`0;${tStartBefore};${tStart};${tEnd};${tEndAfter};1`}
-              />
-            </circle>
-          )}
-        </g>,
-      );
+      paths.push(renderSegment({
+        key: `${fromNode.id}-${toNode.id}`,
+        d,
+        hasSkip,
+        tStart,
+        tEnd,
+        tStartBefore,
+        tEndAfter,
+      }));
     }
 
     return (
@@ -289,8 +308,7 @@ export function GraphCanvas({
         tabIndex={isSelected ? 0 : -1}
         onClick={() => focusNode(id)}
         onKeyDown={(event) => handleNodeKeyDown(event, id)}
-        className={`group text-left p-2.5 rounded-lg border transition-all duration-300 relative flex flex-col justify-between focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
-          isSelected
+        className={`group text-left p-2.5 rounded-lg border transition-all duration-300 relative flex flex-col justify-between focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${isSelected
             ? issueLevel === "critical"
               ? "border-rose-500 bg-rose-950/20 ring-1 ring-rose-500"
               : issueLevel === "warning"
@@ -303,7 +321,7 @@ export function GraphCanvas({
                 : active
                   ? "border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/60"
                   : "border-dashed border-slate-400/70 bg-slate-900/35 hover:border-slate-300 hover:bg-slate-900/55"
-        }`}
+          }`}
       >
         {issueLevel && (
           <span
@@ -313,28 +331,26 @@ export function GraphCanvas({
         <div>
           <div className="flex items-center justify-between mb-2">
             <div
-              className={`p-1 rounded ${
-                issueLevel === "critical"
+              className={`p-1 rounded ${issueLevel === "critical"
                   ? "bg-rose-950/40 border border-rose-700/40 text-rose-400"
                   : issueLevel === "warning"
                     ? "bg-amber-950/30 border border-amber-700/30 text-amber-400"
                     : active
                       ? "bg-electric-blue/10 border border-electric-blue/20 text-electric-blue"
                       : "bg-slate-900 border border-dashed border-slate-400 text-slate-300"
-              }`}
+                }`}
             >
               {nd.icon}
             </div>
             <span
-              className={`text-[11px] font-mono px-1.5 py-0.5 rounded border uppercase whitespace-nowrap tracking-wide ${
-                issueLevel === "critical"
+              className={`text-[11px] font-mono px-1.5 py-0.5 rounded border uppercase whitespace-nowrap tracking-wide ${issueLevel === "critical"
                   ? "bg-rose-950/40 text-rose-400 border-rose-700/40"
                   : issueLevel === "warning"
                     ? "bg-amber-950/30 text-amber-400 border-amber-700/30"
                     : active
                       ? "bg-slate-950 text-electric-blue border-electric-blue/20"
                       : "bg-slate-950 text-slate-200 border-slate-400 border-dashed"
-              }`}
+                }`}
             >
               {issueLevel === "critical"
                 ? "Conflict"
@@ -346,9 +362,8 @@ export function GraphCanvas({
             </span>
           </div>
           <h4
-            className={`text-sm font-bold truncate leading-snug ${
-              active || issueLevel ? "text-slate-100" : "text-slate-300"
-            }`}
+            className={`text-sm font-bold truncate leading-snug ${active || issueLevel ? "text-slate-100" : "text-slate-300"
+              }`}
           >
             {nd.title}
           </h4>
@@ -377,8 +392,7 @@ export function GraphCanvas({
             tabIndex={selectedNodeId === "provider" ? 0 : -1}
             onClick={() => onSelectNode("provider")}
             onKeyDown={(event) => handleNodeKeyDown(event, "provider")}
-            className={`group w-full max-w-[240px] text-left p-3.5 rounded-xl border transition-all duration-300 relative focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
-              selectedNodeId === "provider"
+            className={`group w-full max-w-[240px] text-left p-3.5 rounded-xl border transition-all duration-300 relative focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${selectedNodeId === "provider"
                 ? providerIssue === "critical"
                   ? "border-rose-500 bg-rose-950/20 ring-1 ring-rose-500"
                   : providerIssue === "warning"
@@ -389,7 +403,7 @@ export function GraphCanvas({
                   : providerIssue === "warning"
                     ? "border-amber-700/50 bg-amber-950/5 hover:border-amber-600"
                     : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
-            }`}
+              }`}
           >
             {providerIssue && (
               <span
@@ -416,11 +430,10 @@ export function GraphCanvas({
             tabIndex={selectedNodeId === "output" ? 0 : -1}
             onClick={() => onSelectNode("output")}
             onKeyDown={(event) => handleNodeKeyDown(event, "output")}
-            className={`group w-full max-w-[240px] text-left p-3.5 rounded-xl border transition-all duration-300 relative focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
-              selectedNodeId === "output"
+            className={`group w-full max-w-[240px] text-left p-3.5 rounded-xl border transition-all duration-300 relative focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${selectedNodeId === "output"
                 ? "border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500"
                 : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
-            }`}
+              }`}
           >
             <div className="flex items-center justify-between mb-1.5">
               <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
@@ -470,11 +483,10 @@ export function GraphCanvas({
                 tabIndex={isSelected ? 0 : -1}
                 onClick={() => onSelectNode("input")}
                 onKeyDown={(event) => handleNodeKeyDown(event, "input")}
-                className={`group w-full max-w-[240px] text-left p-4 rounded-xl border transition-all duration-300 relative focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
-                  isSelected
+                className={`group w-full max-w-[240px] text-left p-4 rounded-xl border transition-all duration-300 relative focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${isSelected
                     ? "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue"
                     : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
-                }`}
+                  }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="p-1.5 rounded bg-electric-blue/10 border border-electric-blue/20">

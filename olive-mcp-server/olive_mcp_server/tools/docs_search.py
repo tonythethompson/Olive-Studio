@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import time
 from typing import Any
@@ -82,9 +83,18 @@ def _iter_kb_json_files():
 
     ``Path.glob`` order is OS-dependent; indexing and content hashing must
     iterate in a deterministic order so shipped indexes match across platforms.
+
+    Security: resolved paths are validated to stay within KB_DIR, preventing
+    symlink-based path traversal.
     """
+    kb_dir_resolved = KB_DIR.resolve()
     for file in sorted(KB_DIR.glob("*.json"), key=lambda p: p.name):
         if file.name in _EXCLUDED_KB_FILES:
+            continue
+        # Path traversal protection: reject symlinks or paths resolving outside KB_DIR.
+        resolved = file.resolve()
+        if not resolved.is_relative_to(kb_dir_resolved):
+            logger.warning("KB file %s resolves outside KB_DIR — skipping (path traversal guard)", file.name)
             continue
         yield file
 
@@ -104,7 +114,7 @@ def _load_kb_text() -> list[tuple[str, str]]:
             for path, text in _flatten(data, prefix=file.stem):
                 all_text.append((path, text))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-            logger.debug("Failed to load KB file %s: %s", file.name, exc)
+            logger.warning("Skipping KB file %s: %s", file.name, exc)
             continue
     return all_text
 
@@ -119,7 +129,8 @@ def _kb_max_mtime() -> tuple[float, int]:
     for file in _iter_kb_json_files():
         try:
             mtimes.append(file.stat().st_mtime)
-        except OSError:
+        except OSError as exc:
+            logger.warning("Cannot stat KB file %s: %s", file.name, exc)
             continue
     return (max(mtimes) if mtimes else 0.0, len(mtimes))
 
@@ -551,6 +562,9 @@ def search_olive_documentation(
     """
     if top_k < 0:
         raise ValueError(f"top_k must be >= 0, got {top_k}")
+
+    # Input sanitization: limit query length and strip control characters.
+    query = re.sub(r'[\x00-\x1f\x7f]', '', query[:2000]).strip()
 
     mode_arg = mode if (mode or "").strip() else None
     resolved_mode = get_retrieval_mode(mode_arg)

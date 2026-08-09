@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { getPipelineValidation, applyIssueAutofix, type PipelineIssue } from "@/lib/pipelineValidation";
 import { validatePassParameters } from "@/lib/passParameterValidation";
 import { validateMcpParams, clearParamCache, type McpParamWarning } from "@/lib/mcpParamValidation";
-import { useMcpDiagnostic } from "@/lib/hooks";
+import { useMcpDiagnostic } from "@/lib/hooks/useMcpDiagnostic";
 import { buildPipelineSteps } from "./graphLayout";
 import { UIState, type IHVProvider } from "@/types";
 import { AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Info, RefreshCw, Zap } from "lucide-react";
@@ -244,14 +244,14 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     // Framework not supported warning
     ...(compatResult && compatResult.framework_supported === false
       ? [
-          {
-            id: "compat-framework-unsupported",
-            severity: "warning" as const,
-            title: `Framework '${compatResult.framework}' may not be fully supported for this model`,
-            description: "Consider converting to ONNX first",
-            source: "compatibility" as const,
-          },
-        ]
+        {
+          id: "compat-framework-unsupported",
+          severity: "warning" as const,
+          title: `Framework '${compatResult.framework}' may not be fully supported for this model`,
+          description: "Consider converting to ONNX first",
+          source: "compatibility" as const,
+        },
+      ]
       : []),
     // Hardware-specific parameter warnings
     ...paramWarnings.map((w) => ({
@@ -274,26 +274,26 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     // MCP error diagnostic — known error patterns from the troubleshooting knowledge base
     ...(mcpDiagnostic
       ? [
-          {
-            id: `mcp-diag-${mcpDiagnostic.matched_entry ?? "unknown"}`,
-            severity: "critical" as const,
-            title: `[MCP] ${mcpDiagnostic.title}`,
-            description: `Root cause: ${mcpDiagnostic.root_cause}. Workaround: ${mcpDiagnostic.workaround}`,
-            source: "mcp-diagnostic" as const,
-          },
-        ]
+        {
+          id: `mcp-diag-${mcpDiagnostic.matched_entry ?? "unknown"}`,
+          severity: "critical" as const,
+          title: `[MCP] ${mcpDiagnostic.title}`,
+          description: `Root cause: ${mcpDiagnostic.root_cause}. Workaround: ${mcpDiagnostic.workaround}`,
+          source: "mcp-diagnostic" as const,
+        },
+      ]
       : []),
     // MCP diagnostic loading indicator
     ...(mcpDiagnosing
       ? [
-          {
-            id: "mcp-diag-loading",
-            severity: "warning" as const,
-            title: "Querying MCP knowledge base for known solutions...",
-            description: "Checking if this error pattern has a documented workaround.",
-            source: "mcp-diagnostic" as const,
-          },
-        ]
+        {
+          id: "mcp-diag-loading",
+          severity: "warning" as const,
+          title: "Querying MCP knowledge base for known solutions...",
+          description: "Checking if this error pattern has a documented workaround.",
+          source: "mcp-diagnostic" as const,
+        },
+      ]
       : []),
   ];
 
@@ -393,9 +393,8 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
                       <Info className="h-3 w-3 text-amber-400 shrink-0" />
                     )}
                     <span
-                      className={`text-xs font-medium ${
-                        issue.severity === "critical" ? "text-rose-300" : "text-amber-300"
-                      }`}
+                      className={`text-xs font-medium ${issue.severity === "critical" ? "text-rose-300" : "text-amber-300"
+                        }`}
                     >
                       {issue.title}
                     </span>

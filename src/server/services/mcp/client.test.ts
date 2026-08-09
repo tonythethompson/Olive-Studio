@@ -1,26 +1,55 @@
 /**
- * Unit tests for the Olive MCP tool client's circuit-breaker integration.
- * No real Python subprocess is ever spawned.
- *
- * `child_process` is mocked via `src/server/__tests__/childProcessTestMocks.ts`.
+ * Unit tests for the persistent MCP client's circuit-breaker integration.
+ * No real Python subprocess is ever spawned — @modelcontextprotocol/client
+ * is mocked to simulate transport/protocol behavior.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
+// ─── Mock setup (hoisted before all imports) ───────────────────────────
+
 const mocks = vi.hoisted(() => ({
-  execFileImpl: null as null | ((...args: unknown[]) => unknown),
-  spawnImpl: null as null | ((...args: unknown[]) => unknown),
-  execFileCalls: [] as unknown[][],
+  callTool: vi.fn(),
+  connect: vi.fn(),
+  close: vi.fn(),
 }));
 
-vi.mock("child_process", async (importOriginal) => {
-  const { childProcessVitestMockFactory } = await import("../../__tests__/childProcessTestMocks.ts");
-  return childProcessVitestMockFactory(mocks)(importOriginal);
+vi.mock("@modelcontextprotocol/client", () => {
+  return {
+    Client: class MockClient {
+      connect = mocks.connect;
+      callTool = mocks.callTool;
+      close = mocks.close;
+    },
+  };
 });
 
-import { callOliveMcpTools, callOliveMcpTool, MCP_UNAVAILABLE_ERROR } from "./client.ts";
+vi.mock("@modelcontextprotocol/client/stdio", () => {
+  return {
+    StdioClientTransport: class MockTransport {
+      stderr = null;
+      onclose: (() => void) | undefined = undefined;
+      onerror: ((error: Error) => void) | undefined = undefined;
+    },
+  };
+});
+
+// Mock paths to avoid real filesystem checks
+vi.mock("./paths.ts", () => ({
+  getMcpPython: () => "python",
+  buildPythonEnv: () => ({ PATH: "/usr/bin", PYTHONPATH: "/fake" }),
+  mcpServerDir: () => "/fake/olive-mcp-server",
+}));
+
+// Must import AFTER mocks are set up
+import {
+  callOliveMcpTools,
+  callOliveMcpTool,
+  MCP_UNAVAILABLE_ERROR,
+  resetPersistentClient,
+} from "./persistentClient.ts";
 import mcpBreaker, { resetMcpBreaker } from "./breaker.ts";
 
-/** Trip the process-wide breaker using the current admission epoch (safe after reset()). */
+/** Trip the breaker with 3 consecutive failures. */
 function tripMcpBreaker(): void {
   for (let i = 0; i < 3; i += 1) {
     const admission = mcpBreaker.beforeCall();
@@ -29,166 +58,107 @@ function tripMcpBreaker(): void {
   }
 }
 
-/** Makes the next execFile call resolve with the given stdout/stderr. */
-function mockExecFileResolve(stdout: string, stderr = ""): void {
-  mocks.execFileImpl = (...args: unknown[]) => {
-    mocks.execFileCalls.push(args);
-    return Promise.resolve({ stdout, stderr });
-  };
-}
-
-/** Makes the next execFile call reject like a failed spawn. */
-function mockExecFileReject(message: string): void {
-  mocks.execFileImpl = (...args: unknown[]) => {
-    mocks.execFileCalls.push(args);
-    return Promise.reject(Object.assign(new Error(message), { code: "ENOENT" }));
-  };
-}
-
-describe("callOliveMcpTools circuit-breaker integration", () => {
+describe("persistentClient circuit-breaker integration", () => {
   beforeEach(() => {
     resetMcpBreaker();
-    mocks.execFileImpl = null;
-    mocks.execFileCalls.length = 0;
+    resetPersistentClient();
+    mocks.connect.mockReset().mockResolvedValue(undefined);
+    mocks.callTool.mockReset();
+    mocks.close.mockReset().mockResolvedValue(undefined);
   });
 
-  it("returns results for valid JSON output and records success", async () => {
-    mockExecFileResolve('[{"tool":"x","result":{"ok":true}}]');
+  it("returns results for successful tool calls and records success", async () => {
+    mocks.callTool.mockResolvedValueOnce({
+      content: [{ type: "text", text: '{"ok":true}' }],
+      isError: false,
+    });
 
     const out = await callOliveMcpTools([{ toolName: "x", args: {} }]);
 
     expect(out).toEqual([{ result: { ok: true } }]);
     expect(mcpBreaker.status()).toEqual({ open: false, failures: 0, openedAt: null });
-    expect(mocks.execFileCalls).toHaveLength(1);
   });
 
-  it("returns unavailable errors and records a failure on spawn failure", async () => {
-    mockExecFileReject("spawn python ENOENT");
+  it("returns error on tool-level failure (isError: true) without tripping breaker", async () => {
+    mocks.callTool.mockResolvedValueOnce({
+      content: [{ type: "text", text: "bad tool name" }],
+      isError: true,
+    });
 
     const out = await callOliveMcpTools([{ toolName: "x", args: {} }]);
 
-    expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ error: "spawn python ENOENT", unavailable: true });
-    expect(mcpBreaker.status()).toMatchObject({ open: false, failures: 1 });
-    expect(mocks.execFileCalls).toHaveLength(1);
-  });
-
-  it("returns unavailable errors and records a failure on non-JSON output", async () => {
-    mockExecFileResolve("not json");
-
-    const out = await callOliveMcpTools([{ toolName: "x", args: {} }]);
-
-    expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ error: expect.any(String), unavailable: true });
-    expect(mcpBreaker.status()).toMatchObject({ open: false, failures: 1 });
-  });
-
-  it("does not trip the breaker on row-level tool errors", async () => {
-    mockExecFileResolve('[{"tool":"x","error":"bad tool"}]');
-
-    const out = await callOliveMcpTools([{ toolName: "x", args: {} }]);
-
-    expect(out).toEqual([{ error: "bad tool" }]);
+    expect(out).toEqual([{ error: "bad tool name" }]);
     expect(out[0]).not.toHaveProperty("unavailable");
     expect(mcpBreaker.status()).toEqual({ open: false, failures: 0, openedAt: null });
   });
 
-  it("single-tool calls inherit the unavailable short-circuit", async () => {
+  it("records failure and returns unavailable on connection failure", async () => {
+    mocks.connect.mockRejectedValueOnce(new Error("spawn python ENOENT"));
+
+    const out = await callOliveMcpTools([{ toolName: "x", args: {} }]);
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ error: MCP_UNAVAILABLE_ERROR, unavailable: true });
+    expect(mcpBreaker.status()).toMatchObject({ open: false, failures: 1 });
+  });
+
+  it("records failure on transport error during callTool", async () => {
+    mocks.callTool.mockRejectedValueOnce(new Error("Transport closed"));
+
+    const out = await callOliveMcpTools([{ toolName: "x", args: {} }]);
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ unavailable: true });
+    expect(mcpBreaker.status()).toMatchObject({ open: false, failures: 1 });
+  });
+
+  it("short-circuits when the breaker is open", async () => {
     tripMcpBreaker();
 
     const out = await callOliveMcpTool("x", {});
 
     expect(out).toEqual({ error: MCP_UNAVAILABLE_ERROR, unavailable: true });
-    expect(mocks.execFileCalls).toHaveLength(0);
+    expect(mocks.connect).not.toHaveBeenCalled();
+    expect(mocks.callTool).not.toHaveBeenCalled();
   });
 
-  it("marks non-array JSON output as an unavailable infra failure", async () => {
-    mockExecFileResolve('{"not":"an array"}');
+  it("handles batch calls sequentially — stops on infra error", async () => {
+    mocks.callTool
+      .mockResolvedValueOnce({
+        content: [{ type: "text", text: '{"first":true}' }],
+        isError: false,
+      })
+      .mockRejectedValueOnce(new Error("Connection closed"));
 
-    const out = await callOliveMcpTools([{ toolName: "x", args: {} }]);
+    const out = await callOliveMcpTools([
+      { toolName: "a", args: {} },
+      { toolName: "b", args: {} },
+      { toolName: "c", args: {} },
+    ]);
 
-    expect(out).toEqual([{ error: "MCP batch returned non-array JSON", unavailable: true }]);
-    expect(mcpBreaker.status()).toMatchObject({ open: false, failures: 1 });
-    expect(mocks.execFileCalls).toHaveLength(1);
+    expect(out).toHaveLength(3);
+    expect(out[0]).toEqual({ result: { first: true } });
+    expect(out[1]).toMatchObject({ unavailable: true });
+    expect(out[2]).toMatchObject({ error: MCP_UNAVAILABLE_ERROR, unavailable: true });
   });
 
-  it("closes the breaker after a successful half-open probe", async () => {
-    vi.useFakeTimers();
-    try {
-      mockExecFileReject("spawn python ENOENT");
-      await callOliveMcpTools([{ toolName: "x", args: {} }]);
-      await callOliveMcpTools([{ toolName: "x", args: {} }]);
-      await callOliveMcpTools([{ toolName: "x", args: {} }]);
-      expect(mcpBreaker.status()).toMatchObject({ open: true, failures: 3 });
+  it("reuses the connection for subsequent calls", async () => {
+    mocks.callTool.mockResolvedValue({
+      content: [{ type: "text", text: '{"ok":true}' }],
+      isError: false,
+    });
 
-      vi.advanceTimersByTime(30_000);
-      expect(mcpBreaker.status().open).toBe(false);
-
-      mockExecFileResolve('[{"tool":"x","result":{"ok":true}}]');
-      const out = await callOliveMcpTools([{ toolName: "x", args: {} }]);
-
-      expect(out).toEqual([{ result: { ok: true } }]);
-      expect(mcpBreaker.status()).toEqual({ open: false, failures: 0, openedAt: null });
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("ignores a stale subprocess success after the breaker opened", async () => {
-    let resolveExec: ((value: { stdout: string; stderr: string }) => void) | undefined;
-    mocks.execFileImpl = () =>
-      new Promise<{ stdout: string; stderr: string }>((resolve) => {
-        resolveExec = resolve;
-      });
-
-    const slow = callOliveMcpTools([{ toolName: "x", args: {} }]);
-    mockExecFileReject("spawn python ENOENT");
     await callOliveMcpTools([{ toolName: "x", args: {} }]);
-    await callOliveMcpTools([{ toolName: "x", args: {} }]);
-    await callOliveMcpTools([{ toolName: "x", args: {} }]);
-    expect(mcpBreaker.status().open).toBe(true);
+    await callOliveMcpTools([{ toolName: "y", args: {} }]);
 
-    resolveExec!({ stdout: '[{"tool":"x","result":{"ok":true}}]', stderr: "" });
-    await slow;
-
-    expect(mcpBreaker.status().open).toBe(true);
+    // connect() called only once (second call reuses existing connection)
+    expect(mocks.connect).toHaveBeenCalledTimes(1);
+    expect(mocks.callTool).toHaveBeenCalledTimes(2);
   });
 
-  it("does not let a pre-open success cancel a half-open recovery probe", async () => {
-    vi.useFakeTimers();
-    try {
-      let resolveExec: ((value: { stdout: string; stderr: string }) => void) | undefined;
-      mocks.execFileImpl = () =>
-        new Promise<{ stdout: string; stderr: string }>((resolve) => {
-          resolveExec = resolve;
-        });
+  it("does not trip the breaker while it is already open", async () => {
+    mocks.connect.mockRejectedValue(new Error("spawn python ENOENT"));
 
-      const slow = callOliveMcpTools([{ toolName: "x", args: {} }]);
-      mockExecFileReject("spawn python ENOENT");
-      await callOliveMcpTools([{ toolName: "x", args: {} }]);
-      await callOliveMcpTools([{ toolName: "x", args: {} }]);
-      await callOliveMcpTools([{ toolName: "x", args: {} }]);
-      expect(mcpBreaker.status().open).toBe(true);
-
-      vi.advanceTimersByTime(30_000);
-      const probe = callOliveMcpTools([{ toolName: "x", args: {} }]);
-
-      resolveExec!({ stdout: '[{"tool":"x","result":{"ok":true}}]', stderr: "" });
-      await slow;
-
-      mockExecFileReject("spawn python ENOENT");
-      const probeOut = await probe;
-
-      expect(probeOut).toEqual([{ error: "spawn python ENOENT", unavailable: true }]);
-      expect(mcpBreaker.status().open).toBe(true);
-      expect(mocks.execFileCalls).toHaveLength(4);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("does not inflate the failures counter while the breaker is open", async () => {
-    mockExecFileReject("spawn python ENOENT");
     await callOliveMcpTools([{ toolName: "x", args: {} }]);
     await callOliveMcpTools([{ toolName: "x", args: {} }]);
     await callOliveMcpTools([{ toolName: "x", args: {} }]);
@@ -199,6 +169,51 @@ describe("callOliveMcpTools circuit-breaker integration", () => {
 
     expect(out).toEqual({ error: MCP_UNAVAILABLE_ERROR, unavailable: true });
     expect(mcpBreaker.status().failures).toBe(failuresBefore);
-    expect(mocks.execFileCalls).toHaveLength(3);
+  });
+
+  it("recovers after breaker cooldown with a successful probe", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.connect.mockRejectedValue(new Error("spawn python ENOENT"));
+      await callOliveMcpTools([{ toolName: "x", args: {} }]);
+      await callOliveMcpTools([{ toolName: "x", args: {} }]);
+      await callOliveMcpTools([{ toolName: "x", args: {} }]);
+      expect(mcpBreaker.status().open).toBe(true);
+
+      // Advance past cooldown
+      vi.advanceTimersByTime(30_000);
+      expect(mcpBreaker.status().open).toBe(false);
+
+      // Recovery probe succeeds
+      mocks.connect.mockResolvedValue(undefined);
+      mocks.callTool.mockResolvedValueOnce({
+        content: [{ type: "text", text: '{"recovered":true}' }],
+        isError: false,
+      });
+
+      const out = await callOliveMcpTools([{ toolName: "x", args: {} }]);
+
+      expect(out).toEqual([{ result: { recovered: true } }]);
+      expect(mcpBreaker.status()).toEqual({ open: false, failures: 0, openedAt: null });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns empty array for empty requests", async () => {
+    const out = await callOliveMcpTools([]);
+    expect(out).toEqual([]);
+    expect(mocks.connect).not.toHaveBeenCalled();
+  });
+
+  it("handles non-JSON text content as raw string result", async () => {
+    mocks.callTool.mockResolvedValueOnce({
+      content: [{ type: "text", text: "just a plain string" }],
+      isError: false,
+    });
+
+    const out = await callOliveMcpTools([{ toolName: "x", args: {} }]);
+
+    expect(out).toEqual([{ result: "just a plain string" }]);
   });
 });

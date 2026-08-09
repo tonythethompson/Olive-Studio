@@ -6,6 +6,7 @@ import fs from "fs";
 import { ANY_DOT_VENV_DIR } from "./src/server/shared/anyDotVenvDir.ts";
 
 import { loadStudioEnv } from "./src/server/loadStudioEnv.ts";
+import { shutdownMcpClient } from "./src/server/services/mcp/client.ts";
 import { mountSystemRoutes, type SystemProbeOptions } from "./src/server/routes/system.ts";
 import { mountGithubRoutes } from "./src/server/routes/github.ts";
 import { mountAiRoutes } from "./src/server/routes/ai/index.ts";
@@ -299,14 +300,14 @@ async function startServer() {
 
 process.on("SIGINT", () => {
   // eslint-disable-next-line no-console -- intentional shutdown logging
-  console.log("\n[SIGINT] Shutting down (modular routes handle cleanup).");
-  process.exit(0);
+  console.log("\n[SIGINT] Shutting down.");
+  void shutdownMcpClient().finally(() => process.exit(0));
 });
 
 process.on("SIGTERM", () => {
   // eslint-disable-next-line no-console -- intentional shutdown logging
-  console.log("\n[SIGTERM] Shutting down (modular routes handle cleanup).");
-  process.exit(0);
+  console.log("\n[SIGTERM] Shutting down.");
+  void shutdownMcpClient().finally(() => process.exit(0));
 });
 
 process.on("exit", () => {
