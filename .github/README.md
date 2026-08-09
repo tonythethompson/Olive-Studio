@@ -200,6 +200,25 @@ Issues and pull requests welcome. See [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ---
 
+## Roadmap
+
+**v0.2** (next)
+- Persistent MCP connection (replace subprocess spawn, ~5ms tool calls)
+- Typed pass configuration (discriminated union per pass type)
+- Component splits for large panels
+- GitHub issue triage and cleanup
+
+**Later**
+- Stateful Olive Agent (plan, execute, observe, auto-retry)
+- Published MCP server (PyPI / Docker, usable without the GUI)
+- Tauri desktop packaging (signed installer, auto-update)
+- Multi-model batch comparison view
+- Export optimization reports
+
+Full details in [docs/ROADMAP.md](../docs/ROADMAP.md).
+
+---
+
 ## Related
 
 - [Microsoft Olive](https://github.com/microsoft/Olive) — the optimization engine
