@@ -45,7 +45,7 @@ export async function getInstalledTensorRtRtxVersion(python: string): Promise<st
     const { stdout } = await execFileAsync(python, [
       "-c",
       "import tensorrt_rtx; print(tensorrt_rtx.__version__)",
-    ]);
+    ], { timeout: 30_000 });
     return stdout.trim() || null;
   } catch {
     return null;
@@ -57,7 +57,7 @@ export async function getTensorRtRtxLibsDir(python: string): Promise<string | nu
     const { stdout } = await execFileAsync(python, [
       "-c",
       "import os, tensorrt_rtx_libs; print(os.path.dirname(tensorrt_rtx_libs.__file__))",
-    ]);
+    ], { timeout: 30_000 });
     const dir = stdout.trim();
     return dir && fs.existsSync(dir) ? dir : null;
   } catch {
@@ -140,7 +140,7 @@ if "NvTensorRTRTXExecutionProvider" not in ort.get_available_providers():
 print("ok:" + tensorrt_rtx.__version__)
 `.trim();
   try {
-    const { stdout } = await execFileAsync(python, ["-c", probeScript], { env });
+    const { stdout } = await execFileAsync(python, ["-c", probeScript], { env, timeout: 60_000 });
     const out = stdout.trim();
     if (/(?:^|\n)ok:/.test(out)) {
       return {
