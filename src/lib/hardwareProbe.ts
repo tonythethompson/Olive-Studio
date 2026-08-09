@@ -555,9 +555,7 @@ export function isProviderDetectedLocally(
 }
 
 // Module-level deduplication: concurrent callers share a single in-flight request.
-// Keep refresh and non-refresh requests separate so a forced refresh is never
-// accidentally satisfied by an older, non-refresh request.
-const _probeInflight = new Map<boolean, Promise<HardwareProbeResult>>();
+let _probeInflight: Promise<HardwareProbeResult> | null = null;
 let _probeCache: HardwareProbeResult | null = null;
 const PROBE_CACHE_TTL_MS = 30_000; // 30s
 let _probeCacheTime = 0;
@@ -568,44 +566,35 @@ export async function fetchHardwareProbe(refresh = false): Promise<HardwareProbe
     return _probeCache;
   }
 
-  // Deduplicate concurrent calls with the same refresh semantics.
-  const inflight = _probeInflight.get(refresh);
-  if (inflight) {
-    return inflight;
+  // Deduplicate concurrent calls
+  if (_probeInflight) {
+    return _probeInflight;
   }
 
-  const promise = (async () => {
-    const url = refresh ? "/api/system/hardware-probe?refresh=1" : "/api/system/hardware-probe";
-    const res = await fetch(url);
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(body.error ?? `Hardware probe failed (${res.status})`);
-    }
-    const result = (await res.json()) as HardwareProbeResult;
+  _probeInflight = (async () => {
+    try {
+      const url = refresh ? "/api/system/hardware-probe?refresh=1" : "/api/system/hardware-probe";
+      const res = await fetch(url);
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `Hardware probe failed (${res.status})`);
+      }
+      const result = (await res.json()) as HardwareProbeResult;
 
-    if (!refresh && (result.platform.systemRamGb == null || result.platform.systemRamGb <= 0)) {
-      // Retry directly within this operation. Calling fetchHardwareProbe here
-      // would find this promise in the map and resolve it to itself.
-      return fetchHardwareProbe(true);
-    }
+      if (!refresh && (result.platform.systemRamGb == null || result.platform.systemRamGb <= 0)) {
+        // Clear inflight before recursive refresh call to avoid returning the
+        // same promise (self-cycle) from the deduplication branch.
+        _probeInflight = null;
+        return fetchHardwareProbe(true);
+      }
 
-    _probeCache = result;
-    _probeCacheTime = Date.now();
-    return result;
+      _probeCache = result;
+      _probeCacheTime = Date.now();
+      return result;
+    } finally {
+      _probeInflight = null;
+    }
   })();
 
-  _probeInflight.set(refresh, promise);
-  void promise.then(
-    () => {
-      if (_probeInflight.get(refresh) === promise) {
-        _probeInflight.delete(refresh);
-      }
-    },
-    () => {
-      if (_probeInflight.get(refresh) === promise) {
-        _probeInflight.delete(refresh);
-      }
-    },
-  );
-  return promise;
+  return _probeInflight;
 }

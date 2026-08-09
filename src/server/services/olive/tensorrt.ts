@@ -100,7 +100,7 @@ async function ensureOnnxRuntimeGpu(
   env: NodeJS.ProcessEnv,
 ): Promise<void> {
   try {
-    const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT], { env });
+    const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT], { env, timeout: 60_000 });
     const probe = parseOrtGpuProbe(stdout);
     if (probe.ok) {
       onLine("[deps] onnxruntime-gpu already installed ✓");

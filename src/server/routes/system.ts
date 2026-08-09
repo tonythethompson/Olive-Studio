@@ -517,6 +517,166 @@ export interface SystemProbeOptions {
   probeQnn: (python: string) => Promise<QnnProbeResult>;
 }
 
+/** Mutable accumulator updated by each venv iteration. */
+interface VenvProbeState {
+  openvino: OpenVinoProbeResult | undefined;
+  openvinoVenvAvailable: boolean;
+  qnn: QnnProbeResult | undefined;
+  qnnVenvLoadable: boolean;
+  defaultOrtProviders: string[] | undefined;
+  cudaOrtProviders: string[] | undefined;
+  openvinoOrtProviders: string[] | undefined;
+  qnnOrtProviders: string[] | undefined;
+  systemOrtProviders: string[] | undefined;
+  tensorrt: HardwareProbeResult["tensorrt"];
+  tensorRtRtx: HardwareProbeResult["tensorRtRtx"];
+  cuda: HardwareProbeResult["cuda"] | undefined;
+  tensorRtVenvLoadable: boolean;
+  tensorRtRtxVenvLoadable: boolean;
+  cudaVenvLoadable: boolean;
+}
+
+/**
+ * Probes GPU hardware (NVIDIA, ROCm, Intel) in parallel.
+ */
+async function probeGpuHardware() {
+  const [nvidia, rocm, intelGpuNames] = await Promise.all([
+    probeNvidiaGpus(),
+    probeRocmGpus(),
+    probeIntelGpuNames(),
+  ]);
+  return { nvidia, rocm, intelGpuNames };
+}
+
+/**
+ * Probes a single Python venv for ORT providers, CUDA, TensorRT, OpenVINO, and QNN capabilities.
+ * Mutates the shared `state` accumulator.
+ */
+async function probeVenvCapabilities(
+  python: string,
+  family: { isDefault: boolean; isCuda: boolean; isOpenvino: boolean; isQnn: boolean },
+  opts: SystemProbeOptions,
+  state: VenvProbeState,
+  cudaPythonExists: boolean,
+): Promise<void> {
+  const { isDefault, isCuda, isOpenvino, isQnn } = family;
+  const familyEnv = isCuda
+    ? envForFamily("cuda")
+    : isOpenvino
+      ? envForFamily("openvino")
+      : isQnn
+        ? envForFamily("qnn")
+        : isDefault
+          ? envForFamily("default")
+          : process.env;
+
+  const [pyResult, ov, qnnProbe] = await Promise.all([
+    probePythonRuntime(python, familyEnv),
+    isOpenvino
+      ? opts.probeOpenVino(python)
+      : Promise.resolve({ available: false } as OpenVinoProbeResult),
+    isQnn
+      ? opts.probeQnn(python)
+      : Promise.resolve({ available: false } as QnnProbeResult),
+  ]);
+
+  // OpenVINO
+  const hasOpenVinoSignal = Boolean(ov.version || ov.devices?.length || ov.optimumIntel || ov.detail);
+  if (isOpenvino && (hasOpenVinoSignal || ov.available)) {
+    state.openvino = ov;
+    state.openvinoVenvAvailable = ov.available;
+  }
+
+  // QNN
+  if (isQnn && (qnnProbe.available || qnnProbe.detail || qnnProbe.pluginVersion)) {
+    state.qnn = qnnProbe;
+    if (
+      markQnnVenvLoadable({
+        isQnn: true,
+        loadable: Boolean(qnnProbe.loadable || qnnProbe.preparation),
+      })
+    ) {
+      state.qnnVenvLoadable = true;
+    }
+  }
+
+  // ORT providers
+  if (pyResult.onnxRuntimeProviders?.length) {
+    if (isDefault) state.defaultOrtProviders = pyResult.onnxRuntimeProviders;
+    else if (isCuda) state.cudaOrtProviders = pyResult.onnxRuntimeProviders;
+    else if (isOpenvino) state.openvinoOrtProviders = pyResult.onnxRuntimeProviders;
+    else if (isQnn) state.qnnOrtProviders = pyResult.onnxRuntimeProviders;
+    else state.systemOrtProviders = pyResult.onnxRuntimeProviders;
+  }
+
+  // CUDA / TRT probes prefer the cuda-family python, with PATH isolation so
+  // sibling family Scripts dirs cannot skew EP discovery.
+  if (!state.cuda && (isCuda || (!cudaPythonExists && isDefault))) {
+    try {
+      const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT], {
+        timeout: ORT_PROBE_TIMEOUT_MS,
+        env: familyEnv,
+      });
+      const probe = parseOrtGpuProbe(stdout);
+      if (isCuda && probe.ok) state.cudaVenvLoadable = true;
+      if (isDefault && !cudaPythonExists && probe.ok) state.cudaVenvLoadable = true;
+      const pinnedLabel = pinnedOrtGpuLabel();
+      const requiredVersionMatch = pinnedLabel.match(/==\s*([\d.]+[^\s]*)/);
+      const pinnedVersion = requiredVersionMatch?.[1] ?? pinnedLabel;
+      state.cuda = {
+        loadable: probe.ok,
+        detail: probe.ok
+          ? undefined
+          : probe.cudaUsable === false
+            ? `onnxruntime-gpu CUDA EP not registered (driver/wheel mismatch — got dist ${probe.distVersion ?? "?"} / ort ${probe.ortVersion ?? "?"})`
+            : `onnxruntime-gpu not at pinned version ${probe.distVersion ?? probe.ortVersion ?? "?"} (required ${pinnedVersion})`,
+      };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      state.cuda = {
+        loadable: false,
+        detail: /No module named ['"]onnxruntime['"]/i.test(msg)
+          ? "onnxruntime (CPU/GPU) not installed in CUDA runtime"
+          : `onnxruntime-gpu probe failed: ${msg.split(/\r?\n/, 1)[0] ?? msg}`,
+      };
+    }
+  }
+
+  if (!state.tensorrt?.loadable && (isCuda || (!cudaPythonExists && isDefault))) {
+    const trt = await opts.probeTensorRtLoadable(python, familyEnv);
+    if (
+      markTensorRtVenvLoadable({
+        isCuda,
+        isDefault,
+        cudaPythonExists,
+        loadable: trt.loadable,
+      })
+    ) {
+      state.tensorRtVenvLoadable = true;
+    }
+    if (trt.loadable || !state.tensorrt) {
+      state.tensorrt = trt;
+    }
+  }
+
+  if (!state.tensorRtRtx?.loadable && (isCuda || (!cudaPythonExists && isDefault))) {
+    const rtx = await opts.probeTensorRtRtxLoadable(python, familyEnv);
+    if (
+      markTensorRtVenvLoadable({
+        isCuda,
+        isDefault,
+        cudaPythonExists,
+        loadable: rtx.loadable,
+      })
+    ) {
+      state.tensorRtRtxVenvLoadable = true;
+    }
+    if (rtx.loadable || !state.tensorRtRtx) {
+      state.tensorRtRtx = rtx;
+    }
+  }
+}
+
 /**
  * Probes the host system for hardware capabilities and available inference runtimes.
  *
