@@ -120,13 +120,14 @@ export function HardwareProbeDisplay({
                   <button
                     type="button"
                     onClick={() =>
-                      setState(
-                        prepareProviderChange(
-                          state,
-                          hardwareProbe.recommendedProvider,
-                          hardwareProbe,
-                        ) ?? { ihvProvider: hardwareProbe.recommendedProvider },
-                      )
+                    {
+                      const patch = prepareProviderChange(
+                        state,
+                        hardwareProbe.recommendedProvider,
+                        hardwareProbe,
+                      );
+                      if (patch) setState(patch);
+                    }
                     }
                     className="ml-2 text-sm text-electric-blue hover:text-white cursor-pointer"
                   >

@@ -32,8 +32,8 @@ vi.mock("../services/mcp/persistentClient.ts", async (importOriginal) => {
       if (mcpToolMocks.callOliveMcpToolImpl) {
         return mcpToolMocks.callOliveMcpToolImpl(name, args);
       }
-      // Fall through to original (will be blocked by breaker in tests)
-      return (original.callOliveMcpTool as (n: string, a: Record<string, unknown>) => Promise<unknown>)(name, args);
+      // Fail loudly instead of spawning a real Python process in tests
+      throw new Error(`callOliveMcpTool called without a mock impl set (tool: ${name})`);
     },
     shutdownMcpClient: async () => { },
     resetPersistentClient: () => { },
@@ -106,6 +106,7 @@ beforeEach(() => {
   resetMcpBreaker();
   mcpToolMocks.execFileImpl = null;
   mcpToolMocks.execFileCalls.length = 0;
+  mcpToolMocks.callOliveMcpToolImpl = null;
 });
 
 afterEach(() => {
