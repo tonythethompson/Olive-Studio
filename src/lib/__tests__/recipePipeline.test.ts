@@ -538,26 +538,19 @@ describe("assertRunnableRecipe", () => {
     expect(result.recipeJson).toBeDefined();
   });
 
-  it("throws when the pipeline has critical validation issues", () => {
-    // Create a state that will be blocked after sanitization
-    // AWQ on CPU is blocked — sanitization removes it, but quantization + splitting
-    // on certain configs can trigger blocks
+  it("returns valid result after sanitization resolves conflicts (AWQ→PTQ on CPU)", () => {
+    // AWQ on CPU is a critical conflict, but sanitization auto-fixes it to PTQ.
+    // This verifies the success path: sanitization resolves the conflict.
     const state = baseState({
       ihvProvider: "CPUExecutionProvider" as IHVProvider,
       passes: {
         ...DEFAULT_PASSES,
         quantization: true,
         quantMethod: "awq",
-        // AWQ requires GPU — sanitize will switch to ptq, but let's test a
-        // fundamentally blocked state by using an impossible combo
       },
     });
-    // After sanitization, this should be runnable (sanitize fixes conflicts).
-    // To test the throw, we need a state that stays blocked after sanitize.
-    // The real scenario: calling assertRunnableRecipe with already-sanitized state
-    // that has schema issues won't happen in normal flow, so let's verify it works
-    // for a normal state.
     const result = assertRunnableRecipe(state);
     expect(result.schema.valid).toBe(true);
+    expect(result.isRunnable).toBe(true);
   });
 });
