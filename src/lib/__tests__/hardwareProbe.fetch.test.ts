@@ -5,28 +5,24 @@ import {
   type HardwareProbeResult,
 } from "@/lib/hardwareProbe";
 
-const baseProbe = (overrides?: Partial<HardwareProbeResult>): HardwareProbeResult => ({
-  probedAt: "2026-08-09T00:00:00.000Z",
-  platform: {
-    os: "Windows",
-    arch: "x64",
-    cpuModel: "test-cpu",
-    cpuCores: 8,
-    systemRamGb: 32,
-  },
-  detectedProviders: ["CPUExecutionProvider"],
-  recommendedProvider: "CPUExecutionProvider",
-  notes: [],
-  ...overrides,
-  platform: {
-    os: "Windows",
-    arch: "x64",
-    cpuModel: "test-cpu",
-    cpuCores: 8,
-    systemRamGb: 32,
-    ...overrides?.platform,
-  },
-});
+const baseProbe = (overrides?: Partial<HardwareProbeResult>): HardwareProbeResult => {
+  const { platform: platformOverride, ...rest } = overrides ?? {};
+  return {
+    probedAt: "2026-08-09T00:00:00.000Z",
+    detectedProviders: ["CPUExecutionProvider"],
+    recommendedProvider: "CPUExecutionProvider",
+    notes: [],
+    ...rest,
+    platform: {
+      os: "Windows",
+      arch: "x64",
+      cpuModel: "test-cpu",
+      cpuCores: 8,
+      systemRamGb: 32,
+      ...platformOverride,
+    },
+  };
+};
 
 const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
