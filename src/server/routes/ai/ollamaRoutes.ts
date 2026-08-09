@@ -19,6 +19,62 @@ import {
 import { trackStreamClient, beginPullSse } from "./streamHelpers.ts";
 import { isParseBodyError, parseBody } from "../../middleware/bodyGuard.ts";
 
+type PullSend = (evt: Record<string, unknown>) => void;
+
+interface PullStreamResult {
+  /** Whether the stream completed cleanly (no error event from Ollama). */
+  ok: boolean;
+}
+
+/**
+ * Read the Ollama pull NDJSON stream, forwarding progress events via `send`.
+ * Returns `{ ok: false }` if Ollama emits an error event mid-stream.
+ */
+async function readOllamaPullStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  send: PullSend,
+  isAborted: () => boolean,
+): Promise<PullStreamResult> {
+  const decoder = new TextDecoder();
+  let buf = "";
+  while (true) {
+    if (isAborted()) {
+      try { await reader.cancel(); } catch { /* ignore */ }
+      return { ok: false };
+    }
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const evt = JSON.parse(line) as {
+          status?: string;
+          completed?: number;
+          total?: number;
+          error?: string;
+        };
+        if (evt.error) {
+          send({ type: "error", error: evt.error });
+          return { ok: false };
+        }
+        if (typeof evt.completed === "number" && typeof evt.total === "number" && evt.total > 0) {
+          send({
+            type: "progress",
+            message: evt.status || "Downloading\u2026",
+            percent: Math.round((evt.completed / evt.total) * 60) + 30,
+          });
+        } else if (evt.status) {
+          send({ type: "log", message: evt.status, percent: evt.status === "success" ? 95 : undefined });
+        }
+      } catch { /* non-JSON line */ }
+    }
+  }
+  return { ok: true };
+}
+
 export function mountOllamaRoutes(router: Router): void {
   router.get("/ai/ollama-models", async (_req, res) => {
     try {
@@ -173,60 +229,18 @@ export function mountOllamaRoutes(router: Router): void {
         return;
       }
       const reader = r.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      while (true) {
-        if (guard.disconnected() || timedOut) {
-          try {
-            await reader.cancel();
-          } catch {
-            /* ignore */
-          }
-          if (timedOut && !guard.disconnected()) {
-            send({
-              type: "error",
-              error: "Ollama download exceeded the server time limit (20 minutes).",
-              hint: "Retry when the network is stable, or run `ollama pull` in a terminal.",
-            });
-          }
-          releaseBusy();
-          guard.endOnce();
-          return;
+      const streamResult = await readOllamaPullStream(reader, send, () => guard.disconnected() || timedOut);
+      if (!streamResult.ok) {
+        if (timedOut && !guard.disconnected()) {
+          send({
+            type: "error",
+            error: "Ollama download exceeded the server time limit (20 minutes).",
+            hint: "Retry when the network is stable, or run `ollama pull` in a terminal.",
+          });
         }
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const evt = JSON.parse(line) as {
-              status?: string;
-              completed?: number;
-              total?: number;
-              error?: string;
-            };
-            if (evt.error) {
-              send({ type: "error", error: evt.error });
-              releaseBusy();
-              guard.endOnce();
-              return;
-            }
-            if (typeof evt.completed === "number" && typeof evt.total === "number" && evt.total > 0) {
-              send({
-                type: "progress",
-                message: evt.status || "Downloading…",
-                percent: Math.round((evt.completed / evt.total) * 60) + 30,
-              });
-            } else if (evt.status) {
-              // Already-cached pulls often only emit status strings (no byte totals).
-              send({ type: "log", message: evt.status, percent: evt.status === "success" ? 95 : undefined });
-            }
-          } catch {
-            /* non-JSON line */
-          }
-        }
+        releaseBusy();
+        guard.endOnce();
+        return;
       }
 
       const listed = await listOllamaInstalledNames();

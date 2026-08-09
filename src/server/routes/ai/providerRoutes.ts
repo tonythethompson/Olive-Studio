@@ -60,6 +60,39 @@ function envCredentialsPayload() {
   return listEnvCredentialStatus({ cloudflare: cloudflareUsable });
 }
 
+/**
+ * Fetch model catalog for providers with dedicated auth flows (codex, devin, cloudflare).
+ * Returns the catalog response or null if the provider uses the generic path.
+ */
+async function fetchSpecialProviderCatalog(
+  provider: string,
+): Promise<{ models: Array<{ id: string; label: string }>; source: string; error?: string } | null> {
+  if (provider === "codex") {
+    const server = getCodexAppServer();
+    await server.start();
+    const models = await server.listModels();
+    if (models.length > 0) return { models, source: "live" };
+    return { models: [], source: "fallback", error: "Codex returned an empty model catalog. Sign in, then Refresh." };
+  }
+  if (provider === "devin") {
+    const catalog = await listDevinModels();
+    return {
+      models: catalog.models.map((m) => ({ id: m.id, label: m.name || m.id })),
+      source: catalog.source,
+      ...(catalog.error ? { error: catalog.error } : {}),
+    };
+  }
+  if (provider === "cloudflare") {
+    const catalog = await listCloudflareModels();
+    return {
+      models: catalog.models.map((m) => ({ id: m.id, label: m.name || m.id })),
+      source: catalog.source,
+      ...(catalog.error ? { error: catalog.error } : {}),
+    };
+  }
+  return null;
+}
+
 export function mountProviderRoutes(router: Router): void {
   router.get("/ai/provider", (_req, res) => {
     const envCredentials = envCredentialsPayload();
@@ -201,59 +234,8 @@ export function mountProviderRoutes(router: Router): void {
     if (!ALLOWED_AI_PROVIDERS.has(provider))
       return res.status(400).json({ error: `Unsupported provider: ${provider}` });
     try {
-      if (provider === "codex") {
-        try {
-          const server = getCodexAppServer();
-          await server.start();
-          const models = await server.listModels();
-          if (models.length > 0) {
-            return res.json({ models, source: "live" });
-          }
-          return res.json({
-            models: [],
-            source: "fallback",
-            error: "Codex returned an empty model catalog. Sign in, then Refresh.",
-          });
-        } catch (err: unknown) {
-          return res.json({
-            models: [],
-            source: "fallback",
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-      }
-      if (provider === "devin") {
-        try {
-          const catalog = await listDevinModels();
-          return res.json({
-            models: catalog.models.map((m) => ({ id: m.id, label: m.name || m.id })),
-            source: catalog.source,
-            ...(catalog.error ? { error: catalog.error } : {}),
-          });
-        } catch (err: unknown) {
-          return res.json({
-            models: [],
-            source: "fallback",
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-      }
-      if (provider === "cloudflare") {
-        try {
-          const catalog = await listCloudflareModels();
-          return res.json({
-            models: catalog.models.map((m) => ({ id: m.id, label: m.name || m.id })),
-            source: catalog.source,
-            ...(catalog.error ? { error: catalog.error } : {}),
-          });
-        } catch (err: unknown) {
-          return res.json({
-            models: [],
-            source: "fallback",
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-      }
+      const specialCatalog = await fetchSpecialProviderCatalog(provider);
+      if (specialCatalog) return res.json(specialCatalog);
 
       const plugin = getProvider(provider);
       const runtime = getRuntimeAiProvider();
