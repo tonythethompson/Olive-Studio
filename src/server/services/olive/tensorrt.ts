@@ -43,7 +43,9 @@ const TRT_FAIL_MARK = "OLIVE_TRT_FAIL:";
 
 export async function getInstalledTensorRtVersion(python: string): Promise<string | null> {
   try {
-    const { stdout } = await execFileAsync(python, ["-c", "import tensorrt; print(tensorrt.__version__)"]);
+    const { stdout } = await execFileAsync(python, ["-c", "import tensorrt; print(tensorrt.__version__)"], {
+      timeout: 30_000,
+    });
     const version = stdout.trim();
     return version || null;
   } catch {
@@ -62,7 +64,7 @@ export async function getTensorRtLibsDir(python: string): Promise<string | null>
     const { stdout } = await execFileAsync(python, [
       "-c",
       "import os, tensorrt_libs; print(os.path.dirname(tensorrt_libs.__file__))",
-    ]);
+    ], { timeout: 30_000 });
     const dir = stdout.trim();
     return dir && fs.existsSync(dir) ? dir : null;
   } catch {
@@ -98,7 +100,7 @@ async function ensureOnnxRuntimeGpu(
   env: NodeJS.ProcessEnv,
 ): Promise<void> {
   try {
-    const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT], { env });
+    const { stdout } = await execFileAsync(python, ["-c", ORT_GPU_PROBE_SCRIPT], { env, timeout: 60_000 });
     const probe = parseOrtGpuProbe(stdout);
     if (probe.ok) {
       onLine("[deps] onnxruntime-gpu already installed ✓");
@@ -170,6 +172,7 @@ except Exception as exc:
   try {
     const { stdout, stderr } = await execFileAsync(python, ["-c", script], {
       env: probeEnv,
+      timeout: 60_000,
     });
     const out = `${stdout}\n${stderr}`.trim();
     if (/(?:^|\n)olive_trt_ok(?:\n|$)/.test(out)) {

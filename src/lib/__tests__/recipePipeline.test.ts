@@ -6,6 +6,7 @@ import {
   buildOliveRecipeFromBatchJob,
   projectUiStateToRecipeEvaluation,
   serializeRecipe,
+  assertRunnableRecipe,
 } from "@/lib/recipePipeline";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import type { UIState, IHVProvider } from "@/types";
@@ -401,6 +402,24 @@ describe("parseRecipeJson", () => {
     expect(result.schema.valid).toBe(false);
     expect(result.recipe).toEqual({});
   });
+
+  it("returns empty recipe for null JSON value", () => {
+    const result = parseRecipeJson("null");
+    expect(result.schema.valid).toBe(false);
+    expect(result.recipe).toEqual({});
+  });
+
+  it("returns empty recipe for number JSON value", () => {
+    const result = parseRecipeJson("42");
+    expect(result.schema.valid).toBe(false);
+    expect(result.recipe).toEqual({});
+  });
+
+  it("returns empty recipe for boolean JSON value", () => {
+    const result = parseRecipeJson("true");
+    expect(result.schema.valid).toBe(false);
+    expect(result.recipe).toEqual({});
+  });
 });
 
 // ─── buildOliveRecipeFromBatchJob ─────────────────────────────
@@ -475,5 +494,63 @@ describe("buildOliveRecipeFromBatchJob", () => {
       baseState(),
     );
     expect(result.input_model).toBeDefined();
+  });
+
+  it("falls back when recipeJson is syntactically valid but fails schema", () => {
+    const invalid = JSON.stringify({ not_a_recipe: true });
+    const result = buildOliveRecipeFromBatchJob(
+      {
+        modelSource: "huggingface",
+        modelIdentifier: "test/model",
+        provider: "CUDAExecutionProvider" as IHVProvider,
+        recipeJson: invalid,
+      },
+      baseState(),
+    );
+    // Falls back to building from state because schema.valid is false
+    expect(result.input_model).toBeDefined();
+    expect(result.systems).toBeDefined();
+  });
+
+  it("uses azure model path from job when modelSource is azure", () => {
+    const result = buildOliveRecipeFromBatchJob(
+      {
+        modelSource: "azure",
+        modelIdentifier: "azureml://models/my-model/1",
+        provider: "CPUExecutionProvider" as IHVProvider,
+        recipeJson: undefined,
+      },
+      baseState(),
+    );
+    const config = (result.input_model as Record<string, unknown>).config as Record<string, unknown>;
+    expect(config.model_path).toBe("azureml://models/my-model/1");
+  });
+});
+
+// ─── assertRunnableRecipe ─────────────────────────────────────
+
+describe("assertRunnableRecipe", () => {
+  it("returns a RecipePipelineResult for a valid runnable state", () => {
+    const state = baseState();
+    const result = assertRunnableRecipe(state);
+    expect(result.isRunnable).toBe(true);
+    expect(result.recipe).toBeDefined();
+    expect(result.recipeJson).toBeDefined();
+  });
+
+  it("returns valid result after sanitization resolves conflicts (AWQ→PTQ on CPU)", () => {
+    // AWQ on CPU is a critical conflict, but sanitization auto-fixes it to PTQ.
+    // This verifies the success path: sanitization resolves the conflict.
+    const state = baseState({
+      ihvProvider: "CPUExecutionProvider" as IHVProvider,
+      passes: {
+        ...DEFAULT_PASSES,
+        quantization: true,
+        quantMethod: "awq",
+      },
+    });
+    const result = assertRunnableRecipe(state);
+    expect(result.schema.valid).toBe(true);
+    expect(result.isRunnable).toBe(true);
   });
 });

@@ -32,7 +32,7 @@ if nvidia.is_dir():
 print(os.pathsep.join(dirs))
 `.trim();
   try {
-    const { stdout } = await execFileAsync(python, ["-c", script]);
+    const { stdout } = await execFileAsync(python, ["-c", script], { timeout: 60_000 });
     return stdout
       .trim()
       .split(process.platform === "win32" ? ";" : ":")

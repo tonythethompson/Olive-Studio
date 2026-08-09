@@ -1143,6 +1143,237 @@ describe("buildOliveRecipe", () => {
     expect(buildOliveRecipe(withoutData).evaluators).toBeUndefined();
   });
 
+  // ─── QAT quantization method ─────────────────────────────────
+
+  it("creates QATQuantizer for qat method with correct config", () => {
+    const state = baseState({
+      ihvProvider: "CUDAExecutionProvider",
+      passes: {
+        ...DEFAULT_PASSES,
+        quantization: true,
+        quantMethod: "qat",
+        qatQuantPrecision: "int8",
+        qatCalibrateMethod: "minmax",
+        qatCalibrateSteps: 100,
+      },
+    });
+    const recipe = buildOliveRecipe(state);
+    const q = (recipe.passes as Record<string, unknown>).quantization as Record<string, unknown>;
+    expect(q.type).toBe("QATQuantizer");
+    const cfg = q.config as Record<string, unknown>;
+    expect(cfg.precision).toBe("int8");
+    expect(cfg.calibrate_method).toBe("minmax");
+    expect(cfg.calibrate_steps).toBe(100);
+  });
+
+  it("includes data_config and user_script in QAT config when set", () => {
+    const state = baseState({
+      ihvProvider: "CUDAExecutionProvider",
+      hfDataset: "wikitext",
+      userScript: "/qat/script.py",
+      passes: {
+        ...DEFAULT_PASSES,
+        quantization: true,
+        quantMethod: "qat",
+        qatQuantPrecision: "int4",
+        qatCalibrateMethod: "percentile",
+        qatCalibrateSteps: 50,
+      },
+    });
+    const recipe = buildOliveRecipe(state);
+    const cfg = ((recipe.passes as Record<string, unknown>).quantization as Record<string, unknown>)
+      .config as Record<string, unknown>;
+    expect(cfg.data_config).toEqual({ data_dir: "wikitext", batch_size: 1 });
+    expect(cfg.user_script).toBe("/qat/script.py");
+  });
+
+  // ─── HQQ quantization method ─────────────────────────────────
+
+  it("creates OnnxHqqQuantization for hqq method with int4", () => {
+    const state = baseState({
+      ihvProvider: "CUDAExecutionProvider",
+      passes: {
+        ...DEFAULT_PASSES,
+        quantization: true,
+        quantMethod: "hqq",
+        quantPrecision: "int4",
+      },
+    });
+    const recipe = buildOliveRecipe(state);
+    const q = (recipe.passes as Record<string, unknown>).quantization as Record<string, unknown>;
+    expect(q.type).toBe("OnnxHqqQuantization");
+    expect((q.config as Record<string, unknown>).precision).toBe("int4");
+  });
+
+  it("creates OnnxHqqQuantization for hqq method with int8", () => {
+    const state = baseState({
+      ihvProvider: "CUDAExecutionProvider",
+      passes: {
+        ...DEFAULT_PASSES,
+        quantization: true,
+        quantMethod: "hqq",
+        quantPrecision: "int8",
+      },
+    });
+    const recipe = buildOliveRecipe(state);
+    const q = (recipe.passes as Record<string, unknown>).quantization as Record<string, unknown>;
+    expect(q.type).toBe("OnnxHqqQuantization");
+    expect((q.config as Record<string, unknown>).precision).toBe("int8");
+  });
+
+  it("includes data_config and user_script in HQQ config when set", () => {
+    const state = baseState({
+      ihvProvider: "CUDAExecutionProvider",
+      hfDataset: "c4",
+      userScript: "/hqq/custom.py",
+      passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "hqq", quantPrecision: "int4" },
+    });
+    const recipe = buildOliveRecipe(state);
+    const cfg = ((recipe.passes as Record<string, unknown>).quantization as Record<string, unknown>)
+      .config as Record<string, unknown>;
+    expect(cfg.data_config).toEqual({ data_dir: "c4", batch_size: 1 });
+    expect(cfg.user_script).toBe("/hqq/custom.py");
+  });
+
+  // ─── RTN quantization method ─────────────────────────────────
+
+  it("creates OnnxBlockWiseRtnQuantization for rtn method with int4", () => {
+    const state = baseState({
+      ihvProvider: "CUDAExecutionProvider",
+      passes: {
+        ...DEFAULT_PASSES,
+        quantization: true,
+        quantMethod: "rtn",
+        quantPrecision: "int4",
+      },
+    });
+    const recipe = buildOliveRecipe(state);
+    const q = (recipe.passes as Record<string, unknown>).quantization as Record<string, unknown>;
+    expect(q.type).toBe("OnnxBlockWiseRtnQuantization");
+    const cfg = q.config as Record<string, unknown>;
+    expect(cfg.bits).toBe(4);
+    expect(cfg.block_size).toBe(128);
+    expect(cfg.is_symmetric).toBe(true);
+  });
+
+  it("creates OnnxBlockWiseRtnQuantization for rtn method with int8", () => {
+    const state = baseState({
+      ihvProvider: "CUDAExecutionProvider",
+      passes: {
+        ...DEFAULT_PASSES,
+        quantization: true,
+        quantMethod: "rtn",
+        quantPrecision: "int8",
+      },
+    });
+    const recipe = buildOliveRecipe(state);
+    const q = (recipe.passes as Record<string, unknown>).quantization as Record<string, unknown>;
+    expect(q.type).toBe("OnnxBlockWiseRtnQuantization");
+    expect((q.config as Record<string, unknown>).bits).toBe(8);
+  });
+
+  it("includes data_config and user_script in RTN config when set", () => {
+    const state = baseState({
+      ihvProvider: "CUDAExecutionProvider",
+      hfDataset: "pile",
+      userScript: "/rtn/calibrate.py",
+      passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "rtn", quantPrecision: "int4" },
+    });
+    const recipe = buildOliveRecipe(state);
+    const cfg = ((recipe.passes as Record<string, unknown>).quantization as Record<string, unknown>)
+      .config as Record<string, unknown>;
+    expect(cfg.data_config).toEqual({ data_dir: "pile", batch_size: 1 });
+    expect(cfg.user_script).toBe("/rtn/calibrate.py");
+  });
+
+  // ─── SpinQuant quantization method ───────────────────────────
+
+  it("creates SpinQuant pass with hadamard rotate_mode", () => {
+    const state = baseState({
+      ihvProvider: "CUDAExecutionProvider",
+      passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "spinquant", quantPrecision: "int4" },
+    });
+    const recipe = buildOliveRecipe(state);
+    const q = (recipe.passes as Record<string, unknown>).quantization as Record<string, unknown>;
+    expect(q.type).toBe("SpinQuant");
+    expect((q.config as Record<string, unknown>).rotate_mode).toBe("hadamard");
+  });
+
+  it("includes data_config and user_script in SpinQuant config when set", () => {
+    const state = baseState({
+      ihvProvider: "CUDAExecutionProvider",
+      hfDataset: "wikitext",
+      userScript: "/spin/eval.py",
+      passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "spinquant", quantPrecision: "int4" },
+    });
+    const recipe = buildOliveRecipe(state);
+    const cfg = ((recipe.passes as Record<string, unknown>).quantization as Record<string, unknown>)
+      .config as Record<string, unknown>;
+    expect(cfg.data_config).toEqual({ data_dir: "wikitext", batch_size: 1 });
+    expect(cfg.user_script).toBe("/spin/eval.py");
+  });
+
+  // ─── QuaRot quantization method ──────────────────────────────
+
+  it("creates QuaRot pass with hadamard rotate_mode", () => {
+    const state = baseState({
+      ihvProvider: "CUDAExecutionProvider",
+      passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "quarot", quantPrecision: "int4" },
+    });
+    const recipe = buildOliveRecipe(state);
+    const q = (recipe.passes as Record<string, unknown>).quantization as Record<string, unknown>;
+    expect(q.type).toBe("QuaRot");
+    expect((q.config as Record<string, unknown>).rotate_mode).toBe("hadamard");
+  });
+
+  it("includes data_config and user_script in QuaRot config when set", () => {
+    const state = baseState({
+      ihvProvider: "CUDAExecutionProvider",
+      hfDataset: "c4",
+      userScript: "/quarot/rotate.py",
+      passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "quarot", quantPrecision: "int4" },
+    });
+    const recipe = buildOliveRecipe(state);
+    const cfg = ((recipe.passes as Record<string, unknown>).quantization as Record<string, unknown>)
+      .config as Record<string, unknown>;
+    expect(cfg.data_config).toEqual({ data_dir: "c4", batch_size: 1 });
+    expect(cfg.user_script).toBe("/quarot/rotate.py");
+  });
+
+  // ─── Edge cases ──────────────────────────────────────────────
+
+  it("omits dataset when hfDataset is empty string", () => {
+    const state = baseState({
+      modelSource: "huggingface",
+      hfModelId: "bert-base-uncased",
+      hfDataset: "",
+    });
+    const recipe = buildOliveRecipe(state);
+    const config = (recipe.input_model as Record<string, unknown>).config as Record<string, unknown>;
+    expect(config.dataset).toBeUndefined();
+  });
+
+  it("uses fallback model_path for empty azureModelPath", () => {
+    const state = baseState({
+      modelSource: "azure",
+      azureModelPath: "",
+    });
+    const recipe = buildOliveRecipe(state);
+    const config = (recipe.input_model as Record<string, unknown>).config as Record<string, unknown>;
+    expect(config.model_path).toBe("azureml://...");
+  });
+
+  it("omits local_files when localFiles array is empty", () => {
+    const state = baseState({
+      modelSource: "local",
+      localFiles: [],
+    });
+    const recipe = buildOliveRecipe(state);
+    const config = (recipe.input_model as Record<string, unknown>).config as Record<string, unknown>;
+    expect(config.model_path).toBe("./local_models");
+    expect(config.local_files).toBeUndefined();
+  });
+
   it("generates the same structure for all providers", () => {
     const providers: IHVProvider[] = [
       "CPUExecutionProvider",
