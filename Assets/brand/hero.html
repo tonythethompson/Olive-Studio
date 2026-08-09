@@ -1,0 +1,137 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1280px; height: 640px; overflow: hidden; }
+  body {
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    background:
+      radial-gradient(900px 480px at 72% 8%, rgba(122,155,78,0.16), transparent 60%),
+      radial-gradient(700px 420px at 12% 90%, rgba(56,102,65,0.20), transparent 65%),
+      linear-gradient(135deg, #12150d 0%, #14180f 55%, #101408 100%);
+    color: #e8ece2;
+    position: relative;
+  }
+  .mono { font-family: ui-monospace, "Cascadia Code", Consolas, "SF Mono", monospace; }
+  .dots {
+    position: absolute; left: 470px; top: 60px; width: 760px; height: 440px;
+    background-image: radial-gradient(rgba(168,194,86,0.14) 1px, transparent 1.4px);
+    background-size: 22px 22px;
+    border-radius: 14px;
+  }
+  .left { position: absolute; left: 64px; top: 96px; width: 380px; }
+  .logo-disc {
+    width: 148px; height: 148px; border-radius: 50%;
+    background: #f7f9fb; overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(168,194,86,0.35), 0 12px 40px rgba(0,0,0,0.5);
+  }
+  .logo-disc img { width: 100%; height: 100%; display: block; }
+  h1 { font-size: 58px; font-weight: 700; letter-spacing: -1px; margin-top: 28px; }
+  h1 .accent { color: #a8c256; }
+  .tagline { margin-top: 14px; font-size: 19px; line-height: 1.45; color: #cfd6c2; }
+  .sub { margin-top: 16px; font-size: 13px; letter-spacing: 0.08em; color: #a8c256; }
+  .sub2 { margin-top: 8px; font-size: 12px; letter-spacing: 0.05em; color: #8b947c; }
+
+  .card {
+    position: absolute; width: 200px; border-radius: 10px;
+    background: rgba(26,30,20,0.92); border: 1px solid #333b26;
+    padding: 12px 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  }
+  .card .t { font-size: 14px; font-weight: 600; color: #e8ece2; }
+  .card .s { margin-top: 5px; font-size: 11px; color: #98a184; }
+  .card.input { border-color: #a8c256; box-shadow: 0 0 0 1px rgba(168,194,86,0.4), 0 8px 24px rgba(0,0,0,0.4); }
+  .card.output { border-color: #2dd4a7; }
+  .card.off { border-style: dashed; border-color: #3a4230; background: rgba(22,26,17,0.7); }
+  .card.off .t { color: #9aa38a; }
+  .badge {
+    position: absolute; top: 10px; right: 10px;
+    font-size: 9px; letter-spacing: 0.1em; padding: 3px 7px; border-radius: 4px;
+  }
+  .badge.active { color: #c3dd6c; border: 1px solid rgba(168,194,86,0.55); background: rgba(168,194,86,0.10); }
+  .badge.offb { color: #7d866c; border: 1px dashed #454e37; }
+  .badge.comp { color: #43e0b0; border: 1px solid rgba(45,212,167,0.5); background: rgba(45,212,167,0.10); }
+
+  .col-label { position: absolute; font-size: 11px; letter-spacing: 0.12em; color: #7d866c; }
+
+  .chips { position: absolute; left: 64px; top: 552px; display: flex; gap: 10px; flex-wrap: nowrap; }
+  .chip {
+    font-size: 12px; color: #b9c3a4; padding: 7px 13px; border-radius: 999px;
+    border: 1px solid #333b26; background: rgba(26,30,20,0.8);
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  .chip b { color: #a8c256; font-weight: 600; }
+  svg.wires { position: absolute; left: 0; top: 0; }
+</style>
+</head>
+<body>
+  <div class="dots"></div>
+
+  <div class="left">
+    <div class="logo-disc"><img src="../logo.png" alt="Olive Studio logo"></div>
+    <h1>Olive <span class="accent">Studio</span></h1>
+    <div class="tagline">A visual GUI for Microsoft&nbsp;Olive model optimization.</div>
+    <div class="sub mono">YOUR HARDWARE &middot; YOUR MODELS &middot; YOUR AI</div>
+    <div class="sub2 mono">convert &middot; quantize &middot; prune &middot; deploy</div>
+  </div>
+
+  <svg class="wires" width="1280" height="640" viewBox="0 0 1280 640">
+    <g fill="none" stroke-width="2" stroke-dasharray="6 6">
+      <path d="M 692 292 C 720 292, 716 196, 744 196" stroke="#7fb069"/>
+      <path d="M 692 300 C 720 300, 716 380, 744 380" stroke="#7fb069"/>
+      <path d="M 948 196 C 980 196, 976 288, 1006 288" stroke="#5aa9e6"/>
+      <path d="M 948 380 C 980 380, 976 296, 1006 296" stroke="#5aa9e6"/>
+    </g>
+    <circle cx="692" cy="296" r="4" fill="#a8c256"/>
+    <circle cx="1006" cy="292" r="4" fill="#2dd4a7"/>
+  </svg>
+
+  <div class="col-label mono" style="left:778px; top:118px;">OPTIMIZATION PASSES</div>
+  <div class="col-label mono" style="left:1046px; top:118px;">TARGET</div>
+
+  <div class="card input" style="left:492px; top:240px;">
+    <div class="t">Base Model Input</div>
+    <div class="s mono">Meta-Llama-3-8B</div>
+  </div>
+
+  <div class="card" style="left:744px; top:150px;">
+    <span class="badge active mono">ACTIVE</span>
+    <div class="t">Graph Conversion</div>
+    <div class="s mono">ONNX &middot; Opset 20</div>
+  </div>
+
+  <div class="card" style="left:744px; top:334px;">
+    <span class="badge active mono">ACTIVE</span>
+    <div class="t">Quantization</div>
+    <div class="s mono">int8 &middot; PTQ</div>
+  </div>
+
+  <div class="card off" style="left:492px; top:96px; width:170px;">
+    <span class="badge offb mono">OFF</span>
+    <div class="t">LoRA / QLoRA</div>
+    <div class="s mono">pass disabled</div>
+  </div>
+
+  <div class="card output" style="left:1006px; top:240px; width:212px;">
+    <span class="badge comp mono" style="top:-11px; right:12px; background:#14180f;">4.2&times; SMALLER</span>
+    <div class="t">Deployment Artifact</div>
+    <div class="s mono">.zip package &middot; ready</div>
+  </div>
+
+  <div class="chips">
+    <span class="chip"><b>PTQ</b></span>
+    <span class="chip">AWQ</span>
+    <span class="chip">GPTQ</span>
+    <span class="chip">HQQ</span>
+    <span class="chip">QAT</span>
+    <span class="chip">Pruning</span>
+    <span class="chip">LoRA/QLoRA</span>
+    <span class="chip">TensorRT</span>
+    <span class="chip">OpenVINO</span>
+    <span class="chip">QNN</span>
+    <span class="chip">DirectML</span>
+    <span class="chip">WebGPU</span>
+  </div>
+</body>
+</html>

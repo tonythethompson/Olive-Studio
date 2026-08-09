@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1280px; height: 640px; overflow: hidden; }
+  body {
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    background:
+      radial-gradient(1000px 560px at 78% 30%, rgba(122,155,78,0.14), transparent 62%),
+      radial-gradient(760px 460px at 8% 96%, rgba(56,102,65,0.22), transparent 65%),
+      linear-gradient(135deg, #12150d 0%, #14180f 55%, #101408 100%);
+    color: #e8ece2;
+    position: relative;
+  }
+  .mono { font-family: ui-monospace, "Cascadia Code", Consolas, "SF Mono", monospace; }
+  .dots {
+    position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(168,194,86,0.10) 1px, transparent 1.4px);
+    background-size: 26px 26px;
+  }
+  .watermark {
+    position: absolute; right: -70px; top: 50%; transform: translateY(-50%);
+    width: 560px; height: 560px; border-radius: 50%; overflow: hidden; opacity: 0.10;
+    filter: saturate(1.1);
+  }
+  .watermark img { width: 100%; height: 100%; display: block; }
+  .content { position: absolute; left: 88px; top: 50%; transform: translateY(-54%); width: 760px; }
+  .row { display: flex; align-items: center; gap: 44px; }
+  .logo-disc {
+    flex: 0 0 auto; width: 188px; height: 188px; border-radius: 50%;
+    background: #f7f9fb; overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(168,194,86,0.35), 0 16px 48px rgba(0,0,0,0.5);
+  }
+  .logo-disc img { width: 100%; height: 100%; display: block; }
+  h1 { font-size: 88px; font-weight: 700; letter-spacing: -2px; line-height: 1; }
+  h1 .accent { color: #a8c256; }
+  .tagline { margin-top: 18px; font-size: 27px; color: #cfd6c2; line-height: 1.4; }
+  .chips { margin-top: 34px; display: flex; gap: 12px; }
+  .chip {
+    font-size: 16px; color: #b9c3a4; padding: 10px 16px; border-radius: 999px;
+    border: 1px solid #333b26; background: rgba(26,30,20,0.85);
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    white-space: nowrap;
+  }
+  .chip b { color: #a8c256; font-weight: 600; }
+  .footer {
+    position: absolute; left: 88px; bottom: 44px;
+    font-size: 16px; letter-spacing: 0.06em; color: #7d866c;
+  }
+  .footer .sep { margin: 0 12px; color: #454e37; }
+</style>
+</head>
+<body>
+  <div class="dots"></div>
+  <div class="watermark"><img src="../logo.png" alt=""></div>
+
+  <div class="content">
+    <div class="row">
+      <div class="logo-disc"><img src="../logo.png" alt="Olive Studio logo"></div>
+      <div>
+        <h1>Olive <span class="accent">Studio</span></h1>
+        <div class="tagline">Visual GUI for Microsoft&nbsp;Olive model optimization</div>
+      </div>
+    </div>
+    <div class="chips">
+      <span class="chip"><b>Quantization</b></span>
+      <span class="chip">Pruning</span>
+      <span class="chip">LoRA / QLoRA</span>
+      <span class="chip">ONNX / OpenVINO / TensorRT</span>
+    </div>
+  </div>
+
+  <div class="footer mono">github.com/tonythethompson/Olive-Studio<span class="sep">&middot;</span>your hardware &middot; your models &middot; your AI<span class="sep">&middot;</span>MIT</div>
+</body>
+</html>

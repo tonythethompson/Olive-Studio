@@ -6,7 +6,7 @@
 [![CI](https://github.com/tonythethompson/Olive-Studio/actions/workflows/ci.yml/badge.svg)](https://github.com/tonythethompson/Olive-Studio/actions/workflows/ci.yml)
 
 <p align="center">
-  <img src="../docs/assets/hero.png" alt="Olive Studio recipe builder showing a quantization pipeline with graph flow, AI audit sidebar, and VRAM estimates" width="900" />
+  <img src="../Assets/hero.png" alt="Olive Studio — visual GUI for Microsoft Olive model optimization: model input, optimization passes, and deployment artifact pipeline" width="900" />
 </p>
 
 Olive Studio is a visual GUI for [Microsoft Olive](https://github.com/microsoft/Olive) model optimization. Configure model sources, hardware targets, and optimization passes, then execute on your own machine without cloud accounts. Ships with an AI assistant (20 providers), hardware validation with one-click autofix, and an MCP server for agent-driven workflows.
