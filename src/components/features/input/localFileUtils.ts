@@ -111,7 +111,7 @@ export function getReconstructableGroups(
       })
       .filter((n) => n >= 0)
       .sort((a, b) => a - b);
-    if (indices.length < 2) return false;
+    if (indices.length < 2 || indices[0] !== 1) return false;
     for (let i = 1; i < indices.length; i++) {
       if (indices[i] !== indices[i - 1] + 1) return false;
     }
