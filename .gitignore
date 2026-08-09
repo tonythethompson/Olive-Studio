@@ -83,3 +83,7 @@ install.sh
 
 # Storybook config (not maintained)
 .storybook/
+.windsurfrules
+QWEN.md
+.superdesign/design_iterations/default_ui_darkmode.css
+Assets/logo_large.png
