@@ -285,8 +285,21 @@ export function prepareProviderChange(
   probe?: HardwareProbeResult | null,
   options?: { skipHardwareBlock?: boolean },
 ): Partial<UIState> | null {
-  if (!options?.skipHardwareBlock && getProviderHardwareBlock(providerId, probe)) {
-    return null;
+  if (!options?.skipHardwareBlock) {
+    // Standard hardware block (local providers not in detectedProviders).
+    if (getProviderHardwareBlock(providerId, probe)) {
+      return null;
+    }
+    // PlatformLocal providers bypass getProviderAvailabilityBlock (always selectable in UI),
+    // but prepareProviderChange should still block switching to them when not detected
+    // and the host cannot support them (e.g. QNN on Linux).
+    if (
+      isPlatformLocalProvider(providerId) &&
+      probe &&
+      !probe.detectedProviders.includes(providerId)
+    ) {
+      return null;
+    }
   }
 
   const conflicts = getProviderConflicts(providerId, state.passes);
