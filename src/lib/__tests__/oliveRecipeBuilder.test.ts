@@ -1342,7 +1342,7 @@ describe("buildOliveRecipe", () => {
 
   // ─── Edge cases ──────────────────────────────────────────────
 
-  it("omits hf_config dataset when hfDataset is empty string", () => {
+  it("omits dataset when hfDataset is empty string", () => {
     const state = baseState({
       modelSource: "huggingface",
       hfModelId: "bert-base-uncased",
@@ -1350,8 +1350,7 @@ describe("buildOliveRecipe", () => {
     });
     const recipe = buildOliveRecipe(state);
     const config = (recipe.input_model as Record<string, unknown>).config as Record<string, unknown>;
-    const hf = config.hf_config as Record<string, unknown>;
-    expect(hf.dataset).toBeUndefined();
+    expect(config.dataset).toBeUndefined();
   });
 
   it("uses fallback model_path for empty azureModelPath", () => {
