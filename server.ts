@@ -27,8 +27,25 @@ const app = express();
 // rejects non-objects. Omitted bodies stay undefined (defaulted per-route).
 app.use(express.json({ limit: "10mb", strict: false }));
 
-// Security headers (CSP disabled — local-first app loads scripts from self)
-app.use(helmet({ contentSecurityPolicy: false }));
+// Security headers with a CSP that allows the app's own assets + CDN for ORT WASM.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'", "https://cdn.jsdelivr.net", "https://huggingface.co", "https://*.hf.co"],
+      workerSrc: ["'self'", "blob:"],
+      childSrc: ["'self'", "blob:"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'self'"],
+    },
+  },
+}));
 
 // Prevent indexing if accidentally exposed to the public internet
 app.use((_req, res, next) => {
