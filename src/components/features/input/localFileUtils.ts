@@ -103,17 +103,18 @@ export function getReconstructableGroups(
   }
   return Object.entries(groups).filter(([, files]) => {
     if (files.length < 2) return false;
-    // Require consecutive numeric suffixes to prevent corrupted reconstruction
-    const indices = files
+    // Require consecutive canonical suffixes (001, 002, ...) starting at 001
+    const suffixes = files
       .map((f) => {
         const m = f.name.match(/\.(\d{3,})$/);
-        return m ? parseInt(m[1], 10) : -1;
+        return m ? m[1] : null;
       })
-      .filter((n) => n >= 0)
-      .sort((a, b) => a - b);
-    if (indices.length < 2 || indices[0] !== 1) return false;
-    for (let i = 1; i < indices.length; i++) {
-      if (indices[i] !== indices[i - 1] + 1) return false;
+      .filter((s): s is string => s !== null)
+      .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    if (suffixes.length < 2 || suffixes[0] !== "001") return false;
+    for (let i = 1; i < suffixes.length; i++) {
+      const expected = String(i + 1).padStart(3, "0");
+      if (suffixes[i] !== expected) return false;
     }
     return true;
   });

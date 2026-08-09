@@ -60,6 +60,7 @@ export function useImportPresets<T>(opts: {
         if (result.ok === false) {
           setError(result.error);
         } else {
+          setError("");
           setImportConfirm({
             importedPresets: result.importedPresets,
             collisions: result.collisions,

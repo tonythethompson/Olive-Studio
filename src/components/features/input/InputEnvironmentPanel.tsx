@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, ChangeEvent } from "react";
+import { useState, useRef, useEffect, ChangeEvent, useTransition } from "react";
 import {
   Card,
   CardContent,
@@ -40,7 +40,6 @@ import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { navigatePipeline } from "@/lib/pipelineNavigation";
 import { estimateVramForCatalogPreset } from "@/lib/presetVramEstimate";
 import { presetDisplayName, useRecipeCatalog, type RecipeSortMode } from "@/components/features/input/useRecipeCatalog";
-import { useRecipeHub } from "@/components/features/input/useRecipeHub";
 import {
   getBaseName,
   formatFileSize,
