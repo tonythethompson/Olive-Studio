@@ -453,10 +453,14 @@ def test_search_query_sanitization(monkeypatch: pytest.MonkeyPatch):
     assert result["query"] == "quantization"
 
     # Whitespace controls should become spaces (preserve token boundaries)
-    result_ws = docs_search.search_olive_documentation(
-        query="quantization\ncalibration", top_k=1, live=False, mode="keyword"
-    )
-    assert result_ws["query"] == "quantization calibration"
+    for control in ("\n", "\t", "\r", "\x0b", "\x0c"):
+        result_ws = docs_search.search_olive_documentation(
+            query=f"quantization{control}calibration",
+            top_k=1,
+            live=False,
+            mode="keyword",
+        )
+        assert result_ws["query"] == "quantization calibration"
 
     # Very long query should be truncated to 2000 chars (not crash)
     long_query = "x" * 5000
@@ -464,6 +468,18 @@ def test_search_query_sanitization(monkeypatch: pytest.MonkeyPatch):
         query=long_query, top_k=1, live=False, mode="keyword"
     )
     assert len(result2["query"]) == 2000
+
+    # Truncation applies before control normalization ends; length stays <= 2000
+    long_with_controls = ("a\tb\nc\rd\x0be\x0cf") * 400
+    result3 = docs_search.search_olive_documentation(
+        query=long_with_controls, top_k=1, live=False, mode="keyword"
+    )
+    assert len(result3["query"]) == 2000
+    assert "\t" not in result3["query"]
+    assert "\n" not in result3["query"]
+    assert "\r" not in result3["query"]
+    assert "\x0b" not in result3["query"]
+    assert "\x0c" not in result3["query"]
 
 
 def test_live_auto_budgets_even_when_model_is_warm(monkeypatch: pytest.MonkeyPatch):

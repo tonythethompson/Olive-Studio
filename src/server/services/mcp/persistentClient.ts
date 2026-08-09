@@ -146,8 +146,10 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
     return requests.map(() => ({ error: MCP_UNAVAILABLE_ERROR, unavailable: true }));
   }
 
-  // Snapshot the client reference — onclose can null it between iterations.
+  // Snapshot the client/transport — onclose or a concurrent reconnect can
+  // replace them between iterations; failure cleanup must not tear down a newer session.
   const activeClient = client;
+  const activeTransport = transport;
 
   // ── Execute tool calls sequentially ──
   const results: McpToolCallResult[] = [];
@@ -218,13 +220,16 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
   // ── Update breaker ──
   if (hadInfraFailure) {
     mcpBreaker.recordFailure(epoch);
-    // Close the abandoned transport to free the child process, then clear refs.
-    state = "crashed";
-    if (transport) {
-      try { void transport.close().catch(() => undefined); } catch { /* best-effort */ }
+    // Only tear down if this call still owns the live session. A concurrent
+    // reconnect may have already installed a replacement client/transport.
+    if (client === activeClient && transport === activeTransport) {
+      state = "crashed";
+      if (activeTransport) {
+        try { void activeTransport.close().catch(() => undefined); } catch { /* best-effort */ }
+      }
+      client = null;
+      transport = null;
     }
-    client = null;
-    transport = null;
   } else {
     mcpBreaker.recordSuccess(epoch);
   }
@@ -310,4 +315,24 @@ export function resetPersistentClient(): void {
   transport = null;
   state = "idle";
   connectingPromise = null;
+}
+
+/** Test-only snapshot of module connection refs. */
+export function getPersistentClientSnapshotForTests(): {
+  state: ConnectionState;
+  client: Client | null;
+  transport: StdioClientTransport | null;
+} {
+  return { state, client, transport };
+}
+
+/** Test-only setter used to simulate concurrent reconnect races. */
+export function setPersistentClientSnapshotForTests(next: {
+  state: ConnectionState;
+  client: Client | null;
+  transport: StdioClientTransport | null;
+}): void {
+  state = next.state;
+  client = next.client;
+  transport = next.transport;
 }
