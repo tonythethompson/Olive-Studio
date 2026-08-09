@@ -582,9 +582,6 @@ export async function fetchHardwareProbe(refresh = false): Promise<HardwareProbe
       const result = (await res.json()) as HardwareProbeResult;
 
       if (!refresh && (result.platform.systemRamGb == null || result.platform.systemRamGb <= 0)) {
-        // Clear inflight before recursive refresh call to avoid returning the
-        // same promise (self-cycle) from the deduplication branch.
-        _probeInflight = null;
         return fetchHardwareProbe(true);
       }
 
