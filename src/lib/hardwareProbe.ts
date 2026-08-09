@@ -571,13 +571,6 @@ async function doFetchHardwareProbe(refresh: boolean): Promise<HardwareProbeResu
   return (await res.json()) as HardwareProbeResult;
 }
 
-/** Clears probe cache/inflight state. Exported for unit tests only. */
-export function resetHardwareProbeFetchStateForTests(): void {
-  _probeInflight = null;
-  _probeCache = null;
-  _probeCacheTime = 0;
-}
-
 export async function fetchHardwareProbe(refresh = false): Promise<HardwareProbeResult> {
   // Return cached result if fresh enough and not a forced refresh
   if (!refresh && _probeCache && Date.now() - _probeCacheTime < PROBE_CACHE_TTL_MS) {

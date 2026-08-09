@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  fetchHardwareProbe,
-  resetHardwareProbeFetchStateForTests,
-  type HardwareProbeResult,
-} from "@/lib/hardwareProbe";
+import type { HardwareProbeResult } from "@/lib/hardwareProbe";
+
+type FetchHardwareProbe = typeof import("@/lib/hardwareProbe").fetchHardwareProbe;
+
+let fetchHardwareProbe: FetchHardwareProbe;
 
 const baseProbe = (overrides?: Partial<HardwareProbeResult>): HardwareProbeResult => {
   const { platform: platformOverride, ...rest } = overrides ?? {};
@@ -31,13 +31,15 @@ const jsonResponse = (body: unknown, status = 200): Response =>
   });
 
 describe("fetchHardwareProbe", () => {
-  beforeEach(() => {
-    resetHardwareProbeFetchStateForTests();
+  beforeEach(async () => {
+    // Fresh module instance so cache/inflight state is not shared across tests
+    // without exporting a production reset helper.
+    vi.resetModules();
     vi.stubGlobal("fetch", vi.fn());
+    ({ fetchHardwareProbe } = await import("@/lib/hardwareProbe"));
   });
 
   afterEach(() => {
-    resetHardwareProbeFetchStateForTests();
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
@@ -131,16 +133,23 @@ describe("fetchHardwareProbe", () => {
         ),
       );
 
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error("fetchHardwareProbe hung (deadlock)")), 1000);
+      timeoutId = setTimeout(() => reject(new Error("fetchHardwareProbe hung (deadlock)")), 1000);
     });
 
-    const result = await Promise.race([fetchHardwareProbe(), timeout]);
+    try {
+      const result = await Promise.race([fetchHardwareProbe(), timeout]);
 
-    expect(result.platform.systemRamGb).toBe(16);
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe("/api/system/hardware-probe");
-    expect(vi.mocked(fetch).mock.calls[1]?.[0]).toBe("/api/system/hardware-probe?refresh=1");
+      expect(result.platform.systemRamGb).toBe(16);
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe("/api/system/hardware-probe");
+      expect(vi.mocked(fetch).mock.calls[1]?.[0]).toBe("/api/system/hardware-probe?refresh=1");
+    } finally {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    }
   });
 
   it("throws when the probe endpoint returns an error status", async () => {
