@@ -25,7 +25,7 @@ export function useAiChat(workspaceContext: unknown) {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [chatMessages, isChatting]);
 
   const sendChat = async (presetText?: string) => {

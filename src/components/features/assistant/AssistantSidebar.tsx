@@ -22,7 +22,7 @@ import { useLocalEngineSetup } from "./useLocalEngineSetup";
 
 export type { AnalysisResult, Suggestion } from "./types";
 
-interface GeminiSidebarProps {
+interface AssistantSidebarProps {
   state?: UIState;
   setState?: (partial: Partial<UIState>) => void;
   isOpen: boolean;
@@ -45,14 +45,14 @@ const TABS = [
  * @param openToAudit - Whether to select the audit tab and restart analysis
  * @param onAuditOpened - Optional callback invoked after the audit tab is opened
  */
-export function GeminiSidebar({
+export function AssistantSidebar({
   state: propState,
   setState: propSetState,
   isOpen,
   onClose,
   openToAudit,
   onAuditOpened,
-}: GeminiSidebarProps) {
+}: AssistantSidebarProps) {
   const storeState = usePipelineState();
   const state = propState ?? storeState.state;
   const setState = propSetState ?? storeState.setState;
@@ -148,14 +148,13 @@ export function GeminiSidebar({
 
   const providerLabel =
     providerSource !== "none"
-      ? `${
-          PROVIDER_OPTIONS.find(
-            (p) =>
-              p.id ===
-              (normalizeUiProviderId(providers.providerStatus.provider ?? "") ??
-                providers.providerStatus.provider),
-          )?.name ?? providers.providerStatus.provider
-        } / ${providers.providerStatus.model}`
+      ? `${PROVIDER_OPTIONS.find(
+        (p) =>
+          p.id ===
+          (normalizeUiProviderId(providers.providerStatus.provider ?? "") ??
+            providers.providerStatus.provider),
+      )?.name ?? providers.providerStatus.provider
+      } / ${providers.providerStatus.model}`
       : "No provider set";
 
   return (

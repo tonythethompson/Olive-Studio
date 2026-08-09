@@ -1,6 +1,6 @@
 import { RefreshCw, AlertTriangle, CheckCircle2, Zap, Check } from "lucide-react";
 import { ProviderErrorBlock } from "./ProviderErrorBlock";
-import type { AnalysisResult, Suggestion } from "./GeminiSidebar";
+import type { AnalysisResult, Suggestion } from "./AssistantSidebar";
 
 interface AuditPanelProps {
   analysis: AnalysisResult | null;
@@ -63,13 +63,12 @@ export function AuditPanel({
           <div>
             <h3 className="text-sm font-medium text-slate-100">Pipeline efficiency</h3>
             <div
-              className={`mt-0.5 text-[11px] inline-block px-1.5 py-0.5 rounded font-mono font-bold ${
-                analysis.level === "Optimized"
+              className={`mt-0.5 text-[11px] inline-block px-1.5 py-0.5 rounded font-mono font-bold ${analysis.level === "Optimized"
                   ? "bg-emerald-500/10 text-emerald-400"
                   : analysis.level === "Suboptimal"
                     ? "bg-amber-500/10 text-amber-400"
                     : "bg-rose-500/10 text-rose-400"
-              }`}
+                }`}
             >
               {analysis.level} Mode
             </div>
@@ -109,13 +108,12 @@ export function AuditPanel({
               analysis.suggestions.map((s, i) => (
                 <div
                   key={i}
-                  className={`p-3.5 rounded-lg border text-sm flex flex-col gap-3 bg-slate-950/45 transition-all ${
-                    s.type === "warning"
+                  className={`p-3.5 rounded-lg border text-sm flex flex-col gap-3 bg-slate-950/45 transition-all ${s.type === "warning"
                       ? "border-rose-500/20 hover:border-rose-500/40"
                       : s.type === "success"
                         ? "border-emerald-500/25 hover:border-emerald-500/40"
                         : "border-slate-800 hover:border-slate-700"
-                  }`}
+                    }`}
                 >
                   <div className="min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-1 min-w-0">
@@ -130,9 +128,8 @@ export function AuditPanel({
                         <span className="min-w-0 break-words">{s.title}</span>
                       </span>
                       <span
-                        className={`shrink-0 text-[9px] font-mono uppercase tracking-widest px-1.5 rounded font-bold ${
-                          s.impact === "High" ? "bg-rose-500/10 text-rose-400" : "bg-slate-800 text-slate-400"
-                        }`}
+                        className={`shrink-0 text-[9px] font-mono uppercase tracking-widest px-1.5 rounded font-bold ${s.impact === "High" ? "bg-rose-500/10 text-rose-400" : "bg-slate-800 text-slate-400"
+                          }`}
                       >
                         {s.impact}
                       </span>

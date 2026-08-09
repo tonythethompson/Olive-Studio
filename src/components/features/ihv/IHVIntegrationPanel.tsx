@@ -16,7 +16,7 @@ import {
   prepareProviderChange,
 } from "@/lib/pipelineValidation";
 import { isMemoryOffloadAvailable, hasHuggingFaceModel } from "@/lib/memoryOffload";
-import { isGpuProvider, formatMemoryGb } from "@/lib/vramEstimate";
+import { isGpuProvider } from "@/lib/vramEstimate";
 import { getSelectableProviders, isProviderDetectedLocally } from "@/lib/hardwareProbe";
 import { useHardwareProbe, useRefreshHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { getProviderRuntimeKind } from "@/lib/providerRuntimeKind";
@@ -26,6 +26,7 @@ import {
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { HardwareCompatibilityMatrix } from "./HardwareCompatibilityMatrix";
+import { HardwareProbeDisplay } from "./HardwareProbeDisplay";
 import { HardwarePassCards } from "./HardwarePassCards";
 import { PASS_VALIDATIONS as validations } from "./hardwarePassCompatibility";
 import {
@@ -354,145 +355,30 @@ export function IHVIntegrationPanel({
         />
         <CardContent>
           {/* Live hardware probe from this machine */}
-          <div className="mb-6 rounded-xl border border-slate-800/80 bg-slate-950/40 p-4 min-w-0 overflow-hidden">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between min-w-0">
-              <div className="space-y-2 min-w-0">
-                <div className="flex items-center gap-2">
-                  <HardDrive className="h-4 w-4 text-electric-blue shrink-0" />
-                  <h3 className="text-sm font-medium text-slate-200">Detected on this machine</h3>
-                  {probeLoading && <span className="text-[11px] font-mono text-slate-500">Scanning…</span>}
-                </div>
-                {probeError ? (
-                  <p className="text-sm text-rose-400 break-all">{probeError}</p>
-                ) : hardwareProbe ? (
-                  <div className="space-y-1.5 text-sm text-slate-400">
-                    <p>
-                      <span className="text-slate-500">CPU:</span>{" "}
-                      <span className="text-slate-200">{hardwareProbe.platform.cpuModel}</span>
-                      <span className="text-slate-600">
-                        {" "}
-                        · {hardwareProbe.platform.cpuCores} cores · {hardwareProbe.platform.os} (
-                        {hardwareProbe.platform.arch})
-                      </span>
-                    </p>
-                    <p>
-                      <span className="text-slate-500">System RAM:</span>{" "}
-                      <span className="text-slate-200 font-mono">
-                        {hardwareProbe.platform.systemRamGb != null
-                          ? formatMemoryGb(hardwareProbe.platform.systemRamGb)
-                          : "Unknown"}
-                      </span>
-                    </p>
-                    {hardwareProbe.nvidia?.gpus.length ? (
-                      <p>
-                        <span className="text-slate-500">NVIDIA:</span>{" "}
-                        <span className="text-slate-200">
-                          {hardwareProbe.nvidia.gpus
-                            .map((g) =>
-                              g.vramMb ? `${g.name} (${formatMemoryGb(g.vramMb / 1024)})` : g.name,
-                            )
-                            .join(", ")}
-                        </span>
-                        {hardwareProbe.nvidia.cudaVersion && (
-                          <span className="text-slate-600">
-                            {" "}
-                            · driver CUDA {hardwareProbe.nvidia.cudaVersion}
-                            {hardwareProbe.nvidia.cudaTag ? ` → ${hardwareProbe.nvidia.cudaTag}` : ""}
-                          </span>
-                        )}
-                      </p>
-                    ) : (
-                      <p>
-                        <span className="text-slate-500">NVIDIA:</span>{" "}
-                        <span className="text-slate-600">not detected</span>
-                      </p>
-                    )}
-                    {hardwareProbe.rocm?.gpus.length ? (
-                      <p>
-                        <span className="text-slate-500">AMD ROCm:</span>{" "}
-                        <span className="text-slate-200">
-                          {hardwareProbe.rocm.gpus
-                            .map((g) =>
-                              g.vramMb ? `${g.name} (${formatMemoryGb(g.vramMb / 1024)})` : g.name,
-                            )
-                            .join(", ")}
-                        </span>
-                      </p>
-                    ) : null}
-                    {hardwareProbe.openvino?.loadable ? (
-                      <p>
-                        <span className="text-slate-500">OpenVINO:</span>{" "}
-                        <span className="text-slate-200">
-                          Python package v{hardwareProbe.openvino.version ?? "unknown"}
-                        </span>
-                      </p>
-                    ) : null}
-                    {hardwareProbe.onnxRuntimeProviders?.length ? (
-                      <p>
-                        <span className="text-slate-500">ONNX Runtime EPs:</span>{" "}
-                        <span className="font-mono text-xs text-emerald-400">
-                          {hardwareProbe.onnxRuntimeProviders.join(", ")}
-                        </span>
-                      </p>
-                    ) : null}
-                    <p className="text-xs text-slate-500 pt-1">
-                      Recommended target:{" "}
-                      <span className="text-electric-blue font-semibold">
-                        {providers.find((p) => p.id === hardwareProbe.recommendedProvider)?.name ??
-                          hardwareProbe.recommendedProvider}
-                      </span>
-                      {state.ihvProvider !== hardwareProbe.recommendedProvider && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setState(
-                              prepareProviderChange(
-                                state,
-                                hardwareProbe.recommendedProvider,
-                                hardwareProbe,
-                              ) ?? { ihvProvider: hardwareProbe.recommendedProvider },
-                            )
-                          }
-                          className="ml-2 text-sm text-electric-blue hover:text-white cursor-pointer"
-                        >
-                          Apply
-                        </button>
-                      )}
-                    </p>
-                  </div>
-                ) : !probeLoading ? (
-                  <p className="text-sm text-slate-500">No hardware data yet.</p>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                onClick={() => void runHardwareProbe(true)}
-                disabled={probeLoading}
-                className="flex items-center gap-1.5 self-start rounded border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-300 hover:border-slate-600 hover:text-white disabled:opacity-50 cursor-pointer shrink-0"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${probeLoading ? "animate-spin" : ""}`} />
-                Re-scan hardware
-              </button>
-            </div>
-          </div>
+          <HardwareProbeDisplay
+            state={state}
+            setState={setState}
+            hardwareProbe={hardwareProbe}
+            probeLoading={probeLoading}
+            probeError={probeError}
+            onRescan={() => void runHardwareProbe(true)}
+          />
 
           <VramEstimateBanner state={state} hardwareProbe={hardwareProbe} className="mb-6" />
 
           {/* Hardware Validation Guard Alert Summary Banner */}
           {selectedConflicts.length > 0 && (
             <div
-              className={`mb-6 rounded-xl border p-4.5 animate-in slide-in-from-top-2 duration-300 flex flex-col gap-3.5 ${
-                hasSelectedCritical
-                  ? "bg-rose-950/15 border-rose-500/30 shadow-[0_2px_12px_rgba(244,63,94,0.03)]"
-                  : "bg-amber-955/15 border-amber-500/30 shadow-[0_2px_12px_rgba(245,158,11,0.03)]"
-              }`}
+              className={`mb-6 rounded-xl border p-4.5 animate-in slide-in-from-top-2 duration-300 flex flex-col gap-3.5 ${hasSelectedCritical
+                ? "bg-rose-950/15 border-rose-500/30 shadow-[0_2px_12px_rgba(244,63,94,0.03)]"
+                : "bg-amber-955/15 border-amber-500/30 shadow-[0_2px_12px_rgba(245,158,11,0.03)]"
+                }`}
             >
               <div className="flex items-start md:items-center justify-between border-b border-slate-800/80 pb-3 flex-wrap gap-3">
                 <div className="flex items-center gap-2.5">
                   <span
-                    className={`flex h-6 w-6 items-center justify-center rounded shrink-0 ${
-                      hasSelectedCritical ? "bg-rose-500/10 text-rose-400" : "bg-amber-500/10 text-amber-500"
-                    }`}
+                    className={`flex h-6 w-6 items-center justify-center rounded shrink-0 ${hasSelectedCritical ? "bg-rose-500/10 text-rose-400" : "bg-amber-500/10 text-amber-500"
+                      }`}
                   >
                     {hasSelectedCritical ? (
                       <ShieldAlert className="h-4 w-4" />
@@ -524,11 +410,10 @@ export function IHVIntegrationPanel({
                       passes: applyProviderConflictAutofixes(state.ihvProvider, state.passes),
                     });
                   }}
-                  className={`text-sm px-3 py-1.5 rounded border transition-all cursor-pointer flex items-center gap-1.5 hover:text-white ${
-                    hasSelectedCritical
-                      ? "border-rose-500/30 bg-rose-950/20 text-rose-400 hover:bg-rose-500/20"
-                      : "border-amber-500/30 bg-amber-950/20 text-amber-400 hover:bg-amber-500/20"
-                  }`}
+                  className={`text-sm px-3 py-1.5 rounded border transition-all cursor-pointer flex items-center gap-1.5 hover:text-white ${hasSelectedCritical
+                    ? "border-rose-500/30 bg-rose-950/20 text-rose-400 hover:bg-rose-500/20"
+                    : "border-amber-500/30 bg-amber-950/20 text-amber-400 hover:bg-amber-500/20"
+                    }`}
                 >
                   <Wand2 className="h-3 w-3" /> Auto-Fix Active Config Conflicts
                 </button>
@@ -597,14 +482,14 @@ export function IHVIntegrationPanel({
                           <button
                             type="button"
                             onClick={() =>
-                            setState(
-                              prepareProviderChange(
-                                state,
-                                hardwareProbe.recommendedProvider,
-                                hardwareProbe,
-                              ) ?? { ihvProvider: hardwareProbe.recommendedProvider },
-                            )
-                          }
+                              setState(
+                                prepareProviderChange(
+                                  state,
+                                  hardwareProbe.recommendedProvider,
+                                  hardwareProbe,
+                                ) ?? { ihvProvider: hardwareProbe.recommendedProvider },
+                              )
+                            }
                             className="ml-2 text-electric-blue hover:text-white cursor-pointer underline underline-offset-2"
                           >
                             Switch to{" "}
@@ -640,50 +525,50 @@ export function IHVIntegrationPanel({
               "ROCMExecutionProvider",
             ] as IHVProvider[]
           ).includes(state.ihvProvider) && (
-            <div className="mt-4">
-              <div className="p-4 rounded-xl border border-slate-800/60 bg-slate-900/30">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <div>
-                    <p className="text-sm font-medium text-slate-200">PyTorch CUDA Version</p>
-                    <p className="text-sm text-slate-500 mt-0.5">
-                      {hardwareProbe?.nvidia?.cudaTag ? (
-                        <>
-                          Probed: CUDA {hardwareProbe.nvidia.cudaVersion} (
-                          <code className="text-emerald-400 bg-slate-800 px-1 py-0.5 rounded">
-                            {hardwareProbe.nvidia.cudaTag}
-                          </code>
-                          ) via nvidia-smi. Override if wrong.
-                        </>
-                      ) : (
-                        <>
-                          Auto-detect reads{" "}
-                          <code className="text-slate-400 bg-slate-800 px-1 py-0.5 rounded">nvidia-smi</code>{" "}
-                          at execute time. Override if wrong toolkit version is picked.
-                        </>
-                      )}
-                    </p>
+              <div className="mt-4">
+                <div className="p-4 rounded-xl border border-slate-800/60 bg-slate-900/30">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                      <p className="text-sm font-medium text-slate-200">PyTorch CUDA Version</p>
+                      <p className="text-sm text-slate-500 mt-0.5">
+                        {hardwareProbe?.nvidia?.cudaTag ? (
+                          <>
+                            Probed: CUDA {hardwareProbe.nvidia.cudaVersion} (
+                            <code className="text-emerald-400 bg-slate-800 px-1 py-0.5 rounded">
+                              {hardwareProbe.nvidia.cudaTag}
+                            </code>
+                            ) via nvidia-smi. Override if wrong.
+                          </>
+                        ) : (
+                          <>
+                            Auto-detect reads{" "}
+                            <code className="text-slate-400 bg-slate-800 px-1 py-0.5 rounded">nvidia-smi</code>{" "}
+                            at execute time. Override if wrong toolkit version is picked.
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <select
+                      id="cuda-version-override"
+                      aria-label="PyTorch CUDA Version"
+                      value={state.cudaVersion ?? "auto"}
+                      onChange={(e) => setState({ cudaVersion: e.target.value as UIState["cudaVersion"] })}
+                      className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-electric-blue shrink-0 cursor-pointer"
+                    >
+                      <option value="auto">Auto-detect</option>
+                      <option value="cpu">CPU Only</option>
+                      <option value="cu118">CUDA 11.8</option>
+                      <option value="cu121">CUDA 12.1</option>
+                      <option value="cu124">CUDA 12.4</option>
+                      <option value="cu126">CUDA 12.6</option>
+                      <option value="cu128">CUDA 12.8</option>
+                      <option value="cu130">CUDA 13.0 (driver only — no package pins yet)</option>
+                      <option value="cu132">CUDA 13.2 (driver only — no package pins yet)</option>
+                    </select>
                   </div>
-                  <select
-                    id="cuda-version-override"
-                    aria-label="PyTorch CUDA Version"
-                    value={state.cudaVersion ?? "auto"}
-                    onChange={(e) => setState({ cudaVersion: e.target.value as UIState["cudaVersion"] })}
-                    className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-electric-blue shrink-0 cursor-pointer"
-                  >
-                    <option value="auto">Auto-detect</option>
-                    <option value="cpu">CPU Only</option>
-                    <option value="cu118">CUDA 11.8</option>
-                    <option value="cu121">CUDA 12.1</option>
-                    <option value="cu124">CUDA 12.4</option>
-                    <option value="cu126">CUDA 12.6</option>
-                    <option value="cu128">CUDA 12.8</option>
-                    <option value="cu130">CUDA 13.0 (driver only — no package pins yet)</option>
-                    <option value="cu132">CUDA 13.2 (driver only — no package pins yet)</option>
-                  </select>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Interactive Optimization Passes Cross-Referencing Matrix */}
           <div className="mt-10 pt-8 border-t border-slate-800">
@@ -707,11 +592,10 @@ export function IHVIntegrationPanel({
                   <button
                     type="button"
                     onClick={() => setActiveTab("matrix")}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap cursor-pointer transition-all ${
-                      activeTab === "matrix"
-                        ? "bg-electric-blue text-white font-bold"
-                        : "text-slate-400 hover:text-slate-205"
-                    }`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap cursor-pointer transition-all ${activeTab === "matrix"
+                      ? "bg-electric-blue text-white font-bold"
+                      : "text-slate-400 hover:text-slate-205"
+                      }`}
                   >
                     <Table className="h-3.5 w-3.5" />
                     Matrix View
@@ -719,11 +603,10 @@ export function IHVIntegrationPanel({
                   <button
                     type="button"
                     onClick={() => setActiveTab("cards")}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap cursor-pointer transition-all ${
-                      activeTab === "cards"
-                        ? "bg-electric-blue text-white font-bold"
-                        : "text-slate-400 hover:text-slate-205"
-                    }`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold whitespace-nowrap cursor-pointer transition-all ${activeTab === "cards"
+                      ? "bg-electric-blue text-white font-bold"
+                      : "text-slate-400 hover:text-slate-205"
+                      }`}
                   >
                     <List className="h-3.5 w-3.5" />
                     Interactive Cards
@@ -764,11 +647,10 @@ export function IHVIntegrationPanel({
                       key={cat}
                       type="button"
                       onClick={() => setSelectedCategory(cat)}
-                      className={`px-3 py-1 rounded-full text-[10.5px] font-semibold tracking-tight transition-all cursor-pointer ${
-                        selectedCategory === cat
-                          ? "bg-electric-blue/15 border-electric-blue/40 text-electric-blue font-bold border"
-                          : "bg-slate-950 hover:bg-slate-900 border border-slate-805 text-slate-400"
-                      }`}
+                      className={`px-3 py-1 rounded-full text-[10.5px] font-semibold tracking-tight transition-all cursor-pointer ${selectedCategory === cat
+                        ? "bg-electric-blue/15 border-electric-blue/40 text-electric-blue font-bold border"
+                        : "bg-slate-950 hover:bg-slate-900 border border-slate-805 text-slate-400"
+                        }`}
                     >
                       {cat === "All" ? "All Passes" : cat}
                     </button>
@@ -828,7 +710,7 @@ export function IHVIntegrationPanel({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {state.ihvProvider === "TensorrtExecutionProvider" ||
-              state.ihvProvider === "CUDAExecutionProvider" ? (
+                state.ihvProvider === "CUDAExecutionProvider" ? (
                 <>
                   <div className="flex items-center justify-between">
                     <div>

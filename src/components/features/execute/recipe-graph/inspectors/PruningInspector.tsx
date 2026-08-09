@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
-import { useAutoClearError, useImportPresets, useExportPresets } from "@/lib/hooks";
+import { useAutoClearError } from "@/lib/hooks/useAutoClearError";
+import { useImportPresets, useExportPresets } from "@/lib/hooks/usePresets";
 import { Label, Select, Slider } from "@/components/ui";
 import {
   Tooltip,
@@ -230,11 +231,10 @@ export function PruningInspector({ state, setState }: InspectorProps) {
               type="button"
               onClick={handleSaveCustomPreset}
               disabled={!newPresetName.trim() || duplicateName || customPresets.length >= MAX_CUSTOM_PRESETS}
-              className={`h-7 px-2 text-[11px] font-medium rounded border transition-colors ${
-                duplicateName
+              className={`h-7 px-2 text-[11px] font-medium rounded border transition-colors ${duplicateName
                   ? "border-red-500/50 bg-red-500/10 text-red-400"
                   : "border-amber-500/50 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
-              } disabled:opacity-40 disabled:cursor-not-allowed`}
+                } disabled:opacity-40 disabled:cursor-not-allowed`}
             >
               Save
             </button>
@@ -261,13 +261,12 @@ export function PruningInspector({ state, setState }: InspectorProps) {
                             },
                           })
                         }
-                        className={`px-2.5 py-1 text-[11px] font-medium rounded border transition-colors ${
-                          isActive
+                        className={`px-2.5 py-1 text-[11px] font-medium rounded border transition-colors ${isActive
                             ? "border-amber-500/50 bg-amber-500/10 text-amber-300"
                             : isCustom
                               ? "border-slate-600 bg-slate-900 text-slate-300 hover:border-slate-500 hover:text-slate-200"
                               : "border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500 hover:text-slate-300"
-                        }`}
+                          }`}
                       >
                         {preset.label}
                       </button>

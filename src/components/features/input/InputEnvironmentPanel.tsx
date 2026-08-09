@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, ChangeEvent, useMemo, useTransition } from "react";
+import { useState, useRef, useEffect, ChangeEvent, useTransition } from "react";
 import {
   Card,
   CardContent,
@@ -30,19 +30,24 @@ import { getFileDetailedInfo as resolveFileDetailedInfo } from "@/lib/localFileD
 import { cn } from "@/lib/utils";
 import {
   buildLocalModelHints,
-  scoreRecipeMatchForLocal,
-  summarizeLocalRecipeMatches,
   type LocalModelHints,
 } from "@/lib/recipeModelMatch";
 import {
   assessCatalogItemHardwareCompatibility,
   assessRecipeHardwareCompatibility,
-  summarizeRecipeHardwareCompatibility,
 } from "@/lib/recipeHardwareCompatibility";
-import { isNvTensorRtRtxCatalogPath } from "@/lib/tensorrtRtxDeps";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { navigatePipeline } from "@/lib/pipelineNavigation";
 import { estimateVramForCatalogPreset } from "@/lib/presetVramEstimate";
+import { presetDisplayName, useRecipeCatalog, type RecipeSortMode } from "@/components/features/input/useRecipeCatalog";
+import {
+  getBaseName,
+  formatFileSize,
+  getFileFormatLabel,
+  getFileDescription,
+  getSimulatedTensors,
+  getReconstructableGroups,
+} from "@/components/features/input/localFileUtils";
 import { CompatCountSummary, CompatStatusPill } from "@/components/features/input/CompatStatus";
 import { useHfToken } from "@/components/features/input/useHfToken";
 import {
@@ -83,25 +88,6 @@ interface ReconstructedItem {
   chunks: { name: string; size: number; hash: string }[];
   reconstructedAt: string;
 }
-
-/**
- * Splits a preset name into its primary title and supplemental metadata.
- *
- * @param name - The preset name to parse
- * @returns The parsed title and metadata
- */
-function presetDisplayName(name: string): { title: string; meta: string } {
-  const parts = name
-    .split(" · ")
-    .map((p) => p.trim())
-    .filter(Boolean);
-  if (parts.length >= 2) {
-    return { title: parts[0], meta: parts.slice(1).join(" · ") };
-  }
-  return { title: name, meta: "" };
-}
-
-type RecipeSortMode = "recommended" | "name-asc" | "name-desc" | "size-asc" | "size-desc";
 
 /**
  * Renders the model source configuration and Olive recipe management panel.
@@ -301,18 +287,21 @@ export function InputEnvironmentPanel({
     setTimeout(() => setRecipeSuccessMsg(null), 4000);
   };
 
-  const filteredRecipes = SUGGESTED_RECIPES.filter((item) => {
-    const query = recipeSearch.toLowerCase();
-    const matchesSearch =
-      item.name.toLowerCase().includes(query) ||
-      item.description.toLowerCase().includes(query) ||
-      item.repoPath.toLowerCase().includes(query);
-    const matchesArch = selectedArchitecture === "All" || item.architecture === selectedArchitecture;
-    const matchesDev =
-      selectedDevice === "All" ||
-      item.device === selectedDevice ||
-      (selectedDevice === "TensorRT RTX" && isNvTensorRtRtxCatalogPath(item.repoPath));
-    return matchesSearch && matchesArch && matchesDev;
+  const {
+    filteredRecipes,
+    localMatchSummary,
+    hardwareMatchSummary,
+    curatedRecipesWithMatch,
+    groupedRecipes,
+  } = useRecipeCatalog({
+    recipeSearch,
+    selectedArchitecture,
+    selectedDevice,
+    recipeSort,
+    localModelHints,
+    showLocalRecipeMatchesOnly,
+    hideIncompatibleRecipes,
+    hardwareProbe,
   });
 
   useEffect(() => {
@@ -353,79 +342,6 @@ export function InputEnvironmentPanel({
     };
   }, [state.localFiles]);
 
-  const localMatchSummary = useMemo(
-    () => (localModelHints ? summarizeLocalRecipeMatches(localModelHints, SUGGESTED_RECIPES) : null),
-    [localModelHints],
-  );
-
-  const hardwareMatchSummary = useMemo(
-    () => (hardwareProbe ? summarizeRecipeHardwareCompatibility(SUGGESTED_RECIPES, hardwareProbe) : null),
-    [hardwareProbe],
-  );
-
-  const curatedRecipesWithMatch = useMemo(() => {
-    let rows = filteredRecipes;
-    if (localModelHints && showLocalRecipeMatchesOnly) {
-      rows = rows.filter((item) => scoreRecipeMatchForLocal(localModelHints, item).tier !== "none");
-    }
-    if (hideIncompatibleRecipes && hardwareProbe) {
-      rows = rows.filter(
-        (item) => assessCatalogItemHardwareCompatibility(item, hardwareProbe).tier !== "unavailable",
-      );
-    }
-
-    const decorated = rows.map((item) => ({
-      item,
-      match: localModelHints ? scoreRecipeMatchForLocal(localModelHints, item) : null,
-      hardware: assessCatalogItemHardwareCompatibility(item, hardwareProbe),
-      modelTitle: presetDisplayName(item.name).title,
-      inferenceGb: estimateVramForCatalogPreset(item, hardwareProbe).inferenceGb,
-    }));
-
-    decorated.sort((a, b) => {
-      if (recipeSort === "name-asc" || recipeSort === "name-desc") {
-        const byTitle = a.modelTitle.localeCompare(b.modelTitle, undefined, { sensitivity: "base" });
-        if (byTitle !== 0) return recipeSort === "name-asc" ? byTitle : -byTitle;
-        const byName = a.item.name.localeCompare(b.item.name, undefined, { sensitivity: "base" });
-        return recipeSort === "name-asc" ? byName : -byName;
-      }
-
-      if (recipeSort === "size-asc" || recipeSort === "size-desc") {
-        const bySize = a.inferenceGb - b.inferenceGb;
-        if (bySize !== 0) return recipeSort === "size-asc" ? bySize : -bySize;
-        return a.modelTitle.localeCompare(b.modelTitle, undefined, { sensitivity: "base" });
-      }
-
-      const hwOrder = { compatible: 0, unknown: 1, unavailable: 2 } as const;
-      const hwDiff = hwOrder[a.hardware.tier] - hwOrder[b.hardware.tier];
-      if (hwDiff !== 0) return hwDiff;
-      return (b.match?.score ?? -1) - (a.match?.score ?? -1);
-    });
-
-    return decorated;
-  }, [
-    filteredRecipes,
-    localModelHints,
-    showLocalRecipeMatchesOnly,
-    hideIncompatibleRecipes,
-    hardwareProbe,
-    recipeSort,
-  ]);
-
-  const groupedRecipes = useMemo(() => {
-    const groups = new Map<string, { title: string; rows: typeof curatedRecipesWithMatch }>();
-    for (const row of curatedRecipesWithMatch) {
-      const title = row.modelTitle;
-      const existing = groups.get(title);
-      if (existing) {
-        existing.rows.push(row);
-      } else {
-        groups.set(title, { title, rows: [row] });
-      }
-    }
-    return [...groups.values()];
-  }, [curatedRecipesWithMatch]);
-
   const pathSuggestions = SUGGESTED_RECIPES.filter((item) => {
     if (!repoPath.trim()) return true;
     return item.repoPath.toLowerCase().includes(repoPath.toLowerCase());
@@ -440,88 +356,6 @@ export function InputEnvironmentPanel({
       if (chunk) return chunk.hash;
     }
     return null;
-  };
-
-  const getFileFormatLabel = (name: string) => {
-    const _ext = name.split(".").pop()?.toLowerCase();
-
-    const chunkMatch = name.match(/\.(\d{3,})$/);
-    if (chunkMatch) {
-      return "Olive Binary Chunk Segment";
-    }
-
-    if (name.endsWith(".pt") || name.endsWith(".pth")) return "PyTorch State Dict (Checkpoint)";
-    if (name.endsWith(".bin")) return "PyTorch Binary Weights";
-    if (name.endsWith(".safetensors")) return "HF Safetensors Weight Map";
-    if (name.endsWith(".onnx")) return "ONNX Runtime Optimized Model";
-    if (name.endsWith(".xml")) return "OpenVINO Intermediate Representation (XML)";
-    if (name.endsWith(".json")) return "Model Hyperparameters Config (JSON)";
-
-    return "Generalized Model Binary Blob";
-  };
-
-  const getFileDescription = (name: string) => {
-    const fmt = getFileFormatLabel(name);
-    if (fmt.includes("PyTorch State Dict")) {
-      return "Contains floating point model weight tensors indexed by layer names. Raw parameters from trainer output.";
-    }
-    if (fmt.includes("Weights")) {
-      return "CJS-compliant weight array buffer suitable for multi-threaded direct binary loads.";
-    }
-    if (fmt.includes("Safetensors")) {
-      return "Secure, zero-copy, memory-mapped key-value header model format safely omitting executable Python pickles.";
-    }
-    if (fmt.includes("ONNX")) {
-      return "Optimized platform-independent dataflow graph representing operations and layer nodes in the ONNX spec.";
-    }
-    if (fmt.includes("Config")) {
-      return "Hyperparameters config mapping architecture layers, vocabulary size, attention heads, type tokens, and weights formats.";
-    }
-    if (fmt.includes("Chunk Segment")) {
-      return "Byte-exact partition of a large-scale weight file segmented for robust transfers and parallel cache assemblies.";
-    }
-    return "Standard model compilation asset. Subject to parsing, quantization, and layer alignment workflows.";
-  };
-
-  const getSimulatedTensors = (name: string, size: number) => {
-    const isChunk = name.match(/\.(\d{3,})$/) !== null;
-    if (isChunk) {
-      return [
-        { key: "partition_id", val: name.split(".").pop() || "001" },
-        { key: "compression", val: "None (Raw Bytes)" },
-        {
-          key: "memory_footprint",
-          val: `${(size / (1024 * 1024)).toFixed(1)} MB`,
-        },
-        {
-          key: "segment_checksum",
-          val: getDisplayHash(name) ? "SHA-256 verified" : "Not hashed",
-        },
-      ];
-    }
-    if (name.endsWith(".json")) {
-      return [
-        { key: "vocab_size", val: "32,000 token embeddings" },
-        { key: "hidden_size", val: "4096 dimensions" },
-        { key: "num_attention_heads", val: "32 heads" },
-        { key: "num_hidden_layers", val: "32 layer blocks" },
-        { key: "model_architecture", val: "llama" },
-      ];
-    }
-    // Standard weight files
-    const baseTensorsCount = Math.floor((size / 10000000) % 200) + 50;
-    return [
-      {
-        key: "total_parameters",
-        val: `${(size / 400000000).toFixed(2)}B parameters (est)`,
-      },
-      {
-        key: "weight_dtype",
-        val: size > 2500000000 ? "Float32 (32-bit float)" : "Float16 (16-bit float)",
-      },
-      { key: "registered_tensors", val: `${baseTensorsCount} unique tensors` },
-      { key: "tensor_index_status", val: "Ready (Fully mapped)" },
-    ];
   };
 
   const handleCopyHash = (hash: string) => {
@@ -564,32 +398,8 @@ export function InputEnvironmentPanel({
     }
   };
 
-  const formatSize = (bytes: number) => {
-    if (bytes === 0) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
-
   // Identify chunked files (e.g. model.bin.001, model.bin.002)
-  const getBaseName = (filename: string) => {
-    const match = filename.match(/^(.*)\.(\d{3,})$/);
-    return match ? match[1] : null;
-  };
-
-  const reconstructableGroups = () => {
-    const groups: Record<string, { name: string; size: number }[]> = {};
-    for (const f of state.localFiles) {
-      const base = getBaseName(f.name);
-      if (base) {
-        if (!groups[base]) groups[base] = [];
-        groups[base].push(f);
-      }
-    }
-    // Only return groups that have files for reconstruction
-    return Object.entries(groups).filter(([_base, files]) => files.length > 0);
-  };
+  const reconstructableGroups = () => getReconstructableGroups(state.localFiles);
 
   const startReconstruction = async (baseName: string, files: { name: string; size: number }[]) => {
     setIsReconstructing(true);
@@ -1761,7 +1571,7 @@ export function InputEnvironmentPanel({
                                         {file.name}
                                       </p>
                                       <p className="text-sm text-slate-500 font-mono">
-                                        {formatSize(file.size)}
+                                        {formatFileSize(file.size)}
                                       </p>
                                     </div>
                                   </button>
@@ -1795,7 +1605,7 @@ export function InputEnvironmentPanel({
                                   </h5>
                                   <p className="text-sm text-slate-400">
                                     Detected {files.length} parts for <strong>{base}</strong> (
-                                    {formatSize(files.reduce((a, b) => a + b.size, 0))}
+                                    {formatFileSize(files.reduce((a, b) => a + b.size, 0))}
                                     ).
                                   </p>
                                 </div>
@@ -1895,7 +1705,7 @@ export function InputEnvironmentPanel({
                                               <div className="text-sm font-medium truncate">{file.name}</div>
                                               <div className="text-[11px] font-mono text-slate-500 leading-tight">
                                                 {isChunk ? "Segment block" : "Active baseline"} •{" "}
-                                                {formatSize(file.size)}
+                                                {formatFileSize(file.size)}
                                               </div>
                                             </div>
                                             <ChevronRight
@@ -1943,7 +1753,7 @@ export function InputEnvironmentPanel({
                                                   {item.baseName}
                                                 </div>
                                                 <div className="text-[11px] font-mono text-slate-500 leading-tight">
-                                                  Reconstituted • {formatSize(item.totalSize)} (
+                                                  Reconstituted • {formatFileSize(item.totalSize)} (
                                                   {item.chunks.length} parts)
                                                 </div>
                                               </div>
@@ -1985,7 +1795,7 @@ export function InputEnvironmentPanel({
                                             Size Specification
                                           </span>
                                           <span className="text-sm font-bold text-slate-300 font-mono">
-                                            {formatSize(selectedFileDetailed.size)}
+                                            {formatFileSize(selectedFileDetailed.size)}
                                           </span>
                                           <span className="text-[11px] text-slate-500 block leading-none font-mono mt-0.5">
                                             {selectedFileDetailed.size.toLocaleString()} bytes
@@ -2038,6 +1848,7 @@ export function InputEnvironmentPanel({
                                             {getSimulatedTensors(
                                               selectedFileDetailed.name,
                                               selectedFileDetailed.size,
+                                              getDisplayHash,
                                             ).map((item, i) => (
                                               <div
                                                 key={i}
@@ -2088,7 +1899,7 @@ export function InputEnvironmentPanel({
                                                     </span>
                                                   </div>
                                                   <div className="text-slate-500 flex items-center gap-2">
-                                                    <span>{formatSize(ch.size)}</span>
+                                                    <span>{formatFileSize(ch.size)}</span>
                                                     <span className="text-slate-600">
                                                       ({ch.hash.substring(7, 15)})
                                                     </span>

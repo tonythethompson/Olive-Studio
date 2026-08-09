@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useMcpDiagnostic, useMcpDiagnosticKeyed } from "@/lib/hooks";
+import { useMcpDiagnostic, useMcpDiagnosticKeyed } from "@/lib/hooks/useMcpDiagnostic";
 import type { McpDiagnostic } from "@/types";
 
 // ── Mock fetch ───────────────────────────────────────────────────

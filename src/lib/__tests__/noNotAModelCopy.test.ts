@@ -5,7 +5,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { PROVIDER_OPTIONS } from "@/components/features/gemini/aiProviderCatalog";
+import { PROVIDER_OPTIONS } from "@/components/features/assistant/aiProviderCatalog";
 
 const BANNED = "(not a model)";
 

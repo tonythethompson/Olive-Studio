@@ -5,7 +5,8 @@ import { UIState } from "@/types";
 import { ImportConfirmDialog } from "./ImportConfirmDialog";
 import type { InspectorProps } from "./types";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { useAutoClearError, useImportPresets, useExportPresets } from "@/lib/hooks";
+import { useAutoClearError } from "@/lib/hooks/useAutoClearError";
+import { useImportPresets, useExportPresets } from "@/lib/hooks/usePresets";
 import { RecipeDiffOverlay } from "./RecipeDiffOverlay";
 import { RefreshCw, AlertTriangle, Save, Download, Upload } from "lucide-react";
 import {

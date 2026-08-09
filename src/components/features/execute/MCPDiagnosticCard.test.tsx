@@ -5,8 +5,8 @@ import type { McpDiagnostic, McpTroubleshootFeedbackResult } from "@/types";
 
 const mockRequestFeedback = vi.fn();
 
-vi.mock("@/lib/hooks", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/hooks")>();
+vi.mock("@/lib/mcpClient", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/mcpClient")>();
   return {
     ...actual,
     requestMcpTroubleshootFeedback: (...args: unknown[]) => mockRequestFeedback(...args),

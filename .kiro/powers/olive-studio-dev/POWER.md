@@ -57,7 +57,7 @@ UIState (zustand) → commitUiStateUpdate (coercion) → buildOliveRecipe (memoi
 - `src/components/features/ihv/` — Hardware/EP configuration
 - `src/components/features/execute/` — Recipe visualization, execution, batch jobs
 - `src/components/features/playground/` — In-browser inference, WebGPU benchmarks, Arena
-- `src/components/features/gemini/` — AI assistant sidebar (18+ providers)
+- `src/components/features/assistant/` — AI assistant sidebar (18+ providers)
 
 ### Server Architecture
 - Routes: `ai/`, `mcp.ts`, `olive.ts`, `env.ts`, `system.ts`, `github.ts`, `arena.ts`
@@ -91,7 +91,7 @@ UIState (zustand) → commitUiStateUpdate (coercion) → buildOliveRecipe (memoi
    - `name`, `label`, `defaultModel`, `envVarNames`, `buildConfig()`, `call()`
 3. **Call `registerProvider(plugin)`** at module scope
 4. **Import the file** in `src/server/services/ai/index.ts` (side-effect import)
-5. **Add to UI catalog** in `src/components/features/gemini/aiProviderCatalog.ts` → `PROVIDER_OPTIONS`
+5. **Add to UI catalog** in `src/components/features/assistant/aiProviderCatalog.ts` → `PROVIDER_OPTIONS`
 6. **Test** — verify env detection works, provider appears in settings tab
 
 ## Available Steering Files

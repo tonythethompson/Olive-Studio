@@ -41,18 +41,25 @@ const batchMcpState = {
 
 const mockRequestFeedback = vi.fn();
 
-vi.mock("@/lib/hooks", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/hooks")>();
+vi.mock("@/lib/hooks/useAutoClearError", () => ({
+  useAutoClearError: () => ["", vi.fn()],
+}));
+
+vi.mock("@/lib/hooks/useMcpDiagnostic", () => ({
+  useMcpDiagnostic: () => ({ diagnostic: null, isDiagnosing: false, error: null, fetchDiagnostic: vi.fn() }),
+  useMcpDiagnosticKeyed: () => ({
+    fetchKeyedDiagnostic: mockFetchKeyedDiagnostic,
+    diagnostics: batchMcpState.diagnostics,
+    diagnosingKeys: batchMcpState.diagnosingKeys,
+    errors: batchMcpState.errors,
+    diagnosticKey: "current",
+  }),
+}));
+
+vi.mock("@/lib/mcpClient", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/mcpClient")>();
   return {
     ...actual,
-    useAutoClearError: () => ["", vi.fn()],
-    useMcpDiagnosticKeyed: () => ({
-      fetchKeyedDiagnostic: mockFetchKeyedDiagnostic,
-      diagnostics: batchMcpState.diagnostics,
-      diagnosingKeys: batchMcpState.diagnosingKeys,
-      errors: batchMcpState.errors,
-      diagnosticKey: "current",
-    }),
     requestMcpTroubleshootFeedback: (...args: unknown[]) => mockRequestFeedback(...args),
   };
 });
