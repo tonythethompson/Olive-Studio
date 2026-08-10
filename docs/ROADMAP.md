@@ -49,7 +49,7 @@ Contract (unchanged): standalone MCP is advisory; MCP connected to Studio is an 
 
 ### Olive runtime
 
-- [ ] Update `olive-ai` to 0.1.3 (venv pin / install path, docs, and compatibility notes)
+- [ ] Keep managed `olive-ai` pin, docs, and compatibility notes aligned with Olive **0.12.1** (current pass-catalog / CI baseline; venv already accepts `olive-ai>=0.9.0,<1`)
 
 ### Agent autonomy tools (MCP)
 
@@ -85,7 +85,7 @@ Manual vs Agent on Execute first; Assistant stays chat until the later bridge.
 
 - [ ] Export optimization report (PDF/Markdown)
 - [ ] Recipe catalog version pinning
-- [ ] MultiLoRA adapter support: target v0.4+; **blocked** on upstream Olive multi-adapter pass configuration (Olive >= 0.3.0). Schema `adapters[]` is forward-compatible today; builder still emits single `adapter_path` only. See `docs/multilora-design.md`. Not unblocked by the v0.3 `olive-ai` pin bump.
+- [ ] MultiLoRA adapter support: target v0.4+; **blocked** on upstream Olive multi-adapter pass configuration (Olive >= 0.3.0). Schema `adapters[]` is forward-compatible today; builder does not yet emit `adapter_path` or `adapters[]`. See `docs/multilora-design.md`. Not unblocked by the v0.3 `olive-ai` pin alignment.
 
 ### Distribution
 
