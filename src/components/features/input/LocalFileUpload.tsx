@@ -58,19 +58,37 @@ export function LocalFileUpload({ state, setState, onConfigTextChange }: LocalFi
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [downloadName, setDownloadName] = useState<string | null>(null);
 
+  const syncChunkFilesRefToState = (localFiles: UIState["localFiles"]) => {
+    const allowed = new Set(localFiles.map((f) => f.name));
+    for (const name of chunkFilesRef.current.keys()) {
+      if (!allowed.has(name)) {
+        chunkFilesRef.current.delete(name);
+      }
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
+    syncChunkFilesRefToState(state.localFiles);
+
+    const hasConfigInState = state.localFiles.some((f) => f.name === "config.json");
+    if (!hasConfigInState) {
+      onConfigTextChange?.(undefined, state.localFiles.length === 0 ? "idle" : "ready");
+      return () => { cancelled = true; };
+    }
+
     const configFile = chunkFilesRef.current.get("config.json");
     if (!configFile) {
-      onConfigTextChange?.(undefined, state.localFiles.length === 0 ? "idle" : "ready");
-    } else {
-      onConfigTextChange?.(undefined, "loading");
-      void configFile.text().then((text) => {
-        if (!cancelled) onConfigTextChange?.(text, "ready");
-      }).catch(() => {
-        if (!cancelled) onConfigTextChange?.(undefined, "ready");
-      });
+      onConfigTextChange?.(undefined, "ready");
+      return () => { cancelled = true; };
     }
+
+    onConfigTextChange?.(undefined, "loading");
+    void configFile.text().then((text) => {
+      if (!cancelled) onConfigTextChange?.(text, "ready");
+    }).catch(() => {
+      if (!cancelled) onConfigTextChange?.(undefined, "ready");
+    });
     return () => { cancelled = true; };
   }, [state.localFiles, onConfigTextChange]);
 
@@ -110,6 +128,7 @@ export function LocalFileUpload({ state, setState, onConfigTextChange }: LocalFi
   };
 
   const removeFile = (name: string) => {
+    chunkFilesRef.current.delete(name);
     const updatedFiles = state.localFiles.filter((f) => f.name !== name);
     setState({ localFiles: updatedFiles });
     if (selectedFileName === name) {
@@ -166,6 +185,9 @@ export function LocalFileUpload({ state, setState, onConfigTextChange }: LocalFi
         { baseName, totalSize: blob.size, finalHash, chunks: generatedChunks, reconstructedAt: new Date().toISOString() },
       ]);
       const chunkNames = new Set(files.map((f) => f.name));
+      for (const name of chunkNames) {
+        chunkFilesRef.current.delete(name);
+      }
       const newLocalFiles = state.localFiles.filter((f) => !chunkNames.has(f.name));
       setState({ localFiles: [...newLocalFiles, { name: baseName, size: blob.size }] });
       setSelectedFileName(baseName);
