@@ -60,20 +60,22 @@ export function fingerprintRecipe(recipe: unknown, cudaVersion = "auto"): string
   return createHash("sha256").update(payload).digest("hex");
 }
 
+function findCanonicalAncestor(current: string): { canonical: string; original: string } | undefined {
+  try {
+    return { canonical: fs.realpathSync(current), original: current };
+  } catch {
+    const parent = path.dirname(current);
+    if (parent !== current) return findCanonicalAncestor(parent);
+  }
+}
+
 function canonicalizeRecipePath(resolved: string): string {
   try {
     return fs.realpathSync(resolved);
   } catch {
-    let current = resolved;
-    let parent = path.dirname(current);
-    while (parent !== current) {
-      try {
-        const canonicalParent = fs.realpathSync(parent);
-        return path.join(canonicalParent, path.relative(parent, resolved));
-      } catch {
-        current = parent;
-        parent = path.dirname(current);
-      }
+    const ancestor = findCanonicalAncestor(resolved);
+    if (ancestor) {
+      return path.join(ancestor.canonical, path.relative(ancestor.original, resolved));
     }
     return resolved;
   }
