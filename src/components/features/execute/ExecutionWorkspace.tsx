@@ -390,29 +390,24 @@ export function ExecutionWorkspace({
     try {
       setOwrDownloadError(null);
       const { ortConfig, manifestConfig, webInitCode, mobileInitCode } = owrConfigs;
-      let zip: InstanceType<typeof import("jszip")>;
-      try {
-        const { default: JSZip } = await import("jszip");
-        zip = new JSZip();
-      } catch (e) {
-        console.error("Failed to load ZIP module", e);
-        setOwrDownloadError("Couldn't load the ZIP module. Check your connection and try again.");
-        return;
-      }
-
-      zip.file("ort_config.json", JSON.stringify(ortConfig, null, 2));
-      zip.file("onnx_model_manifest.json", JSON.stringify(manifestConfig, null, 2));
-
-      if (owrPlatform === "web") {
-        zip.file("web_init.js", webInitCode);
-      } else {
-        zip.file("mobile_init.kt", mobileInitCode);
-      }
-
       const rawModelId = state.hfModelId || (state.localFiles && state.localFiles[0]?.name) || "model";
       const modelName = rawModelId.split("/").pop() || "model";
 
-      const readme = `ONNX Runtime Web/Mobile (OWR) Deployment Bundle
+      let zipData: Uint8Array;
+      try {
+        const { zipSync, strToU8 } = await import("fflate");
+
+        const files: Record<string, Uint8Array> = {};
+        files["ort_config.json"] = strToU8(JSON.stringify(ortConfig, null, 2));
+        files["onnx_model_manifest.json"] = strToU8(JSON.stringify(manifestConfig, null, 2));
+
+        if (owrPlatform === "web") {
+          files["web_init.js"] = strToU8(webInitCode);
+        } else {
+          files["mobile_init.kt"] = strToU8(mobileInitCode);
+        }
+
+        const readme = `ONNX Runtime Web/Mobile (OWR) Deployment Bundle
   ==================================================
   Created: ${new Date().toLocaleString()}
   Target Environment: ONNX Runtime ${owrPlatform === "web" ? "Web (WebGPU/WASM)" : "Mobile (Android/iOS)"}
@@ -429,10 +424,17 @@ export function ExecutionWorkspace({
           : "- Place the compiled ORT flatbuffer file (model.ort) under your Android App's 'src/main/assets' directory.\\n- Implement 'ai.onnxruntime:onnxruntime-android' via gradle.\\n- Wire up your OnnxModelExecutor wrapper inside Activities/Handlers."
         }
   `;
-      zip.file("README.txt", readme);
+        files["README.txt"] = strToU8(readme);
+
+        zipData = zipSync(files);
+      } catch (e) {
+        console.error("Failed to load ZIP module", e);
+        setOwrDownloadError("Couldn't load the ZIP module. Check your connection and try again.");
+        return;
+      }
 
       try {
-        const content = await zip.generateAsync({ type: "blob" });
+        const content = new Blob([zipData as unknown as ArrayBuffer], { type: "application/zip" });
         const url = URL.createObjectURL(content);
         const link = document.createElement("a");
         link.href = url;
