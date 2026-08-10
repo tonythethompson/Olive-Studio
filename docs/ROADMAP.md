@@ -85,6 +85,7 @@ Manual vs Agent on Execute first; Assistant stays chat until the later bridge.
 
 - [ ] Export optimization report (PDF/Markdown)
 - [ ] Recipe catalog version pinning
+- [ ] MultiLoRA adapter support: target v0.4+; **blocked** on upstream Olive multi-adapter pass configuration (Olive >= 0.3.0). Schema `adapters[]` is forward-compatible today; builder still emits single `adapter_path` only. See `docs/multilora-design.md`. Not unblocked by the v0.3 `olive-ai` pin bump.
 
 ### Distribution
 
@@ -108,7 +109,6 @@ Converge Assistant and Execute Agent mode on one action path. Do not replace Exe
 
 ## Backlog
 
-- [ ] MultiLoRA adapter support (blocked on Olive ≥ 0.3.0 upstream)
 - [ ] Cloud sync for recipe presets
 - [ ] Collaborative recipe sharing (GitHub Gist export)
 - [ ] ONNX Runtime WebGPU inference preview
