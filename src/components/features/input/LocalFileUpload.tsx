@@ -111,18 +111,21 @@ export function LocalFileUpload({ state, setState, onConfigTextChange }: LocalFi
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const newFiles = Array.from(e.target.files);
-      for (const f of newFiles as File[]) {
+      for (const f of newFiles) {
         chunkFilesRef.current.set(f.name, f);
       }
-      const newFileMetas = newFiles.map((f: File) => ({ name: f.name, size: f.size }));
-      const existingNames = new Set(state.localFiles.map((f) => f.name));
-      const filteredNew = newFileMetas.filter((f) => !existingNames.has(f.name));
-      const combined = [...state.localFiles, ...filteredNew].sort((a, b) =>
+      const newFileMetas = newFiles.map((f) => ({ name: f.name, size: f.size }));
+      const replacementNames = new Set(newFileMetas.map((f) => f.name));
+      const kept = state.localFiles.filter((f) => !replacementNames.has(f.name));
+      const combined = [...kept, ...newFileMetas].sort((a, b) =>
         a.name.localeCompare(b.name),
       );
       setState({ localFiles: combined });
-      if (filteredNew.length > 0 && !selectedFileName) {
-        setSelectedFileName(filteredNew[0].name);
+      const addedNames = newFileMetas
+        .filter((f) => !state.localFiles.some((existing) => existing.name === f.name))
+        .map((f) => f.name);
+      if (addedNames.length > 0 && !selectedFileName) {
+        setSelectedFileName(addedNames[0]);
       }
     }
   };
