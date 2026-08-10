@@ -220,8 +220,8 @@ def compare_results(
 
             status = response.get("status", "unknown")
 
-            if status == "failed":
-                excluded_jobs.append({"job_id": jid, "reason": "job_failed"})
+            if status in {"failed", "cancelled"}:
+                excluded_jobs.append({"job_id": jid, "reason": f"job_{status}"})
                 continue
 
             if status not in _TERMINAL_STATES:
@@ -229,7 +229,7 @@ def compare_results(
                 excluded_jobs.append({"job_id": jid, "reason": reason})
                 continue
 
-            # Job is completed (only non-failed terminal state that passes)
+            # Job is completed (only scoreable terminal state that passes)
             metrics = _extract_metrics(response)
             scoreable.append({
                 "job_id": jid,
