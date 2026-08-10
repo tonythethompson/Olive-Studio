@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { UIState } from "@/types";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
-import { commitUiStateUpdate } from "@/lib/pipelineValidation";
+import { commitUiStateUpdate } from "@/lib/pipelineStateCommit";
 
 const STORAGE_KEY = "olive:pipeline-state";
 
