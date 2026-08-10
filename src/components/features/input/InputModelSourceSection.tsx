@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { Input, Label, Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui";
 import { UIState } from "@/types";
+import { cn } from "@/lib/utils";
 import { LocalFileUpload, type ConfigTextStatus } from "@/components/features/input/LocalFileUpload";
 import type { HfTokenStatus } from "@/components/features/input/useHfToken";
 import { InputHuggingFaceSourceForm } from "@/components/features/input/InputHuggingFaceSourceForm";
@@ -64,9 +66,20 @@ export function InputModelSourceSection({
   handleClearToken,
   onConfigTextChange,
 }: InputModelSourceSectionProps) {
-  if (!sourceConfigExpanded && !recipeRailCollapsed) {
-    return (
-      <div className="min-w-0 w-full">
+  const isSourceCollapsed = !sourceConfigExpanded && !recipeRailCollapsed;
+  const [keepSourceMounted, setKeepSourceMounted] = useState(
+    () => sourceConfigExpanded || recipeRailCollapsed,
+  );
+
+  useEffect(() => {
+    if (sourceConfigExpanded || recipeRailCollapsed) {
+      setKeepSourceMounted(true);
+    }
+  }, [sourceConfigExpanded, recipeRailCollapsed]);
+
+  return (
+    <div className="min-w-0 w-full">
+      {isSourceCollapsed && (
         <button
           type="button"
           onClick={() => setSourceConfigExpanded(true)}
@@ -83,12 +96,10 @@ export function InputModelSourceSection({
           </div>
           <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />
         </button>
-      </div>
-    );
-  }
+      )}
 
-  return (
-    <div className="min-w-0 w-full">
+      {keepSourceMounted && (
+      <div className={cn(isSourceCollapsed && "hidden")}>
       <div className="mb-4 flex items-center justify-between gap-2">
         <h3 className="text-sm font-medium text-slate-400 flex items-center gap-1.5">
           <DownloadCloud className="h-3.5 w-3.5 text-electric-blue" /> Source config
@@ -160,6 +171,8 @@ export function InputModelSourceSection({
           </div>
         </TabsContent>
       </Tabs>
+      </div>
+      )}
     </div>
   );
 }
