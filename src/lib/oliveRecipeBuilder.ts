@@ -612,9 +612,6 @@ function buildSimplifiedLayerNormToRMSNorm(_state: UIState, _ctx: RecipeBuildCon
 function buildOnnxDiscrepancyCheck(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
   if (!_state.passes.onnxDiscrepancyCheck) return undefined;
   const config: Record<string, unknown> = {};
-  if (_state.userScript) {
-    config.test_data_dir = _state.userScript;
-  }
   return { type: "OnnxDiscrepancyCheck", config };
 }
 
@@ -751,6 +748,10 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   recipe.passes = finalizePasses(passes, state.passRecipeOverrides, torchQuantActive);
 
   memoState = state;
+  memoRecipe = recipe;
+  return recipe;
+}
+
   memoRecipe = recipe;
   return recipe;
 }
