@@ -5,17 +5,15 @@
 import { useState } from "react";
 import { Input, Select, Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { fetchOliveRecipesCatalogItem, type RecipeCatalogItem } from "`@/lib/oliveRecipeHub`";
-import { estimateVramForCatalogPreset } from "`@/lib/presetVramEstimate`";
-import {
-  presetDisplayName,
-  type RecipeSortMode,
-  type RecipeRow,
-} from "`@/components/features/input/useRecipeCatalog`";
-import { CompatCountSummary, CompatStatusPill } from "`@/components/features/input/CompatStatus`";
-import { navigatePipeline } from "`@/lib/pipelineNavigation`";
-import type { LocalModelHints } from "`@/lib/recipeModelMatch`";
-import type { HardwareProbeResult } from "`@/lib/hardwareProbe`";
+import { fetchOliveRecipesCatalogItem } from "@/lib/oliveRecipeHub";
+import { estimateVramForCatalogPreset } from "@/lib/presetVramEstimate";
+import { presetDisplayName, type RecipeSortMode } from "@/components/features/input/useRecipeCatalog";
+import { CompatCountSummary, CompatStatusPill } from "@/components/features/input/CompatStatus";
+import { navigatePipeline } from "@/lib/pipelineNavigation";
+import type { RecipeCatalogItem } from "@/lib/oliveRecipeHub";
+import type { LocalModelHints } from "@/lib/recipeModelMatch";
+import type { HardwareProbeResult } from "@/lib/hardwareProbe";
+import type { RecipeRow } from "@/components/features/input/useRecipeCatalog";
 import {
   Search,
   X,
@@ -34,14 +32,14 @@ export interface RecipeCatalogBrowserProps {
   setSelectedDevice: (v: string) => void;
   recipeSort: RecipeSortMode;
   setRecipeSort: (v: RecipeSortMode) => void;
-  hideIncompatibleRecipes: boolean;
-  setHideIncompatibleRecipes: (v: boolean) => void;
-  showLocalRecipeMatchesOnly: boolean;
-  setShowLocalRecipeMatchesOnly: (v: boolean) => void;
+  compatibilityFilter: "all" | "compatible-only";
+  setCompatibilityFilter: (v: "all" | "compatible-only") => void;
+  localMatchFilter: "all" | "local-only";
+  setLocalMatchFilter: (v: "all" | "local-only") => void;
   localModelHints: LocalModelHints | null;
-  localHintsLoading: boolean;
+  localHintsStatus: "idle" | "loading" | "ready";
   hardwareProbe: HardwareProbeResult | null;
-  hardwareProbeLoading: boolean;
+  hardwareProbeStatus: "idle" | "loading" | "ready";
   localMatchSummary: { match: number; possible: number; none: number } | null;
   hardwareMatchSummary: { compatible: number; unavailable: number } | null;
   curatedRecipesWithMatch: RecipeRow[];
@@ -68,14 +66,14 @@ export function RecipeCatalogBrowser({
   setSelectedDevice,
   recipeSort,
   setRecipeSort,
-  hideIncompatibleRecipes,
-  setHideIncompatibleRecipes,
-  showLocalRecipeMatchesOnly,
-  setShowLocalRecipeMatchesOnly,
+  compatibilityFilter,
+  setCompatibilityFilter,
+  localMatchFilter,
+  setLocalMatchFilter,
   localModelHints,
-  localHintsLoading,
+  localHintsStatus,
   hardwareProbe,
-  hardwareProbeLoading,
+  hardwareProbeStatus,
   localMatchSummary,
   hardwareMatchSummary,
   curatedRecipesWithMatch,
@@ -98,10 +96,10 @@ export function RecipeCatalogBrowser({
     <>
       <p className="text-xs text-slate-400 font-mono mb-3">
         {curatedRecipesWithMatch.length} of {totalPresetCount} presets
-        {localModelHints && !localHintsLoading
+        {localModelHints && !localHintsStatus === "loading"
           ? ` · ${localMatchSummary?.match ?? 0} match local upload`
           : ""}
-        {hardwareProbe && !hardwareProbeLoading
+        {hardwareProbe && !hardwareProbeStatus === "loading"
           ? ` · ${hardwareMatchSummary?.compatible ?? 0} compatible with this PC`
           : ""}
       </p>
@@ -112,7 +110,7 @@ export function RecipeCatalogBrowser({
             <p className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">
               Hardware compatibility
             </p>
-            {hardwareProbeLoading ? (
+            {hardwareProbeStatus === "loading" ? (
               <p className="text-sm text-slate-400 mt-1 flex items-center gap-1.5">
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-electric-blue" />
                 Probing this machine…
@@ -136,7 +134,7 @@ export function RecipeCatalogBrowser({
               </p>
             )}
           </div>
-          {hardwareProbe && !hardwareProbeLoading && (
+          {hardwareProbe && !hardwareProbeStatus === "loading" && (
             <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer shrink-0">
               <input
                 type="checkbox"
@@ -164,7 +162,7 @@ export function RecipeCatalogBrowser({
               <p className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">
                 Local model recipe match
               </p>
-              {localHintsLoading ? (
+              {localHintsStatus === "loading" ? (
                 <p className="text-sm text-slate-400 mt-1 flex items-center gap-1.5">
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-electric-blue" />
                   Reading upload…
@@ -201,12 +199,12 @@ export function RecipeCatalogBrowser({
                 </p>
               )}
             </div>
-            {localModelHints && !localHintsLoading && (localMatchSummary?.match ?? 0) > 0 && (
+            {localModelHints && !localHintsStatus === "loading" && (localMatchSummary?.match ?? 0) > 0 && (
               <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer shrink-0">
                 <input
                   type="checkbox"
-                  checked={showLocalRecipeMatchesOnly}
-                  onChange={(e) => setShowLocalRecipeMatchesOnly(e.target.checked)}
+                  checked={localMatchFilter === "local-only"}
+                  onChange={(e) => setLocalMatchFilter(e.target.checked ? "local-only" : "all")}
                   className="rounded border-slate-700 bg-slate-950 text-electric-blue focus:ring-electric-blue/40"
                 />
                 Matches only
@@ -473,7 +471,7 @@ export function RecipeCatalogBrowser({
           <div className="p-6 text-center">
             <Search className="h-6 w-6 text-slate-700 mx-auto mb-2" />
             <p className="text-sm font-semibold text-slate-400">
-              {showLocalRecipeMatchesOnly && localModelHints
+              {localMatchFilter === "local-only" && localModelHints
                 ? "No presets match your local upload with current filters"
                 : hideIncompatibleRecipes && hardwareProbe
                   ? "No presets compatible with this PC match your filters"
@@ -482,7 +480,7 @@ export function RecipeCatalogBrowser({
             <p className="text-xs text-slate-500 mt-1 max-w-[280px] mx-auto">
               {hideIncompatibleRecipes && hardwareProbe
                 ? "Turn off \u201cHide incompatible\u201d or relax search and device filters."
-                : showLocalRecipeMatchesOnly && localModelHints
+                : localMatchFilter === "local-only" && localModelHints
                   ? "Turn off \u201cMatches only\u201d or relax search and device filters."
                   : "Try relaxing your search query or setting the category filters to default values."}
             </p>
@@ -491,4 +489,6 @@ export function RecipeCatalogBrowser({
       </div>
     </>
   );
+}
+
 }
