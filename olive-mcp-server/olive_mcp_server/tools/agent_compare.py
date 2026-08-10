@@ -224,6 +224,10 @@ def compare_results(
                 excluded_jobs.append({"job_id": jid, "reason": "job_failed"})
                 continue
 
+            if status == "cancelled":
+                excluded_jobs.append({"job_id": jid, "reason": "job_cancelled"})
+                continue
+
             if status not in _TERMINAL_STATES:
                 reason = f"status_{status}" if status != "unknown" else "status_unknown"
                 excluded_jobs.append({"job_id": jid, "reason": reason})
