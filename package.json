@@ -79,7 +79,7 @@
     "zustand": "^5.0.14"
   },
   "optionalDependencies": {
-    "@openai/codex-sdk": "^0.145.0"
+    "@openai/codex-sdk": "^0.147.0"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",
