@@ -137,8 +137,14 @@ def _resolve_tool(name: str):
     try:
         module = importlib.import_module(module_name)
         fn = getattr(module, attr)
-    except (ModuleNotFoundError, AttributeError):
+    except (ModuleNotFoundError, AttributeError) as exc:
         # Optional/unimplemented tools must not prevent the server from starting.
+        import warnings
+
+        warnings.warn(
+            f"[olive-mcp-server] Failed to import tool '{name}' ({module_name}.{attr}): {exc}",
+            RuntimeWarning,
+        )
         return None
     _resolved_tools[name] = fn
     return fn
