@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
+import { kbReady } from "@/lib/schemaEngine";
 import {
   getProviderConflicts,
   coercePassFields,
@@ -30,6 +31,11 @@ import type { UIState, IHVProvider } from "@/types";
 function basePasses(overrides?: Partial<UIState["passes"]>): UIState["passes"] {
   return { ...DEFAULT_PASSES, ...overrides };
 }
+
+// Ensure KB is loaded before synchronous validation tests run
+beforeAll(async () => {
+  await kbReady().catch(() => undefined);
+});
 
 function baseState(overrides?: Partial<UIState>): UIState {
   return {
@@ -490,7 +496,7 @@ describe("coercePassFields", () => {
 
 describe("getPipelineValidation", () => {
   it("returns success on clean GPU config", () => {
-    const r = getPipelineValidation(baseState({ ihvProvider: "CUDAExecutionProvider" }));
+    const r = getPipelineValidation(baseState({ ihvProvider: "CUDAExecutionProvider", passes: basePasses({ conversion: false }) }));
     expect(r.isBlocked).toBe(false);
     expect(r.statusTone).toBe("success");
   });
@@ -506,7 +512,7 @@ describe("getPipelineValidation", () => {
       baseState({ passes: basePasses({ conversion: true, conversionFormat: "openvino" }) }),
     );
     expect(blocked.statusLabel).toMatch(/blocking/);
-    const success = getPipelineValidation(baseState({ ihvProvider: "CUDAExecutionProvider" }));
+    const success = getPipelineValidation(baseState({ ihvProvider: "CUDAExecutionProvider", passes: basePasses({ conversion: false }) }));
     expect(success.statusLabel).toBe("Local checks passed");
   });
 
@@ -542,7 +548,7 @@ describe("getPipelineValidation", () => {
       recommendedProvider: "CPUExecutionProvider" as IHVProvider,
       notes: [],
     };
-    const r = getPipelineValidation(baseState({ ihvProvider: "CoreMLExecutionProvider" }), {
+    const r = getPipelineValidation(baseState({ ihvProvider: "CoreMLExecutionProvider", passes: basePasses({ conversion: false }) }), {
       forLocalExecution: true,
       hardwareProbe: probe,
     });

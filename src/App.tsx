@@ -2,11 +2,8 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw, FlaskConical } from "lucide-react";
 import { InputEnvironmentPanel } from "@/components/features/input/InputEnvironmentPanel";
-import { IHVIntegrationPanel } from "@/components/features/ihv/IHVIntegrationPanel";
-import { ExecutionWorkspace } from "@/components/features/execute/ExecutionWorkspace";
 import { LicenseNotice } from "@/components/LicenseNotice";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { ReportIssueModal } from "@/components/ReportIssueModal";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import type { ReportArea } from "@/lib/issueReport";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
@@ -30,6 +27,18 @@ const PlaygroundPanel = lazy(() =>
   import("@/components/features/playground/PlaygroundPanel").then((m) => ({ default: m.PlaygroundPanel })),
 );
 
+const IHVIntegrationPanel = lazy(() =>
+  import("@/components/features/ihv/IHVIntegrationPanel").then((m) => ({ default: m.IHVIntegrationPanel })),
+);
+
+const ExecutionWorkspace = lazy(() =>
+  import("@/components/features/execute/ExecutionWorkspace").then((m) => ({ default: m.ExecutionWorkspace })),
+);
+
+const ReportIssueModal = lazy(() =>
+  import("@/components/ReportIssueModal").then((m) => ({ default: m.ReportIssueModal })),
+);
+
 function SidebarFallback() {
   return (
     <div className="w-80 border-l border-slate-800 bg-slate-900/40 flex items-center justify-center">
@@ -41,6 +50,14 @@ function SidebarFallback() {
 function BatchPanelFallback() {
   return (
     <div className="rounded border border-slate-800 bg-slate-900/40 p-12 flex items-center justify-center">
+      <span className="animate-spin"><RefreshCw className="h-5 w-5 text-electric-blue" /></span>
+    </div>
+  );
+}
+
+function PanelFallback() {
+  return (
+    <div className="rounded border border-slate-800 bg-slate-900/40 p-16 flex items-center justify-center">
       <span className="animate-spin"><RefreshCw className="h-5 w-5 text-electric-blue" /></span>
     </div>
   );
@@ -351,18 +368,22 @@ function Dashboard() {
                         )}
                         {id === "ihv" && (
                           <ErrorBoundary label="Hardware" onReportError={handleReportError}>
-                            <IHVIntegrationPanel />
+                            <Suspense fallback={<PanelFallback />}>
+                              <IHVIntegrationPanel />
+                            </Suspense>
                           </ErrorBoundary>
                         )}
                         {id === "execute" && (
                           <div className="space-y-8">
                             <ErrorBoundary label="Recipe & run" onReportError={handleReportError}>
-                              <ExecutionWorkspace
-                                onOpenAiAudit={handleOpenAiAudit}
-                                onRunStateChange={(running) => {
-                                  setIsOliveRunning(running);
-                                }}
-                              />
+                              <Suspense fallback={<PanelFallback />}>
+                                <ExecutionWorkspace
+                                  onOpenAiAudit={handleOpenAiAudit}
+                                  onRunStateChange={(running) => {
+                                    setIsOliveRunning(running);
+                                  }}
+                                />
+                              </Suspense>
                             </ErrorBoundary>
                             <ErrorBoundary label="Batch queue" onReportError={handleReportError}>
                               <Suspense fallback={<BatchPanelFallback />}>
@@ -401,7 +422,10 @@ function Dashboard() {
         <LicenseNotice open={licenseOpen} onClose={() => setLicenseOpen(false)} />
 
         {/* Report Issue Modal */}
-        <ReportIssueModal
+        {isReportOpen && (
+          <ErrorBoundary label="Report issue" onReportError={() => setIsReportOpen(false)}>
+            <Suspense fallback={null}>
+              <ReportIssueModal
           open={isReportOpen}
           onClose={() => {
             setIsReportOpen(false);
@@ -416,6 +440,9 @@ function Dashboard() {
           }
           frequencyInfo={reportData?.frequencyInfo}
         />
+            </Suspense>
+          </ErrorBoundary>
+        )}
       </div>
     </DesktopMinimumViewport>
   );

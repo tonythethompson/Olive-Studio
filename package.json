@@ -5,6 +5,9 @@
   "license": "MIT",
   "description": "GUI for Microsoft Olive model optimization — runs locally, no cloud required",
   "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
   "bin": {
     "olive-studio": "./bin/cli.js"
   },
@@ -49,7 +52,6 @@
     "tauri:build": "tauri build"
   },
   "dependencies": {
-    "@google/genai": "^2.15.0",
     "@huggingface/transformers": "^4.2.0",
     "@modelcontextprotocol/client": "^2.0.0",
     "@radix-ui/react-accordion": "^1.2.20",
@@ -67,10 +69,9 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
     "express-static-gzip": "^3.0.1",
+    "fflate": "^0.8.3",
     "helmet": "^8.3.0",
-    "jszip": "^3.10.1",
     "lucide-react": "^1.27.0",
-    "motion": "^12.43.0",
     "onnxruntime-web": "^1.27.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -106,7 +107,7 @@
     "eslint": "^9.39.5",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "fast-check": "^3.23.2",
+    "fast-check": "^4.9.0",
     "jsdom": "^30.0.1",
     "oxlint": "^1.75.0",
     "prettier": "^3.9.6",

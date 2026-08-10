@@ -18,7 +18,7 @@ import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import { getSelectableProviders, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
-import { MCPDiagnosticCard } from "./MCPDiagnosticCard";
+import { LazyMCPDiagnosticCard } from "./LazyMCPDiagnosticCard";
 import {
   Play,
   Pause,
@@ -1143,7 +1143,7 @@ export function BatchProcessingPanel({
 
                 {/* MCP Diagnostic for failed jobs (matched_entry from keyed MCP parse enables thumbs) */}
                 {selectedJob.status === "failed" && (
-                  <MCPDiagnosticCard
+                  <LazyMCPDiagnosticCard
                     diagnostic={batchDiagnostics[selectedJob.id] ?? null}
                     isDiagnosing={diagnosingJobs[selectedJob.id] ?? false}
                     fixApplied={appliedFixJobId === selectedJob.id ? "applied" : ""}

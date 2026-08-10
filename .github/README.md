@@ -39,6 +39,19 @@ Optional: NVIDIA / Intel / Qualcomm / AMD drivers for GPU/NPU recipes. [Hugging 
 
 ### Install and run
 
+**Pinned release** (matches [Releases](https://github.com/tonythethompson/Olive-Studio/releases); replace the tag as needed):
+
+```bash
+git clone --branch v0.2.0 --depth 1 https://github.com/tonythethompson/Olive-Studio.git
+cd Olive-Studio
+pnpm install
+pnpm dev
+```
+
+Tagged clones are detached HEAD. `git pull` will not move you to a newer release. To update: `git fetch --depth 1 origin tag vX.Y.Z && git checkout vX.Y.Z && pnpm install`.
+
+**Develop on `main`** (contributors; continuous updates via `git pull`):
+
 ```bash
 git clone https://github.com/tonythethompson/Olive-Studio.git
 cd Olive-Studio

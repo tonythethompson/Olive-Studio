@@ -1,4 +1,4 @@
-import typegpu from 'unplugin-typegpu/vite';
+import typegpuPlugin from 'unplugin-typegpu/vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
@@ -50,7 +50,9 @@ export default defineConfig(() => {
     plugins: [
       react(),
       tailwindcss(),
-      typegpu(),
+      // TypeGPU plugin: WGSL transpilation for dev DX only.
+      // In production, typegpu is externalized (loaded from CDN on-demand).
+      { ...typegpuPlugin(), apply: 'serve' },
       // Bundle analysis — open http://localhost:1420 to view tree map
       ...(process.env.ANALYZE
         ? [
@@ -112,6 +114,17 @@ export default defineConfig(() => {
     },
     build: {
       rollupOptions: {
+        // Externalize heavy optional dependencies — they're only used in
+        // Playground panels behind dynamic imports with graceful fallbacks.
+        // The app works fully offline without them (Arena tokenizer falls back
+        // to prompt-derived encoding, Playground panels show loading state,
+        // WebGPU benchmark gracefully degrades without TypeGPU).
+        // Users who open those panels load them from CDN on-demand.
+        external: [
+          '@huggingface/transformers',
+          'onnxruntime-web',
+          'typegpu',
+        ],
         output: {
           manualChunks(id: string) {
             // React core — stable, changes infrequently
@@ -121,10 +134,6 @@ export default defineConfig(() => {
             // Radix UI primitives
             if (id.includes('@radix-ui')) {
               return 'vendor-radix';
-            }
-            // Animation engine (handles both POSIX / and Windows \ separators)
-            if (id.includes('motion') && (id.includes('node_modules'))) {
-              return 'vendor-motion';
             }
             // Icon library — large surface area
             if (id.includes('lucide-react')) {

@@ -4,6 +4,10 @@ inclusion: always
 
 # Olive Studio — Development Conventions
 
+## Branding
+
+Do not call Olive Studio "local-first", "Local First", or "Local-First" in docs, UI, release notes, or comments. Prefer "local GUI", "runs on your machine", or "loopback-only" / "local-only" for access boundaries. Canonical rule: `.cursor/rules/no-local-first-branding.mdc`.
+
 ## Package Manager
 
 Always use **pnpm** (v11.17). Never use `npm install` — a `preinstall` guard script blocks it and exits with an error. All commands: `pnpm install`, `pnpm add`, `pnpm dev`, etc.

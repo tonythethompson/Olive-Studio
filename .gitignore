@@ -57,7 +57,9 @@ bun.lock
 
 # IDE / editor config (machine-specific)
 .vscode/
-.cursor/
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 .agents/
 .commandcode/
 .amazonq/

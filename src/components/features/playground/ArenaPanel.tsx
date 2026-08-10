@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Button, Input, Label } from "@/components/ui";
-import { cn } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 import {
   FileUp,
   Box,
@@ -77,13 +77,6 @@ export function isArenaPromptBlank(prompt: string): boolean {
 /*  File size formatter                                                */
 /* ------------------------------------------------------------------ */
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
-
 /* ------------------------------------------------------------------ */
 /*  SlotDropZone                                                       */
 /* ------------------------------------------------------------------ */
@@ -148,7 +141,7 @@ function SlotDropZone({ file, onFile, onClear }: SlotDropZoneProps) {
           <Box className="h-4 w-4 text-electric-blue shrink-0" />
           <div className="min-w-0">
             <p className="text-sm font-medium text-slate-200 truncate">{file.name}</p>
-            <p className="text-xs text-slate-500">{formatFileSize(file.size)}</p>
+            <p className="text-xs text-slate-500">{formatBytes(file.size)}</p>
           </div>
         </div>
         <Button
@@ -258,7 +251,7 @@ function SlotConfig({
           <span className="text-sm font-semibold text-slate-200">{label}</span>
           {slotType === "local" && file && (
             <span className="text-xs text-slate-400 font-mono truncate max-w-[140px]">
-              · {file.name} ({formatFileSize(file.size)})
+              · {file.name} ({formatBytes(file.size)})
             </span>
           )}
         </div>

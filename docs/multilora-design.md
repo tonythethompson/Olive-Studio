@@ -51,14 +51,11 @@ critical for serving multiple fine-tuned variants of the same base model efficie
 to v0.2.0 single-adapter mode. The builder ignores unknown keys.
 
 **Current implementation status:** The recipe schema validator accepts the `adapters[]`
-field for forward-compatibility validation, but the current builder (`buildOliveRecipe`)
-does not consume it — only `passes.lora.config.adapter_path` (single-adapter mode) is
-emitted. When both `adapters[].path` and `passes.lora.config.adapter_path` are present,
-the validator does not reject this as a conflict; however, only the pass-level
-`adapter_path` will be used by the builder until multi-adapter builder support is
-implemented (requires Olive >= 0.3.0). For recipes using `adapters[]` today, the
-runtime adapter-loading artifacts will NOT be emitted until builder integration (Phase 4)
-is complete.
+field for forward-compatibility validation, but `buildPeftPass` does not emit
+`adapter_path` or `adapters[]` today (LoRA/QLoRA configs currently include fields such as
+`r` and `alpha`). Multi-adapter builder support still requires Olive >= 0.3.0 upstream
+pass configuration. For recipes that include `adapters[]` today, runtime adapter-loading
+artifacts will NOT be emitted until builder integration (Phase 4) is complete.
 
 ### TypeScript Interface
 

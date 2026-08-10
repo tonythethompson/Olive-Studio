@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { FolderOpen, Sparkles, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { formatBytes } from "@/lib/utils";
 import type { OliveOutputEntry } from "@/lib/arenaOliveOutputs";
 import {
   toCloudSlotPatch,
@@ -16,13 +17,6 @@ type OliveListResponse = {
   recent: OliveOutputEntry[];
   entries: OliveOutputEntry[];
 };
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
 
 function entryBasename(displayPath: string): string {
   const parts = displayPath.replace(/\\/g, "/").split("/");

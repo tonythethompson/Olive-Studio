@@ -1,5 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { validateOliveRecipeStructure, assertValidOliveRecipeStructure } from "@/lib/oliveRecipeSchema";
+import { kbReady } from "@/lib/schemaEngine";
+
+// Ensure KB is loaded before synchronous validation tests run
+beforeAll(async () => {
+  await kbReady().catch(() => undefined);
+});
 
 // ─── Minimal valid recipe ────────────────────────────────────
 
