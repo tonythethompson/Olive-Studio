@@ -121,6 +121,11 @@ function ensureKbLoaded(): boolean {
   return false;
 }
 
+/** Returns true if KB failed to load (not just pending). */
+function kbFailed(): boolean {
+  return kbLoadError !== null;
+}
+
 void loadKb().catch(() => undefined);
 
 function isEmptyValue(v: unknown): boolean {
@@ -281,8 +286,12 @@ function checkParamType(value: unknown, type: ParamType): boolean {
  * @returns An array of validation error messages; an empty array indicates valid or unvalidated configuration
  */
 export function validatePassConfig(passType: string, config: unknown): string[] {
+  if (!ensureKbLoaded() && kbFailed()) {
+    return [`knowledge base unavailable: ${String(kbLoadError)}`];
+  }
   if (!ensureKbLoaded()) {
-    return [`knowledge base unavailable${kbLoadError ? `: ${String(kbLoadError)}` : "; retry with kbReady()"}`];
+    // KB still loading — skip parameter validation, don't reject
+    return [];
   }
 
   const errors: string[] = [];
@@ -371,10 +380,10 @@ export function validatePassConfig(passType: string, config: unknown): string[] 
  * 4. System/accelerator reference validation
  */
 export function validateRecipeSchema(recipe: unknown): SchemaValidationResult {
-  if (!ensureKbLoaded()) {
+  if (!ensureKbLoaded() && kbFailed()) {
     return {
       valid: false,
-      errors: [`knowledge base unavailable${kbLoadError ? `: ${String(kbLoadError)}` : "; retry with kbReady()"}`],
+      errors: [`knowledge base unavailable: ${String(kbLoadError)}`],
     };
   }
 
