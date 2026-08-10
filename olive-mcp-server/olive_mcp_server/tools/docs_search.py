@@ -563,8 +563,11 @@ def search_olive_documentation(
     if top_k < 0:
         raise ValueError(f"top_k must be >= 0, got {top_k}")
 
-    # Input sanitization: limit query length and strip control characters.
-    query = re.sub(r'[\x00-\x1f\x7f]', '', query[:2000]).strip()
+    # Input sanitization: limit length, normalize whitespace controls to spaces
+    # (preserving token boundaries), then strip non-whitespace control chars.
+    raw = query[:2000]
+    raw = re.sub(r'[\t\n\r\x0b\x0c]', ' ', raw)
+    query = re.sub(r'[\x00-\x08\x0e-\x1f\x7f]', '', raw).strip()
 
     mode_arg = mode if (mode or "").strip() else None
     resolved_mode = get_retrieval_mode(mode_arg)

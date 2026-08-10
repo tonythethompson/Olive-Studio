@@ -15,6 +15,20 @@ import {
   parseFeedbackToolPayload,
 } from "@/lib/mcpPayload";
 
+/** Unwrap a `{ result }` envelope if present, otherwise return the raw record. */
+function unwrapToolPayload(data: unknown): Record<string, unknown> | null {
+  const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+  if (
+    record &&
+    record.result &&
+    typeof record.result === "object" &&
+    !Array.isArray(record.result)
+  ) {
+    return record.result as Record<string, unknown>;
+  }
+  return record;
+}
+
 /**
  * Retrieves a troubleshooting diagnostic for the provided logs.
  *
@@ -47,11 +61,7 @@ export async function requestMcpDiagnostic(
     if (signal?.aborted) return { diagnostic: null, error: null };
 
     const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
-    // Prefer unwrapped tool payload when a legacy `{ result }` envelope is present.
-    const payload =
-      record && record.result && typeof record.result === "object" && !Array.isArray(record.result)
-        ? (record.result as Record<string, unknown>)
-        : record;
+    const payload = unwrapToolPayload(data);
 
     if (!resp.ok) {
       const msg =
@@ -143,10 +153,7 @@ function interpretFeedbackHttpResponse(
   data: unknown,
 ): McpTroubleshootFeedbackResult | McpTroubleshootFeedbackError {
   const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
-  const payload =
-    record && record.result && typeof record.result === "object" && !Array.isArray(record.result)
-      ? (record.result as Record<string, unknown>)
-      : record;
+  const payload = unwrapToolPayload(data);
   if (!resp.ok) {
     const msg =
       (payload && typeof payload.error === "string" && payload.error) ||
