@@ -19,6 +19,98 @@ import {
 import { trackStreamClient, beginPullSse } from "./streamHelpers.ts";
 import { isParseBodyError, parseBody } from "../../middleware/bodyGuard.ts";
 
+type PullSend = (evt: Record<string, unknown>) => void;
+
+type PullStreamResult =
+  | { ok: true }
+  | { ok: false; reason: "ollama_error" | "aborted" };
+
+/**
+ * Parse one NDJSON line from the Ollama pull stream.
+ * Returns false when Ollama emitted an error event (already forwarded via `send`).
+ */
+function handleOllamaPullLine(line: string, send: PullSend): boolean {
+  if (!line.trim()) return true;
+  try {
+    const evt = JSON.parse(line) as {
+      status?: string;
+      completed?: number;
+      total?: number;
+      error?: string;
+    };
+    if (evt.error) {
+      send({ type: "error", error: evt.error });
+      return false;
+    }
+    if (typeof evt.completed === "number" && typeof evt.total === "number" && evt.total > 0) {
+      send({
+        type: "progress",
+        message: evt.status || "Downloading\u2026",
+        percent: Math.round((evt.completed / evt.total) * 60) + 30,
+      });
+    } else if (evt.status) {
+      send({ type: "log", message: evt.status, percent: evt.status === "success" ? 95 : undefined });
+    }
+  } catch { /* non-JSON line */ }
+  return true;
+}
+
+/**
+ * Read the Ollama pull NDJSON stream, forwarding progress events via `send`.
+ * Distinguishes Ollama error events from abort/timeout so callers emit one final error.
+ */
+async function readOllamaPullStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  send: PullSend,
+  isAborted: () => boolean,
+): Promise<PullStreamResult> {
+  const decoder = new TextDecoder();
+  let buf = "";
+  while (true) {
+    if (isAborted()) {
+      try { await reader.cancel(); } catch { /* ignore */ }
+      return { ok: false, reason: "aborted" };
+    }
+    const { done, value } = await reader.read();
+    if (done) {
+      buf += decoder.decode();
+      if (buf.trim() && !handleOllamaPullLine(buf, send)) {
+        return { ok: false, reason: "ollama_error" };
+      }
+      break;
+    }
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!handleOllamaPullLine(line, send)) {
+        return { ok: false, reason: "ollama_error" };
+      }
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * Verify the pulled model exists in the Ollama model list and send the final SSE event.
+ */
+async function verifyAndSendPullResult(
+  tag: string,
+  send: PullSend,
+): Promise<void> {
+  const listed = await listOllamaInstalledNames();
+  if (listed === null) {
+    send({ type: "done", message: "Model pulled successfully.", ok: true, percent: 100, modelId: tag, verified: false });
+    return;
+  }
+  const check = verifyInstalledAfterPull("ollama", tag, listed);
+  if (!check.ok) {
+    send({ type: "error", error: check.error, hint: check.hint });
+  } else {
+    send({ type: "done", message: `Model ready: ${check.modelId}`, ok: true, percent: 100, modelId: check.modelId, verified: true });
+  }
+}
+
 export function mountOllamaRoutes(router: Router): void {
   router.get("/ai/ollama-models", async (_req, res) => {
     try {
@@ -173,87 +265,23 @@ export function mountOllamaRoutes(router: Router): void {
         return;
       }
       const reader = r.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      while (true) {
-        if (guard.disconnected() || timedOut) {
-          try {
-            await reader.cancel();
-          } catch {
-            /* ignore */
-          }
-          if (timedOut && !guard.disconnected()) {
-            send({
-              type: "error",
-              error: "Ollama download exceeded the server time limit (20 minutes).",
-              hint: "Retry when the network is stable, or run `ollama pull` in a terminal.",
-            });
-          }
-          releaseBusy();
-          guard.endOnce();
-          return;
-        }
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const evt = JSON.parse(line) as {
-              status?: string;
-              completed?: number;
-              total?: number;
-              error?: string;
-            };
-            if (evt.error) {
-              send({ type: "error", error: evt.error });
-              releaseBusy();
-              guard.endOnce();
-              return;
-            }
-            if (typeof evt.completed === "number" && typeof evt.total === "number" && evt.total > 0) {
-              send({
-                type: "progress",
-                message: evt.status || "Downloading…",
-                percent: Math.round((evt.completed / evt.total) * 60) + 30,
-              });
-            } else if (evt.status) {
-              // Already-cached pulls often only emit status strings (no byte totals).
-              send({ type: "log", message: evt.status, percent: evt.status === "success" ? 95 : undefined });
-            }
-          } catch {
-            /* non-JSON line */
-          }
-        }
-      }
-
-      const listed = await listOllamaInstalledNames();
-      if (listed === null) {
-        send({
-          type: "done",
-          message: "Model pulled successfully.",
-          ok: true,
-          percent: 100,
-          modelId: tag,
-          verified: false,
-        });
-      } else {
-        const check = verifyInstalledAfterPull("ollama", tag, listed);
-        if (!check.ok) {
-          send({ type: "error", error: check.error, hint: check.hint });
-        } else {
+      const streamResult = await readOllamaPullStream(reader, send, () => guard.disconnected() || timedOut);
+      if (!streamResult.ok) {
+        // Only emit a timeout SSE when abort was due to the wall-clock timer, not an
+        // Ollama `{error}` event (already forwarded) or a client disconnect.
+        if (streamResult.reason === "aborted" && timedOut && !guard.disconnected()) {
           send({
-            type: "done",
-            message: `Model ready: ${check.modelId}`,
-            ok: true,
-            percent: 100,
-            modelId: check.modelId,
-            verified: true,
+            type: "error",
+            error: "Ollama download exceeded the server time limit (20 minutes).",
+            hint: "Retry when the network is stable, or run `ollama pull` in a terminal.",
           });
         }
+        releaseBusy();
+        guard.endOnce();
+        return;
       }
+
+      await verifyAndSendPullResult(tag, send);
     } catch (err: unknown) {
       if (!guard.disconnected()) {
         const isAbort = err instanceof Error && err.name === "AbortError";
