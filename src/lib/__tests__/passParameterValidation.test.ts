@@ -46,6 +46,7 @@ function baseState(overrides?: Partial<UIState>): UIState {
       peft: false,
       peftMethod: "lora",
       diffusionLora: false,
+      trustRemoteCode: true,
     },
     ...overrides,
   };

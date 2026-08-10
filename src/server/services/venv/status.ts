@@ -24,10 +24,10 @@ import {
 export type CapabilityStatus =
   | { usable: true }
   | {
-      usable: false;
-      reason: "missing" | "broken" | "unsupported" | "probe_failed";
-      detail?: string;
-    };
+    usable: false;
+    reason: "missing" | "broken" | "unsupported" | "probe_failed";
+    detail?: string;
+  };
 
 export type RuntimeFamilyStatus = {
   family: VenvFamily;
@@ -308,8 +308,8 @@ function buildCapabilities(
         caps.qnnInference = probe.qnn_ep_npu
           ? usable()
           : missing(
-              "No QNN OrtEpDevice with OrtHardwareDeviceType.NPU (CPU/emulator devices do not count for inference)",
-            );
+            "No QNN OrtEpDevice with OrtHardwareDeviceType.NPU (CPU/emulator devices do not count for inference)",
+          );
       } else {
         caps.qnnInference = unsupported(
           "Windows x64 supports QNN preparation / plugin AOT only (not local HTP inference)",
@@ -344,28 +344,28 @@ export async function probeFamilyStatus(family: VenvFamily): Promise<RuntimeFami
         cpu: missing("venv missing"),
         ...(family === "default"
           ? {
-              directml:
-                process.platform === "win32"
-                  ? missing("venv missing")
-                  : unsupported("DirectML requires Windows"),
-              openvino: unsupported(
-                "OpenVINO uses the isolated OpenVINO runtime (.venvs/openvino)",
-              ),
-            }
+            directml:
+              process.platform === "win32"
+                ? missing("venv missing")
+                : unsupported("DirectML requires Windows"),
+            openvino: unsupported(
+              "OpenVINO uses the isolated OpenVINO runtime (.venvs/openvino)",
+            ),
+          }
           : family === "openvino"
             ? {
-                openvino: missing("venv missing"),
-              }
+              openvino: missing("venv missing"),
+            }
             : family === "qnn"
               ? {
-                  qnnPreparation: missing("venv missing"),
-                  qnnInference: missing("venv missing"),
-                }
+                qnnPreparation: missing("venv missing"),
+                qnnInference: missing("venv missing"),
+              }
               : {
-                  cuda: missing("venv missing"),
-                  tensorrt: missing("venv missing"),
-                  tensorrtRtx: missing("venv missing"),
-                }),
+                cuda: missing("venv missing"),
+                tensorrt: missing("venv missing"),
+                tensorrtRtx: missing("venv missing"),
+              }),
       },
     };
   }
@@ -494,6 +494,7 @@ export function capabilityForProvider(
     case "NvTensorRTRTXExecutionProvider":
       return status.capabilities.tensorrtRtx;
     case "QNNExecutionProvider":
+    case "QnnAbiExecutionProvider":
       // Prefer inference when usable; else preparation (x64 AOT / pre-NPU).
       if (status.capabilities.qnnInference?.usable) return status.capabilities.qnnInference;
       return status.capabilities.qnnPreparation;

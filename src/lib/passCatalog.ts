@@ -1,18 +1,18 @@
 /**
- * Olive 0.12.1 Official Pass Catalog
+ * Olive 0.13.0 Official Pass Catalog
  *
  * Compiled from the pass reference page:
- * https://microsoft.github.io/Olive/0.12.1/reference/pass.html
+ * https://microsoft.github.io/Olive/0.13.0/reference/pass.html
  *
  * `olive run-pass --list-passes` prints all names available at runtime.
- * Keep this list in sync with the 0.12.1 docs.
+ * Keep this list in sync with the 0.13.0 docs.
  */
 
 /** Centralized Olive version — update this when upgrading the supported Olive release. */
-export const OLIVE_VERSION = "0.12.1";
+export const OLIVE_VERSION = "0.13.0";
 
 export type PassCategory =
-  "onnx" | "pytorch" | "intel" | "nvidia" | "openvino" | "qnn" | "pruning" | "peft" | "splitting" | "other";
+  "onnx" | "pytorch" | "intel" | "nvidia" | "openvino" | "qnn" | "pruning" | "peft" | "splitting" | "validation" | "other";
 
 export interface PassCatalogEntry {
   /** Exact pass type name used in recipe JSON (`type` field) */
@@ -26,7 +26,7 @@ export interface PassCatalogEntry {
 }
 
 /**
- * All Olive 0.12.1 passes extracted from the official pass reference page.
+ * All Olive 0.13.0 passes extracted from the official pass reference page.
  *
  * The reference page is organised by category (ONNX, PyTorch, Intel, NVIDIA,
  * OpenVINO, etc).  Passes under each category are listed in the order they
@@ -70,6 +70,13 @@ export const PASS_CATALOG: PassCatalogEntry[] = [
     name: "OrtTransformersOptimization",
     category: "onnx",
     description: "Use ONNX Transformer Optimizer to optimize transformer based models.",
+    inputs: ["handler.onnx.ONNXModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+  {
+    name: "OnnxModelOptimizer",
+    category: "onnx",
+    description: "General ONNX graph optimization (constant folding, dead code elimination).",
     inputs: ["handler.onnx.ONNXModelHandler"],
     outputs: ["handler.onnx.ONNXModelHandler"],
   },
@@ -141,6 +148,13 @@ export const PASS_CATALOG: PassCatalogEntry[] = [
     name: "OnnxBlockWiseRtnQuantization",
     category: "onnx",
     description: "Quantize ONNX models with weight-only block-wise RTN algorithm.",
+    inputs: ["handler.onnx.ONNXModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+  {
+    name: "OnnxKquantQuantization",
+    category: "onnx",
+    description: "K-quant quantization for ONNX models using ggml-style block quantization.",
     inputs: ["handler.onnx.ONNXModelHandler"],
     outputs: ["handler.onnx.ONNXModelHandler"],
   },
@@ -238,12 +252,47 @@ export const PASS_CATALOG: PassCatalogEntry[] = [
     inputs: ["handler.onnx.ONNXModelHandler"],
     outputs: ["handler.onnx.ONNXModelHandler"],
   },
+  {
+    name: "IncPruning",
+    category: "intel",
+    description: "Intel Neural Compressor magnitude/structured pruning.",
+    inputs: ["handler.pytorch.PyTorchModelHandler"],
+    outputs: ["handler.pytorch.PyTorchModelHandler"],
+  },
+  {
+    name: "IncSparsityFineTuning",
+    category: "intel",
+    description: "Fine-tune after Intel Neural Compressor pruning.",
+    inputs: ["handler.pytorch.PyTorchModelHandler"],
+    outputs: ["handler.pytorch.PyTorchModelHandler"],
+  },
+  {
+    name: "IncDistillation",
+    category: "intel",
+    description: "Knowledge distillation using Intel Neural Compressor.",
+    inputs: ["handler.pytorch.PyTorchModelHandler"],
+    outputs: ["handler.pytorch.PyTorchModelHandler"],
+  },
 
   // ── Qualcomm AIMET ──────────────────────────────────────────
   {
     name: "AimetQuantization",
     category: "qnn",
     description: "Qualcomm AIMET quantization — supports LPBQ, SeqMSE, AdaRound techniques.",
+    inputs: ["handler.onnx.ONNXModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+  {
+    name: "VitisAIQuantization",
+    category: "other",
+    description: "Xilinx Vitis AI quantization with power-of-2 scales.",
+    inputs: ["handler.onnx.ONNXModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+  {
+    name: "AzureMLQuantization",
+    category: "other",
+    description: "Quantization pass running on Azure ML compute.",
     inputs: ["handler.onnx.ONNXModelHandler"],
     outputs: ["handler.onnx.ONNXModelHandler"],
   },
@@ -268,6 +317,13 @@ export const PASS_CATALOG: PassCatalogEntry[] = [
     category: "pruning",
     description:
       "Magnitude-based weight pruning pass — supports L1 norm (sparser, blockier distributions) and L2 norm (smoother magnitude preservation) criteria for weight ranking.",
+    inputs: ["handler.pytorch.PyTorchModelHandler"],
+    outputs: ["handler.pytorch.PyTorchModelHandler"],
+  },
+  {
+    name: "SparsityFineTuning",
+    category: "pruning",
+    description: "General sparsity fine-tuning pass.",
     inputs: ["handler.pytorch.PyTorchModelHandler"],
     outputs: ["handler.pytorch.PyTorchModelHandler"],
   },
@@ -377,6 +433,28 @@ export const PASS_CATALOG: PassCatalogEntry[] = [
     inputs: ["handler.qnn.QNNModelHandler"],
     outputs: ["handler.qnn.QNNModelHandler"],
   },
+  {
+    name: "QNNQuantization",
+    category: "qnn",
+    description: "Quantize for Qualcomm QNN execution provider.",
+    inputs: ["handler.onnx.ONNXModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+  {
+    name: "QairtPipeline",
+    category: "qnn",
+    description:
+      "Single-pass QAIRT LLM pipeline: YAML-recipe-driven model loading, quantization, and compilation for QNN targets.",
+    inputs: ["handler.pytorch.PyTorchModelHandler", "handler.hf.HfModelHandler"],
+    outputs: ["handler.qnn.QNNModelHandler"],
+  },
+  {
+    name: "SNPEConversion",
+    category: "qnn",
+    description: "Convert to Qualcomm SNPE DLC format.",
+    inputs: ["handler.onnx.ONNXModelHandler"],
+    outputs: ["handler.snpe.SNPEModelHandler"],
+  },
 
   // ── Additional PEFT passes ──────────────────────────────────
   {
@@ -414,12 +492,71 @@ export const PASS_CATALOG: PassCatalogEntry[] = [
     inputs: ["handler.hf.HfModelHandler"],
     outputs: ["handler.hf.HfModelHandler"],
   },
+  {
+    name: "MultiLoRA",
+    category: "peft",
+    description: "Multiple LoRA adapters for ONNX Runtime (experimental).",
+    inputs: ["handler.pytorch.PyTorchModelHandler", "handler.hf.HfModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+  {
+    name: "ExtractLoRA",
+    category: "peft",
+    description: "Extract LoRA weights to separate adapter files.",
+    inputs: ["handler.pytorch.PyTorchModelHandler"],
+    outputs: ["handler.pytorch.PyTorchModelHandler"],
+  },
+  {
+    name: "GenerateAdapterWeights",
+    category: "peft",
+    description: "Generate adapter weight files for serving.",
+    inputs: ["handler.pytorch.PyTorchModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+  {
+    name: "FinetuningPass",
+    category: "peft",
+    description: "General PyTorch fine-tuning pass.",
+    inputs: ["handler.pytorch.PyTorchModelHandler", "handler.hf.HfModelHandler"],
+    outputs: ["handler.pytorch.PyTorchModelHandler"],
+  },
+  {
+    name: "HuggingFaceFineTuning",
+    category: "peft",
+    description: "Hugging Face Trainer integration for fine-tuning.",
+    inputs: ["handler.hf.HfModelHandler"],
+    outputs: ["handler.pytorch.PyTorchModelHandler"],
+  },
 
   // ── Graph surgeries ─────────────────────────────────────────
   {
     name: "GraphSurgeries",
     category: "onnx",
     description: "Apply ONNX graph surgeries (RenameInputs, RemoveQDQ, ReplaceErfWithTanh, etc).",
+    inputs: ["handler.onnx.ONNXModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+  {
+    name: "QuantizeEmbeddingInt8",
+    category: "onnx",
+    description:
+      "Graph surgery for INT8 embedding quantization. Reduces embedding table memory by quantizing to int8.",
+    inputs: ["handler.onnx.ONNXModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+  {
+    name: "ShareEmbeddingLmHead",
+    category: "onnx",
+    description:
+      "Graph surgery to share embedding and LM-head weights, reducing model size for language models with tied embeddings.",
+    inputs: ["handler.onnx.ONNXModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+  {
+    name: "SimplifiedLayerNormToRMSNorm",
+    category: "onnx",
+    description:
+      "Graph surgery converting SimplifiedLayerNorm nodes to RMSNorm for improved QNN compatibility and performance.",
     inputs: ["handler.onnx.ONNXModelHandler"],
     outputs: ["handler.onnx.ONNXModelHandler"],
   },
@@ -446,6 +583,13 @@ export const PASS_CATALOG: PassCatalogEntry[] = [
     category: "onnx",
     description: "Convert generative PyTorch model to ONNX using ONNX Runtime GenAI module.",
     inputs: ["handler.pytorch.PyTorchModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+  {
+    name: "MobiusBuilder",
+    category: "onnx",
+    description: "ONNX export via Mobius; produces loadable ORT GenAI composite packages with caching.",
+    inputs: ["handler.pytorch.PyTorchModelHandler", "handler.hf.HfModelHandler"],
     outputs: ["handler.onnx.ONNXModelHandler"],
   },
   {
@@ -507,12 +651,94 @@ export const PASS_CATALOG: PassCatalogEntry[] = [
     inputs: ["handler.hf.HfModelHandler"],
     outputs: ["handler.pytorch.PyTorchModelHandler"],
   },
+  {
+    name: "KQuant",
+    category: "pytorch",
+    description:
+      "ggml-style weight-only K-quant quantization (asymmetric/symmetric, 2/4/8-bit) for PyTorch models.",
+    inputs: ["handler.hf.HfModelHandler", "handler.pytorch.PyTorchModelHandler"],
+    outputs: ["handler.pytorch.PyTorchModelHandler"],
+  },
+
+  // ── Performance tuning ──────────────────────────────────────
+  {
+    name: "OrtPerfTuning",
+    category: "onnx",
+    description: "ONNX Runtime performance tuning for execution provider settings.",
+    inputs: ["handler.onnx.ONNXModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+  {
+    name: "BatchSizeOptimization",
+    category: "onnx",
+    description: "Search for optimal batch size.",
+    inputs: ["handler.onnx.ONNXModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+  {
+    name: "OnnxGraphCapture",
+    category: "onnx",
+    description: "Capture ONNX computation graph for analysis.",
+    inputs: ["handler.onnx.ONNXModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+  {
+    name: "ModelOptOptimizer",
+    category: "nvidia",
+    description: "NVIDIA Model Optimizer integration.",
+    inputs: ["handler.pytorch.PyTorchModelHandler", "handler.onnx.ONNXModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+
+  // ── Optimum passes ──────────────────────────────────────────
+  {
+    name: "OptimumQuantization",
+    category: "onnx",
+    description: "Hugging Face Optimum quantization pass.",
+    inputs: ["handler.hf.HfModelHandler", "handler.pytorch.PyTorchModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+  {
+    name: "OptimumGraphOptimization",
+    category: "onnx",
+    description: "Hugging Face Optimum ONNX graph optimizations.",
+    inputs: ["handler.onnx.ONNXModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
+
+  // ── Distillation passes ─────────────────────────────────────
+  {
+    name: "DistillationPass",
+    category: "other",
+    description: "General knowledge distillation pass.",
+    inputs: ["handler.pytorch.PyTorchModelHandler"],
+    outputs: ["handler.pytorch.PyTorchModelHandler"],
+  },
+
+  // ── Conversion passes (other) ───────────────────────────────
+  {
+    name: "TensorFlowConversion",
+    category: "other",
+    description: "Convert a model to TensorFlow SavedModel.",
+    inputs: ["handler.onnx.ONNXModelHandler", "handler.pytorch.PyTorchModelHandler"],
+    outputs: ["handler.tf.TFModelHandler"],
+  },
+
+  // ── Validation passes ───────────────────────────────────────
+  {
+    name: "OnnxDiscrepancyCheck",
+    category: "validation",
+    description:
+      "Measures numerical discrepancies on a test model to validate conversions and optimizations. Does not modify the model.",
+    inputs: ["handler.onnx.ONNXModelHandler"],
+    outputs: ["handler.onnx.ONNXModelHandler"],
+  },
 ];
 
 /** String set of every known pass name — O(1) lookup. */
 const KNOWN_PASS_NAMES: ReadonlySet<string> = new Set(PASS_CATALOG.map((p) => p.name));
 
-/** Check if a pass type name is in the official 0.12.1 catalog. */
+/** Check if a pass type name is in the official 0.13.0 catalog. */
 export function isKnownPassName(name: string): boolean {
   return KNOWN_PASS_NAMES.has(name);
 }

@@ -55,10 +55,10 @@ export type VenvFamilySpec = {
 };
 
 /** Bump when pins / layout change so ensure triggers an isolated rebuild. */
-export const VENV_SPEC_VERSION = 4;
+export const VENV_SPEC_VERSION = 5;
 
 /** Pinned olive-ai range for family builds (avoid floating major). */
-export const PINNED_OLIVE_AI_INSTALL = "olive-ai>=0.9.0,<1";
+export const PINNED_OLIVE_AI_INSTALL = "olive-ai>=0.12.0,<1";
 
 const OLIVE_INSTALL_ARGS = [PINNED_OLIVE_AI_INSTALL, "requests"] as const;
 

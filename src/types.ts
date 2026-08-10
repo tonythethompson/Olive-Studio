@@ -38,6 +38,7 @@ export type IHVProvider =
   | "DmlExecutionProvider"
   | "OpenVINOExecutionProvider"
   | "QNNExecutionProvider"
+  | "QnnAbiExecutionProvider"
   | "ROCMExecutionProvider"
   | "WebGpuExecutionProvider"
   | "CoreMLExecutionProvider"
@@ -117,6 +118,8 @@ export interface UIState {
   distributedCaching: boolean;
   /** Path to a user-provided Python script for calibration, evaluation, or training. */
   userScript?: string;
+  /** Directory containing inputs/outputs for the ONNX discrepancy check. */
+  discrepancyTestDataDir?: string;
   batchJobs?: BatchJob[];
   /** Active olive job ID for the Execute Live button */
   activeJobId?: string | null;
@@ -132,7 +135,7 @@ export interface UIState {
     conversionOpset: number;
     conversionInputTargetTypes: string;
     quantization: boolean;
-    quantMethod: "ptq" | "awq" | "qat" | "gptq" | "hqq" | "rtn" | "spinquant" | "quarot";
+    quantMethod: "ptq" | "awq" | "qat" | "gptq" | "hqq" | "rtn" | "kquant" | "spinquant" | "quarot";
     quantPrecision: "int4" | "int8" | "fp16";
     /** GPTQ block size for weight grouping (e.g. 128, 32). Only applies when quantMethod === "gptq". */
     gptqBlockSize: number;
@@ -164,6 +167,24 @@ export interface UIState {
     peft: boolean;
     peftMethod: "lora" | "qlora";
     diffusionLora: boolean;
+    /**
+     * Olive 0.13.0 flipped `trust_remote_code` default to `false`.
+     * When true (the default for HuggingFace sources), the recipe emits
+     * `trust_remote_code: true` so models requiring custom code still load.
+     */
+    trustRemoteCode: boolean;
+    /** MobiusBuilder: ONNX export via Mobius producing ORT GenAI composite packages. */
+    mobiusBuilder: boolean;
+    /** QairtPipeline: Single-pass QAIRT LLM pipeline (QNN-only). */
+    qairtPipeline: boolean;
+    /** QuantizeEmbeddingInt8: Graph surgery for INT8 embedding quantization. */
+    quantizeEmbeddingInt8: boolean;
+    /** ShareEmbeddingLmHead: Graph surgery to share embedding/LM-head weights. */
+    shareEmbeddingLmHead: boolean;
+    /** SimplifiedLayerNormToRMSNorm: Graph surgery converting SimplifiedLayerNorm to RMSNorm. */
+    simplifiedLayerNormToRMSNorm: boolean;
+    /** OnnxDiscrepancyCheck: Validation pass measuring numerical discrepancies. */
+    onnxDiscrepancyCheck: boolean;
   };
 }
 

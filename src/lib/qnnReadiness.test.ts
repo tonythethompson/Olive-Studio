@@ -40,6 +40,7 @@ const basePasses = {
   peft: false,
   peftMethod: "lora" as const,
   diffusionLora: false,
+  trustRemoteCode: true,
 };
 
 function probe(partial: Partial<HardwareProbeResult["qnn"]> = {}): HardwareProbeResult {
