@@ -20,7 +20,7 @@ from .troubleshooting import troubleshoot_olive_error
 _MAX_ERROR_LEN = 4000
 _MAX_CONFIG_CONTEXT_LEN = 200
 
-_VALIDATE_TOOL_PATH = "/api/mcp/tool"
+_VALIDATE_TOOL_PATH = "/api/olive/jobs/validate"
 
 
 def _apply_merge_patch(target: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
@@ -122,12 +122,13 @@ def _validate_fixed_recipe(fixed_recipe: dict[str, Any]) -> bool:
     response = studio_request(
         "POST",
         _VALIDATE_TOOL_PATH,
-        body={"toolName": "validate_optimization_job", "args": {"recipe": fixed_recipe}},
+        body={"recipe": fixed_recipe},
     )
-    # If Studio is down or returned an error, treat as not validated
+    # If Studio is down, returned an error, or rejected the recipe, treat it as
+    # not validated. The endpoint returns validation failures with valid=false.
     if isinstance(response.get("error"), str) and response["error"]:
         return False
-    return True
+    return response.get("valid") is True
 
 
 def diagnose_and_fix(

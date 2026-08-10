@@ -411,6 +411,9 @@ function buildQuaRotQuantizer(state: UIState): PassSpec {
  * depending on whether ONNX conversion is active (ONNX input available).
  */
 function buildKquantQuantizer(state: UIState): PassSpec {
+  if (state.passes.quantPrecision === "fp16") {
+    throw new Error("KQuant supports only INT4 and INT8 precision");
+  }
   const bits = state.passes.quantPrecision === "int4" ? 4 : 8;
   const passType = state.passes.conversion ? "OnnxKquantQuantization" : "KQuant";
   return {
