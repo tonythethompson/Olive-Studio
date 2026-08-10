@@ -39,10 +39,12 @@ interface ReconstructedItem {
   reconstructedAt: string;
 }
 
+export type ConfigTextStatus = "idle" | "loading" | "ready";
+
 export interface LocalFileUploadProps {
   state: UIState;
   setState: (s: Partial<UIState>) => void;
-  onConfigTextChange?: (text: string | undefined) => void;
+  onConfigTextChange?: (text: string | undefined, status: ConfigTextStatus) => void;
 }
 
 export function LocalFileUpload({ state, setState, onConfigTextChange }: LocalFileUploadProps) {
@@ -60,12 +62,13 @@ export function LocalFileUpload({ state, setState, onConfigTextChange }: LocalFi
     let cancelled = false;
     const configFile = chunkFilesRef.current.get("config.json");
     if (!configFile) {
-      onConfigTextChange?.(undefined);
+      onConfigTextChange?.(undefined, state.localFiles.length === 0 ? "idle" : "ready");
     } else {
+      onConfigTextChange?.(undefined, "loading");
       void configFile.text().then((text) => {
-        if (!cancelled) onConfigTextChange?.(text);
+        if (!cancelled) onConfigTextChange?.(text, "ready");
       }).catch(() => {
-        if (!cancelled) onConfigTextChange?.(undefined);
+        if (!cancelled) onConfigTextChange?.(undefined, "ready");
       });
     }
     return () => { cancelled = true; };

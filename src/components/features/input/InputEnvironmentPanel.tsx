@@ -3,7 +3,7 @@
  * Sub-panels extracted per v0.2 Task 5:
  *   RecipeCatalogBrowser, GitHubRecipeSync, RecipeJsonEditor, LocalFileUpload.
  */
-import { useState, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -81,35 +81,38 @@ export function InputEnvironmentPanel({
     handleFetchRemote, handleImport,
   } = useRecipeHub({ setState, hardwareProbe });
 
-  const [localModelHints, setLocalModelHints] = useState<LocalModelHints | null>(null);
-  const [localHintsLoading, setLocalHintsLoading] = useState(false);
   const [configText, setConfigText] = useState<string | undefined>();
+  const [configTextStatus, setConfigTextStatus] = useState<"idle" | "loading" | "ready">("idle");
   const [showLocalRecipeMatchesOnly, setShowLocalRecipeMatchesOnly] = useState(false);
   const [hideIncompatibleRecipes, setHideIncompatibleRecipes] = useState(true);
   const [recipeSort, setRecipeSort] = useState<RecipeSortMode>("recommended");
+
+  const handleConfigTextChange = useCallback(
+    (text: string | undefined, status: "idle" | "loading" | "ready") => {
+      setConfigText(text);
+      setConfigTextStatus(status);
+    },
+    [],
+  );
+
+  const localModelHints = useMemo<LocalModelHints | null>(() => {
+    if (state.localFiles.length === 0) return null;
+    return buildLocalModelHints(
+      state.localFiles.map((f) => f.name),
+      configText,
+    );
+  }, [state.localFiles, configText]);
+
+  const localHintsLoading = configTextStatus === "loading";
+  const activeLocalRecipeMatchesOnly =
+    state.localFiles.length > 0 && showLocalRecipeMatchesOnly;
 
   const {
     localMatchSummary, hardwareMatchSummary, curatedRecipesWithMatch, groupedRecipes,
   } = useRecipeCatalog({
     recipeSearch, selectedArchitecture, selectedDevice, recipeSort,
-    localModelHints, showLocalRecipeMatchesOnly, hideIncompatibleRecipes, hardwareProbe,
+    localModelHints, showLocalRecipeMatchesOnly: activeLocalRecipeMatchesOnly, hideIncompatibleRecipes, hardwareProbe,
   });
-
-  useEffect(() => {
-    if (state.localFiles.length === 0) {
-      setLocalModelHints(null);
-      setLocalHintsLoading(false);
-      setShowLocalRecipeMatchesOnly(false);
-      return;
-    }
-    let cancelled = false;
-    setLocalHintsLoading(true);
-    void (async () => {
-      const hints = buildLocalModelHints(state.localFiles.map((f) => f.name), configText);
-      if (!cancelled) { setLocalModelHints(hints); setLocalHintsLoading(false); }
-    })();
-    return () => { cancelled = true; };
-  }, [state.localFiles, configText]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 animate-duration-300">
@@ -205,7 +208,7 @@ export function InputEnvironmentPanel({
                         setRecipeSort={setRecipeSort}
                         compatibilityFilter={hideIncompatibleRecipes ? "compatible-only" : "all"}
                         setCompatibilityFilter={(v) => setHideIncompatibleRecipes(v === "compatible-only")}
-                        localMatchFilter={showLocalRecipeMatchesOnly ? "local-only" : "all"}
+                        localMatchFilter={activeLocalRecipeMatchesOnly ? "local-only" : "all"}
                         setLocalMatchFilter={(v) => setShowLocalRecipeMatchesOnly(v === "local-only")}
                         localModelHints={localModelHints}
                         localHintsStatus={localHintsLoading ? "loading" : localModelHints ? "ready" : "idle"}
@@ -444,7 +447,11 @@ export function InputEnvironmentPanel({
 
                     {/* Local source tab */}
                     <TabsContent value="local" forceMount className="data-[state=inactive]:hidden animate-in fade-in">
-                      <LocalFileUpload state={state} setState={setState} onConfigTextChange={setConfigText} />
+                      <LocalFileUpload
+                        state={state}
+                        setState={setState}
+                        onConfigTextChange={handleConfigTextChange}
+                      />
                     </TabsContent>
 
                     {/* Azure source tab */}
