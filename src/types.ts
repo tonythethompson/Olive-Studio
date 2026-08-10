@@ -167,8 +167,8 @@ export interface UIState {
     diffusionLora: boolean;
     /**
      * Olive 0.13.0 flipped `trust_remote_code` default to `false`.
-     * When true (the default for HuggingFace sources), the recipe emits
-     * `trust_remote_code: true` so models requiring custom code still load.
+     * When explicitly enabled, the recipe emits `trust_remote_code: true`
+     * so models requiring custom code still load.
      */
     trustRemoteCode: boolean;
     /** MobiusBuilder: ONNX export via Mobius producing ORT GenAI composite packages. */
