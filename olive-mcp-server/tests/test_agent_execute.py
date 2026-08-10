@@ -314,3 +314,41 @@ def test_timeout_clamping_default():
     assert _clamp_timeout(1800) == 1800
     assert _clamp_timeout(9999) == 1800
     assert _clamp_timeout(300) == 300
+
+
+# ---------------------------------------------------------------------------
+# Test: Poll backoff
+# ---------------------------------------------------------------------------
+
+
+def test_next_poll_interval_doubles_then_caps():
+    """Backoff doubles from 2s and caps at 30s."""
+    from olive_mcp_server.tools.agent_execute import _next_poll_interval
+
+    assert _next_poll_interval(2.0) == 4.0
+    assert _next_poll_interval(4.0) == 8.0
+    assert _next_poll_interval(8.0) == 16.0
+    assert _next_poll_interval(16.0) == 30.0
+    assert _next_poll_interval(30.0) == 30.0
+
+
+def test_poll_sleep_uses_exponential_backoff(monkeypatch: pytest.MonkeyPatch):
+    """Long-running jobs sleep with growing intervals, not a fixed 2s cadence."""
+    call_count = {"n": 0}
+    sleeps: list[float] = []
+
+    def fake_studio_request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        if method == "POST" and "/jobs/submit" in path:
+            return {"job_id": "job-backoff"}
+        call_count["n"] += 1
+        if call_count["n"] < 5:
+            return {"status": "running"}
+        return {"status": "completed", "logs": [], "exitCode": 0}
+
+    monkeypatch.setattr(agent_execute, "studio_request", fake_studio_request)
+    monkeypatch.setattr(agent_execute.time, "sleep", lambda seconds: sleeps.append(seconds))
+
+    result = execute_and_observe(recipe={"model_path": "slow.onnx"}, timeout=600)
+
+    assert result["status"] == "completed"
+    assert sleeps == [2.0, 4.0, 8.0, 16.0]

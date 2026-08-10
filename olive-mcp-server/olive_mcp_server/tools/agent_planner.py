@@ -9,12 +9,15 @@ No module-level network calls; no new pip dependencies.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
 from .strategy_advisor import get_quantization_strategy, _normalize_model_type
 from .hardware_guide import get_hardware_optimization_guide
 from .studio_loopback import studio_request, err
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Intent parsing keyword sets
@@ -462,4 +465,5 @@ def plan_optimization(
         return result
 
     except Exception as exc:
+        logger.warning("plan_optimization unexpected error", exc_info=True)
         return {"error": "internal_error", "message": f"{type(exc).__name__}: {exc}"}

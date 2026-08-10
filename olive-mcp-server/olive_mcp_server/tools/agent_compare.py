@@ -10,10 +10,13 @@ Tools:
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
 from .studio_loopback import err, studio_request
+
+logger = logging.getLogger(__name__)
 
 _STATUS_PATH = "/api/olive/agent/status"  # + /{job_id}
 
@@ -281,4 +284,5 @@ def compare_results(
         }
 
     except Exception as exc:
+        logger.warning("compare_results unexpected error", exc_info=True)
         return {"error": "internal_error", "message": f"{type(exc).__name__}: {exc}"}

@@ -11,13 +11,17 @@ No module-level network I/O or heavy imports — only stdlib + project internals
 from __future__ import annotations
 
 import json
+import logging
 import re
-import urllib.request
 import urllib.error
+import urllib.request
 from typing import Any
+from urllib.parse import urlparse
 
 from .studio_loopback import err
 from .strategy_advisor import _normalize_model_type
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Input validation
@@ -62,6 +66,61 @@ _SIZE_TOKEN_RE = re.compile(
 )
 
 
+def _params_from_size_token(model_id: str) -> tuple[float, str] | None:
+    """Return (params_b, "medium") from explicit size tokens like 7B / 1.5B."""
+    sizes: list[float] = []
+    for match in _SIZE_TOKEN_RE.findall(model_id):
+        try:
+            val = float(match)
+        except (ValueError, TypeError):
+            continue
+        if 0 < val < 1000:
+            sizes.append(val)
+    if not sizes:
+        return None
+    return (min(sizes), "medium")
+
+
+def _params_from_whisper(model_id: str) -> tuple[float, str] | None:
+    """Return Whisper size defaults when the id looks like a Whisper variant."""
+    for key, params in _WHISPER_PARAMS_B.items():
+        if f"whisper-{key}" in model_id or f"whisper_{key}" in model_id:
+            return (params, "medium")
+    if "whisper" in model_id:
+        return (0.244, "low")
+    return None
+
+
+# Ordered family defaults: more-specific needles must appear before broader ones
+# (e.g. phi-3.5 before phi-3, llama-3.2 before llama-3, qwen2 before qwen).
+_FAMILY_DEFAULTS: tuple[tuple[tuple[str, ...], float, str], ...] = (
+    (("phi-3.5", "phi3.5"), 3.8, "low"),
+    (("phi-3", "phi3"), 3.8, "low"),
+    (("phi-2",), 2.7, "low"),
+    (("llama-3.2", "llama3.2"), 1.0, "low"),
+    (("llama-3", "llama3"), 8.0, "low"),
+    (("llama-2", "llama2"), 7.0, "low"),
+    (("mistral", "mixtral"), 7.0, "low"),
+    (("qwen2.5", "qwen2"), 7.0, "medium"),
+    (("qwen",), 7.0, "low"),
+    (("sdxl", "stable-diffusion-xl"), 2.6, "low"),
+    (("stable-diffusion", "sd15"), 0.9, "low"),
+    (("bert-base",), 0.11, "medium"),
+    (("resnet",), 0.025, "low"),
+    (("mobilenet",), 0.004, "low"),
+)
+
+
+def _params_from_family_defaults(model_id: str) -> tuple[float, str] | None:
+    """Return the first matching family default for model_id, or None."""
+    if "deepseek" in model_id and "distill" in model_id and "1.5" in model_id:
+        return (1.5, "medium")
+    for needles, params, confidence in _FAMILY_DEFAULTS:
+        if any(needle in model_id for needle in needles):
+            return (params, confidence)
+    return None
+
+
 def _infer_param_billions(identifier: str) -> tuple[float, str]:
     """Infer parameter count (billions) from a model identifier string.
 
@@ -69,63 +128,14 @@ def _infer_param_billions(identifier: str) -> tuple[float, str]:
         (params_b, confidence) where confidence is "medium" or "low".
     """
     model_id = identifier.lower()
-
-    # 1. Prefer explicit size tokens (e.g. "7B", "1.5B")
-    all_matches = _SIZE_TOKEN_RE.findall(model_id)
-    if all_matches:
-        sizes = []
-        for m in all_matches:
-            try:
-                val = float(m)
-                if 0 < val < 1000:
-                    sizes.append(val)
-            except (ValueError, TypeError):
-                continue
-        if sizes:
-            return (min(sizes), "medium")
-
-    # 2. Whisper model sizes
-    for key, params in _WHISPER_PARAMS_B.items():
-        if f"whisper-{key}" in model_id or f"whisper_{key}" in model_id:
-            return (params, "medium")
-    if "whisper" in model_id:
-        return (0.244, "low")
-
-    # 3. Known distill / small models
-    if "deepseek" in model_id and "distill" in model_id and "1.5" in model_id:
-        return (1.5, "medium")
-
-    # 4. Family defaults
-    if "phi-3.5" in model_id or "phi3.5" in model_id:
-        return (3.8, "low")
-    if "phi-3" in model_id or "phi3" in model_id:
-        return (3.8, "low")
-    if "phi-2" in model_id:
-        return (2.7, "low")
-    if "llama-3.2" in model_id or "llama3.2" in model_id:
-        return (1.0, "low")
-    if "llama-3" in model_id or "llama3" in model_id:
-        return (8.0, "low")
-    if "llama-2" in model_id or "llama2" in model_id:
-        return (7.0, "low")
-    if "mistral" in model_id or "mixtral" in model_id:
-        return (7.0, "low")
-    if "qwen2.5" in model_id or "qwen2" in model_id:
-        return (7.0, "medium")
-    if "qwen" in model_id:
-        return (7.0, "low")
-    if "sdxl" in model_id or "stable-diffusion-xl" in model_id:
-        return (2.6, "low")
-    if "stable-diffusion" in model_id or "sd15" in model_id:
-        return (0.9, "low")
-    if "bert-base" in model_id:
-        return (0.11, "medium")
-    if "resnet" in model_id:
-        return (0.025, "low")
-    if "mobilenet" in model_id:
-        return (0.004, "low")
-
-    # 5. Ultimate fallback
+    for resolver in (
+        _params_from_size_token,
+        _params_from_whisper,
+        _params_from_family_defaults,
+    ):
+        resolved = resolver(model_id)
+        if resolved is not None:
+            return resolved
     return (7.0, "low")
 
 
@@ -135,6 +145,7 @@ def _infer_param_billions(identifier: str) -> tuple[float, str]:
 
 _HF_API_BASE = "https://huggingface.co/api/models"
 _HF_TIMEOUT_SECONDS = 3
+_ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
 
 
 def _fetch_hf_metadata(model_id: str) -> dict[str, Any] | None:
@@ -143,6 +154,8 @@ def _fetch_hf_metadata(model_id: str) -> dict[str, Any] | None:
     Returns parsed JSON dict on success, None on any failure.
     """
     url = f"{_HF_API_BASE}/{model_id}"
+    if urlparse(url).scheme not in _ALLOWED_URL_SCHEMES:
+        return None
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=_HF_TIMEOUT_SECONDS) as resp:  # noqa: S310
@@ -262,4 +275,5 @@ def get_model_info(model_id: str) -> dict[str, Any]:
         }
 
     except Exception as exc:
+        logger.warning("get_model_info unexpected error", exc_info=True)
         return {"error": "internal_error", "message": f"{type(exc).__name__}: {exc}"}

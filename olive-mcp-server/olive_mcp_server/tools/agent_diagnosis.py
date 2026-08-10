@@ -12,10 +12,13 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 from typing import Any
 
 from .studio_loopback import err, studio_request
 from .troubleshooting import troubleshoot_olive_error
+
+logger = logging.getLogger(__name__)
 
 _MAX_ERROR_LEN = 4000
 _MAX_CONFIG_CONTEXT_LEN = 200
@@ -203,4 +206,5 @@ def diagnose_and_fix(
         }
 
     except Exception as exc:
+        logger.warning("diagnose_and_fix unexpected error", exc_info=True)
         return err("internal_error", f"{type(exc).__name__}: {exc}")

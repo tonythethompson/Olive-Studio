@@ -213,7 +213,7 @@ class TestDerivedFields:
             "safetensors": {"total": 2_000_000_000},
             "config": {"architectures": ["BertModel"]},
         })
-        result = agent_model_info.get_model_info("bert-base-uncased")
+        result = agent_model_info.get_model_info("google/bert-base-uncased")
         assert result["recommended_quant"] == "int8"
 
     def test_model_type_classification(self, monkeypatch: pytest.MonkeyPatch):

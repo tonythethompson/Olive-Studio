@@ -11,6 +11,7 @@ Tools:
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import time
@@ -18,12 +19,18 @@ from typing import Any
 
 from .studio_loopback import err, studio_request
 
+logger = logging.getLogger(__name__)
+
 _SUBMIT_PATH = "/api/olive/jobs/submit"
 _STATUS_PATH = "/api/olive/agent/status"  # + /{job_id}
 
 _TERMINAL_STATES = frozenset({"completed", "failed", "cancelled"})
 
-_POLL_INTERVAL_SECONDS = 2
+# Poll cadence: start at 2s, double after each wait, cap at 30s.
+# At the 1800s ceiling this is ~65 status polls instead of ~900 fixed 2s polls.
+_POLL_INTERVAL_SECONDS = 2.0
+_POLL_INTERVAL_MAX_SECONDS = 30.0
+_POLL_BACKOFF_FACTOR = 2.0
 _DEFAULT_TIMEOUT = 600
 _MIN_TIMEOUT = 10
 _MAX_TIMEOUT = 1800
@@ -34,6 +41,11 @@ def _clamp_timeout(timeout: int | None) -> int:
     """Clamp user-provided timeout to [10, 1800]; default 600 when None."""
     effective = timeout if timeout is not None else _DEFAULT_TIMEOUT
     return min(max(effective, _MIN_TIMEOUT), _MAX_TIMEOUT)
+
+
+def _next_poll_interval(current: float) -> float:
+    """Return the next capped exponential poll interval."""
+    return min(current * _POLL_BACKOFF_FACTOR, _POLL_INTERVAL_MAX_SECONDS)
 
 
 def _is_error(payload: dict[str, Any]) -> bool:
@@ -114,6 +126,7 @@ def execute_and_observe(
         last_exit_code: int | None = None
         last_artifact_paths: list[str] = []
         timed_out = False
+        poll_interval = _POLL_INTERVAL_SECONDS
 
         while True:
             elapsed_seconds = time.monotonic() - start_time
@@ -165,12 +178,15 @@ def execute_and_observe(
 
             # Check timeout (terminal state at boundary wins)
             elapsed_seconds = time.monotonic() - start_time
-            if elapsed_seconds >= effective_timeout:
+            remaining = effective_timeout - elapsed_seconds
+            if remaining <= 0:
                 timed_out = True
                 break
 
-            # Wait before next poll
-            time.sleep(_POLL_INTERVAL_SECONDS)
+            # Wait before next poll; never sleep past the remaining budget.
+            sleep_for = min(poll_interval, remaining)
+            time.sleep(sleep_for)
+            poll_interval = _next_poll_interval(poll_interval)
 
         # --- Extract artifact path refs from logs (basenames only) ---
         artifact_refs: list[str] = []
@@ -200,4 +216,5 @@ def execute_and_observe(
         }
 
     except Exception as exc:
+        logger.warning("execute_and_observe unexpected error", exc_info=True)
         return {"error": "internal_error", "message": f"{type(exc).__name__}: {exc}"}
