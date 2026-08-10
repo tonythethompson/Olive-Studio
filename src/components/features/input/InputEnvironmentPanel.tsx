@@ -443,7 +443,7 @@ export function InputEnvironmentPanel({
                     </TabsContent>
 
                     {/* Local source tab */}
-                    <TabsContent value="local" forceMount className="animate-in fade-in">
+                    <TabsContent value="local" forceMount className="data-[state=inactive]:hidden animate-in fade-in">
                       <LocalFileUpload state={state} setState={setState} onConfigTextChange={setConfigText} />
                     </TabsContent>
 
