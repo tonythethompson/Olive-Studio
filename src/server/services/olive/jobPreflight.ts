@@ -95,6 +95,34 @@ function getUnsafeRecipePathError(p: string, label: string, cwd: string, canonic
   }
 }
 
+function collectPassRecipePaths(passes: OliveRecipe["passes"]): Array<[string, string]> {
+  const entries: Array<[string, string]> = [];
+  if (!passes || typeof passes !== "object") return entries;
+
+  for (const [passName, passConfig] of Object.entries(passes)) {
+    if (!passConfig || typeof passConfig !== "object") continue;
+    const config = (passConfig as Record<string, unknown>).config;
+    if (!config || typeof config !== "object") continue;
+    const cfg = config as Record<string, unknown>;
+    if (typeof cfg.reference_model_path === "string") {
+      entries.push([cfg.reference_model_path, `passes.${passName}.config.reference_model_path`]);
+    }
+    for (const key of ["model_path", "data_dir", "output_dir", "calibration_data_dir"] as const) {
+      if (typeof cfg[key] === "string") entries.push([cfg[key], `passes.${passName}.config.${key}`]);
+    }
+  }
+
+  return entries;
+}
+
+function collectInputModelRecipePaths(inputModel: OliveRecipe["input_model"]): Array<[string, string]> {
+  if (!inputModel || typeof inputModel !== "object") return [];
+  const config = (inputModel as Record<string, unknown>).config;
+  if (!config || typeof config !== "object") return [];
+  const modelPath = (config as Record<string, unknown>).model_path;
+  return typeof modelPath === "string" ? [[modelPath, "input_model.config.model_path"]] : [];
+}
+
 /**
  * Validates that filesystem paths embedded in the recipe do not escape
  * the approved model root (`process.cwd()`). Rejects traversal segments, UNC,
@@ -115,37 +143,11 @@ function validateRecipePaths(recipe: OliveRecipe): string[] {
     if (error) errors.push(error);
   }
 
-  // Check pass configs for filesystem path parameters
-  const passes = recipe.passes;
-  if (passes && typeof passes === "object") {
-    for (const [passName, passConfig] of Object.entries(passes)) {
-      if (!passConfig || typeof passConfig !== "object") continue;
-      const config = (passConfig as Record<string, unknown>).config;
-      if (!config || typeof config !== "object") continue;
-      const cfg = config as Record<string, unknown>;
-      // reference_model_path (OnnxDiscrepancyCheck)
-      if (typeof cfg.reference_model_path === "string") {
-        validatePath(cfg.reference_model_path, `passes.${passName}.config.reference_model_path`);
-      }
-      // model_path / data_dir / output_dir (common pass patterns)
-      for (const key of ["model_path", "data_dir", "output_dir", "calibration_data_dir"] as const) {
-        if (typeof cfg[key] === "string") {
-          validatePath(cfg[key], `passes.${passName}.config.${key}`);
-        }
-      }
-    }
-  }
-
-  // Check input_model.config paths
-  const inputModel = recipe.input_model;
-  if (inputModel && typeof inputModel === "object") {
-    const imConfig = (inputModel as Record<string, unknown>).config;
-    if (imConfig && typeof imConfig === "object") {
-      const imc = imConfig as Record<string, unknown>;
-      if (typeof imc.model_path === "string") {
-        validatePath(imc.model_path, "input_model.config.model_path");
-      }
-    }
+  for (const [recipePath, label] of [
+    ...collectPassRecipePaths(recipe.passes),
+    ...collectInputModelRecipePaths(recipe.input_model),
+  ]) {
+    validatePath(recipePath, label);
   }
 
   return errors;
