@@ -41,6 +41,11 @@ export function isQnnSdkBackedPass(passName: string): boolean {
   return (QNN_SDK_BACKED_PASS_NAMES as readonly string[]).includes(passName);
 }
 
+/** True for QNN plugin EP and QNN ABI EP (shared readiness / venv family). */
+export function isQnnIhvProvider(provider: IHVProvider): boolean {
+  return provider === "QNNExecutionProvider" || provider === "QnnAbiExecutionProvider";
+}
+
 /** True when a dim is dynamic / symbolic (unresolved for HTP). */
 export function isUnresolvedDynamicDim(dim: unknown): boolean {
   if (dim === null || dim === undefined) return true;
@@ -101,7 +106,7 @@ export function assessQnnRecipeReadiness(input: {
   hostMode?: QnnHostMode;
   platform?: { platform: NodeJS.Platform | string; arch: string };
 }): QnnReadinessIssue[] {
-  if (input.state.ihvProvider !== "QNNExecutionProvider") return [];
+  if (!isQnnIhvProvider(input.state.ihvProvider)) return [];
 
   const issues: QnnReadinessIssue[] = [];
   const mode =

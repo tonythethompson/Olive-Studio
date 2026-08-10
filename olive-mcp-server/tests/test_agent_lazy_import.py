@@ -4,7 +4,7 @@ Validates: Requirements 11.2, 11.4
 """
 from __future__ import annotations
 
-import importlib
+import subprocess
 import sys
 
 
@@ -18,15 +18,20 @@ def test_new_tool_modules_not_in_sys_modules_after_server_import():
         "olive_mcp_server.tools.agent_model_info",
     ]
 
-    for mod in agent_modules:
-        sys.modules.pop(mod, None)
+    script = """
+import sys
+import olive_mcp_server.mcp_server  # noqa: F401
 
-    if "olive_mcp_server.mcp_server" in sys.modules:
-        importlib.reload(sys.modules["olive_mcp_server.mcp_server"])
-    else:
-        import olive_mcp_server.mcp_server  # noqa: F401
+agent_modules = {agent_modules!r}
+eagerly_loaded = [name for name in agent_modules if name in sys.modules]
+if eagerly_loaded:
+    raise SystemExit(f"agent modules imported eagerly: {{eagerly_loaded}}")
+""".format(agent_modules=agent_modules)
 
-    for mod in agent_modules:
-        assert mod not in sys.modules, (
-            f"{mod} was eagerly imported by mcp_server (should be lazy)"
-        )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr or completed.stdout

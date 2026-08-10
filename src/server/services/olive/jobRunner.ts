@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from "uuid";
 import { enrichRecipeMemoryOffloadForRun } from "../../../lib/memoryOffload.ts";
 import { isGpuExecutionProvider } from "../../../lib/oliveGpuRuntime.ts";
 import { resolveQnnHostMode } from "../../../lib/qnnDeps.ts";
-import { assessQnnRecipeReadiness } from "../../../lib/qnnReadiness.ts";
+import { assessQnnRecipeReadiness, isQnnIhvProvider } from "../../../lib/qnnReadiness.ts";
 import { DEFAULT_PASSES } from "../../../lib/defaultPasses.ts";
 import type { HardwareProbeResult } from "../../../lib/hardwareProbe.ts";
 import type { OliveJob, OliveRecipe } from "../../types.ts";
@@ -360,7 +360,7 @@ async function continueOliveJobSetup(
     const capResult = await ensureProviderCapability(
       provider,
       venvListener,
-      provider === "QNNExecutionProvider"
+      isQnnIhvProvider(provider)
         ? {
           usage:
             resolveQnnHostMode({ platform: process.platform, arch: process.arch }) ===
@@ -387,7 +387,7 @@ async function continueOliveJobSetup(
 
     const venvPython = capResult.python ?? getVenvPython(capResult.family);
 
-    if (provider === "QNNExecutionProvider" && venvPython) {
+    if (isQnnIhvProvider(provider) && venvPython) {
       const hostMode = resolveQnnHostMode({ platform: process.platform, arch: process.arch });
       if (hostMode === "local-inference") {
         const qnn = await probeQnn(venvPython);
@@ -406,8 +406,8 @@ async function continueOliveJobSetup(
             cpuModel: "",
             cpuCores: 0,
           },
-          detectedProviders: ["QNNExecutionProvider"],
-          recommendedProvider: "QNNExecutionProvider",
+          detectedProviders: [provider],
+          recommendedProvider: provider,
           notes: [],
           qnn,
         };

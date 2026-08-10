@@ -1,8 +1,8 @@
 # Olive Studio Code Review
 
-**Reviewed:** 2026-07-31  
-**Baseline:** `v0.2.0` (`package.json`); Tauri config reports `0.3.0`  
-**Scope:** Architecture, correctness hotspots, test shape, and ship-risk for local-first use  
+**Reviewed:** 2026-08-10 (trust_remote_code opt-in snapshot)  
+**Baseline:** `v0.2.0` (`package.json`); olive-ai **0.13.0** on `feat/olive-013-upgrade`  
+**Scope:** Architecture, correctness hotspots, test shape, and ship-risk for loopback-only use  
 **Method:** Static review of `src/`, `server.ts`, `olive-mcp-server/`, `src-tauri/`, CI config. No live Olive GPU runs.
 
 ---
@@ -97,7 +97,7 @@ CI also runs `pnpm audit --audit-level high`, build, artifact assert, prod smoke
 
 ## Findings
 
-Severity assumes the documented local-first threat model. LAN exposure raises every item that touches spawn, tokens, or filesystem.
+Severity assumes the documented loopback-only threat model. LAN exposure raises every item that touches spawn, tokens, or filesystem.
 
 ### Critical
 
@@ -113,20 +113,25 @@ Severity assumes the documented local-first threat model. LAN exposure raises ev
 
 ### High
 
-3. **In-app MCP proxy imports a missing `call_tool`**  
+3. **`trust_remote_code` is explicit opt-in (Olive 0.13.0)**  
+   **Verified (2026-08-10):** `DEFAULT_PASSES.trustRemoteCode` is `false`; `buildOliveRecipe` emits `trust_remote_code: true` only when the user enables **Trust Remote Code** in the Hugging Face source settings (`trustRemoteCode === true`). Legacy persisted `undefined` values coerce to `false` in `coercePassFields`, not `true`.  
+   **Local-trust model:** Studio runs on loopback for a single operator. Enabling remote code executes Python from the Hugging Face model repository within the Olive process on the local machine, with the same trust boundary as running Olive locally. Only enable it for repositories you trust, and do not enable it on shared or hostile networks without reviewing the model repo.  
+   **Residual:** MCP troubleshooting entries may suggest `trust_remote_code: true`; Apply Fix still requires a deliberate UI action and does not bypass the recipe opt-in gate.
+
+1. **Finding 4: In-app MCP proxy imports a missing `call_tool`**
    **Verified:** `mcp.ts` runs `from olive_mcp_server.mcp_server import call_tool`, but `mcp_server.py` only exposes FastMCP tools (no module-level `call_tool`). Tests use `mcp.call_tool(...)`, a different API.  
    **Impact:** `POST /api/mcp/tool` fails at runtime; fragile `-c` string embedding.  
    **Fix:** Add an allowlisted `call_tool` helper (or invoke FastMCP properly); pass args via stdin/JSON file, not interpolated Python.
 
-4. **`/api/mcp/tool` is unrate-limited and spawns Python**  
+1. **Finding 5: `/api/mcp/tool` is unrate-limited and spawns Python**
    **Verified:** No rate limit on the tool route (KB sync is limited).  
    **Fix:** Apply `heavyCommandRateLimit` or a dedicated limiter.
 
-5. **`SYNC_KB_TOKEN` is documented but not enforced**  
+1. **Finding 6: `SYNC_KB_TOKEN` is documented but not enforced**
    **Verified:** `.env.example` and `useKbSync.ts` send `x-sync-token`; `POST /mcp/sync-kb` never checks it.  
    **Fix:** Enforce when env is set, or remove the docs.
 
-6. **Runtime `olive-ai` install is unpinned**  
+1. **Finding 7: Runtime `olive-ai` install is unpinned**
    **Verified:** venv path installs `olive-ai` without a version pin.  
    **Fix:** Pin in install command + document supported Olive versions.
 
@@ -139,7 +144,7 @@ Severity assumes the documented local-first threat model. LAN exposure raises ev
 11. Version skew: Tauri `0.3.0` vs npm `0.2.0`.
 12. KB sync unexpected errors may surface as success-shaped responses (check `mcp.ts` catch path).
 13. No global Express error middleware (unhandled errors may leak stacks).
-14. Devin credentials persist on disk (`0o600`, gitignored); acceptable for local-first, harden later if needed.
+14. Devin credentials persist on disk (`0o600`, gitignored); acceptable for loopback-only, harden later if needed.
 15. Local Python `mcp` dep allows `>=1.0.0` in `pyproject.toml`; CI pins `mcp<2`, but local installs can still break on 2.x.
 
 ### Low / positive controls

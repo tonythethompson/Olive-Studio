@@ -3,12 +3,12 @@
   "dim": 384,
   "indexes": {
     "docs_kb": {
-      "content_hash": "2713dd7422486596ac7f76973a15a7333bc9b1e91e44bc72570fc6faa49401f4",
-      "count": 4035
+      "content_hash": "192658843ab943214a6b5236516e6c1cf3b812da76e5b20d2bb0780f3344b00e",
+      "count": 4385
     },
     "ts_olive": {
-      "content_hash": "f241e7934eb287ca49c3a8d7161e2280c964c38f136833787d4fa5f2df10422a",
-      "count": 34
+      "content_hash": "bdea6364e803addd4bec02eeb28f4e52315227ed4eda459c87f791f63b144b70",
+      "count": 36
     },
     "ts_studio": {
       "content_hash": "36dcdf321ad6d99545edfbc4a9dea97d26e106de1ddcc2da7d7faa785a894c50",

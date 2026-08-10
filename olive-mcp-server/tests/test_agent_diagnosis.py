@@ -69,7 +69,7 @@ def test_kb_match_with_updated_config(
         "workaround": "Use int8",
     }
     mock_troubleshoot(kb_result)
-    mock_studio_request({})  # validation success (no error key)
+    mock_studio_request({"valid": True})
 
     recipe = {"passes": {"quantPrecision": "int4", "quantMethod": "awq"}}
 

@@ -306,6 +306,45 @@ describe("mapMcpConfigToUiState", () => {
       expect(patches.passes?.conversion).toBe(true);
     });
 
+    it("does not auto-apply trust_remote_code via Apply Fix (requires manual Hugging Face source opt-in)", () => {
+      const { patches, logs } = mapMcpConfigToUiState(
+        {
+          input_model: {
+            config: {
+              trust_remote_code: true,
+            },
+          },
+        },
+        { ...basePasses, trustRemoteCode: false },
+      );
+      expect(patches.passes?.trustRemoteCode).toBeUndefined();
+      expect(logs.some((l) => l.includes("Hugging Face source settings"))).toBe(true);
+    });
+
+    it("does not auto-apply top-level trust_remote_code (logs opt-in notice, no patch)", () => {
+      const { patches, logs } = mapMcpConfigToUiState(
+        { trust_remote_code: true },
+        { ...basePasses, trustRemoteCode: false },
+      );
+      expect(patches.passes?.trustRemoteCode).toBeUndefined();
+      expect(logs.some((l) => l.includes("Hugging Face source settings"))).toBe(true);
+    });
+
+    it("applyMcpDiagnosticToUiState does not enable trustRemoteCode for olive-hf-trust-remote-code", () => {
+      const diagnostic = {
+        applyable: false,
+        updated_config: {
+          input_model: { config: { trust_remote_code: true } },
+        },
+      };
+      const { patches } = applyMcpDiagnosticToUiState(
+        { updated_config: diagnostic.updated_config },
+        { ...basePasses, trustRemoteCode: false },
+      );
+      expect(patches.passes?.trustRemoteCode).toBeUndefined();
+      expect(canApplyMcpDiagnostic(diagnostic)).toBe(false);
+    });
+
     it("applyMcpDiagnosticToUiState applies updated_config only; quirks are noted", () => {
       const { patches, appliedQuirks, notedQuirks, logs } = applyMcpDiagnosticToUiState(
         {

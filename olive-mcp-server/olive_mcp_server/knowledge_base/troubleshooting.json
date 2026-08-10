@@ -1,6 +1,6 @@
 {
   "version": "0.3.3",
-  "last_updated": "2025-07-22",
+  "last_updated": "2026-08-10",
   "entries": [
     {
       "id": "onnx-export-shape",
@@ -777,7 +777,7 @@
       ],
       "title": "HuggingFace model fails to load after upgrading to olive-ai 0.13.0",
       "root_cause": "Olive 0.13.0 changed the default value of trust_remote_code from true to false for security. Models with custom code (e.g., Phi, Mistral with custom RoPE, Qwen) now refuse to load unless explicitly opted in.",
-      "solution": "Set trust_remote_code: true in the model config or pass config (e.g., OnnxConversion, ModelBuilder). In Olive Studio, enable 'Trust Remote Code' in Advanced settings.",
+      "solution": "In Olive Studio, open the Hugging Face source settings and enable Trust Remote Code. Enabling this executes Python from the model repository inside the Olive process on your machine, so only enable it for repositories you trust. Do not use Apply Fix for this setting; it must be toggled manually.",
       "updated_config": {
         "input_model": {
           "config": {
@@ -785,7 +785,7 @@
           }
         }
       },
-      "applyable": true
+      "applyable": false
     },
     {
       "id": "olive-qairt-passes-removed",
@@ -809,7 +809,7 @@
           }
         }
       },
-      "applyable": true
+      "applyable": false
     }
   ]
 }

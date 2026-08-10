@@ -29,6 +29,12 @@ _REQUIRED_SUPPORT = frozenset({"supported", "warning"})
 _PASS_REGISTRY_ALIASES: dict[str, tuple[str, ...]] = {
     "qnnquantization": ("qnnpreprocess", "qnnconversion", "onnxquantization", "onnxstaticquantization"),
     "onnxmodeloptimizer": ("onnxpeepholeoptimizer",),
+    # Olive 0.13 exposes QAIRT through QairtPipelinePass and the remaining
+    # entries as GraphSurgeries, not as separate registered pass names.
+    "qairtpipeline": ("qairtpipelinepass",),
+    "quantizeembeddingint8": ("graphsurgeries",),
+    "shareembeddinglmhead": ("graphsurgeries",),
+    "simplifiedlayernormtormsnorm": ("graphsurgeries",),
 }
 
 # Cloud workflow passes are valid matrix claims but are not listed in local olive_config.json.
@@ -267,6 +273,7 @@ def _claim_in_registry(claimed_name: str, available_lower: set[str]) -> bool:
     lowered = claimed_name.lower()
     if lowered in _CLOUD_ONLY_PASSES:
         return True
+    # Check registry first — if Olive exposes the pass, trust the real probe.
     if lowered in available_lower:
         return True
     for alias in _PASS_REGISTRY_ALIASES.get(lowered, ()):

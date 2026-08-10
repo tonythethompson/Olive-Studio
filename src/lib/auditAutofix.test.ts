@@ -106,6 +106,12 @@ describe("resolveAuditAutofix", () => {
     expect(resolveAuditAutofix({ pass: "ihvProvider", value: "CUDA" }, state)?.ihvProvider).toBe(
       "CUDAExecutionProvider",
     );
+    expect(
+      resolveAuditAutofix({ pass: "ihvProvider", value: "QnnAbiExecutionProvider" }, state)?.ihvProvider,
+    ).toBe("QnnAbiExecutionProvider");
+    expect(resolveAuditAutofix({ pass: "ihvProvider", value: "qnnabi" }, state)?.ihvProvider).toBe(
+      "QnnAbiExecutionProvider",
+    );
   });
 
   it("maps JSON fp16 quantPrecision through conversion dtype", () => {

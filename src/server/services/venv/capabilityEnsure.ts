@@ -12,6 +12,7 @@ import { ensureOnnxRuntimeGpu } from "../olive/cuda.ts";
 import { ensureTensorRt } from "../olive/tensorrt.ts";
 import { ensureTensorRtRtx } from "../olive/tensorrt-rtx.ts";
 import { ensureQnn } from "../olive/qnn.ts";
+import { isQnnIhvProvider } from "../../../lib/qnnReadiness.ts";
 import { ensureVenvFamily } from "./familyEnsure.ts";
 import { isExportTargetProvider, isPlatformLocalProvider } from "../../../lib/providerRuntimeKind.ts";
 import { getVenvPython } from "./paths.ts";
@@ -94,7 +95,7 @@ export async function ensureProviderCapability(
   const status = await probeFamilyStatus(family);
   const usage = opts?.usage ?? "inference";
   const cap =
-    provider === "QNNExecutionProvider"
+    isQnnIhvProvider(provider)
       ? qnnCapabilityForUsage(status, usage)
       : capabilityForProvider(status, provider);
 
@@ -158,7 +159,8 @@ async function installCapabilityPackages(
       case "WasmExecutionProvider":
         return { ok: true };
 
-      case "QNNExecutionProvider": {
+      case "QNNExecutionProvider":
+      case "QnnAbiExecutionProvider": {
         const result = await ensureQnn(onLine);
         return result.ok ? { ok: true } : { ok: false, error: result.error };
       }

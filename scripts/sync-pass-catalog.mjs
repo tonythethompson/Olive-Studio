@@ -85,8 +85,7 @@ except Exception as e:
     }
     return JSON.parse(raw);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn(`⚠ Olive CLI pass extraction failed: ${message}`);
+    console.warn(`⚠ Olive CLI pass extraction failed: ${err.message}`);
     return null;
   }
 }
@@ -96,7 +95,30 @@ except Exception as e:
 function loadExisting() {
   try {
     if (!fs.existsSync(OUT_FILE)) return {};
-    return JSON.parse(fs.readFileSync(OUT_FILE, "utf-8"));
+    const raw = JSON.parse(fs.readFileSync(OUT_FILE, "utf-8"));
+    if (Array.isArray(raw.passes)) {
+      const byName = {};
+      for (const entry of raw.passes) {
+        if (entry?.name) byName[entry.name] = entry;
+      }
+      return byName;
+    }
+    if (raw.passes && typeof raw.passes === "object" && !Array.isArray(raw.passes)) {
+      return raw.passes;
+    }
+    // Legacy format: pass records stored as top-level keys alongside metadata
+    // (_generated, _source, _passCount). Extract non-metadata object entries.
+    if (typeof raw === "object" && !Array.isArray(raw)) {
+      const byName = {};
+      for (const [key, value] of Object.entries(raw)) {
+        if (key.startsWith("_")) continue; // skip metadata keys
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+          byName[key] = value;
+        }
+      }
+      if (Object.keys(byName).length > 0) return byName;
+    }
+    return {};
   } catch {
     return {};
   }
@@ -136,8 +158,7 @@ async function main() {
   try {
     oliveVersion = await runPython(["-c", "import olive; print(olive.__version__)"]);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`❌ Failed to detect olive-ai version: ${message}`);
+    console.error(`❌ Failed to detect olive-ai version: ${err.message}`);
     process.exit(1);
   }
   if (!oliveVersion.startsWith(EXPECTED_VERSION_PREFIX)) {
@@ -163,12 +184,17 @@ async function main() {
     _generated: new Date().toISOString(),
     _source: "olive-ai CLI pass registry",
     _passCount: Object.keys(merged).length,
-    olive_version: "0.13.0",
-    version: "0.13.0",
+    olive_version: oliveVersion,
+    version: oliveVersion,
     last_updated: new Date().toISOString().slice(0, 10),
+    source: "https://microsoft.github.io/Olive/",
   };
 
-  const output = { ...metadata, ...merged };
+  const passes = Object.entries(merged)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, data]) => ({ name, ...(typeof data === "object" && data ? data : {}) }));
+
+  const output = { ...metadata, passes };
 
   fs.mkdirSync(path.dirname(OUT_FILE), { recursive: true });
   fs.writeFileSync(OUT_FILE, JSON.stringify(output, null, 2), "utf-8");

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { PASS_CATALOG, OLIVE_VERSION, type PassCatalogEntry } from "./passCatalog";
+import { PASS_CATALOG, OLIVE_VERSION } from "./passCatalog";
 import { collectTelemetry } from "./issueReport";
 
 // ── Load passes.json for cross-check ─────────────────────────────────────────

@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { usePipelineStore } from "@/lib/stores/pipelineStore";
+import { usePipelineStore, createDefaultPipelineState } from "@/lib/stores/pipelineStore";
+import { applyMigrations } from "@/lib/passMigration";
+import { commitUiStateUpdate, coercePassFields } from "@/lib/pipelineStateCommit";
 import { usePlaygroundStore } from "@/lib/stores/playgroundStore";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
+import type { UIState } from "@/types";
 
 describe("pipelineStore", () => {
   beforeEach(() => {
@@ -75,6 +78,60 @@ describe("pipelineStore", () => {
     expect(state.modelSource).toBe("local");
     expect(state.ihvProvider).toBe("CUDAExecutionProvider");
     expect(state.passes.conversion).toBe(false);
+  });
+
+  it("replaceState migrates deprecated passRecipeOverrides", () => {
+    usePipelineStore.getState().replaceState({
+      ...createDefaultPipelineState(),
+      passRecipeOverrides: {
+        MobiusModelBuilder: { model_name: "phi-2" },
+        QairtPreparation: { mode: "calibrate" },
+        OnnxConversion: { target_opset: 20 },
+      },
+    } as UIState);
+    const { state } = usePipelineStore.getState();
+    expect(state.passRecipeOverrides?.MobiusBuilder).toEqual({ model_name: "phi-2" });
+    expect(state.passRecipeOverrides).not.toHaveProperty("MobiusModelBuilder");
+    expect(state.passRecipeOverrides).not.toHaveProperty("QairtPreparation");
+    expect(state.passRecipeOverrides?.OnnxConversion).toEqual({ target_opset: 20 });
+  });
+
+  it("replaceState keeps MobiusBuilder authoritative over legacy MobiusModelBuilder", () => {
+    usePipelineStore.getState().replaceState({
+      ...createDefaultPipelineState(),
+      passRecipeOverrides: {
+        MobiusModelBuilder: { model_name: "legacy" },
+        MobiusBuilder: { model_name: "current" },
+      },
+    } as UIState);
+    const { state } = usePipelineStore.getState();
+    expect(state.passRecipeOverrides?.MobiusBuilder).toEqual({ model_name: "current" });
+    expect(state.passRecipeOverrides).not.toHaveProperty("MobiusModelBuilder");
+  });
+
+  it("rehydration merge path migrates persisted legacy overrides", () => {
+    const merged = {
+      ...createDefaultPipelineState(),
+      hfModelId: "mistralai/Mistral-7B-v0.1",
+      passes: { ...DEFAULT_PASSES, quantization: true },
+      passRecipeOverrides: {
+        MobiusModelBuilder: { model_name: "mistral" },
+        QairtGenAIBuilder: { recipe: "default" },
+      },
+    } as UIState;
+    const { state: migrated } = applyMigrations(merged);
+    const committed = commitUiStateUpdate(migrated, {});
+    expect(committed.passRecipeOverrides?.MobiusBuilder).toEqual({ model_name: "mistral" });
+    expect(committed.passRecipeOverrides).not.toHaveProperty("MobiusModelBuilder");
+    expect(committed.passRecipeOverrides).not.toHaveProperty("QairtGenAIBuilder");
+  });
+
+  it("coerces PEFT off when provider is QnnAbiExecutionProvider", () => {
+    const next = coercePassFields(
+      { ...DEFAULT_PASSES, peft: true },
+      "QnnAbiExecutionProvider",
+    );
+    expect(next.peft).toBe(false);
   });
 
   it("resetState restores defaults", () => {

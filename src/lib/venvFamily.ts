@@ -51,6 +51,7 @@ const PROVIDER_ALIASES: ReadonlyMap<string, IHVProvider> = new Map([
   ["qnnexecutionprovider", "QNNExecutionProvider"],
   ["qnnabiexecutionprovider", "QnnAbiExecutionProvider"],
   ["qnnabi", "QnnAbiExecutionProvider"],
+  ["qnn-abi", "QnnAbiExecutionProvider"],
   ["rocmexecutionprovider", "ROCMExecutionProvider"],
   ["webgpuexecutionprovider", "WebGpuExecutionProvider"],
   ["coremlexecutionprovider", "CoreMLExecutionProvider"],

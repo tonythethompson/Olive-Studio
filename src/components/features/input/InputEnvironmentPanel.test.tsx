@@ -225,4 +225,31 @@ describe("InputEnvironmentPanel", () => {
       expect(input.value).toBe("");
     });
   });
+
+  it("lets the user toggle Trust Remote Code in the HuggingFace source form", async () => {
+    mockSetState.mockClear();
+    render(<InputEnvironmentPanel />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const configureLabel = screen.getByText(/configure model source/i);
+    act(() => {
+      fireEvent.click(configureLabel.closest("button") ?? configureLabel);
+    });
+
+    const switchEl = screen.getByRole("switch", {
+      name: /trust remote code from the hugging face model repository/i,
+    });
+
+    act(() => {
+      fireEvent.click(switchEl);
+    });
+
+    expect(mockSetState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        passes: expect.objectContaining({ trustRemoteCode: true }),
+      }),
+    );
+  });
 });

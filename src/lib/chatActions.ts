@@ -14,7 +14,6 @@ const IHV_PROVIDERS = new Set<string>([
   "DmlExecutionProvider",
   "OpenVINOExecutionProvider",
   "QNNExecutionProvider",
-  "QnnAbiExecutionProvider",
   "ROCMExecutionProvider",
   "WebGpuExecutionProvider",
 ]);

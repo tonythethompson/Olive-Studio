@@ -1,14 +1,16 @@
 import { IHVProvider, ModelSource, UIState, OliveRecipe } from "@/types";
 import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
 import { getProviderAvailabilityBlock, type HardwareProbeResult } from "@/lib/hardwareProbe";
-import { buildOliveRecipe, isPyTorchNativeQuantMethod } from "@/lib/oliveRecipeBuilder";
-import { assessQnnRecipeReadiness, type QnnReadinessIssue } from "@/lib/qnnReadiness";
+import { buildOliveRecipe, isPyTorchNativeQuantMethod, hasOnnxGraphProducer } from "@/lib/oliveRecipeBuilder";
+import { REPLACEMENT_PIPELINE_SUPPRESSED_PASSES, isReplacementExportPipeline } from "@/lib/replacementExportPipeline";
+import { assessQnnRecipeReadiness, isQnnIhvProvider, type QnnReadinessIssue } from "@/lib/qnnReadiness";
 import { isKnownPass, getPassSchema } from "@/lib/schemaEngine";
 import { pickOpenVinoTargetFromDevices } from "@/lib/openvinoDeps";
 import {
   isExportTargetProvider,
   isLegacyExportProvider,
   isPlatformLocalProvider,
+  PEFT_UNSUPPORTED_PROVIDERS,
 } from "@/lib/providerRuntimeKind";
 
 export type PipelineValidationOptions = {
@@ -126,7 +128,7 @@ export function isStructuredPruningAllowed(provider: IHVProvider): boolean {
 }
 
 export function isPeftAllowed(provider: IHVProvider): boolean {
-  return !["QNNExecutionProvider", "QnnAbiExecutionProvider", "OpenVINOExecutionProvider"].includes(provider);
+  return !PEFT_UNSUPPORTED_PROVIDERS.includes(provider);
 }
 
 export function isPeftMethodAllowed(method: UIState["passes"]["peftMethod"], provider: IHVProvider): boolean {
@@ -327,6 +329,7 @@ export function prepareProviderChange(
 }
 
 function passesNeedOnnxGraph(passes: UIState["passes"]): boolean {
+  if (isReplacementExportPipeline(passes)) return false;
   // PyTorch-native quantizers do not need an ONNX conversion by themselves.
   // They only need conversion when followed by ONNX graph transforms or splitting.
   const usesPyTorchQuant = passes.quantization && isPyTorchNativeQuantMethod(passes.quantMethod);
@@ -456,6 +459,33 @@ const CROSS_PASS_RULES: CrossPassRule[] = [
     affectedTabs: ["conversion"],
     affectedPasses: ["conversion", "provider"],
     actionLabel: "Switch conversion to ONNX",
+  },
+  {
+    id: "qairt-discrepancy-incompatible",
+    applies: (passes) => passes.onnxDiscrepancyCheck && passes.qairtPipeline,
+    fix: { onnxDiscrepancyCheck: false },
+    autoCoerce: true,
+    severity: "critical",
+    title: "OnnxDiscrepancyCheck incompatible with QairtPipeline",
+    description:
+      "QairtPipeline does not produce an ONNX graph, so OnnxDiscrepancyCheck cannot run. Disable discrepancy checking when using QairtPipeline.",
+    affectedTabs: ["validation"],
+    affectedPasses: ["onnxDiscrepancyCheck", "qairtPipeline"],
+    actionLabel: "Disable OnnxDiscrepancyCheck",
+  },
+  {
+    id: "onnx-discrepancy-missing-producer",
+    applies: (passes) =>
+      passes.onnxDiscrepancyCheck && !hasOnnxGraphProducer(passes) && !passes.qairtPipeline,
+    fix: { conversion: true, conversionFormat: "onnx" },
+    autoCoerce: false,
+    severity: "critical",
+    title: "OnnxDiscrepancyCheck requires an ONNX-producing pass",
+    description:
+      "OnnxDiscrepancyCheck compares ONNX model outputs against a reference. Enable ONNX conversion or MobiusBuilder before this validation pass.",
+    affectedTabs: ["conversion", "validation"],
+    affectedPasses: ["onnxDiscrepancyCheck", "conversion"],
+    actionLabel: "Enable ONNX conversion",
   },
   {
     id: "qairt-pipeline-requires-qnn",
@@ -593,7 +623,7 @@ function getQnnRecipeReadinessIssues(
   recipe: OliveRecipe,
   probe?: HardwareProbeResult | null,
 ): PipelineIssue[] {
-  if (state.ihvProvider !== "QNNExecutionProvider" && state.ihvProvider !== "QnnAbiExecutionProvider") return [];
+  if (!isQnnIhvProvider(state.ihvProvider)) return [];
 
   return assessQnnRecipeReadiness({
     state,
@@ -641,6 +671,16 @@ function getPassChainIssues(state: UIState, recipe: OliveRecipe): PipelineIssue[
   for (const [stepId, passConfig] of passEntries) {
     const passType = (passConfig as { type?: string }).type;
     if (!passType) continue;
+
+    if (
+      isReplacementExportPipeline(state.passes) &&
+      (passType === "OnnxConversion" ||
+        passType === "OpenVINOConversion" ||
+        passType === "QNNConversion" ||
+        passType === "TensorRTConversion")
+    ) {
+      continue;
+    }
 
     const schema = getPassSchema(passType);
     if (!schema) continue;
@@ -720,7 +760,7 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
       severity: "info",
       title: "trust_remote_code is disabled",
       description:
-        "Some HuggingFace models require trust_remote_code=true. Enable in Advanced settings if model loading fails.",
+        "Some HuggingFace models require trust_remote_code=true. Enable Trust Remote Code in the Hugging Face source settings if model loading fails.",
       affectedTabs: ["input"],
       affectedPasses: ["input_model"],
     });
@@ -993,6 +1033,14 @@ export function coercePassFields(passes: UIState["passes"], provider: IHVProvide
     next.peftMethod = "lora";
   }
 
+  if (next.trustRemoteCode === undefined) {
+    next.trustRemoteCode = false;
+  }
+
+  if (isReplacementExportPipeline(next)) {
+    Object.assign(next, REPLACEMENT_PIPELINE_SUPPRESSED_PASSES);
+  }
+
   // Cross-pass coercions come from the shared CROSS_PASS_RULES table so they
   // cannot drift from the issues getCrossPassIssues surfaces.
   for (const rule of CROSS_PASS_RULES) {
@@ -1019,12 +1067,6 @@ export function sanitizePipelineState(state: UIState): UIState {
       state.memoryOffload === "auto" && !isMemoryOffloadAvailable(state) ? "gpu_only" : state.memoryOffload,
     passes: coercePassFields(state.passes, state.ihvProvider),
   };
-
-  // Keep remote code disabled unless the user explicitly opts in. Older
-  // persisted state may not contain this field.
-  if (current.passes.trustRemoteCode === undefined) {
-    current = { ...current, passes: { ...current.passes, trustRemoteCode: false } };
-  }
 
   for (let i = 0; i < 16; i++) {
     const validation = getPipelineValidation(current);

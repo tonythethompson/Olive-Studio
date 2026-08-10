@@ -45,14 +45,19 @@ function satisfiesPep440(specifier: string, version: string): boolean {
       case "!=":
         if (cmp === 0) return false;
         break;
-      case "~=":
+      case "~=": {
         // Compatible release: >=target, <next minor/major
         if (cmp < 0) return false;
-        // Upper bound: bump the second-to-last segment
-        const upper = [...tParts.slice(0, -1)];
-        upper[upper.length - 1]!++;
-        if (compareParts(vParts, upper) >= 0) return false;
+        if (tParts.length === 1) {
+          const upper = [tParts[0]! + 1];
+          if (compareParts(vParts, upper) >= 0) return false;
+        } else {
+          const upper = [...tParts.slice(0, -1)];
+          upper[upper.length - 1]!++;
+          if (compareParts(vParts, upper) >= 0) return false;
+        }
         break;
+      }
     }
   }
   return true;
@@ -78,20 +83,20 @@ describe("venv spec constants", () => {
     expect(satisfiesPep440(PINNED_OLIVE_AI_INSTALL, "0.13.0")).toBe(true);
   });
 
-  it("PINNED_OLIVE_AI_INSTALL includes olive-ai 0.12.0 (backward compat)", () => {
-    expect(satisfiesPep440(PINNED_OLIVE_AI_INSTALL, "0.12.0")).toBe(true);
+  it("PINNED_OLIVE_AI_INSTALL excludes olive-ai 0.12.0", () => {
+    expect(satisfiesPep440(PINNED_OLIVE_AI_INSTALL, "0.12.0")).toBe(false);
   });
 
   it("PINNED_OLIVE_AI_INSTALL excludes olive-ai 1.0.0", () => {
     expect(satisfiesPep440(PINNED_OLIVE_AI_INSTALL, "1.0.0")).toBe(false);
   });
 
-  it("PINNED_OLIVE_AI_INSTALL excludes olive-ai 0.11.0 (below lower bound)", () => {
+  it("PINNED_OLIVE_AI_INSTALL excludes olive-ai 0.11.0", () => {
     expect(satisfiesPep440(PINNED_OLIVE_AI_INSTALL, "0.11.0")).toBe(false);
   });
 
   it("PINNED_OLIVE_AI_INSTALL is a valid PEP 440 specifier string", () => {
-    // Must start with package name, then have >=X,<Y comma-separated clauses
+    // Must start with package name, then have valid PEP 440 clauses
     expect(PINNED_OLIVE_AI_INSTALL).toMatch(
       /^[a-zA-Z0-9_-]+(>=|<=|>|<|==|!=|~=)\d+(\.\d+)*(,(>=|<=|>|<|==|!=|~=)\d+(\.\d+)*)*$/,
     );

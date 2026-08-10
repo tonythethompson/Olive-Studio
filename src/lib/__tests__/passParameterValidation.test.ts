@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { validatePassParameters } from "../passParameterValidation";
 import type { UIState, IHVProvider } from "@/types";
+import { DEFAULT_PASSES } from "../defaultPasses";
 
 /** Minimal UIState builder — only fills fields relevant to validation. */
 function baseState(overrides?: Partial<UIState>): UIState {
@@ -18,6 +19,7 @@ function baseState(overrides?: Partial<UIState>): UIState {
     azureStr: "",
     distributedCaching: false,
     passes: {
+      ...DEFAULT_PASSES,
       conversion: true,
       conversionSourceFormat: "pytorch",
       conversionFormat: "onnx",
@@ -26,27 +28,7 @@ function baseState(overrides?: Partial<UIState>): UIState {
       quantization: true,
       quantMethod: "awq",
       quantPrecision: "int4",
-      gptqBlockSize: 128,
-      gptqDescAct: false,
-      gptqGroupSize: 128,
-      awqGroupSize: 128,
-      awqDampPercent: 0.01,
-      awqSym: true,
-      qatQuantPrecision: "int4",
-      qatCalibrateMethod: "minmax",
-      qatCalibrateSteps: 100,
-      quantPreset: "",
-      pruning: false,
-      pruningSparsity: 0.5,
-      pruningType: "unstructured",
-      pruningMethod: "magnitude",
-      pruningCriteria: "l1_norm",
-      splitting: false,
-      onnxTransforms: false,
-      peft: false,
-      peftMethod: "lora",
-      diffusionLora: false,
-      trustRemoteCode: true,
+      trustRemoteCode: false,
     },
     ...overrides,
   };

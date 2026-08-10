@@ -165,9 +165,11 @@ class TestJsonMergePatchCorrectness:
                     else:
                         assert nested_result.get(sub_key) == sub_value
             elif isinstance(patch_value, dict):
-                # Patch has dict but recipe doesn't have dict at that key: override
+                # RFC 7386 applies an object patch to an empty object when the
+                # target value is absent or not an object, including removing
+                # nested keys whose patch value is null.
                 assert key in result
-                assert result[key] == patch_value
+                assert result[key] == _apply_merge_patch({}, patch_value)
             else:
                 # Non-dict non-null: override
                 assert result.get(key) == patch_value
