@@ -1,6 +1,6 @@
 # Olive Studio v0.2.0
 
-Olive Studio is a local-first GUI for [Microsoft Olive](https://github.com/microsoft/Olive) ONNX model optimization. Configure model sources, hardware targets, and optimization passes visually, then execute locally without cloud dependencies. Ships with an AI assistant (20 providers), hardware validation with one-click autofix, and an MCP server for agent-driven workflows.
+Olive Studio is a GUI for [Microsoft Olive](https://github.com/microsoft/Olive) ONNX model optimization. Configure model sources, hardware targets, and optimization passes visually, then execute locally without cloud dependencies. Ships with an AI assistant (20 providers), hardware validation with one-click autofix, and an MCP server for agent-driven workflows.
 
 ## Highlights
 
