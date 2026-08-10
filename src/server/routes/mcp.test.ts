@@ -48,6 +48,7 @@ import fs from "fs";
 import { mountMcpRoutes } from "./mcp.ts";
 import { setKbStatusCache } from "../services/mcp/state.ts";
 import mcpBreaker, { resetMcpBreaker } from "../services/mcp/breaker.ts";
+import { kbSyncRateLimit } from "../middleware/rateLimit.ts";
 
 function tripMcpBreaker(): void {
   for (let i = 0; i < 3; i += 1) {
@@ -102,12 +103,14 @@ afterAll(async () => {
   if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   setKbStatusCache(null);
   resetMcpBreaker();
   mcpToolMocks.execFileImpl = null;
   mcpToolMocks.execFileCalls.length = 0;
   mcpToolMocks.callOliveMcpToolImpl = null;
+  // Keep per-test sync requests from hitting the 2/min production rate limit.
+  await kbSyncRateLimit.resetKey("127.0.0.1");
 });
 
 afterEach(() => {
@@ -197,6 +200,66 @@ describe("POST /api/mcp/sync-kb", () => {
     const body = await res.json();
     expect(body).toMatchObject({ ok: false, reason: "missing" });
     expect(body.error).toBe("Knowledge base has not been generated yet.");
+  });
+
+  describe("SYNC_KB_TOKEN enforcement", () => {
+    const previousToken = process.env.SYNC_KB_TOKEN;
+
+    afterEach(() => {
+      if (previousToken === undefined) {
+        delete process.env.SYNC_KB_TOKEN;
+      } else {
+        process.env.SYNC_KB_TOKEN = previousToken;
+      }
+    });
+
+    it("returns 401 when the token is required but missing", async () => {
+      process.env.SYNC_KB_TOKEN = "test-secret";
+      vi.spyOn(fs, "readFileSync").mockReturnValue(VALID_KB);
+
+      const res = await fetch(`${baseUrl}/api/mcp/sync-kb`, { method: "POST" });
+      expect(res.status).toBe(401);
+      expect(await res.json()).toMatchObject({ ok: false, error: "Missing or invalid sync token" });
+    });
+
+    it("returns 401 for an invalid token", async () => {
+      process.env.SYNC_KB_TOKEN = "test-secret";
+      vi.spyOn(fs, "readFileSync").mockReturnValue(VALID_KB);
+
+      const res = await fetch(`${baseUrl}/api/mcp/sync-kb`, {
+        method: "POST",
+        headers: { "x-sync-token": "wrong" },
+      });
+      expect(res.status).toBe(401);
+      expect(await res.json()).toMatchObject({ ok: false, error: "Missing or invalid sync token" });
+    });
+
+    it("allows sync when the token matches", async () => {
+      process.env.SYNC_KB_TOKEN = "test-secret";
+      vi.spyOn(fs, "readFileSync").mockReturnValue(VALID_KB);
+
+      const res = await fetch(`${baseUrl}/api/mcp/sync-kb`, {
+        method: "POST",
+        headers: { "x-sync-token": "test-secret" },
+      });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ ok: true, available: true, passCount: 1 });
+    });
+
+    it("returns 403 from studioLocalOnly gate when x-forwarded-for is present", async () => {
+      process.env.SYNC_KB_TOKEN = "test-secret";
+      vi.spyOn(fs, "readFileSync").mockReturnValue(VALID_KB);
+
+      const res = await fetch(`${baseUrl}/api/mcp/sync-kb`, {
+        method: "POST",
+        headers: { "x-forwarded-for": "203.0.113.1", "x-sync-token": "test-secret" },
+      });
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body).toMatchObject({ error: "This endpoint is only available from loopback" });
+      // Sync work must not be performed when the local-only gate rejects.
+      expect(body).not.toMatchObject({ ok: true });
+    });
   });
 });
 

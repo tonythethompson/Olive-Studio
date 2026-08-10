@@ -39,6 +39,7 @@ export const STUDIO_ENV_KEY_NAMES = [
   "LM_API_TOKEN",
   "LM_STUDIO_API_KEY",
   "SYNC_KB_TOKEN",
+  "OLIVE_BIND",
   "OLIVE_STUDIO_WEB_SEARCH_URL",
 ] as const;
 

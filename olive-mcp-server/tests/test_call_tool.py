@@ -1,4 +1,4 @@
-from olive_mcp_server.mcp_server import call_tool, _TOOL_IMPORTS
+from olive_mcp_server.mcp_server import _TOOL_IMPORTS, _resolved_tools, _resolve_tool, call_tool
 from olive_mcp_server.tools.troubleshooting import reset_frequency_store
 
 import pytest
@@ -27,3 +27,17 @@ def test_call_tool_unknown_returns_error():
 
 def test_call_tool_names_match_registered_tools():
     assert "troubleshoot_olive_error" in _TOOL_IMPORTS
+
+
+def test_resolve_tool_logs_import_failure(monkeypatch, caplog):
+    monkeypatch.setitem(
+        _TOOL_IMPORTS,
+        "broken_test_tool",
+        ("olive_mcp_server.tools.module_that_does_not_exist", "broken_test_tool"),
+    )
+    _resolved_tools.pop("broken_test_tool", None)
+
+    with caplog.at_level("WARNING", logger="olive_mcp_server.mcp_server"):
+        assert _resolve_tool("broken_test_tool") is None
+
+    assert "Failed to resolve MCP tool broken_test_tool" in caplog.text

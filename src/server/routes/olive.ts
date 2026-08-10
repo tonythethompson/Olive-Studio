@@ -258,8 +258,10 @@ export function mountOliveRoutes(router: Router): void {
   // Reclaim finished jobs + their temp recipe files on a timer.
   startJobRegistrySweeper();
 
-  // ─── POST /api/olive/run ──────────────────────────────────────────────
-  router.post("/olive/run", oliveRunRateLimit, async (req, res) => {
+  // ─── POST /api/olive/run (loopback only) ──────────────────────────────
+  // Spawns Olive with a user-supplied recipe. Never exposed to LAN without an
+  // explicit bind (see server.ts OLIVE_BIND) and documented threat model.
+  router.post("/olive/run", studioLocalOnly, oliveRunRateLimit, async (req, res) => {
     const body = parseBody<{ recipeJson: string; cudaVersion?: string }>(req.body, {
       recipeJson: { type: "string", message: "Missing recipeJson" },
       cudaVersion: { type: "string", required: false },
@@ -434,9 +436,9 @@ export function mountOliveRoutes(router: Router): void {
   });
 
   // ─── SSE Stream (UI Execute; agent path is /olive/agent/stream) ───────
-  // Match /olive/run: no studioLocalOnly / agent policy so LAN Studio works.
+  // UI path is loopback-only. Agent path already enforces policy.
   // MCP-origin jobs are hidden here — use /olive/agent/* (loopback + policy).
-  router.get("/olive/stream/:jobId", (req, res) => handleOliveStream(req, res, "ui"));
+  router.get("/olive/stream/:jobId", studioLocalOnly, (req, res) => handleOliveStream(req, res, "ui"));
   router.get("/olive/agent/stream/:jobId", studioLocalOnly, (req, res) => {
     const gate = denyUnless(
       (p) => p.allowJobInspection || p.allowJobSubmission,
@@ -449,7 +451,7 @@ export function mountOliveRoutes(router: Router): void {
   });
 
   // ─── Job Status (UI Execute; agent path enforces policy) ─────────────
-  router.get("/olive/status/:jobId", (req, res) => handleOliveStatus(req, res, "ui"));
+  router.get("/olive/status/:jobId", studioLocalOnly, (req, res) => handleOliveStatus(req, res, "ui"));
   router.get("/olive/agent/status/:jobId", studioLocalOnly, (req, res) => {
     const gate = denyUnless(
       (p) => p.allowJobInspection || p.allowJobSubmission,
@@ -488,7 +490,7 @@ export function mountOliveRoutes(router: Router): void {
   });
 
   // ─── Cancel (UI Execute; agent path always enforces cancellation) ───
-  router.post("/olive/cancel", (req, res) => handleOliveCancel(req, res, "ui"));
+  router.post("/olive/cancel", studioLocalOnly, (req, res) => handleOliveCancel(req, res, "ui"));
   router.post("/olive/agent/cancel", studioLocalOnly, (req, res) => {
     // Body `client` is not authorization — agent route always requires policy.
     const gate = denyUnless(

@@ -41,7 +41,7 @@ async function postKbSync(): Promise<KbSyncResult> {
   const timeout = setTimeout(() => controller.abort(), SYNC_TIMEOUT_MS);
   try {
     const headers: Record<string, string> = {};
-    // Optional: set VITE_SYNC_KB_TOKEN when the server requires SYNC_KB_TOKEN.
+    // Optional: set VITE_SYNC_KB_TOKEN to match SYNC_KB_TOKEN when the server requires a sync token.
     const metaEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
     const syncToken = metaEnv?.VITE_SYNC_KB_TOKEN;
     if (syncToken) {

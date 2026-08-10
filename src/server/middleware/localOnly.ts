@@ -1,15 +1,15 @@
 import type { NextFunction, Request, Response } from "express";
 
 /**
- * Reject non-loopback clients for local-first sensitive routes (Arena proxy).
+ * Reject non-loopback clients for loopback-only sensitive routes (Arena proxy).
  *
- * The HTTP server binds `0.0.0.0`, so loopback on `req.socket.remoteAddress`
- * alone is not enough: a same-host reverse proxy makes every client look local.
- * When the override is off, also reject requests that carry reverse-proxy
- * forwarding headers.
+ * The HTTP server defaults to `127.0.0.1`, but a same-host reverse proxy makes
+ * every client look local. When the override is off, also reject requests that
+ * carry reverse-proxy forwarding headers.
  *
  * Override with `OLIVE_ARENA_ALLOW_REMOTE=true` for Docker / remote lab setups
- * (disables this gate intentionally).
+ * (disables this gate intentionally). For wider binding, set `OLIVE_BIND=0.0.0.0`
+ * in server.ts and follow the documented threat model.
  */
 export function isLoopbackRemoteAddress(remoteAddress: string | undefined): boolean {
   if (!remoteAddress) return false;

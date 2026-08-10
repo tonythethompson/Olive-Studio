@@ -11,9 +11,12 @@ Usage:
 from __future__ import annotations
 
 import importlib
+import logging
 import os
 import sys
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # name → (module path, attribute). Lazy so HTTP diagnosis does not pull in
 # optional deps like BeautifulSoup just to troubleshoot an Olive traceback.
@@ -90,6 +93,27 @@ _TOOL_IMPORTS: dict[str, tuple[str, str]] = {
         "olive_mcp_server.tools.studio_jobs",
         "cancel_optimization_job",
     ),
+    # Phase 3: Agent autonomous loop
+    "plan_optimization": (
+        "olive_mcp_server.tools.agent_planner",
+        "plan_optimization",
+    ),
+    "execute_and_observe": (
+        "olive_mcp_server.tools.agent_execute",
+        "execute_and_observe",
+    ),
+    "diagnose_and_fix": (
+        "olive_mcp_server.tools.agent_diagnosis",
+        "diagnose_and_fix",
+    ),
+    "compare_results": (
+        "olive_mcp_server.tools.agent_compare",
+        "compare_results",
+    ),
+    "get_model_info": (
+        "olive_mcp_server.tools.agent_model_info",
+        "get_model_info",
+    ),
 }
 # Studio's HTTP POST /api/mcp/tool proxies these tools but is loopback-only
 # (mcpToolLocalOnly). That gate is required for write tools like feedback.
@@ -113,8 +137,22 @@ def _resolve_tool(name: str):
     if target is None:
         return None
     module_name, attr = target
-    module = importlib.import_module(module_name)
-    fn = getattr(module, attr)
+    try:
+        module = importlib.import_module(module_name)
+        fn = getattr(module, attr)
+    except (ImportError, ModuleNotFoundError, AttributeError) as exc:
+        # Optional/unimplemented tools must not prevent the server from starting.
+        # ImportError covers failures raised by imports inside an optional tool
+        # module (e.g. a missing optional dependency such as bs4/requests).
+        logger.warning(
+            "Failed to resolve MCP tool %s from %s.%s: %s",
+            name,
+            module_name,
+            attr,
+            exc,
+            exc_info=True,
+        )
+        return None
     _resolved_tools[name] = fn
     return fn
 

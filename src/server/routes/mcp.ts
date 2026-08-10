@@ -19,6 +19,7 @@ import { evaluateStudioRecipeBridge } from "../services/mcp/studioRecipeBridge.t
 import {
   hasProxyForwardingHeaders,
   isLoopbackRemoteAddress,
+  studioLocalOnly,
 } from "../middleware/localOnly.ts";
 import {
   kbStatusRateLimit,
@@ -196,6 +197,25 @@ function readPersistedKbLastSync(): string | null {
 }
 
 /**
+ * Enforces the optional SYNC_KB_TOKEN for the KB sync endpoint.
+ * Setting `SYNC_KB_TOKEN` (server-side) enables enforcement: the request
+ * must include the matching `x-sync-token` header. `VITE_SYNC_KB_TOKEN`
+ * must be set to the same value at build time so the bundled UI can send
+ * the header; that Vite-exposed value is client-visible and must not be
+ * treated as a secret.
+ */
+function verifySyncKbToken(req: Request, res: Response, next: NextFunction): void {
+  const configured = process.env.SYNC_KB_TOKEN?.trim();
+  if (!configured) return next();
+
+  const header = req.headers["x-sync-token"];
+  const provided = Array.isArray(header) ? header[0] : header;
+  if (provided?.trim() === configured) return next();
+
+  res.status(401).json({ ok: false, error: "Missing or invalid sync token" });
+}
+
+/**
  * Builds a knowledge-base status record from the provided passes data.
  *
  * @param data - The knowledge-base data used to populate the status record
@@ -333,8 +353,8 @@ export function mountMcpRoutes(router: Router): void {
     return res.json(status);
   });
 
-  // ─── KB Sync ──────────────────────────────────────────────────────────
-  router.post("/mcp/sync-kb", kbSyncRateLimit, async (_req, res) => {
+  // ─── KB Sync (loopback-only + optional token) ─────────────────────────
+  router.post("/mcp/sync-kb", studioLocalOnly, kbSyncRateLimit, verifySyncKbToken, async (_req, res) => {
     if (isKbSyncInProgress()) {
       return res.status(409).json({ ok: false, error: "Sync already in progress" });
     }
@@ -347,7 +367,8 @@ export function mountMcpRoutes(router: Router): void {
       return res.json({ ok: true, ...result.status });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      return res.json({ ok: false, error: msg });
+      console.warn(`[mcp] sync-kb failed: ${msg}`);
+      return res.status(500).json({ ok: false, error: "Knowledge base synchronization failed" });
     } finally {
       setKbSyncInProgress(false);
     }

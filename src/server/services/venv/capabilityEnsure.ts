@@ -157,6 +157,7 @@ async function installCapabilityPackages(
       case "TensorflowLiteExecutionProvider":
       case "XnnpackExecutionProvider":
       case "WasmExecutionProvider":
+      case "QnnAbiExecutionProvider":
         return { ok: true };
 
       case "QNNExecutionProvider":
