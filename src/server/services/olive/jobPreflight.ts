@@ -9,6 +9,7 @@
  * ready — not here. Callers must not treat validate as hardware readiness.
  */
 import { createHash } from "crypto";
+import path from "path";
 import { validateOliveRecipeStructure } from "../../../lib/oliveRecipeSchema.ts";
 import { normalizeIhvProvider } from "../../../lib/venvFamily.ts";
 import { isExportTargetProvider } from "../../../lib/providerRuntimeKind.ts";
@@ -55,6 +56,74 @@ function stableStringify(value: unknown): string {
 export function fingerprintRecipe(recipe: unknown, cudaVersion = "auto"): string {
   const payload = `${stableStringify(recipe)}\0${cudaVersion}`;
   return createHash("sha256").update(payload).digest("hex");
+}
+
+/**
+ * Validates that filesystem paths embedded in the recipe do not escape
+ * the working directory. Rejects traversal segments, UNC paths, and
+ * absolute paths that resolve outside `process.cwd()`.
+ */
+function validateRecipePaths(recipe: OliveRecipe): string[] {
+  const errors: string[] = [];
+  const cwd = process.cwd();
+
+  function isUnsafePath(p: string, label: string): void {
+    const trimmed = p.trim();
+    if (!trimmed) return;
+    if (trimmed.includes("\0")) {
+      errors.push(`${label}: path contains NUL byte`);
+      return;
+    }
+    if (/(^|[\\/])\.\.([\\/]|$)/.test(trimmed)) {
+      errors.push(`${label}: path contains traversal segments (..)`);
+      return;
+    }
+    // Reject UNC paths (\\server\share)
+    if (/^\\\\/.test(trimmed)) {
+      errors.push(`${label}: UNC paths are not allowed`);
+      return;
+    }
+    // Resolve and ensure under cwd (model root)
+    const resolved = path.resolve(cwd, trimmed);
+    if (!resolved.startsWith(cwd + path.sep) && resolved !== cwd) {
+      errors.push(`${label}: path resolves outside the project root`);
+    }
+  }
+
+  // Check pass configs for filesystem path parameters
+  const passes = recipe.passes;
+  if (passes && typeof passes === "object") {
+    for (const [passName, passConfig] of Object.entries(passes)) {
+      if (!passConfig || typeof passConfig !== "object") continue;
+      const config = (passConfig as Record<string, unknown>).config;
+      if (!config || typeof config !== "object") continue;
+      const cfg = config as Record<string, unknown>;
+      // reference_model_path (OnnxDiscrepancyCheck)
+      if (typeof cfg.reference_model_path === "string") {
+        isUnsafePath(cfg.reference_model_path, `passes.${passName}.config.reference_model_path`);
+      }
+      // model_path / data_dir / output_dir (common pass patterns)
+      for (const key of ["model_path", "data_dir", "output_dir", "calibration_data_dir"] as const) {
+        if (typeof cfg[key] === "string") {
+          isUnsafePath(cfg[key], `passes.${passName}.config.${key}`);
+        }
+      }
+    }
+  }
+
+  // Check input_model.config paths
+  const inputModel = recipe.input_model;
+  if (inputModel && typeof inputModel === "object") {
+    const imConfig = (inputModel as Record<string, unknown>).config;
+    if (imConfig && typeof imConfig === "object") {
+      const imc = imConfig as Record<string, unknown>;
+      if (typeof imc.model_path === "string") {
+        isUnsafePath(imc.model_path, "input_model.config.model_path");
+      }
+    }
+  }
+
+  return errors;
 }
 
 /**
@@ -134,6 +203,10 @@ export function preflightOliveRecipe(
   if (cudaVersion !== "auto" && !/^cu\d{3}$|^cpu$/.test(cudaVersion)) {
     warnings.push(`Unusual cudaVersion token: ${cudaVersion}`);
   }
+
+  // ── Path constraint: reject recipe filesystem paths outside the model root ──
+  const pathErrors = validateRecipePaths(recipe);
+  errors.push(...pathErrors);
 
   const fingerprint = fingerprintRecipe(recipe, cudaVersion);
   return {

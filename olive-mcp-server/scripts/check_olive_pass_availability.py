@@ -275,13 +275,21 @@ def _claim_in_registry(claimed_name: str, available_lower: set[str]) -> bool:
     lowered = claimed_name.lower()
     if lowered in _CLOUD_ONLY_PASSES:
         return True
-    if lowered in _STUDIO_CATALOG_ONLY_PASSES:
-        return True
+    # Check registry first — if Olive exposes the pass, trust the real probe.
     if lowered in available_lower:
         return True
     for alias in _PASS_REGISTRY_ALIASES.get(lowered, ()):
         if alias in available_lower:
             return True
+    # Fall back to studio catalog allowlist only when the pass is not yet
+    # enumerable via the installed Olive package (e.g. reference-only passes
+    # documented in Olive 0.13 but not exposed through PassRegistry on PyPI).
+    if lowered in _STUDIO_CATALOG_ONLY_PASSES:
+        _LOG.info(
+            "Pass %r not in Olive registry; accepted via Studio catalog allowlist",
+            claimed_name,
+        )
+        return True
     return False
 
 

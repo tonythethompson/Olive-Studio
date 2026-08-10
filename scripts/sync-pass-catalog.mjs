@@ -106,6 +106,18 @@ function loadExisting() {
     if (raw.passes && typeof raw.passes === "object" && !Array.isArray(raw.passes)) {
       return raw.passes;
     }
+    // Legacy format: pass records stored as top-level keys alongside metadata
+    // (_generated, _source, _passCount). Extract non-metadata object entries.
+    if (typeof raw === "object" && !Array.isArray(raw)) {
+      const byName = {};
+      for (const [key, value] of Object.entries(raw)) {
+        if (key.startsWith("_")) continue; // skip metadata keys
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+          byName[key] = value;
+        }
+      }
+      if (Object.keys(byName).length > 0) return byName;
+    }
     return {};
   } catch {
     return {};

@@ -460,6 +460,19 @@ const CROSS_PASS_RULES: CrossPassRule[] = [
     actionLabel: "Switch conversion to ONNX",
   },
   {
+    id: "qairt-discrepancy-incompatible",
+    applies: (passes) => passes.onnxDiscrepancyCheck && passes.qairtPipeline,
+    fix: { onnxDiscrepancyCheck: false },
+    autoCoerce: true,
+    severity: "critical",
+    title: "OnnxDiscrepancyCheck incompatible with QairtPipeline",
+    description:
+      "QairtPipeline does not produce an ONNX graph, so OnnxDiscrepancyCheck cannot run. Disable discrepancy checking when using QairtPipeline.",
+    affectedTabs: ["validation"],
+    affectedPasses: ["onnxDiscrepancyCheck", "qairtPipeline"],
+    actionLabel: "Disable OnnxDiscrepancyCheck",
+  },
+  {
     id: "onnx-discrepancy-missing-producer",
     applies: (passes) => passes.onnxDiscrepancyCheck && !hasOnnxGraphProducer(passes),
     fix: { conversion: true, conversionFormat: "onnx" },

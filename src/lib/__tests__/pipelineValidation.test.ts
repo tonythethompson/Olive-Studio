@@ -835,7 +835,13 @@ describe("0.13.0 validation rules", () => {
       );
       const result = getPipelineValidation(state);
       expect(result.issues.some((i) => i.id.startsWith("pass-chain-mismatch"))).toBe(false);
-      expect(result.isBlocked).toBe(false);
+      // The pipeline may still be blocked on non-Windows platforms due to
+      // qnn-readiness-qnn_out_of_scope (QNN is Windows-only). Verify that
+      // replacement export pipeline logic itself does not introduce a block.
+      const nonPlatformCriticals = result.issues.filter(
+        (i) => i.severity === "critical" && !i.id.startsWith("qnn-readiness"),
+      );
+      expect(nonPlatformCriticals).toHaveLength(0);
     });
   });
 
