@@ -86,11 +86,6 @@ export function isPeftMethodAllowed(method: UIState["passes"]["peftMethod"], pro
 
 // ─── Cross-Pass Coercion Rules ────────────────────────────────────────────────
 
-/** Whether passes need an ONNX graph (quant/transforms target ONNX). */
-function passesNeedOnnxGraph(passes: UIState["passes"]): boolean {
-  return passes.onnxTransforms || (passes.quantization && passes.quantMethod !== "qat");
-}
-
 interface CrossPassCoercion {
   applies: (passes: UIState["passes"], provider: IHVProvider) => boolean;
   fix: Partial<UIState["passes"]>;
