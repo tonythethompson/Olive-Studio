@@ -62,14 +62,14 @@ _OPTIMIZATION_KEYWORDS = re.compile(
 
 # Provider mapping for UIState ihvProvider field
 _HARDWARE_TO_PROVIDER: dict[str, str] = {
-    "nvidia": "nvidia",
-    "intel": "intel",
-    "qualcomm": "qualcomm",
-    "apple": "apple",
-    "directml": "directml",
-    "rocm": "amd",
-    "webgpu": "webgpu",
-    "cpu": "cpu",
+    "nvidia": "CUDAExecutionProvider",
+    "intel": "OpenVINOExecutionProvider",
+    "qualcomm": "QNNExecutionProvider",
+    "apple": "CoreMLExecutionProvider",
+    "directml": "DmlExecutionProvider",
+    "rocm": "ROCMExecutionProvider",
+    "webgpu": "WebGpuExecutionProvider",
+    "cpu": "CPUExecutionProvider",
 }
 
 
@@ -116,19 +116,19 @@ def _infer_provider(hardware_target: str) -> str | None:
     """Map a hardware target string to a UIState ihvProvider value."""
     lower = hardware_target.lower()
     if "nvidia" in lower or "rtx" in lower or "cuda" in lower or "tensorrt" in lower:
-        return "nvidia"
+        return "CUDAExecutionProvider"
     if "directml" in lower:
-        return "directml"
+        return "DmlExecutionProvider"
     if "rocm" in lower or "mi300" in lower:
-        return "amd"
+        return "ROCMExecutionProvider"
     if "apple" in lower or "coreml" in lower:
-        return "apple"
+        return "CoreMLExecutionProvider"
     if "qualcomm" in lower or "qnn" in lower or "snapdragon" in lower:
-        return "qualcomm"
+        return "QNNExecutionProvider"
     if "openvino" in lower or "intel" in lower:
-        return "intel"
+        return "OpenVINOExecutionProvider"
     if "webgpu" in lower:
-        return "webgpu"
+        return "WebGpuExecutionProvider"
     return None
 
 
@@ -300,7 +300,7 @@ def _validate_patch(patch: dict[str, Any]) -> tuple[bool, str | None]:
     response = studio_request(
         "POST",
         "/api/mcp/tool",
-        body={"tool": "validate_ui_state_recipe", "args": {"ui_state": patch}},
+        body={"toolName": "validate_ui_state_recipe", "args": {"ui_state": patch}},
     )
     if isinstance(response, dict) and response.get("error"):
         error_code = response["error"]
@@ -441,3 +441,4 @@ def plan_optimization(
 
     except Exception as exc:
         return {"error": "internal_error", "message": f"{type(exc).__name__}: {exc}"}
+__name__}: {exc}"}

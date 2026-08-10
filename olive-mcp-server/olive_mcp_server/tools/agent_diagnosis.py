@@ -122,7 +122,7 @@ def _validate_fixed_recipe(fixed_recipe: dict[str, Any]) -> bool:
     response = studio_request(
         "POST",
         _VALIDATE_TOOL_PATH,
-        body={"tool": "validate_optimization_job", "args": {"recipe": fixed_recipe}},
+        body={"toolName": "validate_optimization_job", "args": {"recipe": fixed_recipe}},
     )
     # If Studio is down or returned an error, treat as not validated
     if isinstance(response.get("error"), str) and response["error"]:
