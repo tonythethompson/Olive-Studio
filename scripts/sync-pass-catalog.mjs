@@ -135,7 +135,8 @@ async function main() {
   try {
     oliveVersion = await runPython(["-c", "import olive; print(olive.__version__)"]);
   } catch (err) {
-    console.error(`❌ Failed to detect olive-ai version: ${err.message}`);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`❌ Failed to detect olive-ai version: ${message}`);
     process.exit(1);
   }
   if (!oliveVersion.startsWith(EXPECTED_VERSION_PREFIX)) {
