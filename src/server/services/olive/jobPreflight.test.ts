@@ -218,7 +218,7 @@ describe("preflightOliveRecipe", () => {
         // Create the symlink (may fail on Windows without privilege; gracefully skip)
         try {
           fs.symlinkSync(outsideTarget, symlinkPath, "dir");
-        } catch (symlinkErr) {
+        } catch {
           // Symlink creation failed (likely permissions); skip this test
           console.warn("Skipping symlink test: symlink creation not supported in this environment");
           return;
