@@ -1,0 +1,191 @@
+# Ruler: Olive Studio Client Bundle Size
+# ========================================
+# The auto-improvement loop's primary metric.
+# Status: calibrated (canary passes, noise band = 0)
+#
+# This file is MACHINE-READ by the auto-improvement harness.
+# DO NOT edit to make a number look better.
+
+status: calibrated
+version: 1
+
+primary_metric:
+  label: client_js_bytes
+  unit: bytes
+  direction: lower_is_better
+  description: >
+    Total uncompressed JavaScript bytes in the production client bundle
+    (dist/assets/*.js, excluding server.mjs). Measures the shipped code
+    volume that affects page load time and bandwidth. A deterministic output
+    of Vite/Rollup with zero variance across builds.
+
+stages:
+  - id: vendor_libs
+    description: >
+      Third-party dependencies bundled into the client: react, radix UI,
+      transformers.web, onnxruntime-web, typegpu, jszip, motion, zustand,
+      tanstack-query, lucide-react. Not directly optimizable without swaps.
+    baseline_bytes: 1738048
+
+  - id: app_code
+    description: >
+      Olive Studio application logic: main index chunk, pipelineStore,
+      AssistantSidebar, RecipeGraphView, panel components, utilities.
+      The primary optimization target.
+    baseline_bytes: 917293
+
+anchors:
+  baseline:
+    description: >
+      Production build from HEAD of main branch (post-PR #201 merge).
+      All tests passing, lint clean, tsc clean.
+    commit: HEAD
+    measured_at: "2026-08-10T04:28:00Z"
+    value_bytes: 2655341
+    repetitions: 5
+    note: "All 5 builds produced identical output (zero variance)"
+
+  floor:
+    description: >
+      Theoretical minimum: just React + minimal app shell. Estimated from
+      vendor-react chunk alone (178K) + minimal routing (~50K).
+    value_bytes: 250000
+
+noise_band:
+  sigma: 0
+  floor_bytes: 0
+  band_bytes: 0
+  repetitions: 5
+  note: >
+    Bundle size is perfectly deterministic. Vite/Rollup produce bit-identical
+    output across builds. Any delta != 0 is a real change. This is the ideal
+    metric: zero-noise means every optimization, no matter how small, is
+    unambiguously detectable.
+
+canary:
+  description: >
+    Inject ~100 characters into the OLIVE_VERSION string literal (a used
+    export in src/lib/passCatalog.ts). Verify bundle grows by ~98 bytes.
+    Restore and verify exact baseline recovery.
+  mechanism: >
+    sed replaces "0.12.1" with a 100-char canary string in passCatalog.ts,
+    builds, measures delta, restores. The canary script (data/ruler/canary.sh)
+    automates this.
+  expected_delta_bytes: 98
+  actual_delta_bytes: 98
+  cleared_band: true
+  note: "With noise_band = 0, any delta > 0 clears. 98 >> 0."
+
+guardrails:
+  - id: unit_tests
+    description: >
+      All unit tests (src/lib/**/*.test.ts) must pass. Currently 1,018 tests.
+    threshold: pass
+    measurement: "vitest run"
+
+  - id: server_tests
+    description: >
+      All server tests must pass. Currently 389 tests.
+    threshold: pass
+    measurement: "vitest run --config vitest.server.config.ts"
+
+  - id: type_check
+    description: >
+      TypeScript compilation must succeed with no errors.
+    threshold: pass
+    measurement: "tsc --noEmit"
+
+  - id: no_bundle_growth
+    description: >
+      The primary metric must not increase by more than 500 bytes without
+      explicit justification (new feature addition).
+    threshold_bytes: 500
+    direction: must_not_increase
+
+reward_hack_guards:
+  - id: no_feature_removal
+    description: >
+      Bundle size reduction must not come from removing used features.
+      All existing e2e tests and component tests must continue passing.
+      A change that removes a lazy-loaded panel to save bytes is a regression.
+    detection: >
+      Run component tests (vitest run --config vitest.component.config.ts)
+      and verify all pass. Check that no user-facing exports were removed.
+
+  - id: no_lazy_to_eager_consolidation
+    description: >
+      Merging lazy chunks into fewer eager chunks can reduce total size via
+      dedup but hurts Time-to-Interactive. Chunk count must stay >= 25.
+    detection: >
+      find dist/assets/ -name "*.js" | wc -l must be >= 25 after any change.
+
+  - id: gzip_correlation
+    description: >
+      Compressed (gzip) bundle size must decrease proportionally to raw size.
+      A "win" that inflates gzip (replacing repeated patterns with random data,
+      or inlining unique strings) is a compression-hostile hack.
+    detection: >
+      Measure client_gz_bytes; if raw decreased by X% but gzip decreased by
+      less than X/3%, flag as suspicious.
+
+  - id: no_minification_tricks
+    description: >
+      Rewriting readable source into unreadable one-liners that happen to
+      minify smaller is not a real optimization. Source remains maintainable.
+    detection: >
+      Review diff for readability. AST complexity of changed files must not
+      increase. No single-character variable names in source (minifier handles
+      that).
+
+  - id: held_out_integration_probe
+    description: >
+      After the optimized build, run the integration test suite as a post-hoc
+      check that the server can still start and respond to API calls.
+    detection: >
+      vitest run --config vitest.integration.config.ts must pass.
+
+measurement:
+  script: data/ruler/measure.sh
+  canary_script: data/ruler/canary.sh
+  prerequisites:
+    - "node_modules installed (pnpm install)"
+    - "Node.js >= 22.16"
+  runtime_estimate_seconds: 90
+
+optimization_targets:
+  - id: dead_code
+    label: Dead code elimination
+    description: >
+      Find and remove unused exports, unreachable branches, and dev-only code
+      that leaks into production bundles.
+    estimated_savings_bytes: 10000-50000
+
+  - id: dependency_pruning
+    label: Dependency pruning
+    description: >
+      Replace heavy deps with lighter alternatives or native APIs. Candidates:
+      uuid (crypto.randomUUID), partial lodash usage, unused icon imports.
+    estimated_savings_bytes: 5000-30000
+
+  - id: code_splitting
+    label: Improved code splitting
+    description: >
+      Move rarely-used panels and features behind React.lazy() boundaries.
+      The olive-recipes-catalog chunk (193K) loads statically but is only needed
+      in the recipe builder view.
+    estimated_savings_bytes: 50000-200000
+
+  - id: tree_shaking_barriers
+    label: Tree-shaking barrier removal
+    description: >
+      Fix barrel re-exports (index.ts files that re-export everything),
+      side-effect markers in package.json, and dynamic imports that prevent
+      effective tree-shaking.
+    estimated_savings_bytes: 5000-20000
+
+  - id: duplicate_logic
+    label: Duplicate logic consolidation
+    description: >
+      Consolidate repeated utility implementations across modules. Multiple
+      files may implement similar validation, formatting, or state logic.
+    estimated_savings_bytes: 2000-10000

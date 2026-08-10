@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "status": "calibrated",
+  "project": "olive-studio",
+  "calibrated_at": "2026-08-10T04:28:00Z",
+  "primary_metric": {
+    "label": "client_js_bytes",
+    "description": "Total uncompressed JavaScript bytes in the production client bundle (dist/assets/*.js, excluding server.mjs)",
+    "unit": "bytes",
+    "direction": "lower_is_better",
+    "baseline_value": 2655341,
+    "noise_band": 0,
+    "noise_band_note": "Deterministic output from Vite/Rollup — identical builds produce identical byte counts"
+  },
+  "attributable_stages": [
+    {"label": "vendor_libs", "description": "Third-party dependencies (react, radix, transformers, onnxruntime, typegpu, jszip, motion, zustand, tanstack-query)", "baseline_bytes": 1738048},
+    {"label": "app_code", "description": "Olive Studio application logic (index, pipelineStore, AssistantSidebar, panels)", "baseline_bytes": 917293}
+  ],
+  "guardrails": [
+    {"label": "unit_tests", "check": "vitest run must exit 0", "tolerance": "zero failures"},
+    {"label": "server_tests", "check": "vitest run --config vitest.server.config.ts must exit 0", "tolerance": "zero failures"},
+    {"label": "type_check", "check": "tsc --noEmit must exit 0", "tolerance": "zero type errors"},
+    {"label": "bundle_regression", "check": "client_js_bytes must not INCREASE by more than 500 bytes without justification", "tolerance": "500 bytes"}
+  ],
+  "reward_hack_guards": [
+    {"label": "no_feature_removal", "description": "Bundle size reduction must not come from removing used features or functionality. All existing e2e tests and component tests must continue passing."},
+    {"label": "no_lazy_to_eager", "description": "Moving code from lazy chunks to fewer eager chunks can reduce total size via dedup but hurts initial load. Chunk count must stay >= 25."},
+    {"label": "gzip_correlation", "description": "client_gz_bytes must decrease proportionally. A win on raw bytes that inflates gzip (e.g. replacing repeated patterns with random) is a hack."},
+    {"label": "no_minification_tricks", "description": "Rewriting readable code into unreadable one-liners that happen to minify smaller is not a real optimization. Source readability is preserved."}
+  ],
+  "canary": {
+    "script": "data/ruler/canary.sh",
+    "method": "Inject ~100 bytes into OLIVE_VERSION string literal (a used export), verify bundle grows by ~98 bytes, then restore and verify exact baseline recovery",
+    "expected_delta": 98,
+    "status": "PASS"
+  },
+  "measurement": {
+    "script": "data/ruler/measure.sh",
+    "prerequisites": ["node_modules must be installed (pnpm install)", "Node.js >= 22.16"],
+    "runtime_estimate": "~90 seconds (tests + tsc + build)"
+  },
+  "optimization_targets": [
+    {"label": "dead_code_elimination", "description": "Find and remove unused exports, unreachable branches, and development-only code that leaks into production bundles"},
+    {"label": "dependency_pruning", "description": "Replace heavy dependencies with lighter alternatives or native APIs (e.g. uuid with crypto.randomUUID, lodash utils with native)"},
+    {"label": "code_splitting", "description": "Move rarely-used panels behind lazy() boundaries to reduce initial bundle"},
+    {"label": "tree_shaking_barriers", "description": "Fix barrel re-exports, side-effect markers, and dynamic imports that prevent effective tree-shaking"},
+    {"label": "duplicate_logic", "description": "Consolidate repeated utility implementations across modules"}
+  ]
+}

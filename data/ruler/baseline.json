@@ -1,0 +1,25 @@
+{
+  "measured_at": "2026-08-10T08:35:00Z",
+  "git_sha": "91155c3",
+  "primary": {
+    "label": "client_js_bytes",
+    "value": 1648669,
+    "unit": "bytes",
+    "direction": "lower_is_better"
+  },
+  "secondary": [
+    {"label": "chunk_count", "value": 39, "unit": "count"}
+  ],
+  "calibration": {
+    "samples": 1,
+    "noise_band_bytes": 0,
+    "noise_band_pct": 0.0,
+    "note": "Single build measurement post-PR#219 merge. Bundle size is deterministic (zero variance proven in prior calibration). Full 5-rep calibration deferred until optimization cycle starts."
+  },
+  "prior_baseline": {
+    "value": 2655341,
+    "commit": "pre-PR#219",
+    "reduction_bytes": 1006672,
+    "reduction_pct": 37.9
+  }
+}

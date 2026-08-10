@@ -1,0 +1,53 @@
+{
+  "calibrated_at": "2026-08-10T04:28:00Z",
+  "host": "WSL2 / Ubuntu / Node v22.23.2",
+  "repetitions": 5,
+  "primary_metric": {
+    "label": "client_js_bytes",
+    "unit": "bytes",
+    "direction": "lower_is_better",
+    "samples": [2655341, 2655341, 2655341, 2655341, 2655341],
+    "mean": 2655341,
+    "sigma": 0,
+    "noise_band": 0
+  },
+  "secondary_metrics": {
+    "test_wall_clock_seconds": {
+      "samples": [20.79, 19.74, 19.94, 21.13, 17.00, 19.21, 24.26, 18.16, 26.31, 20.90, 20.44, 19.78, 19.00, 22.17, 21.67, 19.25, 19.44, 17.45, 18.29, 17.98],
+      "repetitions": 20,
+      "mean": 20.15,
+      "sigma": 2.25,
+      "cv_pct": 11.2,
+      "noise_band": 4.51,
+      "note": "Rejected as primary — too noisy for WSL environment"
+    },
+    "vite_build_seconds": {
+      "samples": [2.537, 2.499, 2.511, 2.536, 2.319, 2.578, 2.364, 2.648, 2.587],
+      "repetitions": 9,
+      "mean": 2.509,
+      "sigma": 0.105,
+      "cv_pct": 4.2,
+      "noise_band": 0.211,
+      "note": "Low variance but small absolute value — hard to improve"
+    },
+    "tsc_seconds": {
+      "samples": [14.673, 15.391, 15.788, 15.943],
+      "repetitions": 4,
+      "mean": 15.449,
+      "sigma": 0.567,
+      "cv_pct": 3.7,
+      "noise_band": 1.134,
+      "note": "Relatively stable; affected by code structure but not user-impacting"
+    }
+  },
+  "canary": {
+    "method": "Inject ~100 chars into OLIVE_VERSION used export",
+    "baseline_bytes": 2655341,
+    "canary_bytes": 2655439,
+    "delta_bytes": 98,
+    "restored_bytes": 2655341,
+    "restored_exact": true,
+    "cleared_band": true,
+    "status": "PASS"
+  }
+}
