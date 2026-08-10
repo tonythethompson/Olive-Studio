@@ -134,8 +134,12 @@ def _resolve_tool(name: str):
     if target is None:
         return None
     module_name, attr = target
-    module = importlib.import_module(module_name)
-    fn = getattr(module, attr)
+    try:
+        module = importlib.import_module(module_name)
+        fn = getattr(module, attr)
+    except (ModuleNotFoundError, AttributeError):
+        # Optional/unimplemented tools must not prevent the server from starting.
+        return None
     _resolved_tools[name] = fn
     return fn
 
