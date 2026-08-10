@@ -48,7 +48,7 @@ export interface RecipeCatalogBrowserProps {
   groupedRecipes: { title: string; rows: RecipeRow[] }[];
   totalPresetCount: number;
   localFilesCount: number;
-  syncStatus: string;
+  syncStatus: "idle" | "loading" | "success" | "error";
   syncError: string;
   setSyncStatus: (v: "idle" | "loading" | "success" | "error") => void;
   setSyncError: (v: string) => void;
