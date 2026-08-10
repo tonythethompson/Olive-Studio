@@ -30,6 +30,12 @@ export const ALLOWED_MCP_TOOL_NAMES = new Set([
   "validate_optimization_job",
   "submit_optimization_job",
   "cancel_optimization_job",
+  // Phase 3: Agent autonomous loop.
+  "execute_and_observe",
+  "plan_optimization",
+  "diagnose_and_fix",
+  "compare_results",
+  "get_model_info",
 ]);
 
 /**
