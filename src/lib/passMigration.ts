@@ -94,7 +94,7 @@ export function applyMigrations(
 
   // Deep-clone overrides to avoid mutation.
   const overrides: Record<string, Record<string, unknown>> = state.passRecipeOverrides
-    ? JSON.parse(JSON.stringify(state.passRecipeOverrides))
+    ? structuredClone(state.passRecipeOverrides)
     : {};
 
   // 1. Apply pass name migrations to passRecipeOverrides keys.
