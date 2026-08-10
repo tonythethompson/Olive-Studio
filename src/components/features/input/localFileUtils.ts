@@ -9,8 +9,12 @@ export function getBaseName(filename: string): string | null {
   return match ? match[1] : null;
 }
 
-/** Format a byte count into a human-readable string. */
-export { formatBytes as formatFileSize } from "@/lib/utils";
+import { formatBytes } from "@/lib/utils";
+
+/** Format a byte count into a human-readable string (2 decimal places for file sizes). */
+export function formatFileSize(bytes: number): string {
+  return formatBytes(bytes, 2);
+}
 
 /** Returns a human-readable format label for a model file by extension. */
 export function getFileFormatLabel(name: string): string {

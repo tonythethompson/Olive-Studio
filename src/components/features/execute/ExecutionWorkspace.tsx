@@ -24,9 +24,7 @@ import {
 } from "@/lib/logFailurePatterns";
 import { useOliveStream } from "./useOliveStream";
 import { DiagnosisHistory, type DiagnosisEntry } from "./DiagnosisHistory";
-const MCPDiagnosticCard = lazy(() =>
-  import("./MCPDiagnosticCard").then((m) => ({ default: m.MCPDiagnosticCard })),
-);
+import { LazyMCPDiagnosticCard } from "./LazyMCPDiagnosticCard";
 import {
   Code,
   Play,
@@ -1154,17 +1152,15 @@ export function ExecutionWorkspace({
 
           {/* MCP Diagnostic & Auto-Fix Card (matched_entry from MCP/local parsers enables thumbs) */}
           {executionStatus === "failed" && (
-            <Suspense fallback={null}>
-              <MCPDiagnosticCard
-                diagnostic={displayedDiagnostic}
-                isDiagnosing={isDiagnosing}
-                fixApplied={displayedFixApplied}
-                onApplyFix={handleApplyMcpFix}
-                onRunDiagnosis={handleDiagnose}
-                error={diagnoseError}
-                onFeedbackSubmitted={handleFeedbackSubmitted}
-              />
-            </Suspense>
+            <LazyMCPDiagnosticCard
+              diagnostic={displayedDiagnostic}
+              isDiagnosing={isDiagnosing}
+              fixApplied={displayedFixApplied}
+              onApplyFix={handleApplyMcpFix}
+              onRunDiagnosis={handleDiagnose}
+              error={diagnoseError}
+              onFeedbackSubmitted={handleFeedbackSubmitted}
+            />
           )}
         </CardContent>
       </Card>

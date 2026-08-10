@@ -9,6 +9,7 @@ import {
   OLLAMA_STARTER_MODELS,
   type LocalEngine,
 } from "./localEngineStarters.ts";
+import { formatBytes } from "@/lib/utils";
 
 /** Require this multiple of the estimated download size free before starting. */
 export const LOCAL_PULL_DISK_HEADROOM = 1.15;
@@ -61,8 +62,9 @@ export function starterApproxBytes(tag: string, engine: LocalEngine): number | n
   return hit?.approxBytes ?? null;
 }
 
-export { formatBytes as formatBytesShort } from "@/lib/utils";
-import { formatBytes as formatBytesShort } from "@/lib/utils";
+export function formatBytesShort(bytes: number): string {
+  return formatBytes(bytes);
+}
 
 export type DiskSpaceGate =
   | { ok: true; freeBytes: number | null; needBytes: number | null }

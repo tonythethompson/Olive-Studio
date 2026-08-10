@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, Button, Label, Input, Select } from "@/components/ui";
 import {
   UIState,
@@ -18,9 +18,7 @@ import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import { getSelectableProviders, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
-const MCPDiagnosticCard = lazy(() =>
-  import("./MCPDiagnosticCard").then((m) => ({ default: m.MCPDiagnosticCard })),
-);
+import { LazyMCPDiagnosticCard } from "./LazyMCPDiagnosticCard";
 import {
   Play,
   Pause,
@@ -1145,43 +1143,41 @@ export function BatchProcessingPanel({
 
                 {/* MCP Diagnostic for failed jobs (matched_entry from keyed MCP parse enables thumbs) */}
                 {selectedJob.status === "failed" && (
-                  <Suspense fallback={null}>
-                    <MCPDiagnosticCard
-                      diagnostic={batchDiagnostics[selectedJob.id] ?? null}
-                      isDiagnosing={diagnosingJobs[selectedJob.id] ?? false}
-                      fixApplied={appliedFixJobId === selectedJob.id ? "applied" : ""}
-                      error={batchDiagnoseErrors[selectedJob.id] ?? null}
-                      onApplyFix={() => {
-                        const diagnostic = batchDiagnostics[selectedJob.id];
-                        if (!diagnostic || !canApplyMcpDiagnostic(diagnostic)) return;
-                        const {
-                          patches,
+                  <LazyMCPDiagnosticCard
+                    diagnostic={batchDiagnostics[selectedJob.id] ?? null}
+                    isDiagnosing={diagnosingJobs[selectedJob.id] ?? false}
+                    fixApplied={appliedFixJobId === selectedJob.id ? "applied" : ""}
+                    error={batchDiagnoseErrors[selectedJob.id] ?? null}
+                    onApplyFix={() => {
+                      const diagnostic = batchDiagnostics[selectedJob.id];
+                      if (!diagnostic || !canApplyMcpDiagnostic(diagnostic)) return;
+                      const {
+                        patches,
+                        logs,
+                        appliedQuirks,
+                        notedQuirks: _notedQuirks,
+                      } = applyMcpDiagnosticToUiState(diagnostic, state.passes, state.passRecipeOverrides);
+                      if (Object.keys(patches).length > 0 || appliedQuirks.length > 0) {
+                        if (Object.keys(patches).length > 0) setState(patches);
+                        // Append mapping logs to job logs, matching ExecutionWorkspace behavior
+                        setState({
+                          batchJobs: (state.batchJobs || []).map((j) =>
+                            j.id === selectedJob.id ? { ...j, logs: [...j.logs, ...logs] } : j,
+                          ),
+                        });
+                        // Gate success UI state on actual applied quirks/patches only
+                        setAppliedFixJobId(selectedJob.id);
+                      } else {
+                        console.warn(
+                          "[MCP FIX] No mappable config/quirks for batch job",
+                          selectedJob.id,
                           logs,
-                          appliedQuirks,
-                          notedQuirks: _notedQuirks,
-                        } = applyMcpDiagnosticToUiState(diagnostic, state.passes, state.passRecipeOverrides);
-                        if (Object.keys(patches).length > 0 || appliedQuirks.length > 0) {
-                          if (Object.keys(patches).length > 0) setState(patches);
-                          // Append mapping logs to job logs, matching ExecutionWorkspace behavior
-                          setState({
-                            batchJobs: (state.batchJobs || []).map((j) =>
-                              j.id === selectedJob.id ? { ...j, logs: [...j.logs, ...logs] } : j,
-                            ),
-                          });
-                          // Gate success UI state on actual applied quirks/patches only
-                          setAppliedFixJobId(selectedJob.id);
-                        } else {
-                          console.warn(
-                            "[MCP FIX] No mappable config/quirks for batch job",
-                            selectedJob.id,
-                            logs,
-                          );
-                        }
-                      }}
-                      onRunDiagnosis={() => fetchKeyedDiagnostic(selectedJob.id, selectedJob.logs)}
-                      onFeedbackSubmitted={handleFeedbackSubmitted}
-                    />
-                  </Suspense>
+                        );
+                      }
+                    }}
+                    onRunDiagnosis={() => fetchKeyedDiagnostic(selectedJob.id, selectedJob.logs)}
+                    onFeedbackSubmitted={handleFeedbackSubmitted}
+                  />
                 )}
 
                 {/* Logs terminal */}
