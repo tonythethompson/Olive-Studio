@@ -127,7 +127,7 @@ def _validate_fixed_recipe(fixed_recipe: dict[str, Any]) -> bool:
     # If Studio is down or returned an error, treat as not validated
     if isinstance(response.get("error"), str) and response["error"]:
         return False
-    return True
+    return response.get("valid") is True
 
 
 def diagnose_and_fix(
