@@ -37,12 +37,6 @@ export const DEFAULT_PASSES: UIState["passes"] = {
   qatCalibrateMethod: "minmax",
   qatCalibrateSteps: 10,
   quantPreset: "",
-  mobiusBuilder: false,
-  qairtPipeline: false,
-  quantizeEmbeddingInt8: false,
-  shareEmbeddingLmHead: false,
-  simplifiedLayerNormToRMSNorm: false,
-  onnxDiscrepancyCheck: false,
 };
 
 export function createInactivePasses(): UIState["passes"] {
