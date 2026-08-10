@@ -25,7 +25,7 @@ _HARDWARE_KEYWORDS: list[tuple[str, str]] = [
     (r"\bnvidia\b", "NVIDIA RTX 4090"),
     (r"\brtx\s*\d{4}", "NVIDIA RTX 4090"),
     (r"\bcuda\b", "NVIDIA RTX 4090"),
-    (r"\btensorrt\b", "NVIDIA RTX 4090"),
+    (r"\btensorrt\b", "TensorRT"),
     (r"\bopenvino\b", "Intel Core i9 CPU"),
     (r"\bintel\b", "Intel Core i9 CPU"),
     (r"\bqualcomm\b", "Qualcomm Snapdragon NPU"),
