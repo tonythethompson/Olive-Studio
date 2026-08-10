@@ -10,13 +10,12 @@ No module-level network I/O or heavy imports — only stdlib + project internals
 
 from __future__ import annotations
 
-import json
 import logging
 import re
-import urllib.error
-import urllib.request
 from typing import Any
 from urllib.parse import urlparse
+
+import requests
 
 from .studio_loopback import err
 from .strategy_advisor import _normalize_model_type
@@ -156,15 +155,15 @@ def _fetch_hf_metadata(model_id: str) -> dict[str, Any] | None:
     url = f"{_HF_API_BASE}/{model_id}"
     if urlparse(url).scheme not in _ALLOWED_URL_SCHEMES:
         return None
-    req = urllib.request.Request(url, headers={"Accept": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=_HF_TIMEOUT_SECONDS) as resp:  # noqa: S310
-            raw = resp.read()
-            result = json.loads(raw)
-            # Only accept dict responses; arrays/scalars are unexpected
-            if not isinstance(result, dict):
-                return None
-            return result
+        response = requests.get(
+            url,
+            headers={"Accept": "application/json"},
+            timeout=_HF_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        result = response.json()
+        return result if isinstance(result, dict) else None
     except Exception:  # noqa: BLE001 — any failure triggers heuristic fallback
         return None
 

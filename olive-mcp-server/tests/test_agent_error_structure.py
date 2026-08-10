@@ -298,7 +298,7 @@ class TestJsonRoundTripForNonErrors:
         from olive_mcp_server.tools.agent_model_info import get_model_info
 
         with patch(
-            "olive_mcp_server.tools.agent_model_info.urllib.request.urlopen",
+            "olive_mcp_server.tools.agent_model_info.requests.get",
             side_effect=Exception("network down"),
         ):
             result = get_model_info("meta-llama/Llama-2-7B")
