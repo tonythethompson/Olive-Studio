@@ -384,5 +384,3 @@ export function validatePassParameters(
 
   return warnings;
 }
-gs;
-}
