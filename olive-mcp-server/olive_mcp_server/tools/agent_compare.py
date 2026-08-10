@@ -232,8 +232,13 @@ def compare_results(
                 excluded_jobs.append({"job_id": jid, "reason": reason})
                 continue
 
-            # Job is completed (only scoreable terminal state that passes)
+            # A completed job is comparable only when it exposes at least one
+            # optimization metric. latestMetrics is GPU sampling telemetry, so
+            # do not treat an empty telemetry payload as a scored result.
             metrics = _extract_metrics(response)
+            if not any(value is not None for value in metrics.values()):
+                excluded_jobs.append({"job_id": jid, "reason": "no_comparable_metrics"})
+                continue
             scoreable.append({
                 "job_id": jid,
                 "status": status,
