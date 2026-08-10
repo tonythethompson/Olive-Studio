@@ -75,7 +75,7 @@ export function applyMigrations(state: UIState): MigrationResult {
   let discardedParams = 0;
 
   // Deep-clone overrides to avoid mutation.
-  let overrides: Record<string, Record<string, unknown>> = state.passRecipeOverrides
+  const overrides: Record<string, Record<string, unknown>> = state.passRecipeOverrides
     ? JSON.parse(JSON.stringify(state.passRecipeOverrides))
     : {};
 
