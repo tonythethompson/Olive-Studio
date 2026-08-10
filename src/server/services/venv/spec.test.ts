@@ -78,8 +78,8 @@ describe("venv spec constants", () => {
     expect(satisfiesPep440(PINNED_OLIVE_AI_INSTALL, "0.13.0")).toBe(true);
   });
 
-  it("PINNED_OLIVE_AI_INSTALL includes olive-ai 0.12.0 (backward compat)", () => {
-    expect(satisfiesPep440(PINNED_OLIVE_AI_INSTALL, "0.12.0")).toBe(true);
+  it("PINNED_OLIVE_AI_INSTALL excludes olive-ai 0.12.0", () => {
+    expect(satisfiesPep440(PINNED_OLIVE_AI_INSTALL, "0.12.0")).toBe(false);
   });
 
   it("PINNED_OLIVE_AI_INSTALL excludes olive-ai 1.0.0", () => {
@@ -91,7 +91,7 @@ describe("venv spec constants", () => {
   });
 
   it("PINNED_OLIVE_AI_INSTALL is a valid PEP 440 specifier string", () => {
-    // Must start with package name, then have >=X,<Y comma-separated clauses
+    // Must start with package name, then have valid PEP 440 clauses
     expect(PINNED_OLIVE_AI_INSTALL).toMatch(
       /^[a-zA-Z0-9_-]+(>=|<=|>|<|==|!=|~=)\d+(\.\d+)*(,(>=|<=|>|<|==|!=|~=)\d+(\.\d+)*)*$/,
     );
