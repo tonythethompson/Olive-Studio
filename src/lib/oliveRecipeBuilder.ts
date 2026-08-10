@@ -149,15 +149,15 @@ export function applyPassRecipeOverride(
 function preferredPassOrder(torchQuantActive: boolean): string[] {
   if (torchQuantActive) {
     return [
-      "peft", "pruning", "quantization", "conversion", "transformer_opt",
-      "mobius_builder", "quantize_embedding_int8", "share_embedding_lm_head",
+      "peft", "pruning", "quantization", "mobius_builder", "qairt_pipeline",
+      "conversion", "transformer_opt", "quantize_embedding_int8", "share_embedding_lm_head",
       "simplified_layer_norm_to_rms_norm", "float16", "splitting",
       "qairt_pipeline", "onnx_discrepancy_check",
     ];
   }
   return [
-    "peft", "pruning", "conversion", "transformer_opt", "quantization",
-    "mobius_builder", "quantize_embedding_int8", "share_embedding_lm_head",
+    "peft", "pruning", "mobius_builder", "qairt_pipeline", "conversion",
+    "transformer_opt", "quantization", "quantize_embedding_int8", "share_embedding_lm_head",
     "simplified_layer_norm_to_rms_norm", "float16", "splitting",
     "qairt_pipeline", "onnx_discrepancy_check",
   ];
@@ -310,6 +310,9 @@ const CONVERSION_BUILDERS: Record<ConversionFormat, (state: UIState) => PassSpec
 
 function buildConversionPass(state: UIState): PassSpec | undefined {
   if (!state.passes.conversion) return undefined;
+  // MobiusBuilder and QairtPipeline are alternative conversion paths and
+  // consume the source model directly rather than the converted ONNX output.
+  if (state.passes.mobiusBuilder || state.passes.qairtPipeline) return undefined;
   return CONVERSION_BUILDERS[state.passes.conversionFormat](state);
 }
 
@@ -612,8 +615,8 @@ function buildSimplifiedLayerNormToRMSNorm(_state: UIState, _ctx: RecipeBuildCon
 function buildOnnxDiscrepancyCheck(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
   if (!_state.passes.onnxDiscrepancyCheck) return undefined;
   const config: Record<string, unknown> = {};
-  if (_state.userScript) {
-    config.test_data_dir = _state.userScript;
+  if (_state.testDataDir) {
+    config.test_data_dir = _state.testDataDir;
   }
   return { type: "OnnxDiscrepancyCheck", config };
 }
