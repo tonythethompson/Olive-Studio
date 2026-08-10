@@ -10,6 +10,7 @@
  */
 import { createHash } from "crypto";
 import path from "path";
+import fs from "fs";
 import { isValidReferenceModelPath } from "../../../lib/oliveRecipeBuilder.ts";
 import { validateOliveRecipeStructure } from "../../../lib/oliveRecipeSchema.ts";
 import { normalizeIhvProvider } from "../../../lib/venvFamily.ts";
@@ -68,6 +69,15 @@ function validateRecipePaths(recipe: OliveRecipe): string[] {
   const errors: string[] = [];
   const cwd = process.cwd();
 
+  // Canonicalize the project root once
+  let canonicalRoot: string;
+  try {
+    canonicalRoot = fs.realpathSync(cwd);
+  } catch {
+    // If cwd is somehow invalid, fall back to the raw path
+    canonicalRoot = cwd;
+  }
+
   function isUnsafePath(p: string, label: string): void {
     const trimmed = p.trim();
     if (!trimmed) return;
@@ -80,9 +90,35 @@ function validateRecipePaths(recipe: OliveRecipe): string[] {
       errors.push(`${label}: UNC paths are not allowed`);
       return;
     }
-    // Resolve and ensure under cwd (approved model root)
+    // Resolve and canonicalize paths, handling non-existent targets
     const resolved = path.resolve(cwd, trimmed);
-    if (!resolved.startsWith(cwd + path.sep) && resolved !== cwd) {
+    let canonical: string;
+    try {
+      // Try to canonicalize the path directly
+      canonical = fs.realpathSync(resolved);
+    } catch {
+      // Path doesn't exist; resolve the nearest existing ancestor
+      let current = resolved;
+      let parent = path.dirname(current);
+      while (parent !== current) {
+        try {
+          const parentCanonical = fs.realpathSync(parent);
+          // Reconstruct the full path using the canonical parent
+          const suffix = path.relative(parent, resolved);
+          canonical = path.join(parentCanonical, suffix);
+          break;
+        } catch {
+          current = parent;
+          parent = path.dirname(current);
+        }
+      }
+      // If we exhausted the path without finding an existing ancestor, use the raw resolved path
+      if (parent === current) {
+        canonical = resolved;
+      }
+    }
+    // Ensure the canonical path is within the canonical root
+    if (!canonical.startsWith(canonicalRoot + path.sep) && canonical !== canonicalRoot) {
       errors.push(`${label}: path resolves outside the approved model root`);
     }
   }

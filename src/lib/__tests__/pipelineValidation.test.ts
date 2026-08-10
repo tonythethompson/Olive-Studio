@@ -839,9 +839,16 @@ describe("0.13.0 validation rules", () => {
       // qnn-readiness-qnn_out_of_scope (QNN is Windows-only). Verify that
       // replacement export pipeline logic itself does not introduce a block.
       const nonPlatformCriticals = result.issues.filter(
-        (i) => i.severity === "critical" && !i.id.startsWith("qnn-readiness"),
+        (i) => i.severity === "critical" && i.id !== "qnn-readiness-qnn_out_of_scope",
       );
       expect(nonPlatformCriticals).toHaveLength(0);
+      // Assert QairtPipeline coercion worked: conversion and onnxTransforms should be off
+      expect(state.passes.qairtPipeline).toBe(true);
+      expect(state.passes.conversion).toBe(false);
+      expect(state.passes.onnxTransforms).toBe(false);
+      // Verify the generated recipe reflects the QairtPipeline pass
+      expect(result.recipe.passes).toBeDefined();
+      expect(result.recipe.passes?.qairt_pipeline).toBeDefined();
     });
   });
 

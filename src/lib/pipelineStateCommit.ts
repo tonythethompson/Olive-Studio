@@ -12,6 +12,7 @@
  */
 import type { IHVProvider, UIState } from "@/types";
 import { REPLACEMENT_PIPELINE_SUPPRESSED_PASSES, isReplacementExportPipeline } from "@/lib/replacementExportPipeline";
+import { PEFT_UNSUPPORTED_PROVIDERS } from "@/lib/providerRuntimeKind";
 
 // ─── Provider Constant Sets ───────────────────────────────────────────────────
 
@@ -86,7 +87,7 @@ export function isStructuredPruningAllowed(provider: IHVProvider): boolean {
 }
 
 export function isPeftAllowed(provider: IHVProvider): boolean {
-  return !["QNNExecutionProvider", "QnnAbiExecutionProvider", "OpenVINOExecutionProvider"].includes(provider);
+  return !PEFT_UNSUPPORTED_PROVIDERS.includes(provider);
 }
 
 export function isPeftMethodAllowed(method: UIState["passes"]["peftMethod"], provider: IHVProvider): boolean {

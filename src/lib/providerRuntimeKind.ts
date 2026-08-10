@@ -53,6 +53,21 @@ export function isLegacyExportProvider(provider: IHVProvider): boolean {
 }
 
 /**
+ * Providers that do not support PEFT (LoRA/QLoRA) passes.
+ *
+ * - QNN: QNN runtime does not support PEFT adapter merging
+ * - OpenVINO: OpenVINO conversion does not handle PEFT adapters
+ *
+ * Used by both state sanitization (pipelineStateCommit.ts) and validation
+ * (pipelineValidation.ts) to enforce a consistent PEFT provider policy.
+ */
+export const PEFT_UNSUPPORTED_PROVIDERS: readonly IHVProvider[] = [
+  "QNNExecutionProvider",
+  "QnnAbiExecutionProvider",
+  "OpenVINOExecutionProvider",
+] as const;
+
+/**
  * Providers always choosable for recipe selection without a local probe hit:
  * export targets (WebGPU, OWR mobile/web, TFLite, SNPE) and platform-local EPs
  * (CoreML, VitisAI). Execute Live stays gated separately via pipeline validation.
