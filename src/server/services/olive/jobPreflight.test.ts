@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { resolveQnnHostMode } from "../../../lib/qnnDeps.ts";
 import { fingerprintRecipe, preflightOliveRecipe } from "./jobPreflight.ts";
 import type { OliveRecipe } from "../../types.ts";
@@ -131,6 +134,15 @@ describe("preflightOliveRecipe", () => {
     );
   });
 
+  it("QnnAbi validate uses the same structural QNN readiness path", () => {
+    vi.mocked(resolveQnnHostMode).mockReturnValue("local-inference");
+    const pre = preflightOliveRecipe(minimalRecipe("QnnAbiExecutionProvider"));
+    expect(pre.errors.some((e) => /npu|runtime not ready/i.test(e))).toBe(false);
+    expect(pre.warnings.some((w) => /npu\/runtime readiness is not checked at validate/i.test(w))).toBe(
+      true,
+    );
+  });
+
   it("QNN out-of-scope host skips deferred-readiness warning without NPU hard-fail", () => {
     vi.mocked(resolveQnnHostMode).mockReturnValue("out-of-scope");
     const pre = preflightOliveRecipe(minimalRecipe("QNNExecutionProvider"));
@@ -138,5 +150,102 @@ describe("preflightOliveRecipe", () => {
     expect(pre.warnings.some((w) => /npu\/runtime readiness is not checked at validate/i.test(w))).toBe(
       false,
     );
+  });
+
+  describe("path safety validation", () => {
+    it("rejects input_model.config.model_path with .. traversal", () => {
+      const recipe = minimalRecipe();
+      if (!recipe.input_model) throw new Error("minimal recipe must include input_model");
+      recipe.input_model.config = { model_path: "../../../etc/passwd" };
+      const pre = preflightOliveRecipe(recipe);
+      expect(pre.valid).toBe(false);
+      expect(pre.errors.some((e) => /input_model\.config\.model_path.*not a safe reference model path/i.test(e))).toBe(true);
+    });
+
+    it("rejects absolute pass config paths", () => {
+      const recipe = minimalRecipe();
+      recipe.passes = {
+        conversion: {
+          type: "OnnxConversion",
+          config: { target_opset: 20, model_path: "/etc/passwd" },
+        },
+      };
+      const pre = preflightOliveRecipe(recipe);
+      expect(pre.valid).toBe(false);
+      expect(pre.errors.some((e) => /passes\.conversion\.config\.model_path.*absolute paths are not allowed/i.test(e))).toBe(true);
+    });
+
+    it("rejects Windows absolute pass config paths", () => {
+      const recipe = minimalRecipe();
+      recipe.passes = {
+        conversion: {
+          type: "OnnxConversion",
+          config: { target_opset: 20, model_path: "C:\\models\\model.onnx" },
+        },
+      };
+      const pre = preflightOliveRecipe(recipe);
+      expect(pre.valid).toBe(false);
+      expect(pre.errors.some((e) => /passes\.conversion\.config\.model_path.*absolute paths are not allowed/i.test(e))).toBe(true);
+    });
+
+    it("rejects UNC paths in pass configs", () => {
+      const recipe = minimalRecipe();
+      recipe.passes = {
+        conversion: {
+          type: "OnnxConversion",
+          config: { target_opset: 20, data_dir: "\\\\server\\share\\data" },
+        },
+      };
+      const pre = preflightOliveRecipe(recipe);
+      expect(pre.valid).toBe(false);
+      expect(pre.errors.some((e) => /passes\.conversion\.config\.data_dir.*UNC paths are not allowed/i.test(e))).toBe(true);
+    });
+
+    it("rejects in-root symlink that resolves outside the project root", () => {
+      let tmpDir: string | null = null;
+      let symlinkPath: string | null = null;
+
+      try {
+        // Create a temp directory outside the project root
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "olive-preflight-outside-"));
+        const outsideTarget = path.join(tmpDir, "outside-data");
+        fs.mkdirSync(outsideTarget);
+
+        // Create a symlink inside the project root that points to the outside target
+        const projectRoot = process.cwd();
+        symlinkPath = path.join(projectRoot, "symlink-to-outside");
+
+        // Create the symlink (may fail on Windows without privilege; gracefully skip)
+        try {
+          fs.symlinkSync(outsideTarget, symlinkPath, "dir");
+        } catch {
+          // Symlink creation failed (likely permissions); skip this test
+          console.warn("Skipping symlink test: symlink creation not supported in this environment");
+          return;
+        }
+
+        // Build a recipe that references the symlink via a pass config path
+        const recipe = minimalRecipe();
+        recipe.passes = {
+          conversion: {
+            type: "OnnxConversion",
+            config: { target_opset: 20, data_dir: "symlink-to-outside" },
+          },
+        };
+
+        // The preflight should reject the symlink because it canonicalizes to outside the project root
+        const pre = preflightOliveRecipe(recipe);
+        expect(pre.valid).toBe(false);
+        expect(pre.errors.some((e) => /passes\.conversion\.config\.data_dir.*outside the approved model root/i.test(e))).toBe(true);
+      } finally {
+        // Cleanup
+        if (symlinkPath && fs.existsSync(symlinkPath)) {
+          fs.unlinkSync(symlinkPath);
+        }
+        if (tmpDir && fs.existsSync(tmpDir)) {
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+      }
+    });
   });
 });

@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { UIState } from "@/types";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
-import { commitUiStateUpdate } from "@/lib/pipelineStateCommit";
+import { commitUiStateUpdate } from "@/lib/pipelineValidation";
+import { applyMigrations } from "@/lib/passMigration";
 
 const STORAGE_KEY = "olive:pipeline-state";
 
@@ -49,10 +50,10 @@ export const usePipelineStore = create<PipelineStore>()(
           state: commitUiStateUpdate(store.state, partial),
         })),
 
-      replaceState: (next) =>
-        set({
-          state: commitUiStateUpdate(next, {}),
-        }),
+      replaceState: (next) => {
+        const { state: migrated } = applyMigrations(next);
+        set({ state: commitUiStateUpdate(migrated, {}) });
+      },
 
       resetState: () =>
         set({
@@ -85,7 +86,8 @@ export const usePipelineStore = create<PipelineStore>()(
           localFiles: [],
           azureStr: "",
         };
-        return { ...current, state: commitUiStateUpdate(merged, {}) };
+        const { state: migrated } = applyMigrations(merged);
+        return { ...current, state: commitUiStateUpdate(migrated, {}) };
       },
     },
   ),

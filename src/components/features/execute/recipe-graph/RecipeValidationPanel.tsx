@@ -48,6 +48,7 @@ function getHardwareTargetFromProvider(provider: IHVProvider): string {
     case "CPUExecutionProvider":
       return "Intel Core i9 CPU";
     case "QNNExecutionProvider":
+    case "QnnAbiExecutionProvider":
       return "Qualcomm Snapdragon NPU";
     case "ROCMExecutionProvider":
       return "AMD MI300X / ROCm";

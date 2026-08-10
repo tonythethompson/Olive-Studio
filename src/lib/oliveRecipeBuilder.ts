@@ -1,6 +1,9 @@
 import { IHVProvider, UIState, OpenVinoTargetDevice } from "@/types";
 import { buildHfLoadKwargs, buildPeftOffloadConfig, isMemoryOffloadActive } from "@/lib/memoryOffload";
 import { openvinoTargetToOliveDevice } from "@/lib/openvinoDeps";
+import {
+  isReplacementExportPipeline,
+} from "@/lib/replacementExportPipeline";
 
 const GPU_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
@@ -12,6 +15,7 @@ const GPU_PROVIDERS: IHVProvider[] = [
 ];
 const NPU_PROVIDERS: IHVProvider[] = [
   "QNNExecutionProvider",
+  "QnnAbiExecutionProvider",
   "CoreMLExecutionProvider",
   "NNAPIExecutionProvider",
   "VitisAIExecutionProvider",
@@ -148,9 +152,19 @@ export function applyPassRecipeOverride(
  */
 function preferredPassOrder(torchQuantActive: boolean): string[] {
   if (torchQuantActive) {
-    return ["peft", "pruning", "quantization", "conversion", "transformer_opt", "float16", "splitting"];
+    return [
+      "peft", "pruning", "quantization", "conversion", "transformer_opt",
+      "mobius_builder", "quantize_embedding_int8", "share_embedding_lm_head",
+      "simplified_layer_norm_to_rms_norm", "float16", "splitting",
+      "qairt_pipeline", "onnx_discrepancy_check",
+    ];
   }
-  return ["peft", "pruning", "conversion", "transformer_opt", "quantization", "float16", "splitting"];
+  return [
+    "peft", "pruning", "conversion", "transformer_opt", "quantization",
+    "mobius_builder", "quantize_embedding_int8", "share_embedding_lm_head",
+    "simplified_layer_norm_to_rms_norm", "float16", "splitting",
+    "qairt_pipeline", "onnx_discrepancy_check",
+  ];
 }
 
 function orderPasses(passes: Record<string, unknown>, torchQuantActive: boolean): Record<string, unknown> {
@@ -236,6 +250,11 @@ function intQuantSpec(precision: UIState["passes"]["quantPrecision"]) {
   return INT_QUANT_SPECS[asIntQuantPrecision(precision)];
 }
 
+/** Shared Olive workspace cache directory (engine + MobiusBuilder download cache). */
+function resolveRecipeCacheDir(state: UIState): string {
+  return state.distributedCaching && state.azureStr ? state.azureStr : state.cacheDir || "~/.cache/olive";
+}
+
 type QuantMethodBuilder = {
   gate?: (state: UIState) => boolean;
   build: (state: UIState) => PassSpec;
@@ -245,7 +264,7 @@ function effectiveFormatFamily(state: UIState): FormatFamily {
   if (state.passes.conversionFormat === "openvino" || state.ihvProvider === "OpenVINOExecutionProvider") {
     return "openvino";
   }
-  if (state.passes.conversionFormat === "qnn" || state.ihvProvider === "QNNExecutionProvider") {
+  if (state.passes.conversionFormat === "qnn" || state.ihvProvider === "QNNExecutionProvider" || state.ihvProvider === "QnnAbiExecutionProvider") {
     return "qnn";
   }
   if (state.passes.conversionFormat === "tensorrt" || state.ihvProvider === "TensorrtExecutionProvider") {
@@ -299,7 +318,7 @@ const CONVERSION_BUILDERS: Record<ConversionFormat, (state: UIState) => PassSpec
 };
 
 function buildConversionPass(state: UIState): PassSpec | undefined {
-  if (!state.passes.conversion) return undefined;
+  if (!state.passes.conversion || isReplacementExportPipeline(state.passes)) return undefined;
   return CONVERSION_BUILDERS[state.passes.conversionFormat](state);
 }
 
@@ -353,7 +372,7 @@ function buildQatQuantizer(state: UIState): PassSpec {
   };
 }
 
-// Docs: https://microsoft.github.io/Olive/0.12.1/reference/options.html -> OnnxHqqQuantization
+// Docs: https://microsoft.github.io/Olive/0.13.0/reference/options.html -> OnnxHqqQuantization
 function buildHqqQuantizer(state: UIState): PassSpec {
   const quant = intQuantSpec(state.passes.quantPrecision);
   return {
@@ -365,7 +384,7 @@ function buildHqqQuantizer(state: UIState): PassSpec {
   };
 }
 
-// Docs: https://microsoft.github.io/Olive/0.12.1/reference/options.html -> OnnxBlockWiseRtnQuantization
+// Docs: https://microsoft.github.io/Olive/0.13.0/reference/options.html -> OnnxBlockWiseRtnQuantization
 function buildRtnQuantizer(state: UIState): PassSpec {
   const quant = intQuantSpec(state.passes.quantPrecision);
   return {
@@ -374,7 +393,7 @@ function buildRtnQuantizer(state: UIState): PassSpec {
       {
         bits: quant.bits,
         block_size: 128,
-        is_symmetric: true,
+        symmetric: true,
       },
       state,
     ),
@@ -396,6 +415,26 @@ function buildQuaRotQuantizer(state: UIState): PassSpec {
 }
 
 /**
+ * ggml-style K-Quant: PyTorch KQuant before ONNX conversion; OnnxKquantQuantization
+ * only when the pipeline output format is ONNX.
+ */
+function buildKquantQuantizer(state: UIState): PassSpec {
+  const bits = state.passes.quantPrecision === "int4" ? 4 : 8;
+  const onnxOutput =
+    state.passes.conversion && state.passes.conversionFormat === "onnx";
+  if (onnxOutput) {
+    return {
+      type: "OnnxKquantQuantization",
+      config: withCalibrationData({ bits, block_size: 128 }, state),
+    };
+  }
+  return {
+    type: "KQuant",
+    config: withCalibrationData({ bits, symmetric: true, group_size: 128 }, state),
+  };
+}
+
+/**
  * First-match-wins quant dispatch: PyTorch-native method builders first,
  * then provider/format-family builders (hqq/rtn fall through when their
  * provider gate fails, exactly as the original branch chain did).
@@ -406,6 +445,7 @@ const QUANT_METHOD_BUILDERS: Partial<Record<QuantMethod, QuantMethodBuilder>> = 
   qat: { build: buildQatQuantizer },
   hqq: { gate: isCpuOrCuda, build: buildHqqQuantizer },
   rtn: { gate: isCpuOrCuda, build: buildRtnQuantizer },
+  kquant: { gate: isCpuOrCuda, build: buildKquantQuantizer },
   spinquant: { build: buildSpinQuantQuantizer },
   quarot: { build: buildQuaRotQuantizer },
 };
@@ -451,6 +491,7 @@ const FORMAT_QUANT_BUILDERS: Record<FormatFamily, (state: UIState) => PassSpec> 
 
 function buildQuantizationPass(state: UIState): PassSpec | undefined {
   if (!state.passes.quantization) return undefined;
+  if (isReplacementExportPipeline(state.passes)) return undefined;
   const methodBuilder = QUANT_METHOD_BUILDERS[state.passes.quantMethod];
   if (methodBuilder && (!methodBuilder.gate || methodBuilder.gate(state))) {
     return methodBuilder.build(state);
@@ -480,7 +521,11 @@ const FORMAT_TRANSFORM_BUILDERS: Record<FormatFamily, (state: UIState) => PassSp
 
 // ONNX graph passes cannot follow a torch-native quantizer without an ONNX conversion.
 function buildTransformerOptPass(state: UIState, ctx: RecipeBuildContext): PassSpec | undefined {
-  if (!state.passes.onnxTransforms || (ctx.torchQuantActive && !state.passes.conversion)) {
+  if (
+    !state.passes.onnxTransforms ||
+    isReplacementExportPipeline(state.passes) ||
+    (ctx.torchQuantActive && !state.passes.conversion)
+  ) {
     return undefined;
   }
   return FORMAT_TRANSFORM_BUILDERS[effectiveFormatFamily(state)](state);
@@ -489,7 +534,11 @@ function buildTransformerOptPass(state: UIState, ctx: RecipeBuildContext): PassS
 // ─── Splitting ────────────────────────────────────────────────────────
 
 function buildSplittingPass(state: UIState, ctx: RecipeBuildContext): PassSpec | undefined {
-  if (!state.passes.splitting || (ctx.torchQuantActive && !state.passes.conversion)) {
+  if (
+    !state.passes.splitting ||
+    isReplacementExportPipeline(state.passes) ||
+    (ctx.torchQuantActive && !state.passes.conversion)
+  ) {
     return undefined;
   }
   return { type: "SplitModel", config: {} };
@@ -536,6 +585,85 @@ function buildPruningPass(state: UIState): PassSpec | undefined {
 
 // ─── Pass registry ────────────────────────────────────────────────────
 
+// ─── 0.13.0 New Passes ────────────────────────────────────────────────
+
+/** MobiusBuilder: ONNX export via Mobius; produces ORT GenAI composite packages. */
+function buildMobiusBuilder(state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!state.passes.mobiusBuilder) return undefined;
+  return {
+    type: "MobiusBuilder",
+    config: {
+      model_name: state.hfModelId || "unspecified",
+      cache_dir: resolveRecipeCacheDir(state),
+    },
+  };
+}
+
+/** QairtPipeline: Single-pass QAIRT LLM pipeline (QNN-only). */
+function buildQairtPipeline(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!_state.passes.qairtPipeline) return undefined;
+  return {
+    type: "QairtPipeline",
+    config: {},
+  };
+}
+
+/** QuantizeEmbeddingInt8: Graph surgery for INT8 embedding quantization. */
+function buildQuantizeEmbeddingInt8(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!_state.passes.quantizeEmbeddingInt8) return undefined;
+  return { type: "QuantizeEmbeddingInt8", config: {} };
+}
+
+/** ShareEmbeddingLmHead: Graph surgery to share embedding/LM-head weights. */
+function buildShareEmbeddingLmHead(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!_state.passes.shareEmbeddingLmHead) return undefined;
+  return { type: "ShareEmbeddingLmHead", config: {} };
+}
+
+/** SimplifiedLayerNormToRMSNorm: Graph surgery converting SimplifiedLayerNorm to RMSNorm. */
+function buildSimplifiedLayerNormToRMSNorm(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!_state.passes.simplifiedLayerNormToRMSNorm) return undefined;
+  return { type: "SimplifiedLayerNormToRMSNorm", config: {} };
+}
+
+/** OnnxDiscrepancyCheck: Validation pass measuring numerical discrepancies. */
+export function isValidReferenceModelPath(path: string): boolean {
+  const trimmed = path.trim();
+  if (!trimmed || trimmed.includes("\0")) return false;
+  return !/(^|[\\/])\.\.([\\/]|$)/.test(trimmed);
+}
+
+/** True when the pipeline will produce an ONNX graph before discrepancy validation. */
+export function hasOnnxGraphProducer(passes: UIState["passes"]): boolean {
+  return Boolean(
+    passes.mobiusBuilder || (passes.conversion && passes.conversionFormat === "onnx"),
+  );
+}
+
+function resolveReferenceModelPath(state: UIState): string | undefined {
+  const override = state.passRecipeOverrides?.OnnxDiscrepancyCheck?.config?.reference_model_path;
+  if (typeof override === "string" && isValidReferenceModelPath(override)) {
+    return override.trim();
+  }
+  if (typeof state.referenceModelPath === "string" && isValidReferenceModelPath(state.referenceModelPath)) {
+    return state.referenceModelPath.trim();
+  }
+  return undefined;
+}
+
+function buildOnnxDiscrepancyCheck(state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!state.passes.onnxDiscrepancyCheck) return undefined;
+  if (!hasOnnxGraphProducer(state.passes)) return undefined;
+  const referenceModelPath = resolveReferenceModelPath(state);
+  if (!referenceModelPath) return undefined;
+  return {
+    type: "OnnxDiscrepancyCheck",
+    config: { reference_model_path: referenceModelPath },
+  };
+}
+
+// ─── Pass builder registry ────────────────────────────────────────────
+
 /**
  * Per-pass builder registry. buildOliveRecipe invokes every builder with the
  * shared context; a builder returns undefined when its pass is inactive.
@@ -548,6 +676,12 @@ const PASS_BUILDERS = {
   splitting: buildSplittingPass,
   peft: buildPeftPass,
   pruning: buildPruningPass,
+  mobius_builder: buildMobiusBuilder,
+  qairt_pipeline: buildQairtPipeline,
+  quantize_embedding_int8: buildQuantizeEmbeddingInt8,
+  share_embedding_lm_head: buildShareEmbeddingLmHead,
+  simplified_layer_norm_to_rms_norm: buildSimplifiedLayerNormToRMSNorm,
+  onnx_discrepancy_check: buildOnnxDiscrepancyCheck,
 } satisfies Record<string, PassBuilder>;
 
 type PassKey = keyof typeof PASS_BUILDERS;
@@ -588,8 +722,7 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
       search_strategy: false,
       host: "local_system",
       target: "local_system",
-      cache_dir:
-        state.distributedCaching && state.azureStr ? state.azureStr : state.cacheDir || "~/.cache/olive",
+      cache_dir: resolveRecipeCacheDir(state),
       output_dir: "./models/optimized",
     },
   };
@@ -604,6 +737,10 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
     inputConfig.task = resolveHfTask(state);
     if (state.hfDataset) {
       inputConfig.dataset = state.hfDataset;
+    }
+    // Olive 0.13.0 default is false; emit only on explicit user opt-in.
+    if (state.passes.trustRemoteCode === true) {
+      inputConfig.trust_remote_code = true;
     }
     if (useMemoryOffload) {
       inputConfig.load_kwargs = buildHfLoadKwargs(state.ihvProvider, null);

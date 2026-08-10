@@ -34,7 +34,7 @@ function basePasses(overrides?: Partial<UIState["passes"]>): UIState["passes"] {
 
 // Ensure KB is loaded before synchronous validation tests run
 beforeAll(async () => {
-  await kbReady().catch(() => undefined);
+  await kbReady();
 });
 
 function baseState(overrides?: Partial<UIState>): UIState {
@@ -141,8 +141,9 @@ describe("isStructuredPruningAllowed", () => {
 });
 
 describe("isPeftAllowed", () => {
-  it("denies on QNN and OpenVINO, allows on others", () => {
+  it("denies on QNN, QNN ABI, and OpenVINO, allows on others", () => {
     expect(isPeftAllowed("QNNExecutionProvider")).toBe(false);
+    expect(isPeftAllowed("QnnAbiExecutionProvider")).toBe(false);
     expect(isPeftAllowed("OpenVINOExecutionProvider")).toBe(false);
     expect(isPeftAllowed("CUDAExecutionProvider")).toBe(true);
     expect(isPeftAllowed("CPUExecutionProvider")).toBe(true);
@@ -163,7 +164,7 @@ describe("isPeftMethodAllowed", () => {
 // ─── getAllowed* ──────────────────────────────────────────────
 
 describe("getAllowedQuantMethods", () => {
-  it("returns all 8 for CUDA", () => {
+  it("returns all 9 for CUDA", () => {
     expect(getAllowedQuantMethods("CUDAExecutionProvider")).toEqual([
       "ptq",
       "awq",
@@ -171,12 +172,13 @@ describe("getAllowedQuantMethods", () => {
       "qat",
       "hqq",
       "rtn",
+      "kquant",
       "spinquant",
       "quarot",
     ]);
   });
-  it("excludes AWQ, GPTQ, SpinQuant, QuaRot for CPU (keeps ptq, qat, hqq, rtn)", () => {
-    expect(getAllowedQuantMethods("CPUExecutionProvider")).toEqual(["ptq", "qat", "hqq", "rtn"]);
+  it("excludes AWQ, GPTQ, SpinQuant, QuaRot for CPU (keeps ptq, qat, hqq, rtn, kquant)", () => {
+    expect(getAllowedQuantMethods("CPUExecutionProvider")).toEqual(["ptq", "qat", "hqq", "rtn", "kquant"]);
   });
   it("excludes AWQ, GPTQ, QAT, SpinQuant, QuaRot, HQQ, RTN for QNN (keeps ptq)", () => {
     expect(getAllowedQuantMethods("QNNExecutionProvider")).toEqual(["ptq"]);
@@ -626,6 +628,15 @@ describe("sanitizePipelineState", () => {
     expect(r.passes.conversion).toBe(true);
     expect(r.passes.conversionFormat).toBe("onnx");
   });
+  it("coerces legacy undefined trustRemoteCode to false", () => {
+    const r = sanitizePipelineState(
+      baseState({
+        modelSource: "huggingface",
+        passes: { ...basePasses(), trustRemoteCode: undefined as unknown as boolean },
+      }),
+    );
+    expect(r.passes.trustRemoteCode).toBe(false);
+  });
   it("resolves critical conflicts via the autofix loop", () => {
     // AWQ + pruning on CPU → both coerced to PTQ and unstructured respectively
     const r = sanitizePipelineState(
@@ -745,5 +756,180 @@ describe("parseUIStatePayload", () => {
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain("passes");
+  });
+});
+
+
+// ─── 0.13.0 validation rules ─────────────────────────────────
+
+describe("0.13.0 validation rules", () => {
+  describe("QairtPipeline cross-pass rule", () => {
+    it("rejects QairtPipeline on non-QNN providers", () => {
+      const state = baseState({
+        ihvProvider: "CUDAExecutionProvider",
+        passes: basePasses({ qairtPipeline: true }),
+      });
+      const result = getPipelineValidation(state);
+      expect(result.issues.some((i) => i.id === "qairt-pipeline-requires-qnn")).toBe(true);
+    });
+
+    it("allows QairtPipeline on QNNExecutionProvider", () => {
+      const state = baseState({
+        ihvProvider: "QNNExecutionProvider",
+        passes: basePasses({ qairtPipeline: true }),
+      });
+      const result = getPipelineValidation(state);
+      expect(result.issues.some((i) => i.id === "qairt-pipeline-requires-qnn")).toBe(false);
+    });
+  });
+
+  describe("SimplifiedLayerNormToRMSNorm cross-pass rule", () => {
+    it("rejects SimplifiedLayerNormToRMSNorm on non-QNN providers", () => {
+      const state = baseState({
+        ihvProvider: "CPUExecutionProvider",
+        passes: basePasses({ simplifiedLayerNormToRMSNorm: true }),
+      });
+      const result = getPipelineValidation(state);
+      expect(result.issues.some((i) => i.id === "simplified-layernorm-requires-qnn")).toBe(true);
+    });
+
+    it("allows SimplifiedLayerNormToRMSNorm on QnnAbiExecutionProvider", () => {
+      const state = baseState({
+        ihvProvider: "QnnAbiExecutionProvider" as IHVProvider,
+        passes: basePasses({ simplifiedLayerNormToRMSNorm: true }),
+      });
+      const result = getPipelineValidation(state);
+      expect(result.issues.some((i) => i.id === "simplified-layernorm-requires-qnn")).toBe(false);
+    });
+  });
+
+  describe("replacement export pipelines", () => {
+    it("coerces conversion off when MobiusBuilder is enabled", () => {
+      const state = baseState({
+        passes: basePasses({ mobiusBuilder: true, conversion: true, onnxTransforms: true }),
+      });
+      const coerced = sanitizePipelineState(state);
+      expect(coerced.passes.mobiusBuilder).toBe(true);
+      expect(coerced.passes.conversion).toBe(false);
+      expect(coerced.passes.onnxTransforms).toBe(false);
+    });
+
+    it("does not block validation when MobiusBuilder replaces conversion", () => {
+      const state = sanitizePipelineState(
+        baseState({
+          passes: basePasses({ mobiusBuilder: true, conversion: true }),
+        }),
+      );
+      const result = getPipelineValidation(state);
+      expect(result.issues.some((i) => i.id.startsWith("pass-chain-mismatch"))).toBe(false);
+      expect(result.issues.some((i) => i.id === "onnx-pipeline-missing-conversion")).toBe(false);
+      expect(result.isBlocked).toBe(false);
+    });
+
+    it("does not block validation when QairtPipeline replaces conversion on QNN", () => {
+      const state = sanitizePipelineState(
+        baseState({
+          ihvProvider: "QNNExecutionProvider",
+          passes: basePasses({ qairtPipeline: true, conversion: true, conversionFormat: "qnn" }),
+        }),
+      );
+      const result = getPipelineValidation(state);
+      expect(result.issues.some((i) => i.id.startsWith("pass-chain-mismatch"))).toBe(false);
+      // The pipeline may still be blocked on non-Windows platforms due to
+      // qnn-readiness-qnn_out_of_scope (QNN is Windows-only). Verify that
+      // replacement export pipeline logic itself does not introduce a block.
+      const nonPlatformCriticals = result.issues.filter(
+        (i) => i.severity === "critical" && i.id !== "qnn-readiness-qnn_out_of_scope",
+      );
+      expect(nonPlatformCriticals).toHaveLength(0);
+      // Assert QairtPipeline coercion worked: conversion and onnxTransforms should be off
+      expect(state.passes.qairtPipeline).toBe(true);
+      expect(state.passes.conversion).toBe(false);
+      expect(state.passes.onnxTransforms).toBe(false);
+      // Verify the generated recipe reflects the QairtPipeline pass
+      expect(result.recipe.passes).toBeDefined();
+      expect(result.recipe.passes?.qairt_pipeline).toBeDefined();
+    });
+  });
+
+  describe("KQuant provider conflicts", () => {
+    it("allows kquant on CPU", () => {
+      expect(isQuantMethodAllowed("kquant", "CPUExecutionProvider")).toBe(true);
+    });
+
+    it("allows kquant on CUDA", () => {
+      expect(isQuantMethodAllowed("kquant", "CUDAExecutionProvider")).toBe(true);
+    });
+
+    it("denies kquant on QNN", () => {
+      expect(isQuantMethodAllowed("kquant", "QNNExecutionProvider")).toBe(false);
+    });
+  });
+
+  describe("removed-pass warning (9.3)", () => {
+    it("fires for QairtPreparation in passRecipeOverrides", () => {
+      const state = baseState({
+        passRecipeOverrides: { QairtPreparation: { enabled: true } } as unknown as UIState["passRecipeOverrides"],
+      });
+      const result = getPipelineValidation(state);
+      const issue = result.issues.find((i) => i.id === "removed-pass-QairtPreparation");
+      expect(issue).toBeDefined();
+      expect(issue!.severity).toBe("warning");
+    });
+
+    it("fires for QairtGenAIBuilder in passRecipeOverrides", () => {
+      const state = baseState({
+        passRecipeOverrides: { QairtGenAIBuilder: { enabled: true } } as unknown as UIState["passRecipeOverrides"],
+      });
+      const result = getPipelineValidation(state);
+      expect(result.issues.some((i) => i.id === "removed-pass-QairtGenAIBuilder")).toBe(true);
+    });
+
+    it("fires for MobiusModelBuilder in passRecipeOverrides", () => {
+      const state = baseState({
+        passRecipeOverrides: { MobiusModelBuilder: { enabled: true } } as unknown as UIState["passRecipeOverrides"],
+      });
+      const result = getPipelineValidation(state);
+      expect(result.issues.some((i) => i.id === "removed-pass-MobiusModelBuilder")).toBe(true);
+    });
+
+    it("does not fire for valid pass names", () => {
+      const state = baseState({
+        passRecipeOverrides: { OnnxConversion: { output_name: "model.onnx" } },
+      });
+      const result = getPipelineValidation(state);
+      expect(result.issues.filter((i) => i.id.startsWith("removed-pass-")).length).toBe(0);
+    });
+  });
+
+  describe("trust_remote_code advisory (9.4)", () => {
+    it("fires when trustRemoteCode is false and modelSource is huggingface", () => {
+      const state = baseState({
+        modelSource: "huggingface",
+        passes: basePasses({ trustRemoteCode: false }),
+      });
+      const result = getPipelineValidation(state);
+      const issue = result.issues.find((i) => i.id === "trust-remote-code-advisory");
+      expect(issue).toBeDefined();
+      expect(issue!.severity).toBe("info");
+    });
+
+    it("does not fire when trustRemoteCode is true", () => {
+      const state = baseState({
+        modelSource: "huggingface",
+        passes: basePasses({ trustRemoteCode: true }),
+      });
+      const result = getPipelineValidation(state);
+      expect(result.issues.some((i) => i.id === "trust-remote-code-advisory")).toBe(false);
+    });
+
+    it("does not fire for local model source", () => {
+      const state = baseState({
+        modelSource: "local",
+        passes: basePasses({ trustRemoteCode: false }),
+      });
+      const result = getPipelineValidation(state);
+      expect(result.issues.some((i) => i.id === "trust-remote-code-advisory")).toBe(false);
+    });
   });
 });

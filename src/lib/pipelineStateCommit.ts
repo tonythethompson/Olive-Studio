@@ -11,15 +11,17 @@
  * that display validation results.
  */
 import type { IHVProvider, UIState } from "@/types";
+import { REPLACEMENT_PIPELINE_SUPPRESSED_PASSES, isReplacementExportPipeline } from "@/lib/replacementExportPipeline";
+import { PEFT_UNSUPPORTED_PROVIDERS } from "@/lib/providerRuntimeKind";
 
 // ─── Provider Constant Sets ───────────────────────────────────────────────────
 
 const GPU_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
+  "NvTensorRTRTXExecutionProvider" as IHVProvider,
   "TensorrtExecutionProvider",
-  "DmlExecutionProvider",
-  "QNNExecutionProvider",
-  "OpenVINOExecutionProvider",
+  "ROCMExecutionProvider" as IHVProvider,
+  "WebGpuExecutionProvider",
 ];
 
 const TENSOR_CORE_PROVIDERS: IHVProvider[] = [
@@ -53,13 +55,22 @@ export function isQuantMethodAllowed(
   method: UIState["passes"]["quantMethod"],
   provider: IHVProvider,
 ): boolean {
-  if (method === "awq") return GPU_PROVIDERS.includes(provider);
-  if (method === "gptq") return GPU_PROVIDERS.includes(provider);
-  if (method === "qat") return provider !== "QNNExecutionProvider";
-  if (method === "hqq" || method === "rtn") {
+  if (method === "awq") {
+    return GPU_PROVIDERS.includes(provider);
+  }
+  if (method === "gptq") {
+    return GPU_PROVIDERS.includes(provider);
+  }
+  if (method === "qat") {
+    return provider !== "QNNExecutionProvider" && provider !== "QnnAbiExecutionProvider";
+  }
+  if (method === "hqq" || method === "rtn" || method === "kquant") {
+    // OnnxHqqQuantization, OnnxBlockWiseRtnQuantization, and KQuant/OnnxKquantQuantization only support CPU/CUDA.
     return provider === "CPUExecutionProvider" || provider === "CUDAExecutionProvider";
   }
-  if (method === "spinquant" || method === "quarot") return GPU_PROVIDERS.includes(provider);
+  if (method === "spinquant" || method === "quarot") {
+    return GPU_PROVIDERS.includes(provider);
+  }
   return true;
 }
 
@@ -76,7 +87,7 @@ export function isStructuredPruningAllowed(provider: IHVProvider): boolean {
 }
 
 export function isPeftAllowed(provider: IHVProvider): boolean {
-  return !["QNNExecutionProvider", "OpenVINOExecutionProvider"].includes(provider);
+  return !PEFT_UNSUPPORTED_PROVIDERS.includes(provider);
 }
 
 export function isPeftMethodAllowed(method: UIState["passes"]["peftMethod"], provider: IHVProvider): boolean {
@@ -140,6 +151,14 @@ export function coercePassFields(passes: UIState["passes"], provider: IHVProvide
   }
   if (next.peft && !isPeftMethodAllowed(next.peftMethod, provider)) {
     next.peftMethod = "lora";
+  }
+
+  if (next.trustRemoteCode === undefined) {
+    next.trustRemoteCode = false;
+  }
+
+  if (isReplacementExportPipeline(next)) {
+    Object.assign(next, REPLACEMENT_PIPELINE_SUPPRESSED_PASSES);
   }
 
   // Apply cross-pass auto-coercion rules

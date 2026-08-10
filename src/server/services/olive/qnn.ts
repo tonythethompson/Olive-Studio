@@ -26,6 +26,10 @@ import { invalidateRuntimeStatusCache } from "../venv/status.ts";
 
 const QNN_MARK = "OLIVE_QNN:";
 
+/** ORT execution provider names for the QNN plugin and QNN ABI stacks. */
+const QNN_ORT_EP_NAMES = ["QNNExecutionProvider", "QnnAbiExecutionProvider"] as const;
+const QNN_ORT_EP_NAMES_PY = JSON.stringify([...QNN_ORT_EP_NAMES]);
+
 /** Cached HTP diagnostic under .olive-studio (never on every status refresh). */
 export function getQnnHtpDiagnosticPath(): string {
   return path.join(process.cwd(), ".olive-studio", "qnn-htp-diagnostic.json");
@@ -88,7 +92,8 @@ try:
     import onnxruntime as ort
     providers = list(ort.get_available_providers())
     emit("ort_providers", ",".join(providers))
-    emit("qnn_ep_listed", "1" if "QNNExecutionProvider" in providers else "0")
+    qnn_eps = ${QNN_ORT_EP_NAMES_PY}
+    emit("qnn_ep_listed", "1" if any(ep in providers for ep in qnn_eps) else "0")
     try:
         from olive.common.ort_inference import maybe_register_ep_libraries
         maybe_register_ep_libraries()
@@ -96,7 +101,7 @@ try:
     except Exception as exc:
         emit("olive_register_error", str(exc).replace(chr(10), " "))
     for device in ort.get_ep_devices():
-        if getattr(device, "ep_name", None) != "QNNExecutionProvider":
+        if getattr(device, "ep_name", None) not in qnn_eps:
             continue
         any_qnn = True
         dtype = getattr(getattr(device, "device", None), "type", None)
@@ -211,7 +216,7 @@ export async function probeQnn(python: string): Promise<QnnProbeResult> {
     } else if (!preparation) {
       detail =
         acc.detail ??
-        "QNN plugin present but no QNNExecutionProvider EpDevice registered (Olive native registration path).";
+        "QNN plugin present but no QNN EpDevice registered (QNNExecutionProvider or QnnAbiExecutionProvider; Olive native registration path).";
     } else if (mode === "preparation") {
       detail =
         "QNN preparation / plugin AOT ready on Windows x64. Local HTP inference is not claimed on this host.";
@@ -345,11 +350,12 @@ except Exception:
 
 npu_devices = [
     d for d in ort.get_ep_devices()
-    if d.ep_name == "QNNExecutionProvider"
+    if d.ep_name in ${QNN_ORT_EP_NAMES_PY}
     and d.device.type == ort.OrtHardwareDeviceType.NPU
 ]
 if not npu_devices:
     raise SystemExit("No QNN NPU OrtEpDevice (OrtHardwareDeviceType.NPU)")
+provider_name = npu_devices[0].ep_name
 
 X = helper.make_tensor_value_info("X", TensorProto.FLOAT, [1, 2])
 Y = helper.make_tensor_value_info("Y", TensorProto.FLOAT, [1, 2])
@@ -361,7 +367,7 @@ os.close(fd)
 onnx.save(model, model_path)
 so = ort.SessionOptions()
 # Fail-closed: no silent CPU fallback for validation sessions.
-providers = [("QNNExecutionProvider", {"disable_cpu_ep_fallback": "1", "backend_type": "htp"})]
+providers = [(provider_name, {"disable_cpu_ep_fallback": "1", "backend_type": "htp"})]
 try:
     sess = ort.InferenceSession(model_path, sess_options=so, providers=providers)
     out = sess.run(None, {"X": np.ones((1, 2), dtype=np.float32)})

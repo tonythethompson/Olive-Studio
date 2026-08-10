@@ -24,10 +24,10 @@ import {
 export type CapabilityStatus =
   | { usable: true }
   | {
-      usable: false;
-      reason: "missing" | "broken" | "unsupported" | "probe_failed";
-      detail?: string;
-    };
+    usable: false;
+    reason: "missing" | "broken" | "unsupported" | "probe_failed";
+    detail?: string;
+  };
 
 export type RuntimeFamilyStatus = {
   family: VenvFamily;
@@ -131,8 +131,9 @@ try:
         maybe_register_ep_libraries()
     except Exception:
         pass
+    qnn_eps = {"QNNExecutionProvider", "QnnAbiExecutionProvider"}
     for device in ort.get_ep_devices():
-        if getattr(device, "ep_name", None) != "QNNExecutionProvider":
+        if getattr(device, "ep_name", None) not in qnn_eps:
             continue
         out["qnn_ep_any"] = True
         device_type = getattr(getattr(device, "device", None), "type", None)
@@ -296,7 +297,11 @@ function buildCapabilities(
     } else if (!probe?.onnxruntime_qnn) {
       caps.qnnPreparation = missing("onnxruntime-qnn plugin not installed");
       caps.qnnInference = missing("onnxruntime-qnn plugin not installed");
-    } else if (!probe.qnn_ep_any && !providers.has("QNNExecutionProvider")) {
+    } else if (
+      !probe.qnn_ep_any &&
+      !providers.has("QNNExecutionProvider") &&
+      !providers.has("QnnAbiExecutionProvider")
+    ) {
       caps.qnnPreparation = broken(
         "onnxruntime-qnn installed but no QNN EpDevice registered (Olive native registration)",
       );
@@ -308,8 +313,8 @@ function buildCapabilities(
         caps.qnnInference = probe.qnn_ep_npu
           ? usable()
           : missing(
-              "No QNN OrtEpDevice with OrtHardwareDeviceType.NPU (CPU/emulator devices do not count for inference)",
-            );
+            "No QNN OrtEpDevice with OrtHardwareDeviceType.NPU (CPU/emulator devices do not count for inference)",
+          );
       } else {
         caps.qnnInference = unsupported(
           "Windows x64 supports QNN preparation / plugin AOT only (not local HTP inference)",
@@ -344,28 +349,28 @@ export async function probeFamilyStatus(family: VenvFamily): Promise<RuntimeFami
         cpu: missing("venv missing"),
         ...(family === "default"
           ? {
-              directml:
-                process.platform === "win32"
-                  ? missing("venv missing")
-                  : unsupported("DirectML requires Windows"),
-              openvino: unsupported(
-                "OpenVINO uses the isolated OpenVINO runtime (.venvs/openvino)",
-              ),
-            }
+            directml:
+              process.platform === "win32"
+                ? missing("venv missing")
+                : unsupported("DirectML requires Windows"),
+            openvino: unsupported(
+              "OpenVINO uses the isolated OpenVINO runtime (.venvs/openvino)",
+            ),
+          }
           : family === "openvino"
             ? {
-                openvino: missing("venv missing"),
-              }
+              openvino: missing("venv missing"),
+            }
             : family === "qnn"
               ? {
-                  qnnPreparation: missing("venv missing"),
-                  qnnInference: missing("venv missing"),
-                }
+                qnnPreparation: missing("venv missing"),
+                qnnInference: missing("venv missing"),
+              }
               : {
-                  cuda: missing("venv missing"),
-                  tensorrt: missing("venv missing"),
-                  tensorrtRtx: missing("venv missing"),
-                }),
+                cuda: missing("venv missing"),
+                tensorrt: missing("venv missing"),
+                tensorrtRtx: missing("venv missing"),
+              }),
       },
     };
   }
@@ -494,6 +499,7 @@ export function capabilityForProvider(
     case "NvTensorRTRTXExecutionProvider":
       return status.capabilities.tensorrtRtx;
     case "QNNExecutionProvider":
+    case "QnnAbiExecutionProvider":
       // Prefer inference when usable; else preparation (x64 AOT / pre-NPU).
       if (status.capabilities.qnnInference?.usable) return status.capabilities.qnnInference;
       return status.capabilities.qnnPreparation;

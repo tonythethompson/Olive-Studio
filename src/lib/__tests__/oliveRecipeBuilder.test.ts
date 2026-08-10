@@ -166,6 +166,13 @@ describe("providerToAccelerator", () => {
     expect(result.execution_providers).toEqual(["QNNExecutionProvider"]);
   });
 
+  it("maps QnnAbi to npu device", () => {
+    expect(providerToAccelerator("QnnAbiExecutionProvider")).toEqual({
+      device: "npu",
+      execution_providers: ["QnnAbiExecutionProvider"],
+    });
+  });
+
   it("maps CPU and OpenVINO default target to cpu device", () => {
     expect(providerToAccelerator("CPUExecutionProvider").device).toBe("cpu");
     expect(providerToAccelerator("OpenVINOExecutionProvider").device).toBe("cpu");
@@ -188,6 +195,7 @@ describe("providerToAccelerator", () => {
     expect(providerToAccelerator("NNAPIExecutionProvider").device).toBe("npu");
     expect(providerToAccelerator("VitisAIExecutionProvider").device).toBe("npu");
     expect(providerToAccelerator("SNPEExecutionProvider").device).toBe("npu");
+    expect(providerToAccelerator("QnnAbiExecutionProvider").device).toBe("npu");
     expect(providerToAccelerator("XnnpackExecutionProvider").device).toBe("cpu");
     expect(providerToAccelerator("WasmExecutionProvider").device).toBe("cpu");
     expect(providerToAccelerator("TensorflowLiteExecutionProvider").device).toBe("cpu");
@@ -201,6 +209,7 @@ describe("providerToAccelerator", () => {
       "NvTensorRTRTXExecutionProvider",
       "OpenVINOExecutionProvider",
       "QNNExecutionProvider",
+      "QnnAbiExecutionProvider",
       "ROCMExecutionProvider",
       "CoreMLExecutionProvider",
       "NNAPIExecutionProvider",
@@ -305,6 +314,17 @@ describe("buildOliveRecipe", () => {
     expect(engine.host).toBe("local_system");
     expect(engine.target).toBe("local_system");
     expect(engine.output_dir).toBe("./models/optimized");
+  });
+
+  it("maps QnnAbiExecutionProvider to npu accelerator in recipe systems", () => {
+    const recipe = buildOliveRecipe(baseState({ ihvProvider: "QnnAbiExecutionProvider" }));
+    const systems = recipe.systems as {
+      local_system: { config: { accelerators: Array<{ device: string; execution_providers: string[] }> } };
+    };
+    expect(systems.local_system.config.accelerators[0]).toEqual({
+      device: "npu",
+      execution_providers: ["QnnAbiExecutionProvider"],
+    });
   });
 
   it("uses cache_dir from state when set", () => {
@@ -570,7 +590,7 @@ describe("buildOliveRecipe", () => {
     const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
     expect(quantization).toEqual({
       type: "OnnxBlockWiseRtnQuantization",
-      config: { bits: 4, block_size: 128, is_symmetric: true },
+      config: { bits: 4, block_size: 128, symmetric: true },
     });
   });
 
@@ -1253,7 +1273,7 @@ describe("buildOliveRecipe", () => {
     const cfg = q.config as Record<string, unknown>;
     expect(cfg.bits).toBe(4);
     expect(cfg.block_size).toBe(128);
-    expect(cfg.is_symmetric).toBe(true);
+    expect(cfg.symmetric).toBe(true);
   });
 
   it("creates OnnxBlockWiseRtnQuantization for rtn method with int8", () => {
@@ -1382,6 +1402,7 @@ describe("buildOliveRecipe", () => {
       "NvTensorRTRTXExecutionProvider",
       "OpenVINOExecutionProvider",
       "QNNExecutionProvider",
+      "QnnAbiExecutionProvider",
       "ROCMExecutionProvider",
     ];
     for (const provider of providers) {
@@ -1395,5 +1416,150 @@ describe("buildOliveRecipe", () => {
       expect(accelerators.length).toBe(1);
       expect(accelerators[0].execution_providers).toEqual([provider]);
     }
+  });
+});
+
+describe("buildOliveRecipe 0.13 pass builders", () => {
+  it("emits MobiusBuilder with documented cache_dir (not cache_model)", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        cacheDir: "/custom/mobius-cache",
+        passes: { ...DEFAULT_PASSES, mobiusBuilder: true, conversion: true },
+      }),
+    );
+    const pass = (recipe.passes as Record<string, unknown>).mobius_builder as Record<string, unknown>;
+    const config = pass.config as Record<string, unknown>;
+    expect(pass.type).toBe("MobiusBuilder");
+    expect(config.model_name).toBe("meta-llama/Meta-Llama-3-8B");
+    expect(config.cache_dir).toBe("/custom/mobius-cache");
+    expect(config).not.toHaveProperty("cache_model");
+    expect((recipe.passes as Record<string, unknown>).conversion).toBeUndefined();
+  });
+
+  it("omits quantization for replacement export pipelines (MobiusBuilder and QairtPipeline)", () => {
+    const mobius = buildOliveRecipe(
+      baseState({
+        ihvProvider: "CUDAExecutionProvider",
+        passes: { ...DEFAULT_PASSES, mobiusBuilder: true, quantization: true, quantMethod: "awq" },
+      }),
+    );
+    expect((mobius.passes as Record<string, unknown>).mobius_builder).toBeDefined();
+    expect((mobius.passes as Record<string, unknown>).quantization).toBeUndefined();
+
+    const qairt = buildOliveRecipe(
+      baseState({
+        ihvProvider: "QNNExecutionProvider",
+        passes: { ...DEFAULT_PASSES, qairtPipeline: true, quantization: true, quantMethod: "awq" },
+      }),
+    );
+    expect((qairt.passes as Record<string, unknown>).qairt_pipeline).toBeDefined();
+    expect((qairt.passes as Record<string, unknown>).quantization).toBeUndefined();
+  });
+
+  it("uses PyTorch KQuant when conversion is off or output is not ONNX", () => {
+    const torchOnly = buildOliveRecipe(
+      baseState({
+        ihvProvider: "CUDAExecutionProvider",
+        passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "kquant", conversion: false },
+      }),
+    );
+    const q1 = (torchOnly.passes as Record<string, unknown>).quantization as Record<string, unknown>;
+    expect(q1.type).toBe("KQuant");
+    expect((q1.config as Record<string, unknown>).symmetric).toBe(true);
+    expect((q1.config as Record<string, unknown>).group_size).toBe(128);
+
+    const openvinoOut = buildOliveRecipe(
+      baseState({
+        ihvProvider: "CUDAExecutionProvider",
+        passes: {
+          ...DEFAULT_PASSES,
+          quantization: true,
+          quantMethod: "kquant",
+          conversion: true,
+          conversionFormat: "openvino",
+        },
+      }),
+    );
+    const q2 = (openvinoOut.passes as Record<string, unknown>).quantization as Record<string, unknown>;
+    expect(q2.type).toBe("KQuant");
+  });
+
+  it("uses OnnxKquantQuantization with block_size when ONNX output is selected", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider: "CUDAExecutionProvider",
+        passes: {
+          ...DEFAULT_PASSES,
+          quantization: true,
+          quantMethod: "kquant",
+          conversion: true,
+          conversionFormat: "onnx",
+        },
+      }),
+    );
+    const q = (recipe.passes as Record<string, unknown>).quantization as Record<string, unknown>;
+    expect(q.type).toBe("OnnxKquantQuantization");
+    const cfg = q.config as Record<string, unknown>;
+    expect(cfg.bits).toBe(8);
+    expect(cfg.block_size).toBe(128);
+    expect(cfg.symmetric).toBeUndefined();
+    expect(cfg.group_size).toBeUndefined();
+  });
+
+  it("emits OnnxDiscrepancyCheck only with a validated reference_model_path", () => {
+    const missing = buildOliveRecipe(
+      baseState({ passes: { ...DEFAULT_PASSES, onnxDiscrepancyCheck: true } }),
+    );
+    expect((missing.passes as Record<string, unknown>).onnx_discrepancy_check).toBeUndefined();
+
+    const withPath = buildOliveRecipe(
+      baseState({
+        referenceModelPath: "./models/reference_hf_model",
+        passes: { ...DEFAULT_PASSES, onnxDiscrepancyCheck: true },
+      }),
+    );
+    const pass = (withPath.passes as Record<string, unknown>).onnx_discrepancy_check as Record<
+      string,
+      unknown
+    >;
+    expect(pass.type).toBe("OnnxDiscrepancyCheck");
+    expect((pass.config as Record<string, unknown>).reference_model_path).toBe(
+      "./models/reference_hf_model",
+    );
+    expect((withPath.passes as Record<string, unknown>).onnx_discrepancy_check).toBeDefined();
+
+    const openVinoOnly = buildOliveRecipe(
+      baseState({
+        referenceModelPath: "./models/reference_hf_model",
+        passes: {
+          ...DEFAULT_PASSES,
+          conversion: true,
+          conversionFormat: "openvino",
+          onnxDiscrepancyCheck: true,
+        },
+      }),
+    );
+    expect((openVinoOnly.passes as Record<string, unknown>).onnx_discrepancy_check).toBeUndefined();
+
+    const mobiusProducer = buildOliveRecipe(
+      baseState({
+        referenceModelPath: "./models/reference_hf_model",
+        passes: {
+          ...DEFAULT_PASSES,
+          conversion: false,
+          mobiusBuilder: true,
+          onnxDiscrepancyCheck: true,
+        },
+      }),
+    );
+    expect((mobiusProducer.passes as Record<string, unknown>).onnx_discrepancy_check).toBeDefined();
+
+    const traversal = buildOliveRecipe(
+      baseState({
+        referenceModelPath: "../outside/reference",
+        passes: { ...DEFAULT_PASSES, onnxDiscrepancyCheck: true },
+      }),
+    );
+    expect((traversal.passes as Record<string, unknown>).onnx_discrepancy_check).toBeUndefined();
   });
 });

@@ -409,7 +409,8 @@ function undetectedProviderReason(
   probe?: HardwareProbeResult | null,
 ): string {
   switch (provider) {
-    case "QNNExecutionProvider": {
+    case "QNNExecutionProvider":
+    case "QnnAbiExecutionProvider": {
       if (!probe) {
         return "Qualcomm QNN requires Windows ARM64 (Snapdragon NPU inference) or Windows x64 (plugin preparation).";
       }

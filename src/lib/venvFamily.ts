@@ -23,6 +23,7 @@ export const KNOWN_IHV_PROVIDERS: readonly IHVProvider[] = [
   "DmlExecutionProvider",
   "OpenVINOExecutionProvider",
   "QNNExecutionProvider",
+  "QnnAbiExecutionProvider",
   "ROCMExecutionProvider",
   "WebGpuExecutionProvider",
   "CoreMLExecutionProvider",
@@ -48,6 +49,9 @@ const PROVIDER_ALIASES: ReadonlyMap<string, IHVProvider> = new Map([
   ["dmlexecutionprovider", "DmlExecutionProvider"],
   ["openvinoexecutionprovider", "OpenVINOExecutionProvider"],
   ["qnnexecutionprovider", "QNNExecutionProvider"],
+  ["qnnabiexecutionprovider", "QnnAbiExecutionProvider"],
+  ["qnnabi", "QnnAbiExecutionProvider"],
+  ["qnn-abi", "QnnAbiExecutionProvider"],
   ["rocmexecutionprovider", "ROCMExecutionProvider"],
   ["webgpuexecutionprovider", "WebGpuExecutionProvider"],
   ["coremlexecutionprovider", "CoreMLExecutionProvider"],
@@ -123,6 +127,7 @@ export function mandatoryFamilyForProvider(provider: IHVProvider): VenvFamily | 
     case "OpenVINOExecutionProvider":
       return "openvino";
     case "QNNExecutionProvider":
+    case "QnnAbiExecutionProvider":
       return "qnn";
     case "DmlExecutionProvider":
     case "ROCMExecutionProvider":

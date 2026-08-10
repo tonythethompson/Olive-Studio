@@ -9,11 +9,14 @@
  * ready — not here. Callers must not treat validate as hardware readiness.
  */
 import { createHash } from "crypto";
+import path from "path";
+import fs from "fs";
+import { isValidReferenceModelPath } from "../../../lib/oliveRecipeBuilder.ts";
 import { validateOliveRecipeStructure } from "../../../lib/oliveRecipeSchema.ts";
 import { normalizeIhvProvider } from "../../../lib/venvFamily.ts";
 import { isExportTargetProvider } from "../../../lib/providerRuntimeKind.ts";
 import { resolveQnnHostMode } from "../../../lib/qnnDeps.ts";
-import { assessQnnRecipeReadiness } from "../../../lib/qnnReadiness.ts";
+import { assessQnnRecipeReadiness, isQnnIhvProvider } from "../../../lib/qnnReadiness.ts";
 import { DEFAULT_PASSES } from "../../../lib/defaultPasses.ts";
 import type { OliveRecipe } from "../../types.ts";
 import type { IHVProvider } from "../../../types.ts";
@@ -55,6 +58,99 @@ function stableStringify(value: unknown): string {
 export function fingerprintRecipe(recipe: unknown, cudaVersion = "auto"): string {
   const payload = `${stableStringify(recipe)}\0${cudaVersion}`;
   return createHash("sha256").update(payload).digest("hex");
+}
+
+function findCanonicalAncestor(current: string): { canonical: string; original: string } | undefined {
+  try {
+    return { canonical: fs.realpathSync(current), original: current };
+  } catch {
+    const parent = path.dirname(current);
+    if (parent !== current) return findCanonicalAncestor(parent);
+  }
+}
+
+function canonicalizeRecipePath(resolved: string): string {
+  try {
+    return fs.realpathSync(resolved);
+  } catch {
+    const ancestor = findCanonicalAncestor(resolved);
+    if (ancestor) {
+      return path.join(ancestor.canonical, path.relative(ancestor.original, resolved));
+    }
+    return resolved;
+  }
+}
+
+function getUnsafeRecipePathError(p: string, label: string, cwd: string, canonicalRoot: string): string | undefined {
+  const trimmed = p.trim();
+  if (!trimmed) return;
+  if (!isValidReferenceModelPath(trimmed)) return `${label}: path is not a safe reference model path (NUL or contains ..)`;
+  if (/^\\\\/.test(trimmed)) return `${label}: UNC paths are not allowed`;
+  if (path.isAbsolute(trimmed) || path.win32.isAbsolute(trimmed)) {
+    return `${label}: absolute paths are not allowed; use a project-relative path`;
+  }
+  const canonical = canonicalizeRecipePath(path.resolve(cwd, trimmed));
+  if (!canonical.startsWith(canonicalRoot + path.sep) && canonical !== canonicalRoot) {
+    return `${label}: path resolves outside the approved model root`;
+  }
+}
+
+function collectPassRecipePaths(passes: OliveRecipe["passes"]): Array<[string, string]> {
+  const entries: Array<[string, string]> = [];
+  if (!passes || typeof passes !== "object") return entries;
+
+  for (const [passName, passConfig] of Object.entries(passes)) {
+    if (!passConfig || typeof passConfig !== "object") continue;
+    const config = (passConfig as Record<string, unknown>).config;
+    if (!config || typeof config !== "object") continue;
+    const cfg = config as Record<string, unknown>;
+    if (typeof cfg.reference_model_path === "string") {
+      entries.push([cfg.reference_model_path, `passes.${passName}.config.reference_model_path`]);
+    }
+    for (const key of ["model_path", "data_dir", "output_dir", "calibration_data_dir"] as const) {
+      if (typeof cfg[key] === "string") entries.push([cfg[key], `passes.${passName}.config.${key}`]);
+    }
+  }
+
+  return entries;
+}
+
+function collectInputModelRecipePaths(inputModel: OliveRecipe["input_model"]): Array<[string, string]> {
+  if (!inputModel || typeof inputModel !== "object") return [];
+  const config = (inputModel as Record<string, unknown>).config;
+  if (!config || typeof config !== "object") return [];
+  const modelPath = (config as Record<string, unknown>).model_path;
+  return typeof modelPath === "string" ? [[modelPath, "input_model.config.model_path"]] : [];
+}
+
+/**
+ * Validates that filesystem paths embedded in the recipe do not escape
+ * the approved model root (`process.cwd()`). Rejects traversal segments, UNC,
+ * and absolute paths; recipe paths must be project-relative.
+ */
+function validateRecipePaths(recipe: OliveRecipe): string[] {
+  const errors: string[] = [];
+  const cwd = process.cwd();
+  let canonicalRoot: string;
+  try {
+    canonicalRoot = fs.realpathSync(cwd);
+  } catch {
+    canonicalRoot = cwd;
+  }
+
+  function validatePath(p: string, label: string): void {
+    const error = getUnsafeRecipePathError(p, label, cwd, canonicalRoot);
+    if (error) errors.push(error);
+  }
+
+  for (const [recipePath, label] of [
+    ...collectPassRecipePaths(recipe.passes),
+    ...collectInputModelRecipePaths(recipe.input_model),
+  ]) {
+    validatePath(recipePath, label);
+  }
+
+  return errors;
 }
 
 /**
@@ -103,7 +199,7 @@ export function preflightOliveRecipe(
       );
     }
 
-    if (provider === "QNNExecutionProvider") {
+    if (isQnnIhvProvider(provider)) {
       const inputModel = recipe.input_model as { io_config?: unknown } | undefined;
       const hostMode = resolveQnnHostMode({ platform: process.platform, arch: process.arch });
       // Intentionally omit `probe`: sync validate must not touch the QNN venv.
@@ -134,6 +230,10 @@ export function preflightOliveRecipe(
   if (cudaVersion !== "auto" && !/^cu\d{3}$|^cpu$/.test(cudaVersion)) {
     warnings.push(`Unusual cudaVersion token: ${cudaVersion}`);
   }
+
+  // ── Path constraint: reject recipe filesystem paths outside the model root ──
+  const pathErrors = validateRecipePaths(recipe);
+  errors.push(...pathErrors);
 
   const fingerprint = fingerprintRecipe(recipe, cudaVersion);
   return {

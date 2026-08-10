@@ -19,6 +19,8 @@ describe("venvFamily policy", () => {
     expect(normalizeIhvProvider("openvino")).toBe("OpenVINOExecutionProvider");
     expect(normalizeIhvProvider("CUDAExecutionProvider")).toBe("CUDAExecutionProvider");
     expect(normalizeIhvProvider("cudaexecutionprovider")).toBe("CUDAExecutionProvider");
+    expect(normalizeIhvProvider("QnnAbiExecutionProvider")).toBe("QnnAbiExecutionProvider");
+    expect(normalizeIhvProvider("qnnabi")).toBe("QnnAbiExecutionProvider");
     expect(normalizeIhvProvider("not-a-provider")).toBeNull();
   });
 

@@ -3,8 +3,8 @@
   "kind": "entries",
   "model": "all-MiniLM-L6-v2",
   "dim": 384,
-  "count": 34,
-  "content_hash": "f241e7934eb287ca49c3a8d7161e2280c964c38f136833787d4fa5f2df10422a",
+  "count": 36,
+  "content_hash": "bdea6364e803addd4bec02eeb28f4e52315227ed4eda459c87f791f63b144b70",
   "entry_ids": [
     "onnx-export-shape",
     "onnx-export-external-data",
@@ -39,7 +39,9 @@
     "olive-pass-config-validation",
     "olive-accelerator-device-busy",
     "olive-directml-ep-missing",
-    "olive-webgpu-not-server-ort"
+    "olive-webgpu-not-server-ort",
+    "olive-hf-trust-remote-code",
+    "olive-qairt-passes-removed"
   ],
   "embed_texts": [
     "ONNX export shape mismatch Input shapes or dynamic_axes are not correctly specified; or the model contains control flow that depends on runtime shape. Add dynamic_axes to OnnxConversion for batch/sequence dims; trace with representative input shapes; replace data-dependent control flow with fixed-shape equivalents. dynamic shape RuntimeError: Expected all tensors to be on the same device The size of tensor a shape mismatch  dimension",
@@ -75,6 +77,8 @@
     "Olive pass config failed schema validation Recipe pass params do not match the installed Olive version (renamed/removed keys). Compare pass params with Olive docs for your version; remove unknown keys; rebuild from Olive Studio UI defaults then re-apply advanced overrides carefully. ValidationError pydantic extra fields not permitted field required Input should be",
     "GPU device busy or unavailable to Olive Another process holds the GPU, or CUDA_VISIBLE_DEVICES hides all devices. Stop competing GPU jobs; check CUDA_VISIBLE_DEVICES; retry with a smaller calibration batch or CPU fallback for conversion-only steps. CUDA error: all CUDA-capable devices are busy hipError device already in use cudaErrorDevicesUnavailable",
     "DirectML execution provider not available to Olive Olive/ORT process lacks onnxruntime-directml, or the host is not Windows with DirectX 12. On Windows install onnxruntime-directml into the Olive environment; select DmlExecutionProvider. Do not expect DirectML on Linux/macOS or from CUDA-only ORT wheels. DmlExecutionProvider DirectMLExecutionProvider onnxruntime-directml DirectML is not supported Failed to create DirectML",
-    "WebGPU is not a server-side ONNX Runtime EP for Olive CLI WebGpuExecutionProvider is for ONNX Runtime Web in browsers. Desktop/server Olive runs do not execute WebGPU the same way. Build/export an ONNX recipe (prefer FP16) for browser ORT Web. For local Olive execution pick CUDA, TensorRT, DirectML, OpenVINO, or CPU instead. WebGpuExecutionProvider WebGPU webgpu provider ORT Web"
+    "WebGPU is not a server-side ONNX Runtime EP for Olive CLI WebGpuExecutionProvider is for ONNX Runtime Web in browsers. Desktop/server Olive runs do not execute WebGPU the same way. Build/export an ONNX recipe (prefer FP16) for browser ORT Web. For local Olive execution pick CUDA, TensorRT, DirectML, OpenVINO, or CPU instead. WebGpuExecutionProvider WebGPU webgpu provider ORT Web",
+    "HuggingFace model fails to load after upgrading to olive-ai 0.13.0 Olive 0.13.0 changed the default value of trust_remote_code from true to false for security. Models with custom code (e.g., Phi, Mistral with custom RoPE, Qwen) now refuse to load unless explicitly opted in. In Olive Studio, open the Hugging Face source settings and enable Trust Remote Code. Enabling this executes Python from the model repository inside the Olive process on your machine, so only enable it for repositories you trust. Do not use Apply Fix for this setting; it must be toggled manually. trust_remote_code requires you to execute the configuration file requires you to execute the modeling file has custom code which must be executed Loading .* requires you to execute ValueError: Loading .* requires",
+    "QairtPreparation or QairtGenAIBuilder pass not found in olive-ai 0.13.0 The QairtPreparation and QairtGenAIBuilder passes were superseded by the unified QairtPipeline pass in olive-ai 0.13.0. Recipes referencing the old pass names will fail. Replace QairtPreparation and QairtGenAIBuilder with a single QairtPipeline pass. QairtPipeline combines model loading, quantization, and compilation into one YAML-recipe-driven step. QairtPreparation QairtGenAIBuilder pass not found unknown pass type qairt_preparation qairt_genai_builder"
   ]
 }
