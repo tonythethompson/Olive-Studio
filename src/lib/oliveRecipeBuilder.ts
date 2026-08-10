@@ -616,6 +616,9 @@ function buildSimplifiedLayerNormToRMSNorm(_state: UIState, _ctx: RecipeBuildCon
 function buildOnnxDiscrepancyCheck(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
   if (!_state.passes.onnxDiscrepancyCheck) return undefined;
   const config: Record<string, unknown> = {};
+  if (_state.discrepancyTestDataDir) {
+    config.test_data_dir = _state.discrepancyTestDataDir;
+  }
   return { type: "OnnxDiscrepancyCheck", config };
 }
 
