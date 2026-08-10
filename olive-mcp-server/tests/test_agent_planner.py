@@ -64,8 +64,7 @@ class TestLLMIntentParsing:
         assert result["validated"] is True
 
         patch = result["ui_state_patch"]
-        # Hardware provider detected — must be exactly CUDAExecutionProvider
-        assert "ihvProvider" in patch
+        # Hardware provider detected
         assert patch["ihvProvider"] == "CUDAExecutionProvider"
 
         # Quantization settings
