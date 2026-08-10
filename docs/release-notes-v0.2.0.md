@@ -35,7 +35,7 @@ To follow `main` instead of this tagged release, omit `--branch v0.2.0`.
 
 - **No Tauri installer**: desktop app builds but is unsigned (SmartScreen warnings on Windows)
 - **Unsigned builds**: no code-signing certificate yet; Windows/macOS may flag the binary
-- **No auto-update**: checkout a newer tag or pull `main` for updates
+- **No auto-update**: check out a newer tag or pull `main` for updates
 
 ## What's Next
 
