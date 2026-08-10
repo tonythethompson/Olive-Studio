@@ -37,17 +37,12 @@ class McpDiagnosticLoadBoundary extends Component<
   }
 }
 
-function McpDiagnosticCardLoader({
-  loadKey,
-  ...props
-}: MCPDiagnosticCardProps & { loadKey: number }) {
+function McpDiagnosticCardLoader(props: MCPDiagnosticCardProps) {
   const [Card, setCard] = useState<ComponentType<MCPDiagnosticCardProps> | null>(null);
   const [loadError, setLoadError] = useState<Error | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setCard(null);
-    setLoadError(null);
 
     import("./MCPDiagnosticCard")
       .then((module) => {
@@ -64,7 +59,7 @@ function McpDiagnosticCardLoader({
     return () => {
       cancelled = true;
     };
-  }, [loadKey]);
+  }, []);
 
   if (loadError) {
     throw loadError;
@@ -90,7 +85,7 @@ export function LazyMCPDiagnosticCard(props: MCPDiagnosticCardProps) {
 
   return (
     <McpDiagnosticLoadBoundary onRetry={() => setLoadKey((key) => key + 1)}>
-      <McpDiagnosticCardLoader loadKey={loadKey} {...props} />
+      <McpDiagnosticCardLoader key={loadKey} {...props} />
     </McpDiagnosticLoadBoundary>
   );
 }
