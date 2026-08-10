@@ -19,6 +19,8 @@ Thank you for your interest in Olive Studio. This project is a community front e
 
 ### Install and run
 
+Contributors should clone `main` (not a release tag) so `git pull` and PR branches work normally. For a pinned release install, use the tagged shallow clone on [Releases](https://github.com/tonythethompson/Olive-Studio/releases) or in the README Quick start.
+
 ```bash
 git clone https://github.com/tonythethompson/Olive-Studio.git
 cd Olive-Studio

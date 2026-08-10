@@ -43,7 +43,7 @@ describe("playgroundPBT", () => {
 
     // Blank-only inputs must be blank.
     fc.assert(
-      fc.property(fc.stringOf(whitespaceChar, { maxLength: 32 }), (prompt) => {
+      fc.property(fc.string({ unit: whitespaceChar, maxLength: 32 }), (prompt) => {
         expect(isArenaPromptBlank(prompt)).toBe(true);
       }),
       { numRuns: 50 },
@@ -53,9 +53,9 @@ describe("playgroundPBT", () => {
     fc.assert(
       fc.property(
         fc.tuple(
-          fc.stringOf(whitespaceChar, { maxLength: 8 }),
+          fc.string({ unit: whitespaceChar, maxLength: 8 }),
           fc.string({ minLength: 1 }).filter((s) => /\S/.test(s)),
-          fc.stringOf(whitespaceChar, { maxLength: 8 }),
+          fc.string({ unit: whitespaceChar, maxLength: 8 }),
         ),
         ([pre, mid, post]) => {
           const prompt = `${pre}${mid}${post}`;
