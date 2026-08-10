@@ -755,7 +755,3 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   memoRecipe = recipe;
   return recipe;
 }
-
-  memoRecipe = recipe;
-  return recipe;
-}
