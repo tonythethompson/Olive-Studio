@@ -118,6 +118,11 @@ export interface UIState {
   distributedCaching: boolean;
   /** Path to a user-provided Python script for calibration, evaluation, or training. */
   userScript?: string;
+  /**
+   * Directory containing a Hugging Face reference model for OnnxDiscrepancyCheck.
+   * Must be a local path (not a repo id). Omit unless the discrepancy pass is enabled.
+   */
+  referenceModelPath?: string;
   batchJobs?: BatchJob[];
   /** Active olive job ID for the Execute Live button */
   activeJobId?: string | null;

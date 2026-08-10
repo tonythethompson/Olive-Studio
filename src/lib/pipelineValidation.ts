@@ -993,6 +993,10 @@ export function coercePassFields(passes: UIState["passes"], provider: IHVProvide
     next.peftMethod = "lora";
   }
 
+  if (next.trustRemoteCode === undefined) {
+    next.trustRemoteCode = false;
+  }
+
   // Cross-pass coercions come from the shared CROSS_PASS_RULES table so they
   // cannot drift from the issues getCrossPassIssues surfaces.
   for (const rule of CROSS_PASS_RULES) {
@@ -1019,13 +1023,6 @@ export function sanitizePipelineState(state: UIState): UIState {
       state.memoryOffload === "auto" && !isMemoryOffloadAvailable(state) ? "gpu_only" : state.memoryOffload,
     passes: coercePassFields(state.passes, state.ihvProvider),
   };
-
-  // Olive 0.13.0 flipped trust_remote_code default to false. When the model
-  // source is HuggingFace and the field is missing/undefined (e.g. persisted
-  // state from before 0.13.0), coerce it to true so recipes don't silently fail.
-  if (current.modelSource === "huggingface" && current.passes.trustRemoteCode === undefined) {
-    current = { ...current, passes: { ...current.passes, trustRemoteCode: true } };
-  }
 
   for (let i = 0; i < 16; i++) {
     const validation = getPipelineValidation(current);

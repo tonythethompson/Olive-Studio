@@ -409,22 +409,22 @@ function buildQuaRotQuantizer(state: UIState): PassSpec {
 }
 
 /**
- * ggml-style K-Quant: dispatches to PyTorch KQuant or OnnxKquantQuantization
- * depending on whether ONNX conversion is active (ONNX input available).
+ * ggml-style K-Quant: PyTorch KQuant before ONNX conversion; OnnxKquantQuantization
+ * only when the pipeline output format is ONNX.
  */
 function buildKquantQuantizer(state: UIState): PassSpec {
   const bits = state.passes.quantPrecision === "int4" ? 4 : 8;
-  const passType = state.passes.conversion ? "OnnxKquantQuantization" : "KQuant";
+  const onnxOutput =
+    state.passes.conversion && state.passes.conversionFormat === "onnx";
+  if (onnxOutput) {
+    return {
+      type: "OnnxKquantQuantization",
+      config: withCalibrationData({ bits, block_size: 128 }, state),
+    };
+  }
   return {
-    type: passType,
-    config: withCalibrationData(
-      {
-        bits,
-        symmetric: true,
-        group_size: 128,
-      },
-      state,
-    ),
+    type: "KQuant",
+    config: withCalibrationData({ bits, symmetric: true, group_size: 128 }, state),
   };
 }
 
@@ -611,9 +611,31 @@ function buildSimplifiedLayerNormToRMSNorm(_state: UIState, _ctx: RecipeBuildCon
 }
 
 /** OnnxDiscrepancyCheck: Validation pass measuring numerical discrepancies. */
-function buildOnnxDiscrepancyCheck(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
-  if (!_state.passes.onnxDiscrepancyCheck) return undefined;
-  return { type: "OnnxDiscrepancyCheck", config: {} };
+function isValidReferenceModelPath(path: string): boolean {
+  const trimmed = path.trim();
+  if (!trimmed || trimmed.includes("\0")) return false;
+  return !/(^|[\\/])\.\.([\\/]|$)/.test(trimmed);
+}
+
+function resolveReferenceModelPath(state: UIState): string | undefined {
+  const override = state.passRecipeOverrides?.OnnxDiscrepancyCheck?.config?.reference_model_path;
+  if (typeof override === "string" && isValidReferenceModelPath(override)) {
+    return override.trim();
+  }
+  if (typeof state.referenceModelPath === "string" && isValidReferenceModelPath(state.referenceModelPath)) {
+    return state.referenceModelPath.trim();
+  }
+  return undefined;
+}
+
+function buildOnnxDiscrepancyCheck(state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!state.passes.onnxDiscrepancyCheck) return undefined;
+  const referenceModelPath = resolveReferenceModelPath(state);
+  if (!referenceModelPath) return undefined;
+  return {
+    type: "OnnxDiscrepancyCheck",
+    config: { reference_model_path: referenceModelPath },
+  };
 }
 
 // ─── Pass builder registry ────────────────────────────────────────────
@@ -693,8 +715,7 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
     if (state.hfDataset) {
       inputConfig.dataset = state.hfDataset;
     }
-    // Olive 0.13.0 flipped trust_remote_code default to false; emit explicitly
-    // so HF models requiring custom code (Phi, Mistral, etc.) still load.
+    // Olive 0.13.0 default is false; emit only on explicit user opt-in.
     if (state.passes.trustRemoteCode === true) {
       inputConfig.trust_remote_code = true;
     }

@@ -98,6 +98,19 @@ describe("passMigration integration", () => {
       expect(config.trust_remote_code).toBe(true);
     });
 
+    it("does not emit trust_remote_code when trustRemoteCode is false (default)", () => {
+      const state = createDefaultPipelineState();
+      state.modelSource = "huggingface";
+      state.hfModelId = "microsoft/phi-2";
+      expect(state.passes.trustRemoteCode).toBe(false);
+
+      const coerced = commitUiStateUpdate(state, {});
+      const recipe = buildOliveRecipe(coerced) as Record<string, unknown>;
+      const config = (recipe.input_model as Record<string, unknown>).config as Record<string, unknown>;
+
+      expect(config.trust_remote_code).toBeUndefined();
+    });
+
     it("does not emit trust_remote_code for local models", () => {
       const state = createDefaultPipelineState();
       state.modelSource = "local";

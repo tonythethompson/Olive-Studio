@@ -1,7 +1,7 @@
 # Olive Studio Code Review
 
-**Reviewed:** 2026-07-31  
-**Baseline:** `v0.2.0` (`package.json`); Tauri config reports `0.3.0`  
+**Reviewed:** 2026-08-10 (trust_remote_code opt-in snapshot)  
+**Baseline:** `v0.2.0` (`package.json`); olive-ai **0.13.0** on `feat/olive-013-upgrade`  
 **Scope:** Architecture, correctness hotspots, test shape, and ship-risk for local-first use  
 **Method:** Static review of `src/`, `server.ts`, `olive-mcp-server/`, `src-tauri/`, CI config. No live Olive GPU runs.
 
@@ -113,20 +113,25 @@ Severity assumes the documented local-first threat model. LAN exposure raises ev
 
 ### High
 
-3. **In-app MCP proxy imports a missing `call_tool`**  
+3. **`trust_remote_code` is explicit opt-in (Olive 0.13.0)**  
+   **Verified (2026-08-10):** `DEFAULT_PASSES.trustRemoteCode` is `false`; `buildOliveRecipe` emits `trust_remote_code: true` only when the user enables **Trust Remote Code** in Advanced settings (`trustRemoteCode === true`). Legacy persisted `undefined` values coerce to `false` in `coercePassFields`, not `true`.  
+   **Local-trust model:** Studio runs on loopback for a single operator. Enabling remote code executes Hugging Face repo Python on the local machine with the same trust boundary as running Olive locally. Do not enable on shared or hostile networks without reviewing the model repo.  
+   **Residual:** MCP troubleshooting entries may suggest `trust_remote_code: true`; Apply Fix still requires a deliberate UI action and does not bypass the recipe opt-in gate.
+
+4. **In-app MCP proxy imports a missing `call_tool`**  
    **Verified:** `mcp.ts` runs `from olive_mcp_server.mcp_server import call_tool`, but `mcp_server.py` only exposes FastMCP tools (no module-level `call_tool`). Tests use `mcp.call_tool(...)`, a different API.  
    **Impact:** `POST /api/mcp/tool` fails at runtime; fragile `-c` string embedding.  
    **Fix:** Add an allowlisted `call_tool` helper (or invoke FastMCP properly); pass args via stdin/JSON file, not interpolated Python.
 
-4. **`/api/mcp/tool` is unrate-limited and spawns Python**  
+5. **`/api/mcp/tool` is unrate-limited and spawns Python**  
    **Verified:** No rate limit on the tool route (KB sync is limited).  
    **Fix:** Apply `heavyCommandRateLimit` or a dedicated limiter.
 
-5. **`SYNC_KB_TOKEN` is documented but not enforced**  
+6. **`SYNC_KB_TOKEN` is documented but not enforced**  
    **Verified:** `.env.example` and `useKbSync.ts` send `x-sync-token`; `POST /mcp/sync-kb` never checks it.  
    **Fix:** Enforce when env is set, or remove the docs.
 
-6. **Runtime `olive-ai` install is unpinned**  
+7. **Runtime `olive-ai` install is unpinned**  
    **Verified:** venv path installs `olive-ai` without a version pin.  
    **Fix:** Pin in install command + document supported Olive versions.
 

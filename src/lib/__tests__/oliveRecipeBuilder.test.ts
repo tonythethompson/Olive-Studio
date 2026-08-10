@@ -1397,3 +1397,86 @@ describe("buildOliveRecipe", () => {
     }
   });
 });
+
+describe("buildOliveRecipe 0.13 pass builders", () => {
+  it("uses PyTorch KQuant when conversion is off or output is not ONNX", () => {
+    const torchOnly = buildOliveRecipe(
+      baseState({
+        ihvProvider: "CUDAExecutionProvider",
+        passes: { ...DEFAULT_PASSES, quantization: true, quantMethod: "kquant", conversion: false },
+      }),
+    );
+    const q1 = (torchOnly.passes as Record<string, unknown>).quantization as Record<string, unknown>;
+    expect(q1.type).toBe("KQuant");
+    expect((q1.config as Record<string, unknown>).symmetric).toBe(true);
+    expect((q1.config as Record<string, unknown>).group_size).toBe(128);
+
+    const openvinoOut = buildOliveRecipe(
+      baseState({
+        ihvProvider: "CUDAExecutionProvider",
+        passes: {
+          ...DEFAULT_PASSES,
+          quantization: true,
+          quantMethod: "kquant",
+          conversion: true,
+          conversionFormat: "openvino",
+        },
+      }),
+    );
+    const q2 = (openvinoOut.passes as Record<string, unknown>).quantization as Record<string, unknown>;
+    expect(q2.type).toBe("KQuant");
+  });
+
+  it("uses OnnxKquantQuantization with block_size when ONNX output is selected", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        ihvProvider: "CUDAExecutionProvider",
+        passes: {
+          ...DEFAULT_PASSES,
+          quantization: true,
+          quantMethod: "kquant",
+          conversion: true,
+          conversionFormat: "onnx",
+        },
+      }),
+    );
+    const q = (recipe.passes as Record<string, unknown>).quantization as Record<string, unknown>;
+    expect(q.type).toBe("OnnxKquantQuantization");
+    const cfg = q.config as Record<string, unknown>;
+    expect(cfg.bits).toBe(8);
+    expect(cfg.block_size).toBe(128);
+    expect(cfg.symmetric).toBeUndefined();
+    expect(cfg.group_size).toBeUndefined();
+  });
+
+  it("emits OnnxDiscrepancyCheck only with a validated reference_model_path", () => {
+    const missing = buildOliveRecipe(
+      baseState({ passes: { ...DEFAULT_PASSES, onnxDiscrepancyCheck: true } }),
+    );
+    expect((missing.passes as Record<string, unknown>).onnx_discrepancy_check).toBeUndefined();
+
+    const withPath = buildOliveRecipe(
+      baseState({
+        referenceModelPath: "./models/reference_hf_model",
+        passes: { ...DEFAULT_PASSES, onnxDiscrepancyCheck: true },
+      }),
+    );
+    const pass = (withPath.passes as Record<string, unknown>).onnx_discrepancy_check as Record<
+      string,
+      unknown
+    >;
+    expect(pass.type).toBe("OnnxDiscrepancyCheck");
+    expect((pass.config as Record<string, unknown>).reference_model_path).toBe(
+      "./models/reference_hf_model",
+    );
+    expect((pass.config as Record<string, unknown>).test_data_dir).toBeUndefined();
+
+    const traversal = buildOliveRecipe(
+      baseState({
+        referenceModelPath: "../outside/reference",
+        passes: { ...DEFAULT_PASSES, onnxDiscrepancyCheck: true },
+      }),
+    );
+    expect((traversal.passes as Record<string, unknown>).onnx_discrepancy_check).toBeUndefined();
+  });
+});

@@ -621,6 +621,15 @@ describe("sanitizePipelineState", () => {
     expect(r.passes.conversion).toBe(true);
     expect(r.passes.conversionFormat).toBe("onnx");
   });
+  it("coerces legacy undefined trustRemoteCode to false", () => {
+    const r = sanitizePipelineState(
+      baseState({
+        modelSource: "huggingface",
+        passes: { ...basePasses(), trustRemoteCode: undefined as unknown as boolean },
+      }),
+    );
+    expect(r.passes.trustRemoteCode).toBe(false);
+  });
   it("resolves critical conflicts via the autofix loop", () => {
     // AWQ + pruning on CPU → both coerced to PTQ and unstructured respectively
     const r = sanitizePipelineState(
