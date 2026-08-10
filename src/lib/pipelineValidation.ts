@@ -1020,11 +1020,10 @@ export function sanitizePipelineState(state: UIState): UIState {
     passes: coercePassFields(state.passes, state.ihvProvider),
   };
 
-  // Olive 0.13.0 flipped trust_remote_code default to false. When the model
-  // source is HuggingFace and the field is missing/undefined (e.g. persisted
-  // state from before 0.13.0), coerce it to true so recipes don't silently fail.
-  if (current.modelSource === "huggingface" && current.passes.trustRemoteCode === undefined) {
-    current = { ...current, passes: { ...current.passes, trustRemoteCode: true } };
+  // Keep remote code disabled unless the user explicitly opts in. Older
+  // persisted state may not contain this field.
+  if (current.passes.trustRemoteCode === undefined) {
+    current = { ...current, passes: { ...current.passes, trustRemoteCode: false } };
   }
 
   for (let i = 0; i < 16; i++) {
