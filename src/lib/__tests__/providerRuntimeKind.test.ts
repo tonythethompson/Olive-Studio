@@ -31,10 +31,12 @@ describe("providerRuntimeKind", () => {
     expect(getProviderRuntimeKind("CoreMLExecutionProvider")).toBe("platformLocal");
     expect(getProviderRuntimeKind("VitisAIExecutionProvider")).toBe("platformLocal");
     expect(getProviderRuntimeKind("QNNExecutionProvider")).toBe("platformLocal");
+    expect(getProviderRuntimeKind("QnnAbiExecutionProvider")).toBe("platformLocal");
     expect(isLegacyExportProvider("SNPEExecutionProvider")).toBe(true);
     expect(isExportTargetProvider("WasmExecutionProvider")).toBe(true);
     expect(isPlatformLocalProvider("CoreMLExecutionProvider")).toBe(true);
     expect(isPlatformLocalProvider("QNNExecutionProvider")).toBe(true);
+    expect(isPlatformLocalProvider("QnnAbiExecutionProvider")).toBe(true);
   });
 });
 
@@ -56,13 +58,19 @@ describe("export-target probe carve-outs", () => {
     expect(selectable).toContain("CoreMLExecutionProvider");
     expect(selectable).toContain("VitisAIExecutionProvider");
     expect(selectable).toContain("QNNExecutionProvider");
+    expect(selectable).toContain("QnnAbiExecutionProvider");
     expect(selectable).not.toContain("CUDAExecutionProvider");
   });
 
   it("includes platform-local providers in alwaysSelectableProviders", () => {
     const always = alwaysSelectableProviders();
     expect(always).toEqual(
-      expect.arrayContaining(["CoreMLExecutionProvider", "VitisAIExecutionProvider", "QNNExecutionProvider"]),
+      expect.arrayContaining([
+        "CoreMLExecutionProvider",
+        "VitisAIExecutionProvider",
+        "QNNExecutionProvider",
+        "QnnAbiExecutionProvider",
+      ]),
     );
   });
 

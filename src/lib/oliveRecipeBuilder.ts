@@ -1,6 +1,9 @@
 import { IHVProvider, UIState, OpenVinoTargetDevice } from "@/types";
 import { buildHfLoadKwargs, buildPeftOffloadConfig, isMemoryOffloadActive } from "@/lib/memoryOffload";
 import { openvinoTargetToOliveDevice } from "@/lib/openvinoDeps";
+import {
+  isReplacementExportPipeline,
+} from "@/lib/replacementExportPipeline";
 
 const GPU_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
@@ -247,6 +250,11 @@ function intQuantSpec(precision: UIState["passes"]["quantPrecision"]) {
   return INT_QUANT_SPECS[asIntQuantPrecision(precision)];
 }
 
+/** Shared Olive workspace cache directory (engine + MobiusBuilder download cache). */
+function resolveRecipeCacheDir(state: UIState): string {
+  return state.distributedCaching && state.azureStr ? state.azureStr : state.cacheDir || "~/.cache/olive";
+}
+
 type QuantMethodBuilder = {
   gate?: (state: UIState) => boolean;
   build: (state: UIState) => PassSpec;
@@ -310,9 +318,7 @@ const CONVERSION_BUILDERS: Record<ConversionFormat, (state: UIState) => PassSpec
 };
 
 function buildConversionPass(state: UIState): PassSpec | undefined {
-  if (!state.passes.conversion) return undefined;
-  // MobiusBuilder and QairtPipeline are replacement export pipelines, not ONNX conversion.
-  if (state.passes.mobiusBuilder || state.passes.qairtPipeline) return undefined;
+  if (!state.passes.conversion || isReplacementExportPipeline(state.passes)) return undefined;
   return CONVERSION_BUILDERS[state.passes.conversionFormat](state);
 }
 
@@ -489,6 +495,7 @@ function buildQuantizationPass(state: UIState): PassSpec | undefined {
   if (methodBuilder && (!methodBuilder.gate || methodBuilder.gate(state))) {
     return methodBuilder.build(state);
   }
+  if (isReplacementExportPipeline(state.passes)) return undefined;
   return FORMAT_QUANT_BUILDERS[effectiveFormatFamily(state)](state);
 }
 
@@ -514,7 +521,11 @@ const FORMAT_TRANSFORM_BUILDERS: Record<FormatFamily, (state: UIState) => PassSp
 
 // ONNX graph passes cannot follow a torch-native quantizer without an ONNX conversion.
 function buildTransformerOptPass(state: UIState, ctx: RecipeBuildContext): PassSpec | undefined {
-  if (!state.passes.onnxTransforms || (ctx.torchQuantActive && !state.passes.conversion)) {
+  if (
+    !state.passes.onnxTransforms ||
+    isReplacementExportPipeline(state.passes) ||
+    (ctx.torchQuantActive && !state.passes.conversion)
+  ) {
     return undefined;
   }
   return FORMAT_TRANSFORM_BUILDERS[effectiveFormatFamily(state)](state);
@@ -523,7 +534,11 @@ function buildTransformerOptPass(state: UIState, ctx: RecipeBuildContext): PassS
 // ─── Splitting ────────────────────────────────────────────────────────
 
 function buildSplittingPass(state: UIState, ctx: RecipeBuildContext): PassSpec | undefined {
-  if (!state.passes.splitting || (ctx.torchQuantActive && !state.passes.conversion)) {
+  if (
+    !state.passes.splitting ||
+    isReplacementExportPipeline(state.passes) ||
+    (ctx.torchQuantActive && !state.passes.conversion)
+  ) {
     return undefined;
   }
   return { type: "SplitModel", config: {} };
@@ -573,12 +588,13 @@ function buildPruningPass(state: UIState): PassSpec | undefined {
 // ─── 0.13.0 New Passes ────────────────────────────────────────────────
 
 /** MobiusBuilder: ONNX export via Mobius; produces ORT GenAI composite packages. */
-function buildMobiusBuilder(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
-  if (!_state.passes.mobiusBuilder) return undefined;
+function buildMobiusBuilder(state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!state.passes.mobiusBuilder) return undefined;
   return {
     type: "MobiusBuilder",
     config: {
-      model_name: _state.hfModelId || "unspecified",
+      model_name: state.hfModelId || "unspecified",
+      cache_dir: resolveRecipeCacheDir(state),
     },
   };
 }
@@ -617,6 +633,13 @@ function isValidReferenceModelPath(path: string): boolean {
   return !/(^|[\\/])\.\.([\\/]|$)/.test(trimmed);
 }
 
+/** True when the pipeline will produce an ONNX graph before discrepancy validation. */
+export function hasOnnxGraphProducer(passes: UIState["passes"]): boolean {
+  return Boolean(
+    passes.mobiusBuilder || (passes.conversion && passes.conversionFormat === "onnx"),
+  );
+}
+
 function resolveReferenceModelPath(state: UIState): string | undefined {
   const override = state.passRecipeOverrides?.OnnxDiscrepancyCheck?.config?.reference_model_path;
   if (typeof override === "string" && isValidReferenceModelPath(override)) {
@@ -630,6 +653,7 @@ function resolveReferenceModelPath(state: UIState): string | undefined {
 
 function buildOnnxDiscrepancyCheck(state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
   if (!state.passes.onnxDiscrepancyCheck) return undefined;
+  if (!hasOnnxGraphProducer(state.passes)) return undefined;
   const referenceModelPath = resolveReferenceModelPath(state);
   if (!referenceModelPath) return undefined;
   return {
@@ -698,8 +722,7 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
       search_strategy: false,
       host: "local_system",
       target: "local_system",
-      cache_dir:
-        state.distributedCaching && state.azureStr ? state.azureStr : state.cacheDir || "~/.cache/olive",
+      cache_dir: resolveRecipeCacheDir(state),
       output_dir: "./models/optimized",
     },
   };

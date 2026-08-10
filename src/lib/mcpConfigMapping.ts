@@ -267,18 +267,20 @@ export function mapMcpConfigToUiState(
   }
 
   // ── input_model.config (HfModel trust_remote_code opt-in) ───────────
+  // Security: never auto-enable trust_remote_code via Apply Fix. Executing
+  // model-repo Python requires explicit user opt-in in Advanced settings.
   if (isRecord(config.input_model)) {
     const inputModel = config.input_model;
     if (isRecord(inputModel.config) && inputModel.config.trust_remote_code === true) {
-      patches.passes = mergePassPatch(patches.passes ?? currentPasses, { trustRemoteCode: true });
       logs.push(
-        "[MCP FIX] Applied: input_model.config.trust_remote_code → passes.trustRemoteCode = true",
+        "[MCP FIX] Note: trust_remote_code requires explicit opt-in — enable Trust Remote Code in Advanced settings (not auto-applied).",
       );
     }
   }
   if (config.trust_remote_code === true) {
-    patches.passes = mergePassPatch(patches.passes ?? currentPasses, { trustRemoteCode: true });
-    logs.push("[MCP FIX] Applied: trust_remote_code → passes.trustRemoteCode = true");
+    logs.push(
+      "[MCP FIX] Note: trust_remote_code requires explicit opt-in — enable Trust Remote Code in Advanced settings (not auto-applied).",
+    );
   }
 
   // ── Nested passes.{PassType}.{output_name|params|config} ──────────────

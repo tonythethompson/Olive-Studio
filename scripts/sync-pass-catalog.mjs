@@ -95,7 +95,18 @@ except Exception as e:
 function loadExisting() {
   try {
     if (!fs.existsSync(OUT_FILE)) return {};
-    return JSON.parse(fs.readFileSync(OUT_FILE, "utf-8"));
+    const raw = JSON.parse(fs.readFileSync(OUT_FILE, "utf-8"));
+    if (Array.isArray(raw.passes)) {
+      const byName = {};
+      for (const entry of raw.passes) {
+        if (entry?.name) byName[entry.name] = entry;
+      }
+      return byName;
+    }
+    if (raw.passes && typeof raw.passes === "object" && !Array.isArray(raw.passes)) {
+      return raw.passes;
+    }
+    return {};
   } catch {
     return {};
   }
@@ -164,9 +175,14 @@ async function main() {
     olive_version: oliveVersion,
     version: oliveVersion,
     last_updated: new Date().toISOString().slice(0, 10),
+    source: "https://microsoft.github.io/Olive/",
   };
 
-  const output = { ...metadata, ...merged };
+  const passes = Object.entries(merged)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, data]) => ({ name, ...(typeof data === "object" && data ? data : {}) }));
+
+  const output = { ...metadata, passes };
 
   fs.mkdirSync(path.dirname(OUT_FILE), { recursive: true });
   fs.writeFileSync(OUT_FILE, JSON.stringify(output, null, 2), "utf-8");

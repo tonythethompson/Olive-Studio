@@ -41,6 +41,24 @@ describe("passMigration integration", () => {
       ]);
       expect(result.removedPasses).toEqual([]);
     });
+
+    it("preserves MobiusBuilder override when legacy MobiusModelBuilder key also exists", () => {
+      const state: UIState = {
+        ...createDefaultPipelineState(),
+        passRecipeOverrides: {
+          MobiusModelBuilder: { model_name: "legacy" },
+          MobiusBuilder: { model_name: "current" },
+        },
+      } as UIState;
+
+      const result = applyMigrations(state);
+
+      expect(result.state.passRecipeOverrides?.MobiusBuilder).toEqual({ model_name: "current" });
+      expect(result.state.passRecipeOverrides).not.toHaveProperty("MobiusModelBuilder");
+      expect(result.renamedPasses).toEqual([
+        { oldName: "MobiusModelBuilder", newName: "MobiusBuilder" },
+      ]);
+    });
   });
 
   describe("QairtPreparation and QairtGenAIBuilder removal", () => {

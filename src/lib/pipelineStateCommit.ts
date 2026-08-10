@@ -11,6 +11,7 @@
  * that display validation results.
  */
 import type { IHVProvider, UIState } from "@/types";
+import { REPLACEMENT_PIPELINE_SUPPRESSED_PASSES, isReplacementExportPipeline } from "@/lib/replacementExportPipeline";
 
 // ─── Provider Constant Sets ───────────────────────────────────────────────────
 
@@ -140,6 +141,14 @@ export function coercePassFields(passes: UIState["passes"], provider: IHVProvide
   }
   if (next.peft && !isPeftMethodAllowed(next.peftMethod, provider)) {
     next.peftMethod = "lora";
+  }
+
+  if (next.trustRemoteCode === undefined) {
+    next.trustRemoteCode = false;
+  }
+
+  if (isReplacementExportPipeline(next)) {
+    Object.assign(next, REPLACEMENT_PIPELINE_SUPPRESSED_PASSES);
   }
 
   // Apply cross-pass auto-coercion rules

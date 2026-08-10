@@ -7,7 +7,6 @@ import fc from "fast-check";
 import {
   applyMigrations,
   PASS_NAME_MIGRATIONS,
-  PARAM_MIGRATIONS,
   type ParamMigration,
 } from "@/lib/passMigration";
 import { createDefaultPipelineState } from "@/lib/stores/pipelineStore";
@@ -130,10 +129,6 @@ describe("passMigrationPBT", () => {
 
   // ─── Property 3: Renamed parameter value preservation (Task 10.5) ──
   it("Property 3: Synthetic param migration preserves values under new key", () => {
-    // Since PARAM_MIGRATIONS is empty for 0.13.0, we test the infrastructure
-    // by temporarily injecting a synthetic migration.
-    const originalMigrations = [...PARAM_MIGRATIONS];
-
     const syntheticMigration: ParamMigration = {
       passType: "OnnxConversion",
       oldParam: "legacyParam",
@@ -143,29 +138,22 @@ describe("passMigrationPBT", () => {
 
     fc.assert(
       fc.property(fc.jsonValue(), (value) => {
-        // Inject synthetic migration.
-        PARAM_MIGRATIONS.length = 0;
-        PARAM_MIGRATIONS.push(syntheticMigration);
+        const state = createDefaultPipelineState();
+        state.passRecipeOverrides = {
+          OnnxConversion: { legacyParam: value, otherParam: "keep" } as Record<string, unknown>,
+        };
 
-        try {
-          const state = createDefaultPipelineState();
-          state.passRecipeOverrides = {
-            OnnxConversion: { legacyParam: value, otherParam: "keep" } as UIState["passRecipeOverrides"] extends Record<string, infer V> ? V : never,
-          };
+        const result = applyMigrations(state, {
+          passNameMigrations: PASS_NAME_MIGRATIONS,
+          paramMigrations: [syntheticMigration],
+        });
+        const overrides = result.state.passRecipeOverrides as Record<string, Record<string, unknown>> | undefined;
 
-          const result = applyMigrations(state);
-          const overrides = result.state.passRecipeOverrides as Record<string, Record<string, unknown>> | undefined;
-
-          expect(overrides?.OnnxConversion).toBeDefined();
-          expect(overrides!.OnnxConversion.modernParam).toEqual(value);
-          expect("legacyParam" in overrides!.OnnxConversion).toBe(false);
-          expect(overrides!.OnnxConversion.otherParam).toBe("keep");
-          expect(result.migratedParams).toBe(1);
-        } finally {
-          // Restore original.
-          PARAM_MIGRATIONS.length = 0;
-          PARAM_MIGRATIONS.push(...originalMigrations);
-        }
+        expect(overrides?.OnnxConversion).toBeDefined();
+        expect(overrides!.OnnxConversion.modernParam).toEqual(value);
+        expect("legacyParam" in overrides!.OnnxConversion).toBe(false);
+        expect(overrides!.OnnxConversion.otherParam).toBe("keep");
+        expect(result.migratedParams).toBe(1);
       }),
       { numRuns: 100 },
     );

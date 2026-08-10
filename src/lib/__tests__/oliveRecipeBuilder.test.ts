@@ -166,6 +166,13 @@ describe("providerToAccelerator", () => {
     expect(result.execution_providers).toEqual(["QNNExecutionProvider"]);
   });
 
+  it("maps QnnAbi to npu device", () => {
+    expect(providerToAccelerator("QnnAbiExecutionProvider")).toEqual({
+      device: "npu",
+      execution_providers: ["QnnAbiExecutionProvider"],
+    });
+  });
+
   it("maps CPU and OpenVINO default target to cpu device", () => {
     expect(providerToAccelerator("CPUExecutionProvider").device).toBe("cpu");
     expect(providerToAccelerator("OpenVINOExecutionProvider").device).toBe("cpu");
@@ -188,6 +195,7 @@ describe("providerToAccelerator", () => {
     expect(providerToAccelerator("NNAPIExecutionProvider").device).toBe("npu");
     expect(providerToAccelerator("VitisAIExecutionProvider").device).toBe("npu");
     expect(providerToAccelerator("SNPEExecutionProvider").device).toBe("npu");
+    expect(providerToAccelerator("QnnAbiExecutionProvider").device).toBe("npu");
     expect(providerToAccelerator("XnnpackExecutionProvider").device).toBe("cpu");
     expect(providerToAccelerator("WasmExecutionProvider").device).toBe("cpu");
     expect(providerToAccelerator("TensorflowLiteExecutionProvider").device).toBe("cpu");
@@ -201,6 +209,7 @@ describe("providerToAccelerator", () => {
       "NvTensorRTRTXExecutionProvider",
       "OpenVINOExecutionProvider",
       "QNNExecutionProvider",
+      "QnnAbiExecutionProvider",
       "ROCMExecutionProvider",
       "CoreMLExecutionProvider",
       "NNAPIExecutionProvider",
@@ -305,6 +314,17 @@ describe("buildOliveRecipe", () => {
     expect(engine.host).toBe("local_system");
     expect(engine.target).toBe("local_system");
     expect(engine.output_dir).toBe("./models/optimized");
+  });
+
+  it("maps QnnAbiExecutionProvider to npu accelerator in recipe systems", () => {
+    const recipe = buildOliveRecipe(baseState({ ihvProvider: "QnnAbiExecutionProvider" }));
+    const systems = recipe.systems as {
+      local_system: { config: { accelerators: Array<{ device: string; execution_providers: string[] }> } };
+    };
+    expect(systems.local_system.config.accelerators[0]).toEqual({
+      device: "npu",
+      execution_providers: ["QnnAbiExecutionProvider"],
+    });
   });
 
   it("uses cache_dir from state when set", () => {
@@ -1382,6 +1402,7 @@ describe("buildOliveRecipe", () => {
       "NvTensorRTRTXExecutionProvider",
       "OpenVINOExecutionProvider",
       "QNNExecutionProvider",
+      "QnnAbiExecutionProvider",
       "ROCMExecutionProvider",
     ];
     for (const provider of providers) {
@@ -1399,6 +1420,22 @@ describe("buildOliveRecipe", () => {
 });
 
 describe("buildOliveRecipe 0.13 pass builders", () => {
+  it("emits MobiusBuilder with documented cache_dir (not cache_model)", () => {
+    const recipe = buildOliveRecipe(
+      baseState({
+        cacheDir: "/custom/mobius-cache",
+        passes: { ...DEFAULT_PASSES, mobiusBuilder: true, conversion: true },
+      }),
+    );
+    const pass = (recipe.passes as Record<string, unknown>).mobius_builder as Record<string, unknown>;
+    const config = pass.config as Record<string, unknown>;
+    expect(pass.type).toBe("MobiusBuilder");
+    expect(config.model_name).toBe("meta-llama/Meta-Llama-3-8B");
+    expect(config.cache_dir).toBe("/custom/mobius-cache");
+    expect(config).not.toHaveProperty("cache_model");
+    expect((recipe.passes as Record<string, unknown>).conversion).toBeUndefined();
+  });
+
   it("uses PyTorch KQuant when conversion is off or output is not ONNX", () => {
     const torchOnly = buildOliveRecipe(
       baseState({
@@ -1469,7 +1506,33 @@ describe("buildOliveRecipe 0.13 pass builders", () => {
     expect((pass.config as Record<string, unknown>).reference_model_path).toBe(
       "./models/reference_hf_model",
     );
-    expect((pass.config as Record<string, unknown>).test_data_dir).toBeUndefined();
+    expect((withPath.passes as Record<string, unknown>).onnx_discrepancy_check).toBeDefined();
+
+    const openVinoOnly = buildOliveRecipe(
+      baseState({
+        referenceModelPath: "./models/reference_hf_model",
+        passes: {
+          ...DEFAULT_PASSES,
+          conversion: true,
+          conversionFormat: "openvino",
+          onnxDiscrepancyCheck: true,
+        },
+      }),
+    );
+    expect((openVinoOnly.passes as Record<string, unknown>).onnx_discrepancy_check).toBeUndefined();
+
+    const mobiusProducer = buildOliveRecipe(
+      baseState({
+        referenceModelPath: "./models/reference_hf_model",
+        passes: {
+          ...DEFAULT_PASSES,
+          conversion: false,
+          mobiusBuilder: true,
+          onnxDiscrepancyCheck: true,
+        },
+      }),
+    );
+    expect((mobiusProducer.passes as Record<string, unknown>).onnx_discrepancy_check).toBeDefined();
 
     const traversal = buildOliveRecipe(
       baseState({

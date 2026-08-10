@@ -119,8 +119,8 @@ export interface UIState {
   /** Path to a user-provided Python script for calibration, evaluation, or training. */
   userScript?: string;
   /**
-   * Directory containing a Hugging Face reference model for OnnxDiscrepancyCheck.
-   * Must be a local path (not a repo id). Omit unless the discrepancy pass is enabled.
+   * Path to a reference model for OnnxDiscrepancyCheck (maps to `reference_model_path`).
+   * Prefer a local filesystem path; validation only rejects traversal segments and null bytes.
    */
   referenceModelPath?: string;
   batchJobs?: BatchJob[];

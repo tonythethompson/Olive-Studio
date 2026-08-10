@@ -48,7 +48,10 @@ function satisfiesPep440(specifier: string, version: string): boolean {
       case "~=": {
         // Compatible release: >=target, <next minor/major
         if (cmp < 0) return false;
-        {
+        if (tParts.length === 1) {
+          const upper = [tParts[0]! + 1];
+          if (compareParts(vParts, upper) >= 0) return false;
+        } else {
           const upper = [...tParts.slice(0, -1)];
           upper[upper.length - 1]!++;
           if (compareParts(vParts, upper) >= 0) return false;
@@ -88,7 +91,7 @@ describe("venv spec constants", () => {
     expect(satisfiesPep440(PINNED_OLIVE_AI_INSTALL, "1.0.0")).toBe(false);
   });
 
-  it("PINNED_OLIVE_AI_INSTALL excludes olive-ai 0.11.0 (below lower bound)", () => {
+  it("PINNED_OLIVE_AI_INSTALL excludes olive-ai 0.11.0", () => {
     expect(satisfiesPep440(PINNED_OLIVE_AI_INSTALL, "0.11.0")).toBe(false);
   });
 

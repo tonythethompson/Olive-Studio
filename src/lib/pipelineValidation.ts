@@ -1,7 +1,8 @@
 import { IHVProvider, ModelSource, UIState, OliveRecipe } from "@/types";
 import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
 import { getProviderAvailabilityBlock, type HardwareProbeResult } from "@/lib/hardwareProbe";
-import { buildOliveRecipe, isPyTorchNativeQuantMethod } from "@/lib/oliveRecipeBuilder";
+import { buildOliveRecipe, isPyTorchNativeQuantMethod, hasOnnxGraphProducer } from "@/lib/oliveRecipeBuilder";
+import { REPLACEMENT_PIPELINE_SUPPRESSED_PASSES, isReplacementExportPipeline } from "@/lib/replacementExportPipeline";
 import { assessQnnRecipeReadiness, isQnnIhvProvider, type QnnReadinessIssue } from "@/lib/qnnReadiness";
 import { isKnownPass, getPassSchema } from "@/lib/schemaEngine";
 import { pickOpenVinoTargetFromDevices } from "@/lib/openvinoDeps";
@@ -327,6 +328,7 @@ export function prepareProviderChange(
 }
 
 function passesNeedOnnxGraph(passes: UIState["passes"]): boolean {
+  if (isReplacementExportPipeline(passes)) return false;
   // PyTorch-native quantizers do not need an ONNX conversion by themselves.
   // They only need conversion when followed by ONNX graph transforms or splitting.
   const usesPyTorchQuant = passes.quantization && isPyTorchNativeQuantMethod(passes.quantMethod);
@@ -456,6 +458,19 @@ const CROSS_PASS_RULES: CrossPassRule[] = [
     affectedTabs: ["conversion"],
     affectedPasses: ["conversion", "provider"],
     actionLabel: "Switch conversion to ONNX",
+  },
+  {
+    id: "onnx-discrepancy-missing-producer",
+    applies: (passes) => passes.onnxDiscrepancyCheck && !hasOnnxGraphProducer(passes),
+    fix: { conversion: true, conversionFormat: "onnx" },
+    autoCoerce: false,
+    severity: "critical",
+    title: "OnnxDiscrepancyCheck requires an ONNX-producing pass",
+    description:
+      "OnnxDiscrepancyCheck compares ONNX model outputs against a reference. Enable ONNX conversion or MobiusBuilder before this validation pass.",
+    affectedTabs: ["conversion", "validation"],
+    affectedPasses: ["onnxDiscrepancyCheck", "conversion"],
+    actionLabel: "Enable ONNX conversion",
   },
   {
     id: "qairt-pipeline-requires-qnn",
@@ -641,6 +656,16 @@ function getPassChainIssues(state: UIState, recipe: OliveRecipe): PipelineIssue[
   for (const [stepId, passConfig] of passEntries) {
     const passType = (passConfig as { type?: string }).type;
     if (!passType) continue;
+
+    if (
+      isReplacementExportPipeline(state.passes) &&
+      (passType === "OnnxConversion" ||
+        passType === "OpenVINOConversion" ||
+        passType === "QNNConversion" ||
+        passType === "TensorRTConversion")
+    ) {
+      continue;
+    }
 
     const schema = getPassSchema(passType);
     if (!schema) continue;
@@ -995,6 +1020,10 @@ export function coercePassFields(passes: UIState["passes"], provider: IHVProvide
 
   if (next.trustRemoteCode === undefined) {
     next.trustRemoteCode = false;
+  }
+
+  if (isReplacementExportPipeline(next)) {
+    Object.assign(next, REPLACEMENT_PIPELINE_SUPPRESSED_PASSES);
   }
 
   // Cross-pass coercions come from the shared CROSS_PASS_RULES table so they

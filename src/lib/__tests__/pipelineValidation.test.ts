@@ -802,6 +802,42 @@ describe("0.13.0 validation rules", () => {
     });
   });
 
+  describe("replacement export pipelines", () => {
+    it("coerces conversion off when MobiusBuilder is enabled", () => {
+      const state = baseState({
+        passes: basePasses({ mobiusBuilder: true, conversion: true, onnxTransforms: true }),
+      });
+      const coerced = sanitizePipelineState(state);
+      expect(coerced.passes.mobiusBuilder).toBe(true);
+      expect(coerced.passes.conversion).toBe(false);
+      expect(coerced.passes.onnxTransforms).toBe(false);
+    });
+
+    it("does not block validation when MobiusBuilder replaces conversion", () => {
+      const state = sanitizePipelineState(
+        baseState({
+          passes: basePasses({ mobiusBuilder: true, conversion: true }),
+        }),
+      );
+      const result = getPipelineValidation(state);
+      expect(result.issues.some((i) => i.id.startsWith("pass-chain-mismatch"))).toBe(false);
+      expect(result.issues.some((i) => i.id === "onnx-pipeline-missing-conversion")).toBe(false);
+      expect(result.isBlocked).toBe(false);
+    });
+
+    it("does not block validation when QairtPipeline replaces conversion on QNN", () => {
+      const state = sanitizePipelineState(
+        baseState({
+          ihvProvider: "QNNExecutionProvider",
+          passes: basePasses({ qairtPipeline: true, conversion: true, conversionFormat: "qnn" }),
+        }),
+      );
+      const result = getPipelineValidation(state);
+      expect(result.issues.some((i) => i.id.startsWith("pass-chain-mismatch"))).toBe(false);
+      expect(result.isBlocked).toBe(false);
+    });
+  });
+
   describe("KQuant provider conflicts", () => {
     it("allows kquant on CPU", () => {
       expect(isQuantMethodAllowed("kquant", "CPUExecutionProvider")).toBe(true);

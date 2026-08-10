@@ -306,7 +306,7 @@ describe("mapMcpConfigToUiState", () => {
       expect(patches.passes?.conversion).toBe(true);
     });
 
-    it("maps input_model trust_remote_code to passes.trustRemoteCode", () => {
+    it("does not auto-apply trust_remote_code via Apply Fix (requires manual Advanced opt-in)", () => {
       const { patches, logs } = mapMcpConfigToUiState(
         {
           input_model: {
@@ -317,8 +317,27 @@ describe("mapMcpConfigToUiState", () => {
         },
         { ...basePasses, trustRemoteCode: false },
       );
-      expect(patches.passes?.trustRemoteCode).toBe(true);
-      expect(logs.some((l) => l.includes("trust_remote_code"))).toBe(true);
+      expect(patches.passes?.trustRemoteCode).toBeUndefined();
+      expect(logs.some((l) => l.includes("not auto-applied"))).toBe(true);
+    });
+
+    it("applyMcpDiagnosticToUiState does not enable trustRemoteCode for olive-hf-trust-remote-code", () => {
+      const { patches } = applyMcpDiagnosticToUiState(
+        {
+          applyable: false,
+          updated_config: {
+            input_model: { config: { trust_remote_code: true } },
+          },
+        },
+        { ...basePasses, trustRemoteCode: false },
+      );
+      expect(patches.passes?.trustRemoteCode).toBeUndefined();
+      expect(
+        canApplyMcpDiagnostic({
+          applyable: false,
+          updated_config: { input_model: { config: { trust_remote_code: true } } },
+        }),
+      ).toBe(false);
     });
 
     it("applyMcpDiagnosticToUiState applies updated_config only; quirks are noted", () => {

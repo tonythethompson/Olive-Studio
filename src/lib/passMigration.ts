@@ -43,18 +43,33 @@ export interface MigrationResult {
 
 // ─── Migration Tables ─────────────────────────────────────────
 
-export const PASS_NAME_MIGRATIONS: PassNameMigration[] = [
+export interface MigrationTables {
+  passNameMigrations: readonly PassNameMigration[];
+  paramMigrations: readonly ParamMigration[];
+}
+
+const PASS_NAME_MIGRATION_ROWS = [
   { oldName: "MobiusModelBuilder", newName: "MobiusBuilder", since: "0.13.0" },
   { oldName: "QairtPreparation", newName: null, since: "0.13.0" },
   { oldName: "QairtGenAIBuilder", newName: null, since: "0.13.0" },
-];
+] as const satisfies readonly PassNameMigration[];
+
+const PARAM_MIGRATION_ROWS = [] as const satisfies readonly ParamMigration[];
+
+const DEFAULT_MIGRATION_TABLES: MigrationTables = Object.freeze({
+  passNameMigrations: Object.freeze([...PASS_NAME_MIGRATION_ROWS]),
+  paramMigrations: Object.freeze([...PARAM_MIGRATION_ROWS]),
+});
+
+/** Frozen pass rename/removal table for production migrations. */
+export const PASS_NAME_MIGRATIONS = DEFAULT_MIGRATION_TABLES.passNameMigrations;
 
 /**
- * Parameter renames across versions.
- * Empty for 0.13.0 — no confirmed param renames. Infrastructure is tested
- * with synthetic entries in the property tests.
+ * Frozen parameter rename table.
+ * Empty for 0.13.0 — no confirmed param renames. Property tests inject synthetic
+ * rows via `applyMigrations(state, { ...DEFAULT_MIGRATION_TABLES, paramMigrations })`.
  */
-export const PARAM_MIGRATIONS: ParamMigration[] = [];
+export const PARAM_MIGRATIONS = DEFAULT_MIGRATION_TABLES.paramMigrations;
 
 // ─── Migration Logic ──────────────────────────────────────────
 
@@ -68,7 +83,10 @@ export const PARAM_MIGRATIONS: ParamMigration[] = [];
  *
  * The function is idempotent: applying it twice yields the same result.
  */
-export function applyMigrations(state: UIState): MigrationResult {
+export function applyMigrations(
+  state: UIState,
+  tables: MigrationTables = DEFAULT_MIGRATION_TABLES,
+): MigrationResult {
   const renamedPasses: MigrationResult["renamedPasses"] = [];
   const removedPasses: string[] = [];
   let migratedParams = 0;
@@ -80,7 +98,7 @@ export function applyMigrations(state: UIState): MigrationResult {
     : {};
 
   // 1. Apply pass name migrations to passRecipeOverrides keys.
-  for (const migration of PASS_NAME_MIGRATIONS) {
+  for (const migration of tables.passNameMigrations) {
     if (!(migration.oldName in overrides)) continue;
 
     if (migration.newName === null) {
@@ -100,7 +118,7 @@ export function applyMigrations(state: UIState): MigrationResult {
   }
 
   // 2. Apply parameter migrations within override entries.
-  for (const migration of PARAM_MIGRATIONS) {
+  for (const migration of tables.paramMigrations) {
     const passOverride = overrides[migration.passType];
     if (!passOverride || !(migration.oldParam in passOverride)) continue;
 
