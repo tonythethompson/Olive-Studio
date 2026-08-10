@@ -39,11 +39,14 @@ def _apply_merge_patch(target: dict[str, Any], patch: dict[str, Any]) -> dict[st
 
 
 def _merge_in_place(target: dict[str, Any], patch: dict[str, Any]) -> None:
-    """Recursively apply merge-patch *patch* onto *target* in place."""
+    """Recursively apply merge-patch *patch* onto *target* in place (RFC 7386)."""
     for key, value in patch.items():
         if value is None:
             target.pop(key, None)
-        elif isinstance(value, dict) and isinstance(target.get(key), dict):
+        elif isinstance(value, dict):
+            # RFC 7386: if target value is not a dict, create a fresh one
+            if not isinstance(target.get(key), dict):
+                target[key] = {}
             _merge_in_place(target[key], value)
         else:
             target[key] = value

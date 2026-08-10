@@ -19,6 +19,27 @@ from typing import Any
 from .studio_loopback import err
 from .strategy_advisor import _normalize_model_type
 
+# ---------------------------------------------------------------------------
+# Input validation
+# ---------------------------------------------------------------------------
+
+# HuggingFace repo IDs follow the pattern: owner/model-name
+# Allow alphanumeric, hyphens, underscores, dots, and exactly one slash.
+# Reject path traversal (..), query strings (?), fragments (#), control chars,
+# and whitespace.
+_VALID_MODEL_ID_RE = re.compile(
+    r"^[A-Za-z0-9][\w.\-]*/[\w.\-]+$"
+)
+
+
+def _is_valid_model_id(model_id: str) -> bool:
+    """Return True if model_id matches HuggingFace repo-id grammar."""
+    if ".." in model_id:
+        return False
+    if any(c in model_id for c in "?#\n\r\t\x00"):
+        return False
+    return _VALID_MODEL_ID_RE.match(model_id) is not None
+
 
 # ---------------------------------------------------------------------------
 # Heuristic: inferParamBillions (port from src/lib/vramEstimate.ts)
@@ -126,7 +147,11 @@ def _fetch_hf_metadata(model_id: str) -> dict[str, Any] | None:
     try:
         with urllib.request.urlopen(req, timeout=_HF_TIMEOUT_SECONDS) as resp:  # noqa: S310
             raw = resp.read()
-            return json.loads(raw)
+            result = json.loads(raw)
+            # Only accept dict responses; arrays/scalars are unexpected
+            if not isinstance(result, dict):
+                return None
+            return result
     except Exception:  # noqa: BLE001 — any failure triggers heuristic fallback
         return None
 
@@ -185,6 +210,13 @@ def get_model_info(model_id: str) -> dict[str, Any]:
             return err(
                 "invalid_model_id",
                 "model_id must be a string of 1 to 256 characters.",
+            )
+
+        if not _is_valid_model_id(model_id):
+            return err(
+                "invalid_model_id",
+                "model_id must be a valid HuggingFace repo ID (owner/name), "
+                "without path traversal, query strings, or control characters.",
             )
 
         # --- Attempt HF API ---

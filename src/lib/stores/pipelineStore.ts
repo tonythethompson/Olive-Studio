@@ -55,7 +55,7 @@ export const usePipelineStore = create<PipelineStore>()(
         const migratedCount = renamedPasses.length;
         const removedCount = removedPasses.length;
         if (migratedCount > 0 || removedCount > 0) {
-          console.info(
+          console.warn(
             `[pipelineStore] Migration applied: ${migratedCount} pass(es) renamed, ${removedCount} pass(es) removed.`,
           );
         }
