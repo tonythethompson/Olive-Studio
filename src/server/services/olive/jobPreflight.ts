@@ -60,6 +60,39 @@ export function fingerprintRecipe(recipe: unknown, cudaVersion = "auto"): string
   return createHash("sha256").update(payload).digest("hex");
 }
 
+function canonicalizeRecipePath(resolved: string): string {
+  try {
+    return fs.realpathSync(resolved);
+  } catch {
+    let current = resolved;
+    let parent = path.dirname(current);
+    while (parent !== current) {
+      try {
+        const canonicalParent = fs.realpathSync(parent);
+        return path.join(canonicalParent, path.relative(parent, resolved));
+      } catch {
+        current = parent;
+        parent = path.dirname(current);
+      }
+    }
+    return resolved;
+  }
+}
+
+function getUnsafeRecipePathError(p: string, label: string, cwd: string, canonicalRoot: string): string | undefined {
+  const trimmed = p.trim();
+  if (!trimmed) return;
+  if (!isValidReferenceModelPath(trimmed)) return `${label}: path is not a safe reference model path (NUL or contains ..)`;
+  if (/^\\\\/.test(trimmed)) return `${label}: UNC paths are not allowed`;
+  if (path.isAbsolute(trimmed) || path.win32.isAbsolute(trimmed)) {
+    return `${label}: absolute paths are not allowed; use a project-relative path`;
+  }
+  const canonical = canonicalizeRecipePath(path.resolve(cwd, trimmed));
+  if (!canonical.startsWith(canonicalRoot + path.sep) && canonical !== canonicalRoot) {
+    return `${label}: path resolves outside the approved model root`;
+  }
+}
+
 /**
  * Validates that filesystem paths embedded in the recipe do not escape
  * the approved model root (`process.cwd()`). Rejects traversal segments, UNC,
@@ -68,59 +101,16 @@ export function fingerprintRecipe(recipe: unknown, cudaVersion = "auto"): string
 function validateRecipePaths(recipe: OliveRecipe): string[] {
   const errors: string[] = [];
   const cwd = process.cwd();
-
-  // Canonicalize the project root once
   let canonicalRoot: string;
   try {
     canonicalRoot = fs.realpathSync(cwd);
   } catch {
-    // If cwd is somehow invalid, fall back to the raw path
     canonicalRoot = cwd;
   }
 
-  function isUnsafePath(p: string, label: string): void {
-    const trimmed = p.trim();
-    if (!trimmed) return;
-    if (!isValidReferenceModelPath(trimmed)) {
-      errors.push(`${label}: path is not a safe reference model path (NUL or contains ..)`);
-      return;
-    }
-    // Reject UNC paths (\\server\share)
-    if (/^\\\\/.test(trimmed)) {
-      errors.push(`${label}: UNC paths are not allowed`);
-      return;
-    }
-    if (path.isAbsolute(trimmed) || path.win32.isAbsolute(trimmed)) {
-      errors.push(`${label}: absolute paths are not allowed; use a project-relative path`);
-      return;
-    }
-    // Resolve and canonicalize paths, handling non-existent targets
-    const resolved = path.resolve(cwd, trimmed);
-    let canonical = resolved;
-    try {
-      // Try to canonicalize the path directly
-      canonical = fs.realpathSync(resolved);
-    } catch {
-      // Path doesn't exist; resolve the nearest existing ancestor
-      let current = resolved;
-      let parent = path.dirname(current);
-      while (parent !== current) {
-        try {
-          const parentCanonical = fs.realpathSync(parent);
-          // Reconstruct the full path using the canonical parent
-          const suffix = path.relative(parent, resolved);
-          canonical = path.join(parentCanonical, suffix);
-          break;
-        } catch {
-          current = parent;
-          parent = path.dirname(current);
-        }
-      }
-    }
-    // Ensure the canonical path is within the canonical root
-    if (!canonical.startsWith(canonicalRoot + path.sep) && canonical !== canonicalRoot) {
-      errors.push(`${label}: path resolves outside the approved model root`);
-    }
+  function validatePath(p: string, label: string): void {
+    const error = getUnsafeRecipePathError(p, label, cwd, canonicalRoot);
+    if (error) errors.push(error);
   }
 
   // Check pass configs for filesystem path parameters
@@ -133,12 +123,12 @@ function validateRecipePaths(recipe: OliveRecipe): string[] {
       const cfg = config as Record<string, unknown>;
       // reference_model_path (OnnxDiscrepancyCheck)
       if (typeof cfg.reference_model_path === "string") {
-        isUnsafePath(cfg.reference_model_path, `passes.${passName}.config.reference_model_path`);
+        validatePath(cfg.reference_model_path, `passes.${passName}.config.reference_model_path`);
       }
       // model_path / data_dir / output_dir (common pass patterns)
       for (const key of ["model_path", "data_dir", "output_dir", "calibration_data_dir"] as const) {
         if (typeof cfg[key] === "string") {
-          isUnsafePath(cfg[key], `passes.${passName}.config.${key}`);
+          validatePath(cfg[key], `passes.${passName}.config.${key}`);
         }
       }
     }
@@ -151,7 +141,7 @@ function validateRecipePaths(recipe: OliveRecipe): string[] {
     if (imConfig && typeof imConfig === "object") {
       const imc = imConfig as Record<string, unknown>;
       if (typeof imc.model_path === "string") {
-        isUnsafePath(imc.model_path, "input_model.config.model_path");
+        validatePath(imc.model_path, "input_model.config.model_path");
       }
     }
   }
