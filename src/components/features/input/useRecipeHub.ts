@@ -2,7 +2,7 @@
  * Hook encapsulating Recipe Hub state and handlers (fetch, import, apply, tab management).
  * Extracted from InputEnvironmentPanel to reduce its complexity (#157).
  */
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import type { UIState } from "@/types";
 import {
   compareCatalogMetadataToRecipe,
@@ -58,15 +58,18 @@ export function useRecipeHub({ setState, hardwareProbe }: UseRecipeHubOpts) {
   const [appliedRecipeLabel, setAppliedRecipeLabel] = useState<string | null>(null);
   const [recipeRailExpanded, setRecipeRailExpanded] = useState(true);
   const [sourceConfigExpanded, setSourceConfigExpanded] = useState(false);
+  const applyRequestRef = useRef(0);
 
   const recipeRailCollapsed = Boolean(appliedRecipeLabel) && !recipeRailExpanded;
 
   const applyCuratedRecipe = async (item: RecipeCatalogItem, options?: { allowIncompatible?: boolean }) => {
+    const requestId = ++applyRequestRef.current;
     setApplyingRecipePath(item.repoPath);
     setSyncStatus("idle");
     setSyncError("");
     try {
       const json = await fetchOliveRecipesCatalogItem(item);
+      if (requestId !== applyRequestRef.current) return;
       const metadata = compareCatalogMetadataToRecipe(item, json);
       const hw = assessCatalogItemHardwareCompatibility(item, hardwareProbe, json);
       if (hw.tier === "unavailable" && !options?.allowIncompatible) {
@@ -97,10 +100,11 @@ export function useRecipeHub({ setState, hardwareProbe }: UseRecipeHubOpts) {
       setTimeout(() => { setRecipeSuccessMsg(null); }, 5000);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
+      if (requestId !== applyRequestRef.current) return;
       setSyncStatus("error");
       setSyncError(err.message || "Failed to load recipe from GitHub.");
     } finally {
-      setApplyingRecipePath(null);
+      if (requestId === applyRequestRef.current) setApplyingRecipePath(null);
     }
   };
 

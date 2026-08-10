@@ -791,10 +791,10 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     hasRocmGpu: Boolean(rocm?.gpus.length),
     hasOpenVino: Boolean(state.openvino?.available),
     hasOpenVinoCompatibleHardware,
-    // Hardware readiness (Windows / DX12 class) is separate from EP registration.
-    // hasDirectMl must reflect ORT reporting DmlExecutionProvider so install CTAs stay accurate.
+    // hasDirectMl must reflect default-family ORT reporting DmlExecutionProvider
+    // so Execute Live / install CTAs stay accurate for the Olive default runtime.
     hasDirectMl: resolveDirectMlEpDetected({
-      defaultProviders: onnxRuntimeProviders,
+      defaultProviders: state.defaultOrtProviders,
     }),
     hasQnnCompatibleHardware,
     qnnLoadable: state.qnnVenvLoadable,

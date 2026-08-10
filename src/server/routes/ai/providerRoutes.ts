@@ -67,28 +67,46 @@ function envCredentialsPayload() {
 async function fetchSpecialProviderCatalog(
   provider: string,
 ): Promise<{ models: Array<{ id: string; label: string }>; source: string; error?: string } | null> {
+  const fallback = (err: unknown) => ({
+    models: [] as Array<{ id: string; label: string }>,
+    source: "fallback",
+    error: err instanceof Error ? err.message : String(err),
+  });
+
   if (provider === "codex") {
-    const server = getCodexAppServer();
-    await server.start();
-    const models = await server.listModels();
-    if (models.length > 0) return { models, source: "live" };
-    return { models: [], source: "fallback", error: "Codex returned an empty model catalog. Sign in, then Refresh." };
+    try {
+      const server = getCodexAppServer();
+      await server.start();
+      const models = await server.listModels();
+      if (models.length > 0) return { models, source: "live" };
+      return { models: [], source: "fallback", error: "Codex returned an empty model catalog. Sign in, then Refresh." };
+    } catch (err: unknown) {
+      return fallback(err);
+    }
   }
   if (provider === "devin") {
-    const catalog = await listDevinModels();
-    return {
-      models: catalog.models.map((m) => ({ id: m.id, label: m.name || m.id })),
-      source: catalog.source,
-      ...(catalog.error ? { error: catalog.error } : {}),
-    };
+    try {
+      const catalog = await listDevinModels();
+      return {
+        models: catalog.models.map((m) => ({ id: m.id, label: m.name || m.id })),
+        source: catalog.source,
+        ...(catalog.error ? { error: catalog.error } : {}),
+      };
+    } catch (err: unknown) {
+      return fallback(err);
+    }
   }
   if (provider === "cloudflare") {
-    const catalog = await listCloudflareModels();
-    return {
-      models: catalog.models.map((m) => ({ id: m.id, label: m.name || m.id })),
-      source: catalog.source,
-      ...(catalog.error ? { error: catalog.error } : {}),
-    };
+    try {
+      const catalog = await listCloudflareModels();
+      return {
+        models: catalog.models.map((m) => ({ id: m.id, label: m.name || m.id })),
+        source: catalog.source,
+        ...(catalog.error ? { error: catalog.error } : {}),
+      };
+    } catch (err: unknown) {
+      return fallback(err);
+    }
   }
   return null;
 }
