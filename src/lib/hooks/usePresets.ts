@@ -1,7 +1,7 @@
 /**
  * Shared import/export preset hooks for inspector components.
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 
 // ─── Import Presets ─────────────────────────────────────────────
 
@@ -45,6 +45,7 @@ export function useImportPresets<T>(opts: {
 } {
   const { customPresets, setError, parseImport } = opts;
   const [importConfirm, setImportConfirm] = useState<ImportConfirmState<T> | null>(null);
+  const importGenerationRef = useRef(0);
 
   const handleImport = useCallback(() => {
     const input = document.createElement("input");
@@ -53,19 +54,28 @@ export function useImportPresets<T>(opts: {
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
+      const generation = ++importGenerationRef.current;
       const reader = new FileReader();
       reader.onload = (ev) => {
+        if (generation !== importGenerationRef.current) return;
         const text = ev.target?.result as string;
         const result = parseImport(text, customPresets);
         if (result.ok === false) {
+          setImportConfirm(null);
           setError(result.error);
         } else {
+          setError("");
           setImportConfirm({
             importedPresets: result.importedPresets,
             collisions: result.collisions,
             mergedPresets: result.presets,
           });
         }
+      };
+      reader.onerror = () => {
+        if (generation !== importGenerationRef.current) return;
+        setImportConfirm(null);
+        setError(`Failed to read file: ${reader.error?.message ?? "unknown error"}`);
       };
       reader.readAsText(file);
     };

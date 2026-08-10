@@ -361,7 +361,6 @@ function Dashboard() {
                                 onOpenAiAudit={handleOpenAiAudit}
                                 onRunStateChange={(running) => {
                                   setIsOliveRunning(running);
-                                  if (running) scrollToSection("execute");
                                 }}
                               />
                             </ErrorBoundary>

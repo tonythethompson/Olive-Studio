@@ -113,8 +113,12 @@ export function getQuantConfig(passes: Passes): QuantizationConfig | null {
       return { ...base, method: "spinquant" };
     case "quarot":
       return { ...base, method: "quarot" };
-    default:
+    case "ptq":
       return { ...base, method: "ptq" };
+    default: {
+      console.warn(`[passAccessors] Unknown quantMethod "${passes.quantMethod}", defaulting to PTQ`);
+      return { ...base, method: "ptq" };
+    }
   }
 }
 

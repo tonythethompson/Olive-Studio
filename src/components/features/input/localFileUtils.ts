@@ -101,5 +101,21 @@ export function getReconstructableGroups(
       groups[base].push(f);
     }
   }
-  return Object.entries(groups).filter(([, files]) => files.length > 0);
+  return Object.entries(groups).filter(([, files]) => {
+    if (files.length < 2) return false;
+    // Require consecutive canonical suffixes (001, 002, ...) starting at 001
+    const suffixes = files
+      .map((f) => {
+        const m = f.name.match(/\.(\d{3,})$/);
+        return m ? m[1] : null;
+      })
+      .filter((s): s is string => s !== null)
+      .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    if (suffixes.length < 2 || suffixes[0] !== "001") return false;
+    for (let i = 1; i < suffixes.length; i++) {
+      const expected = String(i + 1).padStart(3, "0");
+      if (suffixes[i] !== expected) return false;
+    }
+    return true;
+  });
 }

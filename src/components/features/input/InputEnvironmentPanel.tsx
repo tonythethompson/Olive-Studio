@@ -288,7 +288,6 @@ export function InputEnvironmentPanel({
   };
 
   const {
-    filteredRecipes,
     localMatchSummary,
     hardwareMatchSummary,
     curatedRecipesWithMatch,
