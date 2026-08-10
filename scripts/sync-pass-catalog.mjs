@@ -2,11 +2,13 @@
  * Auto-sync script: queries the installed olive-ai CLI for available passes
  * and writes the result to olive-mcp-server/olive_mcp_server/knowledge_base/passes.json.
  *
+ * Target version: olive-ai 0.13.0
+ *
  * Usage:
  *   node scripts/sync-pass-catalog.mjs
  *
  * Requirements:
- *   - Project .venv must exist with olive-ai installed.
+ *   - Project .venv must exist with olive-ai 0.13.0 installed.
  *   - Run from the project root.
  */
 
@@ -127,6 +129,23 @@ async function main() {
     process.exit(1);
   }
 
+  // Verify installed olive-ai version before proceeding
+  const EXPECTED_VERSION_PREFIX = "0.13";
+  let oliveVersion;
+  try {
+    oliveVersion = await runPython(["-c", "import olive; print(olive.__version__)"]);
+  } catch (err) {
+    console.error(`❌ Failed to detect olive-ai version: ${err.message}`);
+    process.exit(1);
+  }
+  if (!oliveVersion.startsWith(EXPECTED_VERSION_PREFIX)) {
+    console.error(
+      `❌ Expected olive-ai ${EXPECTED_VERSION_PREFIX}.x but found ${oliveVersion}. Install 0.13.0 first.`
+    );
+    process.exit(1);
+  }
+  console.log(`✓ Detected olive-ai ${oliveVersion}`);
+
   console.log("🔍 Extracting passes from olive-ai CLI...");
   const extracted = await extractPassesFromOlive();
 
@@ -142,6 +161,9 @@ async function main() {
     _generated: new Date().toISOString(),
     _source: "olive-ai CLI pass registry",
     _passCount: Object.keys(merged).length,
+    olive_version: "0.13.0",
+    version: "0.13.0",
+    last_updated: new Date().toISOString().slice(0, 10),
   };
 
   const output = { ...metadata, ...merged };

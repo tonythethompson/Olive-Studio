@@ -82,10 +82,10 @@ export function isQuantMethodAllowed(
     return GPU_PROVIDERS.includes(provider);
   }
   if (method === "qat") {
-    return provider !== "QNNExecutionProvider";
+    return provider !== "QNNExecutionProvider" && provider !== "QnnAbiExecutionProvider";
   }
-  if (method === "hqq" || method === "rtn") {
-    // OnnxHqqQuantization and OnnxBlockWiseRtnQuantization only support CPU/CUDA.
+  if (method === "hqq" || method === "rtn" || method === "kquant") {
+    // OnnxHqqQuantization, OnnxBlockWiseRtnQuantization, and KQuant/OnnxKquantQuantization only support CPU/CUDA.
     return provider === "CPUExecutionProvider" || provider === "CUDAExecutionProvider";
   }
   if (method === "spinquant" || method === "quarot") {
@@ -126,7 +126,7 @@ export function isStructuredPruningAllowed(provider: IHVProvider): boolean {
 }
 
 export function isPeftAllowed(provider: IHVProvider): boolean {
-  return !["QNNExecutionProvider", "OpenVINOExecutionProvider"].includes(provider);
+  return !["QNNExecutionProvider", "QnnAbiExecutionProvider", "OpenVINOExecutionProvider"].includes(provider);
 }
 
 export function isPeftMethodAllowed(method: UIState["passes"]["peftMethod"], provider: IHVProvider): boolean {
@@ -188,6 +188,14 @@ export function getProviderConflicts(providerId: IHVProvider, passes: UIState["p
     autofix: () => ({ quantMethod: "ptq" }),
   });
 
+  add(passes.quantization && passes.quantMethod === "kquant" && !isQuantMethodAllowed("kquant", providerId), {
+    passKey: "quantMethod",
+    passName: "KQuant Quantization",
+    reason: "KQuant (ggml-style) requires CPU or CUDA — not supported on QNN, OpenVINO, or other providers.",
+    severity: "critical",
+    autofix: () => ({ quantMethod: "ptq" }),
+  });
+
   add(
     passes.quantization &&
     (passes.quantMethod === "spinquant" || passes.quantMethod === "quarot") &&
@@ -216,10 +224,10 @@ export function getProviderConflicts(providerId: IHVProvider, passes: UIState["p
     passKey: "peft",
     passName: "PEFT / LoRA Training",
     reason:
-      providerId === "QNNExecutionProvider"
+      providerId === "QNNExecutionProvider" || providerId === "QnnAbiExecutionProvider"
         ? "Snapdragon QNN targets are inference-only and cannot run PEFT training loops."
         : "Intel OpenVINO targets are inference-only; PEFT training requires CUDA or ROCm.",
-    severity: providerId === "QNNExecutionProvider" ? "critical" : "warning",
+    severity: providerId === "QNNExecutionProvider" || providerId === "QnnAbiExecutionProvider" ? "critical" : "warning",
     autofix: () => ({ peft: false }),
   });
 
@@ -449,6 +457,53 @@ const CROSS_PASS_RULES: CrossPassRule[] = [
     affectedPasses: ["conversion", "provider"],
     actionLabel: "Switch conversion to ONNX",
   },
+  {
+    id: "qairt-pipeline-requires-qnn",
+    applies: (passes, provider) =>
+      passes.qairtPipeline &&
+      provider !== "QNNExecutionProvider" &&
+      (provider as string) !== "QnnAbiExecutionProvider",
+    fix: { qairtPipeline: false },
+    autoCoerce: true,
+    severity: "critical",
+    title: "QairtPipeline requires QNN execution provider",
+    description:
+      "QairtPipeline is a QNN-only pass that compiles models for Qualcomm Snapdragon NPUs. It requires QNNExecutionProvider or QnnAbiExecutionProvider.",
+    affectedTabs: ["quantization"],
+    affectedPasses: ["qairtPipeline", "provider"],
+    actionLabel: "Disable QairtPipeline",
+  },
+  {
+    id: "simplified-layernorm-requires-qnn",
+    applies: (passes, provider) =>
+      passes.simplifiedLayerNormToRMSNorm &&
+      provider !== "QNNExecutionProvider" &&
+      (provider as string) !== "QnnAbiExecutionProvider",
+    fix: { simplifiedLayerNormToRMSNorm: false },
+    autoCoerce: true,
+    severity: "critical",
+    title: "SimplifiedLayerNormToRMSNorm requires QNN",
+    description:
+      "SimplifiedLayerNormToRMSNorm is a QNN-targeted graph surgery that converts SimplifiedLayerNorm nodes to RMSNorm for Snapdragon NPU compatibility. Requires QNNExecutionProvider or QnnAbiExecutionProvider.",
+    affectedTabs: ["transforms"],
+    affectedPasses: ["simplifiedLayerNormToRMSNorm", "provider"],
+    actionLabel: "Disable SimplifiedLayerNormToRMSNorm",
+  },
+  {
+    id: "mobius-builder-incompatible-qnn",
+    applies: (passes, provider) =>
+      passes.mobiusBuilder &&
+      (provider === "QNNExecutionProvider" || (provider as string) === "QnnAbiExecutionProvider"),
+    fix: { mobiusBuilder: false },
+    autoCoerce: true,
+    severity: "critical",
+    title: "MobiusBuilder incompatible with QNN",
+    description:
+      "MobiusBuilder produces ORT GenAI composite packages targeting CPU/CUDA. The ONNX GenAI runtime package does not target Qualcomm NPU hardware.",
+    affectedTabs: ["conversion"],
+    affectedPasses: ["mobiusBuilder", "provider"],
+    actionLabel: "Disable MobiusBuilder",
+  },
 ];
 
 function getCrossPassIssues(state: UIState): PipelineIssue[] {
@@ -538,7 +593,7 @@ function getQnnRecipeReadinessIssues(
   recipe: OliveRecipe,
   probe?: HardwareProbeResult | null,
 ): PipelineIssue[] {
-  if (state.ihvProvider !== "QNNExecutionProvider") return [];
+  if (state.ihvProvider !== "QNNExecutionProvider" && state.ihvProvider !== "QnnAbiExecutionProvider") return [];
 
   return assessQnnRecipeReadiness({
     state,
@@ -635,6 +690,39 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
       description:
         "INT4 precision is generally not hardware-accelerated on standard CPUs (may fallback to FP32 math).",
       affectedPasses: ["quantization", "provider"],
+    });
+  }
+
+  // 0.13.0 migration: warn when passRecipeOverrides reference removed/renamed passes.
+  const REMOVED_PASSES: Record<string, string> = {
+    MobiusModelBuilder: "Renamed to MobiusBuilder in Olive 0.13.0.",
+    QairtPreparation: "Removed in Olive 0.13.0 — superseded by QairtPipeline.",
+    QairtGenAIBuilder: "Removed in Olive 0.13.0 — superseded by QairtPipeline.",
+  };
+  if (state.passRecipeOverrides) {
+    for (const passName of Object.keys(state.passRecipeOverrides)) {
+      if (REMOVED_PASSES[passName]) {
+        issues.push({
+          id: `removed-pass-${passName}`,
+          severity: "warning",
+          title: `Deprecated pass: ${passName}`,
+          description: REMOVED_PASSES[passName],
+          affectedPasses: [passName],
+        });
+      }
+    }
+  }
+
+  // 0.13.0: trust_remote_code default flipped. Inform user when it's disabled for HF models.
+  if (passes.trustRemoteCode === false && state.modelSource === "huggingface") {
+    issues.push({
+      id: "trust-remote-code-advisory",
+      severity: "info",
+      title: "trust_remote_code is disabled",
+      description:
+        "Some HuggingFace models require trust_remote_code=true. Enable in Advanced settings if model loading fails.",
+      affectedTabs: ["input"],
+      affectedPasses: ["input_model"],
     });
   }
 
@@ -765,7 +853,7 @@ export function getLocalExecutionIssues(
     // AND the host is a recognized QNN-capable platform (Windows ARM64 or x64).
     const qnnHostMode = probe?.qnn?.hostMode;
     const qnnPreparationAllowed =
-      provider === "QNNExecutionProvider" &&
+      (provider === "QNNExecutionProvider" || provider === "QnnAbiExecutionProvider") &&
       probe?.qnn?.loadable === true &&
       (qnnHostMode === "preparation" || qnnHostMode === "local-inference");
     if (!detected && !qnnPreparationAllowed) {
@@ -932,6 +1020,13 @@ export function sanitizePipelineState(state: UIState): UIState {
     passes: coercePassFields(state.passes, state.ihvProvider),
   };
 
+  // Olive 0.13.0 flipped trust_remote_code default to false. When the model
+  // source is HuggingFace and the field is missing/undefined (e.g. persisted
+  // state from before 0.13.0), coerce it to true so recipes don't silently fail.
+  if (current.modelSource === "huggingface" && current.passes.trustRemoteCode === undefined) {
+    current = { ...current, passes: { ...current.passes, trustRemoteCode: true } };
+  }
+
   for (let i = 0; i < 16; i++) {
     const validation = getPipelineValidation(current);
     // Only auto-apply critical fixes; warnings should be surfaced to the user.
@@ -1017,6 +1112,7 @@ export function getAllowedQuantMethods(provider: IHVProvider): UIState["passes"]
     "qat",
     "hqq",
     "rtn",
+    "kquant",
     "spinquant",
     "quarot",
   ];

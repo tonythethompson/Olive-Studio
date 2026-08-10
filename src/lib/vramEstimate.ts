@@ -206,6 +206,7 @@ export function isGpuProvider(provider: IHVProvider): boolean {
     case "CPUExecutionProvider":
     case "OpenVINOExecutionProvider":
     case "QNNExecutionProvider":
+    case "QnnAbiExecutionProvider":
     case "CoreMLExecutionProvider":
     case "NNAPIExecutionProvider":
     case "VitisAIExecutionProvider":
@@ -290,8 +291,8 @@ export function getSelectedGpuVramGb(
     provider === "ROCMExecutionProvider"
       ? (probe.rocm?.gpus ?? [])
       : provider === "CUDAExecutionProvider" ||
-          provider === "NvTensorRTRTXExecutionProvider" ||
-          provider === "TensorrtExecutionProvider"
+        provider === "NvTensorRTRTXExecutionProvider" ||
+        provider === "TensorrtExecutionProvider"
         ? (probe.nvidia?.gpus ?? [])
         : [];
 

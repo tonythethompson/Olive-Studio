@@ -117,7 +117,7 @@ const PASS_STRING_COERCE: Record<string, Set<string>> = {
   conversionSourceFormat: new Set(["pytorch", "tensorflow", "jax"]),
   conversionFormat: new Set(["onnx", "openvino", "qnn", "tensorrt"]),
   conversionInputTargetTypes: new Set(),
-  quantMethod: new Set(["ptq", "awq", "qat", "gptq", "hqq", "rtn", "spinquant", "quarot"]),
+  quantMethod: new Set(["ptq", "awq", "qat", "gptq", "hqq", "rtn", "kquant", "spinquant", "quarot"]),
   quantPrecision: new Set(["int4", "int8", "fp16"]),
   quantPreset: new Set(),
   pruningType: new Set(["structured", "unstructured"]),
@@ -197,6 +197,7 @@ const QUANT_METHODS = new Set<UIState["passes"]["quantMethod"]>([
   "gptq",
   "hqq",
   "rtn",
+  "kquant",
   "spinquant",
   "quarot",
 ]);

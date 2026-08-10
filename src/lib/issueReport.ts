@@ -156,7 +156,7 @@ function collectHardwareInfo(probe: HardwareProbeResult | null | undefined): str
 }
 
 function collectOliveVersion(): string {
-  return "ORT pinned: 1.26.0 | Olive: 0.12.1";
+  return "ORT pinned: 1.26.0 | Olive: 0.13.0";
 }
 
 function collectRecipeInfo(state: UIState | undefined): string {

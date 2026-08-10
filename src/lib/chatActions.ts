@@ -26,7 +26,7 @@ const PASS_STRING_ENUMS: Record<string, Set<string>> = {
   conversionSourceFormat: new Set(["pytorch", "tensorflow", "jax"]),
   conversionFormat: new Set(["onnx", "openvino", "qnn", "tensorrt"]),
   conversionInputTargetTypes: new Set(), // free string (dtype list)
-  quantMethod: new Set(["ptq", "awq", "qat", "gptq", "hqq", "rtn", "spinquant", "quarot"]),
+  quantMethod: new Set(["ptq", "awq", "qat", "gptq", "hqq", "rtn", "kquant", "spinquant", "quarot"]),
   quantPrecision: new Set(["int4", "int8", "fp16"]),
   quantPreset: new Set(), // free string
   pruningType: new Set(["structured", "unstructured"]),

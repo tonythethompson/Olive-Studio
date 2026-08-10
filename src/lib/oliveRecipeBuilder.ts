@@ -148,9 +148,19 @@ export function applyPassRecipeOverride(
  */
 function preferredPassOrder(torchQuantActive: boolean): string[] {
   if (torchQuantActive) {
-    return ["peft", "pruning", "quantization", "conversion", "transformer_opt", "float16", "splitting"];
+    return [
+      "peft", "pruning", "quantization", "conversion", "transformer_opt",
+      "mobius_builder", "quantize_embedding_int8", "share_embedding_lm_head",
+      "simplified_layer_norm_to_rms_norm", "float16", "splitting",
+      "qairt_pipeline", "onnx_discrepancy_check",
+    ];
   }
-  return ["peft", "pruning", "conversion", "transformer_opt", "quantization", "float16", "splitting"];
+  return [
+    "peft", "pruning", "conversion", "transformer_opt", "quantization",
+    "mobius_builder", "quantize_embedding_int8", "share_embedding_lm_head",
+    "simplified_layer_norm_to_rms_norm", "float16", "splitting",
+    "qairt_pipeline", "onnx_discrepancy_check",
+  ];
 }
 
 function orderPasses(passes: Record<string, unknown>, torchQuantActive: boolean): Record<string, unknown> {
@@ -353,7 +363,7 @@ function buildQatQuantizer(state: UIState): PassSpec {
   };
 }
 
-// Docs: https://microsoft.github.io/Olive/0.12.1/reference/options.html -> OnnxHqqQuantization
+// Docs: https://microsoft.github.io/Olive/0.13.0/reference/options.html -> OnnxHqqQuantization
 function buildHqqQuantizer(state: UIState): PassSpec {
   const quant = intQuantSpec(state.passes.quantPrecision);
   return {
@@ -365,7 +375,7 @@ function buildHqqQuantizer(state: UIState): PassSpec {
   };
 }
 
-// Docs: https://microsoft.github.io/Olive/0.12.1/reference/options.html -> OnnxBlockWiseRtnQuantization
+// Docs: https://microsoft.github.io/Olive/0.13.0/reference/options.html -> OnnxBlockWiseRtnQuantization
 function buildRtnQuantizer(state: UIState): PassSpec {
   const quant = intQuantSpec(state.passes.quantPrecision);
   return {
@@ -396,6 +406,26 @@ function buildQuaRotQuantizer(state: UIState): PassSpec {
 }
 
 /**
+ * ggml-style K-Quant: dispatches to PyTorch KQuant or OnnxKquantQuantization
+ * depending on whether ONNX conversion is active (ONNX input available).
+ */
+function buildKquantQuantizer(state: UIState): PassSpec {
+  const bits = state.passes.quantPrecision === "int4" ? 4 : 8;
+  const passType = state.passes.conversion ? "OnnxKquantQuantization" : "KQuant";
+  return {
+    type: passType,
+    config: withCalibrationData(
+      {
+        bits,
+        is_symmetric: true,
+        group_size: 128,
+      },
+      state,
+    ),
+  };
+}
+
+/**
  * First-match-wins quant dispatch: PyTorch-native method builders first,
  * then provider/format-family builders (hqq/rtn fall through when their
  * provider gate fails, exactly as the original branch chain did).
@@ -406,6 +436,7 @@ const QUANT_METHOD_BUILDERS: Partial<Record<QuantMethod, QuantMethodBuilder>> = 
   qat: { build: buildQatQuantizer },
   hqq: { gate: isCpuOrCuda, build: buildHqqQuantizer },
   rtn: { gate: isCpuOrCuda, build: buildRtnQuantizer },
+  kquant: { gate: isCpuOrCuda, build: buildKquantQuantizer },
   spinquant: { build: buildSpinQuantQuantizer },
   quarot: { build: buildQuaRotQuantizer },
 };
@@ -536,6 +567,59 @@ function buildPruningPass(state: UIState): PassSpec | undefined {
 
 // ─── Pass registry ────────────────────────────────────────────────────
 
+// ─── 0.13.0 New Passes ────────────────────────────────────────────────
+
+/** MobiusBuilder: ONNX export via Mobius; produces ORT GenAI composite packages. */
+function buildMobiusBuilder(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!_state.passes.mobiusBuilder) return undefined;
+  return {
+    type: "MobiusBuilder",
+    config: {
+      model_name: _state.hfModelId || "unspecified",
+      cache_model: true,
+    },
+  };
+}
+
+/** QairtPipeline: Single-pass QAIRT LLM pipeline (QNN-only). */
+function buildQairtPipeline(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!_state.passes.qairtPipeline) return undefined;
+  return {
+    type: "QairtPipeline",
+    config: {},
+  };
+}
+
+/** QuantizeEmbeddingInt8: Graph surgery for INT8 embedding quantization. */
+function buildQuantizeEmbeddingInt8(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!_state.passes.quantizeEmbeddingInt8) return undefined;
+  return { type: "QuantizeEmbeddingInt8", config: {} };
+}
+
+/** ShareEmbeddingLmHead: Graph surgery to share embedding/LM-head weights. */
+function buildShareEmbeddingLmHead(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!_state.passes.shareEmbeddingLmHead) return undefined;
+  return { type: "ShareEmbeddingLmHead", config: {} };
+}
+
+/** SimplifiedLayerNormToRMSNorm: Graph surgery converting SimplifiedLayerNorm to RMSNorm. */
+function buildSimplifiedLayerNormToRMSNorm(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!_state.passes.simplifiedLayerNormToRMSNorm) return undefined;
+  return { type: "SimplifiedLayerNormToRMSNorm", config: {} };
+}
+
+/** OnnxDiscrepancyCheck: Validation pass measuring numerical discrepancies. */
+function buildOnnxDiscrepancyCheck(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
+  if (!_state.passes.onnxDiscrepancyCheck) return undefined;
+  const config: Record<string, unknown> = {};
+  if (_state.userScript) {
+    config.test_data_dir = _state.userScript;
+  }
+  return { type: "OnnxDiscrepancyCheck", config };
+}
+
+// ─── Pass builder registry ────────────────────────────────────────────
+
 /**
  * Per-pass builder registry. buildOliveRecipe invokes every builder with the
  * shared context; a builder returns undefined when its pass is inactive.
@@ -548,6 +632,12 @@ const PASS_BUILDERS = {
   splitting: buildSplittingPass,
   peft: buildPeftPass,
   pruning: buildPruningPass,
+  mobius_builder: buildMobiusBuilder,
+  qairt_pipeline: buildQairtPipeline,
+  quantize_embedding_int8: buildQuantizeEmbeddingInt8,
+  share_embedding_lm_head: buildShareEmbeddingLmHead,
+  simplified_layer_norm_to_rms_norm: buildSimplifiedLayerNormToRMSNorm,
+  onnx_discrepancy_check: buildOnnxDiscrepancyCheck,
 } satisfies Record<string, PassBuilder>;
 
 type PassKey = keyof typeof PASS_BUILDERS;
@@ -604,6 +694,11 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
     inputConfig.task = resolveHfTask(state);
     if (state.hfDataset) {
       inputConfig.dataset = state.hfDataset;
+    }
+    // Olive 0.13.0 flipped trust_remote_code default to false; emit explicitly
+    // so HF models requiring custom code (Phi, Mistral, etc.) still load.
+    if (state.passes.trustRemoteCode !== false) {
+      inputConfig.trust_remote_code = true;
     }
     if (useMemoryOffload) {
       inputConfig.load_kwargs = buildHfLoadKwargs(state.ihvProvider, null);

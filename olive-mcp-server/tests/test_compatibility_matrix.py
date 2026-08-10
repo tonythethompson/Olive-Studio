@@ -518,7 +518,7 @@ def test_matrix_file_exists() -> None:
 def test_real_matrix_has_required_top_level_fields(matrix: dict[str, Any]) -> None:
     # Arrange — fixture loads real matrix
     # Act / Assert
-    assert matrix.get("version") == "0.3.3"
+    assert matrix.get("version") == "0.4.0"
     assert _MATRIX_VERSION_RE.fullmatch(matrix["version"])
     assert _DATE_RE.fullmatch(matrix["last_updated"])
     assert isinstance(matrix["models"], list) and len(matrix["models"]) >= 1
