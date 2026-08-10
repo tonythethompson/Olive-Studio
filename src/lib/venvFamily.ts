@@ -123,6 +123,7 @@ export function mandatoryFamilyForProvider(provider: IHVProvider): VenvFamily | 
     case "OpenVINOExecutionProvider":
       return "openvino";
     case "QNNExecutionProvider":
+    case "QnnAbiExecutionProvider":
       return "qnn";
     case "DmlExecutionProvider":
     case "ROCMExecutionProvider":

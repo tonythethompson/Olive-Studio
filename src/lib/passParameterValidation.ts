@@ -36,6 +36,7 @@ interface ParamRule {
 function hardwareLabel(provider: IHVProvider): string {
   switch (provider) {
     case "QNNExecutionProvider":
+    case "QnnAbiExecutionProvider":
       return "Qualcomm QNN";
     case "OpenVINOExecutionProvider":
       return "Intel OpenVINO";
