@@ -13,6 +13,10 @@ import { getSelectableProviders } from "../src/lib/hardwareProbe";
 import { alwaysSelectableProviders } from "../src/lib/providerRuntimeKind";
 import { deriveUiStateFromOliveRecipe } from "../src/lib/oliveRecipeHub";
 import { UIState } from "../src/types";
+import { kbReady } from "../src/lib/schemaEngine";
+
+// Ensure knowledge base is loaded before running synchronous validation
+await kbReady().catch(() => undefined);
 
 const baseState: UIState = {
   modelSource: "huggingface",
