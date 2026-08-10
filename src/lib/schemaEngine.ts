@@ -18,7 +18,8 @@ import {
   type PassCatalogEntry,
   OLIVE_VERSION,
 } from "@/lib/passCatalog";
-import passKnowledgeBase from "../../olive-mcp-server/olive_mcp_server/knowledge_base/passes.json";
+
+// passes.json is loaded lazily on first use to avoid inlining 62KB into the main bundle.
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -87,12 +88,26 @@ export interface PassesJson {
 let kbData: PassesJson | null = null;
 let PARAM_SCHEMAS: Map<string, PassParamSchema> = new Map();
 
-/** Lazy-load the knowledge base data on first use (synchronous). */
+/** Lazy-load the knowledge base data. Starts loading at module eval time,
+ *  but the 62KB JSON is in a separate chunk rather than inlined in the main bundle. */
 function ensureKbLoaded(): void {
+  // After the async load completes, this becomes a no-op
   if (kbData !== null) return;
-  kbData = passKnowledgeBase as unknown as PassesJson;
-  PARAM_SCHEMAS = buildParamSchemas(kbData);
+  // If the async load hasn't completed yet, use empty data (validation gracefully degrades)
 }
+
+// Kick off the async load immediately — it won't block the main bundle parse,
+// but will be ready by the time the user actually triggers validation.
+(async () => {
+  try {
+    const mod = await import("../../olive-mcp-server/olive_mcp_server/knowledge_base/passes.json");
+    const data = (mod.default ?? mod) as unknown as PassesJson;
+    kbData = data;
+    PARAM_SCHEMAS = buildParamSchemas(data);
+  } catch {
+    // Schema validation degrades gracefully without KB data
+  }
+})();
 
 function isEmptyValue(v: unknown): boolean {
   return v === null || v === undefined || v === "";

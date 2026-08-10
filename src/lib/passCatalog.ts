@@ -522,13 +522,3 @@ export function getPassCatalogEntry(name: string): PassCatalogEntry | undefined 
   return PASS_CATALOG.find((p) => p.name === name);
 }
 
-/** All known pass names grouped by category. */
-export function getPassesByCategory(): Record<PassCategory, PassCatalogEntry[]> {
-  const byCategory: Record<string, PassCatalogEntry[]> = {};
-  for (const entry of PASS_CATALOG) {
-    const cat = entry.category;
-    if (!byCategory[cat]) byCategory[cat] = [];
-    byCategory[cat].push(entry);
-  }
-  return byCategory as Record<PassCategory, PassCatalogEntry[]>;
-}

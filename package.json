@@ -5,6 +5,7 @@
   "license": "MIT",
   "description": "GUI for Microsoft Olive model optimization — runs locally, no cloud required",
   "type": "module",
+  "sideEffects": ["*.css"],
   "bin": {
     "olive-studio": "./bin/cli.js"
   },
@@ -70,7 +71,6 @@
     "helmet": "^8.3.0",
     "jszip": "^3.10.1",
     "lucide-react": "^1.27.0",
-    "motion": "^13.0.0",
     "onnxruntime-web": "^1.27.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
