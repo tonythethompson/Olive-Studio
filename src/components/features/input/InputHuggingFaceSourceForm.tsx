@@ -65,6 +65,24 @@ export function InputHuggingFaceSourceForm({
         </div>
       </div>
 
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+        <label className="flex cursor-pointer items-start gap-3" htmlFor="trust-remote-code">
+          <input
+            id="trust-remote-code"
+            type="checkbox"
+            checked={state.passes.trustRemoteCode}
+            onChange={(e) => setState({ passes: { ...state.passes, trustRemoteCode: e.target.checked } })}
+            className="mt-0.5 h-4 w-4 accent-amber-500"
+          />
+          <span>
+            <span className="block text-sm font-medium text-amber-200">Trust remote code</span>
+            <span className="mt-1 block text-xs leading-relaxed text-slate-400">
+              Enable only after reviewing the model repository. This allows Hugging Face to run repository-provided Python while loading the model.
+            </span>
+          </span>
+        </label>
+      </div>
+
       <div className="p-4 rounded-xl border border-slate-800 bg-slate-900/30 space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <Label className="flex items-center gap-1.5 mb-0">

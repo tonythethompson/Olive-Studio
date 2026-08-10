@@ -155,13 +155,14 @@ describe("preflightOliveRecipe", () => {
   describe("path safety validation", () => {
     it("rejects input_model.config.model_path with .. traversal", () => {
       const recipe = minimalRecipe();
+      if (!recipe.input_model) throw new Error("minimal recipe must include input_model");
       recipe.input_model.config = { model_path: "../../../etc/passwd" };
       const pre = preflightOliveRecipe(recipe);
       expect(pre.valid).toBe(false);
       expect(pre.errors.some((e) => /input_model\.config\.model_path.*not a safe reference model path/i.test(e))).toBe(true);
     });
 
-    it("rejects pass config paths outside the project root", () => {
+    it("rejects absolute pass config paths", () => {
       const recipe = minimalRecipe();
       recipe.passes = {
         conversion: {
@@ -171,7 +172,20 @@ describe("preflightOliveRecipe", () => {
       };
       const pre = preflightOliveRecipe(recipe);
       expect(pre.valid).toBe(false);
-      expect(pre.errors.some((e) => /passes\.conversion\.config\.model_path.*outside the approved model root/i.test(e))).toBe(true);
+      expect(pre.errors.some((e) => /passes\.conversion\.config\.model_path.*absolute paths are not allowed/i.test(e))).toBe(true);
+    });
+
+    it("rejects Windows absolute pass config paths", () => {
+      const recipe = minimalRecipe();
+      recipe.passes = {
+        conversion: {
+          type: "OnnxConversion",
+          config: { target_opset: 20, model_path: "C:\\models\\model.onnx" },
+        },
+      };
+      const pre = preflightOliveRecipe(recipe);
+      expect(pre.valid).toBe(false);
+      expect(pre.errors.some((e) => /passes\.conversion\.config\.model_path.*absolute paths are not allowed/i.test(e))).toBe(true);
     });
 
     it("rejects UNC paths in pass configs", () => {

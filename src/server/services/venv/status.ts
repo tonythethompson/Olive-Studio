@@ -131,8 +131,9 @@ try:
         maybe_register_ep_libraries()
     except Exception:
         pass
+    qnn_eps = {"QNNExecutionProvider", "QnnAbiExecutionProvider"}
     for device in ort.get_ep_devices():
-        if getattr(device, "ep_name", None) != "QNNExecutionProvider":
+        if getattr(device, "ep_name", None) not in qnn_eps:
             continue
         out["qnn_ep_any"] = True
         device_type = getattr(getattr(device, "device", None), "type", None)
@@ -296,7 +297,11 @@ function buildCapabilities(
     } else if (!probe?.onnxruntime_qnn) {
       caps.qnnPreparation = missing("onnxruntime-qnn plugin not installed");
       caps.qnnInference = missing("onnxruntime-qnn plugin not installed");
-    } else if (!probe.qnn_ep_any && !providers.has("QNNExecutionProvider")) {
+    } else if (
+      !probe.qnn_ep_any &&
+      !providers.has("QNNExecutionProvider") &&
+      !providers.has("QnnAbiExecutionProvider")
+    ) {
       caps.qnnPreparation = broken(
         "onnxruntime-qnn installed but no QNN EpDevice registered (Olive native registration)",
       );

@@ -113,39 +113,39 @@ Severity assumes the documented local-first threat model. LAN exposure raises ev
 
 ### High
 
-3. **`trust_remote_code` is explicit opt-in (Olive 0.13.0)**  
+1. **Finding 3: `trust_remote_code` is explicit opt-in (Olive 0.13.0)**
    **Verified (2026-08-10):** `DEFAULT_PASSES.trustRemoteCode` is `false`; `buildOliveRecipe` emits `trust_remote_code: true` only when the user enables **Trust Remote Code** in Advanced settings (`trustRemoteCode === true`). Legacy persisted `undefined` values coerce to `false` in `coercePassFields`, not `true`.  
    **Local-trust model:** Studio runs on loopback for a single operator. Enabling remote code executes Hugging Face repo Python on the local machine with the same trust boundary as running Olive locally. Do not enable on shared or hostile networks without reviewing the model repo.  
    **Residual:** MCP troubleshooting entries may suggest `trust_remote_code: true`; Apply Fix still requires a deliberate UI action and does not bypass the recipe opt-in gate.
 
-4. **In-app MCP proxy imports a missing `call_tool`**  
+1. **Finding 4: In-app MCP proxy imports a missing `call_tool`**
    **Verified:** `mcp.ts` runs `from olive_mcp_server.mcp_server import call_tool`, but `mcp_server.py` only exposes FastMCP tools (no module-level `call_tool`). Tests use `mcp.call_tool(...)`, a different API.  
    **Impact:** `POST /api/mcp/tool` fails at runtime; fragile `-c` string embedding.  
    **Fix:** Add an allowlisted `call_tool` helper (or invoke FastMCP properly); pass args via stdin/JSON file, not interpolated Python.
 
-5. **`/api/mcp/tool` is unrate-limited and spawns Python**  
+1. **Finding 5: `/api/mcp/tool` is unrate-limited and spawns Python**
    **Verified:** No rate limit on the tool route (KB sync is limited).  
    **Fix:** Apply `heavyCommandRateLimit` or a dedicated limiter.
 
-6. **`SYNC_KB_TOKEN` is documented but not enforced**  
+1. **Finding 6: `SYNC_KB_TOKEN` is documented but not enforced**
    **Verified:** `.env.example` and `useKbSync.ts` send `x-sync-token`; `POST /mcp/sync-kb` never checks it.  
    **Fix:** Enforce when env is set, or remove the docs.
 
-7. **Runtime `olive-ai` install is unpinned**  
+1. **Finding 7: Runtime `olive-ai` install is unpinned**
    **Verified:** venv path installs `olive-ai` without a version pin.  
    **Fix:** Pin in install command + document supported Olive versions.
 
 ### Medium
 
-7. Several cost/abuse endpoints lack rate limits (`/ai/chat`, Codex ask, Ollama pull path).
-8. HF token setter is unrate-limited.
-9. Job logs are readable by job ID on the open API.
-10. Tauri CSP is null; weaker XSS containment in the desktop shell.
-11. Version skew: Tauri `0.3.0` vs npm `0.2.0`.
-12. KB sync unexpected errors may surface as success-shaped responses (check `mcp.ts` catch path).
-13. No global Express error middleware (unhandled errors may leak stacks).
-14. Devin credentials persist on disk (`0o600`, gitignored); acceptable for local-first, harden later if needed.
-15. Local Python `mcp` dep allows `>=1.0.0` in `pyproject.toml`; CI pins `mcp<2`, but local installs can still break on 2.x.
+1. **Finding 8:** Several cost/abuse endpoints lack rate limits (`/ai/chat`, Codex ask, Ollama pull path).
+1. **Finding 9:** HF token setter is unrate-limited.
+1. **Finding 10:** Job logs are readable by job ID on the open API.
+1. **Finding 11:** Tauri CSP is null; weaker XSS containment in the desktop shell.
+1. **Finding 12:** Version skew: Tauri `0.3.0` vs npm `0.2.0`.
+1. **Finding 13:** KB sync unexpected errors may surface as success-shaped responses (check `mcp.ts` catch path).
+1. **Finding 14:** No global Express error middleware (unhandled errors may leak stacks).
+1. **Finding 15:** Devin credentials persist on disk (`0o600`, gitignored); acceptable for local-first, harden later if needed.
+1. **Finding 16:** Local Python `mcp` dep allows `>=1.0.0` in `pyproject.toml`; CI pins `mcp<2`, but local installs can still break on 2.x.
 
 ### Low / positive controls
 

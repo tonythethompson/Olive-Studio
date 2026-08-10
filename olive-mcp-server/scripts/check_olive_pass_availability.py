@@ -29,18 +29,16 @@ _REQUIRED_SUPPORT = frozenset({"supported", "warning"})
 _PASS_REGISTRY_ALIASES: dict[str, tuple[str, ...]] = {
     "qnnquantization": ("qnnpreprocess", "qnnconversion", "onnxquantization", "onnxstaticquantization"),
     "onnxmodeloptimizer": ("onnxpeepholeoptimizer",),
+    # Olive 0.13 exposes QAIRT through QairtPipelinePass and the remaining
+    # entries as GraphSurgeries, not as separate registered pass names.
+    "qairtpipeline": ("qairtpipelinepass",),
+    "quantizeembeddingint8": ("graphsurgeries",),
+    "shareembeddinglmhead": ("graphsurgeries",),
+    "simplifiedlayernormtormsnorm": ("graphsurgeries",),
 }
 
 # Cloud workflow passes are valid matrix claims but are not listed in local olive_config.json.
 _CLOUD_ONLY_PASSES = frozenset({"azuremlquantization"})
-
-# Olive 0.13 reference / Studio catalog passes not yet enumerable via PassRegistry on PyPI 0.13.0.
-_STUDIO_CATALOG_ONLY_PASSES = frozenset({
-    "qairtpipeline",
-    "quantizeembeddingint8",
-    "shareembeddinglmhead",
-    "simplifiedlayernormtormsnorm",
-})
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _MCP_ROOT = _SCRIPT_DIR.parent
@@ -281,15 +279,6 @@ def _claim_in_registry(claimed_name: str, available_lower: set[str]) -> bool:
     for alias in _PASS_REGISTRY_ALIASES.get(lowered, ()):
         if alias in available_lower:
             return True
-    # Fall back to studio catalog allowlist only when the pass is not yet
-    # enumerable via the installed Olive package (e.g. reference-only passes
-    # documented in Olive 0.13 but not exposed through PassRegistry on PyPI).
-    if lowered in _STUDIO_CATALOG_ONLY_PASSES:
-        _LOG.info(
-            "Pass %r not in Olive registry; accepted via Studio catalog allowlist",
-            claimed_name,
-        )
-        return True
     return False
 
 

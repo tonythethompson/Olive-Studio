@@ -355,6 +355,7 @@ npu_devices = [
 ]
 if not npu_devices:
     raise SystemExit("No QNN NPU OrtEpDevice (OrtHardwareDeviceType.NPU)")
+provider_name = npu_devices[0].ep_name
 
 X = helper.make_tensor_value_info("X", TensorProto.FLOAT, [1, 2])
 Y = helper.make_tensor_value_info("Y", TensorProto.FLOAT, [1, 2])
@@ -366,7 +367,7 @@ os.close(fd)
 onnx.save(model, model_path)
 so = ort.SessionOptions()
 # Fail-closed: no silent CPU fallback for validation sessions.
-providers = [("QNNExecutionProvider", {"disable_cpu_ep_fallback": "1", "backend_type": "htp"})]
+providers = [(provider_name, {"disable_cpu_ep_fallback": "1", "backend_type": "htp"})]
 try:
     sess = ort.InferenceSession(model_path, sess_options=so, providers=providers)
     out = sess.run(None, {"X": np.ones((1, 2), dtype=np.float32)})

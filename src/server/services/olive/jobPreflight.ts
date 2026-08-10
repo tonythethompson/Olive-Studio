@@ -62,8 +62,8 @@ export function fingerprintRecipe(recipe: unknown, cudaVersion = "auto"): string
 
 /**
  * Validates that filesystem paths embedded in the recipe do not escape
- * the approved model root (`process.cwd()`). Rejects traversal segments, UNC
- * paths, and absolute paths that resolve outside the root.
+ * the approved model root (`process.cwd()`). Rejects traversal segments, UNC,
+ * and absolute paths; recipe paths must be project-relative.
  */
 function validateRecipePaths(recipe: OliveRecipe): string[] {
   const errors: string[] = [];
@@ -90,9 +90,13 @@ function validateRecipePaths(recipe: OliveRecipe): string[] {
       errors.push(`${label}: UNC paths are not allowed`);
       return;
     }
+    if (path.isAbsolute(trimmed) || path.win32.isAbsolute(trimmed)) {
+      errors.push(`${label}: absolute paths are not allowed; use a project-relative path`);
+      return;
+    }
     // Resolve and canonicalize paths, handling non-existent targets
     const resolved = path.resolve(cwd, trimmed);
-    let canonical: string;
+    let canonical = resolved;
     try {
       // Try to canonicalize the path directly
       canonical = fs.realpathSync(resolved);
@@ -111,10 +115,6 @@ function validateRecipePaths(recipe: OliveRecipe): string[] {
           current = parent;
           parent = path.dirname(current);
         }
-      }
-      // If we exhausted the path without finding an existing ancestor, use the raw resolved path
-      if (parent === current) {
-        canonical = resolved;
       }
     }
     // Ensure the canonical path is within the canonical root

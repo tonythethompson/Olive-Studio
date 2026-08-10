@@ -273,13 +273,13 @@ export function mapMcpConfigToUiState(
     const inputModel = config.input_model;
     if (isRecord(inputModel.config) && inputModel.config.trust_remote_code === true) {
       logs.push(
-        "[MCP FIX] Note: trust_remote_code requires explicit opt-in — enable Trust Remote Code in Advanced settings (not auto-applied).",
+        "[MCP FIX] Note: trust_remote_code requires explicit opt-in — enable Trust Remote Code in the Hugging Face source settings (not auto-applied).",
       );
     }
   }
   if (config.trust_remote_code === true) {
     logs.push(
-      "[MCP FIX] Note: trust_remote_code requires explicit opt-in — enable Trust Remote Code in Advanced settings (not auto-applied).",
+      "[MCP FIX] Note: trust_remote_code requires explicit opt-in — enable Trust Remote Code in the Hugging Face source settings (not auto-applied).",
     );
   }
 
