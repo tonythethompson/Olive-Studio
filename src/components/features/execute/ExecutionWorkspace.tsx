@@ -394,9 +394,18 @@ export function ExecutionWorkspace({
       const modelName = rawModelId.split("/").pop() || "model";
 
       let zipData: Uint8Array;
+      // Dynamic import for code-splitting: fflate is only needed for OWR export
+      let zipSync: typeof import("fflate").zipSync;
+      let strToU8: typeof import("fflate").strToU8;
       try {
-        const { zipSync, strToU8 } = await import("fflate");
+        ({ zipSync, strToU8 } = await import("fflate"));
+      } catch (e) {
+        console.error("Failed to load ZIP module", e);
+        setOwrDownloadError("Couldn't load the ZIP module. Check your connection and try again.");
+        return;
+      }
 
+      try {
         const files: Record<string, Uint8Array> = {};
         files["ort_config.json"] = strToU8(JSON.stringify(ortConfig, null, 2));
         files["onnx_model_manifest.json"] = strToU8(JSON.stringify(manifestConfig, null, 2));
@@ -428,8 +437,8 @@ export function ExecutionWorkspace({
 
         zipData = zipSync(files);
       } catch (e) {
-        console.error("Failed to load ZIP module", e);
-        setOwrDownloadError("Couldn't load the ZIP module. Check your connection and try again.");
+        console.error("Archive generation failed", e);
+        setOwrDownloadError("Failed to create the ZIP archive. Check the browser console for details.");
         return;
       }
 
