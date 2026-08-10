@@ -87,27 +87,40 @@ export interface PassesJson {
 
 let kbData: PassesJson | null = null;
 let PARAM_SCHEMAS: Map<string, PassParamSchema> = new Map();
+let kbLoadPromise: Promise<void> | null = null;
+let kbLoadError: unknown = null;
 
-/** Lazy-load the knowledge base data. Starts loading at module eval time,
- *  but the 62KB JSON is in a separate chunk rather than inlined in the main bundle. */
-function ensureKbLoaded(): void {
-  // After the async load completes, this becomes a no-op
-  if (kbData !== null) return;
-  // If the async load hasn't completed yet, use empty data (validation gracefully degrades)
+function loadKb(): Promise<void> {
+  kbLoadPromise = import("../../olive-mcp-server/olive_mcp_server/knowledge_base/passes.json")
+    .then((mod) => {
+      const data = (mod.default ?? mod) as unknown as PassesJson;
+      const nextParamSchemas = buildParamSchemas(data);
+      // Publish the complete state atomically.
+      kbData = data;
+      PARAM_SCHEMAS = nextParamSchemas;
+      kbLoadError = null;
+    })
+    .catch((error) => {
+      kbLoadError = error;
+      throw error;
+    });
+  return kbLoadPromise;
 }
 
-// Kick off the async load immediately — it won't block the main bundle parse,
-// but will be ready by the time the user actually triggers validation.
-(async () => {
-  try {
-    const mod = await import("../../olive-mcp-server/olive_mcp_server/knowledge_base/passes.json");
-    const data = (mod.default ?? mod) as unknown as PassesJson;
-    kbData = data;
-    PARAM_SCHEMAS = buildParamSchemas(data);
-  } catch {
-    // Schema validation degrades gracefully without KB data
-  }
-})();
+/** Resolves when the KB is available and can be retried after a failure. */
+export function kbReady(): Promise<void> {
+  if (kbData !== null) return Promise.resolve();
+  return kbLoadPromise ?? loadKb();
+}
+
+/** Synchronous callers must not silently validate without the KB. */
+function ensureKbLoaded(): boolean {
+  if (kbData !== null) return true;
+  if (!kbLoadPromise) void loadKb().catch(() => undefined);
+  return false;
+}
+
+void loadKb().catch(() => undefined);
 
 function isEmptyValue(v: unknown): boolean {
   return v === null || v === undefined || v === "";
@@ -267,7 +280,9 @@ function checkParamType(value: unknown, type: ParamType): boolean {
  * @returns An array of validation error messages; an empty array indicates valid or unvalidated configuration
  */
 export function validatePassConfig(passType: string, config: unknown): string[] {
-  ensureKbLoaded();
+  if (!ensureKbLoaded()) {
+    return [`knowledge base unavailable${kbLoadError ? `: ${String(kbLoadError)}` : "; retry with kbReady()"}`];
+  }
 
   const errors: string[] = [];
   const schema = getPassSchema(passType);
@@ -355,6 +370,13 @@ export function validatePassConfig(passType: string, config: unknown): string[] 
  * 4. System/accelerator reference validation
  */
 export function validateRecipeSchema(recipe: unknown): SchemaValidationResult {
+  if (!ensureKbLoaded()) {
+    return {
+      valid: false,
+      errors: [`knowledge base unavailable${kbLoadError ? `: ${String(kbLoadError)}` : "; retry with kbReady()"}`],
+    };
+  }
+
   const errors: string[] = [];
 
   if (!isObject(recipe)) {
