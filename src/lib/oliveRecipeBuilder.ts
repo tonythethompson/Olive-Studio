@@ -12,6 +12,7 @@ const GPU_PROVIDERS: IHVProvider[] = [
 ];
 const NPU_PROVIDERS: IHVProvider[] = [
   "QNNExecutionProvider",
+  "QnnAbiExecutionProvider",
   "CoreMLExecutionProvider",
   "NNAPIExecutionProvider",
   "VitisAIExecutionProvider",
