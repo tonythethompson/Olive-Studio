@@ -10,13 +10,7 @@ export function getBaseName(filename: string): string | null {
 }
 
 /** Format a byte count into a human-readable string. */
-export function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-}
+export { formatBytes as formatFileSize } from "@/lib/utils";
 
 /** Returns a human-readable format label for a model file by extension. */
 export function getFileFormatLabel(name: string): string {

@@ -61,17 +61,8 @@ export function starterApproxBytes(tag: string, engine: LocalEngine): number | n
   return hit?.approxBytes ?? null;
 }
 
-export function formatBytesShort(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return "?";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let n = bytes;
-  let i = 0;
-  while (n >= 1024 && i < units.length - 1) {
-    n /= 1024;
-    i += 1;
-  }
-  return `${n.toFixed(i > 1 ? 1 : 0)} ${units[i]}`;
-}
+export { formatBytes as formatBytesShort } from "@/lib/utils";
+import { formatBytes as formatBytesShort } from "@/lib/utils";
 
 export type DiskSpaceGate =
   | { ok: true; freeBytes: number | null; needBytes: number | null }
