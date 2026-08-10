@@ -3,7 +3,7 @@ name: code-review
 description: >-
   Olive Studio pull request code review for Copilot code review and coding agents.
   Use when reviewing PRs, diffs, or changed files in this repository. Applies
-  local-first security, recipe/pipeline validation, Express/Tauri/MCP boundaries,
+  loopback-only security, recipe/pipeline validation, Express/Tauri/MCP boundaries,
   pnpm/testing conventions, and high-risk path checks from AGENTS.md and REVIEW.md.
 license: MIT
 ---
@@ -106,7 +106,7 @@ When Copilot code review has MCP tools enabled:
 - Be specific: file, behavior, failure mode, and a concrete fix when possible.
 - Separate blocking defects from optional improvements.
 - Do not rubber-stamp "it works" if it worsens security boundaries or mega-panel sprawl.
-- Acknowledge intentional local-first tradeoffs when documented; still call out regressions that expand network or filesystem blast radius.
+- Acknowledge intentional loopback-only tradeoffs when documented; still call out regressions that expand network or filesystem blast radius.
 - Avoid em dashes in review prose.
 
 ## Out of scope for this skill

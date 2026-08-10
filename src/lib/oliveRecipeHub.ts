@@ -330,6 +330,8 @@ export function mapProviderToCatalogDevice(provider: IHVProvider): string {
       return "XNNPACK";
     case "WasmExecutionProvider":
       return "WASM";
+    case "QnnAbiExecutionProvider":
+      return "QNN ABI";
     case "CPUExecutionProvider":
       return "CPU";
     default: {

@@ -62,6 +62,8 @@ export interface PassRecipeOverride {
   output_name?: string;
   /** Merged into the pass `config` object. */
   config?: Record<string, unknown>;
+  /** Additional pass-level fields injected by MCP "Apply Fix" or migration. */
+  [key: string]: unknown;
 }
 
 export interface BatchJob {

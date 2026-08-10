@@ -1,4 +1,4 @@
-import express, { Router } from "express";
+import express, { NextFunction, Request, Response, Router } from "express";
 import expressStaticGzip from "express-static-gzip";
 import helmet from "helmet";
 import path from "path";
@@ -104,6 +104,14 @@ app.use((req, res, next) => {
 
 const PORT = Number.parseInt(process.env.PORT || "3000", 10) || 3000;
 
+/**
+ * Bind address. Defaults to 127.0.0.1. Set OLIVE_BIND=0.0.0.0 only when you
+ * explicitly need LAN access and understand the threat model: any LAN host can
+ * reach the API and spawn Olive, read logs, and cancel jobs without auth.
+ */
+const BIND_HOST = process.env.OLIVE_BIND?.trim() || "127.0.0.1";
+const IS_ALL_INTERFACES = BIND_HOST === "0.0.0.0" || BIND_HOST === "::";
+
 // ─── GitHub recipe proxy route ──────────────────────────────────────────────────
 
 // ─── Modular route wiring ────────────────────────────────────────────────────
@@ -163,6 +171,14 @@ app.get("/api/health", (_req, res) => {
 // ─── API 404 fallback ────────────────────────────────────────────────────
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "API route not found." });
+});
+
+// ─── Global error handling ────────────────────────────────────────────────────
+// Sanitize 500s so stack traces are not leaked to clients.
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("[express] unhandled error:", err instanceof Error ? err.stack ?? err.message : err);
+  if (res.headersSent) return;
+  res.status(500).json({ error: "Internal server error" });
 });
 
 // ─── Vite / Static ────────────────────────────────────────────────────────────
@@ -276,10 +292,16 @@ async function startServer() {
   }
 
   await new Promise<void>((resolve) => {
-    app.listen(PORT, "0.0.0.0", () => {
+    app.listen(PORT, BIND_HOST, () => {
       markServerReady();
+      const displayHost = IS_ALL_INTERFACES ? "0.0.0.0 (all interfaces)" : BIND_HOST;
       // eslint-disable-next-line no-console -- intentional server startup message
-      console.log(`Server running on http://localhost:${PORT}`);
+      console.log(`Server running on http://${displayHost}:${PORT}`);
+      if (IS_ALL_INTERFACES) {
+        console.warn(
+          "[security] Server is bound to all network interfaces. Only enable this on a trusted LAN and protect sync/admin endpoints with SYNC_KB_TOKEN.",
+        );
+      }
       // Soft KB sync on boot: reload passes.json and persist freshness so the
       // header does not start "stale" after every server restart.
       try {

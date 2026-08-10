@@ -68,6 +68,8 @@ function getHardwareTargetFromProvider(provider: IHVProvider): string {
       return "XNNPACK (Mobile)";
     case "WasmExecutionProvider":
       return "WASM (Browser)";
+    case "QnnAbiExecutionProvider":
+      return "QNN ABI";
     default: {
       const _exhaustive: never = provider;
       return _exhaustive;

@@ -127,9 +127,9 @@ Severity assumes the documented loopback-only threat model. LAN exposure raises 
    **Verified:** No rate limit on the tool route (KB sync is limited).  
    **Fix:** Apply `heavyCommandRateLimit` or a dedicated limiter.
 
-1. **Finding 6: `SYNC_KB_TOKEN` is documented but not enforced**
-   **Verified:** `.env.example` and `useKbSync.ts` send `x-sync-token`; `POST /mcp/sync-kb` never checks it.  
-   **Fix:** Enforce when env is set, or remove the docs.
+5. **`SYNC_KB_TOKEN` is enforced when configured** (resolved)  
+   **Verified:** `POST /api/mcp/sync-kb` now requires a matching `x-sync-token` header when `SYNC_KB_TOKEN` is set.  
+   **Fix:** Documented in `AGENTS.md` and `.github/README.md`.
 
 1. **Finding 7: Runtime `olive-ai` install is unpinned**
    **Verified:** venv path installs `olive-ai` without a version pin.  
@@ -140,10 +140,10 @@ Severity assumes the documented loopback-only threat model. LAN exposure raises 
 7. Several cost/abuse endpoints lack rate limits (`/ai/chat`, Codex ask, Ollama pull path).
 8. HF token setter is unrate-limited.
 9. Job logs are readable by job ID on the open API.
-10. Tauri CSP is null; weaker XSS containment in the desktop shell.
+10. Tauri CSP now mirrors the Express CSP; `dangerousDisableAssetCspModification` removed.
 11. Version skew: Tauri `0.3.0` vs npm `0.2.0`.
-12. KB sync unexpected errors may surface as success-shaped responses (check `mcp.ts` catch path).
-13. No global Express error middleware (unhandled errors may leak stacks).
+12. KB sync catch path now returns HTTP 500.
+13. Global Express error middleware sanitizes 500s.
 14. Devin credentials persist on disk (`0o600`, gitignored); acceptable for loopback-only, harden later if needed.
 15. Local Python `mcp` dep allows `>=1.0.0` in `pyproject.toml`; CI pins `mcp<2`, but local installs can still break on 2.x.
 
@@ -188,10 +188,10 @@ When reviewing changes, prioritize:
 
 | Priority | Action                                                                   |
 | -------- | ------------------------------------------------------------------------ |
-| P0       | Bind default to `127.0.0.1`; document local-trust threat model in README |
+| P0       | Bind default to `127.0.0.1`; document local-trust threat model in README (done) |
 | P0       | Repair MCP `call_tool` proxy + tool allowlist + rate limit               |
 | P1       | Recipe path allowlisting before spawn                                    |
-| P1       | Enforce or drop `SYNC_KB_TOKEN`                                          |
+| P1       | Enforce or drop `SYNC_KB_TOKEN` (done)                                   |
 | P1       | Pin `olive-ai` (and document supported range)                            |
 | P2       | Align Tauri / package versions; tighten packaged CSP                     |
 | P2       | Split mega-panels; add recipe-graph component tests                      |

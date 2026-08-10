@@ -144,6 +144,9 @@ Create `.env` or `.env.local` in the project root. All are optional:
 | `OPENROUTER_API_KEY` | OpenRouter |
 | `GROQ_API_KEY` | Groq |
 | `TOGETHER_API_KEY` | Together AI |
+| `OLIVE_BIND` | Server bind address (default `127.0.0.1`; set to `0.0.0.0` only on a trusted LAN) |
+| `SYNC_KB_TOKEN` | Server-side secret for `POST /api/mcp/sync-kb` |
+| `VITE_SYNC_KB_TOKEN` | Client-side copy of `SYNC_KB_TOKEN` sent as `x-sync-token` |
 
 Full list of supported keys in [AGENTS.md](../AGENTS.md).
 

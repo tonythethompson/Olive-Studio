@@ -92,7 +92,7 @@ function setNoStorePrivate(res: Response): void {
  * @param router - Express router on which to register the routes
  */
 export function mountArenaRoutes(router: Router): void {
-  // Local-first access boundary (loopback) before rate limit / proxy work.
+  // Loopback-only access boundary before rate limit / proxy work.
   // Override with OLIVE_ARENA_ALLOW_REMOTE=true when intentionally exposing the API.
   router.post("/arena/cloud-inference", arenaLocalOnly, arenaProxyRateLimit, async (req, res) => {
     const body = parseBody<{

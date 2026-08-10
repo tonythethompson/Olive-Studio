@@ -20,6 +20,12 @@ const basePasses = {
   quantization: false,
   awqSym: false,
   trustRemoteCode: true,
+  mobiusBuilder: false,
+  qairtPipeline: false,
+  quantizeEmbeddingInt8: false,
+  shareEmbeddingLmHead: false,
+  simplifiedLayerNormToRMSNorm: false,
+  onnxDiscrepancyCheck: false,
 };
 
 function probe(partial: Partial<HardwareProbeResult["qnn"]> = {}): HardwareProbeResult {

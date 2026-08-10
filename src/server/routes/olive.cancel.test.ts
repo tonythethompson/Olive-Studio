@@ -301,3 +301,31 @@ describe("POST /api/olive/run temp-recipe write failure", () => {
     expect(job?.tempRecipePath).toBeNull();
   });
 });
+
+describe("Loopback-only gating on UI Olive endpoints", () => {
+  it("rejects UI cancel from a reverse-proxied request", async () => {
+    const res = await fetch(`${baseUrl}/api/olive/cancel`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-forwarded-for": "203.0.113.10",
+      },
+      body: JSON.stringify({ jobId: "some-job" }),
+    });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: "This endpoint is only available from loopback" });
+  });
+
+  it("rejects UI run from a reverse-proxied request", async () => {
+    const res = await fetch(`${baseUrl}/api/olive/run`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-forwarded-for": "203.0.113.10",
+      },
+      body: JSON.stringify({ recipeJson: "{}" }),
+    });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: "This endpoint is only available from loopback" });
+  });
+});
