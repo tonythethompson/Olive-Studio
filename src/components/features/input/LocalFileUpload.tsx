@@ -2,7 +2,7 @@
  * LocalFileUpload — Local model source tab with file upload, chunk reconstruction,
  * and metadata inspector. Extracted from InputEnvironmentPanel (Task 5).
  */
-import { useState, useRef, ChangeEvent } from "react";
+import { useState, useRef, type MutableRefObject, type ChangeEvent } from "react";
 import { Button } from "@/components/ui";
 import { Label } from "@/components/ui";
 import type { UIState } from "@/types";
@@ -43,11 +43,11 @@ interface ReconstructedItem {
 export interface LocalFileUploadProps {
   state: UIState;
   setState: (s: Partial<UIState>) => void;
+  chunkFilesRef: MutableRefObject<Map<string, File>>;
 }
 
-export function LocalFileUpload({ state, setState }: LocalFileUploadProps) {
+export function LocalFileUpload({ state, setState, chunkFilesRef }: LocalFileUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const chunkFilesRef = useRef<Map<string, File>>(new Map());
   const [isReconstructing, setIsReconstructing] = useState(false);
   const [reconstructProgress, setReconstructProgress] = useState(0);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);

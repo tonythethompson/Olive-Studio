@@ -3,7 +3,7 @@
  * Sub-panels extracted per v0.2 Task 5:
  *   RecipeCatalogBrowser, GitHubRecipeSync, RecipeJsonEditor, LocalFileUpload.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -59,6 +59,7 @@ export function InputEnvironmentPanel({
   const storeState = usePipelineState();
   const state = propState ?? storeState.state;
   const setState = propSetState ?? storeState.setState;
+  const chunkFilesRef = useRef<Map<string, File>>(new Map());
 
   const {
     hfTokenInput, setHfTokenInput, hfTokenStatus,
@@ -104,8 +105,25 @@ export function InputEnvironmentPanel({
     let cancelled = false;
     setLocalHintsLoading(true);
     void (async () => {
-      const hints = buildLocalModelHints(state.localFiles.map((f) => f.name), undefined);
-      if (!cancelled) { setLocalModelHints(hints); setLocalHintsLoading(false); }
+      const configFile = chunkFilesRef.current.get("config.json");
+      let configText: string | undefined;
+      if (configFile) {
+        try {
+          configText = await configFile.text();
+        } catch {
+          configText = undefined;
+        }
+      }
+
+      if (cancelled) return;
+      const hints = buildLocalModelHints(
+        state.localFiles.map((f) => f.name),
+        configText,
+      );
+      if (!cancelled) {
+        setLocalModelHints(hints);
+        setLocalHintsLoading(false);
+      }
     })();
     return () => { cancelled = true; };
   }, [state.localFiles]);
@@ -381,8 +399,22 @@ export function InputEnvironmentPanel({
                               {submitTokenMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
                             </Button>
                             {hfTokenStatus === "runtime" && (
-                              <Button type="button" variant="outline" onClick={handleClearToken} disabled={isTokenMutating} className="h-9 px-3 text-sm border-red-500/30 text-red-400 hover:bg-red-500/10">
-                                {clearTokenMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Clear"}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleClearToken}
+                                disabled={isTokenMutating}
+                                aria-label={clearTokenMutation.isPending ? "Clearing token" : undefined}
+                                className="h-9 px-3 text-sm border-red-500/30 text-red-400 hover:bg-red-500/10"
+                              >
+                                {clearTokenMutation.isPending ? (
+                                  <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    <span className="sr-only">Clearing token</span>
+                                  </>
+                                ) : (
+                                  "Clear"
+                                )}
                               </Button>
                             )}
                           </div>
@@ -428,8 +460,8 @@ export function InputEnvironmentPanel({
                     </TabsContent>
 
                     {/* Local source tab */}
-                    <TabsContent value="local" className="animate-in fade-in">
-                      <LocalFileUpload state={state} setState={setState} />
+                    <TabsContent value="local" forceMount className="animate-in fade-in data-[state=inactive]:hidden">
+                      <LocalFileUpload state={state} setState={setState} chunkFilesRef={chunkFilesRef} />
                     </TabsContent>
 
                     {/* Azure source tab */}
