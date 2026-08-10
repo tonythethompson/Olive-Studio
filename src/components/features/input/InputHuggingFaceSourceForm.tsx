@@ -196,6 +196,18 @@ export function InputHuggingFaceSourceForm({
             Path to a Python script with eval/calibration functions required by some optimization passes.
           </p>
         </div>
+        <div className="grid gap-3">
+          <Label htmlFor="discrepancy-test-data-dir">Discrepancy Test Data Directory (Optional)</Label>
+          <Input
+            id="discrepancy-test-data-dir"
+            placeholder="e.g. ./test_data"
+            value={state.discrepancyTestDataDir || ""}
+            onChange={(e) => setState({ discrepancyTestDataDir: e.target.value || undefined })}
+          />
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            Directory containing test inputs and expected outputs for discrepancy checking.
+          </p>
+        </div>
       </div>
     </div>
   );

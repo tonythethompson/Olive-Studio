@@ -118,6 +118,8 @@ export interface UIState {
   distributedCaching: boolean;
   /** Path to a user-provided Python script for calibration, evaluation, or training. */
   userScript?: string;
+  /** Directory containing inputs/outputs for the ONNX discrepancy check. */
+  discrepancyTestDataDir?: string;
   batchJobs?: BatchJob[];
   /** Active olive job ID for the Execute Live button */
   activeJobId?: string | null;
