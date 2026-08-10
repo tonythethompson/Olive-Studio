@@ -36,6 +36,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "get_recipe_for_ui_state": (".studio_recipe", "get_recipe_for_ui_state"),
     "get_runtime_ep_hints": (".runtime_ep_hints", "get_runtime_ep_hints"),
     "record_troubleshoot_feedback": (".feedback", "record_troubleshoot_feedback"),
+    "plan_optimization": (".agent_planner", "plan_optimization"),
 }
 
 
