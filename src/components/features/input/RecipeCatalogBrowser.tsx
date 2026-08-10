@@ -98,10 +98,10 @@ export function RecipeCatalogBrowser({
     <>
       <p className="text-xs text-slate-400 font-mono mb-3">
         {curatedRecipesWithMatch.length} of {totalPresetCount} presets
-        {localModelHints && !localHintsStatus === "loading"
+        {localModelHints && localHintsStatus !== "loading"
           ? ` · ${localMatchSummary?.match ?? 0} match local upload`
           : ""}
-        {hardwareProbe && !hardwareProbeStatus === "loading"
+        {hardwareProbe && hardwareProbeStatus !== "loading"
           ? ` · ${hardwareMatchSummary?.compatible ?? 0} compatible with this PC`
           : ""}
       </p>
@@ -136,12 +136,12 @@ export function RecipeCatalogBrowser({
               </p>
             )}
           </div>
-          {hardwareProbe && !hardwareProbeStatus === "loading" && (
+          {hardwareProbe && hardwareProbeStatus !== "loading" && (
             <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer shrink-0">
               <input
                 type="checkbox"
-                checked={hideIncompatibleRecipes}
-                onChange={(e) => setHideIncompatibleRecipes(e.target.checked)}
+                checked={compatibilityFilter === "compatible-only"}
+                onChange={(e) => setCompatibilityFilter(e.target.checked ? "compatible-only" : "all")}
                 className="rounded border-slate-700 bg-slate-950 text-electric-blue focus:ring-electric-blue/40"
               />
               Hide incompatible
@@ -201,7 +201,7 @@ export function RecipeCatalogBrowser({
                 </p>
               )}
             </div>
-            {localModelHints && !localHintsStatus === "loading" && (localMatchSummary?.match ?? 0) > 0 && (
+            {localModelHints && localHintsStatus !== "loading" && (localMatchSummary?.match ?? 0) > 0 && (
               <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer shrink-0">
                 <input
                   type="checkbox"
@@ -475,12 +475,12 @@ export function RecipeCatalogBrowser({
             <p className="text-sm font-semibold text-slate-400">
               {localMatchFilter === "local-only" && localModelHints
                 ? "No presets match your local upload with current filters"
-                : hideIncompatibleRecipes && hardwareProbe
+                : compatibilityFilter === "compatible-only" && hardwareProbe
                   ? "No presets compatible with this PC match your filters"
                   : "No Presets Match Filters"}
             </p>
             <p className="text-xs text-slate-500 mt-1 max-w-[280px] mx-auto">
-              {hideIncompatibleRecipes && hardwareProbe
+              {compatibilityFilter === "compatible-only" && hardwareProbe
                 ? "Turn off \u201cHide incompatible\u201d or relax search and device filters."
                 : localMatchFilter === "local-only" && localModelHints
                   ? "Turn off \u201cMatches only\u201d or relax search and device filters."
@@ -491,6 +491,4 @@ export function RecipeCatalogBrowser({
       </div>
     </>
   );
-}
-
 }
