@@ -25,6 +25,18 @@ Open http://localhost:3000. No account or API key required for recipe building a
 
 To follow `main` instead of this tagged release, omit `--branch v0.2.0`.
 
+### Updating from a tagged clone
+
+`--branch v0.2.0` checks out a tag (detached HEAD). `git pull` will not move you to a newer release. When a newer tag is published on [Releases](https://github.com/tonythethompson/Olive-Studio/releases), fetch and check it out:
+
+```bash
+git fetch --depth 1 origin tag vX.Y.Z
+git checkout vX.Y.Z
+pnpm install
+```
+
+Replace `vX.Y.Z` with the tag name. Or clone `main` if you want continuous updates with `git pull`.
+
 ## Requirements
 
 - Node.js >= 22.16
@@ -35,7 +47,7 @@ To follow `main` instead of this tagged release, omit `--branch v0.2.0`.
 
 - **No Tauri installer**: desktop app builds but is unsigned (SmartScreen warnings on Windows)
 - **Unsigned builds**: no code-signing certificate yet; Windows/macOS may flag the binary
-- **No auto-update**: check out a newer tag or pull `main` for updates
+- **No auto-update**: from a tagged clone, fetch and check out a newer tag (see above); do not rely on `git pull`
 
 ## What's Next
 
