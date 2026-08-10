@@ -23,7 +23,7 @@ export interface GitHubRecipeSyncProps {
   setRepoBranch: (v: string) => void;
   repoPath: string;
   setRepoPath: (v: string) => void;
-  syncStatus: string;
+  syncStatus: "idle" | "loading" | "success" | "error";
   syncError: string;
   handleFetchRemote: (opts?: { url: string; branch: string; path: string }) => Promise<void>;
 }
@@ -74,11 +74,12 @@ export function GitHubRecipeSync({
   return (
     <div className="space-y-3 bg-slate-950/30 p-3 rounded-xl border border-slate-900 max-h-[420px] overflow-y-auto">
       <div className="space-y-2">
-        <Label className="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
+        <Label htmlFor="github-recipe-url" className="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
           <Globe className="h-3.5 w-3.5 text-electric-blue" />
           GitHub Repository URL (Public)
         </Label>
         <Input
+          id="github-recipe-url"
           placeholder="e.g. microsoft/olive"
           value={repoUrl}
           onChange={(e) => setRepoUrl(e.target.value)}
@@ -91,22 +92,24 @@ export function GitHubRecipeSync({
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">
-          <Label className="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
+          <Label htmlFor="github-recipe-branch" className="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
             <GitBranch className="h-3.5 w-3.5 text-electric-blue" />
             Target Branch
           </Label>
           <Input
+            id="github-recipe-branch"
             value={repoBranch}
             onChange={(e) => setRepoBranch(e.target.value)}
             className="font-mono text-sm h-9"
           />
         </div>
         <div className="space-y-2">
-          <Label className="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
+          <Label htmlFor="github-recipe-path" className="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
             <GitPullRequest className="h-3.5 w-3.5 text-pink-400" />
             Recipe Path
           </Label>
           <Input
+            id="github-recipe-path"
             value={repoPath}
             onChange={(e) => setRepoPath(e.target.value)}
             className="font-mono text-sm h-9"

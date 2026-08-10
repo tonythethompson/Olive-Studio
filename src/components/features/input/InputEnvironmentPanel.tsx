@@ -382,8 +382,22 @@ export function InputEnvironmentPanel({
                               {submitTokenMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
                             </Button>
                             {hfTokenStatus === "runtime" && (
-                              <Button type="button" variant="outline" onClick={handleClearToken} disabled={isTokenMutating} className="h-9 px-3 text-sm border-red-500/30 text-red-400 hover:bg-red-500/10">
-                                {clearTokenMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Clear"}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleClearToken}
+                                disabled={isTokenMutating}
+                                aria-label={clearTokenMutation.isPending ? "Clearing token" : undefined}
+                                className="h-9 px-3 text-sm border-red-500/30 text-red-400 hover:bg-red-500/10"
+                              >
+                                {clearTokenMutation.isPending ? (
+                                  <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    <span className="sr-only">Clearing token</span>
+                                  </>
+                                ) : (
+                                  "Clear"
+                                )}
                               </Button>
                             )}
                           </div>

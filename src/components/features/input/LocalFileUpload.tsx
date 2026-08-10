@@ -2,9 +2,8 @@
  * LocalFileUpload — Local model source tab with file upload, chunk reconstruction,
  * and metadata inspector. Extracted from InputEnvironmentPanel (Task 5).
  */
-import { useState, useRef, useEffect, ChangeEvent } from "react";
-import { Button } from "@/components/ui";
-import { Label } from "@/components/ui";
+import { useState, useRef, useEffect, type ChangeEvent } from "react";
+import { Button, Label } from "@/components/ui";
 import type { UIState } from "@/types";
 import { getFileDetailedInfo as resolveFileDetailedInfo } from "@/lib/localFileDetails";
 import {
