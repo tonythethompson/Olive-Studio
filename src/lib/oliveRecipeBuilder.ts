@@ -12,6 +12,7 @@ const GPU_PROVIDERS: IHVProvider[] = [
 ];
 const NPU_PROVIDERS: IHVProvider[] = [
   "QNNExecutionProvider",
+  "QnnAbiExecutionProvider",
   "CoreMLExecutionProvider",
   "NNAPIExecutionProvider",
   "VitisAIExecutionProvider",
@@ -384,7 +385,7 @@ function buildRtnQuantizer(state: UIState): PassSpec {
       {
         bits: quant.bits,
         block_size: 128,
-        is_symmetric: true,
+        symmetric: true,
       },
       state,
     ),
@@ -417,7 +418,7 @@ function buildKquantQuantizer(state: UIState): PassSpec {
     config: withCalibrationData(
       {
         bits,
-        is_symmetric: true,
+        symmetric: true,
         group_size: 128,
       },
       state,
