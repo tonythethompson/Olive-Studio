@@ -34,6 +34,14 @@ _PASS_REGISTRY_ALIASES: dict[str, tuple[str, ...]] = {
 # Cloud workflow passes are valid matrix claims but are not listed in local olive_config.json.
 _CLOUD_ONLY_PASSES = frozenset({"azuremlquantization"})
 
+# Olive 0.13 reference / Studio catalog passes not yet enumerable via PassRegistry on PyPI 0.13.0.
+_STUDIO_CATALOG_ONLY_PASSES = frozenset({
+    "qairtpipeline",
+    "quantizeembeddingint8",
+    "shareembeddinglmhead",
+    "simplifiedlayernormtormsnorm",
+})
+
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _MCP_ROOT = _SCRIPT_DIR.parent
 _DEFAULT_MATRIX = (
@@ -266,6 +274,8 @@ def _claim_in_registry(claimed_name: str, available_lower: set[str]) -> bool:
     """Return True when a matrix olive_pass is present or has a known alias."""
     lowered = claimed_name.lower()
     if lowered in _CLOUD_ONLY_PASSES:
+        return True
+    if lowered in _STUDIO_CATALOG_ONLY_PASSES:
         return True
     if lowered in available_lower:
         return True

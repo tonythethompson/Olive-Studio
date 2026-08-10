@@ -570,7 +570,7 @@ describe("buildOliveRecipe", () => {
     const quantization = (recipe.passes as Record<string, Record<string, unknown>>).quantization;
     expect(quantization).toEqual({
       type: "OnnxBlockWiseRtnQuantization",
-      config: { bits: 4, block_size: 128, is_symmetric: true },
+      config: { bits: 4, block_size: 128, symmetric: true },
     });
   });
 
@@ -1253,7 +1253,7 @@ describe("buildOliveRecipe", () => {
     const cfg = q.config as Record<string, unknown>;
     expect(cfg.bits).toBe(4);
     expect(cfg.block_size).toBe(128);
-    expect(cfg.is_symmetric).toBe(true);
+    expect(cfg.symmetric).toBe(true);
   });
 
   it("creates OnnxBlockWiseRtnQuantization for rtn method with int8", () => {
