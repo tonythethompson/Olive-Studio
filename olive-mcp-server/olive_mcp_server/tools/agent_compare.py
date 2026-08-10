@@ -26,6 +26,8 @@ _TERMINAL_STATES = frozenset({"completed", "failed", "cancelled"})
 
 _MIN_JOBS = 2
 _MAX_JOBS = 10
+_METRIC_KEYS = ("latency_ms", "model_size_mb", "accuracy")
+_LOWER_IS_BETTER = frozenset({"latency_ms", "model_size_mb"})
 
 
 def _is_error(payload: dict[str, Any]) -> bool:
@@ -63,6 +65,65 @@ def _extract_metrics(job_response: dict[str, Any]) -> dict[str, float | None]:
     }
 
 
+def _metric_bounds(
+    scoreable: list[dict[str, Any]],
+) -> dict[str, tuple[float, float]]:
+    """Return observed min/max bounds for each populated metric."""
+    values: dict[str, list[float]] = {key: [] for key in _METRIC_KEYS}
+    for entry in scoreable:
+        for key in _METRIC_KEYS:
+            value = entry["metrics"].get(key)
+            if value is not None:
+                values[key].append(value)
+    return {
+        key: (min(metric_values), max(metric_values))
+        for key, metric_values in values.items()
+        if metric_values
+    }
+
+
+def _metric_weights(preference: str) -> dict[str, float]:
+    """Return scoring weights for the selected preference."""
+    preferred_key = {
+        "latency": "latency_ms",
+        "size": "model_size_mb",
+        "accuracy": "accuracy",
+    }.get(preference)
+    return {key: 2.0 if key == preferred_key else 1.0 for key in _METRIC_KEYS}
+
+
+def _normalized_metric_score(key: str, value: float, bounds: tuple[float, float]) -> float:
+    """Normalize one metric to a higher-is-better score in [0, 1]."""
+    minimum, maximum = bounds
+    normalized = 1.0 if maximum == minimum else (value - minimum) / (maximum - minimum)
+    return 1.0 - normalized if key in _LOWER_IS_BETTER else normalized
+
+
+def _score_entry(
+    entry: dict[str, Any],
+    bounds: dict[str, tuple[float, float]],
+    weights: dict[str, float],
+) -> dict[str, Any]:
+    """Return one comparison entry with its weighted normalized score."""
+    weighted_sum = 0.0
+    total_weight = 0.0
+    for key in _METRIC_KEYS:
+        value = entry["metrics"].get(key)
+        if value is None or key not in bounds:
+            continue
+        weight = weights[key]
+        weighted_sum += _normalized_metric_score(key, value, bounds[key]) * weight
+        total_weight += weight
+
+    score = weighted_sum / total_weight if total_weight else 0.0
+    return {
+        "job_id": entry["job_id"],
+        "status": entry["status"],
+        "metrics": entry["metrics"],
+        "score": round(score, 6),
+    }
+
+
 def _normalize_and_score(
     scoreable: list[dict[str, Any]],
     preference: str,
@@ -74,82 +135,9 @@ def _normalize_and_score(
     Preference weighting: specified metric gets 2x, others 1x; balanced = all 1x.
     Missing metrics are skipped in the average.
     """
-    metric_keys = ["latency_ms", "model_size_mb", "accuracy"]
-    # Metrics where lower is better (inverted after normalization)
-    invert_set = {"latency_ms", "model_size_mb"}
-
-    # Collect raw metric values across scoreable jobs
-    raw_values: dict[str, list[float]] = {k: [] for k in metric_keys}
-    for entry in scoreable:
-        metrics = entry["metrics"]
-        for k in metric_keys:
-            val = metrics.get(k)
-            if val is not None:
-                raw_values[k].append(val)
-
-    # Compute min/max per metric
-    metric_min: dict[str, float] = {}
-    metric_max: dict[str, float] = {}
-    for k in metric_keys:
-        vals = raw_values[k]
-        if vals:
-            metric_min[k] = min(vals)
-            metric_max[k] = max(vals)
-
-    # Determine weights
-    weights: dict[str, float] = {}
-    for k in metric_keys:
-        if preference == "balanced":
-            weights[k] = 1.0
-        elif preference == "latency" and k == "latency_ms":
-            weights[k] = 2.0
-        elif preference == "size" and k == "model_size_mb":
-            weights[k] = 2.0
-        elif preference == "accuracy" and k == "accuracy":
-            weights[k] = 2.0
-        else:
-            weights[k] = 1.0
-
-    # Score each job
-    results: list[dict[str, Any]] = []
-    for entry in scoreable:
-        metrics = entry["metrics"]
-        weighted_sum = 0.0
-        total_weight = 0.0
-
-        for k in metric_keys:
-            val = metrics.get(k)
-            if val is None:
-                continue
-            mn = metric_min.get(k)
-            mx = metric_max.get(k)
-            if mn is None or mx is None:
-                continue
-
-            # Normalize to [0, 1]
-            if mx == mn:
-                normalized = 1.0  # All values equal → full score
-            else:
-                normalized = (val - mn) / (mx - mn)
-
-            # Invert for lower-is-better metrics
-            if k in invert_set:
-                normalized = 1.0 - normalized
-
-            w = weights[k]
-            weighted_sum += normalized * w
-            total_weight += w
-
-        score = weighted_sum / total_weight if total_weight > 0 else 0.0
-
-        results.append({
-            "job_id": entry["job_id"],
-            "status": entry["status"],
-            "metrics": metrics,
-            "score": round(score, 6),
-        })
-
-    return results
+    bounds = _metric_bounds(scoreable)
+    weights = _metric_weights(preference)
+    return [_score_entry(entry, bounds, weights) for entry in scoreable]
 
 
 def _generate_reasoning(

@@ -161,11 +161,61 @@ def _infer_cuda_version(intent: str) -> str | None:
     return None
 
 
+def _build_strategy_passes(strategy: dict[str, Any]) -> dict[str, Any]:
+    """Translate a strategy recommendation into a partial passes patch."""
+    passes: dict[str, Any] = {}
+    algo_lower = str(strategy.get("recommended_algorithm", "")).lower()
+
+    if "int4" in algo_lower or "int8" in algo_lower:
+        passes["quantization"] = True
+        passes["quantPrecision"] = "int4" if "int4" in algo_lower else "int8"
+
+        methods = (
+            ("awq", "awq"),
+            ("gptq", "gptq"),
+            ("hqq", "hqq"),
+            ("static", "static"),
+            ("dynamic", "dynamic"),
+            ("weight", "weight_only"),
+        )
+        quant_method = next((value for needle, value in methods if needle in algo_lower), None)
+        if quant_method:
+            passes["quantMethod"] = quant_method
+
+    if "fp16" in algo_lower or "float16" in algo_lower:
+        passes["fp16Conversion"] = True
+    if strategy.get("pass_chain"):
+        passes["passChain"] = strategy["pass_chain"]
+    return passes
+
+
+def _probe_provider(hardware_probe: dict[str, Any]) -> str | None:
+    """Return a normalized provider from either supported probe key."""
+    provider = hardware_probe.get("ihvProvider")
+    if provider is None:
+        provider = hardware_probe.get("provider")
+    return _normalize_provider(provider)
+
+
+def _apply_hardware_probe_overrides(
+    patch: dict[str, Any],
+    hardware_probe: dict[str, Any] | None,
+) -> None:
+    """Apply authoritative hardware-probe values to a UI-state patch."""
+    if not hardware_probe:
+        return
+
+    provider = _probe_provider(hardware_probe)
+    if provider:
+        patch["ihvProvider"] = provider
+    for field in ("cudaVersion", "openvinoTargetDevice"):
+        if field in hardware_probe:
+            patch[field] = hardware_probe[field]
+
+
 def _compose_ui_state_patch(
     strategy: dict[str, Any],
-    guide: dict[str, Any] | None,
     model_id: str,
-    model_type: str,
     hardware_target: str,
     hardware_probe: dict[str, Any] | None,
     intent: str,
@@ -192,59 +242,10 @@ def _compose_ui_state_patch(
     if strategy.get("openvino_device"):
         patch["openvinoTargetDevice"] = strategy["openvino_device"]
 
-    # Passes configuration from strategy
-    passes: dict[str, Any] = {}
-    algo = strategy.get("recommended_algorithm", "")
-    algo_lower = algo.lower()
-
-    # Quantization settings
-    if "int4" in algo_lower or "int8" in algo_lower:
-        passes["quantization"] = True
-        if "int4" in algo_lower:
-            passes["quantPrecision"] = "int4"
-        elif "int8" in algo_lower:
-            passes["quantPrecision"] = "int8"
-
-        # Quantization method
-        if "awq" in algo_lower:
-            passes["quantMethod"] = "awq"
-        elif "gptq" in algo_lower:
-            passes["quantMethod"] = "gptq"
-        elif "hqq" in algo_lower:
-            passes["quantMethod"] = "hqq"
-        elif "static" in algo_lower:
-            passes["quantMethod"] = "static"
-        elif "dynamic" in algo_lower:
-            passes["quantMethod"] = "dynamic"
-        elif "weight" in algo_lower:
-            passes["quantMethod"] = "weight_only"
-
-    # FP16
-    if "fp16" in algo_lower or "float16" in algo_lower:
-        passes["fp16Conversion"] = True
-
-    # Pass chain from strategy
-    if strategy.get("pass_chain"):
-        passes["passChain"] = strategy["pass_chain"]
-
+    passes = _build_strategy_passes(strategy)
     if passes:
         patch["passes"] = passes
-
-    # Hardware probe overrides
-    if hardware_probe:
-        if "ihvProvider" in hardware_probe:
-            normalized_provider = _normalize_provider(hardware_probe["ihvProvider"])
-            if normalized_provider:
-                patch["ihvProvider"] = normalized_provider
-        elif "provider" in hardware_probe:
-            normalized_provider = _normalize_provider(hardware_probe["provider"])
-            if normalized_provider:
-                patch["ihvProvider"] = normalized_provider
-        if "cudaVersion" in hardware_probe:
-            patch["cudaVersion"] = hardware_probe["cudaVersion"]
-        if "openvinoTargetDevice" in hardware_probe:
-            patch["openvinoTargetDevice"] = hardware_probe["openvinoTargetDevice"]
-
+    _apply_hardware_probe_overrides(patch, hardware_probe)
     return patch
 
 
@@ -336,6 +337,67 @@ def _validate_patch(patch: dict[str, Any]) -> tuple[bool, str | None]:
     return True, None
 
 
+def _validate_plan_inputs(intent: Any, model_id: str) -> dict[str, Any] | None:
+    """Return a structured validation error, or None for valid inputs."""
+    if not isinstance(intent, str) or not intent:
+        return err("invalid_input", "Intent must be a non-empty string (1-2000 characters).")
+    if len(intent) > 2000:
+        return err(
+            "invalid_input",
+            "Intent exceeds maximum length of 2000 characters.",
+            detail=f"length={len(intent)}",
+        )
+    if model_id and len(model_id) > 200:
+        return err(
+            "invalid_input",
+            "model_id exceeds maximum length of 200 characters.",
+            detail=f"length={len(model_id)}",
+        )
+    return None
+
+
+def _build_reasoning(
+    strategy: dict[str, Any],
+    hardware_target: str,
+    model_type: str,
+    optimization_goal: str | None,
+) -> str:
+    """Summarize how the planner interpreted and handled the request."""
+    parts = [
+        f"Detected intent: hardware={hardware_target}, model_type={model_type}, "
+        f"goal={optimization_goal or 'general optimization'}."
+    ]
+    optional_parts = (
+        ("recommended_algorithm", "Recommended algorithm: {}."),
+        ("calibration_strategy", "Calibration: {}."),
+    )
+    for field, template in optional_parts:
+        if strategy.get(field):
+            parts.append(template.format(strategy[field]))
+    if strategy.get("risks"):
+        parts.append(f"Key risks: {'; '.join(strategy['risks'][:2])}.")
+    return " ".join(parts)
+
+
+def _build_plan_response(
+    patch: dict[str, Any],
+    reasoning: str,
+    alternatives: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Validate a patch and package the public planner response."""
+    validated, validation_note = _validate_patch(patch)
+    result: dict[str, Any] = {
+        "ui_state_patch": patch,
+        "reasoning": reasoning,
+        "alternatives": alternatives,
+        "validated": validated,
+        "side_effect": False,
+    }
+    if validation_note is not None:
+        result["validation_note"] = validation_note
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Main tool function
 # ---------------------------------------------------------------------------
@@ -362,107 +424,40 @@ def plan_optimization(
         or unparseable intent.
     """
     try:
-        # --- Input validation ---
-        if not isinstance(intent, str) or len(intent) == 0:
-            return err("invalid_input", "Intent must be a non-empty string (1-2000 characters).")
-        if len(intent) > 2000:
-            return err(
-                "invalid_input",
-                "Intent exceeds maximum length of 2000 characters.",
-                detail=f"length={len(intent)}",
-            )
-        if model_id and len(model_id) > 200:
-            return err(
-                "invalid_input",
-                "model_id exceeds maximum length of 200 characters.",
-                detail=f"length={len(model_id)}",
-            )
+        input_error = _validate_plan_inputs(intent, model_id)
+        if input_error:
+            return input_error
 
-        # --- Parse intent ---
         parsed = _parse_intent(intent)
-        hardware_target = parsed["hardware_target"]
         model_ref = parsed["model_ref"]
         optimization_goal = parsed["optimization_goal"]
-
-        # If none of the three elements found → unparseable
-        if not hardware_target and not model_ref and not optimization_goal:
+        if not any((parsed["hardware_target"], model_ref, optimization_goal)):
             return err(
                 "unparseable_intent",
                 "Could not identify a hardware target, model reference, or "
                 "optimization goal in the provided intent.",
             )
 
-        # --- Determine model type ---
-        model_type = "generic"
-        if model_id:
-            model_type = _normalize_model_type(model_id)
-        elif model_ref:
-            model_type = _normalize_model_type(model_ref)
-
-        # --- Default hardware target if not parsed ---
-        if not hardware_target:
-            hardware_target = "Intel Core i9 CPU"  # safe default
-
-        # --- Call internal strategy functions ---
+        model_type = _normalize_model_type(model_id or model_ref) if model_id or model_ref else "generic"
+        hardware_target = parsed["hardware_target"] or "Intel Core i9 CPU"
         strategy = get_quantization_strategy(
             model_type=model_type,
             target_hardware=hardware_target,
         )
-
-        # get_hardware_optimization_guide may return an error dict for unknown profiles
-        guide = get_hardware_optimization_guide(target_hardware=hardware_target)
-        if isinstance(guide, dict) and guide.get("error"):
-            guide = None  # graceful: proceed without guide
-
-        # --- Compose UIState patch ---
+        # Preserve the hardware-guide lookup used for profile validation. The
+        # UI patch is derived from the strategy and probe, so guide errors are
+        # intentionally non-fatal.
+        get_hardware_optimization_guide(target_hardware=hardware_target)
         patch = _compose_ui_state_patch(
             strategy=strategy,
-            guide=guide,
             model_id=model_id,
-            model_type=model_type,
             hardware_target=hardware_target,
             hardware_probe=hardware_probe,
             intent=intent,
         )
-
-        # --- Build reasoning ---
-        reasoning_parts = []
-        reasoning_parts.append(
-            f"Detected intent: hardware={hardware_target or 'unspecified'}, "
-            f"model_type={model_type}, goal={optimization_goal or 'general optimization'}."
-        )
-        if strategy.get("recommended_algorithm"):
-            reasoning_parts.append(
-                f"Recommended algorithm: {strategy['recommended_algorithm']}."
-            )
-        if strategy.get("calibration_strategy"):
-            reasoning_parts.append(
-                f"Calibration: {strategy['calibration_strategy']}."
-            )
-        if strategy.get("risks"):
-            reasoning_parts.append(
-                f"Key risks: {'; '.join(strategy['risks'][:2])}."
-            )
-        reasoning = " ".join(reasoning_parts)
-
-        # --- Generate alternatives ---
+        reasoning = _build_reasoning(strategy, hardware_target, model_type, optimization_goal)
         alternatives = _generate_alternatives(strategy, model_type, hardware_target)
-
-        # --- Validate patch via Studio bridge (best-effort) ---
-        validated, validation_note = _validate_patch(patch)
-
-        # --- Build response ---
-        result: dict[str, Any] = {
-            "ui_state_patch": patch,
-            "reasoning": reasoning,
-            "alternatives": alternatives,
-            "validated": validated,
-            "side_effect": False,
-        }
-        if validation_note is not None:
-            result["validation_note"] = validation_note
-
-        return result
+        return _build_plan_response(patch, reasoning, alternatives)
 
     except Exception as exc:
         logger.warning("plan_optimization unexpected error", exc_info=True)

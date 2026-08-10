@@ -15,6 +15,7 @@ import logging
 import os
 import re
 import time
+from dataclasses import dataclass, field
 from typing import Any
 
 from .studio_loopback import err, studio_request
@@ -62,6 +63,121 @@ def _artifact_basename(path: str) -> str:
     return os.path.basename(normalized) or path
 
 
+@dataclass
+class _PollState:
+    """Latest observable state accumulated while polling one job."""
+
+    started_at: float
+    status: str = "pending"
+    logs: list[str] = field(default_factory=list)
+    metrics: dict[str, Any] | None = None
+    exit_code: int | None = None
+
+    def update(self, response: dict[str, Any]) -> None:
+        """Apply one Studio status response to the accumulated state."""
+        self.status = response.get("status", self.status)
+        poll_logs = response.get("logs")
+        if isinstance(poll_logs, list):
+            self.logs = [str(line) for line in poll_logs]
+        metrics = response.get("latestMetrics") or response.get("latest_metrics")
+        if metrics is not None:
+            self.metrics = metrics
+        exit_code = response.get("exitCode")
+        if exit_code is None:
+            exit_code = response.get("exit_code")
+        if exit_code is not None:
+            self.exit_code = exit_code
+
+    def elapsed_ms(self) -> int:
+        """Return elapsed polling time in milliseconds."""
+        return int((time.monotonic() - self.started_at) * 1000)
+
+
+def _map_submission_error(response: dict[str, Any]) -> dict[str, Any]:
+    """Map Studio submission failures to the public agent error contract."""
+    studio_code = response.get("error", "")
+    if studio_code in {"validation_error", "invalid_recipe"}:
+        return err(
+            "invalid_recipe",
+            response.get("message", "Recipe validation failed."),
+            detail=response.get("detail"),
+        )
+    if studio_code in {"forbidden", "mcp_access_disabled"}:
+        return err(
+            "submission_denied",
+            response.get("message", "Agent job submission is not allowed by policy."),
+            detail=response.get("detail"),
+        )
+    return response
+
+
+def _poll_until_terminal(
+    job_id: str,
+    effective_timeout: int,
+) -> tuple[_PollState, bool, dict[str, Any] | None]:
+    """Poll a submitted job until it terminates, times out, or polling fails."""
+    state = _PollState(started_at=time.monotonic())
+    poll_interval = _POLL_INTERVAL_SECONDS
+
+    while True:
+        response = studio_request("GET", f"{_STATUS_PATH}/{job_id}")
+        if _is_error(response):
+            return state, False, response
+
+        state.update(response)
+        if state.status in _TERMINAL_STATES:
+            return state, False, None
+
+        remaining = effective_timeout - (time.monotonic() - state.started_at)
+        if remaining <= 0:
+            return state, True, None
+
+        time.sleep(min(poll_interval, remaining))
+        poll_interval = _next_poll_interval(poll_interval)
+
+
+def _artifact_refs_from_logs(logs: list[str]) -> list[str]:
+    """Extract up to 20 unique artifact basenames from job logs."""
+    artifact_re = re.compile(
+        r"(?P<path>(?:[A-Za-z]:)?[^\s\"']+\.(?:onnx|ort|mlpackage|bin|json|pt|safetensors))",
+        re.IGNORECASE,
+    )
+    refs: list[str] = []
+    seen: set[str] = set()
+    for line in logs:
+        for match in artifact_re.finditer(line):
+            basename = _artifact_basename(match.group("path"))
+            if basename and basename not in seen:
+                seen.add(basename)
+                refs.append(basename)
+                if len(refs) == 20:
+                    return refs
+    return refs
+
+
+def _observation_result(
+    job_id: str,
+    state: _PollState,
+    timed_out: bool,
+    poll_error: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Package accumulated poll state into the public tool response."""
+    result: dict[str, Any] = {
+        "status": state.status,
+        "job_id": job_id,
+        "exit_code": state.exit_code,
+        "logs": state.logs[-_MAX_LOG_ENTRIES:],
+        "metrics": state.metrics,
+        "elapsed_ms": state.elapsed_ms(),
+        "artifact_path_refs": [] if poll_error else _artifact_refs_from_logs(state.logs),
+        "timed_out": timed_out,
+        "side_effect": True,
+    }
+    if poll_error:
+        result["poll_error"] = poll_error
+    return result
+
+
 def execute_and_observe(
     recipe: dict[str, Any],
     timeout: int | None = None,
@@ -89,26 +205,7 @@ def execute_and_observe(
         )
 
         if _is_error(submit_response):
-            # Map known Studio error codes to agent-facing codes
-            studio_code = submit_response.get("error", "")
-            if studio_code in ("validation_error", "invalid_recipe"):
-                return err(
-                    "invalid_recipe",
-                    submit_response.get("message", "Recipe validation failed."),
-                    detail=submit_response.get("detail"),
-                )
-            if studio_code == "submission_denied":
-                return submit_response
-            if studio_code == "studio_unavailable":
-                return submit_response
-            if studio_code in ("forbidden", "mcp_access_disabled"):
-                return err(
-                    "submission_denied",
-                    submit_response.get("message", "Agent job submission is not allowed by policy."),
-                    detail=submit_response.get("detail"),
-                )
-            # Pass through other structured errors from Studio
-            return submit_response
+            return _map_submission_error(submit_response)
 
         # --- Extract job_id from submission response ---
         job_id = submit_response.get("job_id") or submit_response.get("jobId")
@@ -118,102 +215,8 @@ def execute_and_observe(
                 "Olive Studio submission response missing job_id.",
             )
 
-        # --- Poll until terminal state or timeout ---
-        start_time = time.monotonic()
-        last_status: str = "pending"
-        all_logs: list[str] = []
-        last_metrics: dict[str, Any] | None = None
-        last_exit_code: int | None = None
-        last_artifact_paths: list[str] = []
-        timed_out = False
-        poll_interval = _POLL_INTERVAL_SECONDS
-
-        while True:
-            elapsed_seconds = time.monotonic() - start_time
-
-            status_response = studio_request(
-                "GET",
-                f"{_STATUS_PATH}/{job_id}",
-            )
-
-            if _is_error(status_response):
-                # If we can't poll, return what we have with the error context
-                return {
-                    "status": last_status,
-                    "job_id": job_id,
-                    "exit_code": last_exit_code,
-                    "logs": all_logs[-_MAX_LOG_ENTRIES:],
-                    "metrics": last_metrics,
-                    "elapsed_ms": int((time.monotonic() - start_time) * 1000),
-                    "artifact_path_refs": last_artifact_paths,
-                    "timed_out": False,
-                    "side_effect": True,
-                    "poll_error": status_response,
-                }
-
-            # Update state from poll response
-            current_status = status_response.get("status", last_status)
-            last_status = current_status
-
-            # Collect logs (deduplicated by accumulating all)
-            poll_logs = status_response.get("logs")
-            if isinstance(poll_logs, list):
-                all_logs = [str(line) for line in poll_logs]
-
-            # Capture metrics
-            metrics = status_response.get("latestMetrics") or status_response.get("latest_metrics")
-            if metrics is not None:
-                last_metrics = metrics
-
-            # Capture exit code, preserving a successful zero value
-            exit_code = status_response.get("exitCode")
-            if exit_code is None:
-                exit_code = status_response.get("exit_code")
-            if exit_code is not None:
-                last_exit_code = exit_code
-
-            # Check for terminal state
-            if current_status in _TERMINAL_STATES:
-                break
-
-            # Check timeout (terminal state at boundary wins)
-            elapsed_seconds = time.monotonic() - start_time
-            remaining = effective_timeout - elapsed_seconds
-            if remaining <= 0:
-                timed_out = True
-                break
-
-            # Wait before next poll; never sleep past the remaining budget.
-            sleep_for = min(poll_interval, remaining)
-            time.sleep(sleep_for)
-            poll_interval = _next_poll_interval(poll_interval)
-
-        # --- Extract artifact path refs from logs (basenames only) ---
-        artifact_refs: list[str] = []
-        seen: set[str] = set()
-        # Simple heuristic: look for common model artifact extensions in log lines
-        artifact_re = re.compile(
-            r"(?P<path>(?:[A-Za-z]:)?[^\s\"']+\.(?:onnx|ort|mlpackage|bin|json|pt|safetensors))",
-            re.IGNORECASE,
-        )
-        for line in all_logs:
-            for match in artifact_re.finditer(line):
-                basename = _artifact_basename(match.group("path"))
-                if basename and basename not in seen and len(artifact_refs) < 20:
-                    seen.add(basename)
-                    artifact_refs.append(basename)
-
-        return {
-            "status": last_status,
-            "job_id": job_id,
-            "exit_code": last_exit_code,
-            "logs": all_logs[-_MAX_LOG_ENTRIES:],
-            "metrics": last_metrics,
-            "elapsed_ms": int((time.monotonic() - start_time) * 1000),
-            "artifact_path_refs": artifact_refs,
-            "timed_out": timed_out,
-            "side_effect": True,
-        }
+        state, timed_out, poll_error = _poll_until_terminal(job_id, effective_timeout)
+        return _observation_result(job_id, state, timed_out, poll_error)
 
     except Exception as exc:
         logger.warning("execute_and_observe unexpected error", exc_info=True)
