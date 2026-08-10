@@ -4,7 +4,7 @@
   "model": "all-MiniLM-L6-v2",
   "dim": 384,
   "count": 36,
-  "content_hash": "7fe9d420e4be46006261efca5cfa1a31cfea5ae45a3b5a744b915ea8b1a22276",
+  "content_hash": "18dad7c10db64a14383ff4263435d0ff176e9bfa8d01f85c30c6f10268c57ed9",
   "entry_ids": [
     "onnx-export-shape",
     "onnx-export-external-data",
@@ -78,7 +78,7 @@
     "GPU device busy or unavailable to Olive Another process holds the GPU, or CUDA_VISIBLE_DEVICES hides all devices. Stop competing GPU jobs; check CUDA_VISIBLE_DEVICES; retry with a smaller calibration batch or CPU fallback for conversion-only steps. CUDA error: all CUDA-capable devices are busy hipError device already in use cudaErrorDevicesUnavailable",
     "DirectML execution provider not available to Olive Olive/ORT process lacks onnxruntime-directml, or the host is not Windows with DirectX 12. On Windows install onnxruntime-directml into the Olive environment; select DmlExecutionProvider. Do not expect DirectML on Linux/macOS or from CUDA-only ORT wheels. DmlExecutionProvider DirectMLExecutionProvider onnxruntime-directml DirectML is not supported Failed to create DirectML",
     "WebGPU is not a server-side ONNX Runtime EP for Olive CLI WebGpuExecutionProvider is for ONNX Runtime Web in browsers. Desktop/server Olive runs do not execute WebGPU the same way. Build/export an ONNX recipe (prefer FP16) for browser ORT Web. For local Olive execution pick CUDA, TensorRT, DirectML, OpenVINO, or CPU instead. WebGpuExecutionProvider WebGPU webgpu provider ORT Web",
-    "HuggingFace model fails to load after upgrading to olive-ai 0.13.0 Olive 0.13.0 changed the default value of trust_remote_code from true to false for security. Models with custom code (e.g., Phi, Mistral with custom RoPE, Qwen) now refuse to load unless explicitly opted in. Set trust_remote_code: true in the model config or pass config (e.g., OnnxConversion, ModelBuilder). In Olive Studio, enable 'Trust Remote Code' in Advanced settings. trust_remote_code requires you to execute the configuration file requires you to execute the modeling file has custom code which must be executed Loading .* requires you to execute ValueError: Loading .* requires",
+    "HuggingFace model fails to load after upgrading to olive-ai 0.13.0 Olive 0.13.0 changed the default value of trust_remote_code from true to false for security. Models with custom code (e.g., Phi, Mistral with custom RoPE, Qwen) now refuse to load unless explicitly opted in. In Olive Studio, open Advanced settings and enable Trust Remote Code (explicit opt-in required). Do not use Apply Fix for this setting; it must be toggled manually after reviewing the model source. trust_remote_code requires you to execute the configuration file requires you to execute the modeling file has custom code which must be executed Loading .* requires you to execute ValueError: Loading .* requires",
     "QairtPreparation or QairtGenAIBuilder pass not found in olive-ai 0.13.0 The QairtPreparation and QairtGenAIBuilder passes were superseded by the unified QairtPipeline pass in olive-ai 0.13.0. Recipes referencing the old pass names will fail. Replace QairtPreparation and QairtGenAIBuilder with a single QairtPipeline pass. QairtPipeline combines model loading, quantization, and compilation into one YAML-recipe-driven step. QairtPreparation QairtGenAIBuilder pass not found unknown pass type qairt_preparation qairt_genai_builder"
   ]
 }

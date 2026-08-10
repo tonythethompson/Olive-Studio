@@ -94,7 +94,7 @@ export function applyMigrations(
 
   // Deep-clone overrides to avoid mutation.
   const overrides: Record<string, Record<string, unknown>> = state.passRecipeOverrides
-    ? structuredClone(state.passRecipeOverrides)
+    ? (structuredClone(state.passRecipeOverrides) as Record<string, Record<string, unknown>>)
     : {};
 
   // 1. Apply pass name migrations to passRecipeOverrides keys.
@@ -121,6 +121,13 @@ export function applyMigrations(
   for (const migration of tables.paramMigrations) {
     const passOverride = overrides[migration.passType];
     if (!passOverride || !(migration.oldParam in passOverride)) continue;
+
+    // Collision: the new parameter already exists — preserve its value, drop the
+    // legacy key, and do not count this as a migrated assignment.
+    if (migration.newParam in passOverride) {
+      delete passOverride[migration.oldParam];
+      continue;
+    }
 
     const oldValue = passOverride[migration.oldParam];
     let newValue: unknown;

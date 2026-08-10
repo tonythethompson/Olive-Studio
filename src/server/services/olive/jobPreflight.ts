@@ -10,6 +10,7 @@
  */
 import { createHash } from "crypto";
 import path from "path";
+import { isValidReferenceModelPath } from "../../../lib/oliveRecipeBuilder.ts";
 import { validateOliveRecipeStructure } from "../../../lib/oliveRecipeSchema.ts";
 import { normalizeIhvProvider } from "../../../lib/venvFamily.ts";
 import { isExportTargetProvider } from "../../../lib/providerRuntimeKind.ts";
@@ -60,8 +61,8 @@ export function fingerprintRecipe(recipe: unknown, cudaVersion = "auto"): string
 
 /**
  * Validates that filesystem paths embedded in the recipe do not escape
- * the working directory. Rejects traversal segments, UNC paths, and
- * absolute paths that resolve outside `process.cwd()`.
+ * the approved model root (`process.cwd()`). Rejects traversal segments, UNC
+ * paths, and absolute paths that resolve outside the root.
  */
 function validateRecipePaths(recipe: OliveRecipe): string[] {
   const errors: string[] = [];
@@ -70,12 +71,8 @@ function validateRecipePaths(recipe: OliveRecipe): string[] {
   function isUnsafePath(p: string, label: string): void {
     const trimmed = p.trim();
     if (!trimmed) return;
-    if (trimmed.includes("\0")) {
-      errors.push(`${label}: path contains NUL byte`);
-      return;
-    }
-    if (/(^|[\\/])\.\.([\\/]|$)/.test(trimmed)) {
-      errors.push(`${label}: path contains traversal segments (..)`);
+    if (!isValidReferenceModelPath(trimmed)) {
+      errors.push(`${label}: path is not a safe reference model path (NUL or contains ..)`);
       return;
     }
     // Reject UNC paths (\\server\share)
@@ -83,10 +80,10 @@ function validateRecipePaths(recipe: OliveRecipe): string[] {
       errors.push(`${label}: UNC paths are not allowed`);
       return;
     }
-    // Resolve and ensure under cwd (model root)
+    // Resolve and ensure under cwd (approved model root)
     const resolved = path.resolve(cwd, trimmed);
     if (!resolved.startsWith(cwd + path.sep) && resolved !== cwd) {
-      errors.push(`${label}: path resolves outside the project root`);
+      errors.push(`${label}: path resolves outside the approved model root`);
     }
   }
 

@@ -34,7 +34,7 @@ function basePasses(overrides?: Partial<UIState["passes"]>): UIState["passes"] {
 
 // Ensure KB is loaded before synchronous validation tests run
 beforeAll(async () => {
-  await kbReady().catch(() => undefined);
+  await kbReady();
 });
 
 function baseState(overrides?: Partial<UIState>): UIState {

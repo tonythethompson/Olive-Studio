@@ -120,7 +120,9 @@ export interface UIState {
   userScript?: string;
   /**
    * Path to a reference model for OnnxDiscrepancyCheck (maps to `reference_model_path`).
-   * Prefer a local filesystem path; validation only rejects traversal segments and null bytes.
+   * Prefer a local filesystem path. The preflight at POST /api/olive/run resolves the
+   * path under the approved model root and rejects traversal, UNC, absolute, and
+   * outside-root paths before passing the recipe to Olive.
    */
   referenceModelPath?: string;
   batchJobs?: BatchJob[];

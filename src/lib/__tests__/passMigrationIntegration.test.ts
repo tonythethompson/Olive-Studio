@@ -3,7 +3,12 @@
  * Concrete fixture-based scenarios for the migration + recipe pipeline.
  */
 import { describe, it, expect } from "vitest";
-import { applyMigrations } from "@/lib/passMigration";
+import {
+  applyMigrations,
+  PASS_NAME_MIGRATIONS,
+  PARAM_MIGRATIONS,
+  type MigrationTables,
+} from "@/lib/passMigration";
 import { createDefaultPipelineState } from "@/lib/stores/pipelineStore";
 import { commitUiStateUpdate } from "@/lib/pipelineValidation";
 import { buildOliveRecipe } from "@/lib/oliveRecipeBuilder";
@@ -164,6 +169,62 @@ describe("passMigration integration", () => {
       expect(recipe).toBeDefined();
       expect(recipe).toHaveProperty("passes");
       expect(recipe).toHaveProperty("input_model");
+    });
+  });
+
+  describe("parameter migration precedence", () => {
+    it("preserves the new param and drops the old param when both exist (collision)", () => {
+      const state: UIState = {
+        ...createDefaultPipelineState(),
+        passRecipeOverrides: {
+          OnnxQuantization: { calibration_data_dir: "/old", data_dir: "/new" },
+        },
+      } as UIState;
+
+      const tables: MigrationTables = {
+        passNameMigrations: PASS_NAME_MIGRATIONS,
+        paramMigrations: [
+          ...PARAM_MIGRATIONS,
+          {
+            passType: "OnnxQuantization",
+            oldParam: "calibration_data_dir",
+            newParam: "data_dir",
+            since: "0.13.0",
+          },
+        ],
+      };
+
+      const result = applyMigrations(state, tables);
+
+      expect(result.state.passRecipeOverrides?.OnnxQuantization).toEqual({ data_dir: "/new" });
+      expect(result.migratedParams).toBe(0);
+    });
+
+    it("renames the old param when the new param is absent", () => {
+      const state: UIState = {
+        ...createDefaultPipelineState(),
+        passRecipeOverrides: {
+          OnnxQuantization: { calibration_data_dir: "/old" },
+        },
+      } as UIState;
+
+      const tables: MigrationTables = {
+        passNameMigrations: PASS_NAME_MIGRATIONS,
+        paramMigrations: [
+          ...PARAM_MIGRATIONS,
+          {
+            passType: "OnnxQuantization",
+            oldParam: "calibration_data_dir",
+            newParam: "data_dir",
+            since: "0.13.0",
+          },
+        ],
+      };
+
+      const result = applyMigrations(state, tables);
+
+      expect(result.state.passRecipeOverrides?.OnnxQuantization).toEqual({ data_dir: "/old" });
+      expect(result.migratedParams).toBe(1);
     });
   });
 });

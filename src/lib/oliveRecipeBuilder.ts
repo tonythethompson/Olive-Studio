@@ -491,11 +491,11 @@ const FORMAT_QUANT_BUILDERS: Record<FormatFamily, (state: UIState) => PassSpec> 
 
 function buildQuantizationPass(state: UIState): PassSpec | undefined {
   if (!state.passes.quantization) return undefined;
+  if (isReplacementExportPipeline(state.passes)) return undefined;
   const methodBuilder = QUANT_METHOD_BUILDERS[state.passes.quantMethod];
   if (methodBuilder && (!methodBuilder.gate || methodBuilder.gate(state))) {
     return methodBuilder.build(state);
   }
-  if (isReplacementExportPipeline(state.passes)) return undefined;
   return FORMAT_QUANT_BUILDERS[effectiveFormatFamily(state)](state);
 }
 
@@ -627,7 +627,7 @@ function buildSimplifiedLayerNormToRMSNorm(_state: UIState, _ctx: RecipeBuildCon
 }
 
 /** OnnxDiscrepancyCheck: Validation pass measuring numerical discrepancies. */
-function isValidReferenceModelPath(path: string): boolean {
+export function isValidReferenceModelPath(path: string): boolean {
   const trimmed = path.trim();
   if (!trimmed || trimmed.includes("\0")) return false;
   return !/(^|[\\/])\.\.([\\/]|$)/.test(trimmed);

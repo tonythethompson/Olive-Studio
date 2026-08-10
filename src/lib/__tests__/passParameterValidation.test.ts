@@ -28,7 +28,7 @@ function baseState(overrides?: Partial<UIState>): UIState {
       quantization: true,
       quantMethod: "awq",
       quantPrecision: "int4",
-      trustRemoteCode: true,
+      trustRemoteCode: false,
     },
     ...overrides,
   };

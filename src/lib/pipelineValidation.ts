@@ -474,7 +474,8 @@ const CROSS_PASS_RULES: CrossPassRule[] = [
   },
   {
     id: "onnx-discrepancy-missing-producer",
-    applies: (passes) => passes.onnxDiscrepancyCheck && !hasOnnxGraphProducer(passes),
+    applies: (passes) =>
+      passes.onnxDiscrepancyCheck && !hasOnnxGraphProducer(passes) && !passes.qairtPipeline,
     fix: { conversion: true, conversionFormat: "onnx" },
     autoCoerce: false,
     severity: "critical",

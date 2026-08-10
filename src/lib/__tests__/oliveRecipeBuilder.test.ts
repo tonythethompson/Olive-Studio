@@ -1436,6 +1436,26 @@ describe("buildOliveRecipe 0.13 pass builders", () => {
     expect((recipe.passes as Record<string, unknown>).conversion).toBeUndefined();
   });
 
+  it("omits quantization for replacement export pipelines (MobiusBuilder and QairtPipeline)", () => {
+    const mobius = buildOliveRecipe(
+      baseState({
+        ihvProvider: "CUDAExecutionProvider",
+        passes: { ...DEFAULT_PASSES, mobiusBuilder: true, quantization: true, quantMethod: "awq" },
+      }),
+    );
+    expect((mobius.passes as Record<string, unknown>).mobius_builder).toBeDefined();
+    expect((mobius.passes as Record<string, unknown>).quantization).toBeUndefined();
+
+    const qairt = buildOliveRecipe(
+      baseState({
+        ihvProvider: "QNNExecutionProvider",
+        passes: { ...DEFAULT_PASSES, qairtPipeline: true, quantization: true, quantMethod: "awq" },
+      }),
+    );
+    expect((qairt.passes as Record<string, unknown>).qairt_pipeline).toBeDefined();
+    expect((qairt.passes as Record<string, unknown>).quantization).toBeUndefined();
+  });
+
   it("uses PyTorch KQuant when conversion is off or output is not ONNX", () => {
     const torchOnly = buildOliveRecipe(
       baseState({

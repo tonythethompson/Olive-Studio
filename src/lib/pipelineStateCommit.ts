@@ -17,10 +17,10 @@ import { REPLACEMENT_PIPELINE_SUPPRESSED_PASSES, isReplacementExportPipeline } f
 
 const GPU_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
+  "NvTensorRTRTXExecutionProvider" as IHVProvider,
   "TensorrtExecutionProvider",
-  "DmlExecutionProvider",
-  "QNNExecutionProvider",
-  "OpenVINOExecutionProvider",
+  "ROCMExecutionProvider" as IHVProvider,
+  "WebGpuExecutionProvider",
 ];
 
 const TENSOR_CORE_PROVIDERS: IHVProvider[] = [
@@ -54,13 +54,22 @@ export function isQuantMethodAllowed(
   method: UIState["passes"]["quantMethod"],
   provider: IHVProvider,
 ): boolean {
-  if (method === "awq") return GPU_PROVIDERS.includes(provider);
-  if (method === "gptq") return GPU_PROVIDERS.includes(provider);
-  if (method === "qat") return provider !== "QNNExecutionProvider";
-  if (method === "hqq" || method === "rtn") {
+  if (method === "awq") {
+    return GPU_PROVIDERS.includes(provider);
+  }
+  if (method === "gptq") {
+    return GPU_PROVIDERS.includes(provider);
+  }
+  if (method === "qat") {
+    return provider !== "QNNExecutionProvider" && provider !== "QnnAbiExecutionProvider";
+  }
+  if (method === "hqq" || method === "rtn" || method === "kquant") {
+    // OnnxHqqQuantization, OnnxBlockWiseRtnQuantization, and KQuant/OnnxKquantQuantization only support CPU/CUDA.
     return provider === "CPUExecutionProvider" || provider === "CUDAExecutionProvider";
   }
-  if (method === "spinquant" || method === "quarot") return GPU_PROVIDERS.includes(provider);
+  if (method === "spinquant" || method === "quarot") {
+    return GPU_PROVIDERS.includes(provider);
+  }
   return true;
 }
 
