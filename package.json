@@ -1,7 +1,7 @@
 {
   "name": "olive-studio",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "description": "GUI for Microsoft Olive model optimization — runs locally, no cloud required",
   "type": "module",
@@ -79,7 +79,7 @@
     "zustand": "^5.0.14"
   },
   "optionalDependencies": {
-    "@openai/codex-sdk": "^0.145.0"
+    "@openai/codex-sdk": "^0.147.0"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",
@@ -96,8 +96,8 @@
     "@types/node": "^26.1.2",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@typescript-eslint/eslint-plugin": "^8.65.0",
-    "@typescript-eslint/parser": "^8.65.0",
+    "@typescript-eslint/eslint-plugin": "^8.66.0",
+    "@typescript-eslint/parser": "^8.66.0",
     "@vitejs/plugin-react": "6.0.5",
     "@vitest/coverage-v8": "^4.1.10",
     "@webgpu/types": "^0.1.71",

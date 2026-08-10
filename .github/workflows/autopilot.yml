@@ -72,7 +72,7 @@ jobs:
           gh pr comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" \
             --body "🤖 Autopilot active against \`${{ needs.guard.outputs.head_branch }}\`. [Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.guard.outputs.head_branch }}
           fetch-depth: 0
@@ -143,12 +143,12 @@ jobs:
       - uses: pnpm/action-setup@v6
         if: steps.threads.outputs.count != '0'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: steps.threads.outputs.count != '0'
         with:
           node-version: '22'
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         if: steps.threads.outputs.count != '0'
         with:
           python-version: '3.11'
