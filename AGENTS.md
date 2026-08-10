@@ -22,7 +22,7 @@ Briefly tell the user when you use memory — e.g. say "checking memory…" befo
 
 ## Project Overview
 
-- **What:** Local-first GUI for Microsoft Olive ONNX model optimization (conversion, quantization PTQ/AWQ/GPTQ/HQQ, pruning, LoRA/QLoRA)
+- **What:** Local GUI for Microsoft Olive ONNX model optimization (conversion, quantization PTQ/AWQ/GPTQ/HQQ, pruning, LoRA/QLoRA). Do not brand the product as "local-first" (see `.cursor/rules/no-local-first-branding.mdc`).
 - **Stack:** React 19 + Vite + Express + Tauri 2 (sidecar) + Python FastMCP server
 - **Package manager:** pnpm 11.17 (`npm install` is blocked by a `preinstall` guard — always use pnpm)
 - **Node:** >=22.16 | **Python:** >=3.10 (MCP server)
