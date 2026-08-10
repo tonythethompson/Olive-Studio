@@ -6,6 +6,52 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [0.2.0] — 2026-08-09
+
+### Added
+
+- **Persistent MCP stdio connection** — replaces per-call subprocess spawn with long-lived JSON-RPC transport via `@modelcontextprotocol/client`. Warm tool calls now complete in <50ms (was ~500ms).
+- **Typed pass accessors** (`src/lib/passAccessors.ts`) — compile-time safe narrowing for pass configuration without migrating the flat UIState shape.
+- **Agent access policy** — `GET/PUT /api/olive/agent-access` with MCP-origin job filtering, submission/cancellation gating, and env overrides for CI.
+- **Olive job heartbeat** — logs "still working" messages when Olive is silent for 10+ seconds, eliminating "is it hung?" confusion.
+- **Pipeline state persistence** — zustand persist middleware saves UIState to localStorage (credentials stripped).
+- **Recipe catalog collapse/expand** — model groups collapsed by default showing EP badges, expand on click.
+- **ROCm download link** — hardware panel surfaces "Get ROCm from AMD" button when AMD GPU detected but runtime missing.
+
+### Changed
+
+- **AssistantSidebar** — renamed from GeminiSidebar; reorganized into `src/components/features/assistant/`.
+- **Component splits** — InputEnvironmentPanel (2200 → 241 lines), IHVIntegrationPanel (1000 → 563 lines), hooks.ts split into focused modules.
+- **Pre-install UX** — EP install buttons reframed as "Pre-install" with green (hardware-compatible) vs neutral (cross-compile) color coding. Messaging clarifies auto-install on first run.
+- **Default model** — empty string instead of gated `meta-llama/Meta-Llama-3-8B`.
+- **Font size bump** — global +1 notch across 91 component files for readability.
+
+### Fixed
+
+- **QNN false-positive** — x64 Windows no longer shows QNN as a local accelerator (stays selectable as platform target).
+- **DirectML detection** — Windows machines show "Compatible, runtime available" instead of "Not on this system".
+- **QNN execution gate** — preparation mode (x64) allowed when runtime is loadable and host is recognized.
+- **DirectML execution gate** — properly blocks Execute Live until onnxruntime-directml is installed (not conflated with detection).
+- **Brotli cache headers** — `index.html.br` and hashed `.br` assets now get correct Cache-Control.
+- **Hardware probe deadlock** — resolved probe timeout issues with subprocess timeouts on TensorRT calls.
+- **Stale MCP transport** — guard against close on stale connection, close on failure, query sanitization.
+
+### Security
+
+- **Helmet + CSP** — Content-Security-Policy with `'self'`, jsdelivr CDN for ORT WASM, frame-ancestors, Permissions-Policy.
+- **X-Robots-Tag: noindex** — prevents indexing if exposed to public internet.
+- **Azure credential stripping** — `azureStr` excluded from localStorage persistence.
+- **Server sourcemap removed** — `dist/server.mjs.map` no longer ships in production builds.
+
+### Infrastructure
+
+- **Test coverage** — recipe builder, pipeline validation, hardware probe, Devin client (22 tests), provider runtime kind.
+- **Reduced method complexity** — #152, #157, #158 addressed via extractions.
+- **GitHub issue triage** — open issue count reduced.
+- **Repo cleanup** — removed agent/IDE directories, stale scaffold files, launcher scripts from tracking.
+
+---
+
 ## [0.1.0] — 2026-08-08
 
 First public release.
