@@ -215,6 +215,7 @@ const IHV_PROVIDERS = new Set<IHVProvider>([
   "DmlExecutionProvider",
   "OpenVINOExecutionProvider",
   "QNNExecutionProvider",
+  "QnnAbiExecutionProvider",
   "ROCMExecutionProvider",
   "WebGpuExecutionProvider",
 ]);
@@ -254,6 +255,9 @@ function normalizeIhvProvider(value: string): IHVProvider | null {
     dmlexecutionprovider: "DmlExecutionProvider",
     qnn: "QNNExecutionProvider",
     qnnexecutionprovider: "QNNExecutionProvider",
+    qnnabi: "QnnAbiExecutionProvider",
+    qnnabiexecutionprovider: "QnnAbiExecutionProvider",
+    "qnn-abi": "QnnAbiExecutionProvider",
     rocm: "ROCMExecutionProvider",
     rocmexecutionprovider: "ROCMExecutionProvider",
     webgpu: "WebGpuExecutionProvider",
