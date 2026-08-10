@@ -113,23 +113,41 @@ def _parse_intent(intent: str) -> dict[str, Any]:
 
 
 def _infer_provider(hardware_target: str) -> str | None:
-    """Map a hardware target string to a UIState ihvProvider value."""
+    """Map a hardware target string to a canonical ONNX Runtime provider ID."""
     lower = hardware_target.lower()
-    if "nvidia" in lower or "rtx" in lower or "cuda" in lower or "tensorrt" in lower:
-        return "nvidia"
+    if "tensorrt" in lower:
+        return "TensorrtExecutionProvider"
+    if "nvidia" in lower or "rtx" in lower or "cuda" in lower:
+        return "CUDAExecutionProvider"
     if "directml" in lower:
-        return "directml"
+        return "DmlExecutionProvider"
     if "rocm" in lower or "mi300" in lower:
-        return "amd"
+        return "ROCMExecutionProvider"
     if "apple" in lower or "coreml" in lower:
-        return "apple"
+        return "CoreMLExecutionProvider"
     if "qualcomm" in lower or "qnn" in lower or "snapdragon" in lower:
-        return "qualcomm"
+        return "QNNExecutionProvider"
     if "openvino" in lower or "intel" in lower:
-        return "intel"
+        return "OpenVINOExecutionProvider"
     if "webgpu" in lower:
-        return "webgpu"
+        return "WebGpuExecutionProvider"
     return None
+
+
+def _normalize_provider(value: Any) -> str | None:
+    """Normalize probe provider labels and preserve canonical provider IDs."""
+    if not isinstance(value, str):
+        return None
+    canonical = {
+        "nvidia": "CUDAExecutionProvider", "cuda": "CUDAExecutionProvider",
+        "tensorrt": "TensorrtExecutionProvider", "directml": "DmlExecutionProvider",
+        "amd": "ROCMExecutionProvider", "rocm": "ROCMExecutionProvider",
+        "apple": "CoreMLExecutionProvider", "coreml": "CoreMLExecutionProvider",
+        "qualcomm": "QNNExecutionProvider", "qnn": "QNNExecutionProvider",
+        "intel": "OpenVINOExecutionProvider", "openvino": "OpenVINOExecutionProvider",
+        "webgpu": "WebGpuExecutionProvider",
+    }
+    return canonical.get(value.lower(), value)
 
 
 def _infer_cuda_version(intent: str) -> str | None:
@@ -212,9 +230,13 @@ def _compose_ui_state_patch(
     # Hardware probe overrides
     if hardware_probe:
         if "ihvProvider" in hardware_probe:
-            patch["ihvProvider"] = hardware_probe["ihvProvider"]
+            normalized_provider = _normalize_provider(hardware_probe["ihvProvider"])
+            if normalized_provider:
+                patch["ihvProvider"] = normalized_provider
         elif "provider" in hardware_probe:
-            patch["ihvProvider"] = hardware_probe["provider"]
+            normalized_provider = _normalize_provider(hardware_probe["provider"])
+            if normalized_provider:
+                patch["ihvProvider"] = normalized_provider
         if "cudaVersion" in hardware_probe:
             patch["cudaVersion"] = hardware_probe["cudaVersion"]
         if "openvinoTargetDevice" in hardware_probe:
@@ -300,7 +322,7 @@ def _validate_patch(patch: dict[str, Any]) -> tuple[bool, str | None]:
     response = studio_request(
         "POST",
         "/api/mcp/tool",
-        body={"tool": "validate_ui_state_recipe", "args": {"ui_state": patch}},
+        body={"toolName": "validate_ui_state_recipe", "args": {"ui_state": patch}},
     )
     if isinstance(response, dict) and response.get("error"):
         error_code = response["error"]
