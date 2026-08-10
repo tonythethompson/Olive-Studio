@@ -322,22 +322,18 @@ describe("mapMcpConfigToUiState", () => {
     });
 
     it("applyMcpDiagnosticToUiState does not enable trustRemoteCode for olive-hf-trust-remote-code", () => {
-      const { patches } = applyMcpDiagnosticToUiState(
-        {
-          applyable: false,
-          updated_config: {
-            input_model: { config: { trust_remote_code: true } },
-          },
+      const diagnostic = {
+        applyable: false,
+        updated_config: {
+          input_model: { config: { trust_remote_code: true } },
         },
+      };
+      const { patches } = applyMcpDiagnosticToUiState(
+        { updated_config: diagnostic.updated_config },
         { ...basePasses, trustRemoteCode: false },
       );
       expect(patches.passes?.trustRemoteCode).toBeUndefined();
-      expect(
-        canApplyMcpDiagnostic({
-          applyable: false,
-          updated_config: { input_model: { config: { trust_remote_code: true } } },
-        }),
-      ).toBe(false);
+      expect(canApplyMcpDiagnostic(diagnostic)).toBe(false);
     });
 
     it("applyMcpDiagnosticToUiState applies updated_config only; quirks are noted", () => {
