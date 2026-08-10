@@ -123,6 +123,85 @@ class TestExcludedNonTerminal:
         comparison_ids = [c["job_id"] for c in result["comparison"]]
         assert comparison_ids == ["job-A"]
 
+    def test_completed_job_empty_metrics_excluded(self, monkeypatch: pytest.MonkeyPatch):
+        """A completed job with no metrics is excluded with no_comparable_metrics."""
+        responses = {
+            "job-A": _make_job_response(
+                latency_ms=50, model_size_mb=100, accuracy=0.95
+            ),
+            "job-B": _make_job_response(status="completed"),  # no metrics
+        }
+
+        def fake_request(method, path, **_kw):
+            jid = path.rsplit("/", 1)[-1]
+            return responses[jid]
+
+        monkeypatch.setattr(agent_compare, "studio_request", fake_request)
+
+        result = compare_results(["job-A", "job-B"])
+
+        # Only job-A is scoreable but <2 scoreable means no winner
+        assert result["winner"] is None
+
+        excluded_ids = {e["job_id"]: e["reason"] for e in result["excluded_jobs"]}
+        assert excluded_ids["job-B"] == "no_comparable_metrics"
+
+
+# ---------------------------------------------------------------------------
+# Test 2c: Constant metrics across jobs produce neutral tie
+# ---------------------------------------------------------------------------
+
+
+class TestConstantMetricsNeutralTie:
+    """When all jobs report identical metrics, every job gets the neutral 0.5 score."""
+
+    def test_constant_metrics_neutral_tie(self, monkeypatch: pytest.MonkeyPatch):
+        """Identical metrics across jobs -> every job scores 0.5 (neutral midpoint)."""
+        responses = {
+            "job-A": _make_job_response(
+                latency_ms=100, model_size_mb=500, accuracy=0.9
+            ),
+            "job-B": _make_job_response(
+                latency_ms=100, model_size_mb=500, accuracy=0.9
+            ),
+        }
+
+        def fake_request(method, path, **_kw):
+            jid = path.rsplit("/", 1)[-1]
+            return responses[jid]
+
+        monkeypatch.setattr(agent_compare, "studio_request", fake_request)
+
+        result = compare_results(["job-A", "job-B"], preference="latency")
+
+        assert "error" not in result
+        scores = {c["job_id"]: c["score"] for c in result["comparison"]}
+        # Every job receives the neutral midpoint score for degenerate ranges.
+        assert scores["job-A"] == 0.5
+        assert scores["job-B"] == 0.5
+
+    def test_constant_lower_is_better_metric_neutral(self, monkeypatch: pytest.MonkeyPatch):
+        """A constant lower-is-better metric (latency) still yields the neutral 0.5."""
+        responses = {
+            "job-A": _make_job_response(latency_ms=42, model_size_mb=100),
+            "job-B": _make_job_response(latency_ms=42, model_size_mb=200),
+        }
+
+        def fake_request(method, path, **_kw):
+            jid = path.rsplit("/", 1)[-1]
+            return responses[jid]
+
+        monkeypatch.setattr(agent_compare, "studio_request", fake_request)
+
+        result = compare_results(["job-A", "job-B"], preference="latency")
+
+        assert "error" not in result
+        scores = {c["job_id"]: c["score"] for c in result["comparison"]}
+        # latency is constant (42 == 42) -> neutral 0.5 for both on that metric.
+        # size differs so the overall score won't be 0.5, but the degenerate
+        # latency contribution must not bias either job.
+        assert result["winner"] is not None
+
 
 # ---------------------------------------------------------------------------
 # Test 3: Fewer than 2 scoreable -> winner=None

@@ -133,7 +133,7 @@ class TestHf404Fallback:
 
 
 class TestInvalidModelId:
-    """Empty string triggers validation error."""
+    """Invalid model_id values trigger validation error."""
 
     def test_empty_string_error(self):
         result = agent_model_info.get_model_info("")
@@ -145,6 +145,33 @@ class TestInvalidModelId:
     def test_json_roundtrip(self):
         result = agent_model_info.get_model_info("")
         _assert_json_roundtrip(result)
+
+    @pytest.mark.parametrize(
+        "bad_id",
+        [
+            "../etc/passwd",          # path traversal
+            "org/model\nname",       # control character (newline)
+            "org/model\tname",       # control character (tab)
+            "org/model?x=1",         # query string
+            "org/model#frag",        # fragment
+            "no-slash-here",         # missing slash
+            "a" * 257,               # exceeds 256 chars
+        ],
+        ids=[
+            "path_traversal",
+            "control_char_newline",
+            "control_char_tab",
+            "query_string",
+            "fragment",
+            "missing_slash",
+            "too_long",
+        ],
+    )
+    def test_invalid_model_id_rejected(self, bad_id: str):
+        result = agent_model_info.get_model_info(bad_id)
+        assert result["error"] == "invalid_model_id"
+        assert "message" in result
+        assert len(result["message"]) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -252,4 +279,40 @@ class TestHfConfigNumParameters:
             },
         })
         result = agent_model_info.get_model_info("openai/whisper-large")
+        _assert_json_roundtrip(result)
+
+
+# ---------------------------------------------------------------------------
+# Test: Mixtral MoE heuristic and architecture-based model type
+# ---------------------------------------------------------------------------
+
+
+class TestMixtralMoeHeuristic:
+    """Mixtral MoE identifiers must be classified correctly, not as 7B."""
+
+    def test_mixtral_8x7b_params(self, monkeypatch: pytest.MonkeyPatch):
+        """Mixtral-8x7B yields ~46.7B params (MoE total), not 7B."""
+        _patch_hf(monkeypatch, None)
+        result = agent_model_info.get_model_info("mistralai/Mixtral-8x7B-Instruct-v0.1")
+        assert "error" not in result
+        assert result["params_b"] == 46.7
+        assert result["source"] == "heuristic"
+        _assert_json_roundtrip(result)
+
+
+class TestArchitectureBasedModelType:
+    """Opaque model IDs should classify from their HF architecture field."""
+
+    def test_whisper_architecture_classifies_speech(self, monkeypatch: pytest.MonkeyPatch):
+        """An opaque model ID with WhisperForConditionalGeneration → model_type=speech."""
+        _patch_hf(monkeypatch, {
+            "config": {
+                "num_parameters": 244_000_000,
+                "architectures": ["WhisperForConditionalGeneration"],
+            },
+        })
+        result = agent_model_info.get_model_info("some-org/random-model-name")
+        assert "error" not in result
+        assert result["architecture"] == "WhisperForConditionalGeneration"
+        assert result["model_type"] == "speech"
         _assert_json_roundtrip(result)

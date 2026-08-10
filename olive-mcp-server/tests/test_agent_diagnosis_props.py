@@ -167,12 +167,30 @@ class TestJsonMergePatchCorrectness:
             elif isinstance(patch_value, dict):
                 # RFC 7386 applies an object patch to an empty object when the
                 # target value is absent or not an object, including removing
-                # nested keys whose patch value is null.
+                # nested keys whose patch value is null. Independently derive
+                # the expected nested object from patch_value (do not call
+                # _apply_merge_patch to avoid circular verification).
+                expected_nested: dict[str, Any] = {}
+                for sub_key, sub_value in patch_value.items():
+                    if sub_value is None:
+                        continue
+                    expected_nested[sub_key] = sub_value
                 assert key in result
-                assert result[key] == _apply_merge_patch({}, patch_value)
+                assert result[key] == expected_nested
             else:
                 # Non-dict non-null: override
                 assert result.get(key) == patch_value
+
+    def test_nested_merge_patch_preserves_existing_child_key(self) -> None:
+        """An existing child key not in patch_value remains in nested_result."""
+        recipe = {"outer": {"keep_me": "original", "replace_me": "old"}}
+        patch = {"outer": {"replace_me": "new", "remove_me": None}}
+
+        result = _apply_merge_patch(recipe, patch)
+
+        assert result["outer"]["keep_me"] == "original"
+        assert result["outer"]["replace_me"] == "new"
+        assert "remove_me" not in result["outer"]
 
 
 # ---------------------------------------------------------------------------

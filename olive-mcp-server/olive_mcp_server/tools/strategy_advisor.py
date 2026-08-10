@@ -37,7 +37,22 @@ def _hardware_category(profile: str) -> str:
     return "generic"
 
 
-def _normalize_model_type(model_type: str) -> str:
+def normalize_model_type(model_type: str, architecture: str = "") -> str:
+    """Normalize a model type string to a canonical category.
+
+    This is the public alias of the internal ``_normalize_model_type`` helper.
+    Callers outside ``strategy_advisor`` should use this public symbol so
+    refactoring internals cannot cause an import-time failure.
+
+    When ``architecture`` is provided (e.g. from the HuggingFace API), it is
+    used as an additional classification signal so opaque model IDs can be
+    classified from their architecture name (e.g.
+    ``WhisperForConditionalGeneration`` → ``speech``).
+    """
+    return _normalize_model_type(model_type, architecture)
+
+
+def _normalize_model_type(model_type: str, architecture: str = "") -> str:
     m = model_type.lower()
     if "llm" in m or any(x in m for x in ["llama", "mistral", "phi", "gpt", "qwen", "falcon"]):
         return "llm"
@@ -47,6 +62,17 @@ def _normalize_model_type(model_type: str) -> str:
         return "vision"
     if "speech" in m or "whisper" in m or "audio" in m:
         return "speech"
+    # Fall back to architecture-based classification for opaque model IDs.
+    arch_lower = architecture.lower()
+    if arch_lower:
+        if any(x in arch_lower for x in ["llama", "mistral", "phi", "gpt", "qwen", "falcon", "causallm", "modelllama"]):
+            return "llm"
+        if any(x in arch_lower for x in ["resnet", "mobilenet", "vit", "conv", "cnn"]):
+            return "cnn"
+        if any(x in arch_lower for x in ["vision", "image", "clip"]):
+            return "vision"
+        if any(x in arch_lower for x in ["whisper", "speech", "audio"]):
+            return "speech"
     return "generic"
 
 

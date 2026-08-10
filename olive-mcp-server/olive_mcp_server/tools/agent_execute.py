@@ -17,6 +17,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import quote
 
 from .studio_loopback import err, studio_request
 
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 _SUBMIT_PATH = "/api/olive/jobs/submit"
 _STATUS_PATH = "/api/olive/agent/status"  # + /{job_id}
 
+_JOB_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _TERMINAL_STATES = frozenset({"completed", "failed", "cancelled"})
 
 # Poll cadence: start at 2s, double after each wait, cap at 30s.
@@ -36,6 +38,17 @@ _DEFAULT_TIMEOUT = 600
 _MIN_TIMEOUT = 10
 _MAX_TIMEOUT = 1800
 _MAX_LOG_ENTRIES = 200
+_MAX_ARTIFACT_REFS = 20
+_MAX_CONSECUTIVE_POLL_ERRORS = 3
+
+# Module-level indirections so tests can patch timing without touching stdlib.
+_monotonic = time.monotonic
+_sleep = time.sleep
+
+_ARTIFACT_RE = re.compile(
+    r"(?P<path>(?:[A-Za-z]:)?[^\s\"']+\.(?:onnx|ort|mlpackage|bin|json|pt|safetensors))",
+    re.IGNORECASE,
+)
 
 
 def _clamp_timeout(timeout: int | None) -> int:
@@ -80,17 +93,20 @@ class _PollState:
         if isinstance(poll_logs, list):
             self.logs = [str(line) for line in poll_logs]
         metrics = response.get("latestMetrics") or response.get("latest_metrics")
-        if metrics is not None:
+        if isinstance(metrics, dict):
             self.metrics = metrics
         exit_code = response.get("exitCode")
         if exit_code is None:
             exit_code = response.get("exit_code")
         if exit_code is not None:
-            self.exit_code = exit_code
+            try:
+                self.exit_code = int(exit_code)
+            except (TypeError, ValueError):
+                pass  # ignore invalid exit codes, preserve existing state
 
     def elapsed_ms(self) -> int:
         """Return elapsed polling time in milliseconds."""
-        return int((time.monotonic() - self.started_at) * 1000)
+        return int((_monotonic() - self.started_at) * 1000)
 
 
 def _map_submission_error(response: dict[str, Any]) -> dict[str, Any]:
@@ -115,42 +131,55 @@ def _poll_until_terminal(
     job_id: str,
     effective_timeout: int,
 ) -> tuple[_PollState, bool, dict[str, Any] | None]:
-    """Poll a submitted job until it terminates, times out, or polling fails."""
-    state = _PollState(started_at=time.monotonic())
+    """Poll a submitted job until it terminates, times out, or polling fails.
+
+    Transient polling failures (``_is_error`` responses) are retried for up to
+    ``_MAX_CONSECUTIVE_POLL_ERRORS`` consecutive errors before returning the
+    error result. The consecutive-error count resets after any successful
+    (non-error) response.
+    """
+    state = _PollState(started_at=_monotonic())
     poll_interval = _POLL_INTERVAL_SECONDS
+    consecutive_errors = 0
 
     while True:
         response = studio_request("GET", f"{_STATUS_PATH}/{job_id}")
         if _is_error(response):
-            return state, False, response
+            consecutive_errors += 1
+            if consecutive_errors >= _MAX_CONSECUTIVE_POLL_ERRORS:
+                return state, False, response
+            # Brief wait before retrying, respecting the timeout deadline.
+            remaining = effective_timeout - (_monotonic() - state.started_at)
+            if remaining <= 0:
+                return state, True, response
+            _sleep(min(poll_interval, remaining))
+            poll_interval = _next_poll_interval(poll_interval)
+            continue
 
+        consecutive_errors = 0
         state.update(response)
         if state.status in _TERMINAL_STATES:
             return state, False, None
 
-        remaining = effective_timeout - (time.monotonic() - state.started_at)
+        remaining = effective_timeout - (_monotonic() - state.started_at)
         if remaining <= 0:
             return state, True, None
 
-        time.sleep(min(poll_interval, remaining))
+        _sleep(min(poll_interval, remaining))
         poll_interval = _next_poll_interval(poll_interval)
 
 
 def _artifact_refs_from_logs(logs: list[str]) -> list[str]:
     """Extract up to 20 unique artifact basenames from job logs."""
-    artifact_re = re.compile(
-        r"(?P<path>(?:[A-Za-z]:)?[^\s\"']+\.(?:onnx|ort|mlpackage|bin|json|pt|safetensors))",
-        re.IGNORECASE,
-    )
     refs: list[str] = []
     seen: set[str] = set()
     for line in logs:
-        for match in artifact_re.finditer(line):
+        for match in _ARTIFACT_RE.finditer(line):
             basename = _artifact_basename(match.group("path"))
             if basename and basename not in seen:
                 seen.add(basename)
                 refs.append(basename)
-                if len(refs) == 20:
+                if len(refs) == _MAX_ARTIFACT_REFS:
                     return refs
     return refs
 
@@ -169,7 +198,7 @@ def _observation_result(
         "logs": state.logs[-_MAX_LOG_ENTRIES:],
         "metrics": state.metrics,
         "elapsed_ms": state.elapsed_ms(),
-        "artifact_path_refs": [] if poll_error else _artifact_refs_from_logs(state.logs),
+        "artifact_path_refs": [] if poll_error else _artifact_refs_from_logs(state.logs[-_MAX_LOG_ENTRIES:]),
         "timed_out": timed_out,
         "side_effect": True,
     }
@@ -209,15 +238,24 @@ def execute_and_observe(
 
         # --- Extract job_id from submission response ---
         job_id = submit_response.get("job_id") or submit_response.get("jobId")
-        if not job_id:
+        if not isinstance(job_id, str) or not job_id:
+            # The recipe was submitted but we cannot determine the job_id.
+            # This is an uncertain side effect — the job may be running.
             return err(
                 "invalid_bridge_response",
                 "Olive Studio submission response missing job_id.",
+                side_effect=True,
+            )
+        if not _JOB_ID_PATTERN.match(job_id):
+            return err(
+                "invalid_bridge_response",
+                "Olive Studio submission response returned a malformed job_id.",
+                side_effect=True,
             )
 
-        state, timed_out, poll_error = _poll_until_terminal(job_id, effective_timeout)
+        state, timed_out, poll_error = _poll_until_terminal(quote(job_id, safe=""), effective_timeout)
         return _observation_result(job_id, state, timed_out, poll_error)
 
     except Exception as exc:
         logger.warning("execute_and_observe unexpected error", exc_info=True)
-        return {"error": "internal_error", "message": f"{type(exc).__name__}: {exc}"}
+        return err("internal_error", type(exc).__name__)

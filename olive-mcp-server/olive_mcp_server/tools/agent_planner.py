@@ -13,9 +13,11 @@ import logging
 import re
 from typing import Any
 
-from .strategy_advisor import get_quantization_strategy, _normalize_model_type
-from .hardware_guide import get_hardware_optimization_guide
-from .studio_loopback import studio_request, err
+from .strategy_advisor import get_quantization_strategy, normalize_model_type
+from .studio_loopback import err
+from .agent_model_info import _is_valid_model_id
+from .studio_recipe import validate_ui_state_recipe
+from .normalization import parse_hardware_target
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +31,7 @@ _HARDWARE_KEYWORDS: list[tuple[str, str]] = [
     (r"\brtx\s*\d{4}", "NVIDIA RTX 4090"),
     (r"\bcuda\b", "NVIDIA RTX 4090"),
     (r"\btensorrt\b", "TensorRT"),
-    (r"\bopenvino\b", "Intel Core i9 CPU"),
+    (r"\bopenvino\b", "OpenVINO CPU"),
     (r"\bintel\b", "Intel Core i9 CPU"),
     (r"\bqualcomm\b", "Qualcomm Snapdragon NPU"),
     (r"\bqnn\b", "Qualcomm Snapdragon NPU"),
@@ -45,8 +47,10 @@ _HARDWARE_KEYWORDS: list[tuple[str, str]] = [
 ]
 
 _MODEL_PATTERNS: list[re.Pattern[str]] = [
-    # HuggingFace org/model style
-    re.compile(r"\b[a-zA-Z0-9_-]+/[a-zA-Z0-9._-]+\b"),
+    # HuggingFace org/model style — require at least one letter on each side
+    # of the slash and exclude common slash-separated prose (and/or, int8/int4,
+    # input/output, path fragments).
+    re.compile(r"\b(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]+/(?=[A-Za-z0-9._-]*[A-Za-z])[A-Za-z0-9._-]+\b"),
     # Known model family names
     re.compile(
         r"\b(?:llama|phi|mistral|qwen|falcon|gpt|bert|resnet|mobilenet|"
@@ -56,6 +60,13 @@ _MODEL_PATTERNS: list[re.Pattern[str]] = [
     ),
 ]
 
+# Short slash-separated tokens that should not be treated as model references.
+_MODEL_REF_STOPWORDS = frozenset({
+    "and/or", "input/output", "int4/int8", "int8/int4", "fp16/fp32",
+    "fp32/fp16", "cpu/gpu", "gpu/cpu", "train/eval", "eval/train",
+    "onnx/pt", "pt/onnx", "pytorch/torch",
+})
+
 _OPTIMIZATION_KEYWORDS = re.compile(
     r"\b(?:quantiz(?:e|ation)|compress|optimi[sz]e|speed|latency|smaller|"
     r"int4|int8|awq|gptq|hqq|prune|pruning|lora|qlora|fp16|float16|"
@@ -63,17 +74,28 @@ _OPTIMIZATION_KEYWORDS = re.compile(
     re.IGNORECASE,
 )
 
-# Provider mapping for UIState ihvProvider field
-_HARDWARE_TO_PROVIDER: dict[str, str] = {
-    "nvidia": "nvidia",
-    "intel": "intel",
-    "qualcomm": "qualcomm",
-    "apple": "apple",
-    "directml": "directml",
-    "rocm": "amd",
-    "webgpu": "webgpu",
-    "cpu": "cpu",
-}
+# Canonical ONNX Runtime execution-provider IDs accepted by the UI's
+# ihvProvider field (see src/types.ts IHVProvider). Used to gate
+# _normalize_provider so unknown values do not pass through.
+_UI_PROVIDER_IDS = frozenset({
+    "CUDAExecutionProvider",
+    "TensorrtExecutionProvider",
+    "NvTensorRTRTXExecutionProvider",
+    "DmlExecutionProvider",
+    "OpenVINOExecutionProvider",
+    "QNNExecutionProvider",
+    "QnnAbiExecutionProvider",
+    "ROCMExecutionProvider",
+    "WebGpuExecutionProvider",
+    "CoreMLExecutionProvider",
+    "NNAPIExecutionProvider",
+    "VitisAIExecutionProvider",
+    "SNPEExecutionProvider",
+    "TensorflowLiteExecutionProvider",
+    "XnnpackExecutionProvider",
+    "WasmExecutionProvider",
+    "CPUExecutionProvider",
+})
 
 
 # ---------------------------------------------------------------------------
@@ -95,15 +117,34 @@ def _parse_intent(intent: str) -> dict[str, Any]:
     }
 
     # Hardware target — first match wins (ordered by specificity)
-    for pattern, target in _HARDWARE_KEYWORDS:
-        if re.search(pattern, lower):
-            result["hardware_target"] = target
-            break
+    # Route structured OpenVINO intents through parse_hardware_target before
+    # the order-sensitive _HARDWARE_KEYWORDS matches, so inputs like
+    # "intel npu" and "openvino npu" resolve to the canonical Intel Core Ultra
+    # NPU (OpenVINO) target rather than Qualcomm Snapdragon NPU.
+    _OV_PHRASE_RE = re.compile(
+        r"\b(openvino[\s:+-]*(?:cpu|gpu|npu)|intel\s+npu|core\s+ultra\s+npu)\b",
+        re.IGNORECASE,
+    )
+    ov_match = _OV_PHRASE_RE.search(intent)
+    if ov_match:
+        parsed_hw = parse_hardware_target(ov_match.group(0))
+        if parsed_hw.profile and not parsed_hw.error:
+            result["hardware_target"] = parsed_hw.profile
+            if parsed_hw.openvino_device:
+                # Stash the OV device so _compose_ui_state_patch can use it.
+                result["_openvino_device"] = parsed_hw.openvino_device
 
-    # Model reference
+    if result["hardware_target"] is None:
+        for pattern, target in _HARDWARE_KEYWORDS:
+            if re.search(pattern, lower):
+                result["hardware_target"] = target
+                break
+
+    # Model reference — first match wins, but exclude generic slash-separated
+    # prose that the org/model regex would otherwise capture.
     for pat in _MODEL_PATTERNS:
         m = pat.search(intent)
-        if m:
+        if m and m.group(0).lower() not in _MODEL_REF_STOPWORDS:
             result["model_ref"] = m.group(0)
             break
 
@@ -116,7 +157,12 @@ def _parse_intent(intent: str) -> dict[str, Any]:
 
 
 def _infer_provider(hardware_target: str) -> str | None:
-    """Map a hardware target string to a canonical ONNX Runtime provider ID."""
+    """Map a hardware target string to a canonical ONNX Runtime provider ID.
+
+    CPU-only intents (e.g. ``Intel Core i9 CPU``) resolve to
+    ``CPUExecutionProvider`` before the OpenVINO/Intel branch so the default
+    CPU target does not become an OpenVINO provider.
+    """
     lower = hardware_target.lower()
     if "tensorrt" in lower:
         return "TensorrtExecutionProvider"
@@ -130,16 +176,29 @@ def _infer_provider(hardware_target: str) -> str | None:
         return "CoreMLExecutionProvider"
     if "qualcomm" in lower or "qnn" in lower or "snapdragon" in lower:
         return "QNNExecutionProvider"
-    if "openvino" in lower or "intel" in lower:
+    # OpenVINO must be checked before CPU so "Intel Core i9 CPU" (the default
+    # OpenVINO CPU target from _HARDWARE_KEYWORDS) resolves to
+    # OpenVINOExecutionProvider. Pure CPU intents that don't mention OpenVINO
+    # or Intel (e.g. "CPU") still fall through to CPUExecutionProvider.
+    if "openvino" in lower:
         return "OpenVINOExecutionProvider"
+    if "intel" in lower and "cpu" not in lower:
+        return "OpenVINOExecutionProvider"
+    if "cpu" in lower:
+        return "CPUExecutionProvider"
     if "webgpu" in lower:
         return "WebGpuExecutionProvider"
     return None
 
 
 def _normalize_provider(value: Any) -> str | None:
-    """Normalize probe provider labels and preserve canonical provider IDs."""
-    if not isinstance(value, str):
+    """Normalize probe provider labels to canonical UI-supported provider IDs.
+
+    Returns a canonical provider ID only when the input is a non-empty string
+    matching the UI's accepted ihvProvider IDs (directly or via alias). Unknown
+    values return None so they cannot pass through into the UIState patch.
+    """
+    if not isinstance(value, str) or not value:
         return None
     canonical = {
         "nvidia": "CUDAExecutionProvider", "cuda": "CUDAExecutionProvider",
@@ -150,7 +209,8 @@ def _normalize_provider(value: Any) -> str | None:
         "intel": "OpenVINOExecutionProvider", "openvino": "OpenVINOExecutionProvider",
         "webgpu": "WebGpuExecutionProvider",
     }
-    return canonical.get(value.lower(), value)
+    resolved = canonical.get(value.lower(), value)
+    return resolved if resolved in _UI_PROVIDER_IDS else None
 
 
 def _infer_cuda_version(intent: str) -> str | None:
@@ -209,8 +269,9 @@ def _apply_hardware_probe_overrides(
     if provider:
         patch["ihvProvider"] = provider
     for field in ("cudaVersion", "openvinoTargetDevice"):
-        if field in hardware_probe:
-            patch[field] = hardware_probe[field]
+        value = hardware_probe.get(field)
+        if isinstance(value, str) and value:
+            patch[field] = value
 
 
 def _compose_ui_state_patch(
@@ -219,6 +280,7 @@ def _compose_ui_state_patch(
     hardware_target: str,
     hardware_probe: dict[str, Any] | None,
     intent: str,
+    openvino_device: str | None = None,
 ) -> dict[str, Any]:
     """Compose a UIState patch from strategy and guide results."""
     patch: dict[str, Any] = {}
@@ -238,9 +300,11 @@ def _compose_ui_state_patch(
     if cuda_ver:
         patch["cudaVersion"] = cuda_ver
 
-    # OpenVINO device
-    if strategy.get("openvino_device"):
-        patch["openvinoTargetDevice"] = strategy["openvino_device"]
+    # OpenVINO device — prefer the parsed device from the intent, then the
+    # strategy's resolved device.
+    ov_device = openvino_device or strategy.get("openvino_device")
+    if ov_device:
+        patch["openvinoTargetDevice"] = ov_device
 
     passes = _build_strategy_passes(strategy)
     if passes:
@@ -252,25 +316,20 @@ def _compose_ui_state_patch(
 def _generate_alternatives(
     strategy: dict[str, Any],
     model_type: str,
-    hardware_target: str,
 ) -> list[dict[str, Any]]:
     """Generate 0-3 alternative optimization approaches."""
     alternatives: list[dict[str, Any]] = []
-    algo = strategy.get("recommended_algorithm", "").lower()
+    algo = str(strategy.get("recommended_algorithm", "")).lower()
 
     # Alternative 1: Different precision
     if "int4" in algo:
         alt_passes: dict[str, Any] = {"quantization": True, "quantPrecision": "int8"}
-        if strategy.get("pass_chain"):
-            alt_passes["passChain"] = strategy["pass_chain"]
         alternatives.append({
             "description": "INT8 quantization (higher accuracy, larger model)",
             "ui_state_patch": {"passes": alt_passes},
         })
     elif "int8" in algo:
         alt_passes = {"quantization": True, "quantPrecision": "int4"}
-        if strategy.get("pass_chain"):
-            alt_passes["passChain"] = strategy["pass_chain"]
         alternatives.append({
             "description": "INT4 quantization (smaller model, potentially lower accuracy)",
             "ui_state_patch": {"passes": alt_passes},
@@ -318,26 +377,39 @@ def _generate_alternatives(
 
 
 def _validate_patch(patch: dict[str, Any]) -> tuple[bool, str | None]:
-    """Validate the UIState patch via Studio bridge (best-effort).
+    """Validate the UIState patch via the Studio bridge (best-effort).
 
-    Returns (validated, validation_note). If Studio is unreachable,
-    returns (False, note) rather than failing.
+    Calls ``validate_ui_state_recipe`` directly (same-process) instead of
+    routing through the HTTP ``/api/mcp/tool`` bridge. Returns
+    ``(validated, validation_note)``. ``validated`` is True only when the
+    validation response carries ``is_runnable: True`` with no schema or
+    pipeline errors. Non-dict or unexpected responses are treated as not
+    validated rather than falling through to success.
     """
-    response = studio_request(
-        "POST",
-        "/api/mcp/tool",
-        body={"toolName": "validate_ui_state_recipe", "args": {"ui_state": patch}},
-    )
-    if isinstance(response, dict) and response.get("error"):
+    response = validate_ui_state_recipe(ui_state=patch)
+    if not isinstance(response, dict):
+        return False, "Patch not validated by Studio (unexpected response type)."
+    if response.get("error"):
         error_code = response["error"]
         if error_code == "studio_unavailable":
             return False, "Studio bridge unavailable; patch not validated"
         # Other errors (e.g. validation failure) — still mark as not validated
         return False, f"Validation failed: {response.get('message', 'unknown error')}"
-    return True, None
+    # Require an explicit positive signal: is_runnable True with no critical
+    # schema or pipeline errors.
+    schema_errors = response.get("schema_errors", [])
+    pipeline_issues = response.get("pipeline_issues", [])
+    critical = response.get("pipeline_critical_count")
+    if response.get("is_runnable") is True and not schema_errors and not pipeline_issues and not critical:
+        return True, None
+    return False, "Patch not validated by Studio (validation issues detected)."
 
 
-def _validate_plan_inputs(intent: Any, model_id: str) -> dict[str, Any] | None:
+def _validate_plan_inputs(
+    intent: Any,
+    model_id: Any,
+    hardware_probe: Any = None,
+) -> dict[str, Any] | None:
     """Return a structured validation error, or None for valid inputs."""
     if not isinstance(intent, str) or not intent:
         return err("invalid_input", "Intent must be a non-empty string (1-2000 characters).")
@@ -347,12 +419,24 @@ def _validate_plan_inputs(intent: Any, model_id: str) -> dict[str, Any] | None:
             "Intent exceeds maximum length of 2000 characters.",
             detail=f"length={len(intent)}",
         )
-    if model_id and len(model_id) > 200:
-        return err(
-            "invalid_input",
-            "model_id exceeds maximum length of 200 characters.",
-            detail=f"length={len(model_id)}",
-        )
+    if model_id is not None:
+        if not isinstance(model_id, str):
+            return err("invalid_input", "model_id must be a string.")
+        if model_id and len(model_id) > 200:
+            return err(
+                "invalid_input",
+                "model_id exceeds maximum length of 200 characters.",
+                detail=f"length={len(model_id)}",
+            )
+        if model_id and not _is_valid_model_id(model_id):
+            return err(
+                "invalid_input",
+                "model_id must be a valid HuggingFace repo ID (owner/name), "
+                "without path traversal, query strings, or control characters.",
+            )
+    if hardware_probe is not None:
+        if not isinstance(hardware_probe, dict):
+            return err("invalid_input", "hardware_probe must be a JSON object (dict).")
     return None
 
 
@@ -424,7 +508,7 @@ def plan_optimization(
         or unparseable intent.
     """
     try:
-        input_error = _validate_plan_inputs(intent, model_id)
+        input_error = _validate_plan_inputs(intent, model_id, hardware_probe)
         if input_error:
             return input_error
 
@@ -438,27 +522,33 @@ def plan_optimization(
                 "optimization goal in the provided intent.",
             )
 
-        model_type = _normalize_model_type(model_id or model_ref) if model_id or model_ref else "generic"
+        model_type = normalize_model_type(model_id or model_ref) if model_id or model_ref else "generic"
         hardware_target = parsed["hardware_target"] or "Intel Core i9 CPU"
+        openvino_device = parsed.get("_openvino_device")
         strategy = get_quantization_strategy(
             model_type=model_type,
             target_hardware=hardware_target,
         )
-        # Preserve the hardware-guide lookup used for profile validation. The
-        # UI patch is derived from the strategy and probe, so guide errors are
-        # intentionally non-fatal.
-        get_hardware_optimization_guide(target_hardware=hardware_target)
+        # Handle error dicts returned by get_quantization_strategy before
+        # passing strategy to _compose_ui_state_patch.
+        if isinstance(strategy.get("error"), str) and strategy["error"]:
+            return err(
+                "unsupported_hardware",
+                f"Hardware target '{hardware_target}' is not supported.",
+                detail=strategy["error"],
+            )
         patch = _compose_ui_state_patch(
             strategy=strategy,
             model_id=model_id,
             hardware_target=hardware_target,
             hardware_probe=hardware_probe,
             intent=intent,
+            openvino_device=openvino_device,
         )
         reasoning = _build_reasoning(strategy, hardware_target, model_type, optimization_goal)
-        alternatives = _generate_alternatives(strategy, model_type, hardware_target)
+        alternatives = _generate_alternatives(strategy, model_type)
         return _build_plan_response(patch, reasoning, alternatives)
 
     except Exception as exc:
         logger.warning("plan_optimization unexpected error", exc_info=True)
-        return {"error": "internal_error", "message": f"{type(exc).__name__}: {exc}"}
+        return err("internal_error", type(exc).__name__)

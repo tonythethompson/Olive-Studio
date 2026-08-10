@@ -197,10 +197,12 @@ function readPersistedKbLastSync(): string | null {
 }
 
 /**
- * Enforces the optional SYNC_KB_TOKEN secret for the KB sync endpoint.
- * When the token is configured, the request must include the matching
- * `x-sync-token` header. Set both `SYNC_KB_TOKEN` (server) and
- * `VITE_SYNC_KB_TOKEN` (client build) to the same value to enable it.
+ * Enforces the optional SYNC_KB_TOKEN for the KB sync endpoint.
+ * Setting `SYNC_KB_TOKEN` (server-side) enables enforcement: the request
+ * must include the matching `x-sync-token` header. `VITE_SYNC_KB_TOKEN`
+ * must be set to the same value at build time so the bundled UI can send
+ * the header; that Vite-exposed value is client-visible and must not be
+ * treated as a secret.
  */
 function verifySyncKbToken(req: Request, res: Response, next: NextFunction): void {
   const configured = process.env.SYNC_KB_TOKEN?.trim();
@@ -366,7 +368,7 @@ export function mountMcpRoutes(router: Router): void {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(`[mcp] sync-kb failed: ${msg}`);
-      return res.status(500).json({ ok: false, error: msg });
+      return res.status(500).json({ ok: false, error: "Knowledge base synchronization failed" });
     } finally {
       setKbSyncInProgress(false);
     }

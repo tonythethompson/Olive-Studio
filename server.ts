@@ -106,8 +106,12 @@ const PORT = Number.parseInt(process.env.PORT || "3000", 10) || 3000;
 
 /**
  * Bind address. Defaults to 127.0.0.1. Set OLIVE_BIND=0.0.0.0 only when you
- * explicitly need LAN access and understand the threat model: any LAN host can
- * reach the API and spawn Olive, read logs, and cancel jobs without auth.
+ * explicitly need LAN access and understand the threat model: wider binding
+ * exposes only routes without loopback gates, while Olive UI actions
+ * (/api/olive/run, status, stream, cancel) and /api/mcp/sync-kb remain
+ * loopback-only. The API assumes a local-trust threat model and must not be
+ * exposed to LAN or public networks without bind and authentication fixes.
+ * SYNC_KB_TOKEN is not protection for remote sync access.
  */
 const BIND_HOST = process.env.OLIVE_BIND?.trim() || "127.0.0.1";
 const IS_ALL_INTERFACES = BIND_HOST === "0.0.0.0" || BIND_HOST === "::";
@@ -171,14 +175,6 @@ app.get("/api/health", (_req, res) => {
 // ─── API 404 fallback ────────────────────────────────────────────────────
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "API route not found." });
-});
-
-// ─── Global error handling ────────────────────────────────────────────────────
-// Sanitize 500s so stack traces are not leaked to clients.
-app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("[express] unhandled error:", err instanceof Error ? err.stack ?? err.message : err);
-  if (res.headersSent) return;
-  res.status(500).json({ error: "Internal server error" });
 });
 
 // ─── Vite / Static ────────────────────────────────────────────────────────────
@@ -290,6 +286,16 @@ async function startServer() {
     // eslint-disable-next-line no-console -- intentional server startup message
     console.log(`Serving UI from ${distPath}`);
   }
+
+  // ─── Global error handling (must be last, before listen) ────────────────────
+  // Sanitize 500s so stack traces are not leaked to clients. Registered at the
+  // end of startServer() so errors from Vite, static middleware, and all
+  // application middleware are handled here.
+  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    console.error("[express] unhandled error:", err instanceof Error ? err.stack ?? err.message : err);
+    if (res.headersSent) return;
+    res.status(500).json({ error: "Internal server error" });
+  });
 
   await new Promise<void>((resolve) => {
     app.listen(PORT, BIND_HOST, () => {

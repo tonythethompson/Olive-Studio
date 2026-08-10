@@ -245,6 +245,21 @@ describe("POST /api/mcp/sync-kb", () => {
       expect(res.status).toBe(200);
       expect(await res.json()).toMatchObject({ ok: true, available: true, passCount: 1 });
     });
+
+    it("returns 403 from studioLocalOnly gate when x-forwarded-for is present", async () => {
+      process.env.SYNC_KB_TOKEN = "test-secret";
+      vi.spyOn(fs, "readFileSync").mockReturnValue(VALID_KB);
+
+      const res = await fetch(`${baseUrl}/api/mcp/sync-kb`, {
+        method: "POST",
+        headers: { "x-forwarded-for": "203.0.113.1", "x-sync-token": "test-secret" },
+      });
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body).toMatchObject({ error: "This endpoint is only available from loopback" });
+      // Sync work must not be performed when the local-only gate rejects.
+      expect(body).not.toMatchObject({ ok: true });
+    });
   });
 });
 

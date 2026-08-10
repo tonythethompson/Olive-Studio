@@ -26,6 +26,31 @@ _MAX_CONFIG_CONTEXT_LEN = 200
 _VALIDATE_TOOL_PATH = "/api/olive/jobs/validate"
 
 
+def _strip_trust_remote_code(recipe: dict[str, Any]) -> bool:
+    """Recursively remove or override ``trust_remote_code: true`` from *recipe*.
+
+    Returns True if any automated elevation was stripped. Patches that set the
+    flag to ``false`` are preserved.
+    """
+    overridden = False
+
+    def _walk(obj: Any) -> None:
+        nonlocal overridden
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                if key == "trust_remote_code" and value is True:
+                    obj[key] = False
+                    overridden = True
+                else:
+                    _walk(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                _walk(item)
+
+    _walk(recipe)
+    return overridden
+
+
 def _apply_merge_patch(target: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
     """Apply an RFC 7386 JSON Merge Patch to *target* (deep-copied first).
 
@@ -76,18 +101,38 @@ def _build_config_context(
     return context
 
 
-def _describe_changes(updated_config: dict[str, Any], prefix: str = "") -> list[str]:
-    """Generate human-readable change descriptions from an updated_config patch."""
+def _describe_changes(
+    original: dict[str, Any],
+    fixed: dict[str, Any],
+    prefix: str = "",
+) -> list[str]:
+    """Generate human-readable change descriptions by diffing original vs fixed.
+
+    Reports effective additions, removals, replacements, and nested changes
+    rather than relying only on the updated_config patch. This catches
+    empty-object patches that replace scalars or create missing keys, and
+    removals of absent keys (no-op).
+    """
     changes: list[str] = []
-    for key, value in updated_config.items():
+    all_keys = set(original) | set(fixed)
+    for key in sorted(all_keys):
         path = f"{prefix}.{key}" if prefix else key
-        if value is None:
+        old_val = original.get(key)
+        new_val = fixed.get(key)
+
+        if key not in original:
+            # Addition: key exists in fixed but not in original
+            changes.append(f"Added {path} = {json.dumps(new_val)}")
+        elif key not in fixed:
+            # Removal: key existed in original but removed from fixed
             changes.append(f"Removed {path}")
-        elif isinstance(value, dict):
-            # Recurse for nested dicts
-            changes.extend(_describe_changes(value, prefix=path))
-        else:
-            changes.append(f"Set {path} to {json.dumps(value)}")
+        elif isinstance(old_val, dict) and isinstance(new_val, dict):
+            # Nested dict: recurse
+            changes.extend(_describe_changes(old_val, new_val, prefix=path))
+        elif old_val != new_val:
+            # Replacement
+            changes.append(f"Set {path} to {json.dumps(new_val)}")
+        # else: unchanged — no description needed
     return changes
 
 
@@ -130,6 +175,9 @@ def _validate_fixed_recipe(fixed_recipe: dict[str, Any]) -> bool:
         _VALIDATE_TOOL_PATH,
         body={"recipe": fixed_recipe},
     )
+    # Non-dict responses (None, lists, etc.) cannot carry a validation verdict.
+    if not isinstance(response, dict):
+        return False
     # If Studio is down, returned an error, or rejected the recipe, treat it as
     # not validated. The endpoint returns validation failures with valid=false.
     if isinstance(response.get("error"), str) and response["error"]:
@@ -187,7 +235,16 @@ def diagnose_and_fix(
         if isinstance(updated_config, dict) and updated_config and applyable:
             # Apply merge patch to produce fixed recipe
             fixed_recipe = _apply_merge_patch(recipe, updated_config)
-            changes_made = _describe_changes(updated_config)
+            # KB patches must never automatically enable trust_remote_code.
+            # Strip or override any nested trust_remote_code: true while
+            # preserving patches that explicitly set it to false.
+            trust_overridden = _strip_trust_remote_code(fixed_recipe)
+            changes_made = _describe_changes(recipe, fixed_recipe)
+            if trust_overridden:
+                changes_made.append(
+                    "trust_remote_code requires deliberate user action; "
+                    "automated elevation was removed from the fixed recipe."
+                )
 
             # Best-effort validation through Studio bridge
             recipe_validated = _validate_fixed_recipe(fixed_recipe)
@@ -207,4 +264,4 @@ def diagnose_and_fix(
 
     except Exception as exc:
         logger.warning("diagnose_and_fix unexpected error", exc_info=True)
-        return err("internal_error", f"{type(exc).__name__}: {exc}")
+        return err("internal_error", type(exc).__name__)

@@ -36,9 +36,11 @@ def _json_round_trip(result: dict[str, Any]) -> None:
 def test_successful_completion(monkeypatch: pytest.MonkeyPatch):
     """Submit succeeds, polls twice, job completes with metrics and logs."""
     call_count = {"n": 0}
+    submit_kwargs: dict[str, Any] = {}
 
     def fake_studio_request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         if method == "POST" and "/jobs/submit" in path:
+            submit_kwargs.update(kwargs)
             return {"job_id": "job-001"}
         # GET status polls
         call_count["n"] += 1
@@ -52,7 +54,7 @@ def test_successful_completion(monkeypatch: pytest.MonkeyPatch):
         }
 
     monkeypatch.setattr(agent_execute, "studio_request", fake_studio_request)
-    monkeypatch.setattr(agent_execute.time, "sleep", lambda _: None)
+    monkeypatch.setattr(agent_execute, "_sleep", lambda _: None)
 
     result = execute_and_observe(recipe={"model_path": "test.onnx"}, timeout=60)
 
@@ -65,6 +67,8 @@ def test_successful_completion(monkeypatch: pytest.MonkeyPatch):
     assert result["exit_code"] == 0
     assert isinstance(result["elapsed_ms"], int)
     assert isinstance(result["artifact_path_refs"], list)
+    # The /jobs/submit call must pass the submission timeout (120s for env setup).
+    assert submit_kwargs.get("timeout") == 120.0
     _json_round_trip(result)
 
 
@@ -84,7 +88,7 @@ def test_failed_job_early_abort(monkeypatch: pytest.MonkeyPatch):
         return {"status": "failed", "logs": ["error line"], "exitCode": 1}
 
     monkeypatch.setattr(agent_execute, "studio_request", fake_studio_request)
-    monkeypatch.setattr(agent_execute.time, "sleep", lambda _: None)
+    monkeypatch.setattr(agent_execute, "_sleep", lambda _: None)
 
     result = execute_and_observe(recipe={"model_path": "bad.onnx"}, timeout=60)
 
@@ -115,8 +119,8 @@ def test_timeout_expiry(monkeypatch: pytest.MonkeyPatch):
         return {"status": "running"}
 
     monkeypatch.setattr(agent_execute, "studio_request", fake_studio_request)
-    monkeypatch.setattr(agent_execute.time, "sleep", lambda _: None)
-    monkeypatch.setattr(agent_execute.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(agent_execute, "_sleep", lambda _: None)
+    monkeypatch.setattr(agent_execute, "_monotonic", fake_monotonic)
 
     result = execute_and_observe(recipe={"model_path": "slow.onnx"}, timeout=10)
 
@@ -205,7 +209,7 @@ def test_json_round_trip_comprehensive(monkeypatch: pytest.MonkeyPatch):
         }
 
     monkeypatch.setattr(agent_execute, "studio_request", fake_studio_request)
-    monkeypatch.setattr(agent_execute.time, "sleep", lambda _: None)
+    monkeypatch.setattr(agent_execute, "_sleep", lambda _: None)
 
     result = execute_and_observe(recipe={"model_path": "m.onnx"}, timeout=60)
 
@@ -346,9 +350,79 @@ def test_poll_sleep_uses_exponential_backoff(monkeypatch: pytest.MonkeyPatch):
         return {"status": "completed", "logs": [], "exitCode": 0}
 
     monkeypatch.setattr(agent_execute, "studio_request", fake_studio_request)
-    monkeypatch.setattr(agent_execute.time, "sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(agent_execute, "_sleep", lambda seconds: sleeps.append(seconds))
 
     result = execute_and_observe(recipe={"model_path": "slow.onnx"}, timeout=600)
 
     assert result["status"] == "completed"
     assert sleeps == [2.0, 4.0, 8.0, 16.0]
+
+
+# ---------------------------------------------------------------------------
+# Test: Logs truncated to last _MAX_LOG_ENTRIES (200) entries
+# ---------------------------------------------------------------------------
+
+
+def test_logs_truncated_to_last_200(monkeypatch: pytest.MonkeyPatch):
+    """When the job returns more than 200 log lines, only the last 200 are kept."""
+    all_logs = [f"line-{i}" for i in range(250)]
+
+    def fake_studio_request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        if method == "POST" and "/jobs/submit" in path:
+            return {"job_id": "job-trunc"}
+        return {"status": "completed", "logs": all_logs, "exitCode": 0}
+
+    monkeypatch.setattr(agent_execute, "studio_request", fake_studio_request)
+    monkeypatch.setattr(agent_execute, "_sleep", lambda _: None)
+
+    result = execute_and_observe(recipe={"model_path": "m.onnx"}, timeout=60)
+
+    assert result["status"] == "completed"
+    assert len(result["logs"]) == 200
+    assert result["logs"][0] == "line-50"
+    assert result["logs"][-1] == "line-249"
+    _json_round_trip(result)
+
+
+# ---------------------------------------------------------------------------
+# Test: Artifact refs capped at 20
+# ---------------------------------------------------------------------------
+
+
+def test_artifact_refs_capped_at_20(monkeypatch: pytest.MonkeyPatch):
+    """When logs contain more than 20 artifact references, only 20 are returned."""
+    logs = [f"saved output/model_{i}.onnx" for i in range(25)]
+
+    def fake_studio_request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        if method == "POST" and "/jobs/submit" in path:
+            return {"job_id": "job-arts"}
+        return {"status": "completed", "logs": logs, "exitCode": 0}
+
+    monkeypatch.setattr(agent_execute, "studio_request", fake_studio_request)
+    monkeypatch.setattr(agent_execute, "_sleep", lambda _: None)
+
+    result = execute_and_observe(recipe={"model_path": "m.onnx"}, timeout=60)
+
+    assert result["status"] == "completed"
+    assert len(result["artifact_path_refs"]) == 20
+    _json_round_trip(result)
+
+
+# ---------------------------------------------------------------------------
+# Test: mcp_access_disabled maps to submission_denied
+# ---------------------------------------------------------------------------
+
+
+def test_mcp_access_disabled_maps_to_submission_denied(monkeypatch: pytest.MonkeyPatch):
+    """Studio returns mcp_access_disabled — maps to submission_denied, no side_effect."""
+
+    def fake_studio_request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        return {"error": "mcp_access_disabled", "message": "Agent access is disabled"}
+
+    monkeypatch.setattr(agent_execute, "studio_request", fake_studio_request)
+
+    result = execute_and_observe(recipe={"model_path": "test.onnx"})
+
+    assert result["error"] == "submission_denied"
+    assert "side_effect" not in result
+    _json_round_trip(result)

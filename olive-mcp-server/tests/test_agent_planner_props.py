@@ -16,82 +16,25 @@ from unittest.mock import patch
 from hypothesis import given, settings, assume
 from hypothesis import strategies as st
 
-from olive_mcp_server.tools.agent_planner import plan_optimization
+from olive_mcp_server.tools.agent_planner import (
+    plan_optimization,
+    _parse_intent,
+)
 
 # ---------------------------------------------------------------------------
-# Keyword / pattern sets (mirrors agent_planner.py triggers)
+# Trigger detection — reuse production symbols so generated-text filtering
+# stays synchronized with production parsing.
 # ---------------------------------------------------------------------------
-
-# Hardware keywords that trigger recognition (lowercased for matching)
-_HARDWARE_TRIGGERS = [
-    "nvidia", "rtx", "cuda", "tensorrt", "openvino", "intel",
-    "qualcomm", "qnn", "snapdragon", "apple", "coreml", "directml",
-    "rocm", "webgpu", "cpu", "npu",
-]
-
-# Model family names that trigger recognition
-_MODEL_FAMILY_TRIGGERS = [
-    "llama", "phi", "mistral", "qwen", "falcon", "gpt", "bert",
-    "resnet", "mobilenet", "whisper", "vit", "yolo",
-    "stable diffusion", "stablediffusion", "stable-diffusion",
-    "deepseek", "mixtral", "efficientnet", "t5", "codellama",
-]
-
-# Optimization keywords that trigger recognition
-_OPTIMIZATION_TRIGGERS = [
-    "quantize", "quantization", "compress", "optimize", "optimise",
-    "speed", "latency", "smaller", "int4", "int8", "awq", "gptq",
-    "hqq", "prune", "pruning", "lora", "qlora", "fp16", "float16",
-    "convert", "onnx", "reduce", "shrink", "accelerate", "faster",
-]
-
-# Combine all trigger words for filtering
-_ALL_TRIGGERS = _HARDWARE_TRIGGERS + _MODEL_FAMILY_TRIGGERS + _OPTIMIZATION_TRIGGERS
-
-# The HF model reference pattern: org/model (e.g. "meta-llama/Llama-2-7b")
-# We also need to exclude strings containing a "/" surrounded by alphanum chars
-# since that matches the org/model regex in agent_planner.
-_HF_MODEL_PATTERN = re.compile(r"\b[a-zA-Z0-9_-]+/[a-zA-Z0-9._-]+\b")
-
-# RTX pattern (rtx followed by digits)
-_RTX_PATTERN = re.compile(r"rtx\s*\d{4}", re.IGNORECASE)
-
-# MI pattern (mi followed by 3 digits) — matches AMD MI300X etc.
-_MI_PATTERN = re.compile(r"mi\d{3}", re.IGNORECASE)
 
 
 def _contains_any_trigger(text: str) -> bool:
-    """Check if the text contains any keyword/pattern that would be parsed."""
-    lower = text.lower()
+    """Check if the text would be parsed by the production _parse_intent.
 
-    # Check word-boundary hardware triggers
-    for kw in _HARDWARE_TRIGGERS:
-        if re.search(rf"\b{re.escape(kw)}\b", lower):
-            return True
-
-    # Check RTX with digits pattern
-    if _RTX_PATTERN.search(text):
-        return True
-
-    # Check MI with digits pattern (AMD)
-    if _MI_PATTERN.search(text):
-        return True
-
-    # Check model family triggers (word boundary)
-    for kw in _MODEL_FAMILY_TRIGGERS:
-        if re.search(rf"\b{re.escape(kw)}\b", lower):
-            return True
-
-    # Check HF model reference pattern (org/model)
-    if _HF_MODEL_PATTERN.search(text):
-        return True
-
-    # Check optimization triggers (word boundary)
-    for kw in _OPTIMIZATION_TRIGGERS:
-        if re.search(rf"\b{re.escape(kw)}\b", lower):
-            return True
-
-    return False
+    Delegates to the production parser so the property test never drifts from
+    the actual trigger definitions in agent_planner.py.
+    """
+    parsed = _parse_intent(text)
+    return any(parsed.values())
 
 
 # ---------------------------------------------------------------------------
@@ -108,7 +51,7 @@ _safe_text = st.text(
     ),
     min_size=1,
     max_size=100,
-).filter(lambda s: not _contains_any_trigger(s))
+).filter(lambda s: s.strip() and not _contains_any_trigger(s))
 
 
 # ---------------------------------------------------------------------------
@@ -118,14 +61,14 @@ _safe_text = st.text(
 
 @settings(max_examples=100)
 @given(intent=_safe_text)
-@patch("olive_mcp_server.tools.agent_planner.studio_request")
-def test_unparseable_intent_returns_error(mock_studio, intent: str):
+def test_unparseable_intent_returns_error(intent: str):
     """Property 3: Random strings with no hardware/model/optimization keywords
     SHALL produce an 'unparseable_intent' error.
 
     Validates: Requirements 3.5
     """
-    result = plan_optimization(intent)
+    with patch("olive_mcp_server.tools.agent_planner.validate_ui_state_recipe") as mock_studio:
+        result = plan_optimization(intent)
 
     assert isinstance(result, dict), f"Expected dict, got {type(result)}"
     assert "error" in result, (

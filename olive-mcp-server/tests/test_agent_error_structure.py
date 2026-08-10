@@ -54,9 +54,10 @@ def assert_valid_error_structure(result: dict[str, Any]) -> None:
 def assert_json_round_trip(result: dict[str, Any]) -> None:
     """Assert that a result dict survives JSON serialization round-trip.
 
-    Property 10: JSON Serialization Round-Trip.
+    Property 10: JSON Serialization Round-Trip. Uses ``allow_nan=False`` so
+    NaN, Infinity, and -Infinity are rejected as invalid JSON.
     """
-    serialized = json.dumps(result)
+    serialized = json.dumps(result, allow_nan=False)
     deserialized = json.loads(serialized)
     assert deserialized == result, (
         f"JSON round-trip failed:\n  original: {result}\n  after: {deserialized}"
@@ -185,31 +186,18 @@ _IMPLEMENTED_ERROR_CASES = [
 ]
 
 # Cases that require plan_optimization (agent_planner.py)
-_PLANNER_AVAILABLE = False
-try:
-    from olive_mcp_server.tools.agent_planner import plan_optimization  # noqa: F401
-    _PLANNER_AVAILABLE = True
-except (ImportError, ModuleNotFoundError):
-    pass
+from olive_mcp_server.tools.agent_planner import plan_optimization  # noqa: F401
 
 _PLANNER_ERROR_CASES = [
     pytest.param(
         _case_plan_optimization_empty,
         "invalid_input",
         id="plan_optimization_empty_intent",
-        marks=pytest.mark.skipif(
-            not _PLANNER_AVAILABLE,
-            reason="agent_planner module not yet implemented",
-        ),
     ),
     pytest.param(
         _case_plan_optimization_unparseable,
         "unparseable_intent",
         id="plan_optimization_unparseable_intent",
-        marks=pytest.mark.skipif(
-            not _PLANNER_AVAILABLE,
-            reason="agent_planner module not yet implemented",
-        ),
     ),
 ]
 

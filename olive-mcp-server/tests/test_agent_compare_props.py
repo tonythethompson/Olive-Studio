@@ -19,9 +19,79 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from olive_mcp_server.tools.agent_compare import (
+    _LOWER_IS_BETTER,
+    _METRIC_KEYS,
     _normalize_and_score,
     compare_results,
 )
+
+
+# ---------------------------------------------------------------------------
+# Independent scoring oracle (does not reuse implementation results)
+# ---------------------------------------------------------------------------
+
+
+def _oracle_normalized_score(key: str, value: float, bounds: tuple[float, float]) -> float:
+    """Independent reimplementation of the normalized-metric score.
+
+    Degenerate ranges (max == min) return the neutral midpoint 0.5.
+    Non-degenerate ranges apply direction-based inversion for lower-is-better.
+    """
+    minimum, maximum = bounds
+    if maximum == minimum:
+        return 0.5
+    normalized = (value - minimum) / (maximum - minimum)
+    return 1.0 - normalized if key in _LOWER_IS_BETTER else normalized
+
+
+def _oracle_bounds(scoreable: list[dict[str, Any]]) -> dict[str, tuple[float, float]]:
+    """Independent reimplementation of metric bounds computation."""
+    values: dict[str, list[float]] = {key: [] for key in _METRIC_KEYS}
+    for entry in scoreable:
+        for key in _METRIC_KEYS:
+            v = entry["metrics"].get(key)
+            if v is not None:
+                values[key].append(v)
+    return {
+        key: (min(vs), max(vs)) for key, vs in values.items() if vs
+    }
+
+
+def _oracle_weights(preference: str) -> dict[str, float]:
+    """Independent reimplementation of preference weights."""
+    preferred = {
+        "latency": "latency_ms",
+        "size": "model_size_mb",
+        "accuracy": "accuracy",
+    }.get(preference)
+    return {key: (2.0 if key == preferred else 1.0) for key in _METRIC_KEYS}
+
+
+def _oracle_score(entry: dict[str, Any], scoreable: list[dict[str, Any]], preference: str) -> float:
+    """Independent reimplementation of the weighted-average score for one entry.
+
+    Missing metrics receive a penalty score of 0.0 but still consume their
+    full weight, matching the implementation's consistent-metric-set policy.
+    """
+    bounds = _oracle_bounds(scoreable)
+    weights = _oracle_weights(preference)
+    weighted_sum = 0.0
+    total_weight = 0.0
+    for key in _METRIC_KEYS:
+        total_weight += weights[key]
+        value = entry["metrics"].get(key)
+        if value is None or key not in bounds:
+            continue  # penalty: 0.0 contribution, full weight consumed
+        weighted_sum += _oracle_normalized_score(key, value, bounds[key]) * weights[key]
+    return round(weighted_sum / total_weight, 6) if total_weight else 0.0
+
+
+def _oracle_winner(scoreable: list[dict[str, Any]], preference: str) -> str | None:
+    """Independently compute the expected winner (highest oracle score)."""
+    if len(scoreable) < 2:
+        return None
+    scored = [(e["job_id"], _oracle_score(e, scoreable, preference)) for e in scoreable]
+    return max(scored, key=lambda x: x[1])[0]
 
 # ---------------------------------------------------------------------------
 # Strategies
@@ -96,6 +166,21 @@ class TestPreferenceWeightedScoring:
 
         assert winner["score"] == max_score
 
+        # Independent oracle: every returned score must match the oracle.
+        for entry in scored:
+            expected = _oracle_score(
+                {"job_id": entry["job_id"], "metrics": entry["metrics"]},
+                scoreable,
+                preference,
+            )
+            assert entry["score"] == expected, (
+                f"Score mismatch for {entry['job_id']}: impl={entry['score']} oracle={expected}"
+            )
+        # The selected winner must match the independently computed highest score.
+        expected_winner = _oracle_winner(scoreable, preference)
+        if expected_winner is not None:
+            assert winner["job_id"] == expected_winner
+
     @given(metrics_list=_job_list_strategy, preference=_preference_strategy)
     @settings(max_examples=100)
     def test_all_scores_in_valid_range(
@@ -120,16 +205,26 @@ class TestPreferenceWeightedScoring:
     ) -> None:
         """When preference is 'balanced', all metrics get equal weight.
 
-        Verify by comparing with explicit 1x weights for each metric.
+        Verify by comparing each returned score against the independent oracle
+        with explicit 1x weights for every metric, and confirm the balanced
+        scoring matches the latency, size, and accuracy oracle when all
+        weights are equal.
         """
         scoreable = _make_scoreable_entries(metrics_list)
         scored_balanced = _normalize_and_score(scoreable, "balanced")
 
-        # Re-compute manually with all weights = 1.0
-        # Since balanced already uses 1.0 for all, scores should match.
         for entry in scored_balanced:
             assert isinstance(entry["score"], float)
             assert 0.0 <= entry["score"] <= 1.0
+            expected = _oracle_score(
+                {"job_id": entry["job_id"], "metrics": entry["metrics"]},
+                scoreable,
+                "balanced",
+            )
+            assert entry["score"] == expected, (
+                f"Balanced score mismatch for {entry['job_id']}: "
+                f"impl={entry['score']} oracle={expected}"
+            )
 
     @given(metrics_list=_job_list_strategy)
     @settings(max_examples=100)
@@ -140,7 +235,8 @@ class TestPreferenceWeightedScoring:
         """When a specific preference is set, that metric's contribution is doubled.
 
         We verify that changing the preference can change the relative ordering
-        of jobs (unless all jobs tie on the preferred metric).
+        of jobs (unless all jobs tie on the preferred metric), and that every
+        returned score matches the independent oracle.
         """
         scoreable = _make_scoreable_entries(metrics_list)
 
@@ -149,10 +245,25 @@ class TestPreferenceWeightedScoring:
         scored_size = _normalize_and_score(scoreable, "size")
         scored_accuracy = _normalize_and_score(scoreable, "accuracy")
 
-        # Each preference-weighted scoring must still produce valid scores
-        for scored in [scored_balanced, scored_latency, scored_size, scored_accuracy]:
+        # Each preference-weighted scoring must still produce valid scores and
+        # match the independent oracle for the corresponding preference.
+        for scored, pref in [
+            (scored_balanced, "balanced"),
+            (scored_latency, "latency"),
+            (scored_size, "size"),
+            (scored_accuracy, "accuracy"),
+        ]:
             for entry in scored:
                 assert 0.0 <= entry["score"] <= 1.0
+                expected = _oracle_score(
+                    {"job_id": entry["job_id"], "metrics": entry["metrics"]},
+                    scoreable,
+                    pref,
+                )
+                assert entry["score"] == expected, (
+                    f"Score mismatch for {entry['job_id']} pref={pref}: "
+                    f"impl={entry['score']} oracle={expected}"
+                )
 
     @given(metrics_list=_job_list_strategy, preference=_preference_strategy)
     @settings(max_examples=100)
@@ -267,17 +378,17 @@ class TestWeightVerification:
         scored_latency = _normalize_and_score(scoreable, "latency")
         scored_balanced = _normalize_and_score(scoreable, "balanced")
 
-        # Size is tied -> norm=1.0 for both (all equal case).
+        # Size is tied -> neutral 0.5 for both (degenerate range midpoint).
         # Latency: job-0 norm=0 -> inv=1.0, job-1 norm=1 -> inv=0.0
         # Accuracy: job-0 norm=0, job-1 norm=1.0
-        # Latency pref: job-0 = (1.0*2 + 1.0*1 + 0.0*1)/4 = 3/4 = 0.75
-        #               job-1 = (0.0*2 + 1.0*1 + 1.0*1)/4 = 2/4 = 0.5
+        # Latency pref: job-0 = (1.0*2 + 0.5*1 + 0.0*1)/4 = 2.5/4 = 0.625
+        #               job-1 = (0.0*2 + 0.5*1 + 1.0*1)/4 = 1.5/4 = 0.375
         job0_latency = next(e for e in scored_latency if e["job_id"] == "job-0")
         job1_latency = next(e for e in scored_latency if e["job_id"] == "job-1")
         assert job0_latency["score"] > job1_latency["score"]
 
-        # Balanced: job-0 = (1.0 + 1.0 + 0.0)/3 = 0.667
-        #           job-1 = (0.0 + 1.0 + 1.0)/3 = 0.667
+        # Balanced: job-0 = (1.0 + 0.5 + 0.0)/3 = 0.5
+        #           job-1 = (0.0 + 0.5 + 1.0)/3 = 0.5
         # They tie under balanced -- the latency preference changes the outcome.
         job0_balanced = next(e for e in scored_balanced if e["job_id"] == "job-0")
         job1_balanced = next(e for e in scored_balanced if e["job_id"] == "job-1")
@@ -297,10 +408,11 @@ class TestWeightVerification:
         scoreable = _make_scoreable_entries(metrics_list)
         scored_size = _normalize_and_score(scoreable, "size")
 
-        # Latency tied -> 1.0 for both. Size: job-0 inv=1.0, job-1 inv=0.0.
+        # Latency tied -> neutral 0.5 for both (degenerate range midpoint).
+        # Size: job-0 inv=1.0, job-1 inv=0.0.
         # Accuracy: job-0=0.0, job-1=1.0.
-        # Size pref: job-0 = (1.0*1 + 1.0*2 + 0.0*1)/4 = 3/4 = 0.75
-        #            job-1 = (1.0*1 + 0.0*2 + 1.0*1)/4 = 2/4 = 0.5
+        # Size pref: job-0 = (0.5*1 + 1.0*2 + 0.0*1)/4 = 2.5/4 = 0.625
+        #            job-1 = (0.5*1 + 0.0*2 + 1.0*1)/4 = 1.5/4 = 0.375
         job0_size = next(e for e in scored_size if e["job_id"] == "job-0")
         job1_size = next(e for e in scored_size if e["job_id"] == "job-1")
         assert job0_size["score"] > job1_size["score"]
@@ -319,10 +431,11 @@ class TestWeightVerification:
         scoreable = _make_scoreable_entries(metrics_list)
         scored_accuracy = _normalize_and_score(scoreable, "accuracy")
 
-        # Latency tied -> 1.0 for both. Size: job-0 inv=0.0, job-1 inv=1.0.
+        # Latency tied -> neutral 0.5 for both (degenerate range midpoint).
+        # Size: job-0 inv=0.0, job-1 inv=1.0.
         # Accuracy: job-0=1.0, job-1=0.0.
-        # Accuracy pref: job-0 = (1.0*1 + 0.0*1 + 1.0*2)/4 = 3/4 = 0.75
-        #               job-1 = (1.0*1 + 1.0*1 + 0.0*2)/4 = 2/4 = 0.5
+        # Accuracy pref: job-0 = (0.5*1 + 0.0*1 + 1.0*2)/4 = 2.5/4 = 0.625
+        #               job-1 = (0.5*1 + 1.0*1 + 0.0*2)/4 = 1.5/4 = 0.375
         job0_acc = next(e for e in scored_accuracy if e["job_id"] == "job-0")
         job1_acc = next(e for e in scored_accuracy if e["job_id"] == "job-1")
         assert job0_acc["score"] > job1_acc["score"]
@@ -337,7 +450,7 @@ class TestWeightVerification:
         scoreable = _make_scoreable_entries(metrics_list)
         scored = _normalize_and_score(scoreable, "balanced")
 
-        # Both have same accuracy (tied -> 1.0 each), and mirror latency/size.
+        # Both have same accuracy (tied -> neutral 0.5 each), and mirror latency/size.
         # Under balanced weights with inverted lower-is-better, they score equally.
         job0 = next(e for e in scored if e["job_id"] == "job-0")
         job1 = next(e for e in scored if e["job_id"] == "job-1")

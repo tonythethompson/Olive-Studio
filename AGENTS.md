@@ -126,7 +126,8 @@ Olive Studio is built for single-user, loopback-only operation. Do not expose th
 | Variable | Effect |
 | ---------------- | ------ |
 | `OLIVE_BIND` | Server bind address. Defaults to `127.0.0.1`. Set to `0.0.0.0` or `::` only to enable LAN access and only on a trusted network. |
-| `SYNC_KB_TOKEN` / `VITE_SYNC_KB_TOKEN` | Optional shared secret for `POST /api/mcp/sync-kb`. When both are set to the same value, the client must send the matching `x-sync-token` header. |
+| `SYNC_KB_TOKEN` | Server-side enforcement token for `POST /api/mcp/sync-kb`. When set, the client must send the matching `x-sync-token` header. |
+| `VITE_SYNC_KB_TOKEN` | Build-time copy of the token embedded in the bundled UI so it can send the `x-sync-token` header. Must match `SYNC_KB_TOKEN`. This value is client-visible and must not be treated as a secret. |
 | `OLIVE_ARENA_ALLOW_REMOTE` | When `true`, disables loopback gating on Arena inference routes for Docker / remote lab setups. |
 
 - `server.ts` binds to `127.0.0.1` by default and logs a warning when bound to all interfaces.

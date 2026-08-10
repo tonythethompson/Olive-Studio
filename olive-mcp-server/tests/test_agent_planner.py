@@ -19,16 +19,20 @@ from olive_mcp_server.tools.agent_planner import plan_optimization
 # ---------------------------------------------------------------------------
 
 
-def _mock_studio_request_success(
-    method: str, path: str, *, body: Any = None, timeout: float = 5.0
-) -> dict[str, Any]:
-    """Simulate a successful Studio bridge validation (returns empty dict = no error)."""
-    return {}
+def _mock_validate_success(ui_state: Any = None) -> dict[str, Any]:
+    """Simulate a successful Studio bridge validation (is_runnable=True)."""
+    return {
+        "effective_state": {},
+        "schema_errors": [],
+        "pipeline_issues": [],
+        "pipeline_critical_count": 0,
+        "local_execution_issues": [],
+        "advisories": [],
+        "is_runnable": True,
+    }
 
 
-def _mock_studio_request_unavailable(
-    method: str, path: str, *, body: Any = None, timeout: float = 5.0
-) -> dict[str, Any]:
+def _mock_validate_unavailable(ui_state: Any = None) -> dict[str, Any]:
     """Simulate Studio bridge unavailability."""
     return {"error": "studio_unavailable", "message": "Studio is unreachable"}
 
@@ -47,8 +51,8 @@ class TestLLMIntentParsing:
         Validates: Requirements 13.2 — LLM intent parsing
         """
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(
@@ -60,9 +64,9 @@ class TestLLMIntentParsing:
         assert result["validated"] is True
 
         patch = result["ui_state_patch"]
-        # Hardware provider detected
+        # Hardware provider detected — must be exactly CUDAExecutionProvider
         assert "ihvProvider" in patch
-        assert "CUDA" in patch["ihvProvider"] or "Tensorrt" in patch["ihvProvider"]
+        assert patch["ihvProvider"] == "CUDAExecutionProvider"
 
         # Quantization settings
         passes = patch.get("passes", {})
@@ -75,8 +79,8 @@ class TestLLMIntentParsing:
         Validates: Requirements 13.7
         """
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(
@@ -99,8 +103,8 @@ class TestCNNIntentParsing:
         Validates: Requirements 13.2 — CNN intent parsing
         """
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(intent="optimize resnet for intel openvino")
@@ -108,9 +112,22 @@ class TestCNNIntentParsing:
         assert "error" not in result
         patch = result["ui_state_patch"]
 
-        # Intel / OpenVINO provider
+        # Intel / OpenVINO provider — must be exactly OpenVINOExecutionProvider
         assert "ihvProvider" in patch
-        assert "OpenVINO" in patch["ihvProvider"] or "intel" in patch["ihvProvider"].lower()
+        assert patch["ihvProvider"] == "OpenVINOExecutionProvider"
+
+        # CNN model type inferred from "resnet"
+        assert result["reasoning"].lower().find("cnn") >= 0 or "cnn" in result["reasoning"].lower()
+
+        # INT8 static quantization settings for CNN on OpenVINO
+        passes = patch.get("passes", {})
+        assert passes.get("quantization") is True
+        assert passes.get("quantPrecision") == "int8"
+
+        # CNN/static pass-chain configuration
+        pass_chain = passes.get("passChain")
+        assert isinstance(pass_chain, list)
+        assert len(pass_chain) >= 1
 
     def test_cnn_openvino_json_roundtrip(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """JSON round-trip for CNN intent.
@@ -118,8 +135,8 @@ class TestCNNIntentParsing:
         Validates: Requirements 13.7
         """
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(intent="optimize resnet for intel openvino")
@@ -140,8 +157,8 @@ class TestHardwareProbeOverride:
         Validates: Requirements 13.2
         """
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(
@@ -163,8 +180,8 @@ class TestHardwareProbeOverride:
         Validates: Requirements 13.7
         """
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(
@@ -188,8 +205,8 @@ class TestStudioDownDegradation:
         Validates: Requirements 13.2 — Studio-down degradation
         """
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_unavailable,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_unavailable,
         )
 
         result = plan_optimization(intent="optimize bert for cpu with int8")
@@ -210,8 +227,8 @@ class TestStudioDownDegradation:
         Validates: Requirements 13.7
         """
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_unavailable,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_unavailable,
         )
 
         result = plan_optimization(intent="optimize bert for cpu with int8")
@@ -232,8 +249,8 @@ class TestUnparseableIntent:
         Validates: Requirements 13.2
         """
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(intent="hello world how are you")
@@ -248,8 +265,8 @@ class TestUnparseableIntent:
         Validates: Requirements 13.7
         """
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(intent="hello world how are you")
@@ -270,8 +287,8 @@ class TestModelIdUsage:
         Validates: Requirements 13.2
         """
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(
@@ -290,8 +307,8 @@ class TestModelIdUsage:
         Validates: Requirements 13.7
         """
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(
@@ -315,8 +332,8 @@ class TestAlternativesGeneration:
         Validates: Requirements 13.2, 13.6
         """
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(
@@ -342,8 +359,8 @@ class TestAlternativesGeneration:
         Validates: Requirements 13.7
         """
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(
@@ -366,8 +383,8 @@ class TestResponseStructure:
         Validates: Requirements 13.2, 13.6
         """
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(intent="quantize llama for nvidia with int4")
@@ -390,8 +407,8 @@ class TestResponseStructure:
         Validates: Requirements 13.6
         """
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(intent="hello world how are you")
@@ -418,8 +435,8 @@ class TestInputValidation:
     def test_empty_intent(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Empty intent returns invalid_input error."""
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(intent="")
@@ -428,8 +445,8 @@ class TestInputValidation:
     def test_intent_too_long(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Intent > 2000 chars returns invalid_input error."""
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(intent="a" * 2001)
@@ -438,11 +455,94 @@ class TestInputValidation:
     def test_model_id_too_long(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """model_id > 200 chars returns invalid_input error."""
         monkeypatch.setattr(
-            "olive_mcp_server.tools.agent_planner.studio_request",
-            _mock_studio_request_success,
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
         )
 
         result = plan_optimization(
             intent="quantize for nvidia", model_id="x" * 201
         )
         assert result.get("error") == "invalid_input"
+
+    def test_intent_boundary_2000_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Intent of exactly 2000 characters should be accepted (boundary)."""
+        monkeypatch.setattr(
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
+        )
+
+        result = plan_optimization(intent="quantize llama for nvidia with int4 " + "a" * (2000 - 40))
+        assert "error" not in result
+
+    def test_model_id_boundary_200_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """model_id of exactly 200 characters should be accepted (boundary)."""
+        monkeypatch.setattr(
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
+        )
+
+        # Build a valid 200-char model_id: owner/name pattern
+        # owner = 97 chars, "/", name = 102 chars = 200 total
+        model_id = "a" * 97 + "/" + "b" * 102
+        assert len(model_id) == 200
+        result = plan_optimization(
+            intent="quantize for nvidia", model_id=model_id
+        )
+        assert "error" not in result
+
+    @pytest.mark.parametrize(
+        "intent,hardware_probe,model_id",
+        [
+            (123, None, ""),  # non-string intent
+            ("quantize for nvidia", "not-a-dict", ""),  # non-dict hardware_probe
+            ("quantize for nvidia", None, 123),  # non-string model_id
+        ],
+        ids=["non-string-intent", "non-dict-hardware-probe", "non-string-model-id"],
+    )
+    def test_wrong_type_inputs_return_invalid_input(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        intent: Any,
+        hardware_probe: Any,
+        model_id: Any,
+    ) -> None:
+        """Non-string intent, non-dict hardware_probe, non-string model_id → invalid_input."""
+        monkeypatch.setattr(
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
+        )
+
+        result = plan_optimization(
+            intent=intent,
+            hardware_probe=hardware_probe,
+            model_id=model_id,
+        )
+        assert result.get("error") == "invalid_input"
+
+
+# ---------------------------------------------------------------------------
+# Test: Unknown ihvProvider fallback
+# ---------------------------------------------------------------------------
+
+
+class TestUnknownProviderFallback:
+    """Unknown ihvProvider in hardware_probe should fall back to inferred provider."""
+
+    def test_unknown_provider_falls_back_to_inferred(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """hardware_probe with ihvProvider='not-a-provider' → falls back to CUDAExecutionProvider."""
+        monkeypatch.setattr(
+            "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",
+            _mock_validate_success,
+        )
+
+        result = plan_optimization(
+            intent="quantize llama for nvidia with int4",
+            hardware_probe={"ihvProvider": "not-a-provider"},
+        )
+
+        assert "error" not in result
+        patch = result["ui_state_patch"]
+        # Unknown provider should be dropped, falling back to the inferred CUDA
+        assert patch["ihvProvider"] == "CUDAExecutionProvider"

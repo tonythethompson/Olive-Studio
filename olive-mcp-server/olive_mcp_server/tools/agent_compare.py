@@ -22,7 +22,6 @@ _STATUS_PATH = "/api/olive/agent/status"  # + /{job_id}
 
 _VALID_PREFERENCES = frozenset({"latency", "size", "accuracy", "balanced"})
 _JOB_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-_TERMINAL_STATES = frozenset({"completed", "failed", "cancelled"})
 
 _MIN_JOBS = 2
 _MAX_JOBS = 10
@@ -93,9 +92,16 @@ def _metric_weights(preference: str) -> dict[str, float]:
 
 
 def _normalized_metric_score(key: str, value: float, bounds: tuple[float, float]) -> float:
-    """Normalize one metric to a higher-is-better score in [0, 1]."""
+    """Normalize one metric to a higher-is-better score in [0, 1].
+
+    Degenerate ranges (maximum == minimum) return the neutral midpoint 0.5
+    regardless of direction, since inversion of a constant is still a constant
+    but the neutral score makes the tie explicit in weighted averages.
+    """
     minimum, maximum = bounds
-    normalized = 1.0 if maximum == minimum else (value - minimum) / (maximum - minimum)
+    if maximum == minimum:
+        return 0.5
+    normalized = (value - minimum) / (maximum - minimum)
     return 1.0 - normalized if key in _LOWER_IS_BETTER else normalized
 
 
@@ -104,16 +110,24 @@ def _score_entry(
     bounds: dict[str, tuple[float, float]],
     weights: dict[str, float],
 ) -> dict[str, Any]:
-    """Return one comparison entry with its weighted normalized score."""
+    """Return one comparison entry with its weighted normalized score.
+
+    Missing metrics receive a penalty score of 0.0 (worst) and still
+    contribute their full weight to ``total_weight``. This ensures every
+    compared job is scored on the same metric set: a job missing a metric
+    cannot inflate its average by dropping that metric's weight.
+    """
     weighted_sum = 0.0
     total_weight = 0.0
     for key in _METRIC_KEYS:
+        weight = weights[key]
+        total_weight += weight
         value = entry["metrics"].get(key)
         if value is None or key not in bounds:
+            # Penalty: missing metric contributes 0.0 to the weighted sum
+            # but still consumes its full weight, pulling the average down.
             continue
-        weight = weights[key]
         weighted_sum += _normalized_metric_score(key, value, bounds[key]) * weight
-        total_weight += weight
 
     score = weighted_sum / total_weight if total_weight else 0.0
     return {
@@ -133,7 +147,8 @@ def _normalize_and_score(
     For latency and size: lower is better → invert (1 - normalized).
     For accuracy: higher is better → use normalized directly.
     Preference weighting: specified metric gets 2x, others 1x; balanced = all 1x.
-    Missing metrics are skipped in the average.
+    Missing metrics receive a penalty score of 0.0 but still consume their
+    full weight, so every job is scored on the same metric set.
     """
     bounds = _metric_bounds(scoreable)
     weights = _metric_weights(preference)
@@ -188,12 +203,25 @@ def compare_results(
             return err(
                 "invalid_job_count",
                 f"job_ids must contain {_MIN_JOBS}\u2013{_MAX_JOBS} entries.",
+                side_effect=False,
             )
 
-        # Validate each job_id format
+        # Validate each job_id format and reject duplicates
+        seen_ids: set[str] = set()
         for jid in job_ids:
             if not isinstance(jid, str) or not _JOB_ID_PATTERN.match(jid):
-                return err("invalid_job_id", f"Invalid job_id: {jid}")
+                return err(
+                    "invalid_job_id",
+                    f"Invalid job_id: {jid}",
+                    side_effect=False,
+                )
+            if jid in seen_ids:
+                return err(
+                    "invalid_job_id",
+                    f"Duplicate job_id: {jid}",
+                    side_effect=False,
+                )
+            seen_ids.add(jid)
 
         # Normalize preference
         effective_preference = preference if preference in _VALID_PREFERENCES else "balanced"
@@ -216,8 +244,7 @@ def compare_results(
                 continue
 
             if status != "completed":
-                reason = f"status_{status}" if status != "unknown" else "status_unknown"
-                excluded_jobs.append({"job_id": jid, "reason": reason})
+                excluded_jobs.append({"job_id": jid, "reason": f"status_{status}"})
                 continue
 
             # A completed job is comparable only when it exposes at least one
@@ -234,7 +261,7 @@ def compare_results(
             })
 
         # --- Score and select winner ---
-        if len(scoreable) < 2:
+        if len(scoreable) < _MIN_JOBS:
             # Not enough scoreable jobs for comparison
             comparison = []
             for entry in scoreable:
@@ -273,4 +300,4 @@ def compare_results(
 
     except Exception as exc:
         logger.warning("compare_results unexpected error", exc_info=True)
-        return {"error": "internal_error", "message": f"{type(exc).__name__}: {exc}"}
+        return err("internal_error", type(exc).__name__, side_effect=False)

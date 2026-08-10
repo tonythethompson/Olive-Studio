@@ -220,9 +220,19 @@ def test_invalid_input_empty_error_message(
     mock_studio_request,
 ):
     """Empty error_message -> invalid_input error."""
-    # Arrange
-    mock_troubleshoot({})  # should not be reached
-    mock_studio_request({})
+    # Arrange — install spies that should never be called.
+    from unittest.mock import MagicMock
+
+    troubleshoot_mock = MagicMock(return_value={})
+    studio_mock = MagicMock(return_value={})
+    monkeypatch.setattr(
+        "olive_mcp_server.tools.agent_diagnosis.troubleshoot_olive_error",
+        troubleshoot_mock,
+    )
+    monkeypatch.setattr(
+        "olive_mcp_server.tools.agent_diagnosis.studio_request",
+        studio_mock,
+    )
 
     recipe = {"passes": {}}
 
@@ -233,6 +243,8 @@ def test_invalid_input_empty_error_message(
     assert result["error"] == "invalid_input"
     assert "1" in result["message"] and "4000" in result["message"]
     _assert_json_roundtrip(result)
+    troubleshoot_mock.assert_not_called()
+    studio_mock.assert_not_called()
 
 
 def test_invalid_input_too_long_error_message(
@@ -241,9 +253,19 @@ def test_invalid_input_too_long_error_message(
     mock_studio_request,
 ):
     """error_message > 4000 chars -> invalid_input error."""
-    # Arrange
-    mock_troubleshoot({})
-    mock_studio_request({})
+    # Arrange — install spies that should never be called.
+    from unittest.mock import MagicMock
+
+    troubleshoot_mock = MagicMock(return_value={})
+    studio_mock = MagicMock(return_value={})
+    monkeypatch.setattr(
+        "olive_mcp_server.tools.agent_diagnosis.troubleshoot_olive_error",
+        troubleshoot_mock,
+    )
+    monkeypatch.setattr(
+        "olive_mcp_server.tools.agent_diagnosis.studio_request",
+        studio_mock,
+    )
 
     recipe = {"passes": {}}
     long_msg = "x" * 4001
@@ -254,6 +276,8 @@ def test_invalid_input_too_long_error_message(
     # Assert
     assert result["error"] == "invalid_input"
     _assert_json_roundtrip(result)
+    troubleshoot_mock.assert_not_called()
+    studio_mock.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -267,9 +291,19 @@ def test_recipe_not_a_dict(
     mock_studio_request,
 ):
     """recipe passed as a string -> invalid_input error."""
-    # Arrange
-    mock_troubleshoot({})
-    mock_studio_request({})
+    # Arrange — install spies that should never be called.
+    from unittest.mock import MagicMock
+
+    troubleshoot_mock = MagicMock(return_value={})
+    studio_mock = MagicMock(return_value={})
+    monkeypatch.setattr(
+        "olive_mcp_server.tools.agent_diagnosis.troubleshoot_olive_error",
+        troubleshoot_mock,
+    )
+    monkeypatch.setattr(
+        "olive_mcp_server.tools.agent_diagnosis.studio_request",
+        studio_mock,
+    )
 
     # Act
     result = diagnose_and_fix(
@@ -281,6 +315,8 @@ def test_recipe_not_a_dict(
     assert result["error"] == "invalid_input"
     assert "object" in result["message"].lower() or "dict" in result["message"].lower()
     _assert_json_roundtrip(result)
+    troubleshoot_mock.assert_not_called()
+    studio_mock.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -366,3 +402,110 @@ def test_json_roundtrip_complex_result(
     assert deserialized["fixed_recipe"]["passes"]["quantPrecision"] == "int8"
     assert deserialized["fixed_recipe"]["newField"] == 42
     assert deserialized["fixed_recipe"]["input_model"] == recipe["input_model"]
+
+
+# ---------------------------------------------------------------------------
+# 9. _describe_changes: removal of absent key (no-op) and empty-object replacement
+# ---------------------------------------------------------------------------
+
+
+def test_describe_changes_removal_of_absent_key(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_troubleshoot,
+    mock_studio_request,
+):
+    """updated_config with null for a key not in recipe — no change, changes_made is empty."""
+    kb_result = {
+        "matched_entry": "remove-absent",
+        "applyable": True,
+        "updated_config": {"passes": {"nonexistentKey": None}},
+        "root_cause": "Cleanup",
+        "workaround": "Remove nonexistentKey",
+    }
+    mock_troubleshoot(kb_result)
+    mock_studio_request({})
+
+    recipe = {"passes": {"goodKey": "keep"}}
+
+    result = diagnose_and_fix(
+        error_message="Error referencing nonexistentKey",
+        recipe=recipe,
+    )
+
+    assert "error" not in result
+    assert result["fixed_recipe"] is not None
+    # The absent key was not in the recipe, so the fixed recipe is unchanged.
+    assert "nonexistentKey" not in result["fixed_recipe"]["passes"]
+    assert result["fixed_recipe"]["passes"]["goodKey"] == "keep"
+    # Diffing recipe vs fixed_recipe: no effective change, so changes_made is empty.
+    assert result["changes_made"] == []
+    _assert_json_roundtrip(result)
+
+
+def test_describe_changes_empty_object_replaces_scalar(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_troubleshoot,
+    mock_studio_request,
+):
+    """updated_config replacing a scalar with an empty object — changes_made describes it."""
+    kb_result = {
+        "matched_entry": "replace-scalar",
+        "applyable": True,
+        "updated_config": {"passes": {}},
+        "root_cause": "Reset passes",
+        "workaround": "Replace passes with empty object",
+    }
+    mock_troubleshoot(kb_result)
+    mock_studio_request({})
+
+    # Start with passes as a scalar (not a dict) so the empty-object patch
+    # replaces it per RFC 7386 (target is not a dict → create fresh {}).
+    recipe = {"passes": "scalar-value"}
+
+    result = diagnose_and_fix(
+        error_message="Error requiring passes reset",
+        recipe=recipe,
+    )
+
+    assert "error" not in result
+    assert result["fixed_recipe"] is not None
+    # An empty-object patch replacing a scalar creates an empty dict per RFC 7386.
+    assert result["fixed_recipe"]["passes"] == {}
+    # changes_made should describe the replacement (scalar → empty object).
+    changes_text = " ".join(result["changes_made"])
+    assert "passes" in changes_text
+    _assert_json_roundtrip(result)
+
+
+def test_describe_changes_empty_object_creates_missing_key(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_troubleshoot,
+    mock_studio_request,
+):
+    """updated_config creating a missing key with an empty object — changes_made describes it."""
+    kb_result = {
+        "matched_entry": "create-key",
+        "applyable": True,
+        "updated_config": {"newSection": {}},
+        "root_cause": "Add new section",
+        "workaround": "Create newSection",
+    }
+    mock_troubleshoot(kb_result)
+    mock_studio_request({})
+
+    recipe = {"existingKey": "value"}
+
+    result = diagnose_and_fix(
+        error_message="Error requiring new section",
+        recipe=recipe,
+    )
+
+    assert "error" not in result
+    assert result["fixed_recipe"] is not None
+    # The missing key is created as an empty object.
+    assert result["fixed_recipe"]["newSection"] == {}
+    assert result["fixed_recipe"]["existingKey"] == "value"
+    # changes_made should describe the addition.
+    changes_text = " ".join(result["changes_made"])
+    assert "newSection" in changes_text
+    _assert_json_roundtrip(result)

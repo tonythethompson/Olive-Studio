@@ -185,6 +185,7 @@ __all__ = [
     "get_recipe_for_ui_state",
     "get_runtime_ep_hints",
     "record_troubleshoot_feedback",
+    "plan_optimization",
     "KB_DIR",
     "load_json",
     "load_passes",

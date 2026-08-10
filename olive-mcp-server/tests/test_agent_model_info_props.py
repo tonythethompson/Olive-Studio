@@ -89,6 +89,9 @@ class TestRecommendedQuantizationThreshold:
             result = get_model_info("test-org/large-model")
 
         assert "error" not in result
+        # Derive expected from the returned params_b (the multiply-then-divide
+        # injection may round across the 6.0 threshold).
+        assert result["params_b"] >= 6.0
         assert result["recommended_quant"] == "int4"
 
     @settings(max_examples=100)
@@ -107,6 +110,9 @@ class TestRecommendedQuantizationThreshold:
             result = get_model_info("test-org/small-model")
 
         assert "error" not in result
+        # Derive expected from the returned params_b (the multiply-then-divide
+        # injection may round across the 6.0 threshold).
+        assert result["params_b"] < 6.0
         assert result["recommended_quant"] == "int8"
 
     @settings(max_examples=100)
@@ -125,7 +131,9 @@ class TestRecommendedQuantizationThreshold:
             result = get_model_info("test-org/boundary-model")
 
         assert "error" not in result
-        expected = "int4" if params_b >= 6.0 else "int8"
+        # Derive the expected quantization from the returned params_b, since the
+        # injected multiply-then-divide value may round across the 6.0 threshold.
+        expected = "int4" if result["params_b"] >= 6.0 else "int8"
         assert result["recommended_quant"] == expected
 
     @settings(max_examples=100)

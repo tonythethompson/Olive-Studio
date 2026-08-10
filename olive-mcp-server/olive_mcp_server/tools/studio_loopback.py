@@ -30,11 +30,24 @@ class _NoRedirect(HTTPRedirectHandler):
 _OPENER = build_opener(_NoRedirect)
 
 
-def err(code: str, message: str, *, detail: str | None = None) -> dict[str, Any]:
-    """Build a structured error dict."""
+def err(
+    code: str,
+    message: str,
+    *,
+    detail: str | None = None,
+    side_effect: bool | None = None,
+) -> dict[str, Any]:
+    """Build a structured error dict.
+
+    When ``side_effect`` is not None, the returned dict includes a
+    ``side_effect`` key with the given boolean value. This lets callers
+    express uncertain side-effect state (e.g. post-submission errors).
+    """
     out: dict[str, Any] = {"error": code, "message": message}
     if detail:
         out["detail"] = detail
+    if side_effect is not None:
+        out["side_effect"] = side_effect
     return out
 
 

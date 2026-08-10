@@ -140,8 +140,10 @@ def _resolve_tool(name: str):
     try:
         module = importlib.import_module(module_name)
         fn = getattr(module, attr)
-    except (ModuleNotFoundError, AttributeError) as exc:
+    except (ImportError, ModuleNotFoundError, AttributeError) as exc:
         # Optional/unimplemented tools must not prevent the server from starting.
+        # ImportError covers failures raised by imports inside an optional tool
+        # module (e.g. a missing optional dependency such as bs4/requests).
         logger.warning(
             "Failed to resolve MCP tool %s from %s.%s: %s",
             name,

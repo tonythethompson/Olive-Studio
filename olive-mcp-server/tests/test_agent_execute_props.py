@@ -81,8 +81,6 @@ def _make_submission_success_mock(
 ) -> Any:
     """Create a mock for studio_request that succeeds on submit and returns terminal on first poll."""
 
-    call_count = {"n": 0}
-
     def mock_studio_request(
         method: str,
         path: str,
@@ -90,7 +88,6 @@ def _make_submission_success_mock(
         body: dict[str, Any] | None = None,
         timeout: float = 5.0,
     ) -> dict[str, Any]:
-        call_count["n"] += 1
         if method == "POST" and "/jobs/submit" in path:
             return {"job_id": job_id}
         if method == "GET" and f"/status/{job_id}" in path:
@@ -125,10 +122,7 @@ def _make_submission_error_mock(error_code: str) -> Any:
 class TestSideEffectFieldCorrectness:
     """Property 2: Side-effect field presence/absence."""
 
-    @given(
-        terminal_status=st.sampled_from(["completed", "failed", "cancelled"]),
-    )
-    @settings(max_examples=100)
+    @pytest.mark.parametrize("terminal_status", ["completed", "failed", "cancelled"])
     def test_successful_submission_has_side_effect_true(
         self, terminal_status: str
     ) -> None:
@@ -147,12 +141,9 @@ class TestSideEffectFieldCorrectness:
         # JSON round-trip (Property 10 piggyback)
         assert json.loads(json.dumps(result)) == result
 
-    @given(
-        error_code=st.sampled_from(
-            ["invalid_recipe", "submission_denied", "studio_unavailable"]
-        ),
+    @pytest.mark.parametrize(
+        "error_code", ["invalid_recipe", "submission_denied", "studio_unavailable"]
     )
-    @settings(max_examples=100)
     def test_pre_submission_error_no_side_effect(self, error_code: str) -> None:
         """When submission fails (error before polling), side_effect key is absent."""
         mock = _make_submission_error_mock(error_code)
@@ -171,7 +162,6 @@ class TestSideEffectFieldCorrectness:
 
     def test_poll_error_still_has_side_effect(self) -> None:
         """When submission succeeds but poll fails, side_effect is still True (job was submitted)."""
-        call_count = {"n": 0}
 
         def mock_studio_request(
             method: str,
@@ -180,7 +170,6 @@ class TestSideEffectFieldCorrectness:
             body: dict[str, Any] | None = None,
             timeout: float = 5.0,
         ) -> dict[str, Any]:
-            call_count["n"] += 1
             if method == "POST" and "/jobs/submit" in path:
                 return {"job_id": "poll-err-job"}
             # All poll attempts fail
@@ -196,8 +185,8 @@ class TestSideEffectFieldCorrectness:
         # Job was submitted, so side_effect must be True
         assert result.get("side_effect") is True
 
-    def test_missing_job_id_in_response_no_side_effect(self) -> None:
-        """When submission response lacks job_id, it's treated as a bridge error (no side_effect)."""
+    def test_missing_job_id_in_response_has_side_effect_true(self) -> None:
+        """When submission response lacks job_id, side_effect is True (uncertain — job may be running)."""
 
         def mock_studio_request(
             method: str,
@@ -217,6 +206,6 @@ class TestSideEffectFieldCorrectness:
         ):
             result = execute_and_observe(recipe={"test": True}, timeout=10)
 
-        # No job was submitted successfully, so no side_effect
-        assert "side_effect" not in result
+        # The recipe was submitted but job_id is unknown — uncertain side effect.
+        assert result.get("side_effect") is True
         assert result.get("error") == "invalid_bridge_response"

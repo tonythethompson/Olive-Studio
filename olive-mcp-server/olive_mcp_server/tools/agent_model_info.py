@@ -5,7 +5,8 @@ recommended quantization for a given HuggingFace model ID.  Falls back to
 regex heuristics (ported from src/lib/vramEstimate.ts) when the HF API is
 unreachable.
 
-No module-level network I/O or heavy imports — only stdlib + project internals.
+No module-level network I/O or heavy imports — only stdlib, the third-party
+``requests`` package, and project internals.
 """
 
 from __future__ import annotations
@@ -13,12 +14,11 @@ from __future__ import annotations
 import logging
 import re
 from typing import Any
-from urllib.parse import urlparse
 
 import requests
 
 from .studio_loopback import err
-from .strategy_advisor import _normalize_model_type
+from .strategy_advisor import normalize_model_type
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,11 @@ _FAMILY_DEFAULTS: tuple[tuple[tuple[str, ...], float, str], ...] = (
     (("llama-3.2", "llama3.2"), 1.0, "low"),
     (("llama-3", "llama3"), 8.0, "low"),
     (("llama-2", "llama2"), 7.0, "low"),
-    (("mistral", "mixtral"), 7.0, "low"),
+    # Mixtral MoE must be checked before the generic mistral fallback so
+    # Mixtral-8x7B is not classified as a 7B dense model. 46.7B total params
+    # with ~13B active per token; VRAM estimate uses total params.
+    (("mixtral-8x7b", "mixtral_8x7b"), 46.7, "medium"),
+    (("mistral",), 7.0, "low"),
     (("qwen2.5", "qwen2"), 7.0, "medium"),
     (("qwen",), 7.0, "low"),
     (("sdxl", "stable-diffusion-xl"), 2.6, "low"),
@@ -144,17 +148,18 @@ def _infer_param_billions(identifier: str) -> tuple[float, str]:
 
 _HF_API_BASE = "https://huggingface.co/api/models"
 _HF_TIMEOUT_SECONDS = 3
-_ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
 
 
 def _fetch_hf_metadata(model_id: str) -> dict[str, Any] | None:
     """Fetch model metadata from the HuggingFace API.
 
     Returns parsed JSON dict on success, None on any failure.
+
+    The URL is built from the fixed ``_HF_API_BASE`` HTTPS constant and a
+    model ID already validated by ``_is_valid_model_id``, so no host or
+    scheme override is possible here.
     """
     url = f"{_HF_API_BASE}/{model_id}"
-    if urlparse(url).scheme not in _ALLOWED_URL_SCHEMES:
-        return None
     try:
         response = requests.get(
             url,
@@ -259,7 +264,7 @@ def get_model_info(model_id: str) -> dict[str, Any]:
 
         # --- Compute derived fields ---
         estimated_vram_gb = params_b * 2.0
-        model_type = _normalize_model_type(model_id)
+        model_type = normalize_model_type(model_id, architecture)
         recommended_quant = "int4" if params_b >= 6.0 else "int8"
 
         return {

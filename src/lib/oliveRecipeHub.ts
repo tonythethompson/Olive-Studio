@@ -210,6 +210,7 @@ function mapExecutionProviderFromRecipe(parsed: unknown): IHVProvider | undefine
         }
         if (token.includes("tensorrt") || token.includes("trt")) return "TensorrtExecutionProvider";
         if (token.includes("directml") || token.includes("dml")) return "DmlExecutionProvider";
+        if (token.includes("qnnabi")) return "QnnAbiExecutionProvider";
         if (token.includes("qnn")) return "QNNExecutionProvider";
         if (token.includes("openvino")) return "OpenVINOExecutionProvider";
         if (token.includes("webgpu")) return "WebGpuExecutionProvider";
@@ -272,6 +273,7 @@ export function getCatalogDeviceFromRecipe(parsed: unknown): string | undefined 
         if (token.includes("nvtensorrtrtx") || token.includes("tensorrtrtx")) return "TensorRT RTX";
         if (token.includes("tensorrt") || token.includes("trt")) return "TensorRT";
         if (token.includes("cuda")) return "CUDA";
+        if (token.includes("qnnabi")) return "QNN ABI";
         if (token.includes("qnn")) return "QNN";
         if (token.includes("openvino")) return "OpenVINO";
         if (token.includes("webgpu")) return "WebGPU";
@@ -310,7 +312,6 @@ export function mapProviderToCatalogDevice(provider: IHVProvider): string {
     case "OpenVINOExecutionProvider":
       return "OpenVINO";
     case "QNNExecutionProvider":
-    case "QnnAbiExecutionProvider":
       return "QNN";
     case "DmlExecutionProvider":
       return "DirectML";
