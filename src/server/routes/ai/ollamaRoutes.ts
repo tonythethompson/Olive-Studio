@@ -75,6 +75,26 @@ async function readOllamaPullStream(
   return { ok: true };
 }
 
+/**
+ * Verify the pulled model exists in the Ollama model list and send the final SSE event.
+ */
+async function verifyAndSendPullResult(
+  tag: string,
+  send: PullSend,
+): Promise<void> {
+  const listed = await listOllamaInstalledNames();
+  if (listed === null) {
+    send({ type: "done", message: "Model pulled successfully.", ok: true, percent: 100, modelId: tag, verified: false });
+    return;
+  }
+  const check = verifyInstalledAfterPull("ollama", tag, listed);
+  if (!check.ok) {
+    send({ type: "error", error: check.error, hint: check.hint });
+  } else {
+    send({ type: "done", message: `Model ready: ${check.modelId}`, ok: true, percent: 100, modelId: check.modelId, verified: true });
+  }
+}
+
 export function mountOllamaRoutes(router: Router): void {
   router.get("/ai/ollama-models", async (_req, res) => {
     try {
@@ -243,31 +263,7 @@ export function mountOllamaRoutes(router: Router): void {
         return;
       }
 
-      const listed = await listOllamaInstalledNames();
-      if (listed === null) {
-        send({
-          type: "done",
-          message: "Model pulled successfully.",
-          ok: true,
-          percent: 100,
-          modelId: tag,
-          verified: false,
-        });
-      } else {
-        const check = verifyInstalledAfterPull("ollama", tag, listed);
-        if (!check.ok) {
-          send({ type: "error", error: check.error, hint: check.hint });
-        } else {
-          send({
-            type: "done",
-            message: `Model ready: ${check.modelId}`,
-            ok: true,
-            percent: 100,
-            modelId: check.modelId,
-            verified: true,
-          });
-        }
-      }
+      await verifyAndSendPullResult(tag, send);
     } catch (err: unknown) {
       if (!guard.disconnected()) {
         const isAbort = err instanceof Error && err.name === "AbortError";

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, ChangeEvent, useTransition } from "react";
+import { useState, useRef, useEffect, ChangeEvent } from "react";
 import {
   Card,
   CardContent,
@@ -16,26 +16,16 @@ import { UIState } from "@/types";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { SUGGESTED_RECIPES } from "@/data/recipes";
 import {
-  compareCatalogMetadataToRecipe,
-  deriveUiStateFromOliveRecipe,
-  fetchGitHubRecipeJson,
   fetchOliveRecipesCatalogItem,
-  getCatalogDeviceFromRecipe,
   OLIVE_RECIPES_BRANCH,
   OLIVE_RECIPES_REPO,
-  type RecipeCatalogItem,
 } from "@/lib/oliveRecipeHub";
-import { parseRecipeJson } from "@/lib/recipePipeline";
 import { getFileDetailedInfo as resolveFileDetailedInfo } from "@/lib/localFileDetails";
 import { cn } from "@/lib/utils";
 import {
   buildLocalModelHints,
   type LocalModelHints,
 } from "@/lib/recipeModelMatch";
-import {
-  assessCatalogItemHardwareCompatibility,
-  assessRecipeHardwareCompatibility,
-} from "@/lib/recipeHardwareCompatibility";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { navigatePipeline } from "@/lib/pipelineNavigation";
 import { estimateVramForCatalogPreset } from "@/lib/presetVramEstimate";
@@ -136,7 +126,7 @@ export function InputEnvironmentPanel({
     importJson, setImportJson, importError, setImportError,
     activeRecipeTab, setActiveRecipeTab, visitedRecipeTabs,
     recipeSuccessMsg, applyingRecipePath, appliedRecipeLabel,
-    recipeRailExpanded, setRecipeRailExpanded,
+    setRecipeRailExpanded,
     sourceConfigExpanded, setSourceConfigExpanded,
     recipeRailCollapsed,
     handleApplyCuratedRecipe, handleApplyCuratedRecipeAnyway,

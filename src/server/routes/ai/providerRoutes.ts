@@ -93,6 +93,41 @@ async function fetchSpecialProviderCatalog(
   return null;
 }
 
+type CredentialResult =
+  | { ok: true; apiKey: string; baseUrl: string | undefined }
+  | { ok: false; error: string };
+
+/**
+ * Resolve the effective API key and base URL for a provider activation.
+ * Handles env-key fallback, empty-key-allowed providers, and Cloudflare OAuth.
+ */
+function resolveProviderCredentials(
+  provider: ProviderConfig["provider"],
+  apiKey: string | undefined,
+  normalizedBaseUrl: string | undefined,
+): CredentialResult {
+  const plugin = getProvider(provider);
+  const envKey = plugin ? readEnvApiKey(...plugin.envVarNames) : undefined;
+  const resolvedKey = typeof apiKey === "string" && apiKey.trim() ? apiKey.trim() : (envKey ?? "");
+  const allowEmptyKey = allowsEmptyApiKey(provider, normalizedBaseUrl);
+  if (!resolvedKey && !allowEmptyKey) {
+    return { ok: false, error: `No API key provided and no env key found for ${provider}.` };
+  }
+  let finalKey = resolvedKey;
+  let finalBaseUrl = normalizedBaseUrl;
+  if (provider === "cloudflare") {
+    const auth = resolveCloudflareAuth();
+    if (auth) {
+      finalKey = finalKey || auth.apiToken;
+      finalBaseUrl = finalBaseUrl || cloudflareAiBaseUrl(auth.accountId);
+    }
+    if (!finalKey || !finalBaseUrl) {
+      return { ok: false, error: "Cloudflare is not signed in. Use Sign in + Sync credentials, or set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID." };
+    }
+  }
+  return { ok: true, apiKey: finalKey, baseUrl: finalBaseUrl };
+}
+
 export function mountProviderRoutes(router: Router): void {
   router.get("/ai/provider", (_req, res) => {
     const envCredentials = envCredentialsPayload();
@@ -174,34 +209,13 @@ export function mountProviderRoutes(router: Router): void {
       return res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
     }
     const plugin = getProvider(provider);
-    const envKey = plugin ? readEnvApiKey(...plugin.envVarNames) : undefined;
-    const resolvedKey = typeof apiKey === "string" && apiKey.trim() ? apiKey.trim() : (envKey ?? "");
-    const allowEmptyKey = allowsEmptyApiKey(provider, normalizedBaseUrl);
-    if (!resolvedKey && !allowEmptyKey) {
-      return res.status(400).json({
-        error: `No API key provided and no env key found for ${provider}.`,
-      });
-    }
-    let finalKey = resolvedKey;
-    let finalBaseUrl = normalizedBaseUrl;
-    if (provider === "cloudflare") {
-      const auth = resolveCloudflareAuth();
-      if (auth) {
-        finalKey = finalKey || auth.apiToken;
-        finalBaseUrl = finalBaseUrl || cloudflareAiBaseUrl(auth.accountId);
-      }
-      if (!finalKey || !finalBaseUrl) {
-        return res.status(400).json({
-          error:
-            "Cloudflare is not signed in. Use Sign in + Sync credentials, or set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.",
-        });
-      }
-    }
+    const creds = resolveProviderCredentials(provider, apiKey, normalizedBaseUrl);
+    if (!creds.ok) return res.status(400).json({ error: creds.error });
     setRuntimeAiProvider({
       provider,
-      apiKey: finalKey,
+      apiKey: creds.apiKey,
       model: model || plugin?.defaultModel || "default",
-      baseUrl: finalBaseUrl,
+      baseUrl: creds.baseUrl,
     });
     return res.json({ ok: true, provider, model: model || plugin?.defaultModel || "default" });
   });
