@@ -760,7 +760,7 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
       severity: "info",
       title: "trust_remote_code is disabled",
       description:
-        "Some HuggingFace models require trust_remote_code=true. Enable in Advanced settings if model loading fails.",
+        "Some HuggingFace models require trust_remote_code=true. Enable Trust Remote Code in the Hugging Face source settings if model loading fails.",
       affectedTabs: ["input"],
       affectedPasses: ["input_model"],
     });

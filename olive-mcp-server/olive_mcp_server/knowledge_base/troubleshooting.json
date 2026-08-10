@@ -777,7 +777,7 @@
       ],
       "title": "HuggingFace model fails to load after upgrading to olive-ai 0.13.0",
       "root_cause": "Olive 0.13.0 changed the default value of trust_remote_code from true to false for security. Models with custom code (e.g., Phi, Mistral with custom RoPE, Qwen) now refuse to load unless explicitly opted in.",
-      "solution": "In Olive Studio, open Advanced settings and enable Trust Remote Code (explicit opt-in required). Do not use Apply Fix for this setting; it must be toggled manually after reviewing the model source.",
+      "solution": "In Olive Studio, open the Hugging Face source settings and enable Trust Remote Code. Enabling this executes Python from the model repository inside the Olive process on your machine, so only enable it for repositories you trust. Do not use Apply Fix for this setting; it must be toggled manually.",
       "updated_config": {
         "input_model": {
           "config": {

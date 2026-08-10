@@ -2,7 +2,7 @@
 
 **Reviewed:** 2026-08-10 (trust_remote_code opt-in snapshot)  
 **Baseline:** `v0.2.0` (`package.json`); olive-ai **0.13.0** on `feat/olive-013-upgrade`  
-**Scope:** Architecture, correctness hotspots, test shape, and ship-risk for local-first use  
+**Scope:** Architecture, correctness hotspots, test shape, and ship-risk for loopback-only use  
 **Method:** Static review of `src/`, `server.ts`, `olive-mcp-server/`, `src-tauri/`, CI config. No live Olive GPU runs.
 
 ---
@@ -97,7 +97,7 @@ CI also runs `pnpm audit --audit-level high`, build, artifact assert, prod smoke
 
 ## Findings
 
-Severity assumes the documented local-first threat model. LAN exposure raises every item that touches spawn, tokens, or filesystem.
+Severity assumes the documented loopback-only threat model. LAN exposure raises every item that touches spawn, tokens, or filesystem.
 
 ### Critical
 
@@ -113,9 +113,9 @@ Severity assumes the documented local-first threat model. LAN exposure raises ev
 
 ### High
 
-1. **Finding 3: `trust_remote_code` is explicit opt-in (Olive 0.13.0)**
-   **Verified (2026-08-10):** `DEFAULT_PASSES.trustRemoteCode` is `false`; `buildOliveRecipe` emits `trust_remote_code: true` only when the user enables **Trust Remote Code** in Advanced settings (`trustRemoteCode === true`). Legacy persisted `undefined` values coerce to `false` in `coercePassFields`, not `true`.  
-   **Local-trust model:** Studio runs on loopback for a single operator. Enabling remote code executes Hugging Face repo Python on the local machine with the same trust boundary as running Olive locally. Do not enable on shared or hostile networks without reviewing the model repo.  
+3. **`trust_remote_code` is explicit opt-in (Olive 0.13.0)**  
+   **Verified (2026-08-10):** `DEFAULT_PASSES.trustRemoteCode` is `false`; `buildOliveRecipe` emits `trust_remote_code: true` only when the user enables **Trust Remote Code** in the Hugging Face source settings (`trustRemoteCode === true`). Legacy persisted `undefined` values coerce to `false` in `coercePassFields`, not `true`.  
+   **Local-trust model:** Studio runs on loopback for a single operator. Enabling remote code executes Python from the Hugging Face model repository within the Olive process on the local machine, with the same trust boundary as running Olive locally. Only enable it for repositories you trust, and do not enable it on shared or hostile networks without reviewing the model repo.  
    **Residual:** MCP troubleshooting entries may suggest `trust_remote_code: true`; Apply Fix still requires a deliberate UI action and does not bypass the recipe opt-in gate.
 
 1. **Finding 4: In-app MCP proxy imports a missing `call_tool`**
@@ -137,15 +137,15 @@ Severity assumes the documented local-first threat model. LAN exposure raises ev
 
 ### Medium
 
-1. **Finding 8:** Several cost/abuse endpoints lack rate limits (`/ai/chat`, Codex ask, Ollama pull path).
-1. **Finding 9:** HF token setter is unrate-limited.
-1. **Finding 10:** Job logs are readable by job ID on the open API.
-1. **Finding 11:** Tauri CSP is null; weaker XSS containment in the desktop shell.
-1. **Finding 12:** Version skew: Tauri `0.3.0` vs npm `0.2.0`.
-1. **Finding 13:** KB sync unexpected errors may surface as success-shaped responses (check `mcp.ts` catch path).
-1. **Finding 14:** No global Express error middleware (unhandled errors may leak stacks).
-1. **Finding 15:** Devin credentials persist on disk (`0o600`, gitignored); acceptable for local-first, harden later if needed.
-1. **Finding 16:** Local Python `mcp` dep allows `>=1.0.0` in `pyproject.toml`; CI pins `mcp<2`, but local installs can still break on 2.x.
+7. Several cost/abuse endpoints lack rate limits (`/ai/chat`, Codex ask, Ollama pull path).
+8. HF token setter is unrate-limited.
+9. Job logs are readable by job ID on the open API.
+10. Tauri CSP is null; weaker XSS containment in the desktop shell.
+11. Version skew: Tauri `0.3.0` vs npm `0.2.0`.
+12. KB sync unexpected errors may surface as success-shaped responses (check `mcp.ts` catch path).
+13. No global Express error middleware (unhandled errors may leak stacks).
+14. Devin credentials persist on disk (`0o600`, gitignored); acceptable for loopback-only, harden later if needed.
+15. Local Python `mcp` dep allows `>=1.0.0` in `pyproject.toml`; CI pins `mcp<2`, but local installs can still break on 2.x.
 
 ### Low / positive controls
 

@@ -3,11 +3,11 @@
   "dim": 384,
   "indexes": {
     "docs_kb": {
-      "content_hash": "3e6b21a659d64406be8c532ea2bc2ffc57dadccfbe3dbf33c1a094001e9a6071",
+      "content_hash": "192658843ab943214a6b5236516e6c1cf3b812da76e5b20d2bb0780f3344b00e",
       "count": 4385
     },
     "ts_olive": {
-      "content_hash": "18dad7c10db64a14383ff4263435d0ff176e9bfa8d01f85c30c6f10268c57ed9",
+      "content_hash": "bdea6364e803addd4bec02eeb28f4e52315227ed4eda459c87f791f63b144b70",
       "count": 36
     },
     "ts_studio": {

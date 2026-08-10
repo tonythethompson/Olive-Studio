@@ -61,6 +61,7 @@ export function createMockUIState(partial?: Partial<UIState>): UIState {
       lora: false,
       ortTransformers: false,
       outputName: "model",
+      trustRemoteCode: false,
     },
     ...partial,
   } as UIState;
