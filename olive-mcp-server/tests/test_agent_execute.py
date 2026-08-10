@@ -62,9 +62,7 @@ def test_successful_completion(monkeypatch: pytest.MonkeyPatch):
     assert result["timed_out"] is False
     assert result["metrics"] == {"latency_ms": 45}
     assert result["logs"] == ["step 1", "done"]
-    # Note: exit_code=0 is treated as falsy by the `or` fallback in the impl,
-    # so it becomes None. Non-zero exit codes are captured correctly.
-    assert result["exit_code"] is None
+    assert result["exit_code"] == 0
     assert isinstance(result["elapsed_ms"], int)
     assert isinstance(result["artifact_path_refs"], list)
     _json_round_trip(result)

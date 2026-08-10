@@ -152,8 +152,10 @@ def execute_and_observe(
             if metrics is not None:
                 last_metrics = metrics
 
-            # Capture exit code
-            exit_code = status_response.get("exitCode") or status_response.get("exit_code")
+            # Capture exit code, preserving a successful zero value
+            exit_code = status_response.get("exitCode")
+            if exit_code is None:
+                exit_code = status_response.get("exit_code")
             if exit_code is not None:
                 last_exit_code = exit_code
 
