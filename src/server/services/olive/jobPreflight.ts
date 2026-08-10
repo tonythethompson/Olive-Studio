@@ -13,7 +13,7 @@ import { validateOliveRecipeStructure } from "../../../lib/oliveRecipeSchema.ts"
 import { normalizeIhvProvider } from "../../../lib/venvFamily.ts";
 import { isExportTargetProvider } from "../../../lib/providerRuntimeKind.ts";
 import { resolveQnnHostMode } from "../../../lib/qnnDeps.ts";
-import { assessQnnRecipeReadiness } from "../../../lib/qnnReadiness.ts";
+import { assessQnnRecipeReadiness, isQnnIhvProvider } from "../../../lib/qnnReadiness.ts";
 import { DEFAULT_PASSES } from "../../../lib/defaultPasses.ts";
 import type { OliveRecipe } from "../../types.ts";
 import type { IHVProvider } from "../../../types.ts";
@@ -103,7 +103,7 @@ export function preflightOliveRecipe(
       );
     }
 
-    if (provider === "QNNExecutionProvider") {
+    if (isQnnIhvProvider(provider)) {
       const inputModel = recipe.input_model as { io_config?: unknown } | undefined;
       const hostMode = resolveQnnHostMode({ platform: process.platform, arch: process.arch });
       // Intentionally omit `probe`: sync validate must not touch the QNN venv.

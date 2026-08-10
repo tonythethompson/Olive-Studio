@@ -266,6 +266,21 @@ export function mapMcpConfigToUiState(
     logs.push(`[MCP FIX] Applied: cache_dir = ${config.cache_dir}`);
   }
 
+  // ── input_model.config (HfModel trust_remote_code opt-in) ───────────
+  if (isRecord(config.input_model)) {
+    const inputModel = config.input_model;
+    if (isRecord(inputModel.config) && inputModel.config.trust_remote_code === true) {
+      patches.passes = mergePassPatch(patches.passes ?? currentPasses, { trustRemoteCode: true });
+      logs.push(
+        "[MCP FIX] Applied: input_model.config.trust_remote_code → passes.trustRemoteCode = true",
+      );
+    }
+  }
+  if (config.trust_remote_code === true) {
+    patches.passes = mergePassPatch(patches.passes ?? currentPasses, { trustRemoteCode: true });
+    logs.push("[MCP FIX] Applied: trust_remote_code → passes.trustRemoteCode = true");
+  }
+
   // ── Nested passes.{PassType}.{output_name|params|config} ──────────────
   if (isRecord(config.passes)) {
     for (const [passType, raw] of Object.entries(config.passes)) {

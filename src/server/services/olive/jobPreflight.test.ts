@@ -131,6 +131,15 @@ describe("preflightOliveRecipe", () => {
     );
   });
 
+  it("QnnAbi validate uses the same structural QNN readiness path", () => {
+    vi.mocked(resolveQnnHostMode).mockReturnValue("local-inference");
+    const pre = preflightOliveRecipe(minimalRecipe("QnnAbiExecutionProvider"));
+    expect(pre.errors.some((e) => /npu|runtime not ready/i.test(e))).toBe(false);
+    expect(pre.warnings.some((w) => /npu\/runtime readiness is not checked at validate/i.test(w))).toBe(
+      true,
+    );
+  });
+
   it("QNN out-of-scope host skips deferred-readiness warning without NPU hard-fail", () => {
     vi.mocked(resolveQnnHostMode).mockReturnValue("out-of-scope");
     const pre = preflightOliveRecipe(minimalRecipe("QNNExecutionProvider"));

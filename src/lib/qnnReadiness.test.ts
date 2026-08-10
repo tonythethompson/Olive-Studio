@@ -80,6 +80,20 @@ describe("qnnReadiness", () => {
     expect(isQnnSnapdragonReleaseGatePassed()).toBe(false);
   });
 
+  it("runs the same readiness checks for QnnAbiExecutionProvider", () => {
+    const state = {
+      ihvProvider: "QnnAbiExecutionProvider" as const,
+      passes: basePasses,
+    } satisfies Pick<UIState, "ihvProvider" | "passes">;
+    const issues = assessQnnRecipeReadiness({
+      state,
+      probe: probe(),
+      ioConfig: { input_shapes: [[1, "dyn"]] },
+    });
+    expect(issues.some((i) => i.code === "qnn_dynamic_shapes" && i.severity === "error")).toBe(true);
+    expect(issues.some((i) => i.code === "qnn_fail_closed")).toBe(true);
+  });
+
   it("does not treat missing NPU as an error when no probe is supplied", () => {
     const issues = assessQnnRecipeReadiness({
       state: { ihvProvider: "QNNExecutionProvider", passes: basePasses },

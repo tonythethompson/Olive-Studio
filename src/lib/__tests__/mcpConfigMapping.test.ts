@@ -306,6 +306,21 @@ describe("mapMcpConfigToUiState", () => {
       expect(patches.passes?.conversion).toBe(true);
     });
 
+    it("maps input_model trust_remote_code to passes.trustRemoteCode", () => {
+      const { patches, logs } = mapMcpConfigToUiState(
+        {
+          input_model: {
+            config: {
+              trust_remote_code: true,
+            },
+          },
+        },
+        { ...basePasses, trustRemoteCode: false },
+      );
+      expect(patches.passes?.trustRemoteCode).toBe(true);
+      expect(logs.some((l) => l.includes("trust_remote_code"))).toBe(true);
+    });
+
     it("applyMcpDiagnosticToUiState applies updated_config only; quirks are noted", () => {
       const { patches, appliedQuirks, notedQuirks, logs } = applyMcpDiagnosticToUiState(
         {

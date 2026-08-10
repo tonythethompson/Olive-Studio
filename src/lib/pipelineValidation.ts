@@ -2,7 +2,7 @@ import { IHVProvider, ModelSource, UIState, OliveRecipe } from "@/types";
 import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
 import { getProviderAvailabilityBlock, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { buildOliveRecipe, isPyTorchNativeQuantMethod } from "@/lib/oliveRecipeBuilder";
-import { assessQnnRecipeReadiness, type QnnReadinessIssue } from "@/lib/qnnReadiness";
+import { assessQnnRecipeReadiness, isQnnIhvProvider, type QnnReadinessIssue } from "@/lib/qnnReadiness";
 import { isKnownPass, getPassSchema } from "@/lib/schemaEngine";
 import { pickOpenVinoTargetFromDevices } from "@/lib/openvinoDeps";
 import {
@@ -593,7 +593,7 @@ function getQnnRecipeReadinessIssues(
   recipe: OliveRecipe,
   probe?: HardwareProbeResult | null,
 ): PipelineIssue[] {
-  if (state.ihvProvider !== "QNNExecutionProvider" && state.ihvProvider !== "QnnAbiExecutionProvider") return [];
+  if (!isQnnIhvProvider(state.ihvProvider)) return [];
 
   return assessQnnRecipeReadiness({
     state,
