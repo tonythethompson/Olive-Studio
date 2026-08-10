@@ -116,8 +116,6 @@ export interface UIState {
   cacheDir: string;
   azureStr: string;
   distributedCaching: boolean;
-  /** Directory containing reference inputs and outputs for discrepancy checks. */
-  testDataDir?: string;
   /** Path to a user-provided Python script for calibration, evaluation, or training. */
   userScript?: string;
   /** Directory containing inputs/outputs for the ONNX discrepancy check. */
