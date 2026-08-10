@@ -423,8 +423,9 @@ function Dashboard() {
 
         {/* Report Issue Modal */}
         {isReportOpen && (
-          <Suspense fallback={null}>
-            <ReportIssueModal
+          <ErrorBoundary label="Report issue" onReportError={() => setIsReportOpen(false)}>
+            <Suspense fallback={null}>
+              <ReportIssueModal
           open={isReportOpen}
           onClose={() => {
             setIsReportOpen(false);
@@ -439,7 +440,8 @@ function Dashboard() {
           }
           frequencyInfo={reportData?.frequencyInfo}
         />
-          </Suspense>
+            </Suspense>
+          </ErrorBoundary>
         )}
       </div>
     </DesktopMinimumViewport>

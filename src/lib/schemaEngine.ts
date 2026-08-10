@@ -102,6 +102,7 @@ function loadKb(): Promise<void> {
     })
     .catch((error) => {
       kbLoadError = error;
+      kbLoadPromise = null; // Allow kbReady() to retry on next call
       throw error;
     });
   return kbLoadPromise;
