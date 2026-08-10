@@ -15,12 +15,14 @@ Olive Studio is a local-first GUI for [Microsoft Olive](https://github.com/micro
 ## Quick Start
 
 ```bash
-git clone https://github.com/tonythethompson/Olive-Studio.git
+git clone --branch v0.1.0 --depth 1 https://github.com/tonythethompson/Olive-Studio.git
 cd Olive-Studio && pnpm install
 pnpm dev
 ```
 
 Open http://localhost:3000. No account or API key required for recipe building and local execution.
+
+To follow `main` instead of this tagged release, omit `--branch v0.1.0`.
 
 ## Requirements
 
