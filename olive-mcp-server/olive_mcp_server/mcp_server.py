@@ -95,10 +95,6 @@ _TOOL_IMPORTS: dict[str, tuple[str, str]] = {
         "olive_mcp_server.tools.agent_execute",
         "execute_and_observe",
     ),
-    "plan_optimization": (
-        "olive_mcp_server.tools.agent_planner",
-        "plan_optimization",
-    ),
     "diagnose_and_fix": (
         "olive_mcp_server.tools.agent_diagnosis",
         "diagnose_and_fix",
