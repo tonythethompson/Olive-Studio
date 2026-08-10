@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { usePipelineStore, createDefaultPipelineState } from "@/lib/stores/pipelineStore";
 import { applyMigrations } from "@/lib/passMigration";
-import { commitUiStateUpdate } from "@/lib/pipelineStateCommit";
+import { commitUiStateUpdate, coercePassFields } from "@/lib/pipelineStateCommit";
 import { usePlaygroundStore } from "@/lib/stores/playgroundStore";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import type { UIState } from "@/types";
@@ -124,6 +124,14 @@ describe("pipelineStore", () => {
     expect(committed.passRecipeOverrides?.MobiusBuilder).toEqual({ model_name: "mistral" });
     expect(committed.passRecipeOverrides).not.toHaveProperty("MobiusModelBuilder");
     expect(committed.passRecipeOverrides).not.toHaveProperty("QairtGenAIBuilder");
+  });
+
+  it("coerces PEFT off when provider is QnnAbiExecutionProvider", () => {
+    const next = coercePassFields(
+      { ...DEFAULT_PASSES, peft: true },
+      "QnnAbiExecutionProvider",
+    );
+    expect(next.peft).toBe(false);
   });
 
   it("resetState restores defaults", () => {

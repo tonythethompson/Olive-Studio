@@ -141,8 +141,9 @@ describe("isStructuredPruningAllowed", () => {
 });
 
 describe("isPeftAllowed", () => {
-  it("denies on QNN and OpenVINO, allows on others", () => {
+  it("denies on QNN, QNN ABI, and OpenVINO, allows on others", () => {
     expect(isPeftAllowed("QNNExecutionProvider")).toBe(false);
+    expect(isPeftAllowed("QnnAbiExecutionProvider")).toBe(false);
     expect(isPeftAllowed("OpenVINOExecutionProvider")).toBe(false);
     expect(isPeftAllowed("CUDAExecutionProvider")).toBe(true);
     expect(isPeftAllowed("CPUExecutionProvider")).toBe(true);

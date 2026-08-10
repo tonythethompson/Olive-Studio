@@ -77,7 +77,7 @@ export function isStructuredPruningAllowed(provider: IHVProvider): boolean {
 }
 
 export function isPeftAllowed(provider: IHVProvider): boolean {
-  return !["QNNExecutionProvider", "OpenVINOExecutionProvider"].includes(provider);
+  return !["QNNExecutionProvider", "QnnAbiExecutionProvider", "OpenVINOExecutionProvider"].includes(provider);
 }
 
 export function isPeftMethodAllowed(method: UIState["passes"]["peftMethod"], provider: IHVProvider): boolean {
