@@ -11,6 +11,12 @@ const mocks = vi.hoisted(() => ({
   callTool: vi.fn(),
   connect: vi.fn(),
   close: vi.fn(),
+  transportInstances: [] as Array<{
+    stderr: null;
+    onclose: (() => void) | undefined;
+    onerror: ((error: Error) => void) | undefined;
+    close: ReturnType<typeof vi.fn>;
+  }>,
 }));
 
 vi.mock("@modelcontextprotocol/client", () => {
@@ -29,6 +35,12 @@ vi.mock("@modelcontextprotocol/client/stdio", () => {
       stderr = null;
       onclose: (() => void) | undefined = undefined;
       onerror: ((error: Error) => void) | undefined = undefined;
+      close = vi.fn(async () => {
+        this.onclose?.();
+      });
+      constructor() {
+        mocks.transportInstances.push(this);
+      }
     },
   };
 });
@@ -46,7 +58,11 @@ import {
   callOliveMcpTool,
   MCP_UNAVAILABLE_ERROR,
   resetPersistentClient,
+  getPersistentClientSnapshotForTests,
+  setPersistentClientSnapshotForTests,
 } from "./persistentClient.ts";
+import { Client } from "@modelcontextprotocol/client";
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import mcpBreaker, { resetMcpBreaker } from "./breaker.ts";
 
 /** Trip the breaker with 3 consecutive failures. */
@@ -62,6 +78,7 @@ describe("persistentClient circuit-breaker integration", () => {
   beforeEach(() => {
     resetMcpBreaker();
     resetPersistentClient();
+    mocks.transportInstances.length = 0;
     mocks.connect.mockReset().mockResolvedValue(undefined);
     mocks.callTool.mockReset();
     mocks.close.mockReset().mockResolvedValue(undefined);
@@ -215,5 +232,111 @@ describe("persistentClient circuit-breaker integration", () => {
     const out = await callOliveMcpTools([{ toolName: "x", args: {} }]);
 
     expect(out).toEqual([{ result: "just a plain string" }]);
+  });
+});
+
+describe("persistentClient transport lifecycle", () => {
+  beforeEach(() => {
+    resetMcpBreaker();
+    resetPersistentClient();
+    mocks.transportInstances.length = 0;
+    mocks.connect.mockReset().mockResolvedValue(undefined);
+    mocks.callTool.mockReset();
+    mocks.close.mockReset().mockResolvedValue(undefined);
+  });
+
+  it("active transport close marks crashed and clears client/transport refs", async () => {
+    mocks.callTool.mockResolvedValue({
+      content: [{ type: "text", text: '{"ok":true}' }],
+      isError: false,
+    });
+    await callOliveMcpTools([{ toolName: "x", args: {} }]);
+
+    const transportA = mocks.transportInstances[0];
+    expect(getPersistentClientSnapshotForTests().state).toBe("connected");
+
+    transportA.onclose?.();
+
+    expect(getPersistentClientSnapshotForTests()).toMatchObject({
+      state: "crashed",
+      client: null,
+      transport: null,
+    });
+  });
+
+  it("stale transport close leaves replacement client and transport unchanged", async () => {
+    mocks.callTool.mockResolvedValue({
+      content: [{ type: "text", text: '{"ok":true}' }],
+      isError: false,
+    });
+
+    await callOliveMcpTools([{ toolName: "a", args: {} }]);
+    const transportA = mocks.transportInstances[0];
+    transportA.onclose?.();
+
+    await callOliveMcpTools([{ toolName: "b", args: {} }]);
+    const transportB = mocks.transportInstances[1];
+    const replacement = getPersistentClientSnapshotForTests();
+    expect(replacement.state).toBe("connected");
+    expect(replacement.transport).toBe(transportB);
+    expect(mocks.transportInstances).toHaveLength(2);
+
+    transportA.onclose?.();
+
+    const afterStaleClose = getPersistentClientSnapshotForTests();
+    expect(afterStaleClose.state).toBe("connected");
+    expect(afterStaleClose.client).toBe(replacement.client);
+    expect(afterStaleClose.transport).toBe(transportB);
+  });
+
+  it("infra failure cleanup closes the owning transport", async () => {
+    mocks.callTool.mockRejectedValueOnce(new Error("Transport closed"));
+
+    await callOliveMcpTools([{ toolName: "x", args: {} }]);
+
+    const transportA = mocks.transportInstances[0];
+    expect(transportA.close).toHaveBeenCalledTimes(1);
+    expect(getPersistentClientSnapshotForTests()).toMatchObject({
+      state: "crashed",
+      client: null,
+      transport: null,
+    });
+  });
+
+  it("infra failure cleanup leaves a newer reconnect session untouched", async () => {
+    mocks.callTool.mockResolvedValueOnce({
+      content: [{ type: "text", text: '{"ok":true}' }],
+      isError: false,
+    });
+    await callOliveMcpTools([{ toolName: "warmup", args: {} }]);
+    const transportA = mocks.transportInstances[0];
+    expect(transportA.close).not.toHaveBeenCalled();
+
+    const replacementClient = new Client({ name: "replacement", version: "0.0.0" });
+    const replacementTransport = new StdioClientTransport({
+      command: "python",
+      args: ["-m", "olive_mcp_server"],
+    });
+    // Avoid recursive onclose from replacement mock close calls during assertions.
+    replacementTransport.onclose = undefined;
+
+    mocks.callTool.mockImplementationOnce(async () => {
+      setPersistentClientSnapshotForTests({
+        state: "connected",
+        client: replacementClient,
+        transport: replacementTransport,
+      });
+      throw new Error("Transport closed");
+    });
+
+    await callOliveMcpTools([{ toolName: "failing", args: {} }]);
+
+    expect(transportA.close).not.toHaveBeenCalled();
+    expect(replacementTransport.close).not.toHaveBeenCalled();
+    expect(getPersistentClientSnapshotForTests()).toMatchObject({
+      state: "connected",
+      client: replacementClient,
+      transport: replacementTransport,
+    });
   });
 });
