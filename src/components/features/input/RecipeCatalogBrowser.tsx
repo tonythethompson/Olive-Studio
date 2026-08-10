@@ -5,15 +5,17 @@
 import { useState } from "react";
 import { Input, Select, Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { fetchOliveRecipesCatalogItem } from "@/lib/oliveRecipeHub";
-import { estimateVramForCatalogPreset } from "@/lib/presetVramEstimate";
-import { presetDisplayName, type RecipeSortMode } from "@/components/features/input/useRecipeCatalog";
-import { CompatCountSummary, CompatStatusPill } from "@/components/features/input/CompatStatus";
-import { navigatePipeline } from "@/lib/pipelineNavigation";
-import type { RecipeCatalogItem } from "@/lib/oliveRecipeHub";
-import type { LocalModelHints } from "@/lib/recipeModelMatch";
-import type { HardwareProbeResult } from "@/lib/hardwareProbe";
-import type { RecipeRow } from "@/components/features/input/useRecipeCatalog";
+import { fetchOliveRecipesCatalogItem, type RecipeCatalogItem } from "`@/lib/oliveRecipeHub`";
+import { estimateVramForCatalogPreset } from "`@/lib/presetVramEstimate`";
+import {
+  presetDisplayName,
+  type RecipeSortMode,
+  type RecipeRow,
+} from "`@/components/features/input/useRecipeCatalog`";
+import { CompatCountSummary, CompatStatusPill } from "`@/components/features/input/CompatStatus`";
+import { navigatePipeline } from "`@/lib/pipelineNavigation`";
+import type { LocalModelHints } from "`@/lib/recipeModelMatch`";
+import type { HardwareProbeResult } from "`@/lib/hardwareProbe`";
 import {
   Search,
   X,
