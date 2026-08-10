@@ -85,7 +85,8 @@ except Exception as e:
     }
     return JSON.parse(raw);
   } catch (err) {
-    console.warn(`⚠ Olive CLI pass extraction failed: ${err.message}`);
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`⚠ Olive CLI pass extraction failed: ${message}`);
     return null;
   }
 }

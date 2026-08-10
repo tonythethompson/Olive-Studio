@@ -385,7 +385,7 @@ function buildRtnQuantizer(state: UIState): PassSpec {
       {
         bits: quant.bits,
         block_size: 128,
-        symmetric: true,
+        is_symmetric: true,
       },
       state,
     ),

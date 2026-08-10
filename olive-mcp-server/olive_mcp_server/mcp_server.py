@@ -11,9 +11,12 @@ Usage:
 from __future__ import annotations
 
 import importlib
+import logging
 import os
 import sys
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # name → (module path, attribute). Lazy so HTTP diagnosis does not pull in
 # optional deps like BeautifulSoup just to troubleshoot an Olive traceback.
@@ -139,11 +142,13 @@ def _resolve_tool(name: str):
         fn = getattr(module, attr)
     except (ModuleNotFoundError, AttributeError) as exc:
         # Optional/unimplemented tools must not prevent the server from starting.
-        import warnings
-
-        warnings.warn(
-            f"[olive-mcp-server] Failed to import tool '{name}' ({module_name}.{attr}): {exc}",
-            RuntimeWarning,
+        logger.warning(
+            "Failed to resolve MCP tool %s from %s.%s: %s",
+            name,
+            module_name,
+            attr,
+            exc,
+            exc_info=True,
         )
         return None
     _resolved_tools[name] = fn
