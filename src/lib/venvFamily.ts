@@ -23,6 +23,7 @@ export const KNOWN_IHV_PROVIDERS: readonly IHVProvider[] = [
   "DmlExecutionProvider",
   "OpenVINOExecutionProvider",
   "QNNExecutionProvider",
+  "QnnAbiExecutionProvider",
   "ROCMExecutionProvider",
   "WebGpuExecutionProvider",
   "CoreMLExecutionProvider",
@@ -123,6 +124,7 @@ export function mandatoryFamilyForProvider(provider: IHVProvider): VenvFamily | 
     case "OpenVINOExecutionProvider":
       return "openvino";
     case "QNNExecutionProvider":
+    case "QnnAbiExecutionProvider":
       return "qnn";
     case "DmlExecutionProvider":
     case "ROCMExecutionProvider":
