@@ -51,14 +51,7 @@ export const usePipelineStore = create<PipelineStore>()(
         })),
 
       replaceState: (next) => {
-        const { state: migrated, renamedPasses, removedPasses } = applyMigrations(next);
-        const migratedCount = renamedPasses.length;
-        const removedCount = removedPasses.length;
-        if (migratedCount > 0 || removedCount > 0) {
-          console.info(
-            `[pipelineStore] Migration applied: ${migratedCount} pass(es) renamed, ${removedCount} pass(es) removed.`,
-          );
-        }
+        const { state: migrated } = applyMigrations(next);
         set({ state: commitUiStateUpdate(migrated, {}) });
       },
 

@@ -45,14 +45,16 @@ function satisfiesPep440(specifier: string, version: string): boolean {
       case "!=":
         if (cmp === 0) return false;
         break;
-      case "~=":
+      case "~=": {
         // Compatible release: >=target, <next minor/major
         if (cmp < 0) return false;
-        // Upper bound: bump the second-to-last segment
-        const upper = [...tParts.slice(0, -1)];
-        upper[upper.length - 1]!++;
-        if (compareParts(vParts, upper) >= 0) return false;
+        {
+          const upper = [...tParts.slice(0, -1)];
+          upper[upper.length - 1]!++;
+          if (compareParts(vParts, upper) >= 0) return false;
+        }
         break;
+      }
     }
   }
   return true;

@@ -150,18 +150,15 @@ describe("passMigrationPBT", () => {
         try {
           const state = createDefaultPipelineState();
           state.passRecipeOverrides = {
-            OnnxConversion: { legacyParam: value, otherParam: "keep" },
+            OnnxConversion: { legacyParam: value, otherParam: "keep" } as UIState["passRecipeOverrides"] extends Record<string, infer V> ? V : never,
           };
 
           const result = applyMigrations(state);
-          const overrides = result.state.passRecipeOverrides;
+          const overrides = result.state.passRecipeOverrides as Record<string, Record<string, unknown>> | undefined;
 
           expect(overrides?.OnnxConversion).toBeDefined();
-          // New param should hold the old value.
           expect(overrides!.OnnxConversion.modernParam).toEqual(value);
-          // Old param should be gone.
           expect("legacyParam" in overrides!.OnnxConversion).toBe(false);
-          // Other params preserved.
           expect(overrides!.OnnxConversion.otherParam).toBe("keep");
           expect(result.migratedParams).toBe(1);
         } finally {

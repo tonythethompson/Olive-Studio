@@ -310,6 +310,7 @@ export function mapProviderToCatalogDevice(provider: IHVProvider): string {
     case "OpenVINOExecutionProvider":
       return "OpenVINO";
     case "QNNExecutionProvider":
+    case "QnnAbiExecutionProvider":
       return "QNN";
     case "DmlExecutionProvider":
       return "DirectML";

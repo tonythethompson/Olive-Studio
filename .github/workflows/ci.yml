@@ -147,9 +147,9 @@ jobs:
           PIP_NO_CACHE_DIR: "1"
         run: |
           set -euo pipefail
-          # Documented pin: Olive 0.12.1 (passCatalog OLIVE_VERSION / matrix max).
+          # Documented pin: Olive 0.13.0 (passCatalog OLIVE_VERSION / matrix max).
           # olive-mcp-server does not depend on olive-ai; pin lives here for CI.
-          pip install "olive-ai==0.12.1"
+          pip install "olive-ai==0.13.0"
 
       - name: Enumerate registry vs compatibility matrix
         env:

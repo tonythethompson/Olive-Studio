@@ -161,8 +161,8 @@ async function main() {
     _generated: new Date().toISOString(),
     _source: "olive-ai CLI pass registry",
     _passCount: Object.keys(merged).length,
-    olive_version: "0.13.0",
-    version: "0.13.0",
+    olive_version: oliveVersion,
+    version: oliveVersion,
     last_updated: new Date().toISOString().slice(0, 10),
   };
 

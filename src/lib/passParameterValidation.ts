@@ -36,6 +36,7 @@ interface ParamRule {
 function hardwareLabel(provider: IHVProvider): string {
   switch (provider) {
     case "QNNExecutionProvider":
+    case "QnnAbiExecutionProvider":
       return "Qualcomm QNN";
     case "OpenVINOExecutionProvider":
       return "Intel OpenVINO";
@@ -81,7 +82,7 @@ function hardwareLabel(provider: IHVProvider): string {
 function getRulesForProvider(provider: IHVProvider): Record<string, ParamRule[]> {
   const rules: Record<string, ParamRule[]> = {};
 
-  if (provider === "QNNExecutionProvider") {
+  if (provider === "QNNExecutionProvider" || provider === "QnnAbiExecutionProvider") {
     rules["QNNQuantization"] = [
       {
         name: "QNN INT8 requires per-channel symmetric quantization",

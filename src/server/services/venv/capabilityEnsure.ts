@@ -158,7 +158,8 @@ async function installCapabilityPackages(
       case "WasmExecutionProvider":
         return { ok: true };
 
-      case "QNNExecutionProvider": {
+      case "QNNExecutionProvider":
+      case "QnnAbiExecutionProvider": {
         const result = await ensureQnn(onLine);
         return result.ok ? { ok: true } : { ok: false, error: result.error };
       }

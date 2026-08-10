@@ -256,7 +256,7 @@ function effectiveFormatFamily(state: UIState): FormatFamily {
   if (state.passes.conversionFormat === "openvino" || state.ihvProvider === "OpenVINOExecutionProvider") {
     return "openvino";
   }
-  if (state.passes.conversionFormat === "qnn" || state.ihvProvider === "QNNExecutionProvider") {
+  if (state.passes.conversionFormat === "qnn" || state.ihvProvider === "QNNExecutionProvider" || state.ihvProvider === "QnnAbiExecutionProvider") {
     return "qnn";
   }
   if (state.passes.conversionFormat === "tensorrt" || state.ihvProvider === "TensorrtExecutionProvider") {
@@ -311,6 +311,8 @@ const CONVERSION_BUILDERS: Record<ConversionFormat, (state: UIState) => PassSpec
 
 function buildConversionPass(state: UIState): PassSpec | undefined {
   if (!state.passes.conversion) return undefined;
+  // MobiusBuilder and QairtPipeline are replacement export pipelines, not ONNX conversion.
+  if (state.passes.mobiusBuilder || state.passes.qairtPipeline) return undefined;
   return CONVERSION_BUILDERS[state.passes.conversionFormat](state);
 }
 
@@ -577,7 +579,6 @@ function buildMobiusBuilder(_state: UIState, _ctx: RecipeBuildContext): PassSpec
     type: "MobiusBuilder",
     config: {
       model_name: _state.hfModelId || "unspecified",
-      cache_model: true,
     },
   };
 }
@@ -612,11 +613,7 @@ function buildSimplifiedLayerNormToRMSNorm(_state: UIState, _ctx: RecipeBuildCon
 /** OnnxDiscrepancyCheck: Validation pass measuring numerical discrepancies. */
 function buildOnnxDiscrepancyCheck(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
   if (!_state.passes.onnxDiscrepancyCheck) return undefined;
-  const config: Record<string, unknown> = {};
-  if (_state.userScript) {
-    config.test_data_dir = _state.userScript;
-  }
-  return { type: "OnnxDiscrepancyCheck", config };
+  return { type: "OnnxDiscrepancyCheck", config: {} };
 }
 
 // ─── Pass builder registry ────────────────────────────────────────────
@@ -698,7 +695,7 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
     }
     // Olive 0.13.0 flipped trust_remote_code default to false; emit explicitly
     // so HF models requiring custom code (Phi, Mistral, etc.) still load.
-    if (state.passes.trustRemoteCode !== false) {
+    if (state.passes.trustRemoteCode === true) {
       inputConfig.trust_remote_code = true;
     }
     if (useMemoryOffload) {

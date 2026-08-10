@@ -480,9 +480,9 @@
             }
           },
           "OnnxKquantQuantization": {
-            "support": "supported",
+            "support": "warning",
             "olive_pass": "OnnxKquantQuantization",
-            "note": "K-quant quantization for ONNX models on DirectML; ggml-style weight-only.",
+            "note": "K-quant is CPU/CUDA-only in Studio validation; DirectML recipes should use AWQ or PTQ instead.",
             "typical_accuracy_drop": "<2%",
             "evidence": {
               "reference": "https://microsoft.github.io/Olive/0.13.0/reference/pass.html",

@@ -10,36 +10,15 @@ import {
 import { isQnnSnapdragonReleaseGatePassed } from "./qnnDeps";
 import type { HardwareProbeResult } from "./hardwareProbe";
 import type { UIState } from "@/types";
+import { DEFAULT_PASSES } from "./defaultPasses";
 
 const basePasses = {
+  ...DEFAULT_PASSES,
   conversion: true,
-  conversionSourceFormat: "pytorch" as const,
-  conversionFormat: "onnx" as const,
   conversionOpset: 17,
   conversionInputTargetTypes: "",
   quantization: false,
-  quantMethod: "ptq" as const,
-  quantPrecision: "int8" as const,
-  gptqBlockSize: 128,
-  gptqDescAct: false,
-  gptqGroupSize: 128,
-  awqGroupSize: 128,
-  awqDampPercent: 0.01,
   awqSym: false,
-  qatQuantPrecision: "int8" as const,
-  qatCalibrateMethod: "minmax" as const,
-  qatCalibrateSteps: 100,
-  quantPreset: "",
-  pruning: false,
-  pruningSparsity: 0.5,
-  pruningType: "unstructured" as const,
-  pruningMethod: "magnitude" as const,
-  pruningCriteria: "l1_norm" as const,
-  splitting: false,
-  onnxTransforms: false,
-  peft: false,
-  peftMethod: "lora" as const,
-  diffusionLora: false,
   trustRemoteCode: true,
 };
 

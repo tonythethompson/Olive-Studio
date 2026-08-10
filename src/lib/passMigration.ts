@@ -75,7 +75,7 @@ export function applyMigrations(state: UIState): MigrationResult {
   let discardedParams = 0;
 
   // Deep-clone overrides to avoid mutation.
-  let overrides: Record<string, Record<string, unknown>> = state.passRecipeOverrides
+  const overrides: Record<string, Record<string, unknown>> = state.passRecipeOverrides
     ? JSON.parse(JSON.stringify(state.passRecipeOverrides))
     : {};
 
@@ -87,6 +87,10 @@ export function applyMigrations(state: UIState): MigrationResult {
       // Pass removed — delete from overrides.
       delete overrides[migration.oldName];
       removedPasses.push(migration.oldName);
+    } else if (migration.newName in overrides) {
+      // Target already has an override — drop the legacy key without clobbering.
+      delete overrides[migration.oldName];
+      renamedPasses.push({ oldName: migration.oldName, newName: migration.newName });
     } else {
       // Pass renamed — move override entry to new key.
       overrides[migration.newName] = overrides[migration.oldName];
