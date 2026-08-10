@@ -309,7 +309,8 @@ const CONVERSION_BUILDERS: Record<ConversionFormat, (state: UIState) => PassSpec
 };
 
 function buildConversionPass(state: UIState): PassSpec | undefined {
-  if (!state.passes.conversion) return undefined;
+  // Alternative builders consume Torch/HF input directly, not ONNX output.
+  if (!state.passes.conversion || state.passes.mobiusBuilder || state.passes.qairtPipeline) return undefined;
   return CONVERSION_BUILDERS[state.passes.conversionFormat](state);
 }
 
@@ -417,7 +418,7 @@ function buildKquantQuantizer(state: UIState): PassSpec {
     config: withCalibrationData(
       {
         bits,
-        is_symmetric: true,
+        symmetric: true,
         group_size: 128,
       },
       state,
@@ -612,9 +613,7 @@ function buildSimplifiedLayerNormToRMSNorm(_state: UIState, _ctx: RecipeBuildCon
 function buildOnnxDiscrepancyCheck(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
   if (!_state.passes.onnxDiscrepancyCheck) return undefined;
   const config: Record<string, unknown> = {};
-  if (_state.userScript) {
-    config.test_data_dir = _state.userScript;
-  }
+  // Test data is a directory; calibration/evaluation scripts are unrelated.
   return { type: "OnnxDiscrepancyCheck", config };
 }
 
