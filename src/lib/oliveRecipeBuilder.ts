@@ -12,7 +12,6 @@ const GPU_PROVIDERS: IHVProvider[] = [
 ];
 const NPU_PROVIDERS: IHVProvider[] = [
   "QNNExecutionProvider",
-  "QnnAbiExecutionProvider",
   "CoreMLExecutionProvider",
   "NNAPIExecutionProvider",
   "VitisAIExecutionProvider",
@@ -108,7 +107,7 @@ export function providerToAccelerator(
   return { device, execution_providers: [provider] };
 }
 
-const PYTORCH_NATIVE_QUANT_METHODS = new Set(["awq", "gptq", "qat", "spinquant", "quarot", "kquant"]);
+const PYTORCH_NATIVE_QUANT_METHODS = new Set(["awq", "gptq", "qat", "spinquant", "quarot"]);
 
 export function isPyTorchNativeQuantMethod(method: UIState["passes"]["quantMethod"]): boolean {
   return PYTORCH_NATIVE_QUANT_METHODS.has(method);
@@ -613,9 +612,6 @@ function buildSimplifiedLayerNormToRMSNorm(_state: UIState, _ctx: RecipeBuildCon
 function buildOnnxDiscrepancyCheck(_state: UIState, _ctx: RecipeBuildContext): PassSpec | undefined {
   if (!_state.passes.onnxDiscrepancyCheck) return undefined;
   const config: Record<string, unknown> = {};
-  if (_state.discrepancyTestDataDir) {
-    config.test_data_dir = _state.discrepancyTestDataDir;
-  }
   return { type: "OnnxDiscrepancyCheck", config };
 }
 
@@ -752,6 +748,10 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   recipe.passes = finalizePasses(passes, state.passRecipeOverrides, torchQuantActive);
 
   memoState = state;
+  memoRecipe = recipe;
+  return recipe;
+}
+
   memoRecipe = recipe;
   return recipe;
 }
