@@ -1,4 +1,5 @@
 import express, { Router } from "express";
+import expressStaticGzip from "express-static-gzip";
 import path from "path";
 import fs from "fs";
 import { ANY_DOT_VENV_DIR } from "./src/server/shared/anyDotVenvDir.ts";
@@ -203,7 +204,21 @@ async function startServer() {
       console.error(`Production build not found at ${indexHtml}\nRun: pnpm build\nThen:  pnpm start`);
       process.exit(1);
     }
-    app.use(staticServeRateLimit, express.static(distPath, { index: "index.html" }));
+    app.use(
+      staticServeRateLimit,
+      expressStaticGzip(distPath, {
+        index: "index.html",
+        enableBrotli: false,
+        orderPreference: ["gz"],
+        serveStatic: {
+          setHeaders: (res, filePath) =>
+            res.setHeader(
+              "Cache-Control",
+              filePath.endsWith("index.html") ? "no-cache" : "public, max-age=31536000, immutable",
+            ),
+        },
+      }),
+    );
     // SPA fallback for client routes (Express 5-safe; avoid bare "*")
     app.use(staticServeRateLimit, (req, res, next) => {
       if (req.method !== "GET" && req.method !== "HEAD") return next();
