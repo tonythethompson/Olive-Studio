@@ -91,6 +91,10 @@ _TOOL_IMPORTS: dict[str, tuple[str, str]] = {
         "cancel_optimization_job",
     ),
     # Phase 3: Agent autonomous loop
+    "plan_optimization": (
+        "olive_mcp_server.tools.agent_planner",
+        "plan_optimization",
+    ),
     "execute_and_observe": (
         "olive_mcp_server.tools.agent_execute",
         "execute_and_observe",
