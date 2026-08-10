@@ -112,13 +112,10 @@ export default defineConfig(() => {
     },
     build: {
       rollupOptions: {
-        // Externalize heavy optional dependencies — they're only used in
-        // Playground panels behind dynamic imports with graceful fallbacks.
-        // Users who open those panels load them from CDN on-demand.
-        external: [
-          '@huggingface/transformers',
-          'onnxruntime-web',
-        ],
+        // Keep optional dependencies in Vite's module graph. Browser-only
+        // panels use dynamic imports for code-splitting; externalizing them
+        // would leave unresolved bare specifiers in production browsers.
+        external: [],
         output: {
           manualChunks(id: string) {
             // React core — stable, changes infrequently
