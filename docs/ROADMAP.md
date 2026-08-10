@@ -47,6 +47,10 @@ Contract (unchanged): standalone MCP is advisory; MCP connected to Studio is an 
 
 ## v0.3 (in progress)
 
+### Olive runtime
+
+- [ ] Update `olive-ai` to 0.1.3 (venv pin / install path, docs, and compatibility notes)
+
 ### Agent autonomy tools (MCP)
 
 Studio-mediated loop (not a second Olive executor). Five tools that close observe → plan → diagnose → retry:
