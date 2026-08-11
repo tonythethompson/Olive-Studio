@@ -289,6 +289,8 @@ export function mergeDetectedProviders(input: {
   tensorRtRtxLoadable?: boolean;
   nvidiaTensorRtFamilyCapable?: boolean;
   cudaLoadable?: boolean;
+  /** True when an NVIDIA GPU meets the CUDA 12 toolkit floor (Maxwell+), independent of whether onnxruntime-gpu is installed yet. */
+  cudaFamilyCapable?: boolean;
   /** Platform OS string for DirectML Windows detection. */
   os?: string;
 }): IHVProvider[] {
@@ -297,6 +299,7 @@ export function mergeDetectedProviders(input: {
   const tensorRtRtxOk = input.tensorRtRtxLoadable === true;
   const cudaOk = input.cudaLoadable !== false;
   const tensorRtFamilyCapable = input.nvidiaTensorRtFamilyCapable ?? true;
+  const cudaFamilyCapable = input.cudaFamilyCapable ?? true;
 
   if (input.onnxRuntimeProviders?.length) {
     for (const provider of mapOrtProvidersToIhv(input.onnxRuntimeProviders)) {
@@ -321,14 +324,21 @@ export function mergeDetectedProviders(input: {
   }
 
   if (input.hasNvidiaGpu) {
-    if (cudaOk) {
+    // Soft-detect on hardware capability, same as TensorRT RTX below: a
+    // compatible GPU without the onnxruntime-gpu wheel yet is "compatible,
+    // not yet installed" (green, selectable), not "not on this system"
+    // (red, blocked) — the wheel install is a first-run/pre-install action,
+    // not a hardware gap. `cudaOk` (the venv-probed signal) still gates the
+    // stricter ORT-providers-list filter above.
+    if (cudaFamilyCapable) {
       detected.add("CUDAExecutionProvider");
     }
     if (tensorRtFamilyCapable) {
       detected.add("NvTensorRTRTXExecutionProvider");
-      if (tensorRtOk) {
-        detected.add("TensorrtExecutionProvider");
-      }
+      // Full TensorRT SDK gets the same capability-based soft-detect as
+      // TensorRT RTX — both are "compatible GPU, installer available",
+      // not a hardware block.
+      detected.add("TensorrtExecutionProvider");
     }
   }
   if (input.hasRocmGpu) {
