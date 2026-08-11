@@ -173,13 +173,13 @@ export function AssistantSidebar({
         aria-label="Assistant"
         className={cn(
           "h-full shrink-0 overflow-hidden border-l border-slate-800 bg-slate-900 transition-[width] duration-300 ease-in-out",
-          isOpen ? "w-[min(100vw,420px)] wide:w-[420px]" : "w-0 border-l-0",
+          isOpen ? "w-full wide:w-[420px]" : "w-0 border-l-0",
           "max-wide:fixed max-wide:inset-y-0 max-wide:right-0 max-wide:z-50 max-wide:shadow-2xl",
         )}
         aria-hidden={!isOpen}
         {...(!isOpen ? { inert: true } : {})}
       >
-        <div className="w-[min(100vw,420px)] wide:w-[420px] h-full flex flex-col shadow-[-4px_0_24px_rgba(3,7,18,0.25)]">
+        <div className="w-full wide:w-[420px] h-full flex flex-col shadow-[-4px_0_24px_rgba(3,7,18,0.25)]">
           {/* Header */}
           <div className="h-12 flex items-center justify-between px-5 border-b border-slate-800 shrink-0 bg-slate-950/80">
             <div className="flex items-center gap-2 min-w-0">
