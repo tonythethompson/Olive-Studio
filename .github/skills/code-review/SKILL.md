@@ -4,7 +4,7 @@ description: >-
   Olive Studio pull request code review for Copilot code review and coding agents.
   Use when reviewing PRs, diffs, or changed files in this repository. Applies
   loopback-only security, recipe/pipeline validation, Express/Tauri/MCP boundaries,
-  pnpm/testing conventions, and high-risk path checks from AGENTS.md and REVIEW.md.
+  pnpm/testing conventions, and high-risk path checks from AGENTS.md.
 license: MIT
 ---
 
@@ -19,7 +19,7 @@ covers unless they change meaning or hide a bug.
 - Local-first GUI for Microsoft Olive ONNX optimization (React 19 + Vite + Express + Tauri 2 + Python FastMCP).
 - Package manager is **pnpm** only (`npm install` is blocked).
 - Threat model is single-user localhost / Tauri. Do not treat LAN or public exposure as safe unless the change adds bind + auth controls.
-- Authoritative agent/dev constraints: `AGENTS.md`. Point-in-time risk snapshot: `REVIEW.md`.
+- Authoritative agent/dev constraints: `AGENTS.md`.
 
 ## Priority order
 

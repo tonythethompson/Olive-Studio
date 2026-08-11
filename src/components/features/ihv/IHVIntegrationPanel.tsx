@@ -371,7 +371,12 @@ export function IHVIntegrationPanel({
             onRescan={() => void runHardwareProbe(true)}
           />
 
-          <VramEstimateBanner state={state} hardwareProbe={hardwareProbe} className="mb-6" />
+          <VramEstimateBanner
+            state={state}
+            setState={setState}
+            hardwareProbe={hardwareProbe}
+            className="mb-6"
+          />
 
           {/* Hardware Validation Guard Alert Summary Banner */}
           {selectedConflicts.length > 0 && (

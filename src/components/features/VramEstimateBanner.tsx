@@ -20,6 +20,7 @@ import { HardDrive, Trash2 } from "lucide-react";
 
 interface VramEstimateBannerProps {
   state?: UIState;
+  setState?: (s: Partial<UIState>) => void;
   hardwareProbe?: HardwareProbeResult | null;
   compact?: boolean;
   sidebar?: boolean;
@@ -28,6 +29,7 @@ interface VramEstimateBannerProps {
 
 export const VramEstimateBanner = memo(function VramEstimateBanner({
   state: propState,
+  setState: propSetState,
   hardwareProbe: hardwareProbeProp,
   compact = false,
   sidebar = false,
@@ -35,7 +37,7 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
 }: VramEstimateBannerProps) {
   const storeState = usePipelineState();
   const state = propState ?? storeState.state;
-  const setState = storeState.setState;
+  const setState = propSetState ?? storeState.setState;
 
   // No prop passed → fall back to the shared, deduped probe query. When a
   // prop IS passed, skip this query entirely — otherwise it fires its own
