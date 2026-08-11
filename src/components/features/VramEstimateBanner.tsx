@@ -120,9 +120,43 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
   const noShrinkPasses = !state.passes.quantization && !state.passes.pruning;
   const afterLabel = noShrinkPasses ? "After (no shrink passes)" : "After optimization";
 
+  const hasModel = Boolean(state.hfModelId.trim() || state.localFiles.length > 0 || state.azureModelPath.trim());
+  const exceedsAvailableGpu = estimate.usesGpu && availableGb != null && afterGb > availableGb;
+
   if (sidebar) {
     return (
-      <div className={cn("px-4 py-3.5 space-y-3", className)}>
+      <div className={className}>
+        {/* Collapsed rail (icon-only sidebar): just the clear-model action and the after-optimization footprint, no labels. */}
+        <div className="wide:hidden py-3 flex flex-col items-center gap-2">
+          {hasModel && afterGb > 0 && (
+            <span
+              className={cn(
+                "text-[11px] font-mono tabular-nums text-center leading-tight break-words px-1",
+                exceedsAvailableGpu ? "text-rose-400" : "text-slate-100",
+              )}
+              title={
+                exceedsAvailableGpu
+                  ? `~${formatMemoryGb(afterGb)} after optimization exceeds the ~${formatMemoryGb(availableGb!)} GPU VRAM available`
+                  : `~${formatMemoryGb(afterGb)} after optimization`
+              }
+            >
+              {formatMemoryGb(afterGb)}
+            </span>
+          )}
+          {hasModel && (
+            <button
+              type="button"
+              onClick={() => setState({ hfModelId: "", hfDataset: "", hfTask: "", localFiles: [], azureModelPath: "" })}
+              className="text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+              title="Clear model selection"
+              aria-label="Clear model selection"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        <div className="hidden wide:block px-4 py-3.5 space-y-3">
         <div className="space-y-1">
           <p className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500">
             {estimate.usesGpu ? "Model VRAM" : "Model memory"}
@@ -232,20 +266,21 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
             </div>
           )}
 
-        {/* Clear model button */}
-        {(state.hfModelId.trim() || state.localFiles.length > 0 || state.azureModelPath.trim()) && (
-          <div className="border-t border-slate-800/90 pt-2">
-            <button
-              type="button"
-              onClick={() => setState({ hfModelId: "", hfDataset: "", hfTask: "", localFiles: [], azureModelPath: "" })}
-              className="flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
-              title="Clear model selection"
-            >
-              <Trash2 className="h-3 w-3" />
-              Clear model
-            </button>
-          </div>
-        )}
+          {/* Clear model button */}
+          {hasModel && (
+            <div className="border-t border-slate-800/90 pt-2">
+              <button
+                type="button"
+                onClick={() => setState({ hfModelId: "", hfDataset: "", hfTask: "", localFiles: [], azureModelPath: "" })}
+                className="flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+                title="Clear model selection"
+              >
+                <Trash2 className="h-3 w-3" />
+                Clear model
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     );
   }

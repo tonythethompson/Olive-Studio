@@ -278,7 +278,7 @@ function Dashboard() {
               </div>
             </nav>
 
-            <div className="shrink-0 border-t border-slate-800 hidden wide:block">
+            <div className="shrink-0 border-t border-slate-800">
               <VramEstimateBanner sidebar />
             </div>
 
