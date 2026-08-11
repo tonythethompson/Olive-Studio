@@ -16,11 +16,15 @@ describe("pathIsolation", () => {
   it("strips default Scripts from inherited PATH when selecting cuda", () => {
     const sep = process.platform === "win32" ? ";" : ":";
     const pathKey = process.platform === "win32" ? "Path" : "PATH";
+    const inheritedBin = path.join(path.parse(process.cwd()).root, "system-bin");
     const dirs = allFamilyScriptsDirs();
     const defaultScripts = getVenvScriptsDir("default");
+    const baseWithoutPath = Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => key.toLowerCase() !== "path"),
+    );
     const base = {
-      ...process.env,
-      [pathKey]: [...dirs, "/usr/bin"].join(sep),
+      ...baseWithoutPath,
+      [pathKey]: [...dirs, inheritedBin].join(sep),
       PYTHONPATH: "/should/be/cleared",
       PYTHONHOME: "/also/cleared",
     };
@@ -29,7 +33,9 @@ describe("pathIsolation", () => {
     expect(
       parts.some((p) => path.resolve(p).toLowerCase() === path.resolve(defaultScripts).toLowerCase()),
     ).toBe(false);
-    expect(parts).toContain("/usr/bin");
+    expect(parts.map((part) => path.resolve(part).toLowerCase())).toContain(
+      path.resolve(inheritedBin).toLowerCase(),
+    );
     expect(env.PYTHONPATH).toBeUndefined();
     expect(env.PYTHONHOME).toBeUndefined();
     expect(env.VIRTUAL_ENV).toBeTruthy();

@@ -40,6 +40,8 @@ _MAX_TIMEOUT = 1800
 _MAX_LOG_ENTRIES = 200
 _MAX_ARTIFACT_REFS = 20
 _MAX_CONSECUTIVE_POLL_ERRORS = 3
+_FAILURE_LOG_TAIL_LINES = 5
+_MAX_FAILURE_TEXT = 500
 
 # Module-level indirections so tests can patch timing without touching stdlib.
 _monotonic = time.monotonic
@@ -184,6 +186,49 @@ def _artifact_refs_from_logs(logs: list[str]) -> list[str]:
     return refs
 
 
+def _clip_text(value: str, max_chars: int) -> str:
+    """Clip text to ``max_chars`` with an ellipsis when needed."""
+    if len(value) <= max_chars:
+        return value
+    if max_chars <= 1:
+        return value[:max_chars]
+    return value[: max_chars - 1].rstrip() + "…"
+
+
+def _derive_failure_text(result: dict[str, Any]) -> str | None:
+    """Derive bounded failure context for unsuccessful execution results."""
+    if result.get("error"):
+        message = result.get("message")
+        return str(message) if message else str(result["error"])
+
+    poll_error = result.get("poll_error")
+    if isinstance(poll_error, dict):
+        poll_message = poll_error.get("message") or poll_error.get("detail") or poll_error.get("error")
+        if poll_message:
+            return str(poll_message)
+
+    status = str(result.get("status") or "unknown")
+    timed_out = bool(result.get("timed_out"))
+    if status == "completed" and not timed_out:
+        return None
+
+    parts: list[str] = [f"status={status}"]
+    if timed_out:
+        parts.append("timed_out=true")
+
+    exit_code = result.get("exit_code")
+    if exit_code is not None:
+        parts.append(f"exit_code={exit_code}")
+
+    logs = result.get("logs")
+    if isinstance(logs, list):
+        tail = [str(line).strip() for line in logs[-_FAILURE_LOG_TAIL_LINES:] if str(line).strip()]
+        if tail:
+            parts.append(f"log_tail={' | '.join(tail)}")
+
+    return _clip_text("; ".join(parts), _MAX_FAILURE_TEXT)
+
+
 def _observation_result(
     job_id: str,
     state: _PollState,
@@ -210,12 +255,14 @@ def _observation_result(
 def execute_and_observe(
     recipe: dict[str, Any],
     timeout: int | None = None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     """Submit a recipe to Olive Studio and poll until terminal state or timeout.
 
     Args:
         recipe: A complete Olive optimization configuration JSON.
         timeout: Polling timeout in seconds, clamped to [10, 1800]. Default 600.
+        session_id: Optional Studio agent-loop session ID.
 
     Returns:
         Structured result with job status, logs, metrics, and artifact refs on
@@ -223,6 +270,31 @@ def execute_and_observe(
         returns a structured error without the ``side_effect`` field.
     """
     try:
+        from .studio_loopback import ENV_API_URL, _ensure_session, _record_attempt
+
+        active_session_id: str | None = None
+        if session_id or os.environ.get(ENV_API_URL):
+            active_session_id, session = _ensure_session(session_id)
+            if active_session_id is None:
+                return session
+
+        def finish(result: dict[str, Any]) -> dict[str, Any]:
+            if not active_session_id:
+                return result
+            failure = _derive_failure_text(result)
+            success = result.get("status") == "completed" and not result.get("error")
+            update = _record_attempt(
+                active_session_id,
+                recipe=recipe,
+                failure=failure,
+                success=success,
+                note=f"Execution finished with status {result.get('status', result.get('error', 'unknown'))}.",
+            )
+            result["session_id"] = active_session_id
+            if isinstance(update.get("error"), str) and update["error"]:
+                result["session_update_error"] = update
+            return result
+
         effective_timeout = _clamp_timeout(timeout)
 
         # --- Submit the recipe ---
@@ -234,27 +306,27 @@ def execute_and_observe(
         )
 
         if _is_error(submit_response):
-            return _map_submission_error(submit_response)
+            return finish(_map_submission_error(submit_response))
 
         # --- Extract job_id from submission response ---
         job_id = submit_response.get("job_id") or submit_response.get("jobId")
         if not isinstance(job_id, str) or not job_id:
             # The recipe was submitted but we cannot determine the job_id.
             # This is an uncertain side effect — the job may be running.
-            return err(
+            return finish(err(
                 "invalid_bridge_response",
                 "Olive Studio submission response missing job_id.",
                 side_effect=True,
-            )
+            ))
         if not _JOB_ID_PATTERN.match(job_id):
-            return err(
+            return finish(err(
                 "invalid_bridge_response",
                 "Olive Studio submission response returned a malformed job_id.",
                 side_effect=True,
-            )
+            ))
 
         state, timed_out, poll_error = _poll_until_terminal(quote(job_id, safe=""), effective_timeout)
-        return _observation_result(job_id, state, timed_out, poll_error)
+        return finish(_observation_result(job_id, state, timed_out, poll_error))
 
     except Exception as exc:
         logger.warning("execute_and_observe unexpected error", exc_info=True)
