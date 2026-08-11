@@ -260,7 +260,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 transition-colors px-1.5 py-1 rounded border border-transparent hover:border-slate-700/80"
+        className="flex items-center justify-center gap-0 wide:gap-1.5 text-slate-400 hover:text-slate-200 transition-colors px-1.5 py-1 rounded border border-transparent hover:border-slate-700/80"
         title={runtimeTitle}
         aria-expanded={open}
         aria-haspopup="dialog"

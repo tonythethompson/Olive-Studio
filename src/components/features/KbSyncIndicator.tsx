@@ -65,7 +65,7 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
             type="button"
             onClick={() => void syncKb()}
             disabled={syncing}
-            className="text-electric-blue hover:text-electric-blue/80 disabled:opacity-40 flex items-center gap-1 transition-colors shrink-0"
+            className="text-electric-blue hover:text-electric-blue/80 disabled:opacity-40 flex items-center gap-0 wide:gap-1 transition-colors shrink-0"
             title="Reload Olive pass docs into the local knowledge base"
             aria-label={syncing ? "Syncing knowledge base" : "Sync knowledge base"}
           >
