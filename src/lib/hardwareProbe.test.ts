@@ -145,8 +145,20 @@ describe("mergeDetectedProviders — CUDA cudaLoadable gating", () => {
       hasRocmGpu: false,
       hasOpenVino: false,
       cudaLoadable: false,
+      cudaFamilyCapable: true,
     });
     expect(detected).toContain("CUDAExecutionProvider");
+  });
+
+  it("does not detect CUDAExecutionProvider when the NVIDIA GPU is pre-Maxwell", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: true,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      cudaLoadable: false,
+      cudaFamilyCapable: false,
+    });
+    expect(detected).not.toContain("CUDAExecutionProvider");
   });
 
   it("strips CUDAExecutionProvider from a reported ORT list when cudaLoadable is false", () => {

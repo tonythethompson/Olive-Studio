@@ -4,7 +4,7 @@
 // symlink here makes pnpm's own prune step throw EACCES on Windows before it
 // ever gets to delete the thing that's broken, wedging every future install.
 import { existsSync, readdirSync, readlinkSync, rmSync } from "node:fs";
-import { join, dirname, resolve, sep } from "node:path";
+import { join, dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -44,7 +44,7 @@ function findDanglingSymlinks(directory) {
 const platformBinaryPattern = /(^|[-/])(linux|darwin|freebsd|android|win32)(-|_|$)/i;
 const dangling = findDanglingSymlinks(pnpmDir)
   .filter((link) => !link.includes(`${sep}.ignored_`) && !link.includes("/.ignored_"))
-  .filter((link) => platformBinaryPattern.test(link));
+  .filter((link) => platformBinaryPattern.test(relative(pnpmDir, link).replaceAll("\\", "/")));
 if (dangling.length === 0) {
   process.exit(0);
 }
