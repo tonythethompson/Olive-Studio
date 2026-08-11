@@ -1,0 +1,82 @@
+# ============================================
+# .kiroignore — Olive Studio (constrained env)
+# ============================================
+
+# --- Caches & Dependencies ---
+node_modules/
+.venv/
+.venvs/
+__pycache__/
+.npm/
+.nuget/
+.pytest_cache/
+
+# --- Build / Compiled Directories ---
+target/
+bin/
+obj/
+dist/
+build/
+.next/
+src-tauri/target/
+storybook-static/
+
+# --- Coverage & Test Reports ---
+coverage/
+test-results/
+playwright-report/
+
+# --- Data & ML Models ---
+*.sqlite
+*.db
+*.wal
+*.onnx
+*.safetensors
+*.pth
+*.bin
+models/
+data/
+
+# --- Heavy Media ---
+*.mp4
+*.wav
+*.flac
+*.mov
+*.tgz
+
+# --- Olive Studio specific ---
+.olive-studio/
+node_modules.stale-body-guard/
+olive-studio-*.tgz
+pnpm-lock.yaml
+
+# --- Agent / tool state (not source) ---
+.agents/
+.commandcode/
+.amazonq/
+.claude/
+.cursor/
+.devin/
+.dirac-cache/
+.freebuff/
+.ocx/
+.opencode/
+.playwright-mcp/
+.qoder/
+.remember/
+.serena/
+.superdesign/
+semantic-review/
+dogfood-output/
+
+# --- Logs ---
+*.log
+start-out.log
+start-err.log
+pnpm_install.log
+
+# --- Review artifacts ---
+review-inline.json
+review-issue-comments.json
+review-summaries.json
+skills-lock.json
