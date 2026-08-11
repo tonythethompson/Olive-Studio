@@ -6,6 +6,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [0.4.0] — 2026-08-11
+
+### Added
+
+- **Agent MCP workflow tools** — plan, execute, diagnose, compare, and model-info flows for assistant-driven optimization work.
+- **Assistant responsive upgrades** — full-screen assistant panel, automatic card view at narrow widths, collapsed-rail model footprint, and one-click clear action.
+- **Metric sentinel coverage** — extra regression protection around release metrics and responsive behavior.
+
+### Changed
+
+- **Version alignment** — package, Tauri shell, and Codex client metadata now consistently report `0.4.0`.
+- **Olive stack refresh** — upgraded to `olive-ai` 0.13.0 with updated pass catalog, validation, and migration support.
+- **Bundle size reductions** — reduced shipped client size with lazy MCP UI loading, externalized `typegpu`, and shared formatting utilities.
+- **Release docs** — pinned clone examples now target the current tagged release by default.
+
+### Fixed
+
+- **NVIDIA capability detection** — stabilized GPU fallback and tightened CUDA / TensorRT platform checks so unsupported systems no longer read as hard failures.
+- **Assistant layout regressions** — prevented header status overlap, centered collapsed triggers, and restored missing `matchMedia` behavior for matrix/card switching.
+- **Cross-platform reliability** — improved accessibility, symlink handling, install hardening, and restored the Trust Remote Code switch.
+- **Agent execution context** — fixed bound-session handling and stripped development-only discussion leakage from UI copy.
+
+### Infrastructure
+
+- **Dependency and CI maintenance** — updated Codex SDK, Motion, Fast Check, ESLint group, and GitHub Actions dependencies.
+- **Workspace support** — added `.kiroignore` for constrained environments and refreshed roadmap/release documentation.
+
+---
+
 ## [0.2.0] — 2026-08-09
 
 ### Added

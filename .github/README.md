@@ -42,7 +42,7 @@ Optional: NVIDIA / Intel / Qualcomm / AMD drivers for GPU/NPU recipes. [Hugging 
 **Pinned release** (matches [Releases](https://github.com/tonythethompson/Olive-Studio/releases); replace the tag as needed):
 
 ```bash
-git clone --branch v0.2.0 --depth 1 https://github.com/tonythethompson/Olive-Studio.git
+git clone --branch v0.4.0 --depth 1 https://github.com/tonythethompson/Olive-Studio.git
 cd Olive-Studio
 pnpm install
 pnpm dev

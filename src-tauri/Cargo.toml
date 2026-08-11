@@ -1,6 +1,6 @@
 [package]
 name = "olive-studio"
-version = "0.3.0"
+version = "0.4.0"
 description = "Desktop shell for Olive Studio — local Microsoft Olive recipe builder"
 authors = ["Anthony Thompson"]
 license = "MIT"
