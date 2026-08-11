@@ -11,7 +11,7 @@ import json
 import os
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 ENV_API_URL = "OLIVE_STUDIO_API_URL"
@@ -245,3 +245,54 @@ def studio_request(
             "Olive Studio bridge returned a non-object JSON payload.",
         )
     return parsed
+
+
+def _ensure_session(session_id: str | None) -> tuple[str | None, dict[str, Any]]:
+    """Get or transparently create the Express-owned agent session.
+
+    This is the auto-creation path for the first agent tool call: when no
+    ``session_id`` is supplied, the Studio POST endpoint creates one. Session
+    state therefore survives MCP stdio process restarts for as long as the
+    Express process remains alive.
+    """
+    if session_id:
+        session = studio_request(
+            "GET",
+            f"/api/olive/agent/sessions/{quote(session_id, safe='')}",
+        )
+        if isinstance(session.get("error"), str) and session["error"]:
+            return None, session
+        return session_id, session
+
+    session = studio_request(
+        "POST",
+        "/api/olive/agent/sessions",
+        body={},
+    )
+    if isinstance(session.get("error"), str) and session["error"]:
+        return None, session
+    created_id = session.get("sessionId")
+    if not isinstance(created_id, str) or not created_id:
+        return None, err(
+            "invalid_bridge_response",
+            "Olive Studio session response missing sessionId.",
+        )
+    return created_id, session
+
+
+def _update_session(session_id: str, **kwargs: Any) -> dict[str, Any]:
+    """Write metadata without recording a new optimization attempt."""
+    return studio_request(
+        "PUT",
+        f"/api/olive/agent/sessions/{quote(session_id, safe='')}",
+        body=kwargs,
+    )
+
+
+def _record_attempt(session_id: str, **kwargs: Any) -> dict[str, Any]:
+    """Record one optimization attempt and its resulting context."""
+    return studio_request(
+        "PUT",
+        f"/api/olive/agent/sessions/{quote(session_id, safe='')}",
+        body={"attempt": True, **kwargs},
+    )

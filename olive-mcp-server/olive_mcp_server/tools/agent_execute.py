@@ -210,12 +210,14 @@ def _observation_result(
 def execute_and_observe(
     recipe: dict[str, Any],
     timeout: int | None = None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     """Submit a recipe to Olive Studio and poll until terminal state or timeout.
 
     Args:
         recipe: A complete Olive optimization configuration JSON.
         timeout: Polling timeout in seconds, clamped to [10, 1800]. Default 600.
+        session_id: Optional Studio agent-loop session ID.
 
     Returns:
         Structured result with job status, logs, metrics, and artifact refs on
@@ -223,6 +225,31 @@ def execute_and_observe(
         returns a structured error without the ``side_effect`` field.
     """
     try:
+        from .studio_loopback import ENV_API_URL, _ensure_session, _record_attempt
+
+        active_session_id: str | None = None
+        if session_id or os.environ.get(ENV_API_URL):
+            active_session_id, session = _ensure_session(session_id)
+            if active_session_id is None:
+                return session
+
+        def finish(result: dict[str, Any]) -> dict[str, Any]:
+            if not active_session_id:
+                return result
+            failure = result.get("message") if result.get("error") else result.get("poll_error")
+            success = result.get("status") == "completed" and not result.get("error")
+            update = _record_attempt(
+                active_session_id,
+                recipe=recipe,
+                failure=str(failure) if failure else None,
+                success=success,
+                note=f"Execution finished with status {result.get('status', result.get('error', 'unknown'))}.",
+            )
+            if isinstance(update.get("error"), str) and update["error"]:
+                return update
+            result["session_id"] = active_session_id
+            return result
+
         effective_timeout = _clamp_timeout(timeout)
 
         # --- Submit the recipe ---
@@ -234,27 +261,27 @@ def execute_and_observe(
         )
 
         if _is_error(submit_response):
-            return _map_submission_error(submit_response)
+            return finish(_map_submission_error(submit_response))
 
         # --- Extract job_id from submission response ---
         job_id = submit_response.get("job_id") or submit_response.get("jobId")
         if not isinstance(job_id, str) or not job_id:
             # The recipe was submitted but we cannot determine the job_id.
             # This is an uncertain side effect — the job may be running.
-            return err(
+            return finish(err(
                 "invalid_bridge_response",
                 "Olive Studio submission response missing job_id.",
                 side_effect=True,
-            )
+            ))
         if not _JOB_ID_PATTERN.match(job_id):
-            return err(
+            return finish(err(
                 "invalid_bridge_response",
                 "Olive Studio submission response returned a malformed job_id.",
                 side_effect=True,
-            )
+            ))
 
         state, timed_out, poll_error = _poll_until_terminal(quote(job_id, safe=""), effective_timeout)
-        return _observation_result(job_id, state, timed_out, poll_error)
+        return finish(_observation_result(job_id, state, timed_out, poll_error))
 
     except Exception as exc:
         logger.warning("execute_and_observe unexpected error", exc_info=True)

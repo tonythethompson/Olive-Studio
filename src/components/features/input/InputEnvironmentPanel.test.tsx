@@ -238,8 +238,8 @@ describe("InputEnvironmentPanel", () => {
       fireEvent.click(configureLabel.closest("button") ?? configureLabel);
     });
 
-    const switchEl = screen.getByRole("switch", {
-      name: /trust remote code from the hugging face model repository/i,
+    const switchEl = screen.getByRole("checkbox", {
+      name: /trust remote code/i,
     });
 
     act(() => {

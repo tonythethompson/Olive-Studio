@@ -20,6 +20,12 @@ import { studioLocalOnly } from "../middleware/localOnly.ts";
 import { preflightOliveRecipe } from "../services/olive/jobPreflight.ts";
 import { startOliveJob } from "../services/olive/jobRunner.ts";
 import { denyUnless, getAgentAccessPublic, updateAgentAccess } from "../services/olive/agentAccess.ts";
+import {
+  createSession,
+  getSession,
+  recordAttempt,
+  updateSession,
+} from "../services/olive/agentSessions.ts";
 
 /** Grace period after SIGTERM before escalating cancel to SIGKILL. */
 export const CANCEL_SIGKILL_GRACE_MS = 10_000;
@@ -255,6 +261,77 @@ function handleOliveStream(req: Request, res: Response, surface: JobHttpSurface 
  * Mounts HTTP routes for Olive job execution, inspection, validation, submission, streaming, cancellation, and agent-access policy management.
  */
 export function mountOliveRoutes(router: Router): void {
+  router.post("/olive/agent/sessions", studioLocalOnly, (req, res) => {
+    const body = parseBody<Record<string, never>>(req.body ?? {}, {});
+    if (isParseBodyError(body)) {
+      res.status(400).json({ error: body.error });
+      return;
+    }
+    res.status(201).json(createSession());
+  });
+
+  router.get("/olive/agent/sessions/:sessionId", studioLocalOnly, (req, res) => {
+    const sessionId = Array.isArray(req.params.sessionId)
+      ? req.params.sessionId[0]
+      : req.params.sessionId;
+    const session = sessionId ? getSession(sessionId) : undefined;
+    if (!session) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    res.json(session);
+  });
+
+  router.put("/olive/agent/sessions/:sessionId", studioLocalOnly, (req, res) => {
+    type SessionBody = {
+      attempt?: boolean;
+      recipe?: Record<string, unknown>;
+      failure?: string;
+      success?: boolean;
+      note?: string;
+      lastRecipe?: Record<string, unknown>;
+      lastFailure?: string;
+      diagnosticNotes?: string[];
+    };
+    const body = parseBody<SessionBody>(req.body, {
+      attempt: { type: "boolean", required: false },
+      recipe: { type: "object", required: false },
+      failure: { type: "string", required: false },
+      success: { type: "boolean", required: false },
+      note: { type: "string", required: false },
+      lastRecipe: { type: "object", required: false },
+      lastFailure: { type: "string", required: false },
+      diagnosticNotes: { type: "string[]", required: false },
+    });
+    if (isParseBodyError(body)) {
+      res.status(400).json({ error: body.error });
+      return;
+    }
+
+    const sessionId = Array.isArray(req.params.sessionId)
+      ? req.params.sessionId[0]
+      : req.params.sessionId;
+    const { attempt, recipe, failure, note } = body.parsed;
+    const patch = {
+      ...(body.parsed.lastRecipe !== undefined ? { lastRecipe: body.parsed.lastRecipe } : {}),
+      ...(body.parsed.lastFailure !== undefined ? { lastFailure: body.parsed.lastFailure } : {}),
+      ...(body.parsed.success !== undefined ? { success: body.parsed.success } : {}),
+      ...(body.parsed.diagnosticNotes !== undefined
+        ? { diagnosticNotes: body.parsed.diagnosticNotes }
+        : {}),
+    };
+    const session = !sessionId
+      ? undefined
+      : attempt
+        ? recordAttempt(sessionId, { recipe, failure, success: body.parsed.success, note })
+        : updateSession(sessionId, patch);
+    if (!session) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    res.json(session);
+  });
+
   // Reclaim finished jobs + their temp recipe files on a timer.
   startJobRegistrySweeper();
 
@@ -518,4 +595,3 @@ export function mountOliveRoutes(router: Router): void {
     return handleOliveCancel(req, res, "agent");
   });
 }
-

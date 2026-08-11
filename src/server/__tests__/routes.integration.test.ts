@@ -16,6 +16,7 @@ import { resetLocalEngineRuntime } from "../services/ai/localEngineState.ts";
 import { app, markServerReady } from "../../../server.ts";
 import { jobRegistry, resetJobRegistry } from "../services/olive/state.ts";
 import { isAllowedMcpToolName } from "../services/mcp/allowedTools.ts";
+import { clearAgentSessionsForTests } from "../services/olive/agentSessions.ts";
 
 let server: Server;
 let baseUrl: string;
@@ -57,9 +58,82 @@ beforeEach(() => {
   resetLocalEngineRuntime();
   resetJobRegistry();
   clearChildProcessLaunchLog();
+  clearAgentSessionsForTests();
 });
 
 describe("Route integration tests", () => {
+  describe("agent sessions", () => {
+    it("creates, reads, records, and metadata-patches a session", async () => {
+      const createdResponse = await fetch(`${baseUrl}/api/olive/agent/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(createdResponse.status).toBe(201);
+      const created = await createdResponse.json();
+      expect(created).toMatchObject({
+        attemptCount: 0,
+        lastRecipe: null,
+        lastFailure: null,
+        success: false,
+        diagnosticNotes: [],
+      });
+
+      const attemptResponse = await fetch(
+        `${baseUrl}/api/olive/agent/sessions/${created.sessionId}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            attempt: true,
+            recipe: { passes: {} },
+            failure: "failed",
+            success: false,
+            note: "first attempt",
+          }),
+        },
+      );
+      expect(attemptResponse.status).toBe(200);
+      expect(await attemptResponse.json()).toMatchObject({
+        attemptCount: 1,
+        lastRecipe: { passes: {} },
+        lastFailure: "failed",
+        diagnosticNotes: ["first attempt"],
+      });
+
+      const metadataResponse = await fetch(
+        `${baseUrl}/api/olive/agent/sessions/${created.sessionId}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ diagnosticNotes: ["diagnosed"] }),
+        },
+      );
+      expect(await metadataResponse.json()).toMatchObject({
+        attemptCount: 1,
+        diagnosticNotes: ["diagnosed"],
+      });
+
+      const getResponse = await fetch(
+        `${baseUrl}/api/olive/agent/sessions/${created.sessionId}`,
+      );
+      expect(getResponse.status).toBe(200);
+      expect(await getResponse.json()).toHaveProperty("sessionId", created.sessionId);
+    });
+
+    it("returns 404 for unknown sessions and 400 for malformed PUT bodies", async () => {
+      const getResponse = await fetch(`${baseUrl}/api/olive/agent/sessions/missing`);
+      expect(getResponse.status).toBe(404);
+
+      const putResponse = await fetch(`${baseUrl}/api/olive/agent/sessions/missing`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([]),
+      });
+      expect(putResponse.status).toBe(400);
+    });
+  });
+
   // ─── GET /api/ai/provider ─────────────────────────────────────────────────
 
   describe("GET /api/ai/provider", () => {
