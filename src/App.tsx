@@ -327,6 +327,9 @@ function Dashboard() {
                   <button
                     type="button"
                     onClick={() => setIsAiSidebarOpen((open) => !open)}
+                    aria-label={isAiSidebarOpen ? "Close Assistant" : "Open Assistant"}
+                    aria-expanded={isAiSidebarOpen}
+                    aria-controls="assistant-panel"
                     className={cn(
                       "px-2.5 wide:px-3 py-1.5 border text-[clamp(0.75rem,0.65rem+0.3vw,0.875rem)] flex items-center gap-1.5 transition-colors cursor-pointer shrink-0",
                       isAiSidebarOpen
