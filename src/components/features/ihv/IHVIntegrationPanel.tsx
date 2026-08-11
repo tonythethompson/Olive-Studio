@@ -181,7 +181,8 @@ export function IHVIntegrationPanel({
     isProviderDetectedLocally("OpenVINOExecutionProvider", hardwareProbe) &&
     hardwareProbe?.openvino?.loadable !== true;
   // CUDA install / toolkit-link gating (from PR #106).
-  const nvidiaGpus = hardwareProbe?.nvidia?.gpus ?? [];
+  const probedNvidiaGpus = hardwareProbe?.nvidia?.gpus;
+  const nvidiaGpus = useMemo(() => probedNvidiaGpus ?? [], [probedNvidiaGpus]);
   const isPreMaxwellBox = isPreMaxwellNvidiaBox(nvidiaGpus);
   const cudaEpInVenv = hardwareProbe?.cuda?.loadable === true;
   const cudaNeedsOrtGpuInstall = nvidiaGpus.length > 0 && !isPreMaxwellBox && !cudaEpInVenv;
