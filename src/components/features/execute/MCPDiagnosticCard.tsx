@@ -74,8 +74,8 @@ function FeedbackThumbButton({ kind, status, active, disabled, onClick }: Feedba
   const successLabel = kind === "up" ? "Thumbs up submitted" : "Thumbs down submitted";
   const idleLabel =
     kind === "up"
-      ? "Thumbs up — this diagnosis was helpful"
-      : "Thumbs down — this diagnosis was not helpful";
+      ? "Thumbs up: this diagnosis was helpful"
+      : "Thumbs down: this diagnosis was not helpful";
   return (
     <button
       type="button"
@@ -344,8 +344,8 @@ export function MCPDiagnosticCard({
               title={
                 !canApply
                   ? diagnostic?.applyable === false
-                    ? "Guidance-only diagnostic — follow Recommended Fix manually"
-                    : "No auto-applyable config — follow Recommended Fix manually"
+                    ? "Guidance-only diagnostic. Follow Recommended Fix manually."
+                    : "No auto-applyable config. Follow Recommended Fix manually."
                   : "Apply recommended config into the pipeline UI"
               }
               className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${fixApplied !== ""

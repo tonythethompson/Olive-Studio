@@ -11,7 +11,7 @@ export function ConversionInspector({ state, setState }: InspectorProps) {
   if (!state.passes.conversion) {
     return (
       <p className="text-sm text-slate-500 font-sans italic text-center py-4">
-        Conversion is skipped — weights are not exported to ONNX/OpenVINO in this recipe.
+        Conversion is skipped. Weights are not exported to ONNX/OpenVINO in this recipe.
       </p>
     );
   }

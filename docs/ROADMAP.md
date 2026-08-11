@@ -6,12 +6,12 @@
 
 Decisions against the "start fresh" critique. Outcomes we want; rewrites we do not.
 
-| Theme | Disposition | Roadmap treatment |
-|-------|-------------|-------------------|
-| MCP as optimization agent (observe → reason → multi-step fix → retry) | **Modify** | Keep the loop. MCP stays Studio-mediated: tools call Studio's job API; MCP never launches Olive. Studio owns policy and execution. |
-| `UIState.passes` as a discriminated union | **Park** | Typed accessors (`passAccessors.ts`) stay the approach. Full union migration stays Tech Debt; not scheduled for v0.3-v0.4. Revisit only if flat-bag TypeScript pain dominates. |
-| Persistent MCP stdio (vs per-call spawn) | **Done** | Shipped in v0.2. No further roadmap item. |
-| Assistant sidebar as the sole agent UI | **Modify** | Ship Execute Agent mode first (v0.4). Later: shared proposed-actions / tool-approval path so Assistant and Agent mode use the same tools. Do not make chat the only agent shell. |
+| Theme                                                                 | Disposition | Roadmap treatment                                                                                                                                                              |
+| --------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| MCP as optimization agent (observe → reason → multi-step fix → retry) | **Done**    | Shipped in v0.3. Studio-mediated loop: tools call Studio's job API; MCP never launches Olive. Studio owns policy and execution.                                                |
+| `UIState.passes` as a discriminated union                             | **Park**    | Typed accessors (`passAccessors.ts`) stay the approach. Full union migration stays Tech Debt; not scheduled for v0.4-v0.5. Revisit only if flat-bag TypeScript pain dominates. |
+| Persistent MCP stdio (vs per-call spawn)                              | **Done**    | Shipped in v0.2. No further roadmap item.                                                                                                                                      |
+| Assistant sidebar as the sole agent UI                                | **Modify**  | Ship Execute Agent mode in v0.5. Later: shared proposed-actions / tool-approval path so Assistant and Agent mode use the same tools. Do not make chat the only agent shell.    |
 
 Contract (unchanged): standalone MCP is advisory; MCP connected to Studio is an agent-facing control plane for Studio operations. See `docs/proposals/olive-mcp-agent-platform.md`.
 
@@ -41,37 +41,66 @@ Contract (unchanged): standalone MCP is advisory; MCP connected to Studio is an 
 - Security headers (helmet + CSP + Permissions-Policy)
 - docs_search.py security fix
 - GitHub issue triage (open count reduced)
-- MCP agent platform Phases 0-3: persistent client, capabilities, retrieval modes, read-only job visibility, validation/preflight, idempotent submit/cancel
+- MCP agent platform Phases 0–3: persistent client, capabilities, retrieval modes, read-only job visibility, validation/preflight, idempotent submit/cancel
 
 ---
 
-## v0.3 (in progress)
+## v0.3 (shipped)
 
-### Olive runtime
+### olive-ai 0.13.0 upgrade
 
-- [ ] Keep managed `olive-ai` pin, docs, and compatibility notes aligned with Olive **0.12.1** (current pass-catalog / CI baseline; venv already accepts `olive-ai>=0.9.0,<1`)
+- [x] Pass catalog: 8 new passes (MobiusBuilder, QairtPipeline, KQuant, OnnxKquantQuantization, QuantizeEmbeddingInt8, ShareEmbeddingLmHead, SimplifiedLayerNormToRMSNorm, OnnxDiscrepancyCheck)
+- [x] KQuant quantization method added to recipe builder, type unions, and validation allowlists
+- [x] `trust_remote_code` default-flip handled: auto-emit `true` for HuggingFace models + info advisory
+- [x] Pipeline validation: CROSS_PASS_RULES for QNN-only passes, QnnAbiExecutionProvider as distinct EP
+- [x] Migration module (`passMigration.ts`): MobiusModelBuilder rename, QairtPreparation/QairtGenAIBuilder removal, pipelineStore integration
+- [x] Removed-pass advisory warnings and removed-pass detection in recipe overrides
+- [x] MCP knowledge base: passes.json, compatibility_matrix.json, hardware_profiles.json, troubleshooting.json updated for 0.13.0
+- [x] Venv spec pin bumped to `olive-ai>=0.12.0,<1` (spec version 5)
 
-### Agent autonomy tools (MCP)
+### Agent autonomy tools (MCP Phase 3)
 
-Studio-mediated loop (not a second Olive executor). Five tools that close observe → plan → diagnose → retry:
+Studio-mediated loop — five tools that close observe → plan → diagnose → retry:
 
-- [ ] `execute_and_observe` — submit via Studio job API, poll until completion, return structured outcome
-- [ ] `plan_optimization` — intent + hardware probe → complete UIState patch with reasoning
-- [ ] `diagnose_and_fix` — error text + current recipe → diagnosis + fixed recipe for retry
-- [ ] `compare_results` — 2+ job results → structured comparison with recommendation
-- [ ] `get_model_info` — HuggingFace model ID → params, architecture, VRAM estimate (HF API with regex fallback)
+- [x] `plan_optimization` — intent + hardware probe → complete UIState patch with reasoning
+- [x] `execute_and_observe` — submit via Studio job API, poll until completion, return structured outcome
+- [x] `diagnose_and_fix` — error text + current recipe → diagnosis + fixed recipe for retry
+- [x] `compare_results` — 2+ job results → structured comparison with recommendation
+- [x] `get_model_info` — HuggingFace model ID → params, architecture, VRAM estimate (HF API with regex fallback)
+
+### Performance
+
+- [x] Client bundle reduced 37.9% (−1007 KB): tree-shaking, code splitting, dead-code elimination
+- [x] Bundle phase 2: externalize typegpu, lazy MCP card, consolidate formatBytes (−293 KB)
+
+### Chore
+
+- [x] fast-check 3.23 → 4.9, motion 12.43 → 13.0
+
+---
+
+## v0.4 (in progress)
+
+### Validation & test hardening
+
+Complete the olive-ai 0.13.0 verification gap (spec tasks 9.5, 11, 12):
+
+- [ ] Pipeline validation unit tests for new CROSS_PASS_RULES (QairtPipeline, SimplifiedLayerNormToRMSNorm, kquant EP constraints, removed-pass warnings, trust_remote_code advisory)
+- [ ] Integration test fixtures: MobiusModelBuilder migration, QairtPreparation/QairtGenAIBuilder removal, trust_remote_code emission
+- [ ] Recipe validation smoke test pass (`pnpm validate:recipe` green)
+- [ ] Final checkpoint sweep: zero `0.12.1` references in source, lint clean, all test tiers green
 
 ### Agent loop state
 
-- [ ] Attempt / session context for agent loops (last recipe, last failure, attempt history) owned by MCP session or Studio job metadata: enough for multi-step retry without turning MCP into the UI controller
+- [ ] Attempt / session context for agent loops (last recipe, last failure, attempt history) owned by MCP session or Studio job metadata — enough for multi-step retry without turning MCP into the UI controller
 
-### Minor quality
+### Quality
 
 - [ ] GraphCanvas SVG dedup (#150)
 
 ---
 
-## v0.4 (next)
+## v0.5 (next)
 
 ### Agent UI (Execute panel)
 
@@ -85,7 +114,7 @@ Manual vs Agent on Execute first; Assistant stays chat until the later bridge.
 
 - [ ] Export optimization report (PDF/Markdown)
 - [ ] Recipe catalog version pinning
-- [ ] MultiLoRA adapter support: target v0.4+; **blocked** on upstream Olive multi-adapter pass configuration (Olive >= 0.3.0). Schema `adapters[]` is forward-compatible today; builder does not yet emit `adapter_path` or `adapters[]`. See `docs/multilora-design.md`. Not unblocked by the v0.3 `olive-ai` pin alignment.
+- [ ] MultiLoRA adapter support: **blocked** on upstream Olive multi-adapter pass configuration (Olive >= 0.3.0). Schema `adapters[]` is forward-compatible today; builder does not yet emit `adapter_path` or `adapters[]`. See `docs/multilora-design.md`.
 
 ### Distribution
 
@@ -95,7 +124,7 @@ Manual vs Agent on Execute first; Assistant stays chat until the later bridge.
 
 ---
 
-## v0.5 (later)
+## v0.6 (later)
 
 ### Assistant ↔ agent bridge
 
@@ -103,7 +132,7 @@ Converge Assistant and Execute Agent mode on one action path. Do not replace Exe
 
 - [ ] Shared proposed-actions model (MCP tool call + user approve) used by Assistant and Agent mode
 - [ ] Assistant can invoke the same autonomy tools as Agent mode (`plan_optimization`, `diagnose_and_fix`, `execute_and_observe`, …)
-- [ ] Audit surfaces proactive agent findings on that path (not a permanent parallel “mode” forever inventing JSON patches)
+- [ ] Audit surfaces proactive agent findings on that path (not a permanent parallel "mode" forever inventing JSON patches)
 
 ---
 
@@ -120,7 +149,7 @@ Converge Assistant and Execute Agent mode on one action path. Do not replace Exe
 
 ## Status legend
 
-| Symbol | Meaning |
-|--------|---------|
-| `[x]` | Shipped |
-| `[ ]` | Planned / in progress |
+| Symbol | Meaning               |
+| ------ | --------------------- |
+| `[x]`  | Shipped               |
+| `[ ]`  | Planned / in progress |

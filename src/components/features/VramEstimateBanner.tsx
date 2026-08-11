@@ -331,7 +331,7 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
 
       {offloadActive && hybridPoolGb != null && (
         <p className="text-xs text-emerald-500/90 mt-2 leading-relaxed">
-          Hybrid offload active — optimization run can spread across ~{formatMemoryGb(hybridPoolGb)} GPU +
+          Hybrid offload active. The optimization run can spread across ~{formatMemoryGb(hybridPoolGb)} GPU +
           host RAM.
         </p>
       )}
@@ -363,7 +363,7 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
       </div>
 
       <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-        Heuristic from model size and active passes — not profiled.{" "}
+        Heuristic based on model size and active passes (not profiled).{" "}
         {!isGpuProvider(state.ihvProvider) &&
           (state.ihvProvider === "OpenVINOExecutionProvider"
             ? "OpenVINO targets use host / shared Intel graphics memory, not NVIDIA VRAM."

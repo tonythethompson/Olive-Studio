@@ -46,7 +46,7 @@ export const ModelMemoryCompare = memo(function ModelMemoryCompare({
           <span className="font-mono text-slate-200 tabular-nums">~{formatMemoryGb(afterGb)}</span>
           {showSavings && <span className="text-emerald-500/90 ml-1">(−{savedPct}%)</span>}
           {showGrowth && (
-            <span className="text-amber-500/90 ml-1">(+{grewPct}% — check quant/precision)</span>
+            <span className="text-amber-500/90 ml-1">(+{grewPct}%, check quant/precision)</span>
           )}
         </p>
       </div>
@@ -87,7 +87,7 @@ export const ModelMemoryCompare = memo(function ModelMemoryCompare({
           <p className="text-[11px] text-electric-blue/80">After optimization</p>
           <p className="text-sm font-mono text-slate-100 tabular-nums mt-0.5">~{formatMemoryGb(afterGb)}</p>
           <p className="text-[9px] text-slate-600 mt-0.5">
-            {showGrowth ? "Larger than base — enable quantization to shrink" : "Deployed inference size"}
+            {showGrowth ? "Larger than base. Enable quantization to shrink." : "Deployed inference size"}
           </p>
         </div>
       </div>

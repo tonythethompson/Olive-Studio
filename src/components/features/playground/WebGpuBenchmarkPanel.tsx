@@ -193,7 +193,7 @@ export function WebGpuBenchmarkPanel() {
               root.destroy();
               return;
             }
-            setLogOutput((prev) => [...prev, `[${ts()}] TypeGPU initialized — compute pipeline ready`]);
+            setLogOutput((prev) => [...prev, `[${ts()}] TypeGPU initialized, compute pipeline ready`]);
             root.destroy();
           } catch (tgpuErr) {
             if (cancelled) return;
@@ -384,7 +384,7 @@ export function WebGpuBenchmarkPanel() {
         estimatedGpuMemMb,
       });
 
-      appendLog(`Done — ${iterations} runs in ${formatMs(totalTimeMs)}`);
+      appendLog(`Done: ${iterations} runs in ${formatMs(totalTimeMs)}`);
       appendLog(`Avg: ${formatMs(avgMs)} | p50: ${formatMs(p50Ms)} | p99: ${formatMs(p99Ms)}`);
       appendLog(`Throughput: ${formatThroughput(throughputPerSec)} it/s`);
       setRunStatus("done");

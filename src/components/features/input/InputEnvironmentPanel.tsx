@@ -123,7 +123,7 @@ export function InputEnvironmentPanel({
                     {appliedRecipeLabel}
                   </p>
                   <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-                    Source fields below are pre-filled — edit anytime before running.
+                    Source fields below are pre-filled. Edit anytime before running.
                   </p>
                 </div>
               </div>

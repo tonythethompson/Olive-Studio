@@ -250,7 +250,7 @@ export function ExecutionWorkspace({
     if (!displayedDiagnostic || !canApplyMcpDiagnostic(displayedDiagnostic)) {
       setExecutionLogs((prev) => [
         ...prev,
-        "[MCP FIX] Nothing auto-applyable — follow Recommended Fix / Known Quirks manually.",
+        "[MCP FIX] Nothing auto-applyable. Follow Recommended Fix / Known Quirks manually.",
       ]);
       return;
     }
@@ -299,7 +299,7 @@ export function ExecutionWorkspace({
       ...logs,
       hasPatches
         ? `[MCP FIX] Applied config + quirks: ${appliedParts.join(", ") || Object.keys(patches).join(", ")}. Re-run Execute (recipe order: Convert → Optimize → Quantize).`
-        : "[MCP FIX] Logged notes only — no UI fields changed.",
+        : "[MCP FIX] Logged notes only. No UI fields changed.",
     ]);
     // Gate success UI state on actual applied quirks/patches only, not noted quirks
     const applied = hasPatches || appliedQuirks.length > 0;
@@ -912,7 +912,7 @@ export function ExecutionWorkspace({
           title="Active Draft"
           description={
             executionStatus === "running"
-              ? "Olive is running — streaming optimization logs."
+              ? "Olive is running. Streaming optimization logs."
               : executionStatus === "completed"
                 ? `Run completed (exit 0)`
                 : executionStatus === "failed"
@@ -1092,7 +1092,7 @@ export function ExecutionWorkspace({
                             setState(patch ?? { ihvProvider: provider });
                             setExecutionLogs((prev) => [
                               ...prev,
-                              `[INFO] Switched target to ${provider} (explicit retry — QNN does not auto-fallback). Rebuild/refresh the recipe, then Execute Live again.`,
+                              `[INFO] Switched target to ${provider} (explicit retry, QNN does not auto-fallback). Rebuild/refresh the recipe, then Execute Live again.`,
                             ]);
                           }}
                           title={`Explicit retry with ${provider} (no automatic EP fallback)`}
@@ -1110,7 +1110,7 @@ export function ExecutionWorkspace({
               >
                 {executionLogs.length === 0 ? (
                   <p className="text-slate-500 italic">
-                    Ready — click &quot;Execute Live&quot; to begin an Olive optimization run.
+                    Ready. Click &quot;Execute Live&quot; to begin an Olive optimization run.
                   </p>
                 ) : (
                   executionLogs.map((line, i) => {

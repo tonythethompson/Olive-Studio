@@ -95,7 +95,7 @@ export function ProviderInspector({ state, setState }: InspectorProps) {
                 return (
                   <option key={provider.id} value={provider.id} disabled={unavailable}>
                     {provider.name}
-                    {unavailable ? " — not on this machine" : ""}
+                    {unavailable ? ", not on this machine" : ""}
                   </option>
                 );
               })

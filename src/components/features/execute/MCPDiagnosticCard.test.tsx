@@ -131,7 +131,7 @@ describe("MCPDiagnosticCard", () => {
       />,
     );
 
-    const up = screen.getByRole("button", { name: /Thumbs up — this diagnosis was helpful/i });
+    const up = screen.getByRole("button", { name: /Thumbs up: this diagnosis was helpful/i });
     await user.click(up);
 
     await waitFor(() => {
@@ -175,7 +175,7 @@ describe("MCPDiagnosticCard", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /Thumbs down — this diagnosis was not helpful/i }));
+    await user.click(screen.getByRole("button", { name: /Thumbs down: this diagnosis was not helpful/i }));
 
     await waitFor(() => {
       expect(mockRequestFeedback).toHaveBeenCalledTimes(1);
@@ -214,7 +214,7 @@ describe("MCPDiagnosticCard", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /Thumbs up — this diagnosis was helpful/i }));
+    await user.click(screen.getByRole("button", { name: /Thumbs up: this diagnosis was helpful/i }));
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeDefined();
@@ -223,8 +223,8 @@ describe("MCPDiagnosticCard", () => {
     expect(screen.getByText(/You can try again/i)).toBeDefined();
     expect(onFeedbackSubmitted).not.toHaveBeenCalled();
 
-    const up = screen.getByRole("button", { name: /Thumbs up — this diagnosis was helpful/i });
-    const down = screen.getByRole("button", { name: /Thumbs down — this diagnosis was not helpful/i });
+    const up = screen.getByRole("button", { name: /Thumbs up: this diagnosis was helpful/i });
+    const down = screen.getByRole("button", { name: /Thumbs down: this diagnosis was not helpful/i });
     expect((up as HTMLButtonElement).disabled).toBe(false);
     expect((down as HTMLButtonElement).disabled).toBe(false);
 
@@ -250,7 +250,7 @@ describe("MCPDiagnosticCard", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /Thumbs up — this diagnosis was helpful/i }));
+    await user.click(screen.getByRole("button", { name: /Thumbs up: this diagnosis was helpful/i }));
     await waitFor(() => {
       expect(screen.getByText(/Thanks for the feedback/i)).toBeDefined();
     });
@@ -270,13 +270,13 @@ describe("MCPDiagnosticCard", () => {
     );
 
     expect(screen.queryByText(/Thanks for the feedback/i)).toBeNull();
-    const up = screen.getByRole("button", { name: /Thumbs up — this diagnosis was helpful/i });
+    const up = screen.getByRole("button", { name: /Thumbs up: this diagnosis was helpful/i });
     expect((up as HTMLButtonElement).disabled).toBe(false);
 
     mockRequestFeedback.mockResolvedValueOnce(
       okResult("thumbs-down", "quantization-precision-mismatch"),
     );
-    await user.click(screen.getByRole("button", { name: /Thumbs down — this diagnosis was not helpful/i }));
+    await user.click(screen.getByRole("button", { name: /Thumbs down: this diagnosis was not helpful/i }));
     await waitFor(() => {
       expect(mockRequestFeedback).toHaveBeenLastCalledWith(
         { matched_entry: "quantization-precision-mismatch", rating: "thumbs-down" },
@@ -302,7 +302,7 @@ describe("MCPDiagnosticCard", () => {
     await user.click(screen.getByRole("button", { name: /Apply Fix/i }));
     expect(onApplyFix).toHaveBeenCalledTimes(1);
 
-    await user.click(screen.getByRole("button", { name: /Thumbs up — this diagnosis was helpful/i }));
+    await user.click(screen.getByRole("button", { name: /Thumbs up: this diagnosis was helpful/i }));
     await waitFor(() => {
       expect(screen.getByText(/Thanks for the feedback/i)).toBeDefined();
     });
@@ -357,7 +357,7 @@ describe("MCPDiagnosticCard", () => {
       />,
     );
 
-    const up = screen.getByRole("button", { name: /Thumbs up — this diagnosis was helpful/i });
+    const up = screen.getByRole("button", { name: /Thumbs up: this diagnosis was helpful/i });
     await user.click(up);
     await waitFor(() => {
       expect(screen.getByText(/Sending/i)).toBeDefined();

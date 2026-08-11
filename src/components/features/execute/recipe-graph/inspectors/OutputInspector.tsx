@@ -15,7 +15,7 @@ export function OutputInspector({ state }: InspectorProps) {
       </div>
       <div className="grid grid-cols-2 gap-4 border-l border-slate-800/50 pl-4 items-center">
         <div className="col-span-2 text-[11px] text-amber-400/90 font-mono uppercase tracking-wide bg-amber-500/5 border border-amber-500/15 rounded px-2 py-1">
-          Simulated heuristics — not profiled. Run Olive for real metrics.
+          Simulated heuristics, not profiled. Run Olive for real metrics.
         </div>
         <div className="bg-slate-950 border border-slate-800 p-2.5 rounded text-center">
           <div className="text-[11px] text-slate-500 font-mono uppercase">Sim. Size (heuristic)</div>

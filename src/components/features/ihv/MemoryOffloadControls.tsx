@@ -125,8 +125,8 @@ export function MemoryOffloadControls({
                   <option value="cu124">CUDA 12.4</option>
                   <option value="cu126">CUDA 12.6</option>
                   <option value="cu128">CUDA 12.8</option>
-                  <option value="cu130">CUDA 13.0 (driver only — no package pins yet)</option>
-                  <option value="cu132">CUDA 13.2 (driver only — no package pins yet)</option>
+                  <option value="cu130">CUDA 13.0 (driver only, no package pins yet)</option>
+                  <option value="cu132">CUDA 13.2 (driver only, no package pins yet)</option>
                 </select>
               </div>
             </div>
