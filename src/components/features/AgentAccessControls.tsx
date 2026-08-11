@@ -187,12 +187,12 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
     : "Agent / MCP access policy";
 
   return (
-    <div ref={rootRef} className="relative text-xs font-mono overflow-visible">
+    <div ref={rootRef} className="relative text-[clamp(0.625rem,0.55rem+0.3vw,0.75rem)] font-mono overflow-visible">
       <button
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 text-slate-400 hover:text-slate-200 transition-colors px-1.5 py-1 rounded border border-transparent hover:border-slate-700/80"
+        className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 transition-colors px-1.5 py-1 rounded border border-transparent hover:border-slate-700/80"
         title={title}
         aria-expanded={open}
         aria-haspopup="dialog"

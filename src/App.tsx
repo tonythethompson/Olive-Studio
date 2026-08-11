@@ -295,25 +295,21 @@ function Dashboard() {
 
           <div className="flex-1 flex min-w-0 overflow-hidden">
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
-              <header className="h-12 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 px-3 wide:px-6 min-[1000px]:px-8 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 shrink-0">
-                <div className="justify-self-start min-w-0">
-                  <span className="text-sm text-slate-400 truncate hidden wide:inline">
-                    Optimization pipeline
-                  </span>
-                </div>
-                <div className="justify-self-center flex items-center gap-5 min-w-0">
+              <header className="min-h-12 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 wide:gap-4 px-3 wide:px-6 min-[1000px]:px-8 py-1.5 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 shrink-0">
+                <div className="flex items-center flex-wrap gap-x-3 gap-y-1 min-w-0 overflow-hidden">
                   <KbSyncIndicator />
                   <span className="hidden sm:block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />
                   <RuntimeEnvControls />
                   <span className="hidden sm:block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />
                   <AgentAccessControls />
                 </div>
-                <div className="justify-self-end">
+                {/* Fixed `auto` track: never compressed by the status cluster's minmax(0,1fr) neighbor. */}
+                <div className="shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsAiSidebarOpen((open) => !open)}
                     className={cn(
-                      "px-2.5 wide:px-3 py-1.5 border text-sm flex items-center gap-1.5 transition-colors cursor-pointer shrink-0",
+                      "px-2.5 wide:px-3 py-1.5 border text-[clamp(0.75rem,0.65rem+0.3vw,0.875rem)] flex items-center gap-1.5 transition-colors cursor-pointer shrink-0",
                       isAiSidebarOpen
                         ? "border-electric-blue text-electric-blue bg-electric-blue/5"
                         : "border-slate-700 text-slate-400 hover:border-electric-blue hover:text-electric-blue",
@@ -323,7 +319,8 @@ function Dashboard() {
                     <span className="hidden sm:inline">Assistant</span>
                   </button>
                 </div>
-              </header>                              <main
+              </header>
+              <main
                 ref={mainRef}
                 id="main"
                 className="flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-5 wide:px-6 wide:py-8 min-[1000px]:px-10 h-full min-w-0"

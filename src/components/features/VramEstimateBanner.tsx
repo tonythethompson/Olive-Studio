@@ -127,7 +127,7 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
           <p className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500">
             {estimate.usesGpu ? "Model VRAM" : "Model memory"}
           </p>
-          <p className="text-sm font-semibold text-slate-100 truncate leading-snug" title={modelLabel}>
+          <p className="text-xs font-semibold text-slate-100 break-words leading-snug" title={modelLabel}>
             {modelShortName}
           </p>
         </div>
@@ -135,14 +135,14 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
         <div className="space-y-2">
           <div className="space-y-1.5">
             <div className="flex items-baseline justify-between gap-2">
-              <span className="text-xs text-slate-500">Before optimization</span>
-              <span className="text-sm font-mono font-medium text-slate-300 tabular-nums">
+              <span className="text-[11px] text-slate-500">Before optimization</span>
+              <span className="text-xs font-mono font-medium text-slate-300 tabular-nums">
                 ~{formatMemoryGb(beforeGb)}
               </span>
             </div>
             <div className="flex items-baseline justify-between gap-2">
               <span
-                className="text-xs text-slate-500"
+                className="text-[11px] text-slate-500"
                 title={
                   noShrinkPasses
                     ? "Quantization / pruning not enabled: footprint matches source weights"
@@ -151,7 +151,7 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
               >
                 {afterLabel}
               </span>
-              <span className="text-sm font-mono font-semibold text-slate-100 tabular-nums">
+              <span className="text-xs font-mono font-semibold text-slate-100 tabular-nums">
                 ~{formatMemoryGb(afterGb)}
               </span>
             </div>
@@ -167,15 +167,15 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
           {estimate.usesGpu ? (
             <>
               <div className="flex items-baseline justify-between gap-2">
-                <span className="text-xs text-slate-500">GPU VRAM available</span>
-                <span className="text-sm font-mono font-semibold text-slate-100 tabular-nums">
+                <span className="text-[11px] text-slate-500">GPU VRAM available</span>
+                <span className="text-xs font-mono font-semibold text-slate-100 tabular-nums">
                   {availableGb != null ? formatMemoryGb(availableGb) : "Unknown"}
                 </span>
               </div>
               {systemRamGb != null && (
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-xs text-slate-500">System RAM available</span>
-                  <span className="text-sm font-mono font-medium text-slate-300 tabular-nums">
+                  <span className="text-[11px] text-slate-500">System RAM available</span>
+                  <span className="text-xs font-mono font-medium text-slate-300 tabular-nums">
                     {formatMemoryGb(systemRamGb)}
                   </span>
                 </div>
@@ -184,15 +184,15 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
           ) : (
             <>
               <div className="flex items-baseline justify-between gap-2">
-                <span className="text-xs text-slate-500">Peak RAM (run)</span>
-                <span className="text-sm font-mono font-semibold text-slate-100 tabular-nums">
+                <span className="text-[11px] text-slate-500">Peak RAM (run)</span>
+                <span className="text-xs font-mono font-semibold text-slate-100 tabular-nums">
                   ~{formatMemoryGb(estimate.peakRunGb)}
                 </span>
               </div>
               {systemRamGb != null && (
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-xs text-slate-500">System RAM available</span>
-                  <span className="text-sm font-mono font-medium text-slate-300 tabular-nums">
+                  <span className="text-[11px] text-slate-500">System RAM available</span>
+                  <span className="text-xs font-mono font-medium text-slate-300 tabular-nums">
                     {formatMemoryGb(systemRamGb)}
                   </span>
                 </div>
