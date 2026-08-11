@@ -10,6 +10,7 @@ No module-level network calls; no new pip dependencies.
 from __future__ import annotations
 
 import logging
+import os
 import re
 from typing import Any
 
@@ -491,6 +492,7 @@ def plan_optimization(
     intent: str,
     hardware_probe: dict[str, Any] | None = None,
     model_id: str = "",
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     """Convert a natural-language optimization intent into a UIState patch.
 
@@ -500,7 +502,8 @@ def plan_optimization(
         hardware_probe: Optional hardware context from the agent's environment
                        (overrides inferred provider/CUDA settings).
         model_id: Optional HuggingFace model ID for model-type inference
-                 (1-200 characters).
+                  (1-200 characters).
+        session_id: Optional Studio agent-loop session ID.
 
     Returns:
         A dict containing ui_state_patch, reasoning, alternatives, validated,
@@ -511,6 +514,16 @@ def plan_optimization(
         input_error = _validate_plan_inputs(intent, model_id, hardware_probe)
         if input_error:
             return input_error
+
+        from .studio_loopback import ENV_API_URL, _ensure_session, _update_session
+
+        active_session_id: str | None = None
+        if session_id or os.environ.get(ENV_API_URL):
+            active_session_id, session = _ensure_session(session_id)
+            if active_session_id is None:
+                return session
+        else:
+            session = {}
 
         parsed = _parse_intent(intent)
         model_ref = parsed["model_ref"]
@@ -547,7 +560,19 @@ def plan_optimization(
         )
         reasoning = _build_reasoning(strategy, hardware_target, model_type, optimization_goal)
         alternatives = _generate_alternatives(strategy, model_type)
-        return _build_plan_response(patch, reasoning, alternatives)
+        result = _build_plan_response(patch, reasoning, alternatives)
+        if active_session_id:
+            update = _update_session(
+                active_session_id,
+                diagnosticNotes=[
+                    *session.get("diagnosticNotes", [])[-49:],
+                    "Optimization plan created and validated.",
+                ],
+            )
+            if isinstance(update.get("error"), str) and update["error"]:
+                return update
+            result["session_id"] = active_session_id
+        return result
 
     except Exception as exc:
         logger.warning("plan_optimization unexpected error", exc_info=True)

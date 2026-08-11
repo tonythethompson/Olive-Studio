@@ -29,9 +29,9 @@ export function parseOliveMetricsFromLogs(logs: string[]): OliveRunMetrics | und
   }
 
   return {
-    latency: found.latency ?? "—",
-    throughput: found.throughput ?? "—",
-    memory: found.memory ?? "—",
-    compression: found.compression ?? "—",
+    latency: found.latency ?? "-",
+    throughput: found.throughput ?? "-",
+    memory: found.memory ?? "-",
+    compression: found.compression ?? "-",
   };
 }

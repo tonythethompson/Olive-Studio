@@ -274,7 +274,7 @@ export function UseAssistantProviderButton({ slotLabel, onApply }: UseAssistantP
       )}
       {okLabel && !reason && (
         <p className="text-xs text-emerald-400/90" role="status">
-          {okLabel} — fields stay editable.
+          {okLabel}. Fields stay editable.
         </p>
       )}
     </div>

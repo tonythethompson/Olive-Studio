@@ -453,7 +453,7 @@ export async function getDualRuntimeStatus(opts?: {
   const hint = !opts?.systemPython
     ? "No system Python found. Need 3.10–3.13 (3.12 recommended). Set python.exe below or OLIVE_STUDIO_PYTHON."
     : !families.default.exists
-      ? "Default runtime (.venv) missing — Install Olive venv now, or first Execute Live will create it."
+      ? "Default runtime (.venv) missing. Install Olive venv now, or first Execute Live will create it."
       : !defaultOk
         ? "Default runtime needs repair (Open Olive runtime / Install Olive venv)."
         : cudaOk && openvinoOk && qnnOk

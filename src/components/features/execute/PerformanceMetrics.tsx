@@ -11,14 +11,14 @@ export const PerformanceMetrics = memo(function PerformanceMetrics({ logs }: { l
   const parsed = logs && logs.length > 0 ? parseOliveMetricsFromLogs(logs) : undefined;
   const parsedMetrics = parsed
     ? ([
-        parsed.latency !== "—"
+        parsed.latency !== "-"
           ? { label: "Latency", value: parsed.latency, color: "text-electric-blue" }
           : null,
-        parsed.throughput !== "—"
+        parsed.throughput !== "-"
           ? { label: "Throughput", value: parsed.throughput, color: "text-emerald-400" }
           : null,
-        parsed.memory !== "—" ? { label: "Memory", value: parsed.memory, color: "text-purple-400" } : null,
-        parsed.compression !== "—"
+        parsed.memory !== "-" ? { label: "Memory", value: parsed.memory, color: "text-purple-400" } : null,
+        parsed.compression !== "-"
           ? { label: "Compression", value: parsed.compression, color: "text-amber-400" }
           : null,
       ].filter(Boolean) as { label: string; value: string; color: string }[])

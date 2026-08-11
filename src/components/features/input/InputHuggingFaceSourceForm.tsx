@@ -1,8 +1,7 @@
 import { Button, Input, Label, Select } from "@/components/ui";
-import { Switch } from "@/components/ui/Switch";
 import { UIState } from "@/types";
 import type { HfTokenStatus } from "@/components/features/input/useHfToken";
-import { KeyRound, Search, Loader2, ShieldAlert } from "lucide-react";
+import { KeyRound, Search, Loader2 } from "lucide-react";
 
 const QUICK_SELECT_MODELS = [
   { label: "Meta-Llama-3", id: "meta-llama/Meta-Llama-3-8B" },
@@ -102,7 +101,7 @@ export function InputHuggingFaceSourceForm({
           )}
           {hfTokenStatus === "none" && (
             <span className="text-[11px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-mono">
-              Not set — required for gated models
+              Not set (required for gated models)
             </span>
           )}
           {hfTokenStatus === "error" && (
@@ -157,11 +156,11 @@ export function InputHuggingFaceSourceForm({
         )}
         {clearTokenMutation.isError && (
           <p role="alert" className="text-[11px] text-rose-400">
-            Couldn&apos;t clear the token — try again.
+            Couldn&apos;t clear the token. Please try again.
           </p>
         )}
         <p className="text-[11px] text-slate-500 leading-relaxed">
-          Stored in server memory only — never written to disk or returned to the client. Set{" "}
+          Stored in server memory only. Never written to disk or returned to the client. Set{" "}
           <code className="text-slate-400 font-mono">HF_TOKEN</code> in environment variables for persistent access.
         </p>
       </div>
@@ -192,7 +191,7 @@ export function InputHuggingFaceSourceForm({
             (GTE, BGE, E5) should use Feature Extraction.
           </p>
         </div>
-        <div className="grid gap-3">
+        <div className="grid gap-3 content-start">
           <Label htmlFor="dataset">Calibration Dataset (Optional)</Label>
           <Input
             id="dataset"
@@ -217,33 +216,6 @@ export function InputHuggingFaceSourceForm({
         </div>
       </div>
 
-      <div className="p-4 rounded-xl border border-slate-800 bg-slate-900/30 space-y-3">
-        <div className="flex items-center gap-3">
-          <Switch
-            id="trustRemoteCode"
-            aria-label="Trust remote code from the Hugging Face model repository"
-            checked={state.passes.trustRemoteCode}
-            onCheckedChange={(v) =>
-              setState({
-                passes: {
-                  ...state.passes,
-                  trustRemoteCode: v,
-                },
-              })
-            }
-          />
-          <Label htmlFor="trustRemoteCode" className="flex items-center gap-2 text-sm text-slate-300">
-            <ShieldAlert className="h-3.5 w-3.5 text-amber-400" />
-            Trust Remote Code
-          </Label>
-        </div>
-        <p className="text-[11px] text-slate-500 leading-relaxed">
-          Required for some Hugging Face models that include custom Python code (e.g. custom architectures or
-          tokenizers). Enabling this executes Python from the model repository inside the Olive process on your
-          machine; only enable it for repositories you trust. Olive sets{" "}
-          <code className="font-mono text-slate-400">trust_remote_code=True</code> when this is enabled.
-        </p>
-      </div>
     </div>
   );
 }

@@ -156,7 +156,7 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
                           {doc?.type && (
                             <span className="text-slate-500 font-mono text-[11px]">:{doc.type}</span>
                           )}
-                          {doc?.description && <span className="text-slate-400">— {doc.description}</span>}
+                          {doc?.description && <span className="text-slate-400">: {doc.description}</span>}
                         </div>
                       );
                     })}

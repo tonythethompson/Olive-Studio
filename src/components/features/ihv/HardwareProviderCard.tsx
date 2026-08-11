@@ -630,7 +630,7 @@ function ProviderPluginInstalls({
         <p className="text-xs text-rose-400/90 leading-relaxed">
           {nvidiaGpus.map((g) => g.name).join(", ")} predates the CUDA 12 toolkit floor (compute
           capability ≥ {CUDA_SM_FLOOR}, Maxwell / RTX 20xx+). Installing the toolkit or the CUDA
-          wheel cannot recover this — these cards cannot execute modern CUDA. Use the CPU provider,
+          wheel cannot recover this. These cards cannot execute modern CUDA. Use the CPU provider,
           or upgrade hardware.
         </p>
       </div>
@@ -996,7 +996,7 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
             <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
               {isLegacyTarget
                 ? "Legacy export path (prefer QNN for Snapdragon). Not available for Studio Execute Live."
-                : "Export / deploy target only. Not a local Python EP — Execute Live stays blocked."}
+                : "Export / deploy target only. Not a local Python EP, so Execute Live stays blocked."}
             </p>
           ) : null}
           {isPlatformTarget && !detectedLocally && !probeLoading ? (
@@ -1011,8 +1011,8 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
             !needsPluginInstall ? (
             <p className="text-xs text-slate-600">
               {p.id === "CPUExecutionProvider"
-                ? "Hardware detection unavailable — CPU status is unknown."
-                : "No matching hardware found locally — you can still select for remote/cross-compile targets."}
+                ? "Hardware detection unavailable. CPU status is unknown."
+                : "No matching hardware found locally. You can still select for remote/cross-compile targets."}
             </p>
           ) : null}
         </div>

@@ -30,7 +30,7 @@ const PRUNING_PRESETS = [
   {
     id: "aggressive",
     label: "Aggressive",
-    description: "Magnitude · L1 · 70% — maximizes sparsity, tolerates accuracy loss",
+    description: "Magnitude · L1 · 70%: maximizes sparsity, tolerates accuracy loss",
     method: "magnitude" as const,
     criteria: "l1_norm" as const,
     sparsity: 0.7,
@@ -38,7 +38,7 @@ const PRUNING_PRESETS = [
   {
     id: "balanced",
     label: "Balanced",
-    description: "Magnitude · L2 · 50% — smooth pruning with moderate compression",
+    description: "Magnitude · L2 · 50%: smooth pruning with moderate compression",
     method: "magnitude" as const,
     criteria: "l2_norm" as const,
     sparsity: 0.5,
@@ -46,7 +46,7 @@ const PRUNING_PRESETS = [
   {
     id: "sparsegpt",
     label: "SparseGPT",
-    description: "SparseGPT · 50% — one-shot LLM pruning with minimal accuracy loss",
+    description: "SparseGPT · 50%: one-shot LLM pruning with minimal accuracy loss",
     method: "sparsegpt" as const,
     criteria: "l1_norm" as const,
     sparsity: 0.5,
@@ -54,7 +54,7 @@ const PRUNING_PRESETS = [
   {
     id: "wanda",
     label: "Wanda",
-    description: "Wanda · 50% — weight × activation pruning, fast calibration",
+    description: "Wanda · 50%: weight × activation pruning, fast calibration",
     method: "wanda" as const,
     criteria: "l1_norm" as const,
     sparsity: 0.5,
@@ -138,7 +138,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
   if (!state.passes.pruning) {
     return (
       <p className="text-sm text-slate-500 font-sans italic text-center py-4">
-        Pruning is skipped — weights stay dense.
+        Pruning is skipped: weights stay dense.
       </p>
     );
   }
@@ -150,7 +150,7 @@ export function PruningInspector({ state, setState }: InspectorProps) {
     <div className="space-y-5">
       {awqBlocksPruning && (
         <p className="text-sm text-amber-500/90 leading-relaxed rounded border border-amber-500/20 bg-amber-950/20 px-3 py-2">
-          AWQ is active — pruning cannot run until you switch to PTQ or disable quantization.
+          AWQ is active: pruning cannot run until you switch to PTQ or disable quantization.
         </p>
       )}
       <div className="space-y-2">
@@ -379,11 +379,11 @@ export function PruningInspector({ state, setState }: InspectorProps) {
                   <TooltipContent className="max-w-xs">
                     <p className="font-semibold mb-1">How weights are ranked for removal</p>
                     <p className="text-slate-300">
-                      <b>L1 norm</b> — sums absolute values. Produces sparser, blockier weight distributions.
+                      <b>L1 norm</b>: sums absolute values. Produces sparser, blockier weight distributions.
                       Best when you want aggressively zeroed weights and can tolerate accuracy loss.
                     </p>
                     <p className="text-slate-300 mt-1">
-                      <b>L2 norm</b> — sums squared values. Preserves relative weight magnitudes more evenly.
+                      <b>L2 norm</b>: sums squared values. Preserves relative weight magnitudes more evenly.
                       Gentler pruning with smoother accuracy degradation.
                     </p>
                   </TooltipContent>
@@ -403,13 +403,13 @@ export function PruningInspector({ state, setState }: InspectorProps) {
               }
               className="h-9 text-sm bg-slate-950 max-w-xs"
             >
-              <option value="l1_norm">L1 norm — aggressive</option>
-              <option value="l2_norm">L2 norm — gentle</option>
+              <option value="l1_norm">L1 norm: aggressive</option>
+              <option value="l2_norm">L2 norm: gentle</option>
             </Select>
             <p className="text-[11px] text-slate-500 leading-relaxed">
               {state.passes.pruningCriteria === "l1_norm"
-                ? "Sparser, blockier weight distributions — aggressively zeros weights with smaller absolute magnitudes."
-                : "Smoother magnitude preservation — penalizes larger weights more heavily, gentler accuracy degradation."}
+                ? "Sparser, blockier weight distributions: aggressively zeros weights with smaller absolute magnitudes."
+                : "Smoother magnitude preservation: penalizes larger weights more heavily, gentler accuracy degradation."}
             </p>
           </div>
         )}

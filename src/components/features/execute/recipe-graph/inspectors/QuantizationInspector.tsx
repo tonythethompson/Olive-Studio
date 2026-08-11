@@ -159,12 +159,12 @@ const AI_PRESET_LABEL = "✨ Ask AI...";
 const QUANT_PRESETS: QuantPreset[] = [
   {
     label: "Default INT4",
-    description: "Post-training INT4 quantization — broadest compatibility",
+    description: "Post-training INT4 quantization: broadest compatibility",
     fields: { quantMethod: "ptq", quantPrecision: "int4" },
   },
   {
     label: "Default INT8",
-    description: "Post-training INT8 — balanced size and accuracy",
+    description: "Post-training INT8: balanced size and accuracy",
     fields: { quantMethod: "ptq", quantPrecision: "int8" },
   },
   {
@@ -191,7 +191,7 @@ const QUANT_PRESETS: QuantPreset[] = [
   },
   {
     label: "GPTQ High Quality",
-    description: "GPTQ INT4 with desc_act on, block 128, group 128 — best accuracy",
+    description: "GPTQ INT4 with desc_act on, block 128, group 128: best accuracy",
     fields: {
       quantMethod: "gptq",
       quantPrecision: "int4",
@@ -202,7 +202,7 @@ const QUANT_PRESETS: QuantPreset[] = [
   },
   {
     label: "GPTQ Fast",
-    description: "GPTQ INT4 with desc_act off, block 256, group 128 — fastest",
+    description: "GPTQ INT4 with desc_act off, block 256, group 128: fastest",
     fields: {
       quantMethod: "gptq",
       quantPrecision: "int4",
@@ -212,8 +212,8 @@ const QUANT_PRESETS: QuantPreset[] = [
     },
   },
   {
-    label: "QAT INT4 — Best Accuracy",
-    description: "QAT INT4 with entropy calibration, 20 steps — highest quality",
+    label: "QAT INT4: Best Accuracy",
+    description: "QAT INT4 with entropy calibration, 20 steps: highest quality",
     fields: {
       quantMethod: "qat",
       quantPrecision: "int4",
@@ -223,8 +223,8 @@ const QUANT_PRESETS: QuantPreset[] = [
     },
   },
   {
-    label: "QAT INT8 — Balanced",
-    description: "QAT INT8 with percentile calibration, 10 steps — good accuracy/speed",
+    label: "QAT INT8: Balanced",
+    description: "QAT INT8 with percentile calibration, 10 steps: good accuracy/speed",
     fields: {
       quantMethod: "qat",
       quantPrecision: "int8",
@@ -351,7 +351,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
       fields.qatCalibrateMethod = passes.qatCalibrateMethod;
       fields.qatCalibrateSteps = passes.qatCalibrateSteps;
     } else if (passes.quantMethod === "hqq") {
-      // OnnxHqqQuantization — no configurable fields exposed yet.
+      // OnnxHqqQuantization: no configurable fields exposed yet.
       // Precision is controlled by quantPrecision dropdown.
     }
     saveCustomPreset({
@@ -385,7 +385,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
   if (!state.passes.quantization) {
     return (
       <p className="text-sm text-slate-500 font-sans italic text-center py-4">
-        Quantization is skipped — model stays in floating point (FP16/FP32).
+        Quantization is skipped: model stays in floating point (FP16/FP32).
       </p>
     );
   }
@@ -423,14 +423,14 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
               Apply a profile…
             </option>
             <option value={AI_PRESET_LABEL} disabled={aiLoading}>
-              ✨ Ask AI… — auto-configure based on model + hardware
+              ✨ Ask AI…: auto-configure based on model + hardware
             </option>
             <option disabled className="text-slate-700" value="">
               ─── presets ───
             </option>
             {QUANT_PRESETS.map((preset) => (
               <option key={preset.label} value={preset.label} title={formatPresetTooltip(preset)}>
-                {preset.label} — {preset.description}
+                {preset.label}: {preset.description}
               </option>
             ))}
             {customPresets.length > 0 && (
@@ -533,9 +533,9 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
             })
           }
         >
-          <option value="int4">INT4 — maximum compression</option>
-          <option value="int8">INT8 — balanced</option>
-          <option value="fp16">FP16 — half precision</option>
+          <option value="int4">INT4: maximum compression</option>
+          <option value="int8">INT8: balanced</option>
+          <option value="fp16">FP16: half precision</option>
         </SelectRow>
         <div className="space-y-1.5">
           <Label htmlFor="quant-method" className="text-sm text-slate-400">
@@ -551,19 +551,19 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
             }
             className="h-9 text-sm bg-slate-950"
           >
-            {allowedQuantMethods.includes("ptq") && <option value="ptq">PTQ — post-training</option>}
-            {allowedQuantMethods.includes("awq") && <option value="awq">AWQ — activation-aware</option>}
-            {allowedQuantMethods.includes("gptq") && <option value="gptq">GPTQ — optimal int4</option>}
+            {allowedQuantMethods.includes("ptq") && <option value="ptq">PTQ: post-training</option>}
+            {allowedQuantMethods.includes("awq") && <option value="awq">AWQ: activation-aware</option>}
+            {allowedQuantMethods.includes("gptq") && <option value="gptq">GPTQ: optimal int4</option>}
             {allowedQuantMethods.includes("qat") && (
-              <option value="qat">QAT — quantization-aware training</option>
+              <option value="qat">QAT: quantization-aware training</option>
             )}
-            {allowedQuantMethods.includes("hqq") && <option value="hqq">HQQ — half-quadratic</option>}
-            {allowedQuantMethods.includes("rtn") && <option value="rtn">RTN — round-to-nearest</option>}
+            {allowedQuantMethods.includes("hqq") && <option value="hqq">HQQ: half-quadratic</option>}
+            {allowedQuantMethods.includes("rtn") && <option value="rtn">RTN: round-to-nearest</option>}
             {allowedQuantMethods.includes("spinquant") && (
-              <option value="spinquant">SpinQuant — rotation-based</option>
+              <option value="spinquant">SpinQuant: rotation-based</option>
             )}
             {allowedQuantMethods.includes("quarot") && (
-              <option value="quarot">QuaRot — Hadamard rotation</option>
+              <option value="quarot">QuaRot: Hadamard rotation</option>
             )}
           </Select>
         </div>
@@ -578,10 +578,10 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
             value={String(state.passes.gptqBlockSize)}
             onChange={(v) => setState({ passes: { ...state.passes, gptqBlockSize: Number(v) } })}
           >
-            <option value="32">32 — fine-grained</option>
-            <option value="64">64 — balanced</option>
-            <option value="128">128 — default</option>
-            <option value="256">256 — coarse</option>
+            <option value="32">32: fine-grained</option>
+            <option value="64">64: balanced</option>
+            <option value="128">128: default</option>
+            <option value="256">256: coarse</option>
           </SelectRow>
           <SelectRow
             id="gptq-group-size"
@@ -589,9 +589,9 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
             value={String(state.passes.gptqGroupSize)}
             onChange={(v) => setState({ passes: { ...state.passes, gptqGroupSize: Number(v) } })}
           >
-            <option value="32">32 — fine</option>
-            <option value="64">64 — medium</option>
-            <option value="128">128 — default</option>
+            <option value="32">32: fine</option>
+            <option value="64">64: medium</option>
+            <option value="128">128: default</option>
           </SelectRow>
           <SwitchRow
             id="gptq-desc-act"
@@ -613,9 +613,9 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
             value={String(state.passes.awqGroupSize)}
             onChange={(v) => setState({ passes: { ...state.passes, awqGroupSize: Number(v) } })}
           >
-            <option value="32">32 — fine</option>
-            <option value="64">64 — medium</option>
-            <option value="128">128 — default</option>
+            <option value="32">32: fine</option>
+            <option value="64">64: medium</option>
+            <option value="128">128: default</option>
           </SelectRow>
           <SelectRow
             id="awq-damp-percent"
@@ -623,10 +623,10 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
             value={String(state.passes.awqDampPercent)}
             onChange={(v) => setState({ passes: { ...state.passes, awqDampPercent: Number(v) } })}
           >
-            <option value="0.001">0.001 — minimal</option>
-            <option value="0.005">0.005 — slight</option>
-            <option value="0.01">0.01 — default</option>
-            <option value="0.05">0.05 — moderate</option>
+            <option value="0.001">0.001: minimal</option>
+            <option value="0.005">0.005: slight</option>
+            <option value="0.01">0.01: default</option>
+            <option value="0.05">0.05: moderate</option>
           </SelectRow>
           <SwitchRow
             id="awq-sym"
@@ -650,8 +650,8 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
               setState({ passes: { ...state.passes, qatQuantPrecision: v as "int4" | "int8" } })
             }
           >
-            <option value="int4">INT4 — maximum compression</option>
-            <option value="int8">INT8 — balanced</option>
+            <option value="int4">INT4: maximum compression</option>
+            <option value="int8">INT8: balanced</option>
           </SelectRow>
           <SelectRow
             id="qat-calibrate-method"
@@ -663,9 +663,9 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
               })
             }
           >
-            <option value="minmax">Min-Max — fastest</option>
-            <option value="percentile">Percentile — outlier-robust</option>
-            <option value="entropy">Entropy — best accuracy</option>
+            <option value="minmax">Min-Max: fastest</option>
+            <option value="percentile">Percentile: outlier-robust</option>
+            <option value="entropy">Entropy: best accuracy</option>
           </SelectRow>
           <SelectRow
             id="qat-calibrate-steps"
@@ -673,10 +673,10 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
             value={String(state.passes.qatCalibrateSteps)}
             onChange={(v) => setState({ passes: { ...state.passes, qatCalibrateSteps: Number(v) } })}
           >
-            <option value="5">5 — minimal</option>
-            <option value="10">10 — default</option>
-            <option value="20">20 — thorough</option>
-            <option value="50">50 — exhaustive</option>
+            <option value="5">5: minimal</option>
+            <option value="10">10: default</option>
+            <option value="20">20: thorough</option>
+            <option value="50">50: exhaustive</option>
           </SelectRow>
         </AdvancedDropdown>
       )}
@@ -685,7 +685,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
       {isHqq && (
         <AdvancedDropdown title="HQQ advanced settings">
           <p className="text-xs text-slate-500 col-span-full -mt-2 mb-1">
-            Uses OnnxHqqQuantization — half-quadratic quantization for ONNX MatMul weight-only 4-bit
+            Uses OnnxHqqQuantization: half-quadratic quantization for ONNX MatMul weight-only 4-bit
             compression on any provider.
           </p>
         </AdvancedDropdown>
@@ -695,7 +695,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
       {isRtn && (
         <AdvancedDropdown title="RTN settings">
           <p className="text-xs text-slate-500 col-span-full -mt-2 mb-1">
-            Uses OnnxBlockWiseRtnQuantization — block-wise round-to-nearest for ONNX MatMul/Gather weight-only
+            Uses OnnxBlockWiseRtnQuantization: block-wise round-to-nearest for ONNX MatMul/Gather weight-only
             4/8-bit quantization. Fastest setup, no calibration needed.
           </p>
         </AdvancedDropdown>
@@ -705,7 +705,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
       {isSpinQuant && (
         <AdvancedDropdown title="SpinQuant info">
           <p className="text-xs text-slate-500 col-span-full -mt-2 mb-1">
-            Dedicated SpinQuant pass — learns orthogonal rotation matrices to eliminate outliers in
+            Dedicated SpinQuant pass: learns orthogonal rotation matrices to eliminate outliers in
             weights/activations. Supports HuggingFace transformer PyTorch models only.
           </p>
         </AdvancedDropdown>
@@ -715,7 +715,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
       {isQuaRot && (
         <AdvancedDropdown title="QuaRot info">
           <p className="text-xs text-slate-500 col-span-full -mt-2 mb-1">
-            Dedicated QuaRot pass — applies Hadamard-domain rotations to whiten weights. Supports HuggingFace
+            Dedicated QuaRot pass: applies Hadamard-domain rotations to whiten weights. Supports HuggingFace
             transformer PyTorch models only.
           </p>
         </AdvancedDropdown>

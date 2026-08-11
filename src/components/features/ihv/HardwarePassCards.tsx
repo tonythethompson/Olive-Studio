@@ -160,7 +160,7 @@ export function HardwarePassCards({
                 <span className="text-[11px] font-mono text-slate-500 font-medium">
                   {isUnsupportedOnCurrent
                     ? v.id === "awq-quantization"
-                      ? "Requires CUDA, TensorRT, or ROCm — switch hardware target above"
+                      ? "Requires CUDA, TensorRT, or ROCm. Switch hardware target above"
                       : "Pass locked on current backend"
                     : isBlockedByConfig
                       ? "Resolve the conflict in Optimization passes first"

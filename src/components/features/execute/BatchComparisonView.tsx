@@ -118,7 +118,7 @@ export function BatchComparisonView({ records, onClose }: BatchComparisonViewPro
               const delta = baseline ? rec.durationMs - baseline.durationMs : 0;
               const deltaStr =
                 delta === 0
-                  ? "—"
+                  ? "-"
                   : delta > 0
                     ? `+${formatDuration(delta)}`
                     : `-${formatDuration(Math.abs(delta))}`;
@@ -143,7 +143,7 @@ export function BatchComparisonView({ records, onClose }: BatchComparisonViewPro
                   <td className="px-3 py-2 text-slate-300 font-mono">{formatDuration(rec.durationMs)}</td>
                   <td className="px-3 py-2 text-slate-300">{rec.passCount}</td>
                   <td className="px-3 py-2 text-slate-300 font-mono">
-                    {rec.vramEstimateGb != null ? rec.vramEstimateGb.toFixed(1) : "—"}
+                    {rec.vramEstimateGb != null ? rec.vramEstimateGb.toFixed(1) : "-"}
                   </td>
                   <td className={`px-3 py-2 font-mono ${deltaCls}`}>{deltaStr}</td>
                 </tr>

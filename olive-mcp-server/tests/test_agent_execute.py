@@ -100,6 +100,97 @@ def test_failed_job_early_abort(monkeypatch: pytest.MonkeyPatch):
     _json_round_trip(result)
 
 
+def test_failed_job_records_bounded_failure_context(monkeypatch: pytest.MonkeyPatch):
+    """Failed terminal results derive a useful failure string for session state."""
+    recorded: dict[str, Any] = {}
+
+    def fake_studio_request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        if method == "POST" and "/jobs/submit" in path:
+            return {"job_id": "job-002b"}
+        return {
+            "status": "failed",
+            "logs": [
+                "setup complete",
+                "RuntimeError: calibration exploded",
+                "See /tmp/output/error.log",
+            ],
+            "exitCode": 17,
+        }
+
+    def fake_ensure_session(session_id: str | None) -> tuple[str, dict[str, Any]]:
+        assert session_id == "session-1"
+        return "session-1", {"sessionId": "session-1", "attemptCount": 0}
+
+    def fake_record_attempt(session_id: str, **kwargs: Any) -> dict[str, Any]:
+        recorded["session_id"] = session_id
+        recorded.update(kwargs)
+        return {"sessionId": session_id, "attemptCount": 1}
+
+    monkeypatch.setattr(agent_execute, "studio_request", fake_studio_request)
+    monkeypatch.setattr(agent_execute, "_sleep", lambda _: None)
+    monkeypatch.setenv("OLIVE_STUDIO_API_URL", "http://127.0.0.1:3000")
+    monkeypatch.setattr("olive_mcp_server.tools.studio_loopback._ensure_session", fake_ensure_session)
+    monkeypatch.setattr("olive_mcp_server.tools.studio_loopback._record_attempt", fake_record_attempt)
+
+    result = execute_and_observe(
+        recipe={"model_path": "bad.onnx"},
+        timeout=60,
+        session_id="session-1",
+    )
+
+    assert result["status"] == "failed"
+    assert result["session_id"] == "session-1"
+    assert recorded["session_id"] == "session-1"
+    assert recorded["success"] is False
+    assert recorded["failure"] == (
+        "status=failed; exit_code=17; "
+        "log_tail=setup complete | RuntimeError: calibration exploded | See /tmp/output/error.log"
+    )
+
+
+def test_session_update_error_preserves_execution_result(monkeypatch: pytest.MonkeyPatch):
+    """Bookkeeping failures stay secondary to the execution outcome."""
+
+    def fake_studio_request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        if method == "POST" and "/jobs/submit" in path:
+            return {"job_id": "job-bookkeeping"}
+        return {"status": "completed", "logs": ["done"], "exitCode": 0}
+
+    def fake_ensure_session(session_id: str | None) -> tuple[str, dict[str, Any]]:
+        assert session_id == "session-2"
+        return "session-2", {"sessionId": "session-2", "attemptCount": 0}
+
+    monkeypatch.setattr(agent_execute, "studio_request", fake_studio_request)
+    monkeypatch.setattr(agent_execute, "_sleep", lambda _: None)
+    monkeypatch.setenv("OLIVE_STUDIO_API_URL", "http://127.0.0.1:3000")
+    monkeypatch.setattr("olive_mcp_server.tools.studio_loopback._ensure_session", fake_ensure_session)
+    monkeypatch.setattr(
+        "olive_mcp_server.tools.studio_loopback._record_attempt",
+        lambda *args, **kwargs: {
+            "error": "studio_unavailable",
+            "message": "Olive Studio bridge timed out.",
+            "detail": "timeout_seconds=5.0",
+        },
+    )
+
+    result = execute_and_observe(
+        recipe={"model_path": "test.onnx"},
+        timeout=60,
+        session_id="session-2",
+    )
+
+    assert result["status"] == "completed"
+    assert result["job_id"] == "job-bookkeeping"
+    assert result["side_effect"] is True
+    assert result["session_id"] == "session-2"
+    assert result["session_update_error"] == {
+        "error": "studio_unavailable",
+        "message": "Olive Studio bridge timed out.",
+        "detail": "timeout_seconds=5.0",
+    }
+    _json_round_trip(result)
+
+
 # ---------------------------------------------------------------------------
 # Test: Timeout expiry
 # ---------------------------------------------------------------------------
@@ -128,6 +219,23 @@ def test_timeout_expiry(monkeypatch: pytest.MonkeyPatch):
     assert result["side_effect"] is True
     assert result["status"] == "running"
     _json_round_trip(result)
+
+
+def test_derive_failure_text_captures_timeout_and_log_tail():
+    """Timeout results include status, timeout, exit code, and bounded log tail."""
+    failure = agent_execute._derive_failure_text(
+        {
+          "status": "running",
+          "timed_out": True,
+          "exit_code": 124,
+          "logs": [f"line-{index}" for index in range(8)],
+        }
+    )
+
+    assert failure == (
+        "status=running; timed_out=true; exit_code=124; "
+        "log_tail=line-3 | line-4 | line-5 | line-6 | line-7"
+    )
 
 
 # ---------------------------------------------------------------------------

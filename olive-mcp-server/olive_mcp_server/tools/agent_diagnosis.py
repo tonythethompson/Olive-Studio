@@ -13,6 +13,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import os
 from typing import Any
 
 from .studio_loopback import err, studio_request
@@ -189,6 +190,7 @@ def diagnose_and_fix(
     error_message: str,
     recipe: dict[str, Any],
     hardware_probe: dict[str, Any] | None = None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     """Diagnose an optimization error and attempt automated recipe repair.
 
@@ -196,6 +198,7 @@ def diagnose_and_fix(
         error_message: The error text or traceback snippet (1-4000 chars).
         recipe: The current Olive optimization recipe as a dict.
         hardware_probe: Optional hardware context for hardware-aware diagnosis.
+        session_id: Optional Studio agent-loop session ID.
 
     Returns:
         Structured result with diagnosis, optional fixed recipe, change list,
@@ -215,6 +218,16 @@ def diagnose_and_fix(
                 "invalid_input",
                 "recipe must be a JSON object",
             )
+
+        from .studio_loopback import ENV_API_URL, _ensure_session, _update_session
+
+        active_session_id: str | None = None
+        if session_id or os.environ.get(ENV_API_URL):
+            active_session_id, session = _ensure_session(session_id)
+            if active_session_id is None:
+                return session
+        else:
+            session = {}
 
         # --- Build config context for matching ---
         config_context = _build_config_context(recipe, hardware_probe)
@@ -253,7 +266,7 @@ def diagnose_and_fix(
             changes_made = []
             recipe_validated = False
 
-        return {
+        result = {
             "diagnosis": diagnosis,
             "fixed_recipe": fixed_recipe,
             "changes_made": changes_made,
@@ -261,6 +274,21 @@ def diagnose_and_fix(
             "fix_confidence": fix_confidence,
             "side_effect": False,
         }
+        if active_session_id:
+            update = _update_session(
+                active_session_id,
+                lastRecipe=fixed_recipe or recipe,
+                lastFailure=error_message,
+                success=False,
+                diagnosticNotes=[
+                    *session.get("diagnosticNotes", [])[-49:],
+                    str(diagnosis.get("title") or "Diagnosis completed."),
+                ],
+            )
+            if isinstance(update.get("error"), str) and update["error"]:
+                return update
+            result["session_id"] = active_session_id
+        return result
 
     except Exception as exc:
         logger.warning("diagnose_and_fix unexpected error", exc_info=True)

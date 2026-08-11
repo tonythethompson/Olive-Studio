@@ -77,7 +77,7 @@ export function RecipeCatalogHardwarePanel({
             </div>
           ) : (
             <p className="text-sm text-slate-500 mt-1">
-              Hardware probe unavailable — compatibility not verified.
+              Hardware probe unavailable. Compatibility not verified.
             </p>
           )}
         </div>

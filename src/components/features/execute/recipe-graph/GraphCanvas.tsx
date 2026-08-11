@@ -3,6 +3,12 @@ import { getPipelineValidation } from "@/lib/pipelineValidation";
 import { UIState } from "@/types";
 import { buildPipelineSteps, buildSegmentCurve, type GraphPoint } from "./graphLayout";
 import { getNodePreviewData } from "./nodePreview";
+import {
+  ARROW_MARKER_ID,
+  GraphSvgDefs,
+  PIPELINE_DOT_SYMBOL_ID,
+  WIRE_GRADIENT_ID,
+} from "./svgDefs";
 
 /** Left-to-right / reading order for arrow-key graph navigation. */
 export const GRAPH_NODE_ORDER = [
@@ -181,16 +187,17 @@ export function GraphCanvas({
         <path
           d={opts.d}
           fill="none"
-          stroke="url(#wireGradient)"
+          stroke={`url(#${WIRE_GRADIENT_ID})`}
           strokeWidth={opts.hasSkip ? 1.5 : 2}
           strokeDasharray="6 6"
           strokeOpacity={opts.hasSkip ? 0.6 : 1}
           className="transition-all duration-300"
+          markerEnd={`url(#${ARROW_MARKER_ID})`}
         >
           <animate attributeName="stroke-dashoffset" from="12" to="0" dur="0.7s" repeatCount="indefinite" />
         </path>
         {showDot && (
-          <circle r={3.5} fill="#8DA840" opacity="0">
+          <use href={`#${PIPELINE_DOT_SYMBOL_ID}`} opacity="0">
             <animateMotion
               dur={`${totalDur}s`}
               repeatCount="indefinite"
@@ -206,7 +213,7 @@ export function GraphCanvas({
               values="0;0;1;1;0;0"
               keyTimes={`0;${opts.tStartBefore};${opts.tStart};${opts.tEnd};${opts.tEndAfter};1`}
             />
-          </circle>
+          </use>
         )}
       </g>
     );
@@ -281,11 +288,7 @@ export function GraphCanvas({
     return (
       <svg className="absolute inset-0 pointer-events-none w-full h-full z-0 overflow-visible">
         <defs>
-          <linearGradient id="wireGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#3b82f6" />
-            <stop offset="50%" stopColor="#8DA840" />
-            <stop offset="100%" stopColor="#10b981" />
-          </linearGradient>
+          <GraphSvgDefs />
         </defs>
         {paths}
       </svg>

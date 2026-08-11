@@ -387,7 +387,7 @@ describe("BatchProcessingPanel", () => {
     expect(screen.getByRole("button", { name: /Thumbs up/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Thumbs down/i })).toBeDefined();
 
-    await user.click(screen.getByRole("button", { name: /Thumbs up — this diagnosis was helpful/i }));
+    await user.click(screen.getByRole("button", { name: /Thumbs up: this diagnosis was helpful/i }));
     await waitFor(() => {
       expect(mockRequestFeedback).toHaveBeenCalledWith(
         { matched_entry: MATCHED_DIAGNOSTIC.matched_entry, rating: "thumbs-up" },

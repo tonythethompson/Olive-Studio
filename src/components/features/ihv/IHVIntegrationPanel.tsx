@@ -411,7 +411,7 @@ export function IHVIntegrationPanel({
           <p className="text-xs text-slate-500 mb-3">
             {probeLoading
               ? "Detecting local execution providers…"
-              : `Showing all ${selectableProviders.length} providers. ${locallyDetectedCount} detected locally — undetected targets are still selectable for cross-compile / remote builds.`}
+              : `Showing all ${selectableProviders.length} providers. ${locallyDetectedCount} detected locally. Undetected targets are still selectable for cross-compile / remote builds.`}
           </p>
 
           <div className="grid gap-4 mt-2 min-w-0 w-full">
