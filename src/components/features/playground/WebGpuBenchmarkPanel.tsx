@@ -134,7 +134,9 @@ function calcP99(arr: number[]): number {
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                         */
-/* ------------------------------------------------------------------ */
+/**
+ * Renders a panel for loading ONNX models and benchmarking their inference performance with WebGPU or WASM.
+ */
 
 export function WebGpuBenchmarkPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null);

@@ -66,7 +66,27 @@ export function IHVIntegrationPanel({
   const state = propState ?? storeState.state;
   const setState = propSetState ?? storeState.setState;
   const [passSearch, setPassSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<"matrix" | "cards">("matrix");
+  // The matrix needs ~1000px to show every EP column without cramping; below that,
+  // default to cards. Once the user explicitly picks a view, stop auto-switching.
+  const hasMatchMedia = typeof window !== "undefined" && typeof window.matchMedia === "function";
+  const [activeTab, setActiveTabState] = useState<"matrix" | "cards">(() =>
+    hasMatchMedia && window.matchMedia("(max-width: 999px)").matches ? "cards" : "matrix",
+  );
+  const userPickedTabRef = useRef(false);
+  const setActiveTab = useCallback((tab: "matrix" | "cards") => {
+    userPickedTabRef.current = true;
+    setActiveTabState(tab);
+  }, []);
+  useEffect(() => {
+    if (!hasMatchMedia) return;
+    const media = window.matchMedia("(max-width: 999px)");
+    const sync = () => {
+      if (userPickedTabRef.current) return;
+      setActiveTabState(media.matches ? "cards" : "matrix");
+    };
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, [hasMatchMedia]);
   const [selectedCategory, setSelectedCategory] = useState<
     "All" | "Conversion" | "Quantization" | "Compression" | "PEFT"
   >("All");
@@ -161,7 +181,8 @@ export function IHVIntegrationPanel({
     isProviderDetectedLocally("OpenVINOExecutionProvider", hardwareProbe) &&
     hardwareProbe?.openvino?.loadable !== true;
   // CUDA install / toolkit-link gating (from PR #106).
-  const nvidiaGpus = hardwareProbe?.nvidia?.gpus ?? [];
+  const probedNvidiaGpus = hardwareProbe?.nvidia?.gpus;
+  const nvidiaGpus = useMemo(() => probedNvidiaGpus ?? [], [probedNvidiaGpus]);
   const isPreMaxwellBox = isPreMaxwellNvidiaBox(nvidiaGpus);
   const cudaEpInVenv = hardwareProbe?.cuda?.loadable === true;
   const cudaNeedsOrtGpuInstall = nvidiaGpus.length > 0 && !isPreMaxwellBox && !cudaEpInVenv;
@@ -351,7 +372,12 @@ export function IHVIntegrationPanel({
             onRescan={() => void runHardwareProbe(true)}
           />
 
-          <VramEstimateBanner state={state} hardwareProbe={hardwareProbe} className="mb-6" />
+          <VramEstimateBanner
+            state={state}
+            setState={setState}
+            hardwareProbe={hardwareProbe}
+            className="mb-6"
+          />
 
           {/* Hardware Validation Guard Alert Summary Banner */}
           {selectedConflicts.length > 0 && (

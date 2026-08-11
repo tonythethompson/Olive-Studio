@@ -51,12 +51,12 @@ Contract (unchanged): standalone MCP is advisory; MCP connected to Studio is an 
 
 - [x] Pass catalog: 8 new passes (MobiusBuilder, QairtPipeline, KQuant, OnnxKquantQuantization, QuantizeEmbeddingInt8, ShareEmbeddingLmHead, SimplifiedLayerNormToRMSNorm, OnnxDiscrepancyCheck)
 - [x] KQuant quantization method added to recipe builder, type unions, and validation allowlists
-- [x] `trust_remote_code` default-flip handled: auto-emit `true` for HuggingFace models + info advisory
+- [x] `trust_remote_code` default-flip handled: emit `true` only after explicit Hugging Face user opt-in + info advisory
 - [x] Pipeline validation: CROSS_PASS_RULES for QNN-only passes, QnnAbiExecutionProvider as distinct EP
 - [x] Migration module (`passMigration.ts`): MobiusModelBuilder rename, QairtPreparation/QairtGenAIBuilder removal, pipelineStore integration
 - [x] Removed-pass advisory warnings and removed-pass detection in recipe overrides
 - [x] MCP knowledge base: passes.json, compatibility_matrix.json, hardware_profiles.json, troubleshooting.json updated for 0.13.0
-- [x] Venv spec pin bumped to `olive-ai>=0.12.0,<1` (spec version 5)
+- [x] Venv spec pinned to `olive-ai==0.13.0` (spec version 5)
 
 ### Agent autonomy tools (MCP Phase 3)
 
@@ -100,7 +100,18 @@ Complete the olive-ai 0.13.0 verification gap (spec tasks 9.5, 11, 12):
 
 ---
 
-## v0.5 (next)
+## v0.5.0 (next)
+
+### Unified Assistant (Audit + Chat)
+
+Combine the visible Audit and Chat tabs into one Assistant experience while keeping Settings and Execute Agent mode separate.
+
+- [ ] Pin a collapsible Pipeline Review in Assistant with score, findings, evidence, last-checked state, and conversation beneath it
+- [ ] Replace Audit-only `{ pass, value }` autofixes with a shared finding/action contract (`applyPatch`, `navigate`, `explain`, `documentation`)
+- [ ] Every reported deficiency must retain a useful next action even when no safe one-click patch exists; never show a negative finding beside "No actionable changes"
+- [ ] Give review and chat the same MCP knowledge and validated UI-patch schema, with bounded targeted retrieval for automatic review and broader retrieval for user questions
+- [ ] Applying an Assistant action re-runs the review; bind results to a workspace fingerprint so stale findings cannot overwrite newer state
+- [ ] Keep deterministic recipe validation authoritative and keep automatic review refreshes out of chat history
 
 ### Agent UI (Execute panel)
 
@@ -114,7 +125,7 @@ Manual vs Agent on Execute first; Assistant stays chat until the later bridge.
 
 - [ ] Export optimization report (PDF/Markdown)
 - [ ] Recipe catalog version pinning
-- [ ] MultiLoRA adapter support: **blocked** on upstream Olive multi-adapter pass configuration (Olive >= 0.3.0). Schema `adapters[]` is forward-compatible today; builder does not yet emit `adapter_path` or `adapters[]`. See `docs/multilora-design.md`.
+- [ ] MultiLoRA adapter support: Olive 0.13.0 supports single-adapter `HfModel.adapter_path` and `ExtractAdapters`; multi-adapter switching is an ONNX Runtime GenAI runtime concern, not an Olive `adapters[]` pass configuration. **Blocked** on Studio builder/runtime integration and end-to-end validation. See `docs/multilora-design.md`.
 
 ### Distribution
 

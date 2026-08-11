@@ -212,8 +212,8 @@ function Dashboard() {
           >
             Skip to main content
           </a>
-          <aside className="w-14 wide:w-56 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
-            <div className="h-14 flex items-center justify-center wide:justify-start px-2 wide:px-4 border-b border-slate-800">
+          <aside className="w-12 wide:w-56 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
+            <div className="h-14 flex items-center justify-center wide:justify-start px-1 wide:px-4 border-b border-slate-800">
               <div className="flex items-center gap-2.5 min-w-0">
                 <img
                   src="/assets/logo.png"
@@ -278,7 +278,7 @@ function Dashboard() {
               </div>
             </nav>
 
-            <div className="shrink-0 border-t border-slate-800 hidden wide:block">
+            <div className="shrink-0 border-t border-slate-800">
               <VramEstimateBanner sidebar />
             </div>
 
@@ -295,13 +295,28 @@ function Dashboard() {
 
           <div className="flex-1 flex min-w-0 overflow-hidden">
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
-              <header className="h-12 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 px-3 wide:px-6 min-[1000px]:px-8 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 shrink-0">
-                <div className="justify-self-start min-w-0">
-                  <span className="text-sm text-slate-400 truncate hidden wide:inline">
-                    Optimization pipeline
+              <header className="min-h-12 grid grid-cols-[1fr_minmax(0,max-content)_1fr] items-center gap-2 wide:gap-4 px-3 wide:px-6 min-[1000px]:px-8 py-1.5 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 shrink-0">
+                {/*
+                  Invisible mirror of the Assistant button. The two outer grid
+                  tracks are plain `1fr` (no minmax(0,...) override), so their
+                  floor is their content's own min-content width — CSS Grid
+                  can never compress a track below that, which is what makes
+                  this a hard barrier the center cluster cannot overlap.
+                  Mirroring the same markup on the left keeps both floors
+                  identical, which keeps the center cluster visually centered
+                  instead of drifting toward the empty side.
+                */}
+                <div className="justify-self-start" aria-hidden="true">
+                  <span
+                    className={cn(
+                      "invisible px-2.5 wide:px-3 py-1.5 border text-[clamp(0.75rem,0.65rem+0.3vw,0.875rem)] flex items-center gap-1.5",
+                    )}
+                  >
+                    <Bot className="h-3.5 w-3.5" />
+                    <span className="hidden wide:inline">Assistant</span>
                   </span>
                 </div>
-                <div className="justify-self-center flex items-center gap-5 min-w-0">
+                <div className="justify-self-center flex items-center flex-wrap justify-center gap-x-3 gap-y-1 min-w-0 overflow-hidden">
                   <KbSyncIndicator />
                   <span className="hidden sm:block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />
                   <RuntimeEnvControls />
@@ -312,18 +327,22 @@ function Dashboard() {
                   <button
                     type="button"
                     onClick={() => setIsAiSidebarOpen((open) => !open)}
+                    aria-label={isAiSidebarOpen ? "Close Assistant" : "Open Assistant"}
+                    aria-expanded={isAiSidebarOpen}
+                    aria-controls="assistant-panel"
                     className={cn(
-                      "px-2.5 wide:px-3 py-1.5 border text-sm flex items-center gap-1.5 transition-colors cursor-pointer shrink-0",
+                      "px-2.5 wide:px-3 py-1.5 border text-[clamp(0.75rem,0.65rem+0.3vw,0.875rem)] flex items-center gap-1.5 transition-colors cursor-pointer shrink-0",
                       isAiSidebarOpen
                         ? "border-electric-blue text-electric-blue bg-electric-blue/5"
                         : "border-slate-700 text-slate-400 hover:border-electric-blue hover:text-electric-blue",
                     )}
                   >
                     <Bot className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Assistant</span>
+                    <span className="hidden wide:inline">Assistant</span>
                   </button>
                 </div>
-              </header>                              <main
+              </header>
+              <main
                 ref={mainRef}
                 id="main"
                 className="flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-5 wide:px-6 wide:py-8 min-[1000px]:px-10 h-full min-w-0"

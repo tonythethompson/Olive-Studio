@@ -20,7 +20,7 @@
     "node": ">=22.16"
   },
   "scripts": {
-    "preinstall": "node -e \"if (!/pnpm/.test(process.env.npm_execpath || \\\"\\\")) { console.error('Use pnpm install, not npm install'); process.exit(1); }\"",
+    "preinstall": "node -e \"if (!/pnpm/.test(process.env.npm_execpath || \\\"\\\")) { console.error('Use pnpm install, not npm install'); process.exit(1); }\" && node scripts/fix-stale-symlinks.mjs",
     "dev": "tsx server.ts",
     "generate:recipes": "node scripts/generate-olive-recipes-catalog.mjs",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server.mjs",

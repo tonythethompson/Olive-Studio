@@ -29,7 +29,10 @@ import {
 } from "lucide-react";
 
 /**
- * Renders the model source configuration and Olive recipe management panel.
+ * Configures recipe selection, model sources, and shared cache and infrastructure settings.
+ *
+ * @param state - Optional UI state override.
+ * @param setState - Optional handler for updating UI state.
  */
 export function InputEnvironmentPanel({
   state: propState,

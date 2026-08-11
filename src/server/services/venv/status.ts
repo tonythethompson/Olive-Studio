@@ -419,6 +419,12 @@ export function familyFlagsFromStatus(
   return flags;
 }
 
+/**
+ * Retrieves the status of all supported virtual-environment runtimes and a setup hint.
+ *
+ * @param opts - Optional Python configuration and cache-control settings.
+ * @returns The aggregated runtime status for all supported virtual-environment families.
+ */
 export async function getDualRuntimeStatus(opts?: {
   force?: boolean;
   systemPython?: string | null;

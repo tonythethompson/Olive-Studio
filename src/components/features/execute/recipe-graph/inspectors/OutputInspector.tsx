@@ -1,6 +1,11 @@
 import { Package } from "lucide-react";
 import type { InspectorProps } from "./types";
 
+/**
+ * Displays simulated deployment-package size and latency metrics based on the selected optimization settings.
+ *
+ * @param state - The inspector state containing quantization and pruning settings.
+ */
 export function OutputInspector({ state }: InspectorProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

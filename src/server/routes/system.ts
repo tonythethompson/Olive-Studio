@@ -232,6 +232,7 @@ export interface ProbeDiagnosticOutput {
   notes: string[];
   onnxRuntimeProviders?: string[];
   nvidiaTensorRtFamilyCapable: boolean;
+  cudaFamilyCapable: boolean;
   qnnHostMode: ReturnType<typeof resolveQnnHostMode>;
 }
 
@@ -338,6 +339,7 @@ function buildCudaNotes(input: ProbeDiagnosticInput): {
   sourceNotes: string[];
   loadNotes: string[];
   floorNotes: string[];
+  cudaFamilyCapable: boolean;
 } {
   const sourceNotes: string[] = [];
   const loadNotes: string[] = [];
@@ -373,7 +375,7 @@ function buildCudaNotes(input: ProbeDiagnosticInput): {
       "CUDA driver detected but the CUDA Toolkit (nvcc) is not installed. Inference via onnxruntime-gpu does not need it; get it from NVIDIA's CUDA Toolkit Archive for native builds.",
     );
   }
-  return { sourceNotes, loadNotes, floorNotes };
+  return { sourceNotes, loadNotes, floorNotes, cudaFamilyCapable: cudaFloorCapable };
 }
 
 /**
@@ -475,6 +477,7 @@ export function buildProbeDiagnostics(input: ProbeDiagnosticInput): ProbeDiagnos
     sourceNotes: cudaSourceNotes,
     loadNotes: cudaLoadNotes,
     floorNotes: cudaFloorNotes,
+    cudaFamilyCapable,
   } = buildCudaNotes(input);
 
   const notes = [
@@ -491,7 +494,7 @@ export function buildProbeDiagnostics(input: ProbeDiagnosticInput): ProbeDiagnos
     ...ortNotes.floorNotes,
   ];
 
-  return { notes, onnxRuntimeProviders, nvidiaTensorRtFamilyCapable, qnnHostMode };
+  return { notes, onnxRuntimeProviders, nvidiaTensorRtFamilyCapable, cudaFamilyCapable, qnnHostMode };
 }
 
 // ─── Main probe orchestrator ───────────────────────────────────────────────
@@ -765,7 +768,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     platformOs: process.platform,
   });
   notes.push(...diag.notes);
-  const { onnxRuntimeProviders, nvidiaTensorRtFamilyCapable, qnnHostMode } = diag;
+  const { onnxRuntimeProviders, nvidiaTensorRtFamilyCapable, cudaFamilyCapable, qnnHostMode } = diag;
 
 
   const hasOpenVinoCompatibleHardware = computeOpenVinoCompatibleHardware({
@@ -802,6 +805,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     tensorRtRtxLoadable: state.tensorRtRtxVenvLoadable,
     nvidiaTensorRtFamilyCapable,
     cudaLoadable: state.cudaVenvLoadable,
+    cudaFamilyCapable,
     os: platform.os,
   });
 

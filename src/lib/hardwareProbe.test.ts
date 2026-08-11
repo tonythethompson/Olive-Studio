@@ -14,7 +14,11 @@ import {
 } from "@/lib/hardwareProbe";
 
 describe("mergeDetectedProviders TensorRT", () => {
-  it("does not infer classic TensorRT until the runtime probe succeeds", () => {
+  it("infers classic TensorRT from GPU capability alone, same as TensorRT RTX", () => {
+    // Both TensorRT variants soft-detect on compute-capability (tensorRtFamilyCapable),
+    // not on whether the SDK/wheel is already probed-loadable — a compatible GPU without
+    // the package installed yet is "compatible, not yet installed", not "not on this
+    // system". The install-readiness distinction shows up in badge/CTA text instead.
     const detected = mergeDetectedProviders({
       hasNvidiaGpu: true,
       hasRocmGpu: false,
@@ -23,7 +27,7 @@ describe("mergeDetectedProviders TensorRT", () => {
       tensorRtRtxLoadable: true,
     });
     expect(detected).toContain("CUDAExecutionProvider");
-    expect(detected).not.toContain("TensorrtExecutionProvider");
+    expect(detected).toContain("TensorrtExecutionProvider");
     expect(detected).toContain("NvTensorRTRTXExecutionProvider");
   });
 
@@ -128,23 +132,42 @@ describe("isNvidiaGpuTensorRtFamily", () => {
 });
 
 describe("mergeDetectedProviders — CUDA cudaLoadable gating", () => {
-  it("strips CUDAExecutionProvider when cudaLoadable is explicitly false", () => {
-    // Mirrors the RTX/TRT pattern: when the ORT probe reports the EP
-    // isn't loadable (wheel missing or driver mismatch), we must NOT
-    // advertise it as detected — otherwise the recipe-compatibility
-    // layer can't gate on `isProviderDetectedLocally`.
+  it("still detects CUDAExecutionProvider via capability when cudaLoadable is false", () => {
+    // `cudaLoadable: false` covers both "never probed (wheel not installed)" and
+    // "probed and failed" — this codebase has no separate signal for those two
+    // cases (see cudaVenvLoadable in server/routes/system.ts, initialized false
+    // and only ever flipped to true on success). Since the common case is "not
+    // installed yet", gating hard on cudaLoadable produced the exact bug this
+    // fix addresses: a GPU-compatible CUDA target reported as "not on this
+    // system" instead of "compatible, not yet installed" — same as TensorRT RTX.
     const detected = mergeDetectedProviders({
       hasNvidiaGpu: true,
       hasRocmGpu: false,
       hasOpenVino: false,
       cudaLoadable: false,
+      cudaFamilyCapable: true,
+    });
+    expect(detected).toContain("CUDAExecutionProvider");
+  });
+
+  it("does not detect CUDAExecutionProvider when the NVIDIA GPU is pre-Maxwell", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: true,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      cudaLoadable: false,
+      cudaFamilyCapable: false,
     });
     expect(detected).not.toContain("CUDAExecutionProvider");
   });
 
   it("strips CUDAExecutionProvider from a reported ORT list when cudaLoadable is false", () => {
+    // The ORT-providers-list filter (distinct from the capability-based
+    // soft-detect above) still distrusts a reported CUDAExecutionProvider
+    // entry when cudaLoadable is false — this only matters when hasNvidiaGpu
+    // is false, since the soft-detect block re-adds it otherwise.
     const detected = mergeDetectedProviders({
-      hasNvidiaGpu: true,
+      hasNvidiaGpu: false,
       hasRocmGpu: false,
       hasOpenVino: false,
       onnxRuntimeProviders: ["CPUExecutionProvider", "CUDAExecutionProvider"],

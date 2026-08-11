@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { screen, act } from "@testing-library/react";
 import { createMockUIState, useFetchRoutesMock, renderWithProviders as render } from "../__tests__/testUtils";
+import type { UIState } from "@/types";
 
 // Mock the pipeline store
 const mockSetState = vi.fn();
@@ -59,7 +60,11 @@ vi.mock("@/lib/vramEstimate", async (importOriginal) => {
 
 // Mock VramEstimateBanner (accesses estimate result without null check)
 vi.mock("@/components/features/VramEstimateBanner", () => ({
-  VramEstimateBanner: () => <div data-testid="vram-banner">VRAM</div>,
+  VramEstimateBanner: ({ setState }: { setState?: (s: Partial<UIState>) => void }) => (
+    <div data-testid="vram-banner" data-has-set-state={String(Boolean(setState))}>
+      VRAM
+    </div>
+  ),
 }));
 
 import { IHVIntegrationPanel } from "./IHVIntegrationPanel";
@@ -90,6 +95,7 @@ describe("IHVIntegrationPanel", () => {
       render(<IHVIntegrationPanel state={state} setState={mockSetState} />);
     });
     expect(screen.getAllByText(/provider/i).length).toBeGreaterThan(0);
+    expect(screen.getByTestId("vram-banner").getAttribute("data-has-set-state")).toBe("true");
   });
 });
 

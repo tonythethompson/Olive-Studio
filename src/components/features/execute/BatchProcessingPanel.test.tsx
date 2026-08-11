@@ -3,6 +3,7 @@ import { screen, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMockUIState, useFetchRoutesMock, renderWithProviders as render } from "../__tests__/testUtils";
 import type { UIState, BatchJob, McpDiagnostic } from "@/types";
+import { parseOliveMetricsFromLogs } from "@/lib/oliveLogMetrics";
 import { BatchProcessingPanel } from "./BatchProcessingPanel";
 
 // Mock the pipeline store to avoid zustand coupling
@@ -148,6 +149,35 @@ describe("BatchProcessingPanel", () => {
     });
     // The panel should render without errors when no batch jobs are present
     expect(screen.queryByText(/running/i)).toBeNull();
+  });
+
+  it("renders unavailable values for partial Olive metrics", async () => {
+    const metrics = parseOliveMetricsFromLogs(["latency: 12.5 ms"]);
+    if (!metrics) throw new Error("Expected partial metrics to parse");
+    const job: BatchJob = {
+      id: "job-partial-metrics",
+      name: "Partial Metrics Job",
+      modelSource: "huggingface",
+      modelIdentifier: "microsoft/phi-2",
+      provider: "CPUExecutionProvider",
+      passes: ["Model Conversion (ONNX)"],
+      recipeJson: undefined,
+      status: "completed",
+      progress: 100,
+      progressKnown: true,
+      logs: ["latency: 12.5 ms"],
+      metrics,
+    };
+    const stateWithJob: UIState = { ...createMockUIState(), batchJobs: [job] };
+    const user = userEvent.setup();
+
+    await act(async () => {
+      render(<BatchProcessingPanel state={stateWithJob} setState={mockSetState} />);
+    });
+    await user.click(screen.getByText(job.name));
+
+    expect(screen.getAllByText("12.5 ms")).toHaveLength(2);
+    expect(screen.getAllByText("-")).toHaveLength(3);
   });
 
   it("renders the Custom Job button to add jobs", async () => {

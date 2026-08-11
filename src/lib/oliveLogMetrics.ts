@@ -7,6 +7,12 @@ export interface OliveRunMetrics {
   compression: string;
 }
 
+/**
+ * Extracts Olive run metrics from log lines.
+ *
+ * @param logs - Log lines containing latency, throughput, memory, or compression metrics
+ * @returns The extracted metrics with `"-"` for missing fields, or `undefined` if no metric is found
+ */
 export function parseOliveMetricsFromLogs(logs: string[]): OliveRunMetrics | undefined {
   const found: Partial<OliveRunMetrics> = {};
 

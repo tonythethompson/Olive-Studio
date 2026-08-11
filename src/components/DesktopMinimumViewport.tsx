@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Monitor } from "lucide-react";
 
 /** Below this width the recipe builder is not supported (phone / very narrow). */
-export const DESKTOP_MIN_WIDTH_PX = 700;
+export const DESKTOP_MIN_WIDTH_PX = 600;
 
 /** At and above this width the full sidebar + horizontal graph shell is used. */
 export const WIDE_SHELL_MIN_WIDTH_PX = 900;
@@ -45,11 +45,8 @@ export function DesktopMinimumViewport({
       </div>
       <h1 className="text-lg font-semibold text-slate-100">Desktop layout required</h1>
       <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-400">
-        Olive Studio needs a window about {minWidthPx}px wide or wider. From {minWidthPx}–
-        {WIDE_SHELL_MIN_WIDTH_PX}
-        px the shell rearranges for a narrow desktop; below {minWidthPx}px it is not supported.
+        Olive Studio needs a window at least {minWidthPx}px wide.
       </p>
-      <p className="mt-4 text-xs font-mono text-slate-400">Current layout: phone / too narrow</p>
     </div>
   );
 }
