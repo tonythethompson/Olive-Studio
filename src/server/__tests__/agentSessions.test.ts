@@ -1,15 +1,18 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  AGENT_SESSION_TTL_MS,
   clearAgentSessionsForTests,
   createSession,
   getSession,
+  MAX_AGENT_SESSIONS,
   recordAttempt,
   updateSession,
 } from "../services/olive/agentSessions.ts";
 
 describe("agent session store", () => {
   beforeEach(clearAgentSessionsForTests);
+  afterEach(() => vi.restoreAllMocks());
 
   it("creates unique UUID sessions with empty retry context", () => {
     const sessions = Array.from({ length: 20 }, () => createSession());
@@ -67,5 +70,27 @@ describe("agent session store", () => {
     expect(session?.diagnosticNotes).toHaveLength(50);
     expect(session?.diagnosticNotes[0]).toBe("note-5");
     expect(session?.diagnosticNotes.at(-1)).toBe("note-54");
+  });
+
+  it("expires sessions that have been idle past the TTL", () => {
+    const now = 1_000_000;
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    const created = createSession();
+
+    vi.spyOn(Date, "now").mockReturnValue(now + AGENT_SESSION_TTL_MS + 1);
+
+    expect(getSession(created.sessionId)).toBeUndefined();
+  });
+
+  it("evicts the oldest sessions when the store exceeds the size cap", () => {
+    const created = Array.from({ length: MAX_AGENT_SESSIONS + 5 }, (_, index) => {
+      vi.spyOn(Date, "now").mockReturnValue(index);
+      return createSession();
+    });
+
+    expect(getSession(created[0]!.sessionId)).toBeUndefined();
+    expect(getSession(created[4]!.sessionId)).toBeUndefined();
+    expect(getSession(created[5]!.sessionId)).toBeDefined();
+    expect(getSession(created.at(-1)!.sessionId)).toBeDefined();
   });
 });

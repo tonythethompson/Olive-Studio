@@ -23,10 +23,34 @@ export interface AgentAttempt {
 }
 
 const MAX_DIAGNOSTIC_NOTES = 50;
+export const MAX_AGENT_SESSIONS = 200;
+export const AGENT_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const sessions = new Map<string, AgentSession>();
+
+function pruneExpiredSessions(now = Date.now()): void {
+  for (const [sessionId, session] of sessions) {
+    if (now - session.updatedAt > AGENT_SESSION_TTL_MS) {
+      sessions.delete(sessionId);
+    }
+  }
+}
+
+function enforceSessionLimit(): void {
+  if (sessions.size <= MAX_AGENT_SESSIONS) return;
+
+  const overflow = sessions.size - MAX_AGENT_SESSIONS;
+  const oldestSessions = [...sessions.values()]
+    .sort((left, right) => left.updatedAt - right.updatedAt || left.createdAt - right.createdAt)
+    .slice(0, overflow);
+
+  for (const session of oldestSessions) {
+    sessions.delete(session.sessionId);
+  }
+}
 
 export function createSession(): AgentSession {
   const now = Date.now();
+  pruneExpiredSessions(now);
   const session: AgentSession = {
     sessionId: randomUUID(),
     attemptCount: 0,
@@ -38,10 +62,12 @@ export function createSession(): AgentSession {
     updatedAt: now,
   };
   sessions.set(session.sessionId, session);
+  enforceSessionLimit();
   return session;
 }
 
 export function getSession(sessionId: string): AgentSession | undefined {
+  pruneExpiredSessions();
   return sessions.get(sessionId);
 }
 
@@ -49,6 +75,7 @@ export function updateSession(
   sessionId: string,
   patch: AgentSessionPatch,
 ): AgentSession | undefined {
+  pruneExpiredSessions();
   const existing = sessions.get(sessionId);
   if (!existing) return undefined;
 
@@ -63,6 +90,7 @@ export function updateSession(
     updatedAt: Date.now(),
   };
   sessions.set(sessionId, updated);
+  enforceSessionLimit();
   return updated;
 }
 
@@ -70,6 +98,7 @@ export function recordAttempt(
   sessionId: string,
   data: AgentAttempt,
 ): AgentSession | undefined {
+  pruneExpiredSessions();
   const existing = sessions.get(sessionId);
   if (!existing) return undefined;
 
@@ -85,6 +114,7 @@ export function recordAttempt(
     updatedAt: Date.now(),
   };
   sessions.set(sessionId, updated);
+  enforceSessionLimit();
   return updated;
 }
 

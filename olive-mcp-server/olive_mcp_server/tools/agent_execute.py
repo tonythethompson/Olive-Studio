@@ -40,6 +40,8 @@ _MAX_TIMEOUT = 1800
 _MAX_LOG_ENTRIES = 200
 _MAX_ARTIFACT_REFS = 20
 _MAX_CONSECUTIVE_POLL_ERRORS = 3
+_FAILURE_LOG_TAIL_LINES = 5
+_MAX_FAILURE_TEXT = 500
 
 # Module-level indirections so tests can patch timing without touching stdlib.
 _monotonic = time.monotonic
@@ -184,6 +186,49 @@ def _artifact_refs_from_logs(logs: list[str]) -> list[str]:
     return refs
 
 
+def _clip_text(value: str, max_chars: int) -> str:
+    """Clip text to ``max_chars`` with an ellipsis when needed."""
+    if len(value) <= max_chars:
+        return value
+    if max_chars <= 1:
+        return value[:max_chars]
+    return value[: max_chars - 1].rstrip() + "…"
+
+
+def _derive_failure_text(result: dict[str, Any]) -> str | None:
+    """Derive bounded failure context for unsuccessful execution results."""
+    if result.get("error"):
+        message = result.get("message")
+        return str(message) if message else str(result["error"])
+
+    poll_error = result.get("poll_error")
+    if isinstance(poll_error, dict):
+        poll_message = poll_error.get("message") or poll_error.get("detail") or poll_error.get("error")
+        if poll_message:
+            return str(poll_message)
+
+    status = str(result.get("status") or "unknown")
+    timed_out = bool(result.get("timed_out"))
+    if status == "completed" and not timed_out:
+        return None
+
+    parts: list[str] = [f"status={status}"]
+    if timed_out:
+        parts.append("timed_out=true")
+
+    exit_code = result.get("exit_code")
+    if exit_code is not None:
+        parts.append(f"exit_code={exit_code}")
+
+    logs = result.get("logs")
+    if isinstance(logs, list):
+        tail = [str(line).strip() for line in logs[-_FAILURE_LOG_TAIL_LINES:] if str(line).strip()]
+        if tail:
+            parts.append(f"log_tail={' | '.join(tail)}")
+
+    return _clip_text("; ".join(parts), _MAX_FAILURE_TEXT)
+
+
 def _observation_result(
     job_id: str,
     state: _PollState,
@@ -236,18 +281,18 @@ def execute_and_observe(
         def finish(result: dict[str, Any]) -> dict[str, Any]:
             if not active_session_id:
                 return result
-            failure = result.get("message") if result.get("error") else result.get("poll_error")
+            failure = _derive_failure_text(result)
             success = result.get("status") == "completed" and not result.get("error")
             update = _record_attempt(
                 active_session_id,
                 recipe=recipe,
-                failure=str(failure) if failure else None,
+                failure=failure,
                 success=success,
                 note=f"Execution finished with status {result.get('status', result.get('error', 'unknown'))}.",
             )
-            if isinstance(update.get("error"), str) and update["error"]:
-                return update
             result["session_id"] = active_session_id
+            if isinstance(update.get("error"), str) and update["error"]:
+                result["session_update_error"] = update
             return result
 
         effective_timeout = _clamp_timeout(timeout)
