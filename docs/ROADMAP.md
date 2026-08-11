@@ -51,7 +51,7 @@ Contract (unchanged): standalone MCP is advisory; MCP connected to Studio is an 
 
 - [x] Pass catalog: 8 new passes (MobiusBuilder, QairtPipeline, KQuant, OnnxKquantQuantization, QuantizeEmbeddingInt8, ShareEmbeddingLmHead, SimplifiedLayerNormToRMSNorm, OnnxDiscrepancyCheck)
 - [x] KQuant quantization method added to recipe builder, type unions, and validation allowlists
-- [x] `trust_remote_code` default-flip handled: auto-emit `true` for HuggingFace models + info advisory
+- [x] `trust_remote_code` default-flip handled: emit `true` only after explicit Hugging Face user opt-in + info advisory
 - [x] Pipeline validation: CROSS_PASS_RULES for QNN-only passes, QnnAbiExecutionProvider as distinct EP
 - [x] Migration module (`passMigration.ts`): MobiusModelBuilder rename, QairtPreparation/QairtGenAIBuilder removal, pipelineStore integration
 - [x] Removed-pass advisory warnings and removed-pass detection in recipe overrides
@@ -114,7 +114,7 @@ Manual vs Agent on Execute first; Assistant stays chat until the later bridge.
 
 - [ ] Export optimization report (PDF/Markdown)
 - [ ] Recipe catalog version pinning
-- [ ] MultiLoRA adapter support: **blocked** on upstream Olive multi-adapter pass configuration (Olive >= 0.3.0). Schema `adapters[]` is forward-compatible today; builder does not yet emit `adapter_path` or `adapters[]`. See `docs/multilora-design.md`.
+- [ ] MultiLoRA adapter support: Olive 0.13.0 supports single-adapter `HfModel.adapter_path` and `ExtractAdapters`; multi-adapter switching is an ONNX Runtime GenAI runtime concern, not an Olive `adapters[]` pass configuration. **Blocked** on Studio builder/runtime integration and end-to-end validation. See `docs/multilora-design.md`.
 
 ### Distribution
 
