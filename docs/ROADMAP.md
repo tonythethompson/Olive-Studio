@@ -56,7 +56,7 @@ Contract (unchanged): standalone MCP is advisory; MCP connected to Studio is an 
 - [x] Migration module (`passMigration.ts`): MobiusModelBuilder rename, QairtPreparation/QairtGenAIBuilder removal, pipelineStore integration
 - [x] Removed-pass advisory warnings and removed-pass detection in recipe overrides
 - [x] MCP knowledge base: passes.json, compatibility_matrix.json, hardware_profiles.json, troubleshooting.json updated for 0.13.0
-- [x] Venv spec pin bumped to `olive-ai>=0.12.0,<1` (spec version 5)
+- [x] Venv spec pinned to `olive-ai==0.13.0` (spec version 5)
 
 ### Agent autonomy tools (MCP Phase 3)
 
