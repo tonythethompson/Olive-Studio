@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Monitor } from "lucide-react";
 
 /** Below this width the recipe builder is not supported (phone / very narrow). */
-export const DESKTOP_MIN_WIDTH_PX = 700;
+export const DESKTOP_MIN_WIDTH_PX = 600;
 
 /** At and above this width the full sidebar + horizontal graph shell is used. */
 export const WIDE_SHELL_MIN_WIDTH_PX = 900;

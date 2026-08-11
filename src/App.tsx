@@ -212,8 +212,8 @@ function Dashboard() {
           >
             Skip to main content
           </a>
-          <aside className="w-14 wide:w-56 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
-            <div className="h-14 flex items-center justify-center wide:justify-start px-2 wide:px-4 border-b border-slate-800">
+          <aside className="w-12 wide:w-56 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
+            <div className="h-14 flex items-center justify-center wide:justify-start px-1 wide:px-4 border-b border-slate-800">
               <div className="flex items-center gap-2.5 min-w-0">
                 <img
                   src="/assets/logo.png"
