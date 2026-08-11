@@ -118,3 +118,11 @@ The `@` alias resolves to `src/` in all vitest configs.
 - **Barrel imports**: Avoid `export *` barrel files — Vite tree-shaking and component test isolation both suffer. Import from the actual module file.
 - **React 19 + Vite 8**: Both are at major versions with breaking changes from prior conventions. Check Context7 docs before assuming API shapes.
 - **Never run `pnpm install` for this checkout from more than one OS**: if the same folder is reachable from both native Windows and WSL (e.g. via `D:\...` / `/mnt/d/...`), running install from both leaves native-Linux `node_modules/.pnpm/**` symlinks (esbuild, tailwindcss oxide, lightningcss, etc.) that Windows can't stat, throwing `EACCES` and wedging every future `pnpm` command since pnpm's own prune step dies on the same broken link it would otherwise remove. Use separate clones per OS. `scripts/fix-stale-symlinks.mjs` runs on every `preinstall` and self-heals this automatically if it happens anyway.
+
+## UI copy
+
+Don't put engineering context in user-facing text. If a user points out a UI problem and explains why, fix the UI — don't narrate the fix, the reasoning, or the conversation back into the copy itself. Users never see this file or the chat; they only see the string. Concretely:
+
+- No implementation details ("below 700px it is not supported", "the shell rearranges at 900px").
+- No meta-commentary defending a design choice ("Empty is fine; X does not invent Y") — if empty state needs explaining, that's a UX problem to solve visually (icon, illustration, one plain sentence), not a place to leave a footnote about how the feature was built.
+- Say only what the user needs at that moment. When in doubt, cut the sentence and see if the UI still makes sense.

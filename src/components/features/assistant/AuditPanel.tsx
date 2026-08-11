@@ -102,7 +102,7 @@ export function AuditPanel({
           <div className="space-y-2.5 max-h-[50vh] overflow-y-auto pr-0.5">
             {analysis.suggestions.length === 0 ? (
               <p className="text-xs text-slate-500 leading-relaxed px-0.5">
-                No actionable changes for this workspace. Empty is fine; Audit does not invent filler cards.
+                No actionable changes for this workspace.
               </p>
             ) : (
               analysis.suggestions.map((s, i) => (
