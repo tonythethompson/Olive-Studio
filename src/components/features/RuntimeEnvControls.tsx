@@ -270,18 +270,21 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
         {status?.oliveInstalled ? (
           <span className="text-emerald-600/90 flex items-center gap-0.5">
             <CheckCircle2 className="h-3 w-3" aria-hidden />
-            {runtimeLabel}
+            <span className="hidden wide:inline">{runtimeLabel}</span>
           </span>
         ) : needsAttention ? (
           <span className="text-slate-400 flex items-center gap-0.5">
             <AlertTriangle className="h-3 w-3 text-amber-600/75" aria-hidden />
-            {runtimeLabel}
+            <span className="hidden wide:inline">{runtimeLabel}</span>
           </span>
         ) : (
-          <span className="text-slate-400">{runtimeLabel}</span>
+          <span className="text-slate-400 hidden wide:inline">{runtimeLabel}</span>
         )}
         {status && !pathOk && status.venvExists && (
-          <span className="text-slate-500" title="Project .venv Scripts/bin is not on your user PATH">
+          <span
+            className="text-slate-500 hidden wide:inline"
+            title="Project .venv Scripts/bin is not on your user PATH"
+          >
             · add PATH
           </span>
         )}

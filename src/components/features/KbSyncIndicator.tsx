@@ -23,7 +23,7 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
         <Database className="h-3 w-3 text-slate-500 shrink-0" aria-hidden />
         {status?.available ? (
           <span
-            className="text-slate-400 truncate"
+            className="text-slate-400 truncate hidden wide:inline"
             title="Olive pass knowledge base used by the recipe builder"
           >
             KB v{status.version}
@@ -38,7 +38,10 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
                 : error || "Local Olive pass catalog could not be loaded"
             }
           >
-            KB unavailable{status?.reason ? ` · ${status.reason}` : ""}
+            <span className="hidden wide:inline">
+              KB unavailable{status?.reason ? ` · ${status.reason}` : ""}
+            </span>
+            <span className="wide:hidden">KB!</span>
           </span>
         )}
       </div>
@@ -47,7 +50,7 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
           {isStale ? (
             <span className="text-amber-500 flex items-center gap-1 shrink-0" title={staleTitle}>
               <AlertCircle className="h-3 w-3" aria-hidden />
-              <span>stale</span>
+              <span className="hidden wide:inline">stale</span>
             </span>
           ) : (
             <span
@@ -55,7 +58,7 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
               title={`Pass catalog synced within the last ${STALE_AFTER_DAYS} days`}
             >
               <CheckCircle className="h-3 w-3" aria-hidden />
-              <span>fresh</span>
+              <span className="hidden wide:inline">fresh</span>
             </span>
           )}
           <button
@@ -67,7 +70,7 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
             aria-label={syncing ? "Syncing knowledge base" : "Sync knowledge base"}
           >
             <RefreshCw className={`h-3 w-3 ${syncing ? "animate-spin" : ""}`} aria-hidden />
-            {syncing ? "syncing…" : "sync"}
+            <span className="hidden wide:inline">{syncing ? "syncing…" : "sync"}</span>
           </button>
         </>
       )}

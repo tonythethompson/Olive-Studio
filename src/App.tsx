@@ -295,16 +295,35 @@ function Dashboard() {
 
           <div className="flex-1 flex min-w-0 overflow-hidden">
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
-              <header className="min-h-12 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 wide:gap-4 px-3 wide:px-6 min-[1000px]:px-8 py-1.5 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 shrink-0">
-                <div className="flex items-center flex-wrap gap-x-3 gap-y-1 min-w-0 overflow-hidden">
+              <header className="min-h-12 grid grid-cols-[1fr_minmax(0,max-content)_1fr] items-center gap-2 wide:gap-4 px-3 wide:px-6 min-[1000px]:px-8 py-1.5 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 shrink-0">
+                {/*
+                  Invisible mirror of the Assistant button. The two outer grid
+                  tracks are plain `1fr` (no minmax(0,...) override), so their
+                  floor is their content's own min-content width — CSS Grid
+                  can never compress a track below that, which is what makes
+                  this a hard barrier the center cluster cannot overlap.
+                  Mirroring the same markup on the left keeps both floors
+                  identical, which keeps the center cluster visually centered
+                  instead of drifting toward the empty side.
+                */}
+                <div className="justify-self-start" aria-hidden="true">
+                  <span
+                    className={cn(
+                      "invisible px-2.5 wide:px-3 py-1.5 border text-[clamp(0.75rem,0.65rem+0.3vw,0.875rem)] flex items-center gap-1.5",
+                    )}
+                  >
+                    <Bot className="h-3.5 w-3.5" />
+                    <span className="hidden wide:inline">Assistant</span>
+                  </span>
+                </div>
+                <div className="justify-self-center flex items-center flex-wrap justify-center gap-x-3 gap-y-1 min-w-0 overflow-hidden">
                   <KbSyncIndicator />
                   <span className="hidden sm:block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />
                   <RuntimeEnvControls />
                   <span className="hidden sm:block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />
                   <AgentAccessControls />
                 </div>
-                {/* Fixed `auto` track: never compressed by the status cluster's minmax(0,1fr) neighbor. */}
-                <div className="shrink-0">
+                <div className="justify-self-end">
                   <button
                     type="button"
                     onClick={() => setIsAiSidebarOpen((open) => !open)}
@@ -316,7 +335,7 @@ function Dashboard() {
                     )}
                   >
                     <Bot className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Assistant</span>
+                    <span className="hidden wide:inline">Assistant</span>
                   </button>
                 </div>
               </header>

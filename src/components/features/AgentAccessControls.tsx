@@ -202,7 +202,7 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
         <Bot className="h-3 w-3 text-slate-500" aria-hidden />
         <span className={elevated ? "text-amber-400/90 flex items-center gap-0.5" : "text-slate-400"}>
           {elevated ? <Shield className="h-3 w-3" aria-hidden /> : null}
-          Agent access
+          <span className="hidden wide:inline">Agent access</span>
         </span>
       </button>
 
