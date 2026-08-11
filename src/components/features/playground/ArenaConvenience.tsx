@@ -213,7 +213,12 @@ export interface UseAssistantProviderProps {
   onApply: (patch: Pick<ArenaSlotConfig, "type" | "endpointUrl" | "apiKey" | "modelId">) => void;
 }
 
-/** Cloud-mode convenience: snapshot the active Assistant OpenAI-compat provider. */
+/**
+ * Provides a button for filling a cloud-mode slot with the active Assistant provider settings.
+ *
+ * @param slotLabel - Label of the slot receiving the provider settings
+ * @param onApply - Callback invoked with the provider settings to apply
+ */
 export function UseAssistantProviderButton({ slotLabel, onApply }: UseAssistantProviderProps) {
   const [busy, setBusy] = useState(false);
   const [reason, setReason] = useState<string | null>(null);

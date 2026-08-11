@@ -25,6 +25,14 @@ export interface MemoryOffloadControlsProps {
   hardwareProbe: HardwareProbeResult | null;
 }
 
+/**
+ * Renders provider-specific memory offload, CUDA version, and hardware-target controls.
+ *
+ * @param state - Current model and execution-provider configuration.
+ * @param setState - Updates the configuration state.
+ * @param hardwareProbe - Detected hardware information used to configure available options.
+ * @returns The provider configuration controls.
+ */
 export function MemoryOffloadControls({
   state,
   setState,

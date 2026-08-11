@@ -398,6 +398,15 @@ function PluginInstallBlock({
   );
 }
 
+/**
+ * Renders provider-specific runtime installation controls, diagnostics, and hardware guidance.
+ *
+ * @param providerId - The execution provider associated with the card.
+ * @param hardwareProbe - Current hardware and runtime detection results.
+ * @param openvinoInstall - OpenVINO installation state and action.
+ * @param qnnInstall - QNN installation and NPU testing state and actions.
+ * @param directMlInstall - DirectML installation state and action.
+ */
 function ProviderPluginInstalls({
   providerId,
   hardwareProbe,

@@ -270,6 +270,13 @@ async function fetchAiQuantRecommendation(state: UIState): Promise<Partial<UISta
 const SAVE_ACTION = "__save_custom__";
 const DELETE_PREFIX = "__delete__:";
 
+/**
+ * Provides controls for configuring model quantization, including methods, precision, advanced settings, and presets.
+ *
+ * @param state - The current model and quantization configuration
+ * @param setState - Updates the model configuration
+ * @returns The quantization configuration interface
+ */
 export function QuantizationInspector({ state, setState }: InspectorProps) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");

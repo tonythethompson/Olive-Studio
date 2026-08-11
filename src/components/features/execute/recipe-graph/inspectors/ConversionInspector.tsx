@@ -4,6 +4,11 @@ import { getSelectedModelInfo } from "@/lib/modelFamily";
 import { UIState } from "@/types";
 import type { InspectorProps } from "./types";
 
+/**
+ * Renders conversion pass settings based on the current UI state.
+ *
+ * @returns The conversion settings panel or a message indicating that conversion is skipped.
+ */
 export function ConversionInspector({ state, setState }: InspectorProps) {
   const modelInfo = getSelectedModelInfo(state);
   const allowedConversionFormats = getAllowedConversionFormats(state.ihvProvider);

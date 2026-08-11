@@ -41,6 +41,13 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+/**
+ * Displays selected job runs in a sortable comparison table with duration deltas.
+ *
+ * @param records - The job history records to compare.
+ * @param onClose - Optional callback invoked when the comparison panel is closed.
+ * @returns The comparison panel element.
+ */
 export function BatchComparisonView({ records, onClose }: BatchComparisonViewProps) {
   const [sortKey, setSortKey] = useState<SortKey>("durationMs");
   const [sortDir, setSortDir] = useState<SortDir>("asc");

@@ -69,6 +69,15 @@ interface FeedbackThumbButtonProps {
   onClick: () => void;
 }
 
+/**
+ * Renders a feedback button for rating a diagnosis as helpful or unhelpful.
+ *
+ * @param kind - The feedback direction, either thumbs up or thumbs down
+ * @param status - The current feedback submission status
+ * @param active - Whether this feedback option is selected
+ * @param disabled - Whether the button is disabled
+ * @param onClick - Handles feedback button clicks
+ */
 function FeedbackThumbButton({ kind, status, active, disabled, onClick }: FeedbackThumbButtonProps) {
   const Icon = kind === "up" ? ThumbsUp : ThumbsDown;
   const successLabel = kind === "up" ? "Thumbs up submitted" : "Thumbs down submitted";

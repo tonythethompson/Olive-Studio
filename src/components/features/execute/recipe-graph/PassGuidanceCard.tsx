@@ -10,6 +10,11 @@ interface PassGuidanceCardProps {
   guidance: PassGuidance;
 }
 
+/**
+ * Displays guidance for a pass and optionally provides expandable MCP parameter documentation.
+ *
+ * @param guidance - The pass title, description, usage conditions, and optional pass name used to load parameter documentation.
+ */
 export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
   const [params, setParams] = useState<McpPassParamsPayload | null>(null);
   const [hasFetched, setHasFetched] = useState(false);

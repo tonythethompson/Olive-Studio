@@ -26,8 +26,7 @@ interface HardwarePassCardsProps {
 }
 
 /**
- * Interactive card grid for toggling optimization passes on the selected provider.
- * Extracted from IHVIntegrationPanel's "Interactive Cards" tab.
+ * Displays optimization passes as interactive cards for the selected hardware provider.
  */
 export function HardwarePassCards({
   filteredValidations,

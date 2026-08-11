@@ -77,6 +77,12 @@ function getActivePresetId(state: UIState, allPresets: readonly AnyPreset[]): st
   return null;
 }
 
+/**
+ * Renders controls for configuring pruning passes, managing pruning presets, and displaying pruning compatibility warnings.
+ *
+ * @param state - The current inspector state.
+ * @param setState - Updates the inspector state.
+ */
 export function PruningInspector({ state, setState }: InspectorProps) {
   const allowedPruningTypes = getAllowedPruningTypes(state.ihvProvider);
   const awqBlocksPruning = state.passes.quantMethod === "awq";

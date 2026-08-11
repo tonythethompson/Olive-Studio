@@ -25,6 +25,20 @@ export interface InputHuggingFaceSourceFormProps {
   handleClearToken: () => void;
 }
 
+/**
+ * Configures a Hugging Face model source, including model settings, token credentials, task type, and optional calibration inputs.
+ *
+ * @param state - The current Hugging Face source configuration.
+ * @param setState - Updates the Hugging Face source configuration.
+ * @param hfTokenInput - The token currently entered by the user.
+ * @param setHfTokenInput - Updates the entered token.
+ * @param hfTokenStatus - The current token availability status.
+ * @param isTokenMutating - Indicates whether a token operation is in progress.
+ * @param submitTokenMutation - The token submission mutation state.
+ * @param clearTokenMutation - The token clearing mutation state.
+ * @param handleSubmitToken - Saves the entered token.
+ * @param handleClearToken - Clears the runtime token.
+ */
 export function InputHuggingFaceSourceForm({
   state,
   setState,

@@ -37,6 +37,15 @@ export function RecipeCatalogSummaryLine({
   );
 }
 
+/**
+ * Displays hardware compatibility status and an optional filter for incompatible recipes.
+ *
+ * @param hardwareProbe - Detected hardware and execution providers, when available
+ * @param hardwareProbeStatus - Current hardware probing state
+ * @param hardwareMatchSummary - Counts of compatible and unavailable recipes
+ * @param compatibilityFilter - Whether all recipes or only compatible recipes are shown
+ * @param setCompatibilityFilter - Updates the compatibility filter
+ */
 export function RecipeCatalogHardwarePanel({
   hardwareProbe,
   hardwareProbeStatus,
