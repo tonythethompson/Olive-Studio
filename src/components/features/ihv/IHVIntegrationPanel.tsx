@@ -86,7 +86,7 @@ export function IHVIntegrationPanel({
     };
     media.addEventListener("change", sync);
     return () => media.removeEventListener("change", sync);
-  }, []);
+  }, [hasMatchMedia]);
   const [selectedCategory, setSelectedCategory] = useState<
     "All" | "Conversion" | "Quantization" | "Compression" | "PEFT"
   >("All");
