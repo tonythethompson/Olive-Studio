@@ -9,6 +9,7 @@ import {
 } from "@/lib/aiWorkspaceContext";
 import { chatPatchToUiState, sanitizeChatActionPatch, type ChatAction } from "@/lib/chatActions";
 import { Bot, X, Lightbulb, MessageSquareCode, Settings2, Bug } from "lucide-react";
+import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { AuditPanel } from "./AuditPanel";
 import { ReportIssueModal } from "@/components/ReportIssueModal";
 import { PROVIDER_OPTIONS, normalizeUiProviderId } from "./aiProviderCatalog";
@@ -58,6 +59,7 @@ export function AssistantSidebar({
   const setState = propSetState ?? storeState.setState;
   const [activeTab, setActiveTab] = useState<SidebarTab>("audit");
   const [, startTabTransition] = useTransition();
+  const { data: hardwareProbe = null } = useHardwareProbe();
 
   const handleTabChange = (tab: SidebarTab) => {
     startTabTransition(() => {
@@ -72,6 +74,10 @@ export function AssistantSidebar({
   const audit = useAiAudit({ state, setState });
   const chat = useAiChat(workspaceContext);
   const chatActionAuditTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chatLogForReport = useMemo(
+    () => chat.chatMessages.map((m) => `${m.sender}: ${m.text}`),
+    [chat.chatMessages],
+  );
 
   useEffect(() => {
     return () => {
@@ -312,6 +318,9 @@ export function AssistantSidebar({
             open={isReportOpen}
             onClose={() => setIsReportOpen(false)}
             state={state}
+            hardwareProbe={hardwareProbe}
+            chatLog={chatLogForReport}
+            defaultArea="assistant-ai"
           />
         </div>
       </aside>

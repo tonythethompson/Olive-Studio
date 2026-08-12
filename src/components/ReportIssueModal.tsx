@@ -18,9 +18,56 @@ import {
   type ReportArea,
   type TelemetryOptionId,
   type IssueReport,
+  categoryHasSeverity,
   collectTelemetry,
   buildReport,
 } from "@/lib/issueReport";
+
+const DRAFT_STORAGE_KEY = "olive-studio:report-issue-draft";
+
+interface ReportIssueDraft {
+  category: ReportCategory;
+  severity: ReportSeverity;
+  area: ReportArea;
+  description: string;
+  telemetry: TelemetryOptionId[];
+}
+
+function loadDraft(): ReportIssueDraft | null {
+  try {
+    const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ReportIssueDraft>;
+    if (typeof parsed.description !== "string" || !parsed.description.trim()) return null;
+    return {
+      category: REPORT_CATEGORIES.some((c) => c.id === parsed.category) ? (parsed.category as ReportCategory) : "bug",
+      severity: REPORT_SEVERITIES.some((s) => s.id === parsed.severity) ? (parsed.severity as ReportSeverity) : "annoying",
+      area: REPORT_AREAS.some((a) => a.id === parsed.area) ? (parsed.area as ReportArea) : "other",
+      description: parsed.description,
+      telemetry: Array.isArray(parsed.telemetry)
+        ? parsed.telemetry.filter((t): t is TelemetryOptionId => TELEMETRY_OPTIONS.some((o) => o.id === t))
+        : ["platform", "hardware"],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(draft: ReportIssueDraft): void {
+  try {
+    window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  } catch {
+    // Storage unavailable (private browsing, quota) — draft persistence is best-effort.
+  }
+}
+
+function clearDraft(): void {
+  try {
+    window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+  } catch {
+    // Best-effort; nothing to clean up if storage was never written.
+  }
+}
 
 interface ReportIssueModalProps {
   open: boolean;
@@ -28,6 +75,8 @@ interface ReportIssueModalProps {
   state?: UIState;
   hardwareProbe?: HardwareProbeResult | null;
   executionLogs?: string[];
+  /** Recent assistant chat transcript, formatted as one "sender: text" line per turn. */
+  chatLog?: string[];
   mcpDiagnostic?: unknown;
   /** Pre-fill the area dropdown (e.g., from execution context). */
   defaultArea?: ReportArea;
@@ -43,6 +92,7 @@ export function ReportIssueModal({
   state,
   hardwareProbe,
   executionLogs,
+  chatLog,
   mcpDiagnostic: _mcpDiagnostic,
   defaultArea,
   defaultDescription,
@@ -57,6 +107,7 @@ export function ReportIssueModal({
   );
   const [showPreview, setShowPreview] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   // Reset state only when the modal transitions from closed → open.
   // Keeping defaultArea/defaultDescription out of the dep array prevents a
@@ -67,16 +118,37 @@ export function ReportIssueModal({
     const wasOpen = wasOpenRef.current;
     wasOpenRef.current = open;
     if (open && !wasOpen) {
-      setCategory("bug");
-      setSeverity("annoying");
-      setArea(defaultArea ?? "other");
-      setDescription(defaultDescription ?? "");
-      setSelectedTelemetry(new Set<TelemetryOptionId>(["platform", "hardware"]));
+      // An error-triggered open (defaultDescription set) always wins over a saved
+      // draft — that context is more relevant than whatever was typed earlier.
+      const draft = defaultDescription ? null : loadDraft();
+      setCategory(draft?.category ?? "bug");
+      setSeverity(draft?.severity ?? "annoying");
+      setArea(draft?.area ?? defaultArea ?? "other");
+      setDescription(draft?.description ?? defaultDescription ?? "");
+      setSelectedTelemetry(new Set<TelemetryOptionId>(draft?.telemetry ?? ["platform", "hardware"]));
       setShowPreview(false);
       setCopied(false);
+      setSubmitted(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only depend on open
   }, [open]);
+
+  // Persist in-progress reports so they survive an accidental window close.
+  useEffect(() => {
+    if (!open || submitted) return;
+    if (!description.trim()) {
+      clearDraft();
+      return;
+    }
+    saveDraft({ category, severity, area, description, telemetry: Array.from(selectedTelemetry) });
+  }, [open, submitted, category, severity, area, description, selectedTelemetry]);
+
+  const severityApplies = categoryHasSeverity(category);
+  // Severity only means something for bug reports; report N/A for the rest
+  // without touching the underlying state, so a feature request can't
+  // accidentally ship as "Crash" or "Blocking", and switching back to Bug
+  // report restores whatever severity the user last picked.
+  const effectiveSeverity: ReportSeverity = severityApplies ? severity : "n-a";
 
   const toggleTelemetry = useCallback((id: TelemetryOptionId) => {
     setSelectedTelemetry((prev) => {
@@ -90,13 +162,14 @@ export function ReportIssueModal({
   const report: IssueReport = useMemo(
     () => ({
       category,
-      severity,
+      severity: effectiveSeverity,
       area,
       description,
       telemetry: collectTelemetry(Array.from(selectedTelemetry), {
         state,
         hardwareProbe,
         executionLogs,
+        chatLog,
       }),
       frequencyInfo: frequencyInfo
         ? {
@@ -107,12 +180,17 @@ export function ReportIssueModal({
           }
         : null,
     }),
-    [category, severity, area, description, selectedTelemetry, state, hardwareProbe, executionLogs, frequencyInfo],
+    [category, effectiveSeverity, area, description, selectedTelemetry, state, hardwareProbe, executionLogs, chatLog, frequencyInfo],
   );
 
   const { url, fullText, urlExceededBudget } = useMemo(
-    () => buildReport(report, { state, hardwareProbe, executionLogs }),
-    [report, state, hardwareProbe, executionLogs],
+    () => buildReport(report, { state, hardwareProbe, executionLogs, chatLog }),
+    [report, state, hardwareProbe, executionLogs, chatLog],
+  );
+
+  const telemetryOptions = useMemo(
+    () => (chatLog?.length ? TELEMETRY_OPTIONS : TELEMETRY_OPTIONS.filter((o) => o.id !== "chat-logs")),
+    [chatLog],
   );
 
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -206,10 +284,19 @@ export function ReportIssueModal({
       void copyFullText().then(() => {
         void openExternal(url);
       });
-      return;
+    } else {
+      void openExternal(url);
     }
-    void openExternal(url);
+    clearDraft();
+    setSubmitted(true);
   }, [url, urlExceededBudget, copyFullText]);
+
+  // Show a brief confirmation, then close and let the next open start blank.
+  useEffect(() => {
+    if (!submitted) return;
+    const timer = window.setTimeout(onClose, 1800);
+    return () => window.clearTimeout(timer);
+  }, [submitted, onClose]);
 
   const handleCopy = useCallback(() => {
     void copyFullText();
@@ -251,6 +338,16 @@ export function ReportIssueModal({
             </Button>
           }
         />
+        {submitted ? (
+          <CardContent className="flex-1 flex flex-col items-center justify-center gap-3 py-12 text-center">
+            <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+              <Check className="h-5 w-5 text-emerald-400" />
+            </div>
+            <p className="text-sm font-semibold text-slate-200">GitHub issue opened</p>
+            <p className="text-xs text-slate-500">This form will close in a moment.</p>
+          </CardContent>
+        ) : (
+        <>
         <CardContent className="flex-1 overflow-y-auto space-y-5">
           {/* Category dropdown */}
           <div className="space-y-1.5">
@@ -278,15 +375,19 @@ export function ReportIssueModal({
           <div className="space-y-1.5">
             <Label htmlFor="report-severity" className="text-sm font-semibold text-slate-300">
               Severity
+              {!severityApplies && (
+                <span className="text-slate-500 font-normal"> (bug reports only)</span>
+              )}
             </Label>
             <div className="relative">
               <select
                 id="report-severity"
-                value={severity}
+                value={effectiveSeverity}
                 onChange={(e) => setSeverity(e.target.value as ReportSeverity)}
-                className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-electric-blue cursor-pointer"
+                disabled={!severityApplies}
+                className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-electric-blue cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {REPORT_SEVERITIES.map((s) => (
+                {REPORT_SEVERITIES.filter((s) => severityApplies || s.id === "n-a").map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.label}
                   </option>
@@ -339,7 +440,7 @@ export function ReportIssueModal({
               Include Telemetry <span className="text-slate-500 font-normal">(optional, helps debug)</span>
             </Label>
             <div className="space-y-2">
-              {TELEMETRY_OPTIONS.map((opt) => (
+              {telemetryOptions.map((opt) => (
                 <label
                   key={opt.id}
                   className={cn(
@@ -378,7 +479,7 @@ export function ReportIssueModal({
               {showPreview && (
                 <div className="bg-slate-950 border border-slate-800 rounded-md p-3 text-sm font-mono text-slate-400 max-h-40 overflow-y-auto">
                   {Array.from(selectedTelemetry).map((key) => {
-                    const telemetry = collectTelemetry([key], { state, hardwareProbe, executionLogs });
+                    const telemetry = collectTelemetry([key], { state, hardwareProbe, executionLogs, chatLog });
                     const value = telemetry[key] ?? "N/A";
                     const label = TELEMETRY_OPTIONS.find((o) => o.id === key)?.label ?? key;
                     return (
@@ -454,6 +555,8 @@ export function ReportIssueModal({
           </div>
           </div>
         </div>
+        </>
+        )}
       </Card>
     </div>
   );
