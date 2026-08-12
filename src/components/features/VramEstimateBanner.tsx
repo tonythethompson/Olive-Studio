@@ -159,15 +159,6 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
         </div>
 
         <div className="hidden wide:block px-4 py-3.5 space-y-3">
-        {!hasModel ? (
-          <div className="space-y-1">
-            <p className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500">
-              Model VRAM
-            </p>
-            <p className="text-xs text-slate-500 leading-snug">No model selected</p>
-          </div>
-        ) : (
-        <>
         <div className="space-y-1">
           <p className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500">
             {estimate.usesGpu ? "Model VRAM" : "Model memory"}
@@ -278,28 +269,25 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
           )}
 
           {/* Clear model button */}
-          <div className="border-t border-slate-800/90 pt-2">
-            <button
-              type="button"
-              onClick={() => setState({ hfModelId: "", hfDataset: "", hfTask: "", localFiles: [], azureModelPath: "" })}
-              className="flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
-              title="Clear model selection"
-            >
-              <Trash2 className="h-3 w-3" />
-              Clear model
-            </button>
-          </div>
-        </>
-        )}
+          {hasModel && (
+            <div className="border-t border-slate-800/90 pt-2">
+              <button
+                type="button"
+                onClick={() => setState({ hfModelId: "", hfDataset: "", hfTask: "", localFiles: [], azureModelPath: "" })}
+                className="flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+                title="Clear model selection"
+              >
+                <Trash2 className="h-3 w-3" />
+                Clear model
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
   if (compact) {
-    if (!hasModel) {
-      return <p className={cn("text-sm text-slate-500", className)}>No model selected</p>;
-    }
     return (
       <div className={cn("text-sm text-slate-500 space-y-1", className)}>
         <ModelMemoryCompare
@@ -323,17 +311,6 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
             )}
           </p>
         )}
-      </div>
-    );
-  }
-
-  if (!hasModel) {
-    return (
-      <div className={cn("rounded border border-slate-800 bg-slate-950/40 p-4", className)}>
-        <div className="flex items-center gap-2">
-          <HardDrive className="h-4 w-4 text-slate-600 shrink-0" />
-          <h4 className="text-sm font-medium text-slate-500">No model selected</h4>
-        </div>
       </div>
     );
   }
