@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Input, Label, Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui";
 import { UIState } from "@/types";
 import { cn } from "@/lib/utils";
@@ -67,17 +67,15 @@ export function InputModelSourceSection({
   onConfigTextChange,
 }: InputModelSourceSectionProps) {
   const isSourceCollapsed = !sourceConfigExpanded && !recipeRailCollapsed;
-  // Monotonic latch: once expanded/collapsed once, keep the panel mounted for
-  // the rest of the component's life. Set directly in the render body (React's
-  // documented "adjusting state when a prop changes" pattern) rather than an
-  // effect, since the guard makes it fire at most once and it only needs to
-  // affect this render's output, not resync with an external system.
   const [keepSourceMounted, setKeepSourceMounted] = useState(
     () => sourceConfigExpanded || recipeRailCollapsed,
   );
-  if (!keepSourceMounted && (sourceConfigExpanded || recipeRailCollapsed)) {
-    setKeepSourceMounted(true);
-  }
+
+  useEffect(() => {
+    if (sourceConfigExpanded || recipeRailCollapsed) {
+      setKeepSourceMounted(true);
+    }
+  }, [sourceConfigExpanded, recipeRailCollapsed]);
 
   return (
     <div className="min-w-0 w-full">
