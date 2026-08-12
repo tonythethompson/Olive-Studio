@@ -24,7 +24,7 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
         {status?.available ? (
           <>
             <span
-              className="text-slate-400 truncate hidden min-[1300px]:inline"
+              className="text-slate-400 truncate hidden wide:inline"
               title="Olive pass knowledge base used by the recipe builder"
               aria-hidden="true"
             >
@@ -46,10 +46,10 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
               }
               aria-hidden="true"
             >
-              <span className="hidden min-[1300px]:inline">
+              <span className="hidden wide:inline">
                 KB unavailable{status?.reason ? ` · ${status.reason}` : ""}
               </span>
-              <span className="min-[1300px]:hidden">KB!</span>
+              <span className="wide:hidden">KB!</span>
             </span>
             <span className="sr-only">
               Knowledge base unavailable{status?.reason ? `: ${status.reason}` : ""}.
@@ -67,7 +67,7 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
                 aria-hidden="true"
               >
                 <AlertCircle className="h-3 w-3" aria-hidden />
-                <span className="hidden min-[1300px]:inline">stale</span>
+                <span className="hidden wide:inline">stale</span>
               </span>
               <span className="sr-only">Knowledge base is stale.</span>
             </>
@@ -79,7 +79,7 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
                 aria-hidden="true"
               >
                 <CheckCircle className="h-3 w-3" aria-hidden />
-                <span className="hidden min-[1300px]:inline">fresh</span>
+                <span className="hidden wide:inline">fresh</span>
               </span>
               <span className="sr-only">Knowledge base is fresh.</span>
             </>
@@ -88,12 +88,12 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
             type="button"
             onClick={() => void syncKb()}
             disabled={syncing}
-            className="text-electric-blue hover:text-electric-blue/80 disabled:opacity-40 flex items-center gap-0 min-[1300px]:gap-1 transition-colors shrink-0"
+            className="text-electric-blue hover:text-electric-blue/80 disabled:opacity-40 flex items-center gap-0 wide:gap-1 transition-colors shrink-0"
             title="Reload Olive pass docs into the local knowledge base"
             aria-label={syncing ? "Syncing knowledge base" : "Sync knowledge base"}
           >
             <RefreshCw className={`h-3 w-3 ${syncing ? "animate-spin" : ""}`} aria-hidden />
-            <span className="hidden min-[1300px]:inline">{syncing ? "syncing…" : "sync"}</span>
+            <span className="hidden wide:inline">{syncing ? "syncing…" : "sync"}</span>
           </button>
         </>
       )}
