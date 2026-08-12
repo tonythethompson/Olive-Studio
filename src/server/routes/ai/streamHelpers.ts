@@ -40,15 +40,8 @@ export function trackStreamClient(
   const onGone = () => {
     if (!ac.signal.aborted) ac.abort();
   };
-  // `req`'s 'close' fires once the request body finishes being read (already
-  // happened by the time we get here — the JSON body is parsed) and does not
-  // reliably fire again when the client aborts later. `res`'s 'close' is the
-  // event Node actually fires when the underlying connection drops before a
-  // streaming response finishes, which is what a cancelled fetch looks like
-  // from the server's side. Without it, a cancelled download's child process
-  // (and the busy-tag lock built on `guard.signal`) never gets released.
+  req.on("close", onGone);
   req.on("aborted", onGone);
-  res.on("close", onGone);
   return {
     disconnected: () => ac.signal.aborted || res.writableEnded,
     signal: ac.signal,
