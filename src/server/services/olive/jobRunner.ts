@@ -25,11 +25,25 @@ import { getVenvPython } from "../venv/paths.ts";
 import {
   ensureProviderCapability,
   buildOliveRunEnvironment,
+  detachVenvListener,
   resolveOliveCommand,
 } from "../venv/index.ts";
 import { preflightOliveRecipe } from "./jobPreflight.ts";
 import { findJobByIdempotency, rememberIdempotencyKeys } from "./jobIdempotency.ts";
 import type { IHVProvider } from "../../../types.ts";
+
+/**
+ * Upper bound on how long the UI's synchronous /olive/run request waits for
+ * setup (venv/capability checks, wheel installs) before failing the request
+ * instead of hanging indefinitely. Read fresh per call (not cached at module
+ * load) so tests and ops tuning can override it via env var. Overridable.
+ */
+function getUiSetupTimeoutMs(): number {
+  const raw = Number(process.env.OLIVE_UI_SETUP_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 && raw <= 2_147_483_647
+    ? raw
+    : 10 * 60_000;
+}
 
 export type StartOliveJobOpts = {
   recipe: OliveRecipe;
@@ -284,12 +298,47 @@ async function registerAndStartOliveJob(opts: {
     };
   }
 
-  return continueOliveJobSetup(job, {
-    recipe,
-    provider,
-    cudaVersion,
-    fingerprint,
+  // The UI path awaits setup so the initial response reflects spawn readiness
+  // (recipe/hardware errors surface immediately). But unlike the MCP path,
+  // nothing previously bounded this wait: a stalled network call inside
+  // ensureProviderCapability (e.g. a CUDA/TensorRT RTX wheel download that
+  // stops making progress) left the /olive/run request pending indefinitely —
+  // the client shows "Initiating Olive run..." forever with no job id to
+  // cancel against, since the job only appears cancellable once the response
+  // (which never arrives) hands the id back. Cap the wait so setup either
+  // finishes or fails the job and returns within a bounded time, same as the
+  // OLIVE_JOB_SETUP_STUB path already does for CI.
+  const setupTimeoutMs = getUiSetupTimeoutMs();
+  let setupTimer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<never>((_, reject) => {
+    setupTimer = setTimeout(() => {
+      reject(new Error(`Olive setup timed out after ${setupTimeoutMs}ms`));
+    }, setupTimeoutMs);
   });
+  try {
+    return await Promise.race([
+      continueOliveJobSetup(job, { recipe, provider, cudaVersion, fingerprint }),
+      timedOut,
+    ]);
+  } catch (err: unknown) {
+    // Only the timeout races here — continueOliveJobSetup catches its own
+    // errors internally. Mark the job cancelled (not just failed) so the
+    // still-running setup, once its stalled await finally resolves, hits the
+    // same bailIfCancelled() guard a user-initiated cancel does and skips
+    // spawning Olive instead of racing back after we've already responded.
+    const msg = err instanceof Error ? err.message : String(err);
+    job.status = "cancelled";
+    pushLog(job, `[error] ${msg}`);
+    if (job.venvListener) {
+      detachVenvListener(job.venvListener);
+      job.venvListener = undefined;
+    }
+    cleanupJobArtifacts(job);
+    finalizeJob(job);
+    return { ok: false, error: msg, httpStatus: 504, jobId, fingerprint };
+  } finally {
+    clearTimeout(setupTimer);
+  }
 }
 
 async function continueOliveJobSetup(
