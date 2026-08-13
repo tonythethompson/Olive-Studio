@@ -83,9 +83,8 @@ describe("batchComparison — Property 12: Batch Comparison Job Count Constraint
   /**
    * **Validates: Requirements 8.6**
    *
-   * Property 12e: Fractional values within boundary zone are handled correctly.
-   * Values like 1.5 (below 2) are rejected; values like 2.5 (within 2–10) are
-   * accepted by the >= / <= comparison; values like 10.5 (above 10) are rejected.
+   * Property 12e: Fractional values are rejected since validateJobCount requires integer job counts.
+   * Fractional values across all ranges (e.g. 1.5 below range, 2.5 within 2–10 range, 10.5 above range) are rejected.
    */
   it("rejects fractional values below 2 and above 10", () => {
     fc.assert(

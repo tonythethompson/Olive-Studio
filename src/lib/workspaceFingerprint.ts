@@ -15,17 +15,22 @@ import { FINGERPRINT_EXCLUDED_KEYS } from "@/lib/types/findingTypes";
 
 /**
  * Recursively serializes a value with sorted object keys for deterministic output.
- * Matches JSON.stringify semantics: omits keys whose values are `undefined`.
+ * Matches JSON.stringify semantics: omits keys whose values are `undefined`, `function`, or `symbol`.
  */
 function stableStringify(value: unknown): string {
-  if (value === null || value === undefined) return JSON.stringify(value);
-  if (typeof value !== "object") return JSON.stringify(value);
+  if (value === null || value === undefined) return JSON.stringify(value) ?? "null";
+  if (typeof value !== "object") return JSON.stringify(value) ?? "null";
   if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(",")}]`;
+    return `[${value.map((item) => (item === undefined ? "null" : stableStringify(item))).join(",")}]`;
   }
   const obj = value as Record<string, unknown>;
   const keys = Object.keys(obj)
-    .filter((k) => obj[k] !== undefined)
+    .filter(
+      (k) =>
+        obj[k] !== undefined &&
+        typeof obj[k] !== "function" &&
+        typeof obj[k] !== "symbol",
+    )
     .sort();
   return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
 }
