@@ -311,7 +311,7 @@ export function GraphCanvas({
         tabIndex={isSelected ? 0 : -1}
         onClick={() => focusNode(id)}
         onKeyDown={(event) => handleNodeKeyDown(event, id)}
-        className={`group text-left p-2.5 rounded-lg border transition-all duration-300 relative flex flex-col justify-between focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${isSelected
+        className={`group text-left p-2 rounded-lg border transition-all duration-300 relative flex flex-col justify-between focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${isSelected
             ? issueLevel === "critical"
               ? "border-rose-500 bg-rose-950/20 ring-1 ring-rose-500"
               : issueLevel === "warning"
@@ -332,7 +332,7 @@ export function GraphCanvas({
           />
         )}
         <div>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1.5">
             <div
               className={`p-1 rounded ${issueLevel === "critical"
                   ? "bg-rose-950/40 border border-rose-700/40 text-rose-400"
@@ -386,7 +386,7 @@ export function GraphCanvas({
     return (
       <>
         <div className="w-full flex flex-col items-center">
-          <div className="text-sm text-slate-400 mb-2.5">Target device</div>
+          <div className="text-sm text-slate-400 mb-1.5">Target device</div>
           <button
             id="node-btn-provider"
             type="button"
@@ -395,7 +395,7 @@ export function GraphCanvas({
             tabIndex={selectedNodeId === "provider" ? 0 : -1}
             onClick={() => onSelectNode("provider")}
             onKeyDown={(event) => handleNodeKeyDown(event, "provider")}
-            className={`group w-full max-w-[240px] text-left p-3.5 rounded-xl border transition-all duration-300 relative focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${selectedNodeId === "provider"
+            className={`group w-full max-w-[240px] text-left p-2.5 rounded-xl border transition-all duration-300 relative focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${selectedNodeId === "provider"
                 ? providerIssue === "critical"
                   ? "border-rose-500 bg-rose-950/20 ring-1 ring-rose-500"
                   : providerIssue === "warning"
@@ -424,7 +424,7 @@ export function GraphCanvas({
         </div>
 
         <div className="w-full flex flex-col items-center">
-          <div className="text-sm text-slate-400 mb-2.5">Output</div>
+          <div className="text-sm text-slate-400 mb-1.5">Output</div>
           <button
             id="node-btn-output"
             type="button"
@@ -433,7 +433,7 @@ export function GraphCanvas({
             tabIndex={selectedNodeId === "output" ? 0 : -1}
             onClick={() => onSelectNode("output")}
             onKeyDown={(event) => handleNodeKeyDown(event, "output")}
-            className={`group w-full max-w-[240px] text-left p-3.5 rounded-xl border transition-all duration-300 relative focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${selectedNodeId === "output"
+            className={`group w-full max-w-[240px] text-left p-2.5 rounded-xl border transition-all duration-300 relative focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${selectedNodeId === "output"
                 ? "border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500"
                 : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
               }`}
@@ -459,7 +459,7 @@ export function GraphCanvas({
       ref={containerRef}
       role="group"
       aria-label="Olive recipe pipeline graph. Tab to the selected node, then use arrow keys to move between nodes."
-      className="relative flex-1 min-h-[480px] wide:min-h-[560px] bg-slate-950 p-3 wide:p-6 flex flex-col justify-center select-none overflow-visible"
+      className="relative flex-1 min-h-[340px] wide:min-h-[400px] bg-slate-950 p-3 wide:p-4 flex flex-col justify-center select-none overflow-visible"
       style={{
         backgroundImage: `
             radial-gradient(ellipse at center, rgba(30, 41, 59, 0.4) 0%, transparent 80%),
@@ -471,9 +471,9 @@ export function GraphCanvas({
       {/* eslint-disable-next-line react-hooks/refs -- intentional: SVG connections read DOM layout during render (client-side SPA, no SSR) */}
       {renderSVGConnections()}
 
-      <div className="grid grid-cols-1 wide:grid-cols-12 gap-y-5 wide:gap-3 relative z-10 items-center justify-between h-full w-full min-w-0 wide:min-w-[720px]">
+      <div className="grid grid-cols-1 wide:grid-cols-12 gap-y-3 wide:gap-3 relative z-10 items-center justify-between h-full w-full min-w-0 wide:min-w-[720px]">
         <div className="wide:col-span-2 flex flex-col justify-center items-center h-full w-full">
-          <div className="text-sm text-slate-400 mb-3">Input</div>
+          <div className="text-sm text-slate-400 mb-2">Input</div>
           {(() => {
             const nd = getNodePreviewData(state, "input");
             const isSelected = selectedNodeId === "input";
@@ -486,12 +486,12 @@ export function GraphCanvas({
                 tabIndex={isSelected ? 0 : -1}
                 onClick={() => onSelectNode("input")}
                 onKeyDown={(event) => handleNodeKeyDown(event, "input")}
-                className={`group w-full max-w-[240px] text-left p-4 rounded-xl border transition-all duration-300 relative focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${isSelected
+                className={`group w-full max-w-[240px] text-left p-3 rounded-xl border transition-all duration-300 relative focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${isSelected
                     ? "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue"
                     : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
                   }`}
               >
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-1.5">
                   <div className="p-1.5 rounded bg-electric-blue/10 border border-electric-blue/20">
                     {nd.icon}
                   </div>
@@ -499,23 +499,23 @@ export function GraphCanvas({
                     {nd.badge}
                   </span>
                 </div>
-                <h4 className="text-sm font-semibold text-slate-100 mb-1 leading-tight break-words">{nd.title}</h4>
+                <h4 className="text-sm font-semibold text-slate-100 mb-0.5 leading-tight break-words">{nd.title}</h4>
                 <p className="text-xs font-mono text-slate-400 leading-relaxed break-words">{nd.desc}</p>
               </button>
             );
           })()}
         </div>
 
-        <div className="wide:col-span-7 flex flex-col items-center justify-center gap-4 wide:border-l wide:border-r border-slate-900/30 px-1 wide:px-4 w-full">
+        <div className="wide:col-span-7 flex flex-col items-center justify-center gap-2 wide:border-l wide:border-r border-slate-900/30 px-1 wide:px-4 w-full">
           <div className="text-sm text-slate-400 mb-1">Optimization passes</div>
-          <div className="grid grid-cols-2 wide:grid-cols-3 gap-3 wide:gap-4 w-full max-w-xl wide:max-w-none">
+          <div className="grid grid-cols-2 wide:grid-cols-3 gap-2 wide:gap-3 w-full max-w-xl wide:max-w-none">
             {["splitting", "peft", "conversion", "pruning", "transformer_opt", "quantization"].map((id) =>
               renderPassNode(id),
             )}
           </div>
         </div>
 
-        <div className="wide:col-span-3 flex flex-col items-center justify-center gap-6 h-full w-full">
+        <div className="wide:col-span-3 flex flex-col items-center justify-center gap-4 h-full w-full">
           {renderProviderOutputNodes()}
         </div>
       </div>
