@@ -48,7 +48,14 @@ export function executeNavigateAction(
   const { targetPanel } = action.payload;
   if (typeof window !== "undefined") {
     if (isPipelineViewId(targetPanel)) {
-      navigatePipeline(targetPanel);
+      const navigated = navigatePipeline(targetPanel);
+      if (!navigated) {
+        return {
+          success: false,
+          summary: `Navigation blocked while an Olive run is in progress: ${targetPanel}`,
+          modifiedStore: false,
+        };
+      }
     } else {
       window.dispatchEvent(
         new CustomEvent("olive-studio:navigate-panel", { detail: { targetPanel } }),
