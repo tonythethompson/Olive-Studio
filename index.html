@@ -15,6 +15,29 @@
         }
       }
     </script>
+    <!-- Synchronous theme init — prevents flash of wrong theme before React mounts -->
+    <script>
+      (function () {
+        var STORAGE_KEY = "olive:preferences";
+        var ATTR = "data-theme";
+
+        function getResolved() {
+          try {
+            var raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+              var parsed = JSON.parse(raw);
+              var pref = parsed && parsed.state && parsed.state.themePreference;
+              if (pref === "light" || pref === "dark") return pref;
+            }
+          } catch (e) { /* corrupted or unavailable — fall through */ }
+          return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+
+        var theme = getResolved();
+        document.documentElement.setAttribute(ATTR, theme);
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

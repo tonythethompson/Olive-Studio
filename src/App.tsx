@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw, FlaskConical } from "lucide-react";
+import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw, FlaskConical, Settings } from "lucide-react";
+import { useThemeEffect } from "@/lib/hooks/useThemeEffect";
+import { SettingsMenu } from "@/components/SettingsMenu";
 import { InputEnvironmentPanel } from "@/components/features/input/InputEnvironmentPanel";
 import { LicenseNotice } from "@/components/LicenseNotice";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -103,6 +105,8 @@ const SECTIONS: { id: ActiveView; step: string; label: string; desc: string; ico
  * Renders the Olive Studio recipe builder dashboard with navigable model, hardware, and execution sections.
  */
 function Dashboard() {
+  useThemeEffect();
+
   const { state: pipelineState } = usePipelineState();
   const [activeView, setActiveView] = useState<ActiveView>("input");
   const [isOliveRunning, setIsOliveRunning] = useState(false);
@@ -315,7 +319,10 @@ function Dashboard() {
                   identical, which keeps the center cluster visually centered
                   instead of drifting toward the empty side.
                 */}
-                <div className="justify-self-start" aria-hidden="true">
+                <div className="justify-self-start flex items-center gap-2" aria-hidden="true">
+                  <span className="invisible p-1.5">
+                    <Settings className="h-4 w-4" />
+                  </span>
                   <span
                     className={cn(
                       "invisible px-2.5 wide:px-3 py-1.5 border text-[clamp(0.75rem,0.65rem+0.3vw,0.875rem)] flex items-center gap-1.5",
@@ -332,7 +339,8 @@ function Dashboard() {
                   <span className="hidden sm:block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />
                   <AgentAccessControls />
                 </div>
-                <div className="justify-self-end">
+                <div className="justify-self-end flex items-center gap-2">
+                  <SettingsMenu />
                   <button
                     type="button"
                     onClick={() => setIsAiSidebarOpen((open) => !open)}
@@ -454,20 +462,20 @@ function Dashboard() {
           <ErrorBoundary label="Report issue" onReportError={() => setIsReportOpen(false)}>
             <Suspense fallback={null}>
               <ReportIssueModal
-          open={isReportOpen}
-          onClose={() => {
-            setIsReportOpen(false);
-            setReportData(null);
-          }}
-          state={pipelineState}
-          defaultArea={labelToArea(reportData?.label)}
-          defaultDescription={
-            reportData
-              ? `Error in ${reportData.label ?? "unknown section"}:\n\n${reportData.error.message}\n\n${reportData.componentStack ? `Component stack:\n${reportData.componentStack}` : ""}`
-              : undefined
-          }
-          frequencyInfo={reportData?.frequencyInfo}
-        />
+                open={isReportOpen}
+                onClose={() => {
+                  setIsReportOpen(false);
+                  setReportData(null);
+                }}
+                state={pipelineState}
+                defaultArea={labelToArea(reportData?.label)}
+                defaultDescription={
+                  reportData
+                    ? `Error in ${reportData.label ?? "unknown section"}:\n\n${reportData.error.message}\n\n${reportData.componentStack ? `Component stack:\n${reportData.componentStack}` : ""}`
+                    : undefined
+                }
+                frequencyInfo={reportData?.frequencyInfo}
+              />
             </Suspense>
           </ErrorBoundary>
         )}

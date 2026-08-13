@@ -112,6 +112,36 @@
   :root {
     color-scheme: dark;
   }
+
+  [data-theme="light"] {
+    color-scheme: light;
+
+    /* Invert the slate scale: high numbers → light green, low numbers → dark */
+    --color-slate-950: #f0f5e8;
+    /* body bg: very light green */
+    --color-slate-900: #e4ecda;
+    --color-slate-850: #d8e3cc;
+    --color-slate-800: #c8d9b8;
+    --color-slate-750: #b0c99e;
+    --color-slate-700: #94b580;
+    --color-slate-600: #6b8a55;
+    --color-slate-500: #4d6b3a;
+    --color-slate-400: #3a5228;
+    --color-slate-300: #1a1f14;
+    /* body text: near-black */
+    --color-slate-200: #2c3422;
+    --color-slate-100: #1f2518;
+    --color-slate-50: #141a10;
+
+    /* Accent adjustments for light contrast */
+    --color-electric-blue: #5c8020;
+    --color-electric-blue-dark: #4a6a18;
+    --color-olive: #5c8020;
+    --color-olive-dark: #4a6a18;
+    --color-emerald-accent: #4d8b35;
+    --color-emerald-dark: #3a6b28;
+  }
+
   /*
    * Lock the document to the viewport so no descendant can push the body
    * past the screen. Without this, sticky / fixed children or panels with a
@@ -135,11 +165,13 @@
     overflow: hidden;
     overscroll-behavior: none;
   }
+
   html {
     /* Belt-and-braces: prevent horizontal overscroll as well. */
     overflow-x: hidden;
     font-size: 18px;
   }
+
   body {
     @apply bg-slate-950 text-slate-300 font-sans antialiased selection:bg-electric-blue/30;
   }
@@ -163,14 +195,26 @@
   width: 4px;
   height: 4px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   @apply bg-slate-700;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-slate-600;
+}
+
+/* Scrollbar adaptation for light mode */
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background-color: var(--color-slate-700);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-slate-600);
 }
 
 /* Pipeline flow animation */
@@ -182,11 +226,13 @@
 
 /* Olive pulse — replaces the cyan neon glow */
 @keyframes pulsar-glow {
+
   0%,
   100% {
     r: 3px;
     filter: drop-shadow(0 0 2px #8da840);
   }
+
   50% {
     r: 5px;
     filter: drop-shadow(0 0 5px #8da840);
