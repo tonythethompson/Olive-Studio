@@ -44,8 +44,10 @@ export interface UseAgentModeReturn {
 
   /** Switch between manual and agent mode. */
   setMode: (mode: AgentSessionState["mode"]) => void;
+  /** Current backend job id once submit succeeds. */
+  jobId: string | undefined;
   /** Start the agent loop. Clears previous session and starts 10s timeout. */
-  startAgent: () => void;
+  startAgent: (opts?: { recipeJson?: string; cudaVersion?: string }) => Promise<void>;
   /** Stop the agent loop. Creates a terminal cancellation entry. */
   stopAgent: () => void;
   /** Append an entry to the activity log (truncated + FIFO bounded). */
@@ -72,6 +74,7 @@ export function useAgentMode(): UseAgentModeReturn {
   const [entries, setEntries] = useState<ActivityLogEntry[]>([]);
   const [outcome, setOutcome] = useState<AgentOutcome | undefined>(undefined);
   const [startedAt, setStartedAt] = useState<string | undefined>(undefined);
+  const [jobId, setJobId] = useState<string | undefined>(undefined);
 
   // Ref to hold the start timeout so we can clear it on success or stop.
   const startTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -108,17 +111,18 @@ export function useAgentMode(): UseAgentModeReturn {
    * 2. Set agentRunning = true, record startedAt
    * 3. Start a 10-second timeout — if not confirmed, append error and re-enable Start
    */
-  const startAgent = useCallback(() => {
+  const startAgent = useCallback(async (opts?: { recipeJson?: string; cudaVersion?: string }) => {
     // Clear previous session (Requirement 7.5: new session clears old entries)
     setEntries([]);
     setOutcome(undefined);
+    setJobId(undefined);
     stepCountRef.current = 0;
 
     // Mark as running
     setAgentRunning(true);
-    const now = new Date().toISOString();
-    setStartedAt(now);
-    startedAtRef.current = now;
+    const nowIso = new Date().toISOString();
+    setStartedAt(nowIso);
+    startedAtRef.current = nowIso;
 
     // Start 10-second failure timeout (Requirement 6.4)
     clearStartTimeout();
@@ -133,8 +137,46 @@ export function useAgentMode(): UseAgentModeReturn {
       };
       setEntries((prev) => appendEntryFIFO(prev, errorEntry));
       setAgentRunning(false);
+      setOutcome({
+        status: "failure",
+        totalSteps: stepCountRef.current,
+        elapsedMs: startedAtRef.current
+          ? Date.now() - new Date(startedAtRef.current).getTime()
+          : START_TIMEOUT_MS,
+        errorDescription: "Agent failed to start within 10 seconds",
+      });
       startTimeoutRef.current = null;
     }, START_TIMEOUT_MS);
+
+    if (!opts?.recipeJson) return;
+
+    try {
+      const resp = await fetch("/api/olive/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipeJson: opts.recipeJson,
+          cudaVersion: opts.cudaVersion ?? "auto",
+        }),
+      });
+      const data = (await resp.json().catch(() => ({}))) as { jobId?: string; error?: string };
+      if (!resp.ok || !data.jobId) {
+        throw new Error(data.error || `HTTP ${resp.status}`);
+      }
+      setJobId(data.jobId);
+    } catch (err) {
+      clearStartTimeout();
+      const message = err instanceof Error ? err.message : "Failed to submit agent job";
+      setAgentRunning(false);
+      setOutcome({
+        status: "failure",
+        totalSteps: 0,
+        elapsedMs: startedAtRef.current
+          ? Date.now() - new Date(startedAtRef.current).getTime()
+          : 0,
+        errorDescription: message,
+      });
+    }
   }, [clearStartTimeout]);
 
   /**
@@ -205,6 +247,7 @@ export function useAgentMode(): UseAgentModeReturn {
     entries,
     outcome,
     startedAt,
+    jobId,
     setMode,
     startAgent,
     stopAgent,

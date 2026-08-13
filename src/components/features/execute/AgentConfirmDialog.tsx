@@ -31,18 +31,23 @@ export interface AgentConfirmDialogProps {
 
 export function AgentConfirmDialog({ open, onConfirm, onCancel }: AgentConfirmDialogProps) {
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const confirmButtonRef = useRef<HTMLButtonElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
 
   // Focus the Cancel button when the dialog opens (basic focus trap)
   useEffect(() => {
     if (open) {
-      // Use requestAnimationFrame to ensure the DOM is ready
+      openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       requestAnimationFrame(() => {
         cancelButtonRef.current?.focus();
       });
+      return () => {
+        openerRef.current?.focus();
+      };
     }
   }, [open]);
 
-  // Handle Escape key to dismiss
+  // Handle Escape key to dismiss and Tab trap
   useEffect(() => {
     if (!open) return;
 
@@ -50,6 +55,21 @@ export function AgentConfirmDialog({ open, onConfirm, onCancel }: AgentConfirmDi
       if (e.key === "Escape") {
         e.preventDefault();
         onCancel();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const focusables = [cancelButtonRef.current, confirmButtonRef.current].filter(
+        (el): el is HTMLButtonElement => el != null,
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
       }
     };
 
@@ -112,6 +132,7 @@ export function AgentConfirmDialog({ open, onConfirm, onCancel }: AgentConfirmDi
             Cancel
           </Button>
           <Button
+            ref={confirmButtonRef}
             variant="danger"
             onClick={onConfirm}
           >

@@ -130,6 +130,7 @@ describe("useAgentMode", () => {
       expect(result.current.entries.length).toBe(1);
       expect(result.current.entries[0].kind).toBe("error");
       expect(result.current.entries[0].text).toContain("10 seconds");
+      expect(result.current.outcome?.status).toBe("failure");
     });
 
     it("does not fire timeout if confirmStart is called before 10s", () => {

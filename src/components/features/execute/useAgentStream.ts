@@ -202,8 +202,8 @@ export function useAgentStream({
         }
       };
       evtSource.addEventListener("log", handleEntry);
-
       evtSource.addEventListener("metrics", handleEntry);
+      evtSource.onmessage = handleEntry;
 
       // Handle server terminal event
       evtSource.addEventListener("done", (event: MessageEvent) => {

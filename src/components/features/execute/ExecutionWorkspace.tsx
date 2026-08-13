@@ -686,6 +686,7 @@ export function ExecutionWorkspace({
     startedAt: agentStartedAt,
     setMode: setAgentMode,
     startAgent,
+    jobId: agentJobId,
     stopAgent,
     appendEntry: appendAgentEntry,
     confirmStart,
@@ -727,10 +728,18 @@ export function ExecutionWorkspace({
 
   useAgentStream({
     enabled: agentRunning,
+    jobId: agentJobId,
     onEntry: handleAgentStreamEntry,
     onError: handleAgentStreamError,
     onComplete: handleAgentStreamComplete,
   });
+
+  const handleStartAgent = useCallback(() => {
+    void startAgent({
+      recipeJson: buildRecipeJsonFromState(state),
+      cudaVersion: state.cudaVersion ?? "auto",
+    });
+  }, [startAgent, state]);
 
   /**
    * Handle mode toggle. If switching from agent to manual while agent is running,
@@ -790,7 +799,7 @@ export function ExecutionWorkspace({
           <CardContent className="flex flex-col gap-4 p-4">
             <AgentControls
               agentRunning={agentRunning}
-              onStart={startAgent}
+              onStart={handleStartAgent}
               onStop={stopAgent}
               outcome={agentOutcome}
             />

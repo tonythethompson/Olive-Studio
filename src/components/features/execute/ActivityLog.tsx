@@ -57,6 +57,10 @@ export function ActivityLog({ entries, className }: ActivityLogProps) {
    * Auto-scroll to bottom when new entries arrive AND user was at bottom.
    */
   useEffect(() => {
+    if (entries.length === 0) {
+      isNearBottomRef.current = true;
+      return;
+    }
     if (isNearBottomRef.current && containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }

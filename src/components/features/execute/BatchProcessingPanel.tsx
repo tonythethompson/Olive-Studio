@@ -19,6 +19,8 @@ import { getSelectableProviders, type HardwareProbeResult } from "@/lib/hardware
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { LazyMCPDiagnosticCard } from "./LazyMCPDiagnosticCard";
+import { BatchComparisonView } from "./BatchComparisonView";
+import type { JobHistoryRecord } from "@/lib/jobHistoryStore";
 import {
   Play,
   Pause,
@@ -1206,6 +1208,31 @@ export function BatchProcessingPanel({
           </CardContent>
         </Card>
       </div>
+      <BatchComparisonView
+        records={(jobs ?? []).filter(isTerminalBatchStatusJob).map(batchJobToHistoryRecord)}
+        completedJobCount={(jobs ?? []).filter((j) => j.status === "completed").length}
+      />
     </div>
   );
+}
+
+function isTerminalBatchStatusJob(job: BatchJob): job is BatchJob & { status: TerminalBatchStatus } {
+  return isTerminalBatchStatus(job.status);
+}
+
+function batchJobToHistoryRecord(job: BatchJob): JobHistoryRecord {
+  return {
+    id: job.id,
+    jobId: job.oliveJobId ?? job.id,
+    timestamp: new Date().toISOString(),
+    modelId: job.modelIdentifier,
+    ihvProvider: job.provider,
+    memoryOffload: "",
+    status: job.status === "queued" || job.status === "running" ? "failed" : job.status,
+    exitCode: job.status === "completed" ? 0 : 1,
+    durationMs: 0,
+    passCount: job.passes.length,
+    passNames: job.passes,
+    recipeJson: job.recipeJson ?? "",
+  };
 }

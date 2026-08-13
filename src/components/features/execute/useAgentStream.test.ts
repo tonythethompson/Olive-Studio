@@ -63,10 +63,10 @@ describe("useAgentStream", () => {
   describe("connection lifecycle", () => {
     it("opens EventSource when enabled is true", () => {
       const onEntry = vi.fn();
-      renderHook(() => useAgentStream({ enabled: true, onEntry }));
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
 
       expect(mockEventSources).toHaveLength(1);
-      expect(mockEventSources[0].url).toBe("/api/olive/agent/stream");
+      expect(mockEventSources[0].url).toBe("/api/olive/agent/stream/job-1");
     });
 
     it("does not open EventSource when enabled is false", () => {
@@ -79,7 +79,7 @@ describe("useAgentStream", () => {
     it("closes EventSource when enabled becomes false", () => {
       const onEntry = vi.fn();
       const { rerender } = renderHook(
-        ({ enabled }) => useAgentStream({ enabled, onEntry }),
+        ({ enabled }) => useAgentStream({ enabled, jobId: "job-1", onEntry }),
         { initialProps: { enabled: true } },
       );
 
@@ -94,7 +94,7 @@ describe("useAgentStream", () => {
     it("closes EventSource on unmount", () => {
       const onEntry = vi.fn();
       const { unmount } = renderHook(() =>
-        useAgentStream({ enabled: true, onEntry }),
+        useAgentStream({ enabled: true, jobId: "job-1", onEntry }),
       );
 
       const es = mockEventSources[0];
@@ -106,7 +106,7 @@ describe("useAgentStream", () => {
     it("opens a new EventSource when enabled transitions from false to true", () => {
       const onEntry = vi.fn();
       const { rerender } = renderHook(
-        ({ enabled }) => useAgentStream({ enabled, onEntry }),
+        ({ enabled }) => useAgentStream({ enabled, jobId: "job-1", onEntry }),
         { initialProps: { enabled: false } },
       );
 
@@ -121,7 +121,7 @@ describe("useAgentStream", () => {
   describe("event parsing", () => {
     it("parses valid message events into ActivityLogEntry and calls onEntry", () => {
       const onEntry = vi.fn();
-      renderHook(() => useAgentStream({ enabled: true, onEntry }));
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
 
       const es = mockEventSources[0];
       const eventData = JSON.stringify({
@@ -143,7 +143,7 @@ describe("useAgentStream", () => {
 
     it("includes stepRef in the entry when present in the event", () => {
       const onEntry = vi.fn();
-      renderHook(() => useAgentStream({ enabled: true, onEntry }));
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
 
       const es = mockEventSources[0];
       const eventData = JSON.stringify({
@@ -164,7 +164,7 @@ describe("useAgentStream", () => {
 
     it("ignores malformed JSON in message events", () => {
       const onEntry = vi.fn();
-      renderHook(() => useAgentStream({ enabled: true, onEntry }));
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
 
       const es = mockEventSources[0];
 
@@ -177,7 +177,7 @@ describe("useAgentStream", () => {
 
     it("ignores events with invalid kind field", () => {
       const onEntry = vi.fn();
-      renderHook(() => useAgentStream({ enabled: true, onEntry }));
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
 
       const es = mockEventSources[0];
       const eventData = JSON.stringify({
@@ -194,7 +194,7 @@ describe("useAgentStream", () => {
 
     it("ignores events missing required text field", () => {
       const onEntry = vi.fn();
-      renderHook(() => useAgentStream({ enabled: true, onEntry }));
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
 
       const es = mockEventSources[0];
       const eventData = JSON.stringify({ kind: "reasoning" });
@@ -208,7 +208,7 @@ describe("useAgentStream", () => {
 
     it("handles all valid entry kinds", () => {
       const onEntry = vi.fn();
-      renderHook(() => useAgentStream({ enabled: true, onEntry }));
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
 
       const es = mockEventSources[0];
       const kinds = ["reasoning", "tool_call", "tool_result", "decision", "error"];
@@ -231,7 +231,7 @@ describe("useAgentStream", () => {
 
     it("generates unique IDs for each entry", () => {
       const onEntry = vi.fn();
-      renderHook(() => useAgentStream({ enabled: true, onEntry }));
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
 
       const es = mockEventSources[0];
 
@@ -259,7 +259,7 @@ describe("useAgentStream", () => {
     it("resets retry count on successful connection", () => {
       const onEntry = vi.fn();
       const onError = vi.fn();
-      renderHook(() => useAgentStream({ enabled: true, onEntry, onError }));
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry, onError }));
 
       const es = mockEventSources[0];
 
@@ -289,7 +289,7 @@ describe("useAgentStream", () => {
     it("reconnects with exponential backoff delays: 1s, 2s, 4s", () => {
       const onEntry = vi.fn();
       const onError = vi.fn();
-      renderHook(() => useAgentStream({ enabled: true, onEntry, onError }));
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry, onError }));
 
       // First connection fails
       act(() => {
@@ -350,7 +350,7 @@ describe("useAgentStream", () => {
     it("calls onError after 3 retries exhausted", () => {
       const onEntry = vi.fn();
       const onError = vi.fn();
-      renderHook(() => useAgentStream({ enabled: true, onEntry, onError }));
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry, onError }));
 
       // First connection fails immediately
       act(() => {
@@ -406,7 +406,7 @@ describe("useAgentStream", () => {
     it("does not reconnect after retries exhausted", () => {
       const onEntry = vi.fn();
       const onError = vi.fn();
-      renderHook(() => useAgentStream({ enabled: true, onEntry, onError }));
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry, onError }));
 
       // Exhaust all retries
       act(() => {
@@ -450,7 +450,7 @@ describe("useAgentStream", () => {
     it("does not call onError when not provided", () => {
       const onEntry = vi.fn();
       // No onError provided
-      renderHook(() => useAgentStream({ enabled: true, onEntry }));
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
 
       // Exhaust all retries — should not throw
       act(() => {
@@ -491,7 +491,7 @@ describe("useAgentStream", () => {
 
     it("closes EventSource on each failed attempt", () => {
       const onEntry = vi.fn();
-      renderHook(() => useAgentStream({ enabled: true, onEntry }));
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
 
       const es = mockEventSources[0];
       act(() => {
@@ -504,7 +504,7 @@ describe("useAgentStream", () => {
     it("cancels pending reconnect timeout when enabled becomes false", () => {
       const onEntry = vi.fn();
       const { rerender } = renderHook(
-        ({ enabled }) => useAgentStream({ enabled, onEntry }),
+        ({ enabled }) => useAgentStream({ enabled, jobId: "job-1", onEntry }),
         { initialProps: { enabled: true } },
       );
 

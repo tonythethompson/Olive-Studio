@@ -203,7 +203,7 @@ export function BatchComparisonView({
       </div>
 
       {/* MCP Compare Results: metric table */}
-      {compareResults && compareResults.results.length > 0 && (
+      {compareResults && (compareResults.results.length > 0 || compareResults.winner === null) && (
         <div className="space-y-3">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
@@ -276,7 +276,6 @@ export function BatchComparisonView({
             </div>
           )}
 
-          {/* No clear winner + excluded jobs */}
           {compareResults.winner === null && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/5 border border-amber-500/20 rounded-lg">
@@ -288,7 +287,9 @@ export function BatchComparisonView({
               {compareResults.reasoning && (
                 <p className="text-xs text-slate-400 px-3">{compareResults.reasoning}</p>
               )}
-              {compareResults.excluded_jobs.length > 0 && (
+            </div>
+          )}
+          {compareResults.excluded_jobs.length > 0 && (
                 <div className="px-3 space-y-1">
                   <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wide">
                     Excluded Jobs
@@ -309,8 +310,6 @@ export function BatchComparisonView({
                     ))}
                   </ul>
                 </div>
-              )}
-            </div>
           )}
         </div>
       )}
