@@ -69,9 +69,25 @@ jobs:
               print("::error::mcp dependency must be pinned below 2 (unpinned specifier)")
               sys.exit(1)
 
-          # Reject any specifier that allows any 2.x (including prereleases).
-          probes = [Version("2.0.0a0"), Version("2.0.0"), Version("2.0.1"), Version("2.1.0"), Version("2.99.99")]
-          if any(spec.contains(v, prereleases=True) for v in probes):
+          def bump(ver: Version, *, minor=False) -> Version:
+              if minor:
+                  return Version(f"{ver.major}.{ver.minor + 1}.0")
+              return Version(f"{ver.major}.{ver.minor}.{ver.micro + 1}")
+
+          # Any 2.x that satisfies the specifier (including bounds like >2.99.99,<3).
+          candidates = {
+              Version("2.0.0a0"),
+              Version("2.0.0"),
+              Version("2.0.1"),
+              Version("2.1.0"),
+          }
+          for item in spec:
+              bound = Version(item.version)
+              candidates.add(bound)
+              candidates.add(bump(bound))
+              candidates.add(bump(bound, minor=True))
+
+          if any(c.major == 2 and spec.contains(c, prereleases=True) for c in candidates):
               print("::error::mcp dependency must not allow 2.x (e.g. 'mcp>=1,<2'). Got: " + str(req))
               sys.exit(1)
           print("mcp pin excludes 2.x")
