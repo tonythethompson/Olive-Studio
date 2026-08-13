@@ -417,7 +417,7 @@ describe("Property 14: Report Filename Pattern", () => {
     );
   });
 
-  it("filename has exactly 27 characters (olive-report-YYYY-MM-DD.md = 27 chars)", () => {
+  it("filename has exactly 26 characters (olive-report-YYYY-MM-DD.md = 26 chars)", () => {
     fc.assert(
       fc.property(fc.constant(null), () => {
         const filename = getReportFilename();

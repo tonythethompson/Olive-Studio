@@ -103,4 +103,5 @@ export interface WorkspaceFingerprintState {
  */
 export const FINGERPRINT_EXCLUDED_KEYS: (keyof UIState)[] = [
   "activeJobId",
+  "localFiles",
 ];
