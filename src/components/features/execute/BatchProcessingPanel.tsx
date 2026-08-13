@@ -872,6 +872,8 @@ export function BatchProcessingPanel({
       progress: 0,
       logs: ["Pipeline reset to initial queued state by analyst."],
       metrics: undefined,
+      startedAtMs: undefined,
+      finishedAtMs: undefined,
     }));
     setState({ batchJobs: resetJobs });
   };

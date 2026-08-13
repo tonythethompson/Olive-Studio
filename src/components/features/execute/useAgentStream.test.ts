@@ -193,6 +193,32 @@ describe("useAgentStream", () => {
       expect(onEntry.mock.calls[0][0].kind).toBe("tool_result");
     });
 
+    it("dedupes replayed log lines after reconnect", () => {
+      const onEntry = vi.fn();
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
+
+      const payload = JSON.stringify({ line: "[INFO] Olive pass started" });
+      act(() => {
+        mockEventSources[0].onmessage?.(new MessageEvent("message", { data: payload }));
+      });
+      expect(onEntry).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        mockEventSources[0].onerror?.();
+      });
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      act(() => {
+        mockEventSources[1].onmessage?.(new MessageEvent("message", { data: payload }));
+      });
+      expect(onEntry).toHaveBeenCalledTimes(1);
+    });
+
     it("ignores events with invalid kind field", () => {
       const onEntry = vi.fn();
       renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));

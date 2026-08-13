@@ -272,10 +272,14 @@ export function useAgentMode(): UseAgentModeReturn {
       clearStartTimeout();
       runGenerationRef.current += 1;
 
-      const terminalEntry = truncateEntry(createTerminalEntry(completionOutcome));
+      const resolved: AgentOutcome = {
+        ...completionOutcome,
+        totalSteps: Math.max(completionOutcome.totalSteps, stepCountRef.current),
+      };
+      const terminalEntry = truncateEntry(createTerminalEntry(resolved));
       setEntries((prev) => appendEntryFIFO(prev, terminalEntry));
       setAgentRunning(false);
-      setOutcome(completionOutcome);
+      setOutcome(resolved);
     },
     [clearStartTimeout],
   );

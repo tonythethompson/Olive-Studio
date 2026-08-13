@@ -705,7 +705,7 @@ export function ExecutionWorkspace({
       .catch(() => {
         setExportRecords([]);
       });
-  }, [isHistoryOpen, agentOutcome]);
+  }, [isHistoryOpen, agentOutcome, executionStatus]);
 
   // SSE stream for agent activity
   const handleAgentStreamEntry = useCallback(

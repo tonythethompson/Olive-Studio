@@ -154,6 +154,7 @@ export function BatchComparisonView({
       </div>
 
       {/* Scoring preference selector and Compare button */}
+      {onCompare && (
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <label htmlFor={scoringSelectId} className="text-xs text-slate-400 font-medium">
@@ -173,12 +174,13 @@ export function BatchComparisonView({
           </select>
         </div>
 
-        {onCompare && (
           <div className="relative group">
             <button
               type="button"
-              onClick={() => onCompare(scoringPreference)}
-              disabled={!canCompare}
+              onClick={() => {
+                if (canCompare) onCompare(scoringPreference);
+              }}
+              aria-disabled={!canCompare}
               aria-describedby={!canCompare ? `${scoringSelectId}-compare-hint` : undefined}
               title={
                 !canCompare
@@ -208,8 +210,8 @@ export function BatchComparisonView({
               </div>
             )}
           </div>
-        )}
       </div>
+      )}
 
       {/* MCP Compare Results: metric table */}
       {compareResults && (compareResults.results.length > 0 || compareResults.winner === null) && (

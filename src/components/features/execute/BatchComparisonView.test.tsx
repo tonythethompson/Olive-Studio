@@ -108,6 +108,13 @@ describe("BatchComparisonView", () => {
   // Scoring preference tests (Requirement 8.7)
   // ────────────────────────────────────────────────────────────
 
+  it("hides scoring selector when onCompare is absent", () => {
+    const records = [makeRecord({ id: "a" }), makeRecord({ id: "b" })];
+    render(<BatchComparisonView records={records} />);
+    expect(screen.queryByLabelText("Scoring:")).toBeNull();
+    expect(screen.queryByText("Compare Results")).toBeNull();
+  });
+
   it("renders scoring preference selector with default 'balanced'", () => {
     const records = [makeRecord({ id: "a" }), makeRecord({ id: "b" })];
     render(<BatchComparisonView records={records} onCompare={vi.fn()} />);
@@ -150,7 +157,7 @@ describe("BatchComparisonView", () => {
     const onCompare = vi.fn();
     render(<BatchComparisonView records={records} onCompare={onCompare} completedJobCount={1} />);
     const btn = screen.getByText("Compare Results");
-    expect(btn).toHaveProperty("disabled", true);
+    expect(btn.getAttribute("aria-disabled")).toBe("true");
   });
 
   it("enables Compare Results button when 2 or more completed jobs", () => {
@@ -161,7 +168,7 @@ describe("BatchComparisonView", () => {
     const onCompare = vi.fn();
     render(<BatchComparisonView records={records} onCompare={onCompare} completedJobCount={2} />);
     const btn = screen.getByText("Compare Results");
-    expect(btn).toHaveProperty("disabled", false);
+    expect(btn.getAttribute("aria-disabled")).toBe("false");
   });
 
   it("shows tooltip when Compare Results is disabled", () => {

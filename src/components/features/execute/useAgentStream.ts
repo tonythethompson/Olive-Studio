@@ -168,6 +168,7 @@ export function useAgentStream({
   const retryCountRef = useRef(0);
   const isMountedRef = useRef(true);
   const completedRef = useRef(false);
+  const seenPayloadKeysRef = useRef(new Set<string>());
 
   // Cleanup helper
   const cleanup = useCallback(() => {
@@ -181,6 +182,7 @@ export function useAgentStream({
     }
     retryCountRef.current = 0;
     completedRef.current = false;
+    seenPayloadKeysRef.current = new Set();
   }, []);
 
   useEffect(() => {
@@ -216,6 +218,13 @@ export function useAgentStream({
           const data: unknown = JSON.parse(String(event.data));
           const entry = parseStreamPayload(data);
           if (entry) {
+            const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+            const key =
+              (record && typeof record.id === "string" && record.id) ||
+              (record && typeof record.line === "string" && `line:${record.line}`) ||
+              `${entry.kind}:${entry.text}`;
+            if (seenPayloadKeysRef.current.has(key)) return;
+            seenPayloadKeysRef.current.add(key);
             // A parsed payload means the stream is actually delivering data.
             retryCountRef.current = 0;
             onEntryRef.current(entry);
