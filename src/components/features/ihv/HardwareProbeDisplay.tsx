@@ -40,104 +40,7 @@ export function HardwareProbeDisplay({
           {probeError ? (
             <p className="text-sm text-rose-400 break-all">{probeError}</p>
           ) : hardwareProbe ? (
-            <div className="space-y-1.5 text-sm text-slate-400">
-              <p>
-                <span className="text-slate-500">CPU:</span>{" "}
-                <span className="text-slate-200">{hardwareProbe.platform.cpuModel}</span>
-                <span className="text-slate-600">
-                  {" "}
-                  · {hardwareProbe.platform.cpuCores} cores · {hardwareProbe.platform.os} (
-                  {hardwareProbe.platform.arch})
-                </span>
-              </p>
-              <p>
-                <span className="text-slate-500">System RAM:</span>{" "}
-                <span className="text-slate-200 font-mono">
-                  {hardwareProbe.platform.systemRamGb != null
-                    ? formatMemoryGb(hardwareProbe.platform.systemRamGb)
-                    : "Unknown"}
-                </span>
-              </p>
-              {hardwareProbe.nvidia?.gpus.length ? (
-                <p>
-                  <span className="text-slate-500">NVIDIA:</span>{" "}
-                  <span className="text-slate-200">
-                    {hardwareProbe.nvidia.gpus
-                      .map((g) =>
-                        g.vramMb ? `${g.name} (${formatMemoryGb(g.vramMb / 1024)})` : g.name,
-                      )
-                      .join(", ")}
-                  </span>
-                  {hardwareProbe.nvidia.cudaVersion && (
-                    <span className="text-slate-600">
-                      {" "}
-                      · driver CUDA {hardwareProbe.nvidia.cudaVersion}
-                      {hardwareProbe.nvidia.cudaTag ? ` → ${hardwareProbe.nvidia.cudaTag}` : ""}
-                    </span>
-                  )}
-                </p>
-              ) : (
-                <p>
-                  <span className="text-slate-500">NVIDIA:</span>{" "}
-                  <span className="text-slate-600">not detected</span>
-                </p>
-              )}
-              {hardwareProbe.rocm?.gpus.length ? (
-                <p>
-                  <span className="text-slate-500">AMD ROCm:</span>{" "}
-                  <span className="text-slate-200">
-                    {hardwareProbe.rocm.gpus
-                      .map((g) =>
-                        g.vramMb ? `${g.name} (${formatMemoryGb(g.vramMb / 1024)})` : g.name,
-                      )
-                      .join(", ")}
-                  </span>
-                </p>
-              ) : null}
-              {hardwareProbe.openvino?.loadable ? (
-                <p>
-                  <span className="text-slate-500">OpenVINO:</span>{" "}
-                  <span className="text-slate-200">
-                    Python package v{hardwareProbe.openvino.version ?? "unknown"}
-                  </span>
-                </p>
-              ) : null}
-              {hardwareProbe.onnxRuntimeProviders?.length ? (
-                <p>
-                  <span className="text-slate-500">ONNX Runtime EPs:</span>{" "}
-                  <span className="font-mono text-xs text-emerald-400">
-                    {hardwareProbe.onnxRuntimeProviders.join(", ")}
-                  </span>
-                </p>
-              ) : null}
-              {!hardwareProbe.detectedProviders?.includes(state.ihvProvider) && (
-                <p className="text-xs text-slate-500 pt-1">
-                  Recommended target:{" "}
-                  <span className="text-electric-blue font-semibold">
-                    {providers.find((p) => p.id === hardwareProbe.recommendedProvider)?.name ??
-                      hardwareProbe.recommendedProvider}
-                  </span>
-                  {state.ihvProvider !== hardwareProbe.recommendedProvider && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                      {
-                        const patch = prepareProviderChange(
-                          state,
-                          hardwareProbe.recommendedProvider,
-                          hardwareProbe,
-                        );
-                        if (patch) setState(patch);
-                      }
-                      }
-                      className="ml-2 text-sm text-electric-blue hover:text-white cursor-pointer"
-                    >
-                      Apply
-                    </button>
-                  )}
-                </p>
-              )}
-            </div>
+            <HardwareProbeDetails state={state} setState={setState} hardwareProbe={hardwareProbe} />
           ) : !probeLoading ? (
             <p className="text-sm text-slate-500">No hardware data yet.</p>
           ) : null}
@@ -152,6 +55,109 @@ export function HardwareProbeDisplay({
           Re-scan hardware
         </button>
       </div>
+    </div>
+  );
+}
+
+interface HardwareProbeDetailsProps {
+  state: UIState;
+  setState: (s: Partial<UIState>) => void;
+  hardwareProbe: HardwareProbeResult;
+}
+
+/** Detected CPU/GPU/runtime rows plus the recommended-EP nudge. Split out of
+ * HardwareProbeDisplay to keep that component's branch count low. */
+function HardwareProbeDetails({ state, setState, hardwareProbe }: HardwareProbeDetailsProps) {
+  const showRecommendation = !hardwareProbe.detectedProviders?.includes(state.ihvProvider);
+
+  return (
+    <div className="space-y-1.5 text-sm text-slate-400">
+      <p>
+        <span className="text-slate-500">CPU:</span>{" "}
+        <span className="text-slate-200">{hardwareProbe.platform.cpuModel}</span>
+        <span className="text-slate-600">
+          {" "}
+          · {hardwareProbe.platform.cpuCores} cores · {hardwareProbe.platform.os} (
+          {hardwareProbe.platform.arch})
+        </span>
+      </p>
+      <p>
+        <span className="text-slate-500">System RAM:</span>{" "}
+        <span className="text-slate-200 font-mono">
+          {hardwareProbe.platform.systemRamGb != null
+            ? formatMemoryGb(hardwareProbe.platform.systemRamGb)
+            : "Unknown"}
+        </span>
+      </p>
+      {hardwareProbe.nvidia?.gpus.length ? (
+        <p>
+          <span className="text-slate-500">NVIDIA:</span>{" "}
+          <span className="text-slate-200">
+            {hardwareProbe.nvidia.gpus
+              .map((g) => (g.vramMb ? `${g.name} (${formatMemoryGb(g.vramMb / 1024)})` : g.name))
+              .join(", ")}
+          </span>
+          {hardwareProbe.nvidia.cudaVersion && (
+            <span className="text-slate-600">
+              {" "}
+              · driver CUDA {hardwareProbe.nvidia.cudaVersion}
+              {hardwareProbe.nvidia.cudaTag ? ` → ${hardwareProbe.nvidia.cudaTag}` : ""}
+            </span>
+          )}
+        </p>
+      ) : (
+        <p>
+          <span className="text-slate-500">NVIDIA:</span>{" "}
+          <span className="text-slate-600">not detected</span>
+        </p>
+      )}
+      {hardwareProbe.rocm?.gpus.length ? (
+        <p>
+          <span className="text-slate-500">AMD ROCm:</span>{" "}
+          <span className="text-slate-200">
+            {hardwareProbe.rocm.gpus
+              .map((g) => (g.vramMb ? `${g.name} (${formatMemoryGb(g.vramMb / 1024)})` : g.name))
+              .join(", ")}
+          </span>
+        </p>
+      ) : null}
+      {hardwareProbe.openvino?.loadable ? (
+        <p>
+          <span className="text-slate-500">OpenVINO:</span>{" "}
+          <span className="text-slate-200">
+            Python package v{hardwareProbe.openvino.version ?? "unknown"}
+          </span>
+        </p>
+      ) : null}
+      {hardwareProbe.onnxRuntimeProviders?.length ? (
+        <p>
+          <span className="text-slate-500">ONNX Runtime EPs:</span>{" "}
+          <span className="font-mono text-xs text-emerald-400">
+            {hardwareProbe.onnxRuntimeProviders.join(", ")}
+          </span>
+        </p>
+      ) : null}
+      {showRecommendation && (
+        <p className="text-xs text-slate-500 pt-1">
+          Recommended target:{" "}
+          <span className="text-electric-blue font-semibold">
+            {providers.find((p) => p.id === hardwareProbe.recommendedProvider)?.name ??
+              hardwareProbe.recommendedProvider}
+          </span>
+          {state.ihvProvider !== hardwareProbe.recommendedProvider && (
+            <button
+              type="button"
+              onClick={() => {
+                const patch = prepareProviderChange(state, hardwareProbe.recommendedProvider, hardwareProbe);
+                if (patch) setState(patch);
+              }}
+              className="ml-2 text-sm text-electric-blue hover:text-white cursor-pointer"
+            >
+              Apply
+            </button>
+          )}
+        </p>
+      )}
     </div>
   );
 }
