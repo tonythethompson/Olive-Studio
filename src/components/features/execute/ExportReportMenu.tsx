@@ -37,7 +37,10 @@ export function ExportReportMenu({
   const containerRef = useRef<HTMLDivElement>(null);
   const flagEnabled = isFeatureEnabled("reportExport");
 
-  const completedRecords = records.filter((record) => record.status === "completed");
+  const completedRecords = useMemo(
+    () => records.filter((record) => record.status === "completed"),
+    [records],
+  );
   const isDisabled = disabled || completedRecords.length === 0;
 
   const handleDownloadMarkdown = useCallback(() => {
