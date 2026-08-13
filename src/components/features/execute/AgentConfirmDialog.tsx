@@ -38,10 +38,11 @@ export function AgentConfirmDialog({ open, onConfirm, onCancel }: AgentConfirmDi
   useEffect(() => {
     if (open) {
       openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      requestAnimationFrame(() => {
+      const frame = requestAnimationFrame(() => {
         cancelButtonRef.current?.focus();
       });
       return () => {
+        cancelAnimationFrame(frame);
         openerRef.current?.focus();
       };
     }
