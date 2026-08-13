@@ -348,6 +348,7 @@ function PluginInstallBlock({
   error,
   log,
   variant = "compatible",
+  isExpanded,
 }: {
   description: ReactNode;
   detail?: string | null;
@@ -360,14 +361,18 @@ function PluginInstallBlock({
   log: string[];
   /** "compatible" = green (hardware present), "cross-compile" = neutral (no local hardware). */
   variant?: "compatible" | "cross-compile";
+  /** Explanatory copy stays collapsed by default; the install action itself never does. */
+  isExpanded: boolean;
 }) {
   const isGreen = variant === "compatible";
   return (
     <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
-      <p className={cn("text-xs leading-relaxed", isGreen ? "text-emerald-400/90" : "text-slate-400")}>
-        {description}
-      </p>
-      {detail ? (
+      {isExpanded && (
+        <p className={cn("text-xs leading-relaxed", isGreen ? "text-emerald-400/90" : "text-slate-400")}>
+          {description}
+        </p>
+      )}
+      {isExpanded && detail ? (
         <p className="text-[11px] text-slate-500 font-mono break-all max-w-full" title={detail}>
           {detail}
         </p>
@@ -439,6 +444,7 @@ function ProviderPluginInstalls({
   installOrtGpuError,
   installOrtGpuLog,
   onInstallOrtGpu,
+  isExpanded,
 }: {
   providerId: IHVProvider;
   hardwareProbe: HardwareProbeResult | null;
@@ -467,6 +473,8 @@ function ProviderPluginInstalls({
   installOrtGpuError: string | null;
   installOrtGpuLog: string[];
   onInstallOrtGpu: () => void;
+  /** Explanatory copy stays collapsed by default; install actions themselves never do. */
+  isExpanded: boolean;
 }) {
   if (providerId === "NvTensorRTRTXExecutionProvider" && trtRtxNeedsInstall) {
     return (
@@ -487,6 +495,7 @@ function ProviderPluginInstalls({
         error={installTrtRtxError}
         log={installTrtRtxLog}
         variant="compatible"
+        isExpanded={isExpanded}
       />
     );
   }
@@ -510,6 +519,7 @@ function ProviderPluginInstalls({
         error={installTrtError}
         log={installTrtLog}
         variant="compatible"
+        isExpanded={isExpanded}
       />
     );
   }
@@ -539,6 +549,7 @@ function ProviderPluginInstalls({
         error={openvinoInstall.state.error}
         log={openvinoInstall.state.log}
         variant={hasIntelHardware ? "compatible" : "cross-compile"}
+        isExpanded={isExpanded}
       />
     );
   }
@@ -583,6 +594,7 @@ function ProviderPluginInstalls({
             onInstall={() => void qnnInstall.install()}
             error={qnnInstall.state.error}
             log={qnnInstall.state.log}
+            isExpanded={isExpanded}
           />
         ) : null}
         {qnnShowTestNpu ? (
@@ -634,6 +646,7 @@ function ProviderPluginInstalls({
         error={directMlInstall.state.error}
         log={directMlInstall.state.log}
         variant="compatible"
+        isExpanded={isExpanded}
       />
     );
   }
@@ -677,9 +690,10 @@ function ProviderPluginInstalls({
             error={installOrtGpuError}
             log={installOrtGpuLog}
             variant="compatible"
+            isExpanded={isExpanded}
           />
         ) : null}
-        {cudaToolkitMissing && cudaEpInVenv ? (
+        {isExpanded && cudaToolkitMissing && cudaEpInVenv ? (
           <p className="text-xs text-amber-500/80 leading-relaxed">
             NVIDIA driver + onnxruntime-gpu CUDA EP detected, but the CUDA Toolkit (
             <code className="text-slate-400">nvcc</code>) is not installed. Inference via OLIVE
@@ -707,10 +721,12 @@ function ProviderPluginInstalls({
     const rocmUrl = rocmDownloadUrlForOs(hardwareProbe?.platform.os);
     return (
       <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
-        <p className="text-xs text-emerald-400/90 leading-relaxed">
-          AMD GPU detected ({hardwareProbe?.rocm?.gpus.map((g) => g.name).join(", ")}). ROCm
-          runtime is required for the ROCM execution provider. Install from AMD, then re-probe.
-        </p>
+        {isExpanded && (
+          <p className="text-xs text-emerald-400/90 leading-relaxed">
+            AMD GPU detected ({hardwareProbe?.rocm?.gpus.map((g) => g.name).join(", ")}). ROCm
+            runtime is required for the ROCM execution provider. Install from AMD, then re-probe.
+          </p>
+        )}
         <a
           href={rocmUrl}
           target="_blank"
@@ -985,40 +1001,43 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
             />
             {isExpanded ? "Hide details" : "Show details"}
           </button>
+          {/* Always surfaced, independent of the details toggle — a user should never have to
+              expand a card to find the action that fixes "not ready" / "needs install". */}
+          <ProviderPluginInstalls
+            providerId={p.id}
+            hardwareProbe={hardwareProbe}
+            trtRtxNeedsInstall={trtRtxNeedsInstall}
+            trtNeedsInstall={trtNeedsInstall}
+            openvinoNeedsInstall={openvinoNeedsInstall}
+            hardwareInstallBusy={hardwareInstallBusy}
+            installingTrtRtx={installingTrtRtx}
+            installTrtRtxError={installTrtRtxError}
+            installTrtRtxLog={installTrtRtxLog}
+            onInstallTensorRtRtx={onInstallTensorRtRtx}
+            installingTrt={installingTrt}
+            installTrtError={installTrtError}
+            installTrtLog={installTrtLog}
+            onInstallTensorRt={onInstallTensorRt}
+            openvinoInstall={openvinoInstall}
+            qnnInstall={qnnInstall}
+            directMlInstall={directMlInstall}
+            isPreMaxwellBox={isPreMaxwellBox}
+            cudaNeedsOrtGpuInstall={cudaNeedsOrtGpuInstall}
+            cudaToolkitMissingAndEpWorks={cudaToolkitMissingAndEpWorks}
+            cudaToolkitMissing={cudaToolkitMissing}
+            cudaEpInVenv={cudaEpInVenv}
+            nvidiaGpus={nvidiaGpus}
+            installingOrtGpu={installingOrtGpu}
+            installOrtGpuError={installOrtGpuError}
+            installOrtGpuLog={installOrtGpuLog}
+            onInstallOrtGpu={onInstallOrtGpu}
+            isExpanded={isExpanded}
+          />
           {isExpanded && (
             <div id={detailsId}>
               {detectedLocally && hardwareDetail ? (
                 <p className="text-xs text-emerald-400/90 font-mono break-words">{hardwareDetail}</p>
               ) : null}
-              <ProviderPluginInstalls
-                providerId={p.id}
-                hardwareProbe={hardwareProbe}
-                trtRtxNeedsInstall={trtRtxNeedsInstall}
-                trtNeedsInstall={trtNeedsInstall}
-                openvinoNeedsInstall={openvinoNeedsInstall}
-                hardwareInstallBusy={hardwareInstallBusy}
-                installingTrtRtx={installingTrtRtx}
-                installTrtRtxError={installTrtRtxError}
-                installTrtRtxLog={installTrtRtxLog}
-                onInstallTensorRtRtx={onInstallTensorRtRtx}
-                installingTrt={installingTrt}
-                installTrtError={installTrtError}
-                installTrtLog={installTrtLog}
-                onInstallTensorRt={onInstallTensorRt}
-                openvinoInstall={openvinoInstall}
-                qnnInstall={qnnInstall}
-                directMlInstall={directMlInstall}
-                isPreMaxwellBox={isPreMaxwellBox}
-                cudaNeedsOrtGpuInstall={cudaNeedsOrtGpuInstall}
-                cudaToolkitMissingAndEpWorks={cudaToolkitMissingAndEpWorks}
-                cudaToolkitMissing={cudaToolkitMissing}
-                cudaEpInVenv={cudaEpInVenv}
-                nvidiaGpus={nvidiaGpus}
-                installingOrtGpu={installingOrtGpu}
-                installOrtGpuError={installOrtGpuError}
-                installOrtGpuLog={installOrtGpuLog}
-                onInstallOrtGpu={onInstallOrtGpu}
-              />
               {p.id === "OpenVINOExecutionProvider" ? (
                 <OpenVinoDeviceHint hardwareProbe={hardwareProbe} />
               ) : null}

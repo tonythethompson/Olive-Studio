@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw, FlaskConical } from "lucide-react";
+import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw, FlaskConical, Settings } from "lucide-react";
+import { useThemeEffect } from "@/lib/hooks/useThemeEffect";
+import { SettingsMenu } from "@/components/SettingsMenu";
 import { InputEnvironmentPanel } from "@/components/features/input/InputEnvironmentPanel";
 import { LicenseNotice } from "@/components/LicenseNotice";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -15,6 +17,7 @@ import { TitleBar } from "@/components/TitleBar";
 import { DesktopMinimumViewport } from "@/components/DesktopMinimumViewport";
 import { cn } from "@/lib/utils";
 import { OLIVE_PIPELINE_NAVIGATE, isPipelineViewId, type PipelineViewId } from "@/lib/pipelineNavigation";
+import { OLIVE_ASK_AI_CHAT, type AskAiChatDetail } from "@/lib/aiChatBridge";
 
 const BatchProcessingPanel = lazy(() =>
   import("@/components/features/execute/BatchProcessingPanel").then((m) => ({ default: m.BatchProcessingPanel })),
@@ -103,11 +106,27 @@ const SECTIONS: { id: ActiveView; step: string; label: string; desc: string; ico
  * Renders the Olive Studio recipe builder dashboard with navigable model, hardware, and execution sections.
  */
 function Dashboard() {
+  useThemeEffect();
+
   const { state: pipelineState } = usePipelineState();
   const [activeView, setActiveView] = useState<ActiveView>("input");
+  const [visitedSections, setVisitedSections] = useState<ReadonlySet<ActiveView>>(() => new Set(["input"]));
+
+  // Header center cluster (KB sync / runtime / agent access) must never wrap
+  // onto a second line. Measure the actual gap between the fixed left and
+  // right header columns and collapse the cluster to icon-only once the
+  // full-label layout wouldn't fit — driven by real available space rather
+  // than a viewport breakpoint, since the sidebar and header columns already
+  // resize independently at their own breakpoints.
+  const headerLeftRef = useRef<HTMLDivElement>(null);
+  const headerRightRef = useRef<HTMLDivElement>(null);
+  const [headerCompact, setHeaderCompact] = useState(false);
+  const HEADER_CLUSTER_FULL_WIDTH = 520;
+
   const [isOliveRunning, setIsOliveRunning] = useState(false);
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
   const [triggerAiAudit, setTriggerAiAudit] = useState(false);
+  const [pendingChatQuery, setPendingChatQuery] = useState<AskAiChatDetail | null>(null);
   const [licenseOpen, setLicenseOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportData, setReportData] = useState<{
@@ -116,6 +135,27 @@ function Dashboard() {
     componentStack?: string;
     frequencyInfo?: import("@/lib/errorFrequency").ErrorFrequencyInfo | null;
   } | null>(null);
+
+  useEffect(() => {
+    const leftEl = headerLeftRef.current;
+    const rightEl = headerRightRef.current;
+    if (!leftEl || !rightEl) return;
+
+    const measure = () => {
+      const available = rightEl.getBoundingClientRect().left - leftEl.getBoundingClientRect().right;
+      setHeaderCompact(available < HEADER_CLUSTER_FULL_WIDTH);
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(leftEl);
+    ro.observe(rightEl);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [isAiSidebarOpen]);
 
   const handleReportError = useCallback(
     (details: {
@@ -153,6 +193,7 @@ function Dashboard() {
     (id: ActiveView) => {
       if (isOliveRunning && id !== "execute" && id !== "playground") return;
       setActiveView(id);
+      setVisitedSections((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
       scrollingToRef.current = id;
       const main = mainRef.current;
       const target = document.getElementById(id);
@@ -182,6 +223,17 @@ function Dashboard() {
   }, [scrollToSection]);
 
   useEffect(() => {
+    const onAskAiChat = (event: Event) => {
+      const detail = (event as CustomEvent<AskAiChatDetail>).detail;
+      if (!detail?.query) return;
+      setIsAiSidebarOpen(true);
+      setPendingChatQuery(detail);
+    };
+    window.addEventListener(OLIVE_ASK_AI_CHAT, onAskAiChat);
+    return () => window.removeEventListener(OLIVE_ASK_AI_CHAT, onAskAiChat);
+  }, []);
+
+  useEffect(() => {
     const main = mainRef.current;
     if (!main) return;
 
@@ -195,6 +247,7 @@ function Dashboard() {
         if (el.getBoundingClientRect().top - mainTop <= 96) current = id;
       }
       setActiveView((prev) => (prev === current ? prev : current));
+      setVisitedSections((prev) => (prev.has(current) ? prev : new Set(prev).add(current)));
     };
 
     main.addEventListener("scroll", syncActiveFromScroll, { passive: true });
@@ -238,7 +291,7 @@ function Dashboard() {
                 {SECTIONS.map(({ id, step, label, icon: Icon }) => {
                   const isActive = activeView === id;
                   const modelSelected = hasSelectedModel(pipelineState);
-                  const isIncomplete = !modelSelected && id !== "input";
+                  const isIncomplete = !modelSelected && id !== "input" && !visitedSections.has(id);
                   return (
                     <button
                       key={id}
@@ -315,7 +368,10 @@ function Dashboard() {
                   identical, which keeps the center cluster visually centered
                   instead of drifting toward the empty side.
                 */}
-                <div className="justify-self-start" aria-hidden="true">
+                <div ref={headerLeftRef} className="justify-self-start flex items-center gap-2" aria-hidden="true">
+                  <span className="invisible p-1.5">
+                    <Settings className="h-4 w-4" />
+                  </span>
                   <span
                     className={cn(
                       "invisible px-2.5 wide:px-3 py-1.5 border text-[clamp(0.75rem,0.65rem+0.3vw,0.875rem)] flex items-center gap-1.5",
@@ -325,14 +381,15 @@ function Dashboard() {
                     <span className="hidden wide:inline">Assistant</span>
                   </span>
                 </div>
-                <div className="justify-self-center flex items-center flex-wrap justify-center gap-x-3 gap-y-1 min-w-0 overflow-hidden">
-                  <KbSyncIndicator />
-                  <span className="hidden sm:block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />
-                  <RuntimeEnvControls />
-                  <span className="hidden sm:block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />
-                  <AgentAccessControls />
+                <div className="justify-self-center flex items-center flex-nowrap justify-center gap-x-3 min-w-0 overflow-hidden">
+                  <KbSyncIndicator compact={headerCompact} />
+                  {!headerCompact && <span className="block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />}
+                  <RuntimeEnvControls compact={headerCompact} />
+                  {!headerCompact && <span className="block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />}
+                  <AgentAccessControls compact={headerCompact} />
                 </div>
-                <div className="justify-self-end">
+                <div ref={headerRightRef} className="justify-self-end flex items-center gap-2">
+                  <SettingsMenu />
                   <button
                     type="button"
                     onClick={() => setIsAiSidebarOpen((open) => !open)}
@@ -354,7 +411,7 @@ function Dashboard() {
               <main
                 ref={mainRef}
                 id="main"
-                className="flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-5 wide:px-6 wide:py-8 min-[1000px]:px-10 h-full min-w-0"
+                className="flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 wide:px-6 wide:py-5 min-[1000px]:px-8 h-full min-w-0"
               >
                 <h1 className="sr-only">Olive Studio recipe builder</h1>
                 <div className="mx-auto w-full max-w-5xl min-w-0">
@@ -368,7 +425,7 @@ function Dashboard() {
                         data-pipeline-section={id}
                         className={cn(
                           "scroll-mt-4",
-                          index > 0 && "mt-12 pt-10 border-t border-slate-800",
+                          index > 0 && "mt-6 pt-5 border-t border-slate-800",
                           // The final pipeline section must be tall enough that
                           // `scrollIntoView({block:"start"})` can land its top at
                           // the scroll-container's top without being clamped to
@@ -382,8 +439,8 @@ function Dashboard() {
                           isLast && "min-h-[calc(100dvh-3rem)] pb-16",
                         )}
                       >
-                        <header className="mb-5 pb-4 border-b border-slate-800/80">
-                          <p className="text-xs text-electric-blue mb-1">{step}</p>
+                        <header className="mb-3 pb-2.5 border-b border-slate-800/80">
+                          <p className="text-xs text-electric-blue mb-0.5">{step}</p>
                           <h2 id={`${id}-heading`} className="text-lg font-semibold text-slate-100">
                             {label}
                           </h2>
@@ -441,6 +498,8 @@ function Dashboard() {
                   onClose={() => setIsAiSidebarOpen(false)}
                   openToAudit={triggerAiAudit}
                   onAuditOpened={() => setTriggerAiAudit(false)}
+                  pendingChatQuery={pendingChatQuery}
+                  onChatQueryConsumed={() => setPendingChatQuery(null)}
                 />
               </Suspense>
             </ErrorBoundary>
@@ -454,20 +513,20 @@ function Dashboard() {
           <ErrorBoundary label="Report issue" onReportError={() => setIsReportOpen(false)}>
             <Suspense fallback={null}>
               <ReportIssueModal
-          open={isReportOpen}
-          onClose={() => {
-            setIsReportOpen(false);
-            setReportData(null);
-          }}
-          state={pipelineState}
-          defaultArea={labelToArea(reportData?.label)}
-          defaultDescription={
-            reportData
-              ? `Error in ${reportData.label ?? "unknown section"}:\n\n${reportData.error.message}\n\n${reportData.componentStack ? `Component stack:\n${reportData.componentStack}` : ""}`
-              : undefined
-          }
-          frequencyInfo={reportData?.frequencyInfo}
-        />
+                open={isReportOpen}
+                onClose={() => {
+                  setIsReportOpen(false);
+                  setReportData(null);
+                }}
+                state={pipelineState}
+                defaultArea={labelToArea(reportData?.label)}
+                defaultDescription={
+                  reportData
+                    ? `Error in ${reportData.label ?? "unknown section"}:\n\n${reportData.error.message}\n\n${reportData.componentStack ? `Component stack:\n${reportData.componentStack}` : ""}`
+                    : undefined
+                }
+                frequencyInfo={reportData?.frequencyInfo}
+              />
             </Suspense>
           </ErrorBoundary>
         )}

@@ -41,7 +41,6 @@ import {
   RefreshCw,
   Download,
   AlertTriangle,
-  CircleDot,
   History,
   Square,
   Wrench,
@@ -206,7 +205,6 @@ export function ExecutionWorkspace({
   };
   const [_isCopied, setIsCopied] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
-  const [showGraphDot, setShowGraphDot] = useState(true);
   const [isExportCopied, setIsExportCopied] = useState(false);
   const [justQueued, setJustQueued] = useState(false);
 
@@ -477,9 +475,9 @@ export function ExecutionWorkspace({
     executionStatus,
     executionExitCode,
     gpuMetrics,
-    runRecipeJson,
     handleExecuteLive,
     handleCancelJob,
+    runRecipeJsonRef,
   } = useOliveStream({
     state,
     hardwareProbe,
@@ -582,10 +580,10 @@ export function ExecutionWorkspace({
   // not a rebuilt version that might include post-run state edits.
   const setCapturedRunRecipe = usePlaygroundStore((s) => s.setCapturedRunRecipe);
   useEffect(() => {
-    if (executionStatus === "completed" && runRecipeJson) {
-      setCapturedRunRecipe(runRecipeJson);
+    if (executionStatus === "completed" && runRecipeJsonRef.current) {
+      setCapturedRunRecipe(runRecipeJsonRef.current);
     }
-  }, [executionStatus, runRecipeJson, setCapturedRunRecipe]);
+  }, [executionStatus, setCapturedRunRecipe, runRecipeJsonRef]);
 
   // Auto-save completed diagnoses to history
   const prevDiagnosticRef = useRef(mcpDiagnostic);
@@ -769,10 +767,11 @@ export function ExecutionWorkspace({
       <Card
         className={cn(
           "flex flex-col overflow-hidden",
-          recipeView === "graph" ? "min-h-[560px] wide:min-h-[680px]" : "min-h-[420px]",
+          recipeView === "graph" ? "min-h-[340px] wide:min-h-[380px]" : "min-h-[340px]",
         )}
       >
         <CardHeader
+          className="p-3 pb-2"
           title="Olive Recipe Definition"
           description={
             recipeView === "graph"
@@ -809,20 +808,6 @@ export function ExecutionWorkspace({
                   <Code className="h-3 w-3" /> JSON Code
                 </button>
               </div>
-              {recipeView === "graph" && (
-                <button
-                  type="button"
-                  onClick={() => setShowGraphDot((v) => !v)}
-                  title={showGraphDot ? "Hide flow dot" : "Show flow dot"}
-                  aria-label={showGraphDot ? "Hide flow dot" : "Show flow dot"}
-                  className={`h-8 w-8 flex items-center justify-center rounded border transition-colors cursor-pointer ${showGraphDot
-                    ? "border-electric-blue/30 text-electric-blue hover:bg-electric-blue/10"
-                    : "border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-300"
-                    }`}
-                >
-                  <CircleDot className="h-3.5 w-3.5" />
-                </button>
-              )}
               <Button
                 variant="outline"
                 className="h-8 px-3 text-sm border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
@@ -900,13 +885,13 @@ export function ExecutionWorkspace({
               key={view}
               className={cn(
                 "flex-1 overflow-hidden p-0",
-                view === "graph" ? "min-h-[560px]" : "min-h-[420px]",
+                view === "graph" ? "min-h-[340px]" : "min-h-[340px]",
                 isActive ? "block" : "hidden",
               )}
             >
               {view === "graph" && (
-                <Suspense fallback={<LoadingFallback label="Loading graph editor..." minH="560px" />}>
-                  <RecipeGraphView state={state} setState={setState} showDot={showGraphDot} />
+                <Suspense fallback={<LoadingFallback label="Loading graph editor..." minH="340px" />}>
+                  <RecipeGraphView state={state} setState={setState} />
                 </Suspense>
               )}
               {view === "json" && (

@@ -1,10 +1,15 @@
 import { memo } from "react";
 import { RefreshCw, Database, CheckCircle, AlertCircle } from "lucide-react";
 import { KB_STALE_AFTER_MS, isKbStatusStale, kbFreshnessMs, useKbSync } from "@/lib/hooks/useKbSync";
+import { cn } from "@/lib/utils";
 
 const STALE_AFTER_DAYS = Math.round(KB_STALE_AFTER_MS / 86_400_000);
 
-export const KbSyncIndicator = memo(function KbSyncIndicator() {
+interface KbSyncIndicatorProps {
+  compact?: boolean;
+}
+
+export const KbSyncIndicator = memo(function KbSyncIndicator({ compact = false }: KbSyncIndicatorProps) {
   const { status, syncing, error, syncKb } = useKbSync();
 
   if (!status && !error) return null;
@@ -24,7 +29,7 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
         {status?.available ? (
           <>
             <span
-              className="text-slate-400 truncate hidden wide:inline"
+              className={cn("text-slate-400 truncate", compact ? "hidden" : "inline")}
               title="Olive pass knowledge base used by the recipe builder"
               aria-hidden="true"
             >
@@ -46,10 +51,10 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
               }
               aria-hidden="true"
             >
-              <span className="hidden wide:inline">
+              <span className={compact ? "hidden" : "inline"}>
                 KB unavailable{status?.reason ? ` · ${status.reason}` : ""}
               </span>
-              <span className="wide:hidden">KB!</span>
+              <span className={compact ? "inline" : "hidden"}>KB!</span>
             </span>
             <span className="sr-only">
               Knowledge base unavailable{status?.reason ? `: ${status.reason}` : ""}.
@@ -67,7 +72,7 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
                 aria-hidden="true"
               >
                 <AlertCircle className="h-3 w-3" aria-hidden />
-                <span className="hidden wide:inline">stale</span>
+                <span className={compact ? "hidden" : "inline"}>stale</span>
               </span>
               <span className="sr-only">Knowledge base is stale.</span>
             </>
@@ -79,7 +84,7 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
                 aria-hidden="true"
               >
                 <CheckCircle className="h-3 w-3" aria-hidden />
-                <span className="hidden wide:inline">fresh</span>
+                <span className={compact ? "hidden" : "inline"}>fresh</span>
               </span>
               <span className="sr-only">Knowledge base is fresh.</span>
             </>
@@ -88,12 +93,15 @@ export const KbSyncIndicator = memo(function KbSyncIndicator() {
             type="button"
             onClick={() => void syncKb()}
             disabled={syncing}
-            className="text-electric-blue hover:text-electric-blue/80 disabled:opacity-40 flex items-center gap-0 wide:gap-1 transition-colors shrink-0"
+            className={cn(
+              "text-electric-blue hover:text-electric-blue/80 disabled:opacity-40 flex items-center transition-colors shrink-0",
+              compact ? "gap-0" : "gap-1",
+            )}
             title="Reload Olive pass docs into the local knowledge base"
             aria-label={syncing ? "Syncing knowledge base" : "Sync knowledge base"}
           >
             <RefreshCw className={`h-3 w-3 ${syncing ? "animate-spin" : ""}`} aria-hidden />
-            <span className="hidden wide:inline">{syncing ? "syncing…" : "sync"}</span>
+            <span className={compact ? "hidden" : "inline"}>{syncing ? "syncing…" : "sync"}</span>
           </button>
         </>
       )}

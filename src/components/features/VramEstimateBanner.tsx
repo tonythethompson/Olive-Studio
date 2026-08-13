@@ -168,36 +168,40 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
           </p>
         </div>
 
-        <div className="space-y-2">
-          <div className="space-y-1.5">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-[11px] text-slate-500">Before optimization</span>
-              <span className="text-xs font-mono font-medium text-slate-300 tabular-nums">
-                ~{formatMemoryGb(beforeGb)}
-              </span>
+        {hasModel ? (
+          <div className="space-y-2">
+            <div className="space-y-1.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[11px] text-slate-500">Before optimization</span>
+                <span className="text-xs font-mono font-medium text-slate-300 tabular-nums">
+                  ~{formatMemoryGb(beforeGb)}
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between gap-2">
+                <span
+                  className="text-[11px] text-slate-500"
+                  title={
+                    noShrinkPasses
+                      ? "Quantization / pruning not enabled: footprint matches source weights"
+                      : undefined
+                  }
+                >
+                  {afterLabel}
+                </span>
+                <span className="text-xs font-mono font-semibold text-slate-100 tabular-nums">
+                  ~{formatMemoryGb(afterGb)}
+                </span>
+              </div>
             </div>
-            <div className="flex items-baseline justify-between gap-2">
-              <span
-                className="text-[11px] text-slate-500"
-                title={
-                  noShrinkPasses
-                    ? "Quantization / pruning not enabled: footprint matches source weights"
-                    : undefined
-                }
-              >
-                {afterLabel}
-              </span>
-              <span className="text-xs font-mono font-semibold text-slate-100 tabular-nums">
-                ~{formatMemoryGb(afterGb)}
-              </span>
-            </div>
+            {noShrinkPasses && (
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Enable quantization or pruning to shrink the deployed footprint.
+              </p>
+            )}
           </div>
-          {noShrinkPasses && (
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Enable quantization or pruning to shrink the deployed footprint.
-            </p>
-          )}
-        </div>
+        ) : (
+          <p className="text-[11px] text-slate-500">Select a model to see a memory estimate.</p>
+        )}
 
         <div className="border-t border-slate-800/90 pt-2.5 space-y-1.5">
           {estimate.usesGpu ? (
@@ -237,7 +241,8 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
           )}
         </div>
 
-        {(fitLabel ||
+        {hasModel &&
+          (fitLabel ||
           showRunWarning ||
           (showOffloadGuidance && !offloadActive) ||
           (offloadActive && hybridPoolGb != null)) && (
@@ -290,15 +295,19 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
   if (compact) {
     return (
       <div className={cn("text-sm text-slate-500 space-y-1", className)}>
-        <ModelMemoryCompare
-          beforeGb={beforeGb}
-          afterGb={afterGb}
-          modelShortName={modelShortName}
-          modelLabel={modelLabel}
-          usesGpu={estimate.usesGpu}
-          size="sm"
-        />
-        {availableGb != null && estimate.usesGpu && (
+        {hasModel ? (
+          <ModelMemoryCompare
+            beforeGb={beforeGb}
+            afterGb={afterGb}
+            modelShortName={modelShortName}
+            modelLabel={modelLabel}
+            usesGpu={estimate.usesGpu}
+            size="sm"
+          />
+        ) : (
+          <p className="text-[11px] text-slate-500">Model: {modelShortName}</p>
+        )}
+        {hasModel && availableGb != null && estimate.usesGpu && (
           <p className="text-xs pl-0.5">
             <span className="text-slate-500">GPU available:</span>{" "}
             <span className="font-mono text-slate-300">{formatMemoryGb(availableGb)}</span>
@@ -335,26 +344,30 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
             {estimate.confidence} confidence
           </span>
         </div>
-        {fitLabel && <span className={cn("text-sm px-2 py-0.5 rounded border", fitClass)}>{fitLabel}</span>}
+        {hasModel && fitLabel && <span className={cn("text-sm px-2 py-0.5 rounded border", fitClass)}>{fitLabel}</span>}
       </div>
 
-      {noShrinkPasses && (
+      {hasModel && noShrinkPasses && (
         <p className="text-xs text-slate-500 mt-2 leading-relaxed">
           No quantization or pruning is active, so before and after match the source weight footprint.
         </p>
       )}
 
-      <ModelMemoryCompare
-        beforeGb={beforeGb}
-        afterGb={afterGb}
-        modelShortName={modelShortName}
-        modelLabel={modelLabel}
-        usesGpu={estimate.usesGpu}
-        size="md"
-        className="mt-3"
-      />
+      {hasModel ? (
+        <ModelMemoryCompare
+          beforeGb={beforeGb}
+          afterGb={afterGb}
+          modelShortName={modelShortName}
+          modelLabel={modelLabel}
+          usesGpu={estimate.usesGpu}
+          size="md"
+          className="mt-3"
+        />
+      ) : (
+        <p className="text-xs text-slate-500 mt-3">Select a model to see a VRAM estimate.</p>
+      )}
 
-      {showRunWarning && (
+      {hasModel && showRunWarning && (
         <p className="text-xs text-amber-500/90 mt-2 leading-relaxed">
           The optimized model should fit, but the Olive run for{" "}
           <span className="font-mono text-amber-400/90">{modelShortName}</span> may temporarily need ~
@@ -362,11 +375,11 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
         </p>
       )}
 
-      {showOffloadGuidance && !offloadActive && (
+      {hasModel && showOffloadGuidance && !offloadActive && (
         <p className="text-xs text-slate-500 mt-2 leading-relaxed">{offloadGuidance}</p>
       )}
 
-      {offloadActive && hybridPoolGb != null && (
+      {hasModel && offloadActive && hybridPoolGb != null && (
         <p className="text-xs text-emerald-500/90 mt-2 leading-relaxed">
           Hybrid offload active. The optimization run can spread across ~{formatMemoryGb(hybridPoolGb)} GPU +
           host RAM.
@@ -374,13 +387,15 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
       )}
 
       <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <div className="rounded border border-slate-800 bg-slate-900/50 px-3 py-2">
-          <p className="text-xs text-slate-500">
-            {estimate.usesGpu ? "Peak VRAM (Olive run)" : "Peak RAM (Olive run)"}
-          </p>
-          <p className="text-sm font-mono text-electric-blue mt-0.5">~{formatMemoryGb(estimate.peakRunGb)}</p>
-          <p className="text-[9px] text-slate-600 mt-0.5">Temporary during optimization</p>
-        </div>
+        {hasModel && (
+          <div className="rounded border border-slate-800 bg-slate-900/50 px-3 py-2">
+            <p className="text-xs text-slate-500">
+              {estimate.usesGpu ? "Peak VRAM (Olive run)" : "Peak RAM (Olive run)"}
+            </p>
+            <p className="text-sm font-mono text-electric-blue mt-0.5">~{formatMemoryGb(estimate.peakRunGb)}</p>
+            <p className="text-[9px] text-slate-600 mt-0.5">Temporary during optimization</p>
+          </div>
+        )}
         {estimate.usesGpu && (
           <div className="rounded border border-slate-800 bg-slate-900/50 px-3 py-2">
             <p className="text-xs text-slate-500">GPU VRAM available</p>

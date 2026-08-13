@@ -162,39 +162,41 @@ export function PruningInspector({ state, setState }: InspectorProps) {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500">Quick presets</p>
-          <button
-            type="button"
-            onClick={() => setShowSaveDialog(!showSaveDialog)}
-            className="text-[11px] text-slate-500 hover:text-amber-400 transition-colors flex items-center gap-1"
-            title="Save current settings as a custom preset"
-          >
-            <Plus className="h-3 w-3" />
-            Save
-            {customPresets.length > 0 && (
-              <span className="text-slate-600">
-                ({customPresets.length}/{MAX_CUSTOM_PRESETS})
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={handleExportPresets}
-            disabled={exportEmpty}
-            className="text-[11px] text-slate-500 hover:text-electric-blue transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            title={exportEmpty ? "No custom presets to export" : "Export custom presets as JSON"}
-            aria-label="Export presets"
-          >
-            <Download className="h-3 w-3" />
-          </button>
-          <button
-            type="button"
-            onClick={handleImportPresets}
-            className="text-[11px] text-slate-500 hover:text-electric-blue transition-colors"
-            title="Import presets from JSON file"
-            aria-label="Import presets"
-          >
-            <Upload className="h-3 w-3" />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowSaveDialog(!showSaveDialog)}
+              className="text-[11px] text-slate-500 hover:text-amber-400 transition-colors flex items-center gap-1"
+              title="Save current settings as a custom preset"
+            >
+              <Plus className="h-3 w-3" />
+              Save
+              {customPresets.length > 0 && (
+                <span className="text-slate-600">
+                  ({customPresets.length}/{MAX_CUSTOM_PRESETS})
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={handleExportPresets}
+              disabled={exportEmpty}
+              className="text-[11px] text-slate-500 hover:text-electric-blue transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              title={exportEmpty ? "No custom presets to export" : "Export custom presets as JSON"}
+              aria-label="Export presets"
+            >
+              <Download className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={handleImportPresets}
+              className="text-[11px] text-slate-500 hover:text-electric-blue transition-colors"
+              title="Import presets from JSON file"
+              aria-label="Import presets"
+            >
+              <Upload className="h-3 w-3" />
+            </button>
+          </div>
         </div>
         {importConfirm && (
           <ImportConfirmDialog<CustomPruningPreset>

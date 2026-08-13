@@ -8,7 +8,8 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useAutoClearError } from "@/lib/hooks/useAutoClearError";
 import { useImportPresets, useExportPresets } from "@/lib/hooks/usePresets";
 import { RecipeDiffOverlay } from "./RecipeDiffOverlay";
-import { RefreshCw, AlertTriangle, Save, Download, Upload } from "lucide-react";
+import { AlertTriangle, Save, Download, Upload } from "lucide-react";
+import { askAiChat } from "@/lib/aiChatBridge";
 import {
   loadCustomPresets,
   saveCustomPreset,
@@ -235,36 +236,6 @@ const QUANT_PRESETS: QuantPreset[] = [
   },
 ];
 
-// ── AI recommendation helper ───────────────────────────────────────
-
-async function fetchAiQuantRecommendation(state: UIState): Promise<Partial<UIState["passes"]>> {
-  const res = await fetch("/api/ai/recommend-quant", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ state }),
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error((data as { error?: string }).error || `HTTP ${res.status}`);
-  }
-  const fields = (await res.json()) as Record<string, unknown>;
-
-  // Ensure quantization is turned on
-  const result: Partial<UIState["passes"]> = {
-    quantization: true,
-    quantPreset: "AI Recommendation",
-    ...fields,
-  };
-
-  // Clean up any extraneous fields the AI might have returned
-  delete (result as Record<string, unknown>).score;
-  delete (result as Record<string, unknown>).level;
-  delete (result as Record<string, unknown>).summary;
-  delete (result as Record<string, unknown>).suggestions;
-
-  return result;
-}
-
 // ── Main component ─────────────────────────────────────────────────
 
 const SAVE_ACTION = "__save_custom__";
@@ -278,8 +249,6 @@ const DELETE_PREFIX = "__delete__:";
  * @returns The quantization configuration interface
  */
 export function QuantizationInspector({ state, setState }: InspectorProps) {
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState("");
   const [customPresets, setCustomPresets] = useState<CustomQuantPreset[]>(() => loadCustomPresets());
   const [importError, setImportError] = useAutoClearError(4000);
   const {
@@ -318,9 +287,14 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
       handleSaveCustom();
       return;
     }
-    // If it's the AI ask option, call the API
+    // If it's the AI ask option, open the Assistant chat so the user can review the
+    // reasoning and apply (or ignore) the suggested settings themselves.
     if (presetLabel === AI_PRESET_LABEL) {
-      handleAskAi();
+      askAiChat(
+        "Recommend a quantization method and precision for the current model and my selected " +
+          "execution provider. Briefly explain the tradeoff, then propose the exact settings as " +
+          "an applyable change.",
+      );
       return;
     }
     // Check custom presets first
@@ -375,20 +349,6 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
     serialize: exportPresetsJSON,
     filename: "quantization-presets.json",
   });
-  const handleAskAi = async () => {
-    setAiLoading(true);
-    setAiError("");
-    try {
-      const fields = await fetchAiQuantRecommendation(state);
-      setState({ passes: { ...state.passes, ...fields } });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "AI recommendation failed.";
-      setAiError(message);
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
   if (!state.passes.quantization) {
     return (
       <p className="text-sm text-slate-500 font-sans italic text-center py-4">
@@ -403,15 +363,7 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
 
       {/* Presets dropdown */}
       <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <Label className="text-sm text-slate-400">Quick presets</Label>
-          {aiLoading && (
-            <span className="text-[11px] text-electric-blue flex items-center gap-1">
-              <RefreshCw className="h-3 w-3 animate-spin" />
-              AI thinking…
-            </span>
-          )}
-        </div>
+        <Label className="text-sm text-slate-400">Quick presets</Label>
         <div className="flex gap-2">
           <Select
             id="quant-presets"
@@ -424,12 +376,11 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
               }
             }}
             className="h-9 text-sm bg-slate-950 flex-1 min-w-0"
-            disabled={aiLoading}
           >
             <option value="" disabled>
               Apply a profile…
             </option>
-            <option value={AI_PRESET_LABEL} disabled={aiLoading}>
+            <option value={AI_PRESET_LABEL}>
               ✨ Ask AI…: auto-configure based on model + hardware
             </option>
             <option disabled className="text-slate-700" value="">
@@ -516,12 +467,6 @@ export function QuantizationInspector({ state, setState }: InspectorProps) {
           <div className="flex items-start gap-1.5 text-[11px] text-amber-400 mt-1">
             <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
             <span>{importError}</span>
-          </div>
-        )}
-        {aiError && (
-          <div className="flex items-start gap-1.5 text-[11px] text-rose-400 mt-1">
-            <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
-            <span>{aiError}</span>
           </div>
         )}
       </div>

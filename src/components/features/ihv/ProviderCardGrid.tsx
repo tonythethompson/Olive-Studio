@@ -45,9 +45,10 @@ export function ProviderCardGrid({
     const detected: ProviderCatalogEntry[] = [];
     const undetected: ProviderCatalogEntry[] = [];
 
-    // Only split if probe data is available; otherwise treat all as detected since detection is unavailable.
+    // Only split if probe data is available; otherwise show all together since we can't distinguish
+    // detected from undetected without probe results. Splitting would incorrectly hide providers when
+    // probe fails (e.g., CPU is always available as fallback, but other providers appear undetected).
     if (!hardwareProbe && !probeLoading) {
-      // Probe finished but returned null (error case) — show all, don't split
       return { detectedLocal: localAccelerators, undetectedLocal: [] };
     }
 

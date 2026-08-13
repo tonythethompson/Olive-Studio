@@ -20,6 +20,7 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
   const [hasFetched, setHasFetched] = useState(false);
   const [networkError, setNetworkError] = useState(false);
   const [paramsExpanded, setParamsExpanded] = useState(false);
+  const [aboutExpanded, setAboutExpanded] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchParams = useCallback(() => {
@@ -69,6 +70,11 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
     };
   }, [fetchParams]);
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- collapse-by-default when the selected node changes
+    setAboutExpanded(false);
+  }, [guidance.title]);
+
   const isLoading = guidance.passName != null && !hasFetched;
   const hasParams = params && !params.error && params.parameters && Object.keys(params.parameters).length > 0;
   const requiredParams = params?.required_params ?? [];
@@ -79,54 +85,70 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
     : [];
 
   return (
-    <div className="rounded-lg border border-slate-800/80 bg-slate-950/50 p-4 space-y-4">
+    <div className="rounded-lg border border-slate-800/80 bg-slate-950/50 p-3 space-y-2.5">
       <div>
-        <p className="text-[11px] font-mono uppercase tracking-wider text-electric-blue/80 mb-1">
-          About this pass
-        </p>
+        <button
+          type="button"
+          onClick={() => setAboutExpanded((v) => !v)}
+          aria-expanded={aboutExpanded}
+          className="flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-electric-blue/80 hover:text-electric-blue transition-colors cursor-pointer w-full mb-1"
+        >
+          <span>About this pass</span>
+          {aboutExpanded ? (
+            <ChevronDown className="h-3 w-3 ml-auto" />
+          ) : (
+            <ChevronRight className="h-3 w-3 ml-auto" />
+          )}
+        </button>
         <h4 className="text-sm font-semibold text-slate-100 leading-snug">{guidance.title}</h4>
-        <p className="text-sm text-slate-400 mt-1.5 leading-relaxed">{guidance.summary}</p>
-      </div>
-
-      <p className="text-sm text-slate-500 leading-relaxed border-l-2 border-slate-700 pl-3">
-        {guidance.whatItDoes}
-      </p>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <p className="text-[11px] font-mono uppercase tracking-wider text-emerald-500/90 flex items-center gap-1.5">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            Use when
-          </p>
-          <ul className="space-y-1.5">
-            {guidance.whenToUse.map((item) => (
-              <li key={item} className="text-sm text-slate-400 leading-relaxed pl-0.5">
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {guidance.whenNotToUse.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-[11px] font-mono uppercase tracking-wider text-amber-500/90 flex items-center gap-1.5">
-              <XCircle className="h-3.5 w-3.5" />
-              Skip when
-            </p>
-            <ul className="space-y-1.5">
-              {guidance.whenNotToUse.map((item) => (
-                <li key={item} className="text-sm text-slate-500 leading-relaxed pl-0.5">
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
+        {aboutExpanded && (
+          <p className="text-sm text-slate-400 mt-1.5 leading-relaxed">{guidance.summary}</p>
         )}
       </div>
 
+      {aboutExpanded && (
+        <>
+          <p className="text-sm text-slate-500 leading-relaxed border-l-2 border-slate-700 pl-3">
+            {guidance.whatItDoes}
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <p className="text-[11px] font-mono uppercase tracking-wider text-emerald-500/90 flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Use when
+              </p>
+              <ul className="space-y-1.5">
+                {guidance.whenToUse.map((item) => (
+                  <li key={item} className="text-sm text-slate-400 leading-relaxed pl-0.5">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {guidance.whenNotToUse.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[11px] font-mono uppercase tracking-wider text-amber-500/90 flex items-center gap-1.5">
+                  <XCircle className="h-3.5 w-3.5" />
+                  Skip when
+                </p>
+                <ul className="space-y-1.5">
+                  {guidance.whenNotToUse.map((item) => (
+                    <li key={item} className="text-sm text-slate-500 leading-relaxed pl-0.5">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
       {/* MCP Parameter Documentation */}
       {guidance.passName && (
-        <div className="border-t border-slate-800/60 pt-3">
+        <div className="border-t border-slate-800/60 pt-2.5">
           <button
             type="button"
             onClick={() => setParamsExpanded((v) => !v)}

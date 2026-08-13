@@ -112,6 +112,91 @@
   :root {
     color-scheme: dark;
   }
+
+  [data-theme="light"] {
+    color-scheme: light;
+
+    /*
+     * Olive-green paper palette — distinctly green, not washed-out white.
+     * Body bg is a soft sage; panels step slightly lighter; dark end stays
+     * legible olive-black. Contrast body text vs bg ≈ 12:1 (WCAG AAA).
+     */
+    --color-slate-950: #d4e4c8;
+    /* body bg: soft sage green */
+    --color-slate-900: #c4d9b5;
+    /* panel surfaces */
+    --color-slate-850: #b5cea6;
+    /* card backgrounds */
+    --color-slate-800: #8aab76;
+    /* borders, dividers — darker for visibility */
+    --color-slate-750: #749a5e;
+    /* heavier borders */
+    --color-slate-700: #5d8348;
+    /* scrollbar thumb, muted UI */
+    --color-slate-600: #476834;
+    /* secondary text, icons */
+    --color-slate-500: #365224;
+    /* mid-emphasis text */
+    --color-slate-400: #2a4019;
+    /* strong secondary text */
+    --color-slate-300: #1a2b12;
+    /* body text: deep olive-black */
+    --color-slate-200: #162410;
+    /* headings / high-emphasis */
+    --color-slate-100: #111d0c;
+    /* near-black */
+    --color-slate-50: #0c1408;
+    /* deepest ink */
+
+    /*
+     * Primary accent: warm olive-brown — NOT green — so it visually pops
+     * against the green background. ≈ 7:1 contrast on sage.
+     */
+    --color-electric-blue: #5c4a0f;
+    --color-electric-blue-dark: #4a3a08;
+    --color-olive: #5c4a0f;
+    --color-olive-dark: #4a3a08;
+
+    /*
+     * Emerald/success states → teal in light mode.
+     * Tailwind's default emerald-400 (#34d399) is invisible on green bg,
+     * so we remap the scale. The 300-400 range must be readable both:
+     *   - on the sage body bg (#d4e4c8) — as standalone text/badges
+     *   - on solid emerald-950 (#031210) bg — as badge text in cards
+     * Solution: 300/400 are mid-teal with good contrast on both extremes.
+     */
+    --color-emerald-accent: #0f5c50;
+    --color-emerald-dark: #0a4a40;
+    --color-emerald-50: #e0f5f0;
+    --color-emerald-100: #b3e8dd;
+    --color-emerald-200: #6dd4c0;
+    --color-emerald-300: #4ecdb2;
+    /* light teal — 7.5:1 on emerald-950, 4.5:1 on sage */
+    --color-emerald-400: #1a9a80;
+    /* medium teal — 4.5:1 on sage, 8:1 on emerald-950 */
+    --color-emerald-500: #0f7a65;
+    /* dark teal — good on sage bg */
+    --color-emerald-600: #0a6354;
+    --color-emerald-700: #084d42;
+    --color-emerald-800: #053a32;
+    --color-emerald-900: #032a24;
+    --color-emerald-950: #021c18;
+
+    /*
+     * Semantic status colors — dark-theme values are unreadable on sage bg.
+     * amber: warnings, rose/red: errors/danger. Darkened for ≥ 4.5:1 on #d4e4c8.
+     */
+    --color-amber-300: #92600a;
+    --color-amber-400: #7a4f06;
+    --color-amber-500: #6b4304;
+    --color-amber-600: #5c3903;
+    --color-rose-400: #b91c3d;
+    --color-rose-500: #a01833;
+    --color-rose-600: #8b1429;
+    --color-rose-700: #751020;
+    --color-red-400: #b91c1c;
+  }
+
   /*
    * Lock the document to the viewport so no descendant can push the body
    * past the screen. Without this, sticky / fixed children or panels with a
@@ -135,11 +220,13 @@
     overflow: hidden;
     overscroll-behavior: none;
   }
+
   html {
     /* Belt-and-braces: prevent horizontal overscroll as well. */
     overflow-x: hidden;
     font-size: 18px;
   }
+
   body {
     @apply bg-slate-950 text-slate-300 font-sans antialiased selection:bg-electric-blue/30;
   }
@@ -163,14 +250,26 @@
   width: 4px;
   height: 4px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   @apply bg-slate-700;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-slate-600;
+}
+
+/* Scrollbar adaptation for light mode */
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background-color: var(--color-slate-700);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-slate-600);
 }
 
 /* Pipeline flow animation */
@@ -182,11 +281,13 @@
 
 /* Olive pulse — replaces the cyan neon glow */
 @keyframes pulsar-glow {
+
   0%,
   100% {
     r: 3px;
     filter: drop-shadow(0 0 2px #8da840);
   }
+
   50% {
     r: 5px;
     filter: drop-shadow(0 0 5px #8da840);

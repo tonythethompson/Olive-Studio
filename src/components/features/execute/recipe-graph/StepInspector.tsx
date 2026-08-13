@@ -46,8 +46,8 @@ export function StepInspector({ state, setState, selectedNodeId, pipelineSteps }
   const passGuidance = getPassGuidanceForNode(selectedNodeId, state);
 
   return (
-    <div className="border-t border-slate-800 bg-slate-950/90 p-4 md:p-6 select-none shadow-inner">
-      <div className="flex flex-col gap-4">
+    <div className="border-t border-slate-800 bg-slate-950/90 p-3 md:p-4 select-none shadow-inner">
+      <div className="flex flex-col gap-2.5">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <Settings className="h-4 w-4 text-electric-blue" />
@@ -86,7 +86,7 @@ export function StepInspector({ state, setState, selectedNodeId, pipelineSteps }
 
         {passGuidance && <PassGuidanceCard guidance={passGuidance} />}
 
-        <div className="bg-slate-900/40 rounded-lg p-4 md:p-5 border border-slate-900 min-h-[90px] flex flex-col justify-center">
+        <div className="bg-slate-900/40 rounded-lg p-3 md:p-3.5 border border-slate-900 min-h-[70px] flex flex-col justify-center">
           {selectedNodeId === "input" && <InputInspector state={state} setState={setState} />}
           {selectedNodeId === "splitting" && <SplittingInspector state={state} setState={setState} />}
           {selectedNodeId === "peft" && <PeftInspector state={state} setState={setState} />}
@@ -100,7 +100,7 @@ export function StepInspector({ state, setState, selectedNodeId, pipelineSteps }
           {selectedNodeId === "output" && <OutputInspector state={state} setState={setState} />}
         </div>
 
-        <div className="flex items-start gap-2 text-xs text-slate-500 bg-slate-900/30 px-3 py-2 rounded-md border border-slate-900 leading-relaxed font-sans mt-1">
+        <div className="flex items-start gap-2 text-xs text-slate-500 bg-slate-900/30 px-2.5 py-1.5 rounded-md border border-slate-900 leading-relaxed font-sans">
           <Info className="h-3.5 w-3.5 text-electric-blue shrink-0 mt-0.5" />
           <p>
             This live dependency network maps the active <strong>Microsoft Olive compiler pipeline</strong>.

@@ -325,7 +325,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     return (
       <div
         data-testid="recipe-validation-panel"
-        className="rounded-lg border border-emerald-800/50 bg-emerald-950/20 px-3 py-2"
+        className="rounded-lg border border-emerald-800/50 bg-emerald-950/20 px-3 py-1.5"
       >
         <div className="flex items-center gap-2 text-emerald-400">
           <CheckCircle className="h-4 w-4 shrink-0" />
@@ -341,7 +341,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
       className="rounded-lg border border-slate-700 bg-slate-900/80 overflow-hidden"
     >
       {/* Header */}
-      <div className="w-full flex items-center justify-between p-3 hover:bg-slate-800/50 transition-colors">
+      <div className="w-full flex items-center justify-between p-2 hover:bg-slate-800/50 transition-colors">
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
@@ -400,7 +400,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
           {allIssues.map((issue) => (
             <div
               key={issue.id}
-              className={`px-3 py-2.5 ${issue.severity === "critical" ? "bg-rose-950/10" : "bg-amber-950/5"}`}
+              className={`px-3 py-2 ${issue.severity === "critical" ? "bg-rose-950/10" : "bg-amber-950/5"}`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">

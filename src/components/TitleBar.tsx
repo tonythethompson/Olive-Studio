@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Minus, Square, X, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SettingsMenu } from "@/components/SettingsMenu";
 
 /**
  * Renders custom Tauri window controls for Olive Studio.
@@ -80,6 +81,9 @@ export function TitleBar() {
       </div>
 
       <div className="flex items-stretch h-full" data-tauri-drag-region="false">
+        <div className="flex items-center px-2">
+          <SettingsMenu />
+        </div>
         <button
           type="button"
           aria-label="Minimize"
