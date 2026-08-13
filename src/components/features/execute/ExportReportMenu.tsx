@@ -21,10 +21,8 @@ import { isFeatureEnabled } from "@/lib/featureFlags";
 export interface ExportReportMenuProps {
   /** Job history records to include in the report. */
   records: JobHistoryRecord[];
-  /** Whether to include recipe JSON blocks in the report. */
-  includeRecipeJson?: boolean;
-  /** Whether to include log summary in the report. */
-  includeLogSummary?: boolean;
+  /** Report detail level. */
+  reportDetail?: "summary" | "full";
   /** Force-disable the menu (in addition to the zero-records check). */
   disabled?: boolean;
 }
@@ -33,8 +31,7 @@ export interface ExportReportMenuProps {
 
 export function ExportReportMenu({
   records,
-  includeRecipeJson = false,
-  includeLogSummary = false,
+  reportDetail = "summary",
   disabled = false,
 }: ExportReportMenuProps) {
   const [open, setOpen] = useState(false);
@@ -44,16 +41,16 @@ export function ExportReportMenu({
   const isDisabled = disabled || records.length === 0;
 
   const handleDownloadMarkdown = useCallback(() => {
-    const options: ReportOptions = { includeRecipeJson, includeLogSummary };
+    const options: ReportOptions = { includeRecipeJson: reportDetail === "full", includeLogSummary: reportDetail === "full" };
     downloadMarkdownReport(records, options);
     setOpen(false);
-  }, [records, includeRecipeJson, includeLogSummary]);
+  }, [records, reportDetail]);
 
   const handlePrintPdf = useCallback(() => {
-    const options: ReportOptions = { includeRecipeJson, includeLogSummary };
+    const options: ReportOptions = { includeRecipeJson: reportDetail === "full", includeLogSummary: reportDetail === "full" };
     printReportAsPdf(records, options);
     setOpen(false);
-  }, [records, includeRecipeJson, includeLogSummary]);
+  }, [records, reportDetail]);
 
   // Close dropdown on outside click
   useEffect(() => {
