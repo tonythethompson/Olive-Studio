@@ -124,6 +124,7 @@ vi.mock("@/components/features/playground/WebGpuBenchmarkPanel", () => ({
 // Mock job history store
 vi.mock("@/lib/jobHistoryStore", () => ({
   saveJobHistory: vi.fn(),
+  getJobHistory: vi.fn().mockResolvedValue([]),
 }));
 
 // Mock GPU metrics

@@ -177,7 +177,10 @@ describe("BatchProcessingPanel", () => {
     await user.click(screen.getByText(job.name));
 
     expect(screen.getAllByText("12.5 ms")).toHaveLength(2);
-    expect(screen.getAllByText("-")).toHaveLength(3);
+    for (const label of ["Throughput", "VRAM Size", "Compression"] as const) {
+      const card = screen.getByText(label).closest("div");
+      expect(card?.textContent).toMatch(/-/);
+    }
   });
 
   it("renders the Custom Job button to add jobs", async () => {
