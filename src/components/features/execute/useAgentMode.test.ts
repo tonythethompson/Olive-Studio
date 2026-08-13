@@ -302,6 +302,44 @@ describe("useAgentMode", () => {
       expect(result.current.outcome?.status).toBe("failure");
     });
 
+    it("resolves deferred stop after pending submit is cancelled", async () => {
+      let resolveSubmit: (value: Response) => void = () => {};
+      const submitPromise = new Promise<Response>((resolve) => {
+        resolveSubmit = resolve;
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url: string) => {
+          if (String(url).includes("/olive/jobs/submit")) return submitPromise;
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ status: "cancelled" }),
+          } as Response);
+        }),
+      );
+
+      const { result } = renderHook(() => useAgentMode());
+      act(() => {
+        void result.current.startAgent({ recipeJson: "{}" });
+      });
+
+      let stopResult: Promise<boolean> | undefined;
+      act(() => {
+        stopResult = result.current.stopAgent();
+      });
+
+      await act(async () => {
+        resolveSubmit({
+          ok: true,
+          json: async () => ({ jobId: "job-deferred" }),
+        } as Response);
+        expect(await stopResult).toBe(true);
+      });
+
+      expect(result.current.agentRunning).toBe(false);
+      expect(result.current.outcome?.status).toBe("cancelled");
+    });
+
     it("applies cancelled when stop-during-submit gets no jobId", async () => {
       let resolveSubmit: (value: Response) => void = () => {};
       const submitPromise = new Promise<Response>((resolve) => {

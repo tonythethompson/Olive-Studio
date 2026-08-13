@@ -95,6 +95,16 @@ export function useAgentMode(): UseAgentModeReturn {
   const runGenerationRef = useRef(0);
   const submitInFlightRef = useRef(false);
   const stopRequestedRef = useRef(false);
+  const pendingStopWaiterRef = useRef<{
+    promise: Promise<boolean>;
+    resolve: (ok: boolean) => void;
+  } | null>(null);
+
+  const resolvePendingStop = useCallback((ok: boolean) => {
+    const waiter = pendingStopWaiterRef.current;
+    pendingStopWaiterRef.current = null;
+    waiter?.resolve(ok);
+  }, []);
 
   // ─── Internal helpers ───────────────────────────────────────────────────────
 
@@ -144,6 +154,7 @@ export function useAgentMode(): UseAgentModeReturn {
     runGenerationRef.current += 1;
     const thisGen = runGenerationRef.current;
     stopRequestedRef.current = false;
+    resolvePendingStop(false);
     setEntries([]);
     setOutcome(undefined);
     setJobId(undefined);
@@ -183,6 +194,7 @@ export function useAgentMode(): UseAgentModeReturn {
         errorDescription: "Agent failed to start within 10 seconds",
       });
       startTimeoutRef.current = null;
+      resolvePendingStop(true);
       if (orphanId) void requestAgentCancel(orphanId);
     }, START_TIMEOUT_MS);
 
@@ -203,6 +215,7 @@ export function useAgentMode(): UseAgentModeReturn {
         if (!data.jobId) {
           stopRequestedRef.current = false;
           applyCancelledOutcome();
+          resolvePendingStop(true);
           return;
         }
         let cancelOk = false;
@@ -212,9 +225,13 @@ export function useAgentMode(): UseAgentModeReturn {
         } catch {
           cancelOk = false;
         }
-        if (thisGen !== runGenerationRef.current) return;
+        if (thisGen !== runGenerationRef.current) {
+          resolvePendingStop(false);
+          return;
+        }
         if (cancelOk) {
           applyCancelledOutcome();
+          resolvePendingStop(true);
           return;
         }
         stopRequestedRef.current = false;
@@ -229,6 +246,7 @@ export function useAgentMode(): UseAgentModeReturn {
             : 0,
           errorDescription: "Failed to cancel agent job",
         });
+        resolvePendingStop(false);
         return;
       }
       if (thisGen !== runGenerationRef.current) {
@@ -241,7 +259,10 @@ export function useAgentMode(): UseAgentModeReturn {
       setJobId(data.jobId);
       jobIdRef.current = data.jobId;
     } catch (err) {
-      if (thisGen !== runGenerationRef.current) return;
+      if (thisGen !== runGenerationRef.current) {
+        resolvePendingStop(false);
+        return;
+      }
       stopRequestedRef.current = false;
       clearStartTimeout();
       const message = err instanceof Error ? err.message : "Failed to submit agent job";
@@ -254,10 +275,11 @@ export function useAgentMode(): UseAgentModeReturn {
           : 0,
         errorDescription: message,
       });
+      resolvePendingStop(true);
     } finally {
       submitInFlightRef.current = false;
     }
-  }, [applyCancelledOutcome, clearStartTimeout]);
+  }, [applyCancelledOutcome, clearStartTimeout, resolvePendingStop]);
 
   /**
    * Confirm that the agent has successfully started (clears the 10s timeout).
@@ -277,7 +299,14 @@ export function useAgentMode(): UseAgentModeReturn {
     if (!activeJobId) {
       if (submitInFlightRef.current) {
         stopRequestedRef.current = true;
-        return false;
+        if (!pendingStopWaiterRef.current) {
+          let resolve!: (ok: boolean) => void;
+          const promise = new Promise<boolean>((r) => {
+            resolve = r;
+          });
+          pendingStopWaiterRef.current = { promise, resolve };
+        }
+        return pendingStopWaiterRef.current.promise;
       }
       if (!stopRequestedRef.current) {
         runGenerationRef.current += 1;
