@@ -2,7 +2,7 @@
  * ProviderCardGrid — Provider card grid with local accelerators and export/platform sections.
  * Extracted from IHVIntegrationPanel (Task 6).
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TooltipProvider } from "@/components/ui/Tooltip";
 import { HardwareProviderCard, type HardwareProviderCardProps } from "./HardwareProviderCard";
 import { ChevronDown, RefreshCw } from "lucide-react";
@@ -30,6 +30,9 @@ export function ProviderCardGrid({
     (p) => p.id === providerCardProps.state.ihvProvider,
   );
   const [showExportTargets, setShowExportTargets] = useState(selectedIsExportTarget);
+  useEffect(() => {
+    setShowExportTargets(selectedIsExportTarget);
+  }, [selectedIsExportTarget]);
 
   if (probeLoading) {
     return (

@@ -217,12 +217,14 @@ export function RecipeCatalogBrowserList({
         const sizesGb = rows.map((r) => r.inferenceGb).filter((gb) => gb > 0);
         const minSizeGb = sizesGb.length ? Math.min(...sizesGb) : null;
         const maxSizeGb = sizesGb.length ? Math.max(...sizesGb) : null;
+        const minSizeLabel = minSizeGb == null ? null : formatMemoryGb(minSizeGb);
+        const maxSizeLabel = maxSizeGb == null ? null : formatMemoryGb(maxSizeGb);
         const sizeLabel =
-          minSizeGb == null || maxSizeGb == null
+          minSizeLabel == null || maxSizeLabel == null
             ? null
-            : minSizeGb === maxSizeGb
-              ? `~${formatMemoryGb(minSizeGb)}`
-              : `~${formatMemoryGb(minSizeGb)}–${formatMemoryGb(maxSizeGb)}`;
+            : minSizeLabel === maxSizeLabel
+              ? `~${minSizeLabel}`
+              : `~${minSizeLabel}–${maxSizeLabel}`;
         return (
           <div key={modelTitle} className="bg-slate-950/20">
             <button
@@ -243,7 +245,7 @@ export function RecipeCatalogBrowserList({
                 {sizeLabel && (
                   <span
                     className="shrink-0 text-[11px] font-mono text-slate-500"
-                    title="Approximate deployed model size, smallest to largest available target"
+                    title="Approximate inference memory estimate, smallest to largest available target"
                   >
                     {sizeLabel}
                   </span>
