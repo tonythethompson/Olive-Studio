@@ -15,8 +15,9 @@ import {
   isValidSha,
   formatCatalogMetadata,
   isCatalogStale,
+  catalogEntryToRecipeItem,
 } from "@/lib/recipeCatalogPin";
-import type { CatalogMetadata } from "@/lib/recipeCatalogPin";
+import type { CatalogEntry, CatalogMetadata } from "@/lib/recipeCatalogPin";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -258,5 +259,23 @@ describe("Property 15: Catalog Commit SHA Format", () => {
         { numRuns: 100 },
       );
     });
+  });
+});
+
+describe("catalogEntryToRecipeItem", () => {
+  it("carries pinned.commitSha so deferred loads stay on the pin", () => {
+    const sha = "a".repeat(40);
+    const entry: CatalogEntry = {
+      id: "Qwen-Qwen2.5-1.5B-Instruct/aitk/qwen2_5_dml_config.json",
+      name: "LLM / qwen2_5_dml_config",
+      architecture: "LLM",
+      deviceTarget: "DirectML",
+      content: null,
+      pinned: { branch: "main", commitSha: sha, fetchedAt: "2026-01-01T00:00:00.000Z" },
+    };
+    const item = catalogEntryToRecipeItem(entry);
+    expect(item.repoPath).toBe(entry.id);
+    expect(item.commitSha).toBe(sha);
+    expect(item.device).toBe("DirectML");
   });
 });
