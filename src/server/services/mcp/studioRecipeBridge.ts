@@ -11,6 +11,7 @@
  */
 import type { IHVProvider, ModelSource, OpenVinoTargetDevice, UIState } from "../../../types.ts";
 import { coercePassValue } from "../../../lib/auditAutofix.ts";
+import { gateMultiLoraAdapters } from "../../../lib/oliveRecipeBuilder.ts";
 import { mergeUiState, type UiStatePatch } from "../../../lib/pipelineValidation.ts";
 import {
   projectUiStateToRecipeEvaluation,
@@ -250,6 +251,20 @@ export function evaluateStudioRecipeBridge(
 
   const merged = mergeBridgeUiState(createDefaultState(), rawState);
   if (!merged.ok) return merged;
+
+  const adapters = merged.state.multiLoraAdapters;
+  if (merged.state.passes.peft && Array.isArray(adapters) && adapters.length > 0) {
+    const vram =
+      typeof merged.state.vramEstimateGb === "number" ? merged.state.vramEstimateGb : Number.NaN;
+    const gate = gateMultiLoraAdapters(adapters, vram);
+    if (!gate.allowed) {
+      return {
+        ok: false,
+        code: "invalid_ui_state",
+        error: `Multi-LoRA adapter configuration rejected: ${gate.reason ?? "invalid adapter configuration"}`,
+      };
+    }
+  }
 
   // Exactly one projection call — pure, no Olive / I/O.
   const evaluation = evaluate(merged.state);
