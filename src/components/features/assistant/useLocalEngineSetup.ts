@@ -165,6 +165,8 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
   const [installingEngine, setInstallingEngine] = useState<LocalEngine | null>(null);
   const [preferredEngine, setPreferredEngine] = useState<LocalEngine>(readStoredEngine);
   const pullAbortRef = useRef<AbortController | null>(null);
+  const pullCompletionRef = useRef<Promise<void> | null>(null);
+  const resolvePullCompletionRef = useRef<(() => void) | null>(null);
   const pullUserCancelledRef = useRef(false);
 
   const selectPreferredEngine = (engine: LocalEngine) => {
@@ -442,12 +444,9 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
   const cancelLocalPull = () => {
     pullUserCancelledRef.current = true;
     pullAbortRef.current?.abort();
-    // Free the busy guard immediately rather than waiting for the aborted
-    // fetch/stream to finish unwinding — that teardown can lag (or, on some
-    // platforms, never resolve if the underlying connection is already
-    // stuck), which otherwise leaves "another download is in progress"
-    // blocking every retry until the stale request eventually settles.
-    pullAbortRef.current = null;
+    // Keep the controller until the aborted request has fully unwound. A retry
+    // requested during that window waits for server-side process teardown, so
+    // it cannot be rejected by the LM Studio busy gate or overlap the old pull.
     setPullingModel(null);
     setLocalPullPercent(null);
     setLocalInstallInfo(null);
@@ -456,12 +455,20 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
 
   const pullLocalModel = async (modelTag: string, source: LocalEngine = "lms") => {
     if (pullAbortRef.current) {
+      if (pullUserCancelledRef.current && pullCompletionRef.current) {
+        await pullCompletionRef.current;
+        if (!pullAbortRef.current) return pullLocalModel(modelTag, source);
+      }
       setLocalPullError("A download is already in progress. Cancel it first, or wait for it to finish.");
       return;
     }
 
     const controller = new AbortController();
     pullAbortRef.current = controller;
+    const completion = new Promise<void>((resolve) => {
+      resolvePullCompletionRef.current = resolve;
+    });
+    pullCompletionRef.current = completion;
 
     setPullingModel(modelTag);
     setLocalPullError("");
@@ -543,9 +550,14 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     } finally {
       if (pullAbortRef.current === controller) {
         pullAbortRef.current = null;
+        pullCompletionRef.current = null;
+        pullUserCancelledRef.current = false;
         setPullingModel(null);
       }
-      if (pullAbortRef.current === controller) pullUserCancelledRef.current = false;
+      if (resolvePullCompletionRef.current) {
+        resolvePullCompletionRef.current();
+        resolvePullCompletionRef.current = null;
+      }
     }
   };
 
