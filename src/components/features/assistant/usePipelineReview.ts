@@ -48,6 +48,8 @@ export interface UsePipelineReviewReturn {
   completedAt: number;
   /** Trigger a new review cycle. */
   refresh: () => void;
+  /** Clear committed review results (e.g. provider removed). */
+  reset: () => void;
   /**
    * Schedule an auto-refresh after a patch action (debounced 300–1000 ms).
    * Call this from ActionButton after applying a patch via commitUiStateUpdate.
@@ -59,6 +61,35 @@ export interface UsePipelineReviewReturn {
 
 /** Minimum debounce delay for post-patch auto-refresh (ms). */
 const POST_PATCH_DEBOUNCE_MS = 400;
+const ANALYZE_TIMEOUT_MS = 45_000;
+
+function parseFindings(raw: unknown): Finding[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: Finding[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    const severity = rec.severity;
+    if (
+      typeof rec.id !== "string" ||
+      typeof rec.title !== "string" ||
+      typeof rec.description !== "string" ||
+      (severity !== "critical" && severity !== "warning" && severity !== "info") ||
+      !Array.isArray(rec.actions)
+    ) {
+      continue;
+    }
+    out.push({
+      id: rec.id,
+      title: rec.title.slice(0, 120),
+      description: rec.description.slice(0, 2000),
+      severity,
+      evidence: typeof rec.evidence === "string" ? rec.evidence : rec.description,
+      actions: rec.actions as Finding["actions"],
+    });
+  }
+  return out;
+}
 
 // ─── Hook Implementation ─────────────────────────────────────────────────────
 
@@ -101,6 +132,7 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
   const reviewIdRef = useRef(0);
   /** Timer for post-patch debounced auto-refresh. */
   const postPatchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   /** Latest pipeline state ref for async access inside fetch callbacks. */
   const stateRef = useRef(pipelineState);
 
@@ -115,6 +147,7 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
       if (postPatchTimerRef.current) {
         clearTimeout(postPatchTimerRef.current);
       }
+      abortRef.current?.abort();
     };
   }, []);
 
@@ -122,7 +155,8 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
   // The findings are stale if the result's fingerprint doesn't match the
   // current live fingerprint, unless we've never completed a review.
   const isStale =
-    resultFingerprint !== "" && currentFingerprint !== "" && resultFingerprint !== currentFingerprint;
+    resultFingerprint !== "" &&
+    (currentFingerprint === "" || resultFingerprint !== currentFingerprint);
 
   // ── Core review cycle ─────────────────────────────────────────────────────
 
@@ -133,6 +167,10 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
     if (currentFingerprint === "") return;
 
     const thisReviewId = ++reviewIdRef.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const timeoutId = window.setTimeout(() => controller.abort(), ANALYZE_TIMEOUT_MS);
 
     setIsLoading(true);
     setError("");
@@ -153,6 +191,7 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ state: snapshot }),
+          signal: controller.signal,
         });
 
         // If a newer review was initiated while this was in-flight, abandon.
@@ -161,7 +200,7 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
         const contentType = response.headers.get("content-type") ?? "";
         if (!contentType.includes("application/json")) {
           throw new Error(
-            "Server returned non-JSON. Ensure the Express API server is running.",
+            "The analysis service returned an unexpected response. Try again.",
           );
         }
 
@@ -200,17 +239,16 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
           findings?: Finding[];
         };
 
-        // Get deterministic issues for reconciliation from the current state.
-        const { issues } = getPipelineValidation(stateRef.current);
+        const { issues } = getPipelineValidation(snapshot);
         const providerConflicts = getProviderConflicts(
-          stateRef.current.ihvProvider,
-          stateRef.current.passes,
+          snapshot.ihvProvider,
+          snapshot.passes,
         );
 
-        // Use findings if available (new contract), otherwise convert suggestions.
-        const aiFindings: Finding[] = rawResult.findings ?? adaptSuggestionsToFindings(
+        const parsedFindings = parseFindings(rawResult.findings);
+        const aiFindings: Finding[] = parsedFindings ?? adaptSuggestionsToFindings(
           rawResult.suggestions ?? [],
-          stateRef.current,
+          snapshot,
         );
 
         // Reconcile AI findings with deterministic validation.
@@ -230,6 +268,10 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
       } catch (err: unknown) {
         // Only apply error if this is still the active review.
         if (thisReviewId !== reviewIdRef.current) return;
+        if (err instanceof DOMException && err.name === "AbortError") {
+          setError("Analysis timed out. Try again.");
+          return;
+        }
         const message =
           err instanceof Error ? err.message : "Review failed.";
         setError(message);
@@ -237,9 +279,23 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
         if (thisReviewId === reviewIdRef.current) {
           setIsLoading(false);
         }
+        window.clearTimeout(timeoutId);
       }
     })();
   }, [currentFingerprint]);
+
+  const reset = useCallback(() => {
+    reviewIdRef.current += 1;
+    abortRef.current?.abort();
+    setFindings([]);
+    setScore(0);
+    setLevel("");
+    setSummary("");
+    setResultFingerprint("");
+    setCompletedAt(0);
+    setError("");
+    setIsLoading(false);
+  }, []);
 
   // ── Post-patch auto-refresh (Req 2.6: 300–1000 ms) ───────────────────────
 
@@ -265,6 +321,7 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
     error,
     completedAt,
     refresh,
+    reset,
     schedulePostPatchRefresh,
   };
 }
