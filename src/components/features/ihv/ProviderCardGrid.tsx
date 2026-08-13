@@ -2,9 +2,11 @@
  * ProviderCardGrid — Provider card grid with local accelerators and export/platform sections.
  * Extracted from IHVIntegrationPanel (Task 6).
  */
+import { useState } from "react";
 import { TooltipProvider } from "@/components/ui/Tooltip";
 import { HardwareProviderCard, type HardwareProviderCardProps } from "./HardwareProviderCard";
-import { RefreshCw } from "lucide-react";
+import { ChevronDown, RefreshCw } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { ProviderCatalogEntry } from "@/lib/providerCatalog";
 
 export interface ProviderCardGridProps {
@@ -20,6 +22,15 @@ export function ProviderCardGrid({
   exportAndPlatformTargets,
   providerCardProps,
 }: ProviderCardGridProps) {
+  // Export/platform targets (QNN, WebGPU, CoreML, NNAPI, TFLite, WASM, ...) are rarely
+  // what someone came here to pick — they're deploy targets for a different runtime, not
+  // candidates on this machine. Keep them out of the way unless the active selection is
+  // one of them, or the user asks to see them.
+  const selectedIsExportTarget = exportAndPlatformTargets.some(
+    (p) => p.id === providerCardProps.state.ihvProvider,
+  );
+  const [showExportTargets, setShowExportTargets] = useState(selectedIsExportTarget);
+
   if (probeLoading) {
     return (
       <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-8 text-center text-sm text-slate-500">
@@ -32,21 +43,48 @@ export function ProviderCardGrid({
   return (
     <TooltipProvider delayDuration={200}>
       <div className="space-y-5">
-        {([
-          { label: "Local accelerators", items: localAccelerators },
-          { label: "Export & platform targets", items: exportAndPlatformTargets },
-        ] as const).map((section) => (
-          <div key={section.label} className="space-y-3">
-            <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500">
-              {section.label}
+        <div className="space-y-3">
+          <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500">
+            Local accelerators
+          </p>
+          <div className="grid gap-4 min-w-0 w-full">
+            {localAccelerators.map((p) => (
+              <HardwareProviderCard key={p.id} provider={p} {...providerCardProps} />
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => setShowExportTargets((v) => !v)}
+            className="flex w-full items-center justify-between gap-2 text-left cursor-pointer group"
+            aria-expanded={showExportTargets}
+          >
+            <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500 group-hover:text-slate-400">
+              Export &amp; platform targets ({exportAndPlatformTargets.length})
+            </span>
+            <ChevronDown
+              className={cn(
+                "h-3.5 w-3.5 text-slate-500 shrink-0 transition-transform group-hover:text-slate-400",
+                showExportTargets && "rotate-180",
+              )}
+            />
+          </button>
+          {!showExportTargets && (
+            <p className="text-xs text-slate-600">
+              Deploy/export targets for other runtimes (mobile, browser, edge) — not local
+              execution providers on this machine.
             </p>
+          )}
+          {showExportTargets && (
             <div className="grid gap-4 min-w-0 w-full">
-              {section.items.map((p) => (
+              {exportAndPlatformTargets.map((p) => (
                 <HardwareProviderCard key={p.id} provider={p} {...providerCardProps} />
               ))}
             </div>
-          </div>
-        ))}
+          )}
+        </div>
       </div>
     </TooltipProvider>
   );
