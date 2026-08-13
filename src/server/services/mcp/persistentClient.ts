@@ -10,9 +10,8 @@
  * The circuit breaker governs spawn failures / crashes; tool-level errors
  * (bad args, unknown tool) never trip the breaker.
  */
-import { Client } from "@modelcontextprotocol/client";
+import { Client, SSEClientTransport } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
-import { SSEClientTransport } from "@modelcontextprotocol/client/sse";
 import mcpBreaker, { type McpCallAdmission } from "./breaker.ts";
 import { getMcpPython, buildPythonEnv, mcpServerDir } from "./paths.ts";
 
@@ -336,7 +335,18 @@ export function resetPersistentClient(): void {
  * change and need to take effect.
  */
 export async function reconnectMcpClient(): Promise<void> {
-  // Tear down the existing connection
+  // Serialize with any in-flight connect() so its success/catch cannot
+  // overwrite the replacement session after we reset module state.
+  const pending = connectingPromise;
+  connectingPromise = null;
+  if (pending) {
+    try {
+      await pending;
+    } catch {
+      // Previous connect failed; continue with a fresh attempt.
+    }
+  }
+
   if (client) {
     try { await client.close(); } catch { /* best-effort */ }
   }
@@ -356,7 +366,7 @@ export async function reconnectMcpClient(): Promise<void> {
 export function getPersistentClientSnapshotForTests(): {
   state: ConnectionState;
   client: Client | null;
-  transport: StdioClientTransport | null;
+  transport: StdioClientTransport | SSEClientTransport | null;
 } {
   return { state, client, transport };
 }
@@ -365,7 +375,7 @@ export function getPersistentClientSnapshotForTests(): {
 export function setPersistentClientSnapshotForTests(next: {
   state: ConnectionState;
   client: Client | null;
-  transport: StdioClientTransport | null;
+  transport: StdioClientTransport | SSEClientTransport | null;
 }): void {
   state = next.state;
   client = next.client;
