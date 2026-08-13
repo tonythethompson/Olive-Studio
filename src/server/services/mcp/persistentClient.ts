@@ -1,9 +1,10 @@
 /**
- * Persistent MCP client using stdio transport.
+ * Persistent MCP client using stdio transport by default, or SSE when
+ * OLIVE_MCP_URL is configured.
  *
- * Maintains a long-lived child process running `python -m olive_mcp_server`
- * and communicates via JSON-RPC over stdin/stdout (MCP protocol). Tool calls
- * complete in <50ms (warm) vs ~500ms per subprocess spawn.
+ * The local mode maintains a long-lived child process running
+ * `python -m olive_mcp_server` and communicates via JSON-RPC over stdin/stdout
+ * (MCP protocol). Tool calls complete in <50ms (warm) vs ~500ms per subprocess spawn.
  *
  * Connection lifecycle: idle → connecting → connected → (crash) → reconnecting.
  * The circuit breaker governs spawn failures / crashes; tool-level errors
@@ -11,6 +12,7 @@
  */
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { SSEClientTransport } from "@modelcontextprotocol/client/sse";
 import mcpBreaker, { type McpCallAdmission } from "./breaker.ts";
 import { getMcpPython, buildPythonEnv, mcpServerDir } from "./paths.ts";
 
@@ -27,7 +29,7 @@ type ConnectionState = "idle" | "connecting" | "connected" | "crashed";
 
 let state: ConnectionState = "idle";
 let client: Client | null = null;
-let transport: StdioClientTransport | null = null;
+let transport: StdioClientTransport | SSEClientTransport | null = null;
 /** Pending connect() promise — prevents concurrent connection attempts. */
 let connectingPromise: Promise<void> | null = null;
 
@@ -48,28 +50,37 @@ async function connect(): Promise<void> {
   connectingPromise = (async () => {
     state = "connecting";
     try {
-      const python = getMcpPython();
-      const env = buildPythonEnv();
-      const cwd = mcpServerDir();
+      const remoteUrl = process.env.OLIVE_MCP_URL;
+      if (remoteUrl) {
+        // The Compose MCP service exposes the SSE endpoint at /sse.
+        const url = new URL(remoteUrl);
+        if (url.pathname === "/" || url.pathname === "") url.pathname = "/sse";
+        transport = new SSEClientTransport(url);
+      } else {
+        const python = getMcpPython();
+        const env = buildPythonEnv();
+        const cwd = mcpServerDir();
 
-      transport = new StdioClientTransport({
-        command: python,
-        args: ["-m", "olive_mcp_server"],
-        env: { ...env } as Record<string, string>,
-        cwd,
-        stderr: "pipe",
-      });
-
-      // Log stderr from the MCP server for diagnostics (don't suppress errors).
-      const stderrStream = transport.stderr;
-      if (stderrStream && "on" in stderrStream) {
-        (stderrStream as NodeJS.ReadableStream).on("data", (chunk: Buffer) => {
-          const line = chunk.toString().trim();
-          if (line) {
-            // Only log non-empty lines to avoid noise
-            process.stderr.write(`[olive-mcp] ${line}\n`);
-          }
+        const stdioTransport = new StdioClientTransport({
+          command: python,
+          args: ["-m", "olive_mcp_server"],
+          env: { ...env } as Record<string, string>,
+          cwd,
+          stderr: "pipe",
         });
+        transport = stdioTransport;
+
+        // Log stderr from the MCP server for diagnostics (don't suppress errors).
+        const stderrStream = stdioTransport.stderr;
+        if (stderrStream && "on" in stderrStream) {
+          (stderrStream as NodeJS.ReadableStream).on("data", (chunk: Buffer) => {
+            const line = chunk.toString().trim();
+            if (line) {
+              // Only log non-empty lines to avoid noise
+              process.stderr.write(`[olive-mcp] ${line}\n`);
+            }
+          });
+        }
       }
 
       // Capture instance ref so a stale transport's close event doesn't
@@ -102,7 +113,7 @@ async function connect(): Promise<void> {
 // ─── Public API (same signatures as the old client.ts) ─────────────────
 
 /**
- * Invokes a single Olive MCP tool via the persistent stdio connection.
+ * Invokes a single Olive MCP tool via the persistent MCP connection.
  *
  * @param toolName - The name of the tool to invoke
  * @param args - Arguments to pass to the tool
@@ -325,18 +336,7 @@ export function resetPersistentClient(): void {
  * change and need to take effect.
  */
 export async function reconnectMcpClient(): Promise<void> {
-  // Serialize with any in-flight connect() so its success/catch cannot
-  // overwrite the replacement session after we reset module state.
-  const pending = connectingPromise;
-  connectingPromise = null;
-  if (pending) {
-    try {
-      await pending;
-    } catch {
-      // Previous connect failed; continue with a fresh attempt.
-    }
-  }
-
+  // Tear down the existing connection
   if (client) {
     try { await client.close(); } catch { /* best-effort */ }
   }
@@ -348,6 +348,7 @@ export async function reconnectMcpClient(): Promise<void> {
   state = "idle";
   connectingPromise = null;
 
+  // Re-establish with fresh env
   await connect();
 }
 
