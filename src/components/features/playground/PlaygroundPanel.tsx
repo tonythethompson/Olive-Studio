@@ -6,6 +6,7 @@ import { usePlaygroundStore, type PlaygroundSubView } from "@/lib/stores/playgro
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { buildRecipeJsonFromState } from "@/lib/recipePipeline";
 import { hasSelectedModel } from "@/lib/pipelineValidation";
+import { mapExecutionProviderFromRecipe } from "@/lib/oliveRecipeHub";
 
 /* ------------------------------------------------------------------ */
 /*  Lazy sub-view imports                                               */
@@ -58,17 +59,29 @@ function LoadingFallback({ label }: { label: string }) {
 /*  PlaygroundPanel                                                     */
 /* ------------------------------------------------------------------ */
 
+function isWebGpuRecipe(recipeJson: string): boolean {
+  return mapExecutionProviderFromRecipe(recipeJson) === "WebGpuExecutionProvider";
+}
+
 export function PlaygroundPanel() {
   const activeSubView = usePlaygroundStore((s) => s.activeSubView);
   const setActiveSubView = usePlaygroundStore((s) => s.setActiveSubView);
+  const capturedRunRecipe = usePlaygroundStore((s) => s.capturedRunRecipe);
   const { state } = usePipelineState();
-  // Ties the Browser Test hint back to the recipe actually configured in steps 01-03,
-  // instead of always being hidden (it was previously hardcoded to undefined).
+  // Memoize captured WebGPU recipe check so JSON parsing doesn't re-run on frequent pipeline state edits.
+  const isCapturedWebGpu = useMemo(() => {
+    return Boolean(capturedRunRecipe && isWebGpuRecipe(capturedRunRecipe));
+  }, [capturedRunRecipe]);
+
+  // Use the recipe from the last successful Execute run if available (preserves context even if
+  // user modifies state afterward). Fallback to building from current state for manual Browser Test.
   // Only pass recipe if provider is WebGPU; other providers should not show this hint.
-  const recipeJson = useMemo(
-    () => (hasSelectedModel(state) && state.ihvProvider === "WebGpuExecutionProvider" ? buildRecipeJsonFromState(state) : undefined),
-    [state],
-  );
+  const recipeJson = useMemo(() => {
+    if (isCapturedWebGpu && capturedRunRecipe) return capturedRunRecipe;
+    return hasSelectedModel(state) && state.ihvProvider === "WebGpuExecutionProvider"
+      ? buildRecipeJsonFromState(state)
+      : undefined;
+  }, [isCapturedWebGpu, capturedRunRecipe, state]);
 
   // Keep-alive: seed from store so remounts don't blank a restored sub-view
   const [visitedSubViews, setVisitedSubViews] = useState<Set<string>>(

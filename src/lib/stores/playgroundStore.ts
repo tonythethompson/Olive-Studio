@@ -40,6 +40,9 @@ interface PlaygroundStore {
   slotB: ArenaSlotConfig;
   setSlotA: (patch: Partial<ArenaSlotConfig>) => void;
   setSlotB: (patch: Partial<ArenaSlotConfig>) => void;
+  /** Recipe JSON captured from the last successful Execute run. */
+  capturedRunRecipe: string | undefined;
+  setCapturedRunRecipe: (recipe: string | undefined) => void;
   /** Reset session-scoped Playground fields (does not touch pipeline state). */
   resetPlayground: () => void;
 }
@@ -51,10 +54,13 @@ export const usePlaygroundStore = create<PlaygroundStore>((set) => ({
   slotB: defaultArenaSlot(),
   setSlotA: (patch) => set((s) => ({ slotA: { ...s.slotA, ...patch } })),
   setSlotB: (patch) => set((s) => ({ slotB: { ...s.slotB, ...patch } })),
+  capturedRunRecipe: undefined,
+  setCapturedRunRecipe: (recipe) => set({ capturedRunRecipe: recipe }),
   resetPlayground: () =>
     set({
       activeSubView: "browser-test",
       slotA: defaultArenaSlot(),
       slotB: defaultArenaSlot(),
+      capturedRunRecipe: undefined,
     }),
 }));

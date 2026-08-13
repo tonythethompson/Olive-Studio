@@ -94,7 +94,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const [showCompatDetails, setShowCompatDetails] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const forceRefreshRef = useRef(false);
-  const { diagnostic: mcpDiagnostic, isDiagnosing: mcpDiagnosing, fetchDiagnostic } = useMcpDiagnostic();
+  const { diagnostic: mcpDiagnostic, isDiagnosing: mcpDiagnosing, fetchDiagnostic, clearDiagnostic } = useMcpDiagnostic();
 
   const validation = getPipelineValidation(state);
   // Pass-parameter advisories (quant method preferences, precision tips, etc.) are all
@@ -219,16 +219,21 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     // Reset ref and clear stale diagnostics when model is deselected.
     if (!modelSelected) {
       prevIssueCountRef.current = 0;
+      clearDiagnostic();
       return;
     }
     const criticalIssues = validation.issues.filter((i) => i.severity === "critical");
     const count = criticalIssues.length;
-    if (count === 0 || count === prevIssueCountRef.current) return;
+    if (count === 0) {
+      prevIssueCountRef.current = 0;
+      return;
+    }
+    if (count === prevIssueCountRef.current) return;
     prevIssueCountRef.current = count;
 
     const logLines = criticalIssues.map((i) => `[VALIDATION] ${i.title}: ${i.description}`);
     fetchDiagnostic(logLines);
-  }, [validation.issues, modelSelected, fetchDiagnostic]);
+  }, [validation.issues, modelSelected, fetchDiagnostic, clearDiagnostic]);
 
   // Hardware-specific parameter validation (synchronous, cheap — runs every render with state)
   const paramWarnings = validatePassParameters(state, activePassNames, recipe);

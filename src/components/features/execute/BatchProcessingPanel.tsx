@@ -297,6 +297,7 @@ function uiStateForBatchJob(job: BatchJob, state: UIState): UIState {
   return {
     ...state,
     modelSource: job.modelSource,
+    localFiles: state.localFiles,
     hfModelId: job.modelSource === "huggingface" ? job.modelIdentifier : state.hfModelId,
     azureModelPath: job.modelSource === "azure" ? job.modelIdentifier : state.azureModelPath,
     ihvProvider: job.provider,

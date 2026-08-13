@@ -8,7 +8,11 @@ import { PlaygroundPanel } from "./PlaygroundPanel";
 import { usePlaygroundStore } from "@/lib/stores/playgroundStore";
 
 vi.mock("./InBrowserValidation", () => ({
-  InBrowserValidation: () => <div data-testid="browser-test-panel">Browser Test Panel</div>,
+  InBrowserValidation: ({ recipeJson }: { recipeJson?: string }) => (
+    <div data-testid="browser-test-panel" data-recipe-json={recipeJson ?? ""}>
+      Browser Test Panel
+    </div>
+  ),
 }));
 
 vi.mock("./WebGpuBenchmarkPanel", () => ({
@@ -85,5 +89,48 @@ describe("PlaygroundPanel", () => {
     expect(screen.getByTestId("browser-test-panel").closest("[role='tabpanel']")?.hasAttribute("hidden")).toBe(
       true,
     );
+  });
+
+  it("passes capturedRunRecipe to InBrowserValidation only if it uses WebGpuExecutionProvider", async () => {
+    const cudaRecipe = JSON.stringify({
+      systems: {
+        gpu: {
+          config: {
+            accelerators: [{ execution_providers: ["CUDAExecutionProvider"] }],
+          },
+        },
+      },
+    });
+
+    usePlaygroundStore.getState().setCapturedRunRecipe(cudaRecipe);
+    const { unmount } = render(<PlaygroundPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("browser-test-panel")).toBeTruthy();
+    });
+
+    // CUDA captured recipe should NOT be passed to Browser Test
+    expect(screen.getByTestId("browser-test-panel").getAttribute("data-recipe-json")).toBe("");
+    unmount();
+
+    const webGpuRecipe = JSON.stringify({
+      systems: {
+        gpu: {
+          config: {
+            accelerators: [{ execution_providers: ["WebGpuExecutionProvider"] }],
+          },
+        },
+      },
+    });
+
+    usePlaygroundStore.getState().setCapturedRunRecipe(webGpuRecipe);
+    render(<PlaygroundPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("browser-test-panel")).toBeTruthy();
+    });
+
+    // WebGPU captured recipe SHOULD be passed to Browser Test
+    expect(screen.getByTestId("browser-test-panel").getAttribute("data-recipe-json")).toBe(webGpuRecipe);
   });
 });

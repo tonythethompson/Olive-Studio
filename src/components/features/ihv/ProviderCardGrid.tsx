@@ -2,11 +2,12 @@
  * ProviderCardGrid — Provider card grid with local accelerators and export/platform sections.
  * Extracted from IHVIntegrationPanel (Task 6).
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { TooltipProvider } from "@/components/ui/Tooltip";
 import { HardwareProviderCard, type HardwareProviderCardProps } from "./HardwareProviderCard";
 import { ChevronDown, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isProviderDetectedLocally } from "@/lib/hardwareProbe";
 import type { ProviderCatalogEntry } from "@/lib/providerCatalog";
 
 export interface ProviderCardGridProps {
@@ -34,6 +35,37 @@ export function ProviderCardGrid({
     setShowExportTargets(selectedIsExportTarget);
   }, [selectedIsExportTarget]);
 
+  // Within local accelerators, cards for hardware not actually detected on this machine
+  // (e.g. CoreML on a Windows box) are rarely the pick — collapse them the same way
+  // export/platform targets collapse, unless the active selection is one of them.
+  // However, if probe is still loading or failed (null), show all locals together since we
+  // can't reliably distinguish detected from undetected without probe results.
+  const { detectedLocal, undetectedLocal } = useMemo(() => {
+    const hardwareProbe = providerCardProps.hardwareProbe;
+    const detected: ProviderCatalogEntry[] = [];
+    const undetected: ProviderCatalogEntry[] = [];
+
+    // Only split if probe data is available; otherwise treat all as detected since detection is unavailable.
+    if (!hardwareProbe && !probeLoading) {
+      // Probe finished but returned null (error case) — show all, don't split
+      return { detectedLocal: localAccelerators, undetectedLocal: [] };
+    }
+
+    for (const p of localAccelerators) {
+      if (isProviderDetectedLocally(p.id, hardwareProbe)) detected.push(p);
+      else undetected.push(p);
+    }
+    return { detectedLocal: detected, undetectedLocal: undetected };
+  }, [localAccelerators, providerCardProps.hardwareProbe, probeLoading]);
+
+  const selectedIsUndetectedLocal = undetectedLocal.some(
+    (p) => p.id === providerCardProps.state.ihvProvider,
+  );
+  const [showUndetectedLocal, setShowUndetectedLocal] = useState(selectedIsUndetectedLocal);
+  useEffect(() => {
+    setShowUndetectedLocal(selectedIsUndetectedLocal);
+  }, [selectedIsUndetectedLocal]);
+
   if (probeLoading) {
     return (
       <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-8 text-center text-sm text-slate-500">
@@ -51,10 +83,37 @@ export function ProviderCardGrid({
             Local accelerators
           </p>
           <div className="grid gap-4 min-w-0 w-full">
-            {localAccelerators.map((p) => (
+            {detectedLocal.map((p) => (
               <HardwareProviderCard key={p.id} provider={p} {...providerCardProps} />
             ))}
           </div>
+          {undetectedLocal.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowUndetectedLocal((v) => !v)}
+                className="flex w-full items-center justify-between gap-2 text-left cursor-pointer group"
+                aria-expanded={showUndetectedLocal}
+              >
+                <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500 group-hover:text-slate-400">
+                  {showUndetectedLocal ? "Hide" : "Show"} other targets ({undetectedLocal.length})
+                </span>
+                <ChevronDown
+                  className={cn(
+                    "h-3.5 w-3.5 text-slate-500 shrink-0 transition-transform group-hover:text-slate-400",
+                    showUndetectedLocal && "rotate-180",
+                  )}
+                />
+              </button>
+              {showUndetectedLocal && (
+                <div className="grid gap-4 min-w-0 w-full">
+                  {undetectedLocal.map((p) => (
+                    <HardwareProviderCard key={p.id} provider={p} {...providerCardProps} />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         <div className="space-y-3">
