@@ -20,8 +20,9 @@ import {
   formatCatalogMetadata,
   isValidSha,
   CatalogPinError,
+  type CatalogMetadata,
+  type CatalogEntry,
 } from "@/lib/recipeCatalogPin";
-import type { CatalogMetadata, CatalogEntry } from "@/lib/recipeCatalogPin";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

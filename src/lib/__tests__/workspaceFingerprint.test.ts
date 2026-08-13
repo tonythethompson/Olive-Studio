@@ -11,10 +11,9 @@ import {
   computeFingerprint,
   _serializeForFingerprint,
 } from "@/lib/workspaceFingerprint";
-import { FINGERPRINT_EXCLUDED_KEYS } from "@/lib/types/findingTypes";
+import { FINGERPRINT_EXCLUDED_KEYS, type ReviewResult } from "@/lib/types/findingTypes";
 import { createDefaultPipelineState } from "@/lib/stores/pipelineStore";
 import type { UIState } from "@/types";
-import type { ReviewResult } from "@/lib/types/findingTypes";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
