@@ -309,6 +309,12 @@ export function useAgentStream({
         // If the stream already completed cleanly, do not reconnect
         if (completedRef.current) return;
 
+        // Drop any timer already scheduled so it cannot fire untracked.
+        if (reconnectTimeoutRef.current !== null) {
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = null;
+        }
+
         // Close the failed connection
         evtSource.close();
         if (eventSourceRef.current === evtSource) {
