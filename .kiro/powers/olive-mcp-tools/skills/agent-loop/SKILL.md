@@ -16,6 +16,9 @@ Intent (natural language)
 plan_optimization  --> UIState patch + reasoning
     |
     v
+get_recipe_for_ui_state --> olive_recipe (complete Olive JSON)
+    |
+    v
 execute_and_observe --> Submit job, poll until terminal
     |
     +---> Success --------+
@@ -120,7 +123,7 @@ Returns on failure:
 - `timed_out`: `true` when polling reached the timeout (status is **not** rewritten to `"timeout"`)
 - `logs`: Diagnostic log lines containing the failure details
 
-Treat `timed_out: true` as a timeout even if `status` is still `"running"` or `"queued"`. Use those logs with `diagnose_and_fix` / retry.
+Treat `timed_out: true` as a timeout even if `status` is still `"running"` or `"queued"`. That is **not** a terminal failure: the Studio job may still be running. Continue polling the same job, or cancel it, before calling `execute_and_observe` again. Do not submit a second job while the first is still queued or running.
 
 ### Step 6: Handle Failures
 
@@ -179,28 +182,40 @@ Returns:
 
 ### Pattern A: Single-Shot Optimization
 ```
-get_model_info -> plan_optimization -> execute_and_observe -> done
+get_model_info
+  -> plan_optimization
+  -> get_recipe_for_ui_state(ui_state_patch)
+  -> execute_and_observe(olive_recipe)
+  -> done
 ```
+`plan_optimization` returns a `ui_state_patch`, **not** an Olive recipe. Passing that patch to `execute_and_observe` fails with `invalid_recipe`. Convert with `get_recipe_for_ui_state` and submit the returned `olive_recipe` object.
+
 Best for: Simple requests with high confidence.
 
 ### Pattern B: Iterate Until Success
 ```
-plan -> execute -> (fail) -> diagnose_and_fix -> execute -> (fail) -> diagnose_and_fix -> execute -> success
+plan -> get_recipe_for_ui_state -> execute
+  -> (fail) -> diagnose_and_fix -> execute
+  -> (fail) -> diagnose_and_fix -> execute -> success
 ```
 Best for: Complex configurations where first attempts may fail (OOM, compatibility).
 
 ### Pattern C: Multi-Strategy Comparison
 ```
-plan(strategy_1) -> execute -> success
-plan(strategy_2) -> execute -> success
-plan(strategy_3) -> execute -> success
+plan(strategy_1) -> get_recipe_for_ui_state -> execute -> success
+plan(strategy_2) -> get_recipe_for_ui_state -> execute -> success
+plan(strategy_3) -> get_recipe_for_ui_state -> execute -> success
 compare_results -> winner
 ```
 Best for: Finding the best approach — try AWQ, GPTQ, and HQQ, then pick the winner.
 
 ### Pattern D: Hardware-Aware Planning
 ```
-get_runtime_ep_hints -> get_model_info -> plan_optimization(with hardware_probe) -> execute -> done
+get_runtime_ep_hints -> get_model_info
+  -> plan_optimization(with hardware_probe)
+  -> get_recipe_for_ui_state
+  -> execute_and_observe(olive_recipe)
+  -> done
 ```
 Best for: Leveraging actual local hardware rather than guessing.
 

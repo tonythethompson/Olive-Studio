@@ -32,7 +32,7 @@ Each pass entry follows this schema:
 ```json
 {
   "name": "MyNewPass",
-  "type": "category",
+  "type": "quantization",
   "class": "olive.passes.my_new_pass.MyNewPass",
   "description": "One sentence describing what the pass does.",
   "input_formats": ["onnx"],

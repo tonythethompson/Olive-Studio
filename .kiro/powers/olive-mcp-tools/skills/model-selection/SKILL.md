@@ -155,7 +155,7 @@ Tool: get_integration_recipe
 Input: {
   "model_type": "LLM",
   "target_hardware": "nvidia",
-  "source_format": "PyTorch"
+  "source_format": "HuggingFace"
 }
 ```
 

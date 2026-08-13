@@ -44,11 +44,11 @@ The Python MCP server provides 32 tools for pass catalog, validation, and troubl
 
 Verify:
 ```bash
-# Windows:
-.venv\Scripts\python -m pytest tests -q
+# Windows (from repo root):
+olive-mcp-server\.venv\Scripts\python -m pytest olive-mcp-server\tests -q
 
-# Linux/macOS:
-.venv/bin/python -m pytest tests -q
+# Linux/macOS (from repo root):
+olive-mcp-server/.venv/bin/python -m pytest olive-mcp-server/tests -q
 ```
 
 ## Step 4: Kiro MCP connection

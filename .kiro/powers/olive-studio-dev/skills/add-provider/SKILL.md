@@ -15,33 +15,32 @@ Add the new provider id to `ProviderConfig["provider"]` in `src/server/types.ts`
 Then create `myProvider.ts` implementing `AiProviderPlugin`:
 
 ```typescript
-import type { ProviderConfig, AIChatMessage } from "../../types.ts";
-import { registerProvider, type AiProviderPlugin } from "./registry.js";
-import { callOpenAICompat } from "./openai.js";
+import type { ProviderConfig } from "../../types.ts";
+import { registerProvider, type AiProviderPlugin } from "./registry.ts";
+import { callOpenAICompat } from "./openai.ts";
 
 const plugin: AiProviderPlugin = {
-  name: "openai-compat",
+  name: "my-provider",
   label: "My Provider",
   defaultModel: "model-name",
   defaultBaseUrl: "https://api.myprovider.com/v1",
   envVarNames: ["MY_PROVIDER_API_KEY"],
 
-  buildConfig(apiKey: string): ProviderConfig {
-    return {
-      provider: "openai-compat",
-      apiKey,
-      model: "model-name",
-      endpoint: "https://api.myprovider.com/v1",
-    };
-  },
+  buildConfig: (apiKey) => ({
+    provider: "my-provider",
+    apiKey,
+    model: "model-name",
+    baseUrl: "https://api.myprovider.com/v1",
+  }),
 
-  call(cfg, system, messages, wantJson) {
-    return callOpenAICompat(cfg, system, messages, wantJson);
-  },
+  call: (cfg, system, messages, wantJson) =>
+    callOpenAICompat(cfg, system, messages, wantJson),
 };
 
 registerProvider(plugin);
 ```
+
+`name` and `buildConfig().provider` must be the **new** id (add it to `ProviderConfig["provider"]` first). Reusing `"openai-compat"` throws at import: `registerProvider` rejects duplicate names. Config uses `baseUrl`, not `endpoint`. Required plugin fields: `name`, `label`, `defaultModel`, `envVarNames`, `buildConfig`, `call`.
 
 ## Step 2: Side-Effect Import
 
@@ -49,7 +48,7 @@ registerProvider(plugin);
 
 Add the import so the provider registers at module load:
 ```typescript
-import "./myProvider.js";
+import "./myProvider.ts";
 ```
 
 ## Step 3: Add to UI Catalog
@@ -91,8 +90,8 @@ pnpm lint:quick    # Quick lint
 ### OpenAI-Compatible Providers
 
 Most providers today are OpenAI-compatible. Use the shared OpenAI handler with custom base URL:
-- Set `baseUrl` in `buildConfig`
-- Reuse the standard chat completion call path
+- Set `defaultBaseUrl` on the plugin and `baseUrl` in `buildConfig`
+- Reuse `callOpenAICompat` from `openai.ts`
 - Override only model names and auth headers
 
 ### Providers with Custom Auth
@@ -104,9 +103,8 @@ For non-standard auth (SigV4, OAuth, custom headers):
 
 ### Streaming Support
 
-If the provider supports streaming:
-- Return an async iterator from `call` when `options.stream` is true
-- The Express route handles SSE framing automatically
+`AiProviderPlugin.call` returns `Promise<string>` (the full assistant text).
+Do not invent a `stream` option on `call`; streaming is handled by the Express chat route, not the plugin.
 
 ## Important Rules
 
