@@ -31,6 +31,7 @@ describe("useAgentMode", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   // ─── Initial State ───────────────────────────────────────────────────────
@@ -133,6 +134,45 @@ describe("useAgentMode", () => {
       expect(result.current.outcome?.status).toBe("failure");
     });
 
+    it("ignores a late submit after the 10s timeout and cancels that job", async () => {
+      let resolveSubmit: (value: Response) => void = () => {};
+      const submitPromise = new Promise<Response>((resolve) => {
+        resolveSubmit = resolve;
+      });
+      const fetchMock = vi.fn((url: string) => {
+        if (String(url).includes("/olive/jobs/submit")) return submitPromise;
+        return Promise.resolve({ ok: true, json: async () => ({ status: "cancelled" }) } as Response);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { result } = renderHook(() => useAgentMode());
+
+      await act(async () => {
+        void result.current.startAgent({ recipeJson: "{}" });
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(result.current.agentRunning).toBe(false);
+      expect(result.current.jobId).toBeUndefined();
+
+      await act(async () => {
+        resolveSubmit({
+          ok: true,
+          json: async () => ({ jobId: "late-job" }),
+        } as Response);
+        await Promise.resolve();
+      });
+
+      expect(result.current.jobId).toBeUndefined();
+      expect(result.current.agentRunning).toBe(false);
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/olive/agent/cancel",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+
     it("does not fire timeout if confirmStart is called before 10s", () => {
       const { result } = renderHook(() => useAgentMode());
 
@@ -179,6 +219,42 @@ describe("useAgentMode", () => {
       expect(result.current.entries[0].text.toLowerCase()).toContain(
         "cancelled",
       );
+    });
+
+    it("reports failure and stays running when cancel API fails", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url: string) => {
+          if (String(url).includes("/olive/jobs/submit")) {
+            return Promise.resolve({
+              ok: true,
+              json: async () => ({ jobId: "job-cancel-fail" }),
+            } as Response);
+          }
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: async () => ({ error: "cancel denied" }),
+          } as Response);
+        }),
+      );
+
+      const { result } = renderHook(() => useAgentMode());
+
+      await act(async () => {
+        await result.current.startAgent({ recipeJson: "{}" });
+      });
+      expect(result.current.jobId).toBe("job-cancel-fail");
+
+      await act(async () => {
+        result.current.stopAgent();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(result.current.agentRunning).toBe(true);
+      expect(result.current.outcome?.status).toBe("failure");
+      expect(result.current.outcome?.errorDescription).toContain("cancel denied");
     });
 
     it("clears the start timeout if stop is called before 10s", () => {

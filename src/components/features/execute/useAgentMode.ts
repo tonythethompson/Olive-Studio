@@ -28,6 +28,14 @@ import type {
 /** Timeout (ms) after which a start attempt is considered failed. */
 const START_TIMEOUT_MS = 10_000;
 
+function requestAgentCancel(jobId: string): Promise<Response> {
+  return fetch("/api/olive/agent/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jobId }),
+  });
+}
+
 // ─── Hook Return Type ───────────────────────────────────────────────────────────
 
 export interface UseAgentModeReturn {
@@ -83,6 +91,8 @@ export function useAgentMode(): UseAgentModeReturn {
   // Ref for startedAt to avoid stale closure in stopAgent during React batching.
   const startedAtRef = useRef<string | undefined>(undefined);
   const jobIdRef = useRef<string | undefined>(undefined);
+  /** Bumped on start/stop/timeout/complete so a late POST cannot attach. */
+  const runGenerationRef = useRef(0);
 
   // ─── Internal helpers ───────────────────────────────────────────────────────
 
@@ -114,6 +124,8 @@ export function useAgentMode(): UseAgentModeReturn {
    */
   const startAgent = useCallback(async (opts?: { recipeJson?: string; cudaVersion?: string }) => {
     // Clear previous session (Requirement 7.5: new session clears old entries)
+    runGenerationRef.current += 1;
+    const thisGen = runGenerationRef.current;
     setEntries([]);
     setOutcome(undefined);
     setJobId(undefined);
@@ -129,6 +141,9 @@ export function useAgentMode(): UseAgentModeReturn {
     // Start 10-second failure timeout (Requirement 6.4)
     clearStartTimeout();
     startTimeoutRef.current = setTimeout(() => {
+      if (thisGen !== runGenerationRef.current) return;
+      runGenerationRef.current += 1;
+      const orphanId = jobIdRef.current;
       const now = new Date();
       const ts = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
       const errorEntry: ActivityLogEntry = {
@@ -139,6 +154,8 @@ export function useAgentMode(): UseAgentModeReturn {
       };
       setEntries((prev) => appendEntryFIFO(prev, errorEntry));
       setAgentRunning(false);
+      setJobId(undefined);
+      jobIdRef.current = undefined;
       setOutcome({
         status: "failure",
         totalSteps: stepCountRef.current,
@@ -148,12 +165,13 @@ export function useAgentMode(): UseAgentModeReturn {
         errorDescription: "Agent failed to start within 10 seconds",
       });
       startTimeoutRef.current = null;
+      if (orphanId) void requestAgentCancel(orphanId);
     }, START_TIMEOUT_MS);
 
     if (!opts?.recipeJson) return;
 
     try {
-      const resp = await fetch("/api/olive/run", {
+      const resp = await fetch("/api/olive/jobs/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -162,12 +180,17 @@ export function useAgentMode(): UseAgentModeReturn {
         }),
       });
       const data = (await resp.json().catch(() => ({}))) as { jobId?: string; error?: string };
+      if (thisGen !== runGenerationRef.current) {
+        if (data.jobId) void requestAgentCancel(data.jobId);
+        return;
+      }
       if (!resp.ok || !data.jobId) {
         throw new Error(data.error || `HTTP ${resp.status}`);
       }
       setJobId(data.jobId);
       jobIdRef.current = data.jobId;
     } catch (err) {
+      if (thisGen !== runGenerationRef.current) return;
       clearStartTimeout();
       const message = err instanceof Error ? err.message : "Failed to submit agent job";
       setAgentRunning(false);
@@ -193,20 +216,7 @@ export function useAgentMode(): UseAgentModeReturn {
    * Stop the agent loop manually (user-initiated cancellation).
    * Appends a terminal cancellation entry and disables running state.
    */
-  const stopAgent = useCallback(() => {
-    clearStartTimeout();
-
-    const activeJobId = jobIdRef.current;
-    if (activeJobId) {
-      void fetch("/api/olive/cancel", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId: activeJobId }),
-      }).catch(() => {
-        /* local UI still stops even if cancel request fails */
-      });
-    }
-
+  const applyCancelledOutcome = useCallback(() => {
     const cancelOutcome: AgentOutcome = {
       status: "cancelled",
       totalSteps: stepCountRef.current,
@@ -215,12 +225,43 @@ export function useAgentMode(): UseAgentModeReturn {
         : 0,
       cancelledAtStep: stepCountRef.current,
     };
-
     const terminalEntry = truncateEntry(createTerminalEntry(cancelOutcome));
     setEntries((prev) => appendEntryFIFO(prev, terminalEntry));
     setAgentRunning(false);
     setOutcome(cancelOutcome);
-  }, [clearStartTimeout]);
+  }, []);
+
+  const stopAgent = useCallback(() => {
+    clearStartTimeout();
+    runGenerationRef.current += 1;
+
+    const activeJobId = jobIdRef.current;
+    if (!activeJobId) {
+      applyCancelledOutcome();
+      return;
+    }
+
+    void (async () => {
+      try {
+        const resp = await requestAgentCancel(activeJobId);
+        const data = (await resp.json().catch(() => ({}))) as { error?: string; status?: string };
+        if (!resp.ok) {
+          throw new Error(data.error || `HTTP ${resp.status}`);
+        }
+        applyCancelledOutcome();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to cancel agent job";
+        setOutcome({
+          status: "failure",
+          totalSteps: stepCountRef.current,
+          elapsedMs: startedAtRef.current
+            ? Date.now() - new Date(startedAtRef.current).getTime()
+            : 0,
+          errorDescription: message,
+        });
+      }
+    })();
+  }, [applyCancelledOutcome, clearStartTimeout]);
 
   /**
    * Complete the agent loop with a specified outcome.
@@ -229,6 +270,7 @@ export function useAgentMode(): UseAgentModeReturn {
   const completeAgent = useCallback(
     (completionOutcome: AgentOutcome) => {
       clearStartTimeout();
+      runGenerationRef.current += 1;
 
       const terminalEntry = truncateEntry(createTerminalEntry(completionOutcome));
       setEntries((prev) => appendEntryFIFO(prev, terminalEntry));
