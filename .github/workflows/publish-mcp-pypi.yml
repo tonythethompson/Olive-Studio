@@ -1,0 +1,73 @@
+name: Publish Olive MCP Server to PyPI
+
+on:
+  push:
+    tags:
+      - "mcp-server/v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Verify version matches tag
+        working-directory: olive-mcp-server
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#mcp-server/v}"
+          PKG_VERSION=$(python -c "
+          try:
+              import tomllib
+          except ModuleNotFoundError:
+              import tomli as tomllib
+          with open('pyproject.toml', 'rb') as f:
+              data = tomllib.load(f)
+          print(data['project']['version'])
+          ")
+          echo "Tag version: $TAG_VERSION"
+          echo "Package version: $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Version mismatch: tag says $TAG_VERSION but pyproject.toml says $PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Verify mcp dependency is pinned below 2
+        working-directory: olive-mcp-server
+        run: |
+          MCP_CONSTRAINT=$(python -c "
+          try:
+              import tomllib
+          except ModuleNotFoundError:
+              import tomli as tomllib
+          with open('pyproject.toml', 'rb') as f:
+              data = tomllib.load(f)
+          deps = data.get('project', {}).get('dependencies', [])
+          for dep in deps:
+              if dep.lower().startswith('mcp'):
+                  print(dep)
+                  break
+          ")
+          echo "MCP constraint: $MCP_CONSTRAINT"
+          if ! echo "$MCP_CONSTRAINT" | grep -qE 'mcp[<>=!~ ]+.*2'; then
+            echo "::error::mcp dependency must be pinned below 2 (e.g. 'mcp<2')"
+            exit 1
+          fi
+
+      - name: Build package
+        working-directory: olive-mcp-server
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: olive-mcp-server/dist/
