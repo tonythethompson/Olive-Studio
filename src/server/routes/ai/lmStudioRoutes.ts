@@ -158,24 +158,29 @@ export function mountLmStudioRoutes(router: Router): void {
       }
     };
     const waitForPullSlot = async (): Promise<boolean> => {
-      if (!localEngineRuntime.lmsPullBusyTag) return true;
-      const cancelledPull =
-        localEngineRuntime.lmsPullBusyTag === tag ? localEngineRuntime.lmsPullTeardown : null;
-      if (cancelledPull) {
-        await cancelledPull;
-        if (guard.disconnected()) {
+      if (localEngineRuntime.lmsPullBusyTag) {
+        const cancelledPull =
+          localEngineRuntime.lmsPullBusyTag === tag ? localEngineRuntime.lmsPullTeardown : null;
+        if (cancelledPull) {
+          await cancelledPull;
+          if (guard.disconnected()) {
+            guard.endOnce();
+            return false;
+          }
+        }
+        if (localEngineRuntime.lmsPullBusyTag) {
+          send({
+            type: "error",
+            error: "Another LM Studio download is already in progress.",
+            hint: `Wait for "${localEngineRuntime.lmsPullBusyTag}" to finish, or cancel that download, then retry.`,
+          });
           guard.endOnce();
           return false;
         }
       }
-      if (!localEngineRuntime.lmsPullBusyTag) return true;
-      send({
-        type: "error",
-        error: "Another LM Studio download is already in progress.",
-        hint: `Wait for "${localEngineRuntime.lmsPullBusyTag}" to finish, or cancel that download, then retry.`,
-      });
-      guard.endOnce();
-      return false;
+      localEngineRuntime.lmsPullBusyTag = tag;
+      ownsBusy = true;
+      return true;
     };
     try {
       if (!isValidLocalModelTag(tag)) {
@@ -187,12 +192,11 @@ export function mountLmStudioRoutes(router: Router): void {
       const disk = gateLocalPullDiskSpace("lms", tag);
       if (!disk.ok) {
         send({ type: "error", error: disk.error, hint: disk.hint });
+        finalizeBusy();
         guard.endOnce();
         return;
       }
 
-      localEngineRuntime.lmsPullBusyTag = tag;
-      ownsBusy = true;
       const markCancelled = () => {
         if (ownsBusy && localEngineRuntime.lmsPullBusyTag === tag) {
           localEngineRuntime.lmsPullTeardown = teardown;
