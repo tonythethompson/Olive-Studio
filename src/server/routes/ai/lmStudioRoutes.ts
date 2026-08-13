@@ -275,6 +275,7 @@ export function mountLmStudioRoutes(router: Router): void {
       const armStallTimer = () => {
         if (stallTimer) clearTimeout(stallTimer);
         stallTimer = setTimeout(() => {
+          if (guard.disconnected()) return;
           send({
             type: "log",
             message: `No progress for ${Math.round(STALL_WARN_MS / 1000)}s — the download may be stuck. You can cancel and retry.`,
@@ -288,6 +289,7 @@ export function mountLmStudioRoutes(router: Router): void {
           stallTimer = undefined;
         }
       };
+      guard.signal.addEventListener("abort", clearStallTimer, { once: true });
       armStallTimer();
 
       const logBuf: string[] = [];
