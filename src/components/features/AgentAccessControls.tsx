@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Bot, RefreshCw, Shield } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export type AgentAccessPolicyState = {
   mcpAccess: boolean;
@@ -68,7 +69,11 @@ function formatAgentAccessError(status: number, serverError: string | undefined)
  * loopback-only on the server. Env overrides (e.g. OLIVE_MCP_ALLOW_JOBS) may
  * still force submit/cancel — UI shows when that is active.
  */
-export const AgentAccessControls = memo(function AgentAccessControls() {
+interface AgentAccessControlsProps {
+  compact?: boolean;
+}
+
+export const AgentAccessControls = memo(function AgentAccessControls({ compact = false }: AgentAccessControlsProps) {
   const [policy, setPolicy] = useState<AgentAccessPolicyState | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -192,7 +197,10 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center justify-center gap-0 wide:gap-1.5 text-slate-400 hover:text-slate-200 transition-colors px-1.5 py-1 rounded border border-transparent hover:border-slate-700/80"
+        className={cn(
+          "flex items-center justify-center text-slate-400 hover:text-slate-200 transition-colors px-1.5 py-1 rounded border border-transparent hover:border-slate-700/80",
+          compact ? "gap-0" : "gap-1.5",
+        )}
         title={title}
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -202,7 +210,7 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
         <Bot className="h-3 w-3 text-slate-500" aria-hidden />
         <span className={elevated ? "text-amber-400/90 flex items-center gap-0.5" : "text-slate-400"}>
           {elevated ? <Shield className="h-3 w-3" aria-hidden /> : null}
-          <span className="hidden wide:inline">Agent access</span>
+          <span className={compact ? "hidden" : "inline"}>Agent access</span>
         </span>
       </button>
 

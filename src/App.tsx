@@ -110,6 +110,38 @@ function Dashboard() {
   const { state: pipelineState } = usePipelineState();
   const [activeView, setActiveView] = useState<ActiveView>("input");
   const [visitedSections, setVisitedSections] = useState<ReadonlySet<ActiveView>>(() => new Set(["input"]));
+
+  // Header center cluster (KB sync / runtime / agent access) must never wrap
+  // onto a second line. Measure the actual gap between the fixed left and
+  // right header columns and collapse the cluster to icon-only once the
+  // full-label layout wouldn't fit — driven by real available space rather
+  // than a viewport breakpoint, since the sidebar and header columns already
+  // resize independently at their own breakpoints.
+  const headerLeftRef = useRef<HTMLDivElement>(null);
+  const headerRightRef = useRef<HTMLDivElement>(null);
+  const [headerCompact, setHeaderCompact] = useState(false);
+  const HEADER_CLUSTER_FULL_WIDTH = 520;
+
+  useEffect(() => {
+    const leftEl = headerLeftRef.current;
+    const rightEl = headerRightRef.current;
+    if (!leftEl || !rightEl) return;
+
+    const measure = () => {
+      const available = rightEl.getBoundingClientRect().left - leftEl.getBoundingClientRect().right;
+      setHeaderCompact(available < HEADER_CLUSTER_FULL_WIDTH);
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(leftEl);
+    ro.observe(rightEl);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
   const [isOliveRunning, setIsOliveRunning] = useState(false);
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
   const [triggerAiAudit, setTriggerAiAudit] = useState(false);
@@ -322,7 +354,7 @@ function Dashboard() {
                   identical, which keeps the center cluster visually centered
                   instead of drifting toward the empty side.
                 */}
-                <div className="justify-self-start flex items-center gap-2" aria-hidden="true">
+                <div ref={headerLeftRef} className="justify-self-start flex items-center gap-2" aria-hidden="true">
                   <span className="invisible p-1.5">
                     <Settings className="h-4 w-4" />
                   </span>
@@ -335,14 +367,14 @@ function Dashboard() {
                     <span className="hidden wide:inline">Assistant</span>
                   </span>
                 </div>
-                <div className="justify-self-center flex items-center flex-wrap justify-center gap-x-3 gap-y-1 min-w-0 overflow-hidden">
-                  <KbSyncIndicator />
-                  <span className="hidden sm:block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />
-                  <RuntimeEnvControls />
-                  <span className="hidden sm:block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />
-                  <AgentAccessControls />
+                <div className="justify-self-center flex items-center flex-nowrap justify-center gap-x-3 min-w-0 overflow-hidden">
+                  <KbSyncIndicator compact={headerCompact} />
+                  {!headerCompact && <span className="block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />}
+                  <RuntimeEnvControls compact={headerCompact} />
+                  {!headerCompact && <span className="block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />}
+                  <AgentAccessControls compact={headerCompact} />
                 </div>
-                <div className="justify-self-end flex items-center gap-2">
+                <div ref={headerRightRef} className="justify-self-end flex items-center gap-2">
                   <SettingsMenu />
                   <button
                     type="button"

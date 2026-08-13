@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { FolderOpen, Route, RefreshCw, CheckCircle2, AlertTriangle, Terminal } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export interface RuntimeEnvStatus {
   venvExists: boolean;
@@ -18,7 +19,11 @@ export interface RuntimeEnvStatus {
 /**
  * Header control: show Python/Olive readiness and fix PATH / interpreter from the UI.
  */
-export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
+interface RuntimeEnvControlsProps {
+  compact?: boolean;
+}
+
+export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = false }: RuntimeEnvControlsProps) {
   const [status, setStatus] = useState<RuntimeEnvStatus | null>(null);
   const [open, setOpen] = useState(false);
   const [pythonPath, setPythonPath] = useState("");
@@ -260,7 +265,10 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center justify-center gap-0 wide:gap-1.5 text-slate-400 hover:text-slate-200 transition-colors px-1.5 py-1 rounded border border-transparent hover:border-slate-700/80"
+        className={cn(
+          "flex items-center justify-center text-slate-400 hover:text-slate-200 transition-colors px-1.5 py-1 rounded border border-transparent hover:border-slate-700/80",
+          compact ? "gap-0" : "gap-1.5",
+        )}
         title={runtimeTitle}
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -270,19 +278,19 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
         {status?.oliveInstalled ? (
           <span className="text-emerald-600/90 flex items-center gap-0.5">
             <CheckCircle2 className="h-3 w-3" aria-hidden />
-            <span className="hidden wide:inline">{runtimeLabel}</span>
+            <span className={compact ? "hidden" : "inline"}>{runtimeLabel}</span>
           </span>
         ) : needsAttention ? (
           <span className="text-slate-400 flex items-center gap-0.5">
             <AlertTriangle className="h-3 w-3 text-amber-600/75" aria-hidden />
-            <span className="hidden wide:inline">{runtimeLabel}</span>
+            <span className={compact ? "hidden" : "inline"}>{runtimeLabel}</span>
           </span>
         ) : (
-          <span className="text-slate-400 hidden wide:inline">{runtimeLabel}</span>
+          <span className={cn("text-slate-400", compact ? "hidden" : "inline")}>{runtimeLabel}</span>
         )}
         {status && !pathOk && status.venvExists && (
           <span
-            className="text-slate-500 hidden wide:inline"
+            className={cn("text-slate-500", compact ? "hidden" : "inline")}
             title="Project .venv Scripts/bin is not on your user PATH"
           >
             · add PATH
