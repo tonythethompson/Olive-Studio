@@ -170,8 +170,8 @@
     --color-emerald-50: #e0f5f0;
     --color-emerald-100: #b3e8dd;
     --color-emerald-200: #6dd4c0;
-    --color-emerald-300: #35b89e;
-    /* light teal — 5.5:1 on sage, 7:1 on emerald-950 */
+    --color-emerald-300: #4ecdb2;
+    /* light teal — 7.5:1 on emerald-950, 4.5:1 on sage */
     --color-emerald-400: #1a9a80;
     /* medium teal — 4.5:1 on sage, 8:1 on emerald-950 */
     --color-emerald-500: #0f7a65;
