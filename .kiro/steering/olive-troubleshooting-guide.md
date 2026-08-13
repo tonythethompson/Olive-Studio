@@ -113,7 +113,7 @@ The troubleshooting KB (`olive-mcp-server/olive_mcp_server/knowledge_base/`) con
 
 - **troubleshooting.json** — Error patterns with regex matching, root causes, and fixes
 - **studio_troubleshooting.json** — Studio-specific UI/bridge errors
-- **passes.json** — 84 pass definitions with gotchas for each
+- **passes.json** — 92 pass definitions with gotchas for each
 - **hardware_profiles.json** — 22 hardware profiles with known issues
 - **compatibility_matrix.json** — Model × hardware × pass support matrix
 - **quirks.json** — Edge cases for specific configurations

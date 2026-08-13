@@ -34,7 +34,7 @@ src/
     routes/                ai.ts, mcp.ts, olive.ts, env.ts, system.ts, github.ts
     services/              ai/ (20 providers), olive/ (venv, job registry), venv/
     middleware/            Error handling, rate limiting
-olive-mcp-server/          Python FastMCP stdio server (32 tools, 84 passes, 22 HW profiles)
+olive-mcp-server/          Python FastMCP stdio server (32 tools, 92 passes, 22 HW profiles)
 src-tauri/                 Tauri 2 shell (optional — app runs without it)
 ```
 

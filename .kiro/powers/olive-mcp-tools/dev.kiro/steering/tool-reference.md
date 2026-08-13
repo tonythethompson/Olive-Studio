@@ -45,7 +45,7 @@ The MCP server supports hybrid keyword + semantic search for documentation queri
 **Retrieval modes** (controlled by `OLIVE_MCP_RETRIEVAL_MODE` env var):
 - `auto` (default) — uses semantic when budget allows, falls back to keyword
 - `keyword` — keyword-only, no embedding model loaded
-- `semantic` — semantic-only, requires model download on first use (~130MB BAAI/bge-small-en-v1.5)
+- `semantic` — semantic-only, requires model download on first use (~80MB all-MiniLM-L6-v2)
 
 **Preload at startup** (for zero-latency first queries):
 Set `OLIVE_MCP_PRELOAD_EMBEDDINGS=1` in the Power's `mcp.json` env to front-load the embedding model at server start instead of lazy-loading on first search.

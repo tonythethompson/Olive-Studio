@@ -35,7 +35,7 @@ The `mcp` package MUST be pinned `<2` — version 2.x breaks imports.
 
 | Tool | Description |
 |------|-------------|
-| `get_olive_passes` | List all 84+ optimization passes with optional filtering by type, hardware, format |
+| `get_olive_passes` | List all 92 optimization passes with optional filtering by type, hardware, format |
 | `get_pass_config_template` | Generate a pass configuration JSON template for a specific pass type |
 | `get_pass_parameters` | Detailed parameter documentation for a pass (types, defaults, constraints) |
 | `get_pass_chain` | Suggest an ordered pipeline of passes for a given optimization goal |
