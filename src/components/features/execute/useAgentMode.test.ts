@@ -286,7 +286,7 @@ describe("useAgentMode", () => {
         result.current.stopAgent();
         result.current.stopAgent();
       });
-      expect(result.current.outcome?.status).not.toBe("cancelled");
+      expect(result.current.outcome).toBeUndefined();
       expect(result.current.agentRunning).toBe(true);
 
       await act(async () => {
