@@ -81,7 +81,8 @@ export function attemptPipelineNavigate(id: PipelineViewId): boolean {
 }
 
 /** Switch the main pipeline step from nested panels (graph inspectors, etc.). */
-export const navigatePipeline = (id: PipelineViewId) => {
-  if (!attemptPipelineNavigate(id)) return;
+export const navigatePipeline = (id: PipelineViewId): boolean => {
+  if (!attemptPipelineNavigate(id)) return false;
   window.dispatchEvent(new CustomEvent(OLIVE_PIPELINE_NAVIGATE, { detail: id }));
+  return true;
 };

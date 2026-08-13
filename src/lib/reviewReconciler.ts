@@ -93,17 +93,65 @@ function wouldNotResolveProviderConflict(
       const conflict = conflictsByPassKey.get(passKey);
       if (!conflict || conflict.severity !== "critical") continue;
 
-      // Get the autofix value from the conflict
       const autofixPasses = conflict.autofix();
       const resolveValue = (autofixPasses as Record<string, unknown>)[passKey];
 
-      // If the suggested value doesn't match the resolution → suppress
-      if (resolveValue !== undefined && suggestedValue !== resolveValue) {
+      // Missing autofix for this key still leaves the critical conflict unresolved.
+      if (resolveValue === undefined || suggestedValue !== resolveValue) {
         return true;
       }
     }
   }
   return false;
+}
+
+const KNOWN_PASS_FIELDS = new Set([
+  "conversion",
+  "conversionSourceFormat",
+  "conversionFormat",
+  "conversionOpset",
+  "conversionInputTargetTypes",
+  "quantization",
+  "quantMethod",
+  "quantPrecision",
+  "pruning",
+  "pruningType",
+  "pruningMethod",
+  "pruningSparsity",
+  "peft",
+  "peftMethod",
+  "splitting",
+]);
+
+const AFFECTED_PASS_FIELDS: Record<string, string[]> = {
+  peft: ["peft", "peftMethod"],
+  quantization: ["quantization", "quantMethod", "quantPrecision"],
+  conversion: ["conversion", "conversionFormat", "conversionOpset", "conversionSourceFormat"],
+  pruning: ["pruning", "pruningType", "pruningMethod", "pruningSparsity"],
+  splitting: ["splitting"],
+};
+
+function collectDeterministicPassFields(issue: PipelineIssue): string[] {
+  const passPatch = issue.autofix?.passes;
+  if (!passPatch || typeof passPatch !== "object") {
+    return (issue.affectedPasses ?? []).filter((k) => k !== "provider");
+  }
+  const patch = passPatch as Record<string, unknown>;
+  const concrete = Object.keys(patch).filter((k) => KNOWN_PASS_FIELDS.has(k) && k !== "provider");
+  if (issue.affectedPasses && issue.affectedPasses.length > 0) {
+    const mapped = new Set<string>();
+    for (const passId of issue.affectedPasses) {
+      if (passId in patch && KNOWN_PASS_FIELDS.has(passId)) {
+        mapped.add(passId);
+        continue;
+      }
+      for (const field of AFFECTED_PASS_FIELDS[passId] ?? []) {
+        if (field in patch) mapped.add(field);
+      }
+    }
+    if (mapped.size > 0) return [...mapped];
+  }
+  return concrete;
 }
 
 /**
@@ -133,12 +181,9 @@ function pipelineIssueToFinding(issue: PipelineIssue): Finding {
     if (issue.autofix.passes && typeof issue.autofix.passes === "object") {
       const passPatch = issue.autofix.passes as Record<string, unknown>;
       const targeted: Record<string, unknown> = {};
-      const keys =
-        issue.affectedPasses && issue.affectedPasses.length > 0
-          ? issue.affectedPasses.filter((k) => k in passPatch && k !== "provider")
-          : Object.keys(passPatch);
+      const keys = collectDeterministicPassFields(issue);
       for (const key of keys) {
-        targeted[key] = passPatch[key];
+        if (key in passPatch) targeted[key] = passPatch[key];
       }
       if (Object.keys(targeted).length > 0) {
         payload.passes = targeted as ActionPayloadApplyPatch["payload"]["passes"];
@@ -228,10 +273,8 @@ export function reconcileFindings(
   // and its affectedPasses array
   const deterministicPassFields = new Map<string, PipelineIssue>();
   for (const issue of deterministicIssues) {
-    if (issue.affectedPasses) {
-      for (const passId of issue.affectedPasses) {
-        deterministicPassFields.set(passId, issue);
-      }
+    for (const field of collectDeterministicPassFields(issue)) {
+      deterministicPassFields.set(field, issue);
     }
     if (issue.autofix) {
       for (const key of Object.keys(issue.autofix)) {
