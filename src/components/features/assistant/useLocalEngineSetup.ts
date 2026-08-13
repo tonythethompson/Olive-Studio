@@ -599,11 +599,14 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     try {
       await executePullLocalModel(modelTag, source, controller);
     } catch (err: unknown) {
-      // A cancelled pull already reset all this state synchronously and may have
-      // let the user start a new pull — don't let this stale rejection stomp it.
-      if (isStale(controller)) return;
+      // Suppress only when a *newer* pull superseded this controller, or the user
+      // explicitly cancelled (cancelLocalPull already set error state synchronously).
+      // An internal timeout (ensure/download timer) aborts the signal but this
+      // controller is still active — let the error surface so the user sees guidance.
+      const superseded = pullAbortRef.current !== controller;
+      if (superseded || pullUserCancelledRef.current) return;
       setLocalPullError(
-        describePullFetchError(err, { userCancelled: pullUserCancelledRef.current }),
+        describePullFetchError(err, { userCancelled: false }),
       );
       setLocalInstallInfo(null);
     } finally {
