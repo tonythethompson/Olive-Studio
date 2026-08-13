@@ -717,9 +717,9 @@ export function ExecutionWorkspace({
     [completeAgent, agentEntries.length],
   );
 
-  const handleAgentStreamComplete = useCallback(() => {
+  const handleAgentStreamComplete = useCallback((streamStatus: "completed" | "failed" | "cancelled") => {
     completeAgent({
-      status: "success",
+      status: streamStatus === "completed" ? "success" : streamStatus === "failed" ? "failure" : "cancelled",
       totalSteps: agentEntries.length,
       elapsedMs: agentStartedAt ? Date.now() - new Date(agentStartedAt).getTime() : 0,
     });

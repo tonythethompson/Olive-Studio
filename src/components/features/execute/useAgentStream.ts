@@ -27,12 +27,14 @@ const BASE_BACKOFF_MS = 1000;
 export interface UseAgentStreamOptions {
   /** When true, the SSE connection is opened. When false, it is closed/cleaned up. */
   enabled: boolean;
+  /** Job identifier used to scope the stream. */
+  jobId?: string;
   /** Called for each parsed activity log entry received from the stream. */
   onEntry: (entry: ActivityLogEntry) => void;
   /** Called when the connection fails after exhausting all retry attempts. */
   onError?: (error: string) => void;
   /** Called when the server sends a "done" event signaling clean completion. */
-  onComplete?: () => void;
+  onComplete?: (status: "completed" | "failed" | "cancelled") => void;
 }
 
 /** Raw SSE event data shape from the agent stream. */
@@ -120,6 +122,7 @@ function toActivityLogEntry(event: AgentStreamEvent): ActivityLogEntry {
  */
 export function useAgentStream({
   enabled,
+  jobId,
   onEntry,
   onError,
   onComplete,
@@ -165,7 +168,7 @@ export function useAgentStream({
   useEffect(() => {
     isMountedRef.current = true;
 
-    if (!enabled) {
+    if (!enabled || !jobId) {
       cleanup();
       return;
     }
@@ -182,11 +185,10 @@ export function useAgentStream({
         eventSourceRef.current = null;
       }
 
-      const evtSource = new EventSource(AGENT_STREAM_ENDPOINT);
+      const evtSource = new EventSource(`${AGENT_STREAM_ENDPOINT}/${encodeURIComponent(jobId)}`);
       eventSourceRef.current = evtSource;
 
-      // Handle incoming message events (regular entries)
-      evtSource.onmessage = (event: MessageEvent) => {
+      const handleEntry = (event: MessageEvent) => {
         if (!isMountedRef.current) return;
 
         try {
@@ -199,16 +201,24 @@ export function useAgentStream({
           // Ignore malformed JSON payloads
         }
       };
+      evtSource.addEventListener("log", handleEntry);
 
-      // Handle server "done" event signaling clean completion
-      evtSource.addEventListener("done", () => {
+      evtSource.addEventListener("metrics", handleEntry);
+
+      // Handle server terminal event
+      evtSource.addEventListener("done", (event: MessageEvent) => {
         if (!isMountedRef.current) return;
         completedRef.current = true;
         evtSource.close();
         if (eventSourceRef.current === evtSource) {
           eventSourceRef.current = null;
         }
-        onCompleteRef.current?.();
+        let status: "completed" | "failed" | "cancelled" = "completed";
+        try {
+          const payload = JSON.parse(String(event.data)) as { status?: string };
+          if (payload.status === "failed" || payload.status === "cancelled") status = payload.status;
+        } catch { /* terminal status defaults to completed */ }
+        onCompleteRef.current?.(status);
       });
 
       // Handle successful connection (reset retry count)
@@ -269,5 +279,5 @@ export function useAgentStream({
       isMountedRef.current = false;
       cleanup();
     };
-  }, [enabled, cleanup]);
+  }, [enabled, jobId, cleanup]);
 }
