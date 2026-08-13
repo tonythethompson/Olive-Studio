@@ -454,7 +454,8 @@ function inferArchitectureFromPath(path: string, fileName: string): string {
   return "Other";
 }
 
-function inferDeviceTarget(pathOrFolder: string): string {
+/** @internal exported for unit tests */
+export function inferDeviceTarget(pathOrFolder: string): string {
   const lower = pathOrFolder.toLowerCase();
   if (lower.includes("cpu")) return "CPU";
   if (lower.includes("cuda")) return "CUDA";
@@ -464,7 +465,8 @@ function inferDeviceTarget(pathOrFolder: string): string {
   if (lower.includes("qnn")) return "QNN";
   if (lower.includes("openvino")) return "OpenVINO";
   if (lower.includes("webgpu")) return "WebGPU";
-  if (lower.includes("rocm")) return "ROCm";
+  // Same as getCatalogDeviceFromRecipe / generate-olive-recipes-catalog: ROCm → CUDA.
+  if (lower.includes("rocm")) return "CUDA";
   if (lower.includes("coreml")) return "CoreML";
   if (lower.includes("quant")) return "CPU";
   if (lower.includes("baseline")) return "CPU";
