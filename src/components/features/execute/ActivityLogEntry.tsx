@@ -38,7 +38,8 @@ export interface ActivityLogEntryProps {
 
 export function ActivityLogEntry({ entry }: ActivityLogEntryProps) {
   const [expanded, setExpanded] = useState(false);
-  const { icon: Icon, color } = KIND_CONFIG[entry.kind];
+  const { icon: Icon, color } =
+    KIND_CONFIG[entry.kind] ?? { icon: AlertTriangle, color: "text-zinc-400" };
   const hasTruncated = Boolean(entry.expandedText);
 
   return (
