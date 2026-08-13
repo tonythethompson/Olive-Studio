@@ -22,6 +22,8 @@ storybook-static/
 start-server.bat
 
 # Kiro Crew steering (local agent config)
+# Per-developer MCP override — Power config is .kiro/powers/olive-mcp-tools/mcp.json
+.kiro/settings/mcp.json
 
 # Playwright
 /test-results/

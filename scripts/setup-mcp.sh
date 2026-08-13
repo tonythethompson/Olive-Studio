@@ -54,7 +54,34 @@ fi
 
 echo "[2/5] Setting up virtual environment..."
 if [[ -d "$VENV_DIR" ]]; then
-  echo "      Venv already exists at: $VENV_DIR"
+  existing_py=""
+  if [[ -x "$VENV_DIR/bin/python" ]]; then
+    existing_py="$VENV_DIR/bin/python"
+  elif [[ -x "$VENV_DIR/Scripts/python" ]]; then
+    existing_py="$VENV_DIR/Scripts/python"
+  fi
+  recreate=0
+  if [[ -z "$existing_py" ]]; then
+    recreate=1
+  else
+    ver="$("$existing_py" --version 2>&1 || true)"
+    if [[ "$ver" =~ Python\ 3\.([0-9]+) ]]; then
+      if [[ "${BASH_REMATCH[1]}" -lt 10 ]]; then
+        echo "      Existing venv is $ver (< 3.10); recreating..."
+        recreate=1
+      fi
+    else
+      recreate=1
+    fi
+  fi
+  if [[ "$recreate" -eq 1 ]]; then
+    rm -rf "$VENV_DIR"
+    echo "      Creating venv at: $VENV_DIR"
+    "$PYTHON_CMD" -m venv "$VENV_DIR"
+    echo "      Created."
+  else
+    echo "      Venv already exists at: $VENV_DIR"
+  fi
 else
   echo "      Creating venv at: $VENV_DIR"
   "$PYTHON_CMD" -m venv "$VENV_DIR"
@@ -79,7 +106,7 @@ echo "      All dependencies installed (including sentence-transformers for sema
 
 if [[ "$SKIP_VERIFY" -eq 0 ]]; then
   echo "[4/5] Verifying server starts..."
-  if ! test_output="$("$PY_VENV" -c "from olive_mcp_server.mcp_server import _build_mcp; print('OK')" 2>&1)"; then
+  if ! test_output="$("$PY_VENV" -c "from olive_mcp_server.mcp_server import _build_mcp; _build_mcp(); print('OK')" 2>&1)"; then
     echo "      WARNING: Server import check failed:" >&2
     echo "      $test_output" >&2
     exit 1

@@ -57,7 +57,36 @@ if (-not $pythonCmd) {
 # ── Step 2: Create venv if it doesn't exist ────────────────────────────────────
 Write-Host "[2/5] Setting up virtual environment..." -ForegroundColor Yellow
 if (Test-Path $VenvDir) {
-    Write-Host "      Venv already exists at: $VenvDir" -ForegroundColor DarkGray
+    $existingPy = Join-Path $VenvDir "Scripts" "python.exe"
+    if (-not (Test-Path $existingPy)) {
+        $existingPy = Join-Path $VenvDir "bin" "python"
+    }
+    $recreate = $false
+    if (-not (Test-Path $existingPy)) {
+        $recreate = $true
+    } else {
+        $ver = & $existingPy --version 2>&1
+        if ($ver -match "Python 3\.(\d+)") {
+            if ([int]$Matches[1] -lt 10) {
+                Write-Host "      Existing venv is $ver (< 3.10); recreating..." -ForegroundColor Yellow
+                $recreate = $true
+            }
+        } else {
+            $recreate = $true
+        }
+    }
+    if ($recreate) {
+        Remove-Item -Recurse -Force $VenvDir
+        Write-Host "      Creating venv at: $VenvDir"
+        & $pythonCmd -m venv $VenvDir
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "      ERROR: Failed to create venv." -ForegroundColor Red
+            exit 1
+        }
+        Write-Host "      Created." -ForegroundColor Green
+    } else {
+        Write-Host "      Venv already exists at: $VenvDir" -ForegroundColor DarkGray
+    }
 } else {
     Write-Host "      Creating venv at: $VenvDir"
     & $pythonCmd -m venv $VenvDir
@@ -92,7 +121,7 @@ if (-not $SkipVerify) {
     if (-not (Test-Path $pythonVenv)) {
         $pythonVenv = Join-Path $VenvDir "bin" "python"
     }
-    $testOutput = & $pythonVenv -c "from olive_mcp_server.mcp_server import _build_mcp; print('OK')" 2>&1
+    $testOutput = & $pythonVenv -c "from olive_mcp_server.mcp_server import _build_mcp; _build_mcp(); print('OK')" 2>&1
     if ($testOutput -match "OK") {
         Write-Host "      Server module imports successfully." -ForegroundColor Green
     } else {
