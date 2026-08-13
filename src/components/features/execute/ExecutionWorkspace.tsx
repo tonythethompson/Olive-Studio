@@ -6,6 +6,7 @@ import {
   useMemo,
   useDeferredValue,
   useTransition,
+  useCallback,
   Suspense,
   lazy,
   type MouseEvent as ReactMouseEvent,
@@ -27,6 +28,12 @@ import { navigatePipeline } from "@/lib/pipelineNavigation";
 import { usePlaygroundStore } from "@/lib/stores/playgroundStore";
 import { DiagnosisHistory, type DiagnosisEntry } from "./DiagnosisHistory";
 import { LazyMCPDiagnosticCard } from "./LazyMCPDiagnosticCard";
+import { useAgentMode } from "./useAgentMode";
+import { useAgentStream } from "./useAgentStream";
+import { ModeToggle } from "./ModeToggle";
+import { AgentControls } from "./AgentControls";
+import { ActivityLog } from "./ActivityLog";
+import { AgentConfirmDialog } from "./AgentConfirmDialog";
 import {
   Code,
   Play,
@@ -430,9 +437,9 @@ export function ExecutionWorkspace({
 
   Deployment Steps:
   ${owrPlatform === "web"
-          ? "- Place the optimized model file (model.onnx) in your public asset folder.\\n- Install 'onnxruntime-web' dependency using pnpm.\\n- Import and invoke your customized initializeOrtSession() function. "
-          : "- Place the compiled ORT flatbuffer file (model.ort) under your Android App's 'src/main/assets' directory.\\n- Implement 'ai.onnxruntime:onnxruntime-android' via gradle.\\n- Wire up your OnnxModelExecutor wrapper inside Activities/Handlers."
-        }
+            ? "- Place the optimized model file (model.onnx) in your public asset folder.\\n- Install 'onnxruntime-web' dependency using pnpm.\\n- Import and invoke your customized initializeOrtSession() function. "
+            : "- Place the compiled ORT flatbuffer file (model.ort) under your Android App's 'src/main/assets' directory.\\n- Implement 'ai.onnxruntime:onnxruntime-android' via gradle.\\n- Wire up your OnnxModelExecutor wrapper inside Activities/Handlers."
+          }
   `;
         files["README.txt"] = strToU8(readme);
 
@@ -670,543 +677,663 @@ export function ExecutionWorkspace({
     URL.revokeObjectURL(url);
   };
 
+  // ─── Agent Mode State ────────────────────────────────────────────────────────
+  const {
+    mode: agentMode,
+    agentRunning,
+    entries: agentEntries,
+    outcome: agentOutcome,
+    startedAt: agentStartedAt,
+    setMode: setAgentMode,
+    startAgent,
+    stopAgent,
+    appendEntry: appendAgentEntry,
+    confirmStart,
+    completeAgent,
+  } = useAgentMode();
+
+  // Confirmation dialog state for switching away from agent while running
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+
+  // SSE stream for agent activity
+  const handleAgentStreamEntry = useCallback(
+    (entry: Parameters<typeof appendAgentEntry>[0]) => {
+      // Confirm start on first entry received (clears 10s timeout)
+      confirmStart();
+      appendAgentEntry(entry);
+    },
+    [appendAgentEntry, confirmStart],
+  );
+
+  const handleAgentStreamError = useCallback(
+    (errorMsg: string) => {
+      completeAgent({
+        status: "failure",
+        totalSteps: agentEntries.length,
+        elapsedMs: 0,
+        errorDescription: errorMsg,
+      });
+    },
+    [completeAgent, agentEntries.length],
+  );
+
+  const handleAgentStreamComplete = useCallback(() => {
+    completeAgent({
+      status: "success",
+      totalSteps: agentEntries.length,
+      elapsedMs: agentStartedAt ? Date.now() - new Date(agentStartedAt).getTime() : 0,
+    });
+  }, [completeAgent, agentEntries.length, agentStartedAt]);
+
+  useAgentStream({
+    enabled: agentRunning,
+    onEntry: handleAgentStreamEntry,
+    onError: handleAgentStreamError,
+    onComplete: handleAgentStreamComplete,
+  });
+
+  /**
+   * Handle mode toggle. If switching from agent to manual while agent is running,
+   * show the confirmation dialog instead of switching immediately.
+   */
+  const handleModeChange = useCallback(
+    (newMode: "manual" | "agent") => {
+      if (agentMode === "agent" && newMode === "manual" && agentRunning) {
+        setConfirmDialogOpen(true);
+        return;
+      }
+      setAgentMode(newMode);
+    },
+    [agentMode, agentRunning, setAgentMode],
+  );
+
+  /** User confirmed stopping the agent and switching to manual. */
+  const handleConfirmStopAndSwitch = useCallback(() => {
+    stopAgent();
+    setAgentMode("manual");
+    setConfirmDialogOpen(false);
+  }, [stopAgent, setAgentMode]);
+
+  /** User cancelled the confirmation dialog — stay in agent mode. */
+  const handleCancelDialog = useCallback(() => {
+    setConfirmDialogOpen(false);
+  }, []);
+
   return (
     <div
       data-testid="execution-workspace"
       className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 relative"
     >
-      {/* Export Recipe Overlay */}
-      {isExportOpen && (
-        <div className="absolute inset-0 z-55 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in overflow-y-auto">
-          <Card className="w-full max-w-2xl border-electric-blue/30 flex flex-col max-h-[85vh]">
-            <CardHeader
-              title="Export Microsoft Olive Recipe"
-              description="Download your dynamic JSON recipe configuration or copy the schema to run with the MS Olive CLI."
-              badge={
-                <Button
-                  variant="ghost"
-                  className="h-8 w-8 p-0 hover:bg-slate-800"
-                  onClick={() => setIsExportOpen(false)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              }
-            />
-            <CardContent className="flex flex-col gap-4 overflow-hidden flex-1 p-6">
-              <div className="flex-1 min-h-[300px] relative flex flex-col overflow-hidden bg-slate-950 border border-slate-800 rounded-lg">
-                <div className="flex items-center justify-between px-4 py-2 border-b border-slate-900 bg-slate-900/40">
-                  <div className="flex items-center gap-2">
-                    <FileJson className="h-4 w-4 text-emerald-400" />
-                    <span className="text-sm font-mono text-slate-300">olive_recipe.json</span>
-                  </div>
-                  <span className="text-[11px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono font-semibold">
-                    VALID OLIVE SCHEMA
-                  </span>
-                </div>
-                <textarea
-                  readOnly
-                  className="w-full flex-1 bg-transparent p-4 font-mono text-sm text-emerald-400 focus-visible:outline-none resize-none overflow-y-auto cursor-text"
-                  value={JSON.stringify(recipe, null, 2)}
-                  onClick={(e) => (e.target as HTMLTextAreaElement).select()}
-                />
-              </div>
+      {/* Mode Toggle: Manual / Agent */}
+      <div className="flex items-center justify-between">
+        <ModeToggle
+          mode={agentMode}
+          onModeChange={handleModeChange}
+          disabled={isRunning}
+        />
+      </div>
 
-              <div className="flex justify-between items-center gap-3 pt-2">
-                <span className="text-sm text-slate-500 font-mono hidden sm:inline">
-                  Generated dynamic recipe mapping
-                </span>
-                <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-                  <Button variant="outline" className="text-sm h-9" onClick={() => setIsExportOpen(false)}>
-                    Close
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="text-sm h-9 border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
-                    onClick={handleExportCopy}
-                  >
-                    {isExportCopied ? (
-                      <Check className="h-4 w-4 mr-1.5 text-emerald-500" />
-                    ) : (
-                      <Copy className="h-4 w-4 mr-1.5" />
-                    )}
-                    {isExportCopied ? "Copied!" : "Copy to Clipboard"}
-                  </Button>
-                  <Button
-                    variant="default"
-                    className="text-sm h-9 bg-electric-blue hover:bg-electric-blue/90 text-slate-950"
-                    onClick={handleExportDownload}
-                  >
-                    <Download className="h-4 w-4 mr-1.5" /> Save File (.json)
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      {/* Agent Confirm Dialog — shown when switching away while agent is running */}
+      <AgentConfirmDialog
+        open={confirmDialogOpen}
+        onConfirm={handleConfirmStopAndSwitch}
+        onCancel={handleCancelDialog}
+      />
+
+      {/* Agent Mode Controls */}
+      {agentMode === "agent" && (
+        <Card className="border-slate-800 bg-slate-900/40">
+          <CardHeader
+            title="Agent Execution"
+            description="The MCP agent autonomously plans, executes, and diagnoses optimization runs."
+          />
+          <CardContent className="flex flex-col gap-4 p-4">
+            <AgentControls
+              agentRunning={agentRunning}
+              onStart={startAgent}
+              onStop={stopAgent}
+              outcome={agentOutcome}
+            />
+            <ActivityLog entries={agentEntries} />
+          </CardContent>
+        </Card>
       )}
 
-      {/* OWR Export Bundle Overlay */}
-      <OwrExportOverlay
-        open={isOwrExportOpen}
-        onClose={() => setIsOwrExportOpen(false)}
-        configs={owrConfigs}
-        platform={owrPlatform}
-        onPlatformChange={setOwrPlatform}
-        selectedFile={owrSelectedFile}
-        onFileSelect={setOwrSelectedFile}
-        threads={owrThreads}
-        onThreadsChange={setOwrThreads}
-        vramMode={owrVramMode}
-        onVramModeChange={setOwrVramMode}
-        onDownloadBundle={handleDownloadOwrBundle}
-        isDownloading={isOwrDownloading}
-        downloadError={owrDownloadError}
-      />
-
-      {/* Recipe Preview */}
-      <Card
-        className={cn(
-          "flex flex-col overflow-hidden",
-          recipeView === "graph" ? "min-h-[340px] wide:min-h-[380px]" : "min-h-[340px]",
-        )}
-      >
-        <CardHeader
-          className="p-3 pb-2"
-          title="Olive Recipe Definition"
-          description={
-            recipeView === "graph"
-              ? undefined
-              : "The exact JSON schema that will be sent to the Olive Engine."
-          }
-          badge={
-            <div className="flex flex-wrap items-center gap-2">
-              <div
-                className="flex bg-slate-900 border border-slate-800 rounded p-0.5"
-                role="group"
-                aria-label="Recipe view"
-              >
-                <button
-                  type="button"
-                  aria-pressed={recipeView === "graph"}
-                  onClick={() => setRecipeView("graph")}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${recipeView === "graph"
-                    ? "bg-electric-blue text-slate-950"
-                    : "text-slate-400 hover:text-slate-200"
-                    }`}
-                >
-                  <Workflow className="h-3 w-3" /> Graph Flow
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={recipeView === "json"}
-                  onClick={() => setRecipeView("json")}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${recipeView === "json"
-                    ? "bg-electric-blue text-slate-950"
-                    : "text-slate-400 hover:text-slate-200"
-                    }`}
-                >
-                  <Code className="h-3 w-3" /> JSON Code
-                </button>
-              </div>
-              <Button
-                variant="outline"
-                className="h-8 px-3 text-sm border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
-                onClick={() => setIsExportOpen(true)}
-              >
-                <Download className="h-3.5 w-3.5 mr-1.5" /> Export Recipe
-              </Button>
-              <div className="relative" ref={moreToolsContainerRef}>
-                <Button
-                  ref={moreToolsTriggerRef}
-                  variant="outline"
-                  className="h-8 px-2.5 text-sm border-slate-700 text-slate-300 hover:border-slate-500"
-                  aria-expanded={moreToolsOpen}
-                  aria-haspopup="menu"
-                  onClick={() => setMoreToolsOpen((open) => !open)}
-                >
-                  <MoreHorizontal className="h-3.5 w-3.5 mr-1" /> More
-                </Button>
-                {moreToolsOpen && (
-                  <div
-                    role="menu"
-                    className="absolute right-0 z-20 mt-1 min-w-[180px] rounded-lg border border-slate-800 bg-slate-950 p-1 shadow-xl"
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-slate-300 hover:bg-slate-900 cursor-pointer"
-                      onClick={() => {
-                        setIsHistoryOpen(true);
-                        setMoreToolsOpen(false);
-                      }}
-                    >
-                      <History className="h-3 w-3" /> Run History
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-slate-300 hover:bg-slate-900 cursor-pointer"
-                      onClick={() => {
-                        void getJobHistory()
-                          .then((records) => downloadMarkdownReport(records))
-                          .catch((err: unknown) => {
-                            console.error(
-                              "Failed to export Markdown report:",
-                              err instanceof Error ? err.message : err,
-                            );
-                          });
-                        setMoreToolsOpen(false);
-                      }}
-                    >
-                      <FileText className="h-3 w-3" /> Export Report
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-slate-300 hover:bg-slate-900 cursor-pointer"
-                      onClick={() => {
-                        setIsOwrExportOpen(true);
-                        setMoreToolsOpen(false);
-                      }}
-                    >
-                      <Globe className="h-3 w-3" /> Export for OWR
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          }
-        />
-        {(["graph", "json"] as const).map((view) => {
-          if (!visitedRecipeViews.has(view)) return null;
-          const isActive = recipeView === view;
-          return (
-            <CardContent
-              key={view}
-              className={cn(
-                "flex-1 overflow-hidden p-0",
-                view === "graph" ? "min-h-[340px]" : "min-h-[340px]",
-                isActive ? "block" : "hidden",
-              )}
-            >
-              {view === "graph" && (
-                <Suspense fallback={<LoadingFallback label="Loading graph editor..." minH="340px" />}>
-                  <RecipeGraphView state={state} setState={setState} />
-                </Suspense>
-              )}
-              {view === "json" && (
-                <div className="overflow-auto bg-slate-950 p-4 m-6 mt-0 rounded-lg border border-slate-800 min-h-[360px]">
-                  <pre className="text-sm font-mono text-emerald-400">{JSON.stringify(recipe, null, 2)}</pre>
-                </div>
-              )}
-            </CardContent>
-          );
-        })}
-      </Card>
-
-      {/* Active Draft — execution controls + live log in one card */}
-      <Card className="border-slate-800 bg-slate-900/40">
-        <CardHeader
-          title="Active Draft"
-          description={
-            executionStatus === "running"
-              ? "Olive is running. Streaming optimization logs."
-              : executionStatus === "completed"
-                ? `Run completed (exit 0)`
-                : executionStatus === "failed"
-                  ? `Run failed (exit ${executionExitCode ?? "?"})`
-                  : "Review recipe above, then execute live or add to batch queue."
-          }
-          badge={
-            <div className="flex items-center gap-2 flex-wrap">
-              {executionStatus === "running" && (
-                <span className="flex items-center gap-1.5 text-sm font-mono bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-2.5 py-1 rounded">
-                  <RefreshCw className="h-3 w-3 animate-spin" /> Running
-                </span>
-              )}
-              {executionStatus === "completed" && (
-                <>
-                  <span className="flex items-center gap-1.5 text-sm font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded">
-                    <CheckCircle2 className="h-3 w-3" /> Done
-                  </span>
+      {/* Manual Mode Controls — hidden when in Agent mode */}
+      {agentMode === "manual" && <>
+        {/* Export Recipe Overlay */}
+        {isExportOpen && (
+          <div className="absolute inset-0 z-55 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in overflow-y-auto">
+            <Card className="w-full max-w-2xl border-electric-blue/30 flex flex-col max-h-[85vh]">
+              <CardHeader
+                title="Export Microsoft Olive Recipe"
+                description="Download your dynamic JSON recipe configuration or copy the schema to run with the MS Olive CLI."
+                badge={
                   <Button
-                    variant="outline"
-                    className="h-8 px-2.5 text-sm border-electric-blue/40 text-electric-blue hover:bg-electric-blue/10"
-                    onClick={() => {
-                      setPlaygroundSubView("browser-test");
-                      navigatePipeline("playground");
-                    }}
+                    variant="ghost"
+                    className="h-8 w-8 p-0 hover:bg-slate-800"
+                    onClick={() => setIsExportOpen(false)}
                   >
-                    Test in Playground →
+                    <X className="h-4 w-4" />
                   </Button>
-                </>
-              )}
-              {executionStatus === "failed" && (
-                <span className="flex items-center gap-1.5 text-sm font-mono bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded">
-                  <AlertCircle className="h-3 w-3" /> Failed
-                </span>
-              )}
-              <Button
-                variant="ghost"
-                className="h-8 px-2.5 text-sm text-slate-400 hover:text-electric-blue"
-                onClick={() => onOpenAiAudit?.()}
-              >
-                Review with Assistant
-              </Button>
-            </div>
-          }
-        />
-        <CardContent className="flex flex-col gap-4 p-4">
-          <VramEstimateBanner state={state} compact />
-          {schemaErrors.length > 0 && (
-            <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3 space-y-2">
-              {schemaErrors.map((error) => (
-                <div key={error} className="flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
-                  <p className="text-xs text-rose-200 leading-relaxed">{error}</p>
-                </div>
-              ))}
-            </div>
-          )}
-          {advisories.length > 0 && (
-            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 space-y-2">
-              {advisories.map((issue) => (
-                <div key={issue.id} className="flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-amber-300">{issue.title}</p>
-                    <p className="text-xs text-slate-400 leading-relaxed">{issue.description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="flex justify-between items-center gap-3 flex-wrap sm:flex-nowrap">
-            <div className="flex items-center gap-2">
-              {validationTone === "success" ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-              ) : validationTone === "warning" ? (
-                <AlertTriangle className="h-4 w-4 text-amber-400" />
-              ) : (
-                <AlertCircle className="h-4 w-4 text-rose-400" />
-              )}
-              <span
-                className={`text-sm sm:text-sm font-medium ${validationTone === "success"
-                  ? "text-emerald-400"
-                  : validationTone === "warning"
-                    ? "text-amber-300"
-                    : "text-rose-300"
-                  }`}
-              >
-                {validationLabel}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 ml-auto">
-              {isRunning && (
-                <Button
-                  variant="outline"
-                  onClick={handleCancelJob}
-                  className="h-9 px-3 text-sm border-rose-500/40 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500 cursor-pointer"
-                >
-                  <Square className="h-3.5 w-3.5 mr-1.5 fill-rose-400 text-rose-400" /> Cancel Run
-                </Button>
-              )}
-              {justQueued ? (
-                <span className="text-sm text-electric-blue font-semibold font-mono mr-2">Queued</span>
-              ) : (
-                <Button
-                  variant="outline"
-                  className="h-9 px-3 text-sm border-dashed border-slate-700 hover:border-electric-blue hover:text-electric-blue disabled:opacity-40"
-                  onClick={handleQueueJob}
-                  disabled={!isRunnable}
-                >
-                  + Queue
-                </Button>
-              )}
-              <Button
-                variant="success"
-                onClick={handleExecuteLive}
-                disabled={isRunning || !isRunnable}
-                className="h-9 text-sm"
-              >
-                {isRunning ? (
-                  <>
-                    <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Olive running...
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-3.5 w-3.5 mr-1.5" fill="currentColor" /> Execute Live
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-          {/* GPU metrics live bar */}
-          {isRunning && gpuMetrics && <GpuMetricsBar metrics={gpuMetrics} />}
-          {/* Log panel with selection, manual diagnosis, and history sidebar */}
-          <div className="flex gap-0 rounded-md border border-slate-800 overflow-hidden">
-            <div className="flex-1 space-y-1.5 min-w-0">
-              {executionLogs.length > 0 && (
-                <div className="flex items-center justify-between gap-2 px-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400 font-mono">
-                      {selectedLogIndices.size > 0
-                        ? `${selectedLogIndices.size} line${selectedLogIndices.size > 1 ? "s" : ""} selected`
-                        : `${executionLogs.length} lines`}
-                    </span>
-                    <span className="text-xs text-slate-400 hidden sm:inline">
-                      Click to select · Shift+click for range · Ctrl/Cmd+click for multi
+                }
+              />
+              <CardContent className="flex flex-col gap-4 overflow-hidden flex-1 p-6">
+                <div className="flex-1 min-h-[300px] relative flex flex-col overflow-hidden bg-slate-950 border border-slate-800 rounded-lg">
+                  <div className="flex items-center justify-between px-4 py-2 border-b border-slate-900 bg-slate-900/40">
+                    <div className="flex items-center gap-2">
+                      <FileJson className="h-4 w-4 text-emerald-400" />
+                      <span className="text-sm font-mono text-slate-300">olive_recipe.json</span>
+                    </div>
+                    <span className="text-[11px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono font-semibold">
+                      VALID OLIVE SCHEMA
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={handleDiagnose}
-                      disabled={isDiagnosing || executionLogs.length === 0}
-                      title={
-                        selectedLogIndices.size > 0
-                          ? `Diagnose ${selectedLogIndices.size} selected line(s)`
-                          : "Diagnose full log (error lines are auto-selected on failure)"
-                      }
-                      className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded border border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50 transition-all cursor-pointer disabled:opacity-50"
+                  <textarea
+                    readOnly
+                    className="w-full flex-1 bg-transparent p-4 font-mono text-sm text-emerald-400 focus-visible:outline-none resize-none overflow-y-auto cursor-text"
+                    value={JSON.stringify(recipe, null, 2)}
+                    onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                  />
+                </div>
+
+                <div className="flex justify-between items-center gap-3 pt-2">
+                  <span className="text-sm text-slate-500 font-mono hidden sm:inline">
+                    Generated dynamic recipe mapping
+                  </span>
+                  <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                    <Button variant="outline" className="text-sm h-9" onClick={() => setIsExportOpen(false)}>
+                      Close
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="text-sm h-9 border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
+                      onClick={handleExportCopy}
                     >
-                      <Wrench className="h-3 w-3" />{" "}
-                      {selectedLogIndices.size > 0 ? `Diagnose (${selectedLogIndices.size})` : "Diagnose"}
-                    </button>
-                    {executionStatus === "failed" && (
+                      {isExportCopied ? (
+                        <Check className="h-4 w-4 mr-1.5 text-emerald-500" />
+                      ) : (
+                        <Copy className="h-4 w-4 mr-1.5" />
+                      )}
+                      {isExportCopied ? "Copied!" : "Copy to Clipboard"}
+                    </Button>
+                    <Button
+                      variant="default"
+                      className="text-sm h-9 bg-electric-blue hover:bg-electric-blue/90 text-slate-950"
+                      onClick={handleExportDownload}
+                    >
+                      <Download className="h-4 w-4 mr-1.5" /> Save File (.json)
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* OWR Export Bundle Overlay */}
+        <OwrExportOverlay
+          open={isOwrExportOpen}
+          onClose={() => setIsOwrExportOpen(false)}
+          configs={owrConfigs}
+          platform={owrPlatform}
+          onPlatformChange={setOwrPlatform}
+          selectedFile={owrSelectedFile}
+          onFileSelect={setOwrSelectedFile}
+          threads={owrThreads}
+          onThreadsChange={setOwrThreads}
+          vramMode={owrVramMode}
+          onVramModeChange={setOwrVramMode}
+          onDownloadBundle={handleDownloadOwrBundle}
+          isDownloading={isOwrDownloading}
+          downloadError={owrDownloadError}
+        />
+
+        {/* Recipe Preview */}
+        <Card
+          className={cn(
+            "flex flex-col overflow-hidden",
+            recipeView === "graph" ? "min-h-[340px] wide:min-h-[380px]" : "min-h-[340px]",
+          )}
+        >
+          <CardHeader
+            className="p-3 pb-2"
+            title="Olive Recipe Definition"
+            description={
+              recipeView === "graph"
+                ? undefined
+                : "The exact JSON schema that will be sent to the Olive Engine."
+            }
+            badge={
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className="flex bg-slate-900 border border-slate-800 rounded p-0.5"
+                  role="group"
+                  aria-label="Recipe view"
+                >
+                  <button
+                    type="button"
+                    aria-pressed={recipeView === "graph"}
+                    onClick={() => setRecipeView("graph")}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${recipeView === "graph"
+                      ? "bg-electric-blue text-slate-950"
+                      : "text-slate-400 hover:text-slate-200"
+                      }`}
+                  >
+                    <Workflow className="h-3 w-3" /> Graph Flow
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={recipeView === "json"}
+                    onClick={() => setRecipeView("json")}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded transition-all flex items-center gap-1 cursor-pointer ${recipeView === "json"
+                      ? "bg-electric-blue text-slate-950"
+                      : "text-slate-400 hover:text-slate-200"
+                      }`}
+                  >
+                    <Code className="h-3 w-3" /> JSON Code
+                  </button>
+                </div>
+                <Button
+                  variant="outline"
+                  className="h-8 px-3 text-sm border-electric-blue/30 text-electric-blue hover:text-white hover:bg-electric-blue/10"
+                  onClick={() => setIsExportOpen(true)}
+                >
+                  <Download className="h-3.5 w-3.5 mr-1.5" /> Export Recipe
+                </Button>
+                <div className="relative" ref={moreToolsContainerRef}>
+                  <Button
+                    ref={moreToolsTriggerRef}
+                    variant="outline"
+                    className="h-8 px-2.5 text-sm border-slate-700 text-slate-300 hover:border-slate-500"
+                    aria-expanded={moreToolsOpen}
+                    aria-haspopup="menu"
+                    onClick={() => setMoreToolsOpen((open) => !open)}
+                  >
+                    <MoreHorizontal className="h-3.5 w-3.5 mr-1" /> More
+                  </Button>
+                  {moreToolsOpen && (
+                    <div
+                      role="menu"
+                      className="absolute right-0 z-20 mt-1 min-w-[180px] rounded-lg border border-slate-800 bg-slate-950 p-1 shadow-xl"
+                    >
                       <button
                         type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-slate-300 hover:bg-slate-900 cursor-pointer"
                         onClick={() => {
-                          setReportArea("execution-batch");
-                          setReportDescription(
-                            `Execution failed with exit code ${executionExitCode ?? "?"}.\n\nRecent logs:\n${executionLogs.slice(-20).join("\n")}`,
-                          );
-                          setIsReportOpen(true);
+                          setIsHistoryOpen(true);
+                          setMoreToolsOpen(false);
                         }}
-                        title="Report this failure as a GitHub issue"
-                        className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/50 transition-all cursor-pointer"
                       >
-                        <Bug className="h-3 w-3" /> Report
+                        <History className="h-3 w-3" /> Run History
                       </button>
-                    )}
-                    {executionStatus === "failed" &&
-                      state.ihvProvider === "QNNExecutionProvider" &&
-                      qnnExplicitRetryProviders().map((provider) => (
-                        <button
-                          key={provider}
-                          type="button"
-                          onClick={() => {
-                            const patch = prepareProviderChange(state, provider, hardwareProbe, {
-                              skipHardwareBlock: true,
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-slate-300 hover:bg-slate-900 cursor-pointer"
+                        onClick={() => {
+                          void getJobHistory()
+                            .then((records) => downloadMarkdownReport(records))
+                            .catch((err: unknown) => {
+                              console.error(
+                                "Failed to export Markdown report:",
+                                err instanceof Error ? err.message : err,
+                              );
                             });
-                            setState(patch ?? { ihvProvider: provider });
-                            setExecutionLogs((prev) => [
-                              ...prev,
-                              `[INFO] Switched target to ${provider} (explicit retry, QNN does not auto-fallback). Rebuild/refresh the recipe, then Execute Live again.`,
-                            ]);
-                          }}
-                          title={`Explicit retry with ${provider} (no automatic EP fallback)`}
-                          className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded border border-slate-600/50 bg-slate-800/60 text-slate-300 hover:bg-slate-700/60 transition-all cursor-pointer"
-                        >
-                          Retry with {provider === "DmlExecutionProvider" ? "DirectML" : "CPU"}
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              )}
-              <div
-                data-testid="execution-log-panel"
-                className="bg-slate-950 border border-slate-800 rounded-md p-4 font-mono text-sm text-emerald-400 space-y-0.5 h-[220px] overflow-y-auto"
-              >
-                {executionLogs.length === 0 ? (
-                  <p className="text-slate-500 italic">
-                    Ready. Click &quot;Execute Live&quot; to begin an Olive optimization run.
-                  </p>
-                ) : (
-                  executionLogs.map((line, i) => {
-                    const isSelected = selectedLogIndices.has(i);
-                    const lineClass = line.includes("[ERROR]")
-                      ? "text-red-400"
-                      : line.includes("[WARN]")
-                        ? "text-amber-300"
-                        : line.includes("[SETUP]")
-                          ? "text-amber-400"
-                          : line.includes("[DONE]") || line.includes("[info] Job cancelled")
-                            ? "text-emerald-300 font-bold"
-                            : "text-emerald-400";
-                    return (
-                      <p
-                        key={i}
-                        onClick={(e) => handleLogLineClick(i, e)}
-                        className={`${lineClass} cursor-pointer rounded px-1 -mx-1 transition-colors ${isSelected
-                          ? "bg-electric-blue/15 ring-1 ring-electric-blue/30"
-                          : "hover:bg-slate-800/50"
-                          }`}
+                          setMoreToolsOpen(false);
+                        }}
                       >
-                        {line}
-                      </p>
-                    );
-                  })
+                        <FileText className="h-3 w-3" /> Export Report
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-slate-300 hover:bg-slate-900 cursor-pointer"
+                        onClick={() => {
+                          setIsOwrExportOpen(true);
+                          setMoreToolsOpen(false);
+                        }}
+                      >
+                        <Globe className="h-3 w-3" /> Export for OWR
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            }
+          />
+          {(["graph", "json"] as const).map((view) => {
+            if (!visitedRecipeViews.has(view)) return null;
+            const isActive = recipeView === view;
+            return (
+              <CardContent
+                key={view}
+                className={cn(
+                  "flex-1 overflow-hidden p-0",
+                  view === "graph" ? "min-h-[340px]" : "min-h-[340px]",
+                  isActive ? "block" : "hidden",
                 )}
+              >
+                {view === "graph" && (
+                  <Suspense fallback={<LoadingFallback label="Loading graph editor..." minH="340px" />}>
+                    <RecipeGraphView state={state} setState={setState} />
+                  </Suspense>
+                )}
+                {view === "json" && (
+                  <div className="overflow-auto bg-slate-950 p-4 m-6 mt-0 rounded-lg border border-slate-800 min-h-[360px]">
+                    <pre className="text-sm font-mono text-emerald-400">{JSON.stringify(recipe, null, 2)}</pre>
+                  </div>
+                )}
+              </CardContent>
+            );
+          })}
+        </Card>
+
+        {/* Active Draft — execution controls + live log in one card */}
+        <Card className="border-slate-800 bg-slate-900/40">
+          <CardHeader
+            title="Active Draft"
+            description={
+              executionStatus === "running"
+                ? "Olive is running. Streaming optimization logs."
+                : executionStatus === "completed"
+                  ? `Run completed (exit 0)`
+                  : executionStatus === "failed"
+                    ? `Run failed (exit ${executionExitCode ?? "?"})`
+                    : "Review recipe above, then execute live or add to batch queue."
+            }
+            badge={
+              <div className="flex items-center gap-2 flex-wrap">
+                {executionStatus === "running" && (
+                  <span className="flex items-center gap-1.5 text-sm font-mono bg-electric-blue/10 text-electric-blue border border-electric-blue/30 px-2.5 py-1 rounded">
+                    <RefreshCw className="h-3 w-3 animate-spin" /> Running
+                  </span>
+                )}
+                {executionStatus === "completed" && (
+                  <>
+                    <span className="flex items-center gap-1.5 text-sm font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded">
+                      <CheckCircle2 className="h-3 w-3" /> Done
+                    </span>
+                    <Button
+                      variant="outline"
+                      className="h-8 px-2.5 text-sm border-electric-blue/40 text-electric-blue hover:bg-electric-blue/10"
+                      onClick={() => {
+                        setPlaygroundSubView("browser-test");
+                        navigatePipeline("playground");
+                      }}
+                    >
+                      Test in Playground →
+                    </Button>
+                  </>
+                )}
+                {executionStatus === "failed" && (
+                  <span className="flex items-center gap-1.5 text-sm font-mono bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded">
+                    <AlertCircle className="h-3 w-3" /> Failed
+                  </span>
+                )}
+                <Button
+                  variant="ghost"
+                  className="h-8 px-2.5 text-sm text-slate-400 hover:text-electric-blue"
+                  onClick={() => onOpenAiAudit?.()}
+                >
+                  Review with Assistant
+                </Button>
+              </div>
+            }
+          />
+          <CardContent className="flex flex-col gap-4 p-4">
+            <VramEstimateBanner state={state} compact />
+            {schemaErrors.length > 0 && (
+              <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3 space-y-2">
+                {schemaErrors.map((error) => (
+                  <div key={error} className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+                    <p className="text-xs text-rose-200 leading-relaxed">{error}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {advisories.length > 0 && (
+              <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 space-y-2">
+                {advisories.map((issue) => (
+                  <div key={issue.id} className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-amber-300">{issue.title}</p>
+                      <p className="text-xs text-slate-400 leading-relaxed">{issue.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-between items-center gap-3 flex-wrap sm:flex-nowrap">
+              <div className="flex items-center gap-2">
+                {validationTone === "success" ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                ) : validationTone === "warning" ? (
+                  <AlertTriangle className="h-4 w-4 text-amber-400" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 text-rose-400" />
+                )}
+                <span
+                  className={`text-sm sm:text-sm font-medium ${validationTone === "success"
+                    ? "text-emerald-400"
+                    : validationTone === "warning"
+                      ? "text-amber-300"
+                      : "text-rose-300"
+                    }`}
+                >
+                  {validationLabel}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 ml-auto">
+                {isRunning && (
+                  <Button
+                    variant="outline"
+                    onClick={handleCancelJob}
+                    className="h-9 px-3 text-sm border-rose-500/40 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500 cursor-pointer"
+                  >
+                    <Square className="h-3.5 w-3.5 mr-1.5 fill-rose-400 text-rose-400" /> Cancel Run
+                  </Button>
+                )}
+                {justQueued ? (
+                  <span className="text-sm text-electric-blue font-semibold font-mono mr-2">Queued</span>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="h-9 px-3 text-sm border-dashed border-slate-700 hover:border-electric-blue hover:text-electric-blue disabled:opacity-40"
+                    onClick={handleQueueJob}
+                    disabled={!isRunnable}
+                  >
+                    + Queue
+                  </Button>
+                )}
+                <Button
+                  variant="success"
+                  onClick={handleExecuteLive}
+                  disabled={isRunning || !isRunnable}
+                  className="h-9 text-sm"
+                >
+                  {isRunning ? (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Olive running...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-3.5 w-3.5 mr-1.5" fill="currentColor" /> Execute Live
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
+            {/* GPU metrics live bar */}
+            {isRunning && gpuMetrics && <GpuMetricsBar metrics={gpuMetrics} />}
+            {/* Log panel with selection, manual diagnosis, and history sidebar */}
+            <div className="flex gap-0 rounded-md border border-slate-800 overflow-hidden">
+              <div className="flex-1 space-y-1.5 min-w-0">
+                {executionLogs.length > 0 && (
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 font-mono">
+                        {selectedLogIndices.size > 0
+                          ? `${selectedLogIndices.size} line${selectedLogIndices.size > 1 ? "s" : ""} selected`
+                          : `${executionLogs.length} lines`}
+                      </span>
+                      <span className="text-xs text-slate-400 hidden sm:inline">
+                        Click to select · Shift+click for range · Ctrl/Cmd+click for multi
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleDiagnose}
+                        disabled={isDiagnosing || executionLogs.length === 0}
+                        title={
+                          selectedLogIndices.size > 0
+                            ? `Diagnose ${selectedLogIndices.size} selected line(s)`
+                            : "Diagnose full log (error lines are auto-selected on failure)"
+                        }
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded border border-electric-blue/30 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 hover:border-electric-blue/50 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        <Wrench className="h-3 w-3" />{" "}
+                        {selectedLogIndices.size > 0 ? `Diagnose (${selectedLogIndices.size})` : "Diagnose"}
+                      </button>
+                      {executionStatus === "failed" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReportArea("execution-batch");
+                            setReportDescription(
+                              `Execution failed with exit code ${executionExitCode ?? "?"}.\n\nRecent logs:\n${executionLogs.slice(-20).join("\n")}`,
+                            );
+                            setIsReportOpen(true);
+                          }}
+                          title="Report this failure as a GitHub issue"
+                          className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/50 transition-all cursor-pointer"
+                        >
+                          <Bug className="h-3 w-3" /> Report
+                        </button>
+                      )}
+                      {executionStatus === "failed" &&
+                        state.ihvProvider === "QNNExecutionProvider" &&
+                        qnnExplicitRetryProviders().map((provider) => (
+                          <button
+                            key={provider}
+                            type="button"
+                            onClick={() => {
+                              const patch = prepareProviderChange(state, provider, hardwareProbe, {
+                                skipHardwareBlock: true,
+                              });
+                              setState(patch ?? { ihvProvider: provider });
+                              setExecutionLogs((prev) => [
+                                ...prev,
+                                `[INFO] Switched target to ${provider} (explicit retry, QNN does not auto-fallback). Rebuild/refresh the recipe, then Execute Live again.`,
+                              ]);
+                            }}
+                            title={`Explicit retry with ${provider} (no automatic EP fallback)`}
+                            className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded border border-slate-600/50 bg-slate-800/60 text-slate-300 hover:bg-slate-700/60 transition-all cursor-pointer"
+                          >
+                            Retry with {provider === "DmlExecutionProvider" ? "DirectML" : "CPU"}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+                <div
+                  data-testid="execution-log-panel"
+                  className="bg-slate-950 border border-slate-800 rounded-md p-4 font-mono text-sm text-emerald-400 space-y-0.5 h-[220px] overflow-y-auto"
+                >
+                  {executionLogs.length === 0 ? (
+                    <p className="text-slate-500 italic">
+                      Ready. Click &quot;Execute Live&quot; to begin an Olive optimization run.
+                    </p>
+                  ) : (
+                    executionLogs.map((line, i) => {
+                      const isSelected = selectedLogIndices.has(i);
+                      const lineClass = line.includes("[ERROR]")
+                        ? "text-red-400"
+                        : line.includes("[WARN]")
+                          ? "text-amber-300"
+                          : line.includes("[SETUP]")
+                            ? "text-amber-400"
+                            : line.includes("[DONE]") || line.includes("[info] Job cancelled")
+                              ? "text-emerald-300 font-bold"
+                              : "text-emerald-400";
+                      return (
+                        <p
+                          key={i}
+                          onClick={(e) => handleLogLineClick(i, e)}
+                          className={`${lineClass} cursor-pointer rounded px-1 -mx-1 transition-colors ${isSelected
+                            ? "bg-electric-blue/15 ring-1 ring-electric-blue/30"
+                            : "hover:bg-slate-800/50"
+                            }`}
+                        >
+                          {line}
+                        </p>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
 
-            {/* Diagnosis history sidebar */}
-            <DiagnosisHistory
-              entries={diagnosisHistory}
-              activeIndex={activeHistoryIndex}
-              onSelect={handleSelectHistory}
-              onClear={handleClearHistory}
-            />
-          </div>
+              {/* Diagnosis history sidebar */}
+              <DiagnosisHistory
+                entries={diagnosisHistory}
+                activeIndex={activeHistoryIndex}
+                onSelect={handleSelectHistory}
+                onClear={handleClearHistory}
+              />
+            </div>
 
-          {/* MCP Diagnostic & Auto-Fix Card (matched_entry from MCP/local parsers enables thumbs) */}
-          {executionStatus === "failed" && (
-            <LazyMCPDiagnosticCard
-              diagnostic={displayedDiagnostic}
-              isDiagnosing={isDiagnosing}
-              fixApplied={displayedFixApplied}
-              onApplyFix={handleApplyMcpFix}
-              onRunDiagnosis={handleDiagnose}
-              error={diagnoseError}
-              onFeedbackSubmitted={handleFeedbackSubmitted}
-            />
-          )}
-        </CardContent>
-      </Card>
+            {/* MCP Diagnostic & Auto-Fix Card (matched_entry from MCP/local parsers enables thumbs) */}
+            {executionStatus === "failed" && (
+              <LazyMCPDiagnosticCard
+                diagnostic={displayedDiagnostic}
+                isDiagnosing={isDiagnosing}
+                fixApplied={displayedFixApplied}
+                onApplyFix={handleApplyMcpFix}
+                onRunDiagnosis={handleDiagnose}
+                error={diagnoseError}
+                onFeedbackSubmitted={handleFeedbackSubmitted}
+              />
+            )}
+          </CardContent>
+        </Card>
 
-      {/* History & Side-by-Side Comparison Modal */}
-      <JobHistoryModal
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        onSelectRecipe={(recipeJsonStr) => {
-          try {
-            const parsed = JSON.parse(recipeJsonStr);
-            // Optionally update UI state if needed
-            setExecutionLogs([
-              `[INFO] Loaded recipe from history (${parsed.input_model?.type || "Olive recipe"})`,
-            ]);
-          } catch {
-            /* ignore */
-          }
-        }}
-      />
+        {/* History & Side-by-Side Comparison Modal */}
+        <JobHistoryModal
+          isOpen={isHistoryOpen}
+          onClose={() => setIsHistoryOpen(false)}
+          onSelectRecipe={(recipeJsonStr) => {
+            try {
+              const parsed = JSON.parse(recipeJsonStr);
+              // Optionally update UI state if needed
+              setExecutionLogs([
+                `[INFO] Loaded recipe from history (${parsed.input_model?.type || "Olive recipe"})`,
+              ]);
+            } catch {
+              /* ignore */
+            }
+          }}
+        />
 
-      {/* Report Issue Modal */}
-      <ReportIssueModal
-        open={isReportOpen}
-        onClose={() => {
-          setIsReportOpen(false);
-          setReportArea(undefined);
-          setReportDescription("");
-        }}
-        state={state}
-        hardwareProbe={hardwareProbe}
-        executionLogs={executionLogs}
-        mcpDiagnostic={mcpDiagnostic}
-        defaultArea={reportArea}
-        defaultDescription={reportDescription}
-      />
+        {/* Report Issue Modal */}
+        <ReportIssueModal
+          open={isReportOpen}
+          onClose={() => {
+            setIsReportOpen(false);
+            setReportArea(undefined);
+            setReportDescription("");
+          }}
+          state={state}
+          hardwareProbe={hardwareProbe}
+          executionLogs={executionLogs}
+          mcpDiagnostic={mcpDiagnostic}
+          defaultArea={reportArea}
+          defaultDescription={reportDescription}
+        />
+      </>}
     </div>
   );
 }
