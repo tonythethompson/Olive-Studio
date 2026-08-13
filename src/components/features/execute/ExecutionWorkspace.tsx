@@ -23,6 +23,8 @@ import {
   isStudioHfTaskSpeechFix,
 } from "@/lib/logFailurePatterns";
 import { useOliveStream } from "./useOliveStream";
+import { navigatePipeline } from "@/lib/pipelineNavigation";
+import { usePlaygroundStore } from "@/lib/stores/playgroundStore";
 import { DiagnosisHistory, type DiagnosisEntry } from "./DiagnosisHistory";
 import { LazyMCPDiagnosticCard } from "./LazyMCPDiagnosticCard";
 import {
@@ -169,6 +171,7 @@ export function ExecutionWorkspace({
   setIsRunning?: (v: boolean) => void;
 } = {}) {
   const storeState = usePipelineState();
+  const setPlaygroundSubView = usePlaygroundStore((s) => s.setActiveSubView);
   // All-or-nothing controlled pair: both props or neither. Mixed mode is rejected.
   const hasState = propState !== undefined;
   const hasSetState = propSetState !== undefined;
@@ -927,9 +930,21 @@ export function ExecutionWorkspace({
                 </span>
               )}
               {executionStatus === "completed" && (
-                <span className="flex items-center gap-1.5 text-sm font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded">
-                  <CheckCircle2 className="h-3 w-3" /> Done
-                </span>
+                <>
+                  <span className="flex items-center gap-1.5 text-sm font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded">
+                    <CheckCircle2 className="h-3 w-3" /> Done
+                  </span>
+                  <Button
+                    variant="outline"
+                    className="h-8 px-2.5 text-sm border-electric-blue/40 text-electric-blue hover:bg-electric-blue/10"
+                    onClick={() => {
+                      setPlaygroundSubView("browser-test");
+                      navigatePipeline("playground");
+                    }}
+                  >
+                    Test in Playground →
+                  </Button>
+                </>
               )}
               {executionStatus === "failed" && (
                 <span className="flex items-center gap-1.5 text-sm font-mono bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded">
