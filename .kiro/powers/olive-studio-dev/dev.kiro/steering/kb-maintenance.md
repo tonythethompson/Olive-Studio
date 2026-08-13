@@ -73,23 +73,27 @@ Each pass entry follows this schema:
 
 ```json
 {
-  "name": "NVIDIA RTX 5090",
-  "category": "nvidia",
-  "description": "Consumer GPU, Blackwell architecture",
-  "vram_gb": 32,
-  "compute_capability": "10.0",
+  "target": "NVIDIA RTX 5090",
+  "accelerator": "gpu",
+  "execution_providers": [
+    "TensorrtExecutionProvider",
+    "CUDAExecutionProvider"
+  ],
   "recommended_passes": ["OnnxConversion", "OrtTransformersOptimization", "OnnxQuantization"],
-  "recommended_ep": "CUDAExecutionProvider",
-  "quantization_methods": ["AWQ", "GPTQ", "HQQ", "RTN"],
-  "max_model_params_billions": 30,
-  "notes": ["Supports INT4 natively via Tensor Cores"]
+  "typical_speedup": "8-15x",
+  "calibration_size": 256,
+  "optimal_batch_size": 32,
+  "memory_gb": 32,
+  "ops_supported": ["Conv", "Gemm", "Attention"],
+  "known_issues": [],
+  "notes": "Consumer GPU, Blackwell. INT4 via Tensor Cores."
 }
 ```
 
 ### Key considerations:
-- `category` determines strategy routing: `nvidia`, `amd`, `intel`, `qualcomm`, `apple`, `webgpu`, `cpu`
+- Loader keys are `target`, `accelerator`, `execution_providers` (array), and `memory_gb`
+- `accelerator` is `gpu`, `cpu`, or `npu`
 - `recommended_passes` should be in execution order
-- `max_model_params_billions` is approximate (depends on quantization level)
 
 ## Adding a Troubleshooting Entry
 
@@ -98,32 +102,36 @@ Each pass entry follows this schema:
 ```json
 {
   "id": "unique-kebab-case-id",
-  "pattern": "regex pattern matching the error message",
-  "keywords": ["keyword1", "keyword2"],
-  "category": "oom|conversion|provider|calibration|compatibility|runtime",
-  "severity": "critical|warning|info",
+  "patterns": [
+    "regex or substring matching the error message",
+    "alternate phrasing"
+  ],
   "title": "Human-readable title",
-  "description": "Why this error occurs.",
   "root_cause": "Technical explanation of the root cause.",
-  "fix": "Step-by-step resolution.",
-  "recipe_patch": {
-    "path.to.config.key": "new_value"
+  "solution": "Step-by-step resolution the agent can apply.",
+  "updated_config": {
+    "passes": {
+      "OnnxConversion": {
+        "params": {
+          "use_external_data_format": true
+        }
+      }
+    }
   },
-  "related_entries": ["other-entry-id"],
-  "frequency": 0
+  "domain": "olive",
+  "applyable": true
 }
 ```
 
 ### Pattern guidelines:
-- Use regex that matches the key error substring (not the full traceback)
-- Escape special characters properly
-- Test the pattern against 2-3 real examples before committing
-- `keywords` enable keyword-fallback search when semantic search misses
+- `patterns` is a string array — `troubleshoot_olive_error` scores hits against this list
+- Use substrings that match the key error text (not the full traceback)
+- Test the patterns against 2-3 real examples before committing
 
-### Recipe patch:
-- Optional — only include if the fix is a deterministic config change
-- Uses dot-notation paths into the recipe JSON
-- The `diagnose_and_fix` tool applies these patches automatically
+### Applyable fix:
+- `solution` is the human-readable workaround shown to the agent
+- `updated_config` is the recipe patch `diagnose_and_fix` applies when `applyable` is true
+- Omit `updated_config` (or leave `{}`) only when there is no deterministic config change
 
 ## Adding an Integration Recipe
 

@@ -20,7 +20,7 @@ const child = spawn(python, [runPy, ...process.argv.slice(2)], {
   stdio: "inherit",
   env: {
     ...process.env,
-    PYTHONPATH: mcpDir,
+    PYTHONPATH: [mcpDir, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),
     ...(venvDir ? { VIRTUAL_ENV: venvDir } : {}),
   },
 });

@@ -150,10 +150,21 @@ For robust deployment, configure fallback providers:
 
 ## Docker / Remote Lab Considerations
 
-When hardware probe runs inside a container or on a remote machine:
+`get_runtime_ep_hints` talks to Studio at `OLIVE_STUDIO_API_URL`. The MCP
+client only accepts a **loopback** Studio URL (`127.0.0.1`, `localhost`, `::1`).
+A remote MCP process cannot point that env var at a LAN or container-published
+host and get a probe.
 
-- Set `OLIVE_ARENA_ALLOW_REMOTE=true` to disable loopback gating on Arena routes
-- GPU passthrough: ensure `--gpus all` (Docker) or device mapping
+`OLIVE_ARENA_ALLOW_REMOTE=true` does **not** change this. It only disables
+`arenaLocalOnly` on Arena **inference** routes. Hardware probe, Olive job
+control, and other `studioLocalOnly` routes still return **403** for
+non-loopback or reverse-proxied clients. There is no env override for
+`studioLocalOnly`.
+
+For Docker / remote labs:
+- Run the MCP server **on the same host** as Studio and set
+  `OLIVE_STUDIO_API_URL=http://127.0.0.1:3000`
+- GPU passthrough: `--gpus all` (Docker) or device mapping
 - NVIDIA Container Toolkit must be installed for CUDA in Docker
 - `nvidia-smi` must be accessible inside the container for detection
 - OpenVINO requires `/dev/dri` passthrough for GPU device access
