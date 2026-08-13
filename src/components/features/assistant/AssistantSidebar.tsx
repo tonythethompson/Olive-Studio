@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useTransition, useRef } from "react";
 import { UIState } from "@/types";
+import type { AskAiChatDetail } from "@/lib/aiChatBridge";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { cn } from "@/lib/utils";
 import {
@@ -29,6 +30,8 @@ interface AssistantSidebarProps {
   onClose: () => void;
   openToAudit?: boolean;
   onAuditOpened?: () => void;
+  pendingChatQuery?: AskAiChatDetail | null;
+  onChatQueryConsumed?: () => void;
 }
 
 const TABS = [
@@ -44,6 +47,8 @@ const TABS = [
  * @param onClose - Callback invoked when the sidebar is closed
  * @param openToAudit - Whether to select the audit tab and restart analysis
  * @param onAuditOpened - Optional callback invoked after the audit tab is opened
+ * @param pendingChatQuery - A query to select the chat tab and send automatically
+ * @param onChatQueryConsumed - Optional callback invoked after the pending chat query is sent
  */
 export function AssistantSidebar({
   state: propState,
@@ -52,6 +57,8 @@ export function AssistantSidebar({
   onClose,
   openToAudit,
   onAuditOpened,
+  pendingChatQuery,
+  onChatQueryConsumed,
 }: AssistantSidebarProps) {
   const storeState = usePipelineState();
   const state = propState ?? storeState.state;
@@ -133,6 +140,15 @@ export function AssistantSidebar({
     audit.restartAnalysis();
     onAuditOpened?.();
   }, [openToAudit]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!pendingChatQuery) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: respond to prop change
+    setActiveTab("chat");
+    void chat.sendChat(pendingChatQuery.query);
+    onChatQueryConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per nonce, not on every chat/audit identity change
+  }, [pendingChatQuery]);
 
   // Report issue modal state (must precede the Escape-key effect that reads it)
   const [isReportOpen, setIsReportOpen] = useState(false);

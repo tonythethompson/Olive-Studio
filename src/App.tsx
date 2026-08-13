@@ -17,6 +17,7 @@ import { TitleBar } from "@/components/TitleBar";
 import { DesktopMinimumViewport } from "@/components/DesktopMinimumViewport";
 import { cn } from "@/lib/utils";
 import { OLIVE_PIPELINE_NAVIGATE, isPipelineViewId, type PipelineViewId } from "@/lib/pipelineNavigation";
+import { OLIVE_ASK_AI_CHAT, type AskAiChatDetail } from "@/lib/aiChatBridge";
 
 const BatchProcessingPanel = lazy(() =>
   import("@/components/features/execute/BatchProcessingPanel").then((m) => ({ default: m.BatchProcessingPanel })),
@@ -145,6 +146,7 @@ function Dashboard() {
   const [isOliveRunning, setIsOliveRunning] = useState(false);
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
   const [triggerAiAudit, setTriggerAiAudit] = useState(false);
+  const [pendingChatQuery, setPendingChatQuery] = useState<AskAiChatDetail | null>(null);
   const [licenseOpen, setLicenseOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportData, setReportData] = useState<{
@@ -218,6 +220,17 @@ function Dashboard() {
     window.addEventListener(OLIVE_PIPELINE_NAVIGATE, onNavigate);
     return () => window.removeEventListener(OLIVE_PIPELINE_NAVIGATE, onNavigate);
   }, [scrollToSection]);
+
+  useEffect(() => {
+    const onAskAiChat = (event: Event) => {
+      const detail = (event as CustomEvent<AskAiChatDetail>).detail;
+      if (!detail?.query) return;
+      setIsAiSidebarOpen(true);
+      setPendingChatQuery(detail);
+    };
+    window.addEventListener(OLIVE_ASK_AI_CHAT, onAskAiChat);
+    return () => window.removeEventListener(OLIVE_ASK_AI_CHAT, onAskAiChat);
+  }, []);
 
   useEffect(() => {
     const main = mainRef.current;
@@ -484,6 +497,8 @@ function Dashboard() {
                   onClose={() => setIsAiSidebarOpen(false)}
                   openToAudit={triggerAiAudit}
                   onAuditOpened={() => setTriggerAiAudit(false)}
+                  pendingChatQuery={pendingChatQuery}
+                  onChatQueryConsumed={() => setPendingChatQuery(null)}
                 />
               </Suspense>
             </ErrorBoundary>
