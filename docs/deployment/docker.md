@@ -101,7 +101,7 @@ networks:
     name: olive-network
 ```
 
-Start both services:
+Start the MCP service:
 
 ```bash
 docker compose up -d
@@ -128,9 +128,9 @@ After starting the container, verify it is healthy:
 docker inspect --format='{{.State.Health.Status}}' olive-mcp
 # Expected output: healthy
 
-# Or test the endpoint directly
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/sse
-# Expected output: 200
+# Or test the endpoint directly (SSE stays open; --max-time avoids a hang)
+curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://localhost:8000/sse
+# Expected output: 200 (curl may exit 28 after printing the status)
 ```
 
 ## Security Notes

@@ -11,6 +11,7 @@ from typing import Any
 
 from .docs_search import _keyword_search, _load_kb_text, get_or_build_kb_index
 from .embeddings import DEFAULT_THRESHOLD, semantic_search
+from .retrieval import get_retrieval_mode
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,7 @@ def get_context_for_pipeline(
         model_name or "",
         target_hardware or "",
     )
+    mode = get_retrieval_mode()
 
     if not query or top_k == 0:
         return {
@@ -95,49 +97,71 @@ def get_context_for_pipeline(
             "confidence": 0.0,
             "snippet_count": 0,
             "status": "ok",
-            "retrieval": {"mode": "auto", "effective": "none"},
+            "retrieval": {"mode": mode, "effective": "none"},
         }
 
     status = "ok"
-    retrieval: dict[str, Any] = {"mode": "auto", "effective": "semantic"}
-    try:
-        kb_texts, embeddings = get_or_build_kb_index()
-        results = semantic_search(
-            query,
-            kb_texts,
-            embeddings,
-            top_k,
-            threshold=DEFAULT_THRESHOLD,
-        )
-    except Exception:
-        logger.warning(
-            "Semantic KB retrieval failed for pipeline context; "
-            "falling back to keyword search",
-            exc_info=True,
-        )
+    retrieval: dict[str, Any] = {"mode": mode, "effective": "semantic"}
+
+    def _keyword_results() -> list[dict[str, Any]]:
+        terms = [t.lower() for t in query.split() if t]
+        return _keyword_search(_load_kb_text(), terms, top_k)
+
+    if mode == "keyword":
         try:
-            terms = [t.lower() for t in query.split() if t]
-            results = _keyword_search(_load_kb_text(), terms, top_k)
-            status = "degraded"
-            retrieval = {
-                "mode": "auto",
-                "effective": "keyword",
-                "degraded": True,
-                "reason": "semantic_error",
-            }
+            results = _keyword_results()
+            retrieval = {"mode": mode, "effective": "keyword"}
         except Exception:
             logger.warning(
-                "Keyword fallback also failed for pipeline context",
+                "Keyword retrieval failed for pipeline context",
                 exc_info=True,
             )
             results = []
             status = "retrieval_failed"
             retrieval = {
-                "mode": "auto",
+                "mode": mode,
                 "effective": "none",
                 "degraded": True,
-                "reason": "keyword_and_semantic_error",
+                "reason": "keyword_error",
             }
+    else:
+        try:
+            kb_texts, embeddings = get_or_build_kb_index()
+            results = semantic_search(
+                query,
+                kb_texts,
+                embeddings,
+                top_k,
+                threshold=DEFAULT_THRESHOLD,
+            )
+        except Exception:
+            logger.warning(
+                "Semantic KB retrieval failed for pipeline context; "
+                "falling back to keyword search",
+                exc_info=True,
+            )
+            try:
+                results = _keyword_results()
+                status = "degraded"
+                retrieval = {
+                    "mode": mode,
+                    "effective": "keyword",
+                    "degraded": True,
+                    "reason": "semantic_error",
+                }
+            except Exception:
+                logger.warning(
+                    "Keyword fallback also failed for pipeline context",
+                    exc_info=True,
+                )
+                results = []
+                status = "retrieval_failed"
+                retrieval = {
+                    "mode": mode,
+                    "effective": "none",
+                    "degraded": True,
+                    "reason": "keyword_and_semantic_error",
+                }
 
     confidences = [float(r.get("relevance", 0.0)) for r in results]
     confidence = sum(confidences) / len(confidences) if confidences else 0.0

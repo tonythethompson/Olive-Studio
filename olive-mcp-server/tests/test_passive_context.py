@@ -171,9 +171,36 @@ def test_semantic_failure_falls_back_to_keyword(monkeypatch: pytest.MonkeyPatch)
     assert result["status"] == "degraded"
     assert result["snippet_count"] == 1
     assert len(result["context_snippets"]) == 1
+    assert result["retrieval"]["mode"] == "auto"
     assert result["retrieval"]["effective"] == "keyword"
     assert result["retrieval"]["degraded"] is True
     assert result["retrieval"]["reason"] == "semantic_error"
+
+
+def test_keyword_mode_skips_semantic(monkeypatch: pytest.MonkeyPatch):
+    def boom():
+        raise AssertionError("semantic path must not run in keyword mode")
+
+    def fake_keyword_search(entries, terms, top_k):
+        return [
+            {
+                "source": "passes.OnnxQuantization",
+                "snippet": "Static quantization requires calibration data.",
+                "relevance": 0.6,
+            }
+        ]
+
+    monkeypatch.setenv("OLIVE_MCP_RETRIEVAL_MODE", "keyword")
+    monkeypatch.setattr(passive_context, "get_or_build_kb_index", boom)
+    monkeypatch.setattr(passive_context, "semantic_search", boom)
+    monkeypatch.setattr(passive_context, "_keyword_search", fake_keyword_search)
+    monkeypatch.setattr(passive_context, "_load_kb_text", lambda: [("s", "t")])
+
+    result = get_context_for_pipeline(pipeline_passes=["OnnxQuantization"], top_k=3)
+    assert result["status"] == "ok"
+    assert result["snippet_count"] == 1
+    assert result["retrieval"]["mode"] == "keyword"
+    assert result["retrieval"]["effective"] == "keyword"
 
 
 def test_both_retrieval_paths_fail(monkeypatch: pytest.MonkeyPatch):
