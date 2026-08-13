@@ -7,8 +7,7 @@
  */
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { reconcileFindings } from "@/lib/reviewReconciler";
-import type { ProviderConflict } from "@/lib/reviewReconciler";
+import { reconcileFindings, type ProviderConflict } from "@/lib/reviewReconciler";
 import type { PipelineIssue, IssueSeverity } from "@/lib/pipelineValidation";
 import type {
   Finding,
