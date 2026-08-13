@@ -3,6 +3,7 @@ import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { fetchOliveRecipesCatalogItem, type RecipeCatalogItem } from "@/lib/oliveRecipeHub";
 import { estimateVramForCatalogPreset } from "@/lib/presetVramEstimate";
+import { formatMemoryGb } from "@/lib/vramEstimate";
 import { presetDisplayName, type RecipeRow } from "@/components/features/input/useRecipeCatalog";
 import { CompatStatusPill } from "@/components/features/input/CompatStatus";
 import { navigatePipeline } from "@/lib/pipelineNavigation";
@@ -213,6 +214,15 @@ export function RecipeCatalogBrowserList({
       {groupedRecipes.map(({ title: modelTitle, rows }) => {
         const isExpanded = expandedRecipeGroups.has(modelTitle);
         const uniqueDevices = [...new Set(rows.map((r) => r.item.device))];
+        const sizesGb = rows.map((r) => r.inferenceGb).filter((gb) => gb > 0);
+        const minSizeGb = sizesGb.length ? Math.min(...sizesGb) : null;
+        const maxSizeGb = sizesGb.length ? Math.max(...sizesGb) : null;
+        const sizeLabel =
+          minSizeGb == null || maxSizeGb == null
+            ? null
+            : minSizeGb === maxSizeGb
+              ? `~${formatMemoryGb(minSizeGb)}`
+              : `~${formatMemoryGb(minSizeGb)}–${formatMemoryGb(maxSizeGb)}`;
         return (
           <div key={modelTitle} className="bg-slate-950/20">
             <button
@@ -228,7 +238,17 @@ export function RecipeCatalogBrowserList({
               className="sticky top-0 z-[1] w-full flex items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2 cursor-pointer hover:bg-slate-900/80 transition-colors text-left"
               aria-expanded={isExpanded}
             >
-              <h3 className="text-sm font-semibold text-slate-100 truncate">{modelTitle}</h3>
+              <div className="flex items-baseline gap-2 min-w-0">
+                <h3 className="text-sm font-semibold text-slate-100 truncate">{modelTitle}</h3>
+                {sizeLabel && (
+                  <span
+                    className="shrink-0 text-[11px] font-mono text-slate-500"
+                    title="Approximate deployed model size, smallest to largest available target"
+                  >
+                    {sizeLabel}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2 shrink-0">
                 {!isExpanded && (
                   <div className="flex items-center gap-1 flex-wrap justify-end">
