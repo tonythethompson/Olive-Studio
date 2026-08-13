@@ -10,6 +10,7 @@ export {
   callOliveMcpTools,
   MCP_UNAVAILABLE_ERROR,
   shutdownMcpClient,
+  reconnectMcpClient,
   type McpToolCallResult,
   type McpToolRequest,
 } from "./persistentClient.ts";

@@ -317,6 +317,30 @@ export function resetPersistentClient(): void {
   connectingPromise = null;
 }
 
+/**
+ * Force-reconnect the MCP server child process.
+ * Tears down the current connection (if any) and spawns a fresh process
+ * with the latest environment variables from buildPythonEnv().
+ * Used by the settings UI when MCP env vars (retrieval mode, preload, etc.)
+ * change and need to take effect.
+ */
+export async function reconnectMcpClient(): Promise<void> {
+  // Tear down the existing connection
+  if (client) {
+    try { await client.close(); } catch { /* best-effort */ }
+  }
+  if (transport) {
+    try { void transport.close().catch(() => undefined); } catch { /* best-effort */ }
+  }
+  client = null;
+  transport = null;
+  state = "idle";
+  connectingPromise = null;
+
+  // Re-establish with fresh env
+  await connect();
+}
+
 /** Test-only snapshot of module connection refs. */
 export function getPersistentClientSnapshotForTests(): {
   state: ConnectionState;

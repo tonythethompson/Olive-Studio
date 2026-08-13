@@ -188,6 +188,15 @@ export interface StudioConfig {
   kbLastSync?: string;
   /** Agent/MCP access policy (Studio is authoritative). */
   agentAccess?: AgentAccessPolicy;
+  /** MCP server retrieval settings (persisted across restarts). */
+  mcpSettings?: McpSettings;
+}
+
+export interface McpSettings {
+  /** Retrieval mode: auto (semantic with keyword fallback), keyword, or semantic. */
+  retrievalMode?: "auto" | "keyword" | "semantic";
+  /** Preload the embedding model at server startup instead of lazy-loading. */
+  preloadEmbeddings?: boolean;
 }
 
 // ─── Recipe Dependency Types ──────────────────────────────────────────────────

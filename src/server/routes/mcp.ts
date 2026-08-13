@@ -13,7 +13,7 @@ import {
   isKbSyncInProgress,
   setKbSyncInProgress,
 } from "../services/mcp/state.ts";
-import { callOliveMcpTool, MCP_UNAVAILABLE_ERROR } from "../services/mcp/client.ts";
+import { callOliveMcpTool, MCP_UNAVAILABLE_ERROR, reconnectMcpClient } from "../services/mcp/client.ts";
 import { isAllowedMcpToolName } from "../services/mcp/allowedTools.ts";
 import { evaluateStudioRecipeBridge } from "../services/mcp/studioRecipeBridge.ts";
 import {
@@ -372,5 +372,46 @@ export function mountMcpRoutes(router: Router): void {
     } finally {
       setKbSyncInProgress(false);
     }
+  });
+
+  // ─── MCP Settings (update env vars + restart server) ───────────────────
+  router.post("/mcp/settings", studioLocalOnly, kbSyncRateLimit, async (req, res) => {
+    const body = parseBody<{
+      retrievalMode?: "auto" | "keyword" | "semantic";
+      preloadEmbeddings?: boolean;
+    }>(req.body, {
+      retrievalMode: { type: "string", required: false },
+      preloadEmbeddings: { type: "boolean", required: false },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+
+    const parsed = body.parsed;
+    const validModes = ["auto", "keyword", "semantic"];
+    if (parsed.retrievalMode && !validModes.includes(parsed.retrievalMode)) {
+      return res.status(400).json({ error: `retrievalMode must be one of: ${validModes.join(", ")}` });
+    }
+
+    // Persist to disk config
+    const current = readStudioConfig();
+    const mcpSettings = {
+      ...current.mcpSettings,
+      ...(parsed.retrievalMode !== undefined && { retrievalMode: parsed.retrievalMode }),
+      ...(parsed.preloadEmbeddings !== undefined && { preloadEmbeddings: parsed.preloadEmbeddings }),
+    };
+    writeStudioConfig({ mcpSettings });
+
+    // Reconnect the MCP server with new env vars
+    try {
+      await reconnectMcpClient();
+      return res.json({ ok: true, mcpSettings });
+    } catch {
+      return res.status(500).json({ ok: false, error: "Failed to restart MCP server with new settings" });
+    }
+  });
+
+  // ─── MCP Settings (read current) ───────────────────────────────────────
+  router.get("/mcp/settings", kbStatusRateLimit, (_req, res) => {
+    const { mcpSettings } = readStudioConfig();
+    return res.json({ mcpSettings: mcpSettings ?? {} });
   });
 }
