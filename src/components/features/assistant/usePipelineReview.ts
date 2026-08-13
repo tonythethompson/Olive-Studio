@@ -14,7 +14,6 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { useWorkspaceFingerprint } from "@/lib/hooks/useWorkspaceFingerprint";
 import { usePipelineStore } from "@/lib/stores/pipelineStore";
 import { reconcileFindings } from "@/lib/reviewReconciler";
 import {
@@ -160,7 +159,6 @@ function parseFindings(raw: unknown): Finding[] | null {
  */
 export function usePipelineReview(controlledState?: UIState): UsePipelineReviewReturn {
   // ── External state ────────────────────────────────────────────────────────
-  const { fingerprint: currentFingerprint } = useWorkspaceFingerprint();
   const storeState = usePipelineStore((s) => s.state);
   const pipelineState = controlledState ?? storeState;
 
@@ -173,6 +171,8 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
   const [error, setError] = useState("");
   /** Fingerprint that was current when the last successful result was committed. */
   const [resultFingerprint, setResultFingerprint] = useState("");
+  /** Fingerprint of the pipeline state this hook reviews (store or controlled). */
+  const [liveFingerprint, setLiveFingerprint] = useState("");
   /** Timestamp (Date.now()) when the last successful review completed. */
   const [completedAt, setCompletedAt] = useState(0);
 
@@ -190,6 +190,16 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
     stateRef.current = pipelineState;
   }, [pipelineState]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void computeFingerprint(pipelineState).then((hash) => {
+      if (!cancelled) setLiveFingerprint(hash);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pipelineState]);
+
   // Cleanup timers on unmount.
   useEffect(() => {
     return () => {
@@ -205,16 +215,11 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
   // current live fingerprint, unless we've never completed a review.
   const isStale =
     resultFingerprint !== "" &&
-    (currentFingerprint === "" || resultFingerprint !== currentFingerprint);
+    (liveFingerprint === "" || resultFingerprint !== liveFingerprint);
 
   // ── Core review cycle ─────────────────────────────────────────────────────
 
   const refresh = useCallback(() => {
-    // Gate: do not start a review until the workspace fingerprint has been
-    // computed at least once. Without this, the result would be committed with
-    // an empty fingerprint and staleness detection would never trigger.
-    if (currentFingerprint === "") return;
-
     const thisReviewId = ++reviewIdRef.current;
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -253,7 +258,7 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
           );
         }
 
-        const data = await response.json().catch(() => ({}));
+        const data: unknown = await response.json();
         if (!response.ok) {
           throw new Error(
             (data as { error?: string }).error || `HTTP ${response.status}`,
@@ -295,8 +300,16 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
         );
 
         const parsedFindings = parseFindings(rawResult.findings);
+        const aiSuggestions = Array.isArray(rawResult.suggestions)
+          ? rawResult.suggestions.filter(
+              (suggestion): suggestion is Record<string, unknown> =>
+                suggestion !== null &&
+                typeof suggestion === "object" &&
+                !Array.isArray(suggestion),
+            )
+          : [];
         const aiFindings: Finding[] = parsedFindings ?? adaptSuggestionsToFindings(
-          rawResult.suggestions ?? [],
+          aiSuggestions,
           snapshot,
         );
 
@@ -331,7 +344,7 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
         window.clearTimeout(timeoutId);
       }
     })();
-  }, [currentFingerprint]);
+  }, []);
 
   const reset = useCallback(() => {
     reviewIdRef.current += 1;
