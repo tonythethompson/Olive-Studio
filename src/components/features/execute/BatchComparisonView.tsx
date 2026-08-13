@@ -236,10 +236,10 @@ export function BatchComparisonView({
                           : "hover:bg-slate-800/30",
                       )}
                     >
-                      <td className="px-3 py-2 font-medium text-slate-200 max-w-[160px] truncate" title={entry.job_id}>
+                      <td className="px-3 py-2 font-medium text-slate-200 max-w-[160px] truncate" title={matchingRecord?.modelId ?? entry.job_id}>
                         <span className="inline-flex items-center gap-1.5">
                           {isWinner && <Trophy className="h-3.5 w-3.5 text-emerald-400 shrink-0" />}
-                          {entry.job_id}
+                          {matchingRecord?.modelId ?? entry.job_id}
                         </span>
                       </td>
                       <td className="px-3 py-2 text-slate-300 font-mono">

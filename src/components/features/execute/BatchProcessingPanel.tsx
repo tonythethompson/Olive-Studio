@@ -175,6 +175,7 @@ function applyBatchStreamDone(
           status: finalStatus,
           progress: finalStatus === "completed" ? 100 : j.progress,
           metrics: metrics ?? j.metrics,
+          finishedAtMs: Date.now(),
         }
         : j,
     ),
@@ -203,6 +204,7 @@ function applyBatchStreamError(
             ...j,
             status: "cancelled",
             logs: [...(j.logs || []), "[INFO] Halted by user."],
+            finishedAtMs: Date.now(),
           }
           : j,
       ),
@@ -215,7 +217,7 @@ function applyBatchStreamError(
   const errorLogs = [...(failedJob?.logs || []), "[ERROR] SSE connection lost."];
   setState({
     batchJobs: currentJobs.map((j) =>
-      j.id === batchJobId ? { ...j, status: "failed", logs: errorLogs } : j,
+      j.id === batchJobId ? { ...j, status: "failed", logs: errorLogs, finishedAtMs: Date.now() } : j,
     ),
   });
   fetchKeyedDiagnostic(batchJobId, errorLogs);
@@ -289,7 +291,7 @@ function failQueuedBatchJob(
 ): void {
   ctx.setState({
     batchJobs: (ctx.jobsRef.current ?? []).map((j) =>
-      j.id === jobId ? { ...j, status: "failed", logs: errorLogs } : j,
+      j.id === jobId ? { ...j, status: "failed", logs: errorLogs, finishedAtMs: Date.now() } : j,
     ),
   });
   ctx.fetchKeyedDiagnostic(jobId, errorLogs);
@@ -326,7 +328,7 @@ function markBatchJobRunning(
   ctx.setState({
     batchJobs: (ctx.jobsRef.current ?? []).map((j) =>
       j.id === jobId
-        ? { ...j, status: "running", progress: -1, logs: ["[INFO] Starting Olive run..."] }
+        ? { ...j, status: "running", progress: -1, logs: ["[INFO] Starting Olive run..."], startedAtMs: Date.now() }
         : j,
     ),
   });
@@ -346,6 +348,7 @@ async function applyHaltBeforeStream(
           oliveJobId,
           status: terminalStatus,
           logs: [...(j.logs || []), haltLog],
+          finishedAtMs: Date.now(),
         }
         : j,
     ),
@@ -710,6 +713,7 @@ export function BatchProcessingPanel({
             ...j,
             status: "cancelled",
             logs: [...(j.logs || []), "[INFO] Halted by user."],
+            finishedAtMs: Date.now(),
           }
           : j,
       ),
@@ -1208,10 +1212,12 @@ export function BatchProcessingPanel({
           </CardContent>
         </Card>
       </div>
-      <BatchComparisonView
-        records={(jobs ?? []).filter(isTerminalBatchStatusJob).map(batchJobToHistoryRecord)}
-        completedJobCount={(jobs ?? []).filter((j) => j.status === "completed").length}
-      />
+      <div className="xl:col-span-3">
+        <BatchComparisonView
+          records={(jobs ?? []).filter(isTerminalBatchStatusJob).map(batchJobToHistoryRecord)}
+          completedJobCount={(jobs ?? []).filter((j) => j.status === "completed").length}
+        />
+      </div>
     </div>
   );
 }
@@ -1230,7 +1236,10 @@ function batchJobToHistoryRecord(job: BatchJob): JobHistoryRecord {
     memoryOffload: "",
     status: job.status === "queued" || job.status === "running" ? "failed" : job.status,
     exitCode: job.status === "completed" ? 0 : 1,
-    durationMs: 0,
+    durationMs:
+      job.startedAtMs != null && job.finishedAtMs != null
+        ? Math.max(0, job.finishedAtMs - job.startedAtMs)
+        : 0,
     passCount: job.passes.length,
     passNames: job.passes,
     recipeJson: job.recipeJson ?? "",

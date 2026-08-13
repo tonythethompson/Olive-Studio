@@ -38,19 +38,20 @@ export function ExportReportMenu({
   const containerRef = useRef<HTMLDivElement>(null);
   const flagEnabled = isFeatureEnabled("reportExport");
 
-  const isDisabled = disabled || records.length === 0;
+  const completedRecords = records.filter((record) => record.status === "completed");
+  const isDisabled = disabled || completedRecords.length === 0;
 
   const handleDownloadMarkdown = useCallback(() => {
     const options: ReportOptions = { includeRecipeJson: reportDetail === "full", includeLogSummary: reportDetail === "full" };
-    downloadMarkdownReport(records, options);
+    downloadMarkdownReport(completedRecords, options);
     setOpen(false);
-  }, [records, reportDetail]);
+  }, [completedRecords, reportDetail]);
 
   const handlePrintPdf = useCallback(() => {
     const options: ReportOptions = { includeRecipeJson: reportDetail === "full", includeLogSummary: reportDetail === "full" };
-    printReportAsPdf(records, options);
+    printReportAsPdf(completedRecords, options);
     setOpen(false);
-  }, [records, reportDetail]);
+  }, [completedRecords, reportDetail]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -79,6 +80,10 @@ export function ExportReportMenu({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open]);
+
+  useEffect(() => {
+    if (isDisabled && open) setOpen(false);
+  }, [isDisabled, open]);
 
   // Hide entirely when the feature flag is disabled
   if (!flagEnabled) {

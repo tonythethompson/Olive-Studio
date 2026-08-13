@@ -42,6 +42,13 @@ export function ModeToggle({ mode, onModeChange, disabled = false }: ModeToggleP
       role="radiogroup"
       aria-label="Execution mode"
       data-testid="mode-toggle"
+      onKeyDown={(event) => {
+        if (disabled) return;
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        const next = mode === "manual" ? "agent" : "manual";
+        onModeChange(next);
+      }}
       className={cn(
         "inline-flex rounded-md border border-zinc-200 bg-zinc-100 p-0.5",
         "dark:border-zinc-700 dark:bg-zinc-800",
@@ -58,7 +65,7 @@ export function ModeToggle({ mode, onModeChange, disabled = false }: ModeToggleP
             aria-checked={isActive}
             aria-disabled={disabled}
             disabled={disabled}
-            tabIndex={disabled ? -1 : 0}
+            tabIndex={disabled || !isActive ? -1 : 0}
             onClick={() => {
               if (!isActive) {
                 onModeChange(segment.value);
