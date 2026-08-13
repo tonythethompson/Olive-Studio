@@ -4,6 +4,8 @@ import { openvinoTargetToOliveDevice } from "@/lib/openvinoDeps";
 import {
   isReplacementExportPipeline,
 } from "@/lib/replacementExportPipeline";
+import { isMultiLoraEnabled } from "@/lib/featureFlags";
+import { validateAdapters, type AdapterEntry } from "@/lib/multiLoraValidation";
 
 const GPU_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
@@ -790,9 +792,134 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   }
 
   // Order: Convert → Optimize → Quantize (ONNX path), then MCP pass overrides
+  // Multi-LoRA adapter gating — when PEFT is active and adapters are configured
+  const passesAny = state.passes as Record<string, unknown>;
+  const multiLoraAdapters = passesAny.multiLoraAdapters;
+  if (state.passes.peft && Array.isArray(multiLoraAdapters) && multiLoraAdapters.length > 0) {
+    const vram = typeof (state as unknown as Record<string, unknown>).vramEstimateGb === "number"
+      ? (state as unknown as Record<string, unknown>).vramEstimateGb as number
+      : 16;
+    const gateResult = gateMultiLoraAdapters(multiLoraAdapters, vram);
+    if (gateResult.allowed && gateResult.adapters.length > 0) {
+      const extractPass = buildExtractAdaptersPass(gateResult.adapters);
+      if (extractPass) {
+        passes["extract_adapters"] = extractPass;
+      }
+    }
+  }
+
   recipe.passes = finalizePasses(passes, state.passRecipeOverrides, torchQuantActive);
 
   memoState = state;
   memoRecipe = recipe;
   return recipe;
+}
+
+// ─── Multi-LoRA Adapter Gating ────────────────────────────────────────────────
+
+/**
+ * Result of adapter gating — either a validated adapters array (when the
+ * multiLora flag is enabled and adapters are valid) or a rejection reason.
+ */
+export interface AdapterGateResult {
+  /** Whether the adapters passed gating and can be emitted in the recipe. */
+  allowed: boolean;
+  /** Validated adapter entries (populated only when `allowed` is true). */
+  adapters: AdapterEntry[];
+  /** Human-readable reason when adapters are rejected. */
+  reason?: string;
+}
+
+/**
+ * Gates multi-adapter configurations based on the `multiLora` feature flag.
+ *
+ * - When the flag is **disabled** (default): rejects any configuration with
+ *   more than one adapter entry. Single-adapter configs are allowed through
+ *   in single-adapter mode (using only `adapter_path`).
+ * - When the flag is **enabled**: validates adapters using `validateAdapters`
+ *   and returns the validated entries for emission in Olive 0.13.0
+ *   `ExtractAdapters` pass format.
+ *
+ * @param adapters - Raw adapter entries from the recipe configuration
+ * @param vramGb - Available VRAM in gigabytes (for count limit enforcement)
+ * @returns Gating result with validated adapters or rejection reason
+ */
+export function gateMultiLoraAdapters(
+  adapters: unknown[],
+  vramGb: number,
+): AdapterGateResult {
+  // When flag is disabled, reject multi-adapter configs
+  if (!isMultiLoraEnabled()) {
+    if (adapters.length > 1) {
+      return {
+        allowed: false,
+        adapters: [],
+        reason:
+          "Multi-adapter configuration rejected: multiLora feature flag is disabled. " +
+          "Use single-adapter mode (adapter_path) or enable the multiLora flag.",
+      };
+    }
+    // Single adapter (or empty) is allowed even with flag off — treated as legacy single-adapter mode
+    if (adapters.length === 1) {
+      const entry = adapters[0];
+      if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+        const obj = entry as Record<string, unknown>;
+        if (typeof obj.path === "string" && obj.path.length > 0) {
+          return {
+            allowed: true,
+            adapters: [{
+              name: (typeof obj.name === "string" && obj.name.length > 0) ? obj.name : "default",
+              path: obj.path,
+              rank: (typeof obj.rank === "number" && Number.isInteger(obj.rank) && obj.rank > 0) ? obj.rank : 8,
+              alpha: (typeof obj.alpha === "number" && Number.isFinite(obj.alpha) && obj.alpha > 0) ? obj.alpha : 16,
+              ...(Array.isArray(obj.targetModules) ? { targetModules: obj.targetModules as string[] } : {}),
+            }],
+            reason: undefined,
+          };
+        }
+      }
+      return {
+        allowed: false,
+        adapters: [],
+        reason: "Invalid single-adapter entry: path must be a non-empty string.",
+      };
+    }
+    // Empty array — nothing to gate
+    return { allowed: true, adapters: [], reason: undefined };
+  }
+
+  // Flag is enabled — validate via multiLoraValidation
+  const result = validateAdapters(adapters, vramGb);
+  if (result.valid) {
+    return { allowed: true, adapters: result.adapters, reason: undefined };
+  }
+
+  return {
+    allowed: false,
+    adapters: [],
+    reason: result.errors.map((e) => e.message).join("; "),
+  };
+}
+
+/**
+ * Builds the `ExtractAdapters` pass config from validated adapter entries.
+ * Only emitted when the `multiLora` feature flag is enabled and adapters are validated.
+ *
+ * @param adapters - Validated adapter entries
+ * @returns Olive 0.13.0 `ExtractAdapters` pass specification, or undefined if empty
+ */
+export function buildExtractAdaptersPass(adapters: AdapterEntry[]): Record<string, unknown> | undefined {
+  if (adapters.length === 0) return undefined;
+  return {
+    type: "ExtractAdapters",
+    config: {
+      adapters: adapters.map((a) => ({
+        name: a.name,
+        path: a.path,
+        rank: a.rank,
+        alpha: a.alpha,
+        ...(a.targetModules ? { target_modules: a.targetModules } : {}),
+      })),
+    },
+  };
 }
