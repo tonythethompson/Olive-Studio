@@ -132,18 +132,18 @@ export function GraphCanvas({
         onClick={() => focusNode(id)}
         onKeyDown={(event) => handleNodeKeyDown(event, id)}
         className={`group text-left p-2 rounded-lg border transition-all duration-300 relative flex flex-col justify-between focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${isSelected
-            ? issueLevel === "critical"
-              ? "border-rose-500 bg-rose-950/20 ring-1 ring-rose-500"
-              : issueLevel === "warning"
-                ? "border-amber-500 bg-amber-950/10 ring-1 ring-amber-500"
-                : "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue"
-            : issueLevel === "critical"
-              ? "border-rose-700/60 bg-rose-950/10 hover:border-rose-600"
-              : issueLevel === "warning"
-                ? "border-amber-700/50 bg-amber-950/5 hover:border-amber-600"
-                : active
-                  ? "border-emerald-600/50 bg-emerald-950/10 hover:border-emerald-500 hover:bg-emerald-950/20"
-                  : "border-slate-800 bg-slate-900/30 hover:border-slate-700 hover:bg-slate-900/45"
+          ? issueLevel === "critical"
+            ? "border-rose-500 bg-rose-950/20 ring-1 ring-rose-500"
+            : issueLevel === "warning"
+              ? "border-amber-500 bg-amber-950/10 ring-1 ring-amber-500"
+              : "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue"
+          : issueLevel === "critical"
+            ? "border-rose-700/60 bg-rose-950/10 hover:border-rose-600"
+            : issueLevel === "warning"
+              ? "border-amber-700/50 bg-amber-950/5 hover:border-amber-600"
+              : active
+                ? "border-emerald-600/50 bg-emerald-950/10 hover:border-emerald-500 hover:bg-emerald-950/20"
+                : "border-slate-800 bg-slate-900/30 hover:border-slate-700 hover:bg-slate-900/45"
           }`}
       >
         {issueLevel && (
@@ -155,24 +155,24 @@ export function GraphCanvas({
           <div className="flex items-center justify-between mb-1.5">
             <div
               className={`p-1 rounded ${issueLevel === "critical"
-                  ? "bg-rose-950/40 border border-rose-700/40 text-rose-400"
-                  : issueLevel === "warning"
-                    ? "bg-amber-950/30 border border-amber-700/30 text-amber-400"
-                    : active
-                      ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
-                      : "bg-slate-900 border border-slate-700 text-slate-500"
+                ? "bg-rose-950/40 border border-rose-700/40 text-rose-400"
+                : issueLevel === "warning"
+                  ? "bg-amber-950/30 border border-amber-700/30 text-amber-400"
+                  : active
+                    ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
+                    : "bg-slate-900 border border-slate-700 text-slate-500"
                 }`}
             >
               {nd.icon}
             </div>
             <span
               className={`text-[11px] font-mono px-1.5 py-0.5 rounded border uppercase whitespace-nowrap tracking-wide ${issueLevel === "critical"
-                  ? "bg-rose-950/40 text-rose-400 border-rose-700/40"
-                  : issueLevel === "warning"
-                    ? "bg-amber-950/30 text-amber-400 border-amber-700/30"
-                    : active
-                      ? "bg-emerald-950/40 text-emerald-400 border-emerald-600/50"
-                      : "bg-slate-950 text-slate-500 border-slate-700"
+                ? "bg-rose-950/40 text-rose-400 border-rose-700/40"
+                : issueLevel === "warning"
+                  ? "bg-amber-950/30 text-amber-400 border-amber-700/30"
+                  : active
+                    ? "bg-emerald-950/40 text-emerald-400 border-emerald-600/50"
+                    : "bg-slate-950 text-slate-500 border-slate-700"
                 }`}
             >
               {issueLevel === "critical"
@@ -216,16 +216,16 @@ export function GraphCanvas({
             onClick={() => onSelectNode("provider")}
             onKeyDown={(event) => handleNodeKeyDown(event, "provider")}
             className={`group w-full max-w-[240px] text-left p-2.5 rounded-xl border transition-all duration-300 relative focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${selectedNodeId === "provider"
-                ? providerIssue === "critical"
-                  ? "border-rose-500 bg-rose-950/20 ring-1 ring-rose-500"
-                  : providerIssue === "warning"
-                    ? "border-amber-500 bg-amber-950/10 ring-1 ring-amber-500"
-                    : "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue"
-                : providerIssue === "critical"
-                  ? "border-rose-700/60 bg-rose-950/10 hover:border-rose-600"
-                  : providerIssue === "warning"
-                    ? "border-amber-700/50 bg-amber-950/5 hover:border-amber-600"
-                    : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
+              ? providerIssue === "critical"
+                ? "border-rose-500 bg-rose-950/20 ring-1 ring-rose-500"
+                : providerIssue === "warning"
+                  ? "border-amber-500 bg-amber-950/10 ring-1 ring-amber-500"
+                  : "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue"
+              : providerIssue === "critical"
+                ? "border-rose-700/60 bg-rose-950/10 hover:border-rose-600"
+                : providerIssue === "warning"
+                  ? "border-amber-700/50 bg-amber-950/5 hover:border-amber-600"
+                  : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
               }`}
           >
             {providerIssue && (
@@ -254,8 +254,8 @@ export function GraphCanvas({
             onClick={() => onSelectNode("output")}
             onKeyDown={(event) => handleNodeKeyDown(event, "output")}
             className={`group w-full max-w-[240px] text-left p-2.5 rounded-xl border transition-all duration-300 relative focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${selectedNodeId === "output"
-                ? "border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500"
-                : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
+              ? "border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500"
+              : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
               }`}
           >
             <div className="flex items-center justify-between mb-1.5">
@@ -282,8 +282,8 @@ export function GraphCanvas({
       className="relative flex-1 min-h-[260px] wide:min-h-[300px] bg-slate-950 p-2.5 wide:p-3 flex flex-col justify-center select-none overflow-visible"
       style={{
         backgroundImage: `
-            radial-gradient(ellipse at center, rgba(30, 41, 59, 0.4) 0%, transparent 80%),
-            radial-gradient(circle, rgba(15, 23, 42, 0.8) 1px, transparent 1px)
+            radial-gradient(ellipse at center, var(--color-slate-900) 0%, transparent 80%),
+            radial-gradient(circle, var(--color-slate-800) 1px, transparent 1px)
           `,
         backgroundSize: "24px 24px",
       }}
@@ -304,8 +304,8 @@ export function GraphCanvas({
                 onClick={() => onSelectNode("input")}
                 onKeyDown={(event) => handleNodeKeyDown(event, "input")}
                 className={`group w-full max-w-[240px] text-left p-3 rounded-xl border transition-all duration-300 relative focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${isSelected
-                    ? "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue"
-                    : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
+                  ? "border-electric-blue bg-electric-blue/10 ring-1 ring-electric-blue"
+                  : "border-slate-800 hover:border-slate-700 bg-slate-900/60"
                   }`}
               >
                 <div className="flex items-center justify-between mb-1.5">

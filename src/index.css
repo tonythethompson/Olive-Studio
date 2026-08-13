@@ -127,17 +127,17 @@
     /* panel surfaces */
     --color-slate-850: #b5cea6;
     /* card backgrounds */
-    --color-slate-800: #a3c193;
-    /* borders, dividers */
-    --color-slate-750: #8bb37d;
+    --color-slate-800: #8aab76;
+    /* borders, dividers — darker for visibility */
+    --color-slate-750: #749a5e;
     /* heavier borders */
-    --color-slate-700: #6f9a5f;
+    --color-slate-700: #5d8348;
     /* scrollbar thumb, muted UI */
-    --color-slate-600: #527a42;
+    --color-slate-600: #476834;
     /* secondary text, icons */
-    --color-slate-500: #3d5f30;
+    --color-slate-500: #365224;
     /* mid-emphasis text */
-    --color-slate-400: #2d4a22;
+    --color-slate-400: #2a4019;
     /* strong secondary text */
     --color-slate-300: #1a2b12;
     /* body text: deep olive-black */
@@ -148,13 +148,33 @@
     --color-slate-50: #0c1408;
     /* deepest ink */
 
-    /* Accent: darker olive-gold for punchy contrast on green bg */
-    --color-electric-blue: #3d6b10;
-    --color-electric-blue-dark: #2e5508;
-    --color-olive: #3d6b10;
-    --color-olive-dark: #2e5508;
-    --color-emerald-accent: #2a7a1e;
-    --color-emerald-dark: #1e5c14;
+    /*
+     * Primary accent: warm olive-brown — NOT green — so it visually pops
+     * against the green background. ≈ 7:1 contrast on sage.
+     */
+    --color-electric-blue: #5c4a0f;
+    --color-electric-blue-dark: #4a3a08;
+    --color-olive: #5c4a0f;
+    --color-olive-dark: #4a3a08;
+
+    /*
+     * Emerald/success states → deep teal-blue in light mode.
+     * Tailwind's default emerald-400 (#34d399) is invisible on green bg,
+     * so we remap the whole emerald scale to high-contrast dark teal.
+     */
+    --color-emerald-accent: #1a6b5c;
+    --color-emerald-dark: #0f4f44;
+    --color-emerald-50: #0b3d34;
+    --color-emerald-100: #0f4f44;
+    --color-emerald-200: #147a68;
+    --color-emerald-300: #1a6b5c;
+    --color-emerald-400: #176358;
+    --color-emerald-500: #145c50;
+    --color-emerald-600: #0f4a40;
+    --color-emerald-700: #0b3d34;
+    --color-emerald-800: #082e28;
+    --color-emerald-900: #051f1a;
+    --color-emerald-950: #031210;
   }
 
   /*
