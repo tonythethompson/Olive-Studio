@@ -211,41 +211,30 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
       const result = buildExtractAdaptersPass(adapters);
       expect(result).toBeDefined();
       expect(result!.type).toBe("ExtractAdapters");
-      expect(result!.config).toBeDefined();
-      const config = result!.config as { adapters: Record<string, unknown>[] };
-      expect(config.adapters).toHaveLength(2);
-      expect(config.adapters[0]).toEqual({
-        name: "lora-a",
-        path: "/weights/a",
-        rank: 8,
-        alpha: 16,
+      expect(result!.config).toEqual({
+        adapter_type: "lora",
+        make_inputs: true,
       });
-      expect(config.adapters[1]).toEqual({
-        name: "lora-b",
-        path: "/weights/b",
-        rank: 4,
-        alpha: 8,
-      });
+      expect(result!.config).not.toHaveProperty("adapters");
     });
 
-    it("maps targetModules to target_modules in output", () => {
+    it("does not emit unsupported adapters[] on ExtractAdapters", () => {
       const adapters = [
         { name: "lora-a", path: "/weights/a", rank: 8, alpha: 16, targetModules: ["q_proj"] },
       ];
       const result = buildExtractAdaptersPass(adapters);
-      const config = result!.config as { adapters: Record<string, unknown>[] };
-      expect(config.adapters[0]).toHaveProperty("target_modules", ["q_proj"]);
-      expect(config.adapters[0]).not.toHaveProperty("targetModules");
+      const config = result!.config as Record<string, unknown>;
+      expect(config.adapter_type).toBe("lora");
+      expect(config).not.toHaveProperty("adapters");
+      expect(config).not.toHaveProperty("targetModules");
     });
 
-    it("omits target_modules when not specified", () => {
+    it("omits adapter list from pass config when not specified", () => {
       const adapters = [
         { name: "lora-a", path: "/weights/a", rank: 8, alpha: 16 },
       ];
       const result = buildExtractAdaptersPass(adapters);
-      const config = result!.config as { adapters: Record<string, unknown>[] };
-      expect(config.adapters[0]).not.toHaveProperty("target_modules");
-      expect(config.adapters[0]).not.toHaveProperty("targetModules");
+      expect(result!.config).not.toHaveProperty("adapters");
     });
   });
 });
