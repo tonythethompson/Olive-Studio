@@ -38,17 +38,32 @@ function isNumberOrNull(value: unknown): value is number | null {
 /**
  * Validates a single result entry from the MCP compare_results output.
  */
-function isValidResultEntry(entry: unknown): entry is CompareResultEntry {
-  if (entry === null || typeof entry !== "object") return false;
+function flattenCompareEntry(entry: unknown): CompareResultEntry | null {
+  if (entry === null || typeof entry !== "object") return null;
   const obj = entry as Record<string, unknown>;
-  return (
-    isString(obj.job_id) &&
-    isNumberOrNull(obj.latency_ms) &&
-    isNumberOrNull(obj.model_size_mb) &&
-    isNumberOrNull(obj.accuracy) &&
-    typeof obj.score === "number" &&
-    Number.isFinite(obj.score)
-  );
+  if (!isString(obj.job_id)) return null;
+  if (typeof obj.score !== "number" || !Number.isFinite(obj.score)) return null;
+
+  const metrics =
+    obj.metrics !== null && typeof obj.metrics === "object" && !Array.isArray(obj.metrics)
+      ? (obj.metrics as Record<string, unknown>)
+      : obj;
+
+  if (
+    !isNumberOrNull(metrics.latency_ms) ||
+    !isNumberOrNull(metrics.model_size_mb) ||
+    !isNumberOrNull(metrics.accuracy)
+  ) {
+    return null;
+  }
+
+  return {
+    job_id: obj.job_id,
+    latency_ms: metrics.latency_ms,
+    model_size_mb: metrics.model_size_mb,
+    accuracy: metrics.accuracy,
+    score: obj.score,
+  };
 }
 
 /**
@@ -76,9 +91,18 @@ function isValidExcludedJob(entry: unknown): entry is ExcludedJob {
 export function parseMcpCompareOutput(
   raw: Record<string, unknown>
 ): CompareResultsOutput | null {
-  // Validate `results` is an array of valid entries
-  if (!Array.isArray(raw.results)) return null;
-  if (!raw.results.every(isValidResultEntry)) return null;
+  const rows = Array.isArray(raw.comparison)
+    ? raw.comparison
+    : Array.isArray(raw.results)
+      ? raw.results
+      : null;
+  if (!rows) return null;
+  const results: CompareResultEntry[] = [];
+  for (const row of rows) {
+    const parsed = flattenCompareEntry(row);
+    if (!parsed) return null;
+    results.push(parsed);
+  }
 
   // Validate `winner` is string or null
   if (raw.winner !== null && !isString(raw.winner)) return null;
@@ -91,7 +115,7 @@ export function parseMcpCompareOutput(
   if (!raw.excluded_jobs.every(isValidExcludedJob)) return null;
 
   return {
-    results: raw.results as CompareResultEntry[],
+    results,
     winner: raw.winner as string | null,
     reasoning: raw.reasoning as string,
     excluded_jobs: raw.excluded_jobs as ExcludedJob[],
