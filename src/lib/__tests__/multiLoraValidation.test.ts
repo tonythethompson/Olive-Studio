@@ -16,8 +16,6 @@ import fc from "fast-check";
 import {
   validateAdapters,
   getMaxAdapterCount,
-  type AdapterEntry,
-  type ValidationResult,
 } from "@/lib/multiLoraValidation";
 
 // ─── Arbitraries ─────────────────────────────────────────────────────────────
