@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from packaging.requirements import Requirement
+from packaging.version import Version
 
 try:
     import tomllib
@@ -22,16 +23,51 @@ def mcp_requirement_from_deps(deps: list[str]) -> Requirement | None:
     return None
 
 
+def _get_candidate_versions(spec) -> list[Version]:
+    candidates = {
+        Version("2.0.0"),
+        Version("2.0.1"),
+        Version("2.1.0"),
+        Version("2.99.0"),
+        Version("3.0.0"),
+        Version("10.0.0"),
+    }
+    for s in spec:
+        raw_v = s.version.rstrip(".*")
+        if not raw_v:
+            continue
+        try:
+            v = Version(raw_v)
+        except Exception:
+            continue
+
+        base_versions = [v]
+        if v.major < 2:
+            base_versions.append(Version(f"2.{v.minor}.{v.micro}"))
+
+        for base_v in base_versions:
+            candidates.add(base_v)
+            if base_v.major >= 2:
+                candidates.add(Version(f"{base_v.major}.{base_v.minor}.{base_v.micro + 1}"))
+                if base_v.micro > 0:
+                    candidates.add(Version(f"{base_v.major}.{base_v.minor}.{base_v.micro - 1}"))
+                candidates.add(Version(f"{base_v.major}.{base_v.minor + 1}.0"))
+                if base_v.minor > 0:
+                    candidates.add(Version(f"{base_v.major}.{base_v.minor - 1}.0"))
+                candidates.add(Version(f"{base_v.major + 1}.0.0"))
+                if base_v.major > 2:
+                    candidates.add(Version(f"{base_v.major - 1}.0.0"))
+
+    return [c for c in candidates if c >= Version("2.0.0")]
+
+
 def allows_mcp_two_or_newer(spec) -> bool:
     """True if any released mcp 2+ version satisfies the specifier."""
     if not spec:
         return True
-    for major in range(2, 32):
-        for minor in (0, 1, 99):
-            for micro in (0, 1, 99):
-                raw = f"{major}.{minor}.{micro}"
-                if spec.contains(raw, prereleases=False):
-                    return True
+    for candidate in _get_candidate_versions(spec):
+        if spec.contains(candidate, prereleases=False):
+            return True
     return False
 
 

@@ -23,6 +23,8 @@ _SPEC.loader.exec_module(_MODULE)
         "mcp>=1.0,<2.0",
         "mcp~=1.0",
         "mcp==1.2.0",
+        "mcp<2.0.0",
+        "mcp<2.0",
     ],
 )
 def test_accepted_pins(dep: str) -> None:
@@ -45,6 +47,10 @@ def test_accepted_pins(dep: str) -> None:
         "mcp<2.0.1",
         "mcp<=2",
         "mcp<=2.0.0",
+        "mcp==2.5.5",
+        "mcp>=2.5.5,<2.6",
+        "mcp~=2.5.0",
+        "mcp!=2.0.0,!=2.0.1,!=2.1.0",
     ],
 )
 def test_rejected_pins(dep: str) -> None:
