@@ -2,10 +2,8 @@ import { Info, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface CatalogUpdateNoticeProps {
-  /** Whether the catalog is stale (upstream SHA differs from stored). */
-  isStale: boolean;
-  /** Whether a catalog refresh is currently in progress. */
-  isRefreshing: boolean;
+  /** Current catalog state. */
+  status: "upToDate" | "stale" | "refreshing";
   /** Callback to trigger a catalog refresh. */
   onRefresh: () => void;
   /** Optional current commit SHA (first 7 chars displayed). */
@@ -19,18 +17,17 @@ export interface CatalogUpdateNoticeProps {
  * upstream catalog repository. Shows an "Update" button to trigger a refresh,
  * with a loading indicator while the refresh is in progress.
  *
- * Renders nothing when the catalog is up to date (`isStale` is false).
+ * Renders nothing when the catalog is up to date.
  *
  * @see Requirements 10.3, 10.4, 10.6
  */
 export function CatalogUpdateNotice({
-  isStale,
-  isRefreshing,
+  status,
   onRefresh,
   currentSha,
   className,
 }: CatalogUpdateNoticeProps) {
-  if (!isStale) return null;
+  if (status === "upToDate") return null;
 
   return (
     <div
@@ -50,7 +47,7 @@ export function CatalogUpdateNotice({
           ({currentSha.slice(0, 7)})
         </span>
       )}
-      {isRefreshing ? (
+      {status === "refreshing" ? (
         <Loader2
           className="ml-auto h-3.5 w-3.5 animate-spin text-blue-400"
           aria-label="Refreshing catalog"
