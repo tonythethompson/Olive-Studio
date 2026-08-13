@@ -57,6 +57,7 @@ import {
   callOliveMcpTools,
   callOliveMcpTool,
   MCP_UNAVAILABLE_ERROR,
+  reconnectMcpClient,
   resetPersistentClient,
   getPersistentClientSnapshotForTests,
   setPersistentClientSnapshotForTests,
@@ -232,6 +233,32 @@ describe("persistentClient circuit-breaker integration", () => {
     const out = await callOliveMcpTools([{ toolName: "x", args: {} }]);
 
     expect(out).toEqual([{ result: "just a plain string" }]);
+  });
+
+  it("resets an open breaker after a successful reconnect", async () => {
+    tripMcpBreaker();
+    expect(mcpBreaker.status().open).toBe(true);
+
+    await reconnectMcpClient();
+
+    expect(mcpBreaker.status()).toEqual({ open: false, failures: 0, openedAt: null });
+    expect(mocks.connect).toHaveBeenCalled();
+  });
+
+  it("shares one reconnect when two settings updates overlap", async () => {
+    let release!: () => void;
+    mocks.connect.mockImplementationOnce(
+      () => new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+    );
+
+    const first = reconnectMcpClient();
+    const second = reconnectMcpClient();
+    release();
+    await Promise.all([first, second]);
+
+    expect(mocks.connect).toHaveBeenCalledTimes(1);
   });
 });
 

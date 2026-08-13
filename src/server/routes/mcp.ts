@@ -24,6 +24,7 @@ import {
 import {
   kbStatusRateLimit,
   kbSyncRateLimit,
+  mcpSettingsRateLimit,
   studioRecipeRateLimit,
   mcpToolRateLimit,
 } from "../middleware/rateLimit.ts";
@@ -375,7 +376,7 @@ export function mountMcpRoutes(router: Router): void {
   });
 
   // ─── MCP Settings (update env vars + restart server) ───────────────────
-  router.post("/mcp/settings", studioLocalOnly, kbSyncRateLimit, async (req, res) => {
+  router.post("/mcp/settings", studioLocalOnly, mcpSettingsRateLimit, async (req, res) => {
     const body = parseBody<{
       retrievalMode?: "auto" | "keyword" | "semantic";
       preloadEmbeddings?: boolean;

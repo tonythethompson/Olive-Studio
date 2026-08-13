@@ -58,6 +58,8 @@ export function SettingsMenu() {
   const handleThemeSelect = useCallback(
     (value: ThemePreference) => {
       setThemePreference(value);
+      setOpen(false);
+      triggerRef.current?.focus();
     },
     [setThemePreference],
   );

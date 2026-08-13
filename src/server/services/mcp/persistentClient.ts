@@ -12,7 +12,7 @@
  */
 import { Client, SSEClientTransport } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
-import mcpBreaker, { type McpCallAdmission } from "./breaker.ts";
+import mcpBreaker, { resetMcpBreaker, type McpCallAdmission } from "./breaker.ts";
 import { getMcpPython, buildPythonEnv, mcpServerDir } from "./paths.ts";
 
 export type McpToolCallResult = { result?: unknown; error?: string; unavailable?: boolean };
@@ -31,6 +31,8 @@ let client: Client | null = null;
 let transport: StdioClientTransport | SSEClientTransport | null = null;
 /** Pending connect() promise — prevents concurrent connection attempts. */
 let connectingPromise: Promise<void> | null = null;
+/** Pending reconnect — overlapping settings updates share one teardown/connect. */
+let reconnectPromise: Promise<void> | null = null;
 
 // ─── Internal helpers ──────────────────────────────────────────────────
 
@@ -325,6 +327,7 @@ export function resetPersistentClient(): void {
   transport = null;
   state = "idle";
   connectingPromise = null;
+  reconnectPromise = null;
 }
 
 /**
@@ -335,31 +338,40 @@ export function resetPersistentClient(): void {
  * change and need to take effect.
  */
 export async function reconnectMcpClient(): Promise<void> {
-  // Serialize with any in-flight connect() so its success/catch cannot
-  // overwrite the replacement session after we reset module state.
-  const pending = connectingPromise;
-  connectingPromise = null;
-  if (pending) {
-    try {
-      await pending;
-    } catch {
-      // Previous connect failed; continue with a fresh attempt.
+  if (reconnectPromise) return reconnectPromise;
+
+  reconnectPromise = (async () => {
+    // Serialize with any in-flight connect() so its success/catch cannot
+    // overwrite the replacement session after we reset module state.
+    const pending = connectingPromise;
+    connectingPromise = null;
+    if (pending) {
+      try {
+        await pending;
+      } catch {
+        // Previous connect failed; continue with a fresh attempt.
+      }
     }
-  }
 
-  if (client) {
-    try { await client.close(); } catch { /* best-effort */ }
-  }
-  if (transport) {
-    try { void transport.close().catch(() => undefined); } catch { /* best-effort */ }
-  }
-  client = null;
-  transport = null;
-  state = "idle";
-  connectingPromise = null;
+    if (client) {
+      try { await client.close(); } catch { /* best-effort */ }
+    }
+    if (transport) {
+      try { void transport.close().catch(() => undefined); } catch { /* best-effort */ }
+    }
+    client = null;
+    transport = null;
+    state = "idle";
+    connectingPromise = null;
 
-  // Re-establish with fresh env
-  await connect();
+    await connect();
+    // Forced reconnect succeeded — do not leave a previously tripped breaker open.
+    resetMcpBreaker();
+  })().finally(() => {
+    reconnectPromise = null;
+  });
+
+  return reconnectPromise;
 }
 
 /** Test-only snapshot of module connection refs. */
