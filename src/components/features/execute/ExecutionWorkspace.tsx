@@ -478,7 +478,6 @@ export function ExecutionWorkspace({
     executionExitCode,
     gpuMetrics,
     runRecipeJson,
-    runRecipeJsonRef,
     handleExecuteLive,
     handleCancelJob,
   } = useOliveStream({
