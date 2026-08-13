@@ -491,6 +491,79 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     setLocalInstallInfo(`Ready: ${modelId}`);
   };
 
+  const activateDownloadedPull = async (
+    modelTag: string,
+    source: LocalEngine,
+    starter: ReturnType<typeof starterForTag>,
+    pullMeta: PullMeta,
+    controller: AbortController,
+  ): Promise<void> => {
+    if (controller.signal.aborted) return;
+    markEngineReady(source);
+    const after = await refreshInstalledModels(source);
+    if (controller.signal.aborted) return;
+    const found = findInstalledStarterId(
+      {
+        tag: modelTag,
+        enableTag: starter?.enableTag ?? preferredEnableTag(modelTag, source) ?? modelTag,
+        match: starter?.match ?? starter?.enableTag ?? modelTag,
+      },
+      after,
+    );
+    const enableId =
+      found ??
+      (pullMeta.modelId && after.includes(pullMeta.modelId) ? pullMeta.modelId : undefined) ??
+      (pullMeta.verified && pullMeta.modelId ? pullMeta.modelId : undefined);
+    if (!enableId) {
+      const expected =
+        pullMeta.modelId ||
+        preferredEnableTag(modelTag, source) ||
+        resolveLocalEnableModelId(modelTag, preferredEnableTag(modelTag, source), after);
+      throw new Error(
+        joinErrorParts(
+          `Download finished but the model did not appear in ${source === "ollama" ? "Ollama" : "LM Studio"}`,
+          `Expected something like "${expected}". Click Refresh under Installed models, then Enable.`,
+        ),
+      );
+    }
+    setLocalInstallInfo(`Enabling ${enableId}…`);
+    if (!isCurrentPullController(controller, pullAbortRef.current)) return;
+    await onModelActivated(enableId, source, controller.signal);
+    if (!isCurrentPullController(controller, pullAbortRef.current)) return;
+    setLocalInstallInfo(`Ready: ${enableId}`);
+  };
+
+  const executePullLocalModel = async (
+    modelTag: string,
+    source: LocalEngine,
+    controller: AbortController,
+  ): Promise<void> => {
+    const starter = starterForTag(modelTag, source);
+    const installed = await refreshInstalledModels(source);
+    if (controller.signal.aborted) return;
+    const existing = findInstalledStarterId(
+      {
+        tag: modelTag,
+        enableTag: starter?.enableTag ?? preferredEnableTag(modelTag, source) ?? modelTag,
+        match: starter?.match ?? starter?.enableTag ?? modelTag,
+      },
+      installed,
+    );
+    if (existing) {
+      await activateExistingPull(existing, source, controller);
+      return;
+    }
+
+    setLocalPullPercent(0);
+    setLocalInstallInfo(
+      source === "ollama"
+        ? "Starting: ensure Ollama → serve → download…"
+        : "Starting: ensure LM Studio → serve → download…",
+    );
+    const pullMeta = await runModelPull(modelTag, source, controller);
+    await activateDownloadedPull(modelTag, source, starter, pullMeta, controller);
+  };
+
   const pullLocalModel = async (modelTag: string, source: LocalEngine = "lms") => {
     if (!(await waitForPullSlot())) return;
 
@@ -508,63 +581,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     pullUserCancelledRef.current = false;
 
     try {
-      const starter = starterForTag(modelTag, source);
-      const installed = await refreshInstalledModels(source);
-      if (controller.signal.aborted) return;
-      const existing = findInstalledStarterId(
-        {
-          tag: modelTag,
-          enableTag: starter?.enableTag ?? preferredEnableTag(modelTag, source) ?? modelTag,
-          match: starter?.match ?? starter?.enableTag ?? modelTag,
-        },
-        installed,
-      );
-      if (existing) {
-        await activateExistingPull(existing, source, controller);
-        return;
-      }
-
-      setLocalPullPercent(0);
-      setLocalInstallInfo(
-        source === "ollama"
-          ? "Starting: ensure Ollama → serve → download…"
-          : "Starting: ensure LM Studio → serve → download…",
-      );
-
-      const pullMeta = await runModelPull(modelTag, source, controller);
-      if (controller.signal.aborted) return;
-      markEngineReady(source);
-      const after = await refreshInstalledModels(source);
-      if (controller.signal.aborted) return;
-      const found = findInstalledStarterId(
-        {
-          tag: modelTag,
-          enableTag: starter?.enableTag ?? preferredEnableTag(modelTag, source) ?? modelTag,
-          match: starter?.match ?? starter?.enableTag ?? modelTag,
-        },
-        after,
-      );
-      const enableId =
-        found ??
-        (pullMeta.modelId && after.includes(pullMeta.modelId) ? pullMeta.modelId : undefined) ??
-        (pullMeta.verified && pullMeta.modelId ? pullMeta.modelId : undefined);
-      if (!enableId) {
-        const expected =
-          pullMeta.modelId ||
-          preferredEnableTag(modelTag, source) ||
-          resolveLocalEnableModelId(modelTag, preferredEnableTag(modelTag, source), after);
-        throw new Error(
-          joinErrorParts(
-            `Download finished but the model did not appear in ${source === "ollama" ? "Ollama" : "LM Studio"}`,
-            `Expected something like "${expected}". Click Refresh under Installed models, then Enable.`,
-          ),
-        );
-      }
-      setLocalInstallInfo(`Enabling ${enableId}…`);
-      if (controller.signal.aborted || pullAbortRef.current !== controller) return;
-      await onModelActivated(enableId, source, controller.signal);
-      if (controller.signal.aborted || pullAbortRef.current !== controller) return;
-      setLocalInstallInfo(`Ready: ${enableId}`);
+      await executePullLocalModel(modelTag, source, controller);
     } catch (err: unknown) {
       // A cancelled pull already reset all this state synchronously and may have
       // let the user start a new pull — don't let this stale rejection stomp it.
