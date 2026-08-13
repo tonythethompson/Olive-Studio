@@ -57,15 +57,16 @@ describe("AssistantSidebar", () => {
       renderWithProviders(<AssistantSidebar {...defaultProps} />);
     });
     // Sidebar should be visible with tab content
-    expect(screen.getAllByText(/assistant/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("tab", { name: /^Assistant$/ })).toBeTruthy();
+    expect(screen.getByTestId("pipeline-review")).toBeTruthy();
   });
 
   it("renders tab navigation (assistant, settings)", async () => {
     await act(async () => {
       renderWithProviders(<AssistantSidebar {...defaultProps} />);
     });
-    expect(screen.getAllByText(/assistant/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/settings/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("tab", { name: /^Assistant$/, selected: true })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /^Settings$/ })).toBeTruthy();
   });
 
   it("calls onClose when close button is clicked", async () => {
@@ -83,7 +84,8 @@ describe("AssistantSidebar", () => {
     await act(async () => {
       renderWithProviders(<AssistantSidebar {...defaultProps} state={state} setState={mockSetState} />);
     });
-    expect(screen.getAllByText(/assistant/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("tab", { name: /^Assistant$/ })).toBeTruthy();
+    expect(screen.getByTestId("pipeline-review")).toBeTruthy();
   });
 
   it("sets aria-hidden when isOpen is false", async () => {

@@ -60,7 +60,7 @@ describe("AssistantSidebar flows", () => {
 
     // Header reflects the active provider and the assistant auto-runs analysis
     await waitFor(() => expect(screen.getByText(/Google Gemini \/ gemini-2.5-flash/)).toBeTruthy());
-    // PipelineReview is mocked — analysis results are rendered by PipelineReview component (tested separately)
+    expect(screen.getByTestId("pipeline-review")).toBeTruthy();
 
     // Chat tab: preset query round-trips through /api/ai/chat
     // In unified assistant tab, chat is always visible below PipelineReview
