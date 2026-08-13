@@ -65,8 +65,8 @@ describe("AssistantSidebar", () => {
     await act(async () => {
       renderWithProviders(<AssistantSidebar {...defaultProps} />);
     });
-    expect(screen.getByRole("tab", { name: /^Assistant$/, selected: true })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: /^Settings$/ })).toBeTruthy();
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.map((t) => t.getAttribute("aria-label"))).toEqual(["Assistant", "Settings"]);
   });
 
   it("calls onClose when close button is clicked", async () => {

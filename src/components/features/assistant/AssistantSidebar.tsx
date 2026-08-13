@@ -237,6 +237,7 @@ export function AssistantSidebar({
                   type="button"
                   role="tab"
                   id={`assistant-tab-${id}`}
+                  aria-label={label}
                   aria-selected={activeTab === id}
                   aria-controls={`assistant-panel-${id}`}
                   key={id}
@@ -244,6 +245,7 @@ export function AssistantSidebar({
                   className={`py-1.5 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer border ${activeTab === id ? "bg-slate-900 text-electric-blue shadow-sm border-slate-800/40" : "text-slate-400 hover:text-slate-200 border-transparent"}`}
                 >
                   <Icon
+                    aria-hidden="true"
                     className={`h-3.5 w-3.5 ${activeTab === id ? "text-electric-blue" : "text-slate-500"}`}
                   />
                   {label}
