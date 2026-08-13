@@ -18,6 +18,10 @@ import type {
 import { usePipelineStore } from "@/lib/stores/pipelineStore";
 import { commitUiStateUpdate } from "@/lib/pipelineValidation";
 import { sanitizeChatActionPatch, chatPatchToUiState } from "@/lib/chatActions";
+import {
+  isPipelineViewId,
+  navigatePipeline,
+} from "@/lib/pipelineNavigation";
 
 // ─── Result Types ────────────────────────────────────────────────────────────
 
@@ -42,6 +46,15 @@ export function executeNavigateAction(
 ): ActionExecutionResult {
   // In a real UI, this would call scrollIntoView or focus. Pure logic only.
   const { targetPanel } = action.payload;
+  if (typeof window !== "undefined") {
+    if (isPipelineViewId(targetPanel)) {
+      navigatePipeline(targetPanel);
+    } else {
+      window.dispatchEvent(
+        new CustomEvent("olive-studio:navigate-panel", { detail: { targetPanel } }),
+      );
+    }
+  }
   return {
     success: true,
     summary: `Navigated to panel: ${targetPanel}`,
@@ -58,6 +71,9 @@ export function executeExplainAction(
 ): ActionExecutionResult {
   // In a real UI, this would append to a chat messages list (separate from PipelineStore).
   const { body } = action.payload;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("olive-studio:explain", { detail: { body } }));
+  }
   return {
     success: true,
     summary: `Explanation injected (${body.length} chars)`,
@@ -74,6 +90,13 @@ export function executeDocumentationAction(
 ): ActionExecutionResult {
   const { url, topicKey } = action.payload;
   const target = url ?? topicKey ?? "unknown";
+  if (typeof window !== "undefined" && typeof url === "string" && url.length > 0) {
+    window.open(url, "_blank", "noopener,noreferrer");
+  } else if (typeof window !== "undefined" && topicKey) {
+    window.dispatchEvent(
+      new CustomEvent("olive-studio:documentation", { detail: { topicKey } }),
+    );
+  }
   return {
     success: true,
     summary: `Documentation opened: ${target}`,
@@ -106,7 +129,7 @@ export function executeApplyPatchAction(
     success: true,
     summary: "Patch applied to pipeline store",
     modifiedStore: true,
-    committedState: committed,
+    committedState: usePipelineStore.getState().state,
   };
 }
 

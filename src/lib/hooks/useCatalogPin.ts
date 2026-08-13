@@ -39,6 +39,9 @@ const DEBOUNCE_RESOLVE_MS = 2_000;
  */
 const STALE_CHECK_THRESHOLD_MS = 60_000;
 
+/** Shared across hook instances so remounts still honor the debounce window. */
+let lastResolveTimeMs = 0;
+
 // ─── localStorage Helpers ────────────────────────────────────────────────────
 
 /**
@@ -124,7 +127,6 @@ export function useCatalogPin(options: UseCatalogPinOptions = {}): UseCatalogPin
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
   // Track the last resolve time to avoid hammering the API
-  const lastResolveTimeRef = useRef<number>(0);
   // Track whether a resolve is already in-flight to prevent duplicate calls
   const resolvingRef = useRef(false);
   // Track whether a refresh is in-flight to prevent duplicate refresh calls
@@ -153,20 +155,21 @@ export function useCatalogPin(options: UseCatalogPinOptions = {}): UseCatalogPin
       if (elapsed < STALE_CHECK_THRESHOLD_MS) {
         // Last fetch was recent enough, skip the upstream check
         setMetadata(stored);
+        setUpstreamSha(stored.commitSha);
         return;
       }
     }
 
     // Debounce the resolution to prevent rapid API calls on remounts
     const now = Date.now();
-    const timeSinceLastResolve = now - lastResolveTimeRef.current;
+    const timeSinceLastResolve = now - lastResolveTimeMs;
     const delay = Math.max(0, DEBOUNCE_RESOLVE_MS - timeSinceLastResolve);
 
     debounceTimerRef.current = setTimeout(() => {
       // Guard against duplicate in-flight resolves
       if (resolvingRef.current) return;
       resolvingRef.current = true;
-      lastResolveTimeRef.current = Date.now();
+      lastResolveTimeMs = Date.now();
 
       void resolveHeadSha()
         .then((sha) => {
