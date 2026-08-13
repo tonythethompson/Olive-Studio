@@ -195,6 +195,15 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
   const resolvePullCompletionRef = useRef<(() => void) | null>(null);
   const pullUserCancelledRef = useRef(false);
 
+  /**
+   * Returns true when this controller is no longer the active pull — either
+   * because the user cancelled it (abort) or a newer pull superseded it.
+   * All async continuations must bail when stale to avoid overwriting
+   * the newer pull's UI state.
+   */
+  const isStale = (controller: AbortController): boolean =>
+    !isCurrentPullController(controller, pullAbortRef.current);
+
   const selectPreferredEngine = (engine: LocalEngine) => {
     setPreferredEngine(engine);
     setLocalPullError("");
@@ -363,7 +372,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     onDownloadPhase?: () => void,
     controller?: AbortController,
   ) => {
-    if (controller && !isCurrentPullController(controller, pullAbortRef.current)) return;
+    if (controller && isStale(controller)) return;
     // Server only starts its 20m lms get / ollama timer after ensure*; arm ours then too.
     if (isPullDownloadPhaseEvent(evt)) onDownloadPhase?.();
     if (typeof evt.percent === "number" && Number.isFinite(evt.percent)) {
@@ -406,13 +415,16 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
       }
     });
 
+    // Bail early if this controller became stale while the stream was being consumed.
+    if (isStale(controller)) return {};
+
     // Legacy JSON body (non-stream) if server ever falls back.
     applyLegacyPullBody(buf, r, state, onDownloadPhase);
     if (!state.gotDone && !r.ok) {
       throw new Error(`Pull failed (HTTP ${r.status})`);
     }
 
-    if (controller.signal.aborted || pullAbortRef.current !== controller) return {};
+    if (isStale(controller)) return {};
     setLocalInstallInfo(state.finalMessage || "Model ready.");
     return { modelId: state.modelId, verified: state.verified };
   };
@@ -438,7 +450,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     };
 
     try {
-      if (controller.signal.aborted) return {};
+      if (isStale(controller)) return {};
       const r = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -448,7 +460,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
         body: JSON.stringify({ modelTag }),
         signal: controller.signal,
       });
-      if (controller.signal.aborted) return {};
+      if (isStale(controller)) return {};
       return await consumePullStream(r, controller, armDownloadTimeout);
     } finally {
       clearTimeout(ensureTimer);
@@ -483,11 +495,13 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     source: LocalEngine,
     controller: AbortController,
   ): Promise<void> => {
-    if (!isCurrentPullController(controller, pullAbortRef.current)) return;
+    // Skip activation — a newer pull has started or this one was cancelled.
+    if (isStale(controller)) return;
     setLocalPullPercent(100);
     setLocalInstallInfo(`Already installed — enabling ${modelId}…`);
     await onModelActivated(modelId, source, controller.signal);
-    if (!isCurrentPullController(controller, pullAbortRef.current)) return;
+    // A newer pull may have started while activation was in flight — don't overwrite its state.
+    if (isStale(controller)) return;
     setLocalInstallInfo(`Ready: ${modelId}`);
   };
 
@@ -498,10 +512,10 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     pullMeta: PullMeta,
     controller: AbortController,
   ): Promise<void> => {
-    if (controller.signal.aborted) return;
+    if (isStale(controller)) return;
     markEngineReady(source);
     const after = await refreshInstalledModels(source);
-    if (controller.signal.aborted) return;
+    if (isStale(controller)) return;
     const found = findInstalledStarterId(
       {
         tag: modelTag,
@@ -527,9 +541,11 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
       );
     }
     setLocalInstallInfo(`Enabling ${enableId}…`);
-    if (!isCurrentPullController(controller, pullAbortRef.current)) return;
+    // Skip activation — a newer pull superseded this one or it was cancelled.
+    if (isStale(controller)) return;
     await onModelActivated(enableId, source, controller.signal);
-    if (!isCurrentPullController(controller, pullAbortRef.current)) return;
+    // A newer pull may have started while activation was in flight — don't overwrite its state.
+    if (isStale(controller)) return;
     setLocalInstallInfo(`Ready: ${enableId}`);
   };
 
@@ -540,7 +556,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
   ): Promise<void> => {
     const starter = starterForTag(modelTag, source);
     const installed = await refreshInstalledModels(source);
-    if (controller.signal.aborted) return;
+    if (isStale(controller)) return;
     const existing = findInstalledStarterId(
       {
         tag: modelTag,
@@ -585,7 +601,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     } catch (err: unknown) {
       // A cancelled pull already reset all this state synchronously and may have
       // let the user start a new pull — don't let this stale rejection stomp it.
-      if (pullAbortRef.current !== controller) return;
+      if (isStale(controller)) return;
       setLocalPullError(
         describePullFetchError(err, { userCancelled: pullUserCancelledRef.current }),
       );
