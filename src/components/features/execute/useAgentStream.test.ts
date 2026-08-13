@@ -175,6 +175,24 @@ describe("useAgentStream", () => {
       expect(onEntry).not.toHaveBeenCalled();
     });
 
+    it("adapts server log {line} payloads into activity entries", () => {
+      const onEntry = vi.fn();
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
+
+      const es = mockEventSources[0];
+      act(() => {
+        es.onmessage?.(
+          new MessageEvent("message", {
+            data: JSON.stringify({ line: "[INFO] Olive pass started" }),
+          }),
+        );
+      });
+
+      expect(onEntry).toHaveBeenCalledTimes(1);
+      expect(onEntry.mock.calls[0][0].text).toBe("[INFO] Olive pass started");
+      expect(onEntry.mock.calls[0][0].kind).toBe("tool_result");
+    });
+
     it("ignores events with invalid kind field", () => {
       const onEntry = vi.fn();
       renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));

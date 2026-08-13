@@ -82,6 +82,7 @@ export function useAgentMode(): UseAgentModeReturn {
   const stepCountRef = useRef(0);
   // Ref for startedAt to avoid stale closure in stopAgent during React batching.
   const startedAtRef = useRef<string | undefined>(undefined);
+  const jobIdRef = useRef<string | undefined>(undefined);
 
   // ─── Internal helpers ───────────────────────────────────────────────────────
 
@@ -116,6 +117,7 @@ export function useAgentMode(): UseAgentModeReturn {
     setEntries([]);
     setOutcome(undefined);
     setJobId(undefined);
+    jobIdRef.current = undefined;
     stepCountRef.current = 0;
 
     // Mark as running
@@ -164,6 +166,7 @@ export function useAgentMode(): UseAgentModeReturn {
         throw new Error(data.error || `HTTP ${resp.status}`);
       }
       setJobId(data.jobId);
+      jobIdRef.current = data.jobId;
     } catch (err) {
       clearStartTimeout();
       const message = err instanceof Error ? err.message : "Failed to submit agent job";
@@ -193,6 +196,17 @@ export function useAgentMode(): UseAgentModeReturn {
   const stopAgent = useCallback(() => {
     clearStartTimeout();
 
+    const activeJobId = jobIdRef.current;
+    if (activeJobId) {
+      void fetch("/api/olive/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: activeJobId }),
+      }).catch(() => {
+        /* local UI still stops even if cancel request fails */
+      });
+    }
+
     const cancelOutcome: AgentOutcome = {
       status: "cancelled",
       totalSteps: stepCountRef.current,
@@ -202,7 +216,7 @@ export function useAgentMode(): UseAgentModeReturn {
       cancelledAtStep: stepCountRef.current,
     };
 
-    const terminalEntry = createTerminalEntry(cancelOutcome);
+    const terminalEntry = truncateEntry(createTerminalEntry(cancelOutcome));
     setEntries((prev) => appendEntryFIFO(prev, terminalEntry));
     setAgentRunning(false);
     setOutcome(cancelOutcome);
@@ -216,7 +230,7 @@ export function useAgentMode(): UseAgentModeReturn {
     (completionOutcome: AgentOutcome) => {
       clearStartTimeout();
 
-      const terminalEntry = createTerminalEntry(completionOutcome);
+      const terminalEntry = truncateEntry(createTerminalEntry(completionOutcome));
       setEntries((prev) => appendEntryFIFO(prev, terminalEntry));
       setAgentRunning(false);
       setOutcome(completionOutcome);

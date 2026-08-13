@@ -91,6 +91,24 @@ function isValidAgentStreamEvent(data: unknown): data is AgentStreamEvent {
 /**
  * Convert a validated stream event into an ActivityLogEntry.
  */
+function parseStreamPayload(data: unknown): ActivityLogEntry | null {
+  if (isValidAgentStreamEvent(data)) {
+    return toActivityLogEntry(data);
+  }
+  if (typeof data !== "object" || data === null) return null;
+  const obj = data as Record<string, unknown>;
+  if (typeof obj.line === "string") {
+    return toActivityLogEntry({ kind: "tool_result", text: obj.line });
+  }
+  if ("util" in obj || "vramUsedMb" in obj || "gpu" in obj || "timestamp" in obj) {
+    return toActivityLogEntry({
+      kind: "tool_result",
+      text: `metrics: ${JSON.stringify(obj)}`,
+    });
+  }
+  return null;
+}
+
 function toActivityLogEntry(event: AgentStreamEvent): ActivityLogEntry {
   const entry: ActivityLogEntry = {
     id: generateEntryId(),
@@ -196,8 +214,10 @@ export function useAgentStream({
 
         try {
           const data: unknown = JSON.parse(String(event.data));
-          if (isValidAgentStreamEvent(data)) {
-            const entry = toActivityLogEntry(data);
+          const entry = parseStreamPayload(data);
+          if (entry) {
+            // A parsed payload means the stream is actually delivering data.
+            retryCountRef.current = 0;
             onEntryRef.current(entry);
           }
         } catch {
@@ -224,11 +244,8 @@ export function useAgentStream({
         onCompleteRef.current?.(status);
       });
 
-      // Handle successful connection (reset retry count)
-      evtSource.onopen = () => {
-        if (!isMountedRef.current) return;
-        retryCountRef.current = 0;
-      };
+      // Do not reset retryCount on open — brief connects that immediately drop
+      // would otherwise reconnect forever. Reset only after a parsed payload.
 
       // Handle connection errors with exponential backoff
       evtSource.onerror = () => {

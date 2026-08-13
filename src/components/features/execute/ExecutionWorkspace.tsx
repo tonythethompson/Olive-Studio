@@ -34,6 +34,8 @@ import { ModeToggle } from "./ModeToggle";
 import { AgentControls } from "./AgentControls";
 import { ActivityLog } from "./ActivityLog";
 import { AgentConfirmDialog } from "./AgentConfirmDialog";
+import { ExportReportMenu } from "./ExportReportMenu";
+import type { JobHistoryRecord } from "@/lib/jobHistoryStore";
 import {
   Code,
   Play,
@@ -695,6 +697,15 @@ export function ExecutionWorkspace({
 
   // Confirmation dialog state for switching away from agent while running
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [exportRecords, setExportRecords] = useState<JobHistoryRecord[]>([]);
+
+  useEffect(() => {
+    void getJobHistory()
+      .then(setExportRecords)
+      .catch(() => {
+        setExportRecords([]);
+      });
+  }, [isHistoryOpen, agentOutcome]);
 
   // SSE stream for agent activity
   const handleAgentStreamEntry = useCallback(
@@ -711,11 +722,11 @@ export function ExecutionWorkspace({
       completeAgent({
         status: "failure",
         totalSteps: agentEntries.length,
-        elapsedMs: 0,
+        elapsedMs: agentStartedAt ? Date.now() - new Date(agentStartedAt).getTime() : 0,
         errorDescription: errorMsg,
       });
     },
-    [completeAgent, agentEntries.length],
+    [completeAgent, agentEntries.length, agentStartedAt],
   );
 
   const handleAgentStreamComplete = useCallback((streamStatus: "completed" | "failed" | "cancelled") => {
@@ -758,10 +769,10 @@ export function ExecutionWorkspace({
 
   /** User confirmed stopping the agent and switching to manual. */
   const handleConfirmStopAndSwitch = useCallback(() => {
-    stopAgent();
+    if (agentRunning) stopAgent();
     setAgentMode("manual");
     setConfirmDialogOpen(false);
-  }, [stopAgent, setAgentMode]);
+  }, [agentRunning, stopAgent, setAgentMode]);
 
   /** User cancelled the confirmation dialog — stay in agent mode. */
   const handleCancelDialog = useCallback(() => {
@@ -780,6 +791,7 @@ export function ExecutionWorkspace({
           onModeChange={handleModeChange}
           disabled={isRunning}
         />
+        <ExportReportMenu records={exportRecords} />
       </div>
 
       {/* Agent Confirm Dialog — shown when switching away while agent is running */}
