@@ -79,6 +79,7 @@ export function AssistantSidebar({
   const chat = useAiChat(workspaceContext);
   // Ref to trigger post-patch refresh in PipelineReview from chat actions.
   const postPatchRefreshRef = useRef<(() => void) | null>(null);
+  const reviewRefreshRef = useRef<(() => void) | null>(null);
   const chatLogForReport = useMemo(
     () =>
       chat.chatMessages.map((m) => {
@@ -118,6 +119,7 @@ export function AssistantSidebar({
     activeTab,
     onProviderActivated: () => {
       setActiveTab("assistant");
+      reviewRefreshRef.current?.();
     },
     onProviderMissing: () => setActiveTab("settings"),
     onProviderCleared: () => setActiveTab("settings"),
@@ -134,9 +136,16 @@ export function AssistantSidebar({
   const providerSource = providers.providerStatus.source;
 
   useEffect(() => {
+    if (isOpen && providerSource !== "none") {
+      reviewRefreshRef.current?.();
+    }
+  }, [isOpen, providerSource]);
+
+  useEffect(() => {
     if (!openToAudit) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: respond to prop change
     setActiveTab("assistant");
+    reviewRefreshRef.current?.();
     onAuditOpened?.();
   }, [openToAudit]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -248,14 +257,17 @@ export function AssistantSidebar({
               aria-labelledby="assistant-tab-assistant"
               className={cn(
                 "absolute inset-0 flex flex-col overflow-y-auto",
-                activeTab === "assistant" ? "visible" : "invisible",
+                activeTab === "assistant" ? "flex" : "hidden",
               )}
+              aria-hidden={activeTab !== "assistant"}
             >
               {/* PipelineReview at the top (Req 1.2) */}
               <PipelineReview
+                state={state}
                 onExplain={(body) => void chat.sendChat(body)}
                 className="m-4 mb-0 shrink-0"
                 postPatchRefreshRef={postPatchRefreshRef}
+                reviewRefreshRef={reviewRefreshRef}
               />
 
               {/* Chat conversation below (Req 1.5) */}

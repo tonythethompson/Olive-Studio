@@ -25,6 +25,7 @@ import { computeFingerprint } from "@/lib/workspaceFingerprint";
 import { resolveAuditAutofix } from "@/lib/auditAutofix";
 import type { Finding } from "@/lib/types/findingTypes";
 import type { ChatActionPatch } from "@/lib/chatActions";
+import type { UIState } from "@/types";
 
 // ─── Return Type ─────────────────────────────────────────────────────────────
 
@@ -77,10 +78,11 @@ const POST_PATCH_DEBOUNCE_MS = 400;
  *   review result was committed (the result's fingerprint no longer matches).
  * - On discard (stale arrival), the previous findings remain marked stale.
  */
-export function usePipelineReview(): UsePipelineReviewReturn {
+export function usePipelineReview(controlledState?: UIState): UsePipelineReviewReturn {
   // ── External state ────────────────────────────────────────────────────────
   const { fingerprint: currentFingerprint } = useWorkspaceFingerprint();
-  const pipelineState = usePipelineStore((s) => s.state);
+  const storeState = usePipelineStore((s) => s.state);
+  const pipelineState = controlledState ?? storeState;
 
   // ── Local state ───────────────────────────────────────────────────────────
   const [findings, setFindings] = useState<Finding[]>([]);
@@ -174,14 +176,20 @@ export function usePipelineReview(): UsePipelineReviewReturn {
         if (thisReviewId !== reviewIdRef.current) return;
 
         // Hash the live pipeline state after the response arrives.
-        const liveHash = await computeFingerprint(usePipelineStore.getState().state);
+        const liveState = stateRef.current;
+        const liveHash = await computeFingerprint(liveState);
 
         // If a newer review was initiated during live hashing, abandon.
         if (thisReviewId !== reviewIdRef.current) return;
 
+        // Re-read after hashing so we don't commit findings for a superseded state.
+        const confirmState = stateRef.current;
+        const confirmHash = await computeFingerprint(confirmState);
+        if (thisReviewId !== reviewIdRef.current) return;
+
         // Discard if the snapshot hash differs from the live state hash
         // (the workspace has moved on since the review was requested).
-        if (snapshotHash !== liveHash) return;
+        if (snapshotHash !== liveHash || liveHash !== confirmHash) return;
 
         // Extract AI suggestions from the response (legacy format compatibility).
         const rawResult = data as {

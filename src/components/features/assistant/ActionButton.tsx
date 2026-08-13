@@ -168,7 +168,13 @@ export function ActionButton({
 
   const handleDocumentation = useCallback(() => {
     if (action.kind !== "documentation") return;
-    const { url } = action.payload;
+    const { url, topicKey } = action.payload;
+    if (topicKey && !url) {
+      window.dispatchEvent(
+        new CustomEvent("olive-studio:documentation", { detail: { topicKey } }),
+      );
+      return;
+    }
     if (url) {
       // Only allow http: and https: URLs to prevent javascript:/data: injection.
       try {

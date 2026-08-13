@@ -42,6 +42,10 @@ export interface PipelineReviewProps {
    * action patch to schedule a debounced review refresh.
    */
   postPatchRefreshRef?: React.MutableRefObject<(() => void) | null>;
+  /** Optional controlled pipeline state (same object the chat applies patches to). */
+  state?: import("@/types").UIState;
+  /** Optional ref populated with `refresh` so the parent can trigger a review. */
+  reviewRefreshRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 // ─── Score Level Colors ──────────────────────────────────────────────────────
@@ -53,6 +57,7 @@ function getScoreBadgeClasses(level: string): string {
     case "Suboptimal":
       return "bg-amber-500/20 text-amber-300 border-amber-500/40";
     case "Inefficient":
+    case "Critical":
       return "bg-rose-500/20 text-rose-300 border-rose-500/40";
     default:
       return "bg-slate-700/40 text-slate-300 border-slate-600/40";
@@ -66,6 +71,7 @@ function getScoreTextColor(level: string): string {
     case "Suboptimal":
       return "text-amber-400";
     case "Inefficient":
+    case "Critical":
       return "text-rose-400";
     default:
       return "text-slate-400";
@@ -86,7 +92,7 @@ function getScoreTextColor(level: string): string {
  * - 1.7: Zero-state with "No review yet" message and Refresh button.
  * - 1.8: Toggle via click or Enter/Space on focused header.
  */
-export function PipelineReview({ onExplain, className, postPatchRefreshRef }: PipelineReviewProps) {
+export function PipelineReview({ onExplain, className, postPatchRefreshRef, state, reviewRefreshRef }: PipelineReviewProps) {
   // Expanded by default on first session open (Req 1.6).
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -101,10 +107,10 @@ export function PipelineReview({ onExplain, className, postPatchRefreshRef }: Pi
     refresh,
     schedulePostPatchRefresh,
     completedAt,
-  } = usePipelineReview();
+  } = usePipelineReview(state);
 
   // Determine if we have any review data (Req 1.7 zero-state detection).
-  const hasReviewData = level !== "" || findings.length > 0 || score > 0;
+  const hasReviewData = completedAt > 0;
 
   // Unresolved finding count (for collapsed badge).
   const unresolvedCount = useMemo(
@@ -128,12 +134,18 @@ export function PipelineReview({ onExplain, className, postPatchRefreshRef }: Pi
     if (postPatchRefreshRef) {
       postPatchRefreshRef.current = schedulePostPatchRefresh;
     }
+    if (reviewRefreshRef) {
+      reviewRefreshRef.current = refresh;
+    }
     return () => {
       if (postPatchRefreshRef) {
         postPatchRefreshRef.current = null;
       }
+      if (reviewRefreshRef) {
+        reviewRefreshRef.current = null;
+      }
     };
-  }, [postPatchRefreshRef, schedulePostPatchRefresh]);
+  }, [postPatchRefreshRef, reviewRefreshRef, schedulePostPatchRefresh, refresh]);
 
   // ── Toggle handlers ─────────────────────────────────────────────────────
 
