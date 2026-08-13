@@ -157,32 +157,33 @@ export function mountLmStudioRoutes(router: Router): void {
         resolveTeardown = null;
       }
     };
+    const waitForPullSlot = async (): Promise<boolean> => {
+      if (!localEngineRuntime.lmsPullBusyTag) return true;
+      const cancelledPull =
+        localEngineRuntime.lmsPullBusyTag === tag ? localEngineRuntime.lmsPullTeardown : null;
+      if (cancelledPull) {
+        await cancelledPull;
+        if (guard.disconnected()) {
+          guard.endOnce();
+          return false;
+        }
+      }
+      if (!localEngineRuntime.lmsPullBusyTag) return true;
+      send({
+        type: "error",
+        error: "Another LM Studio download is already in progress.",
+        hint: `Wait for "${localEngineRuntime.lmsPullBusyTag}" to finish, or cancel that download, then retry.`,
+      });
+      guard.endOnce();
+      return false;
+    };
     try {
       if (!isValidLocalModelTag(tag)) {
         send({ type: "error", error: "Invalid modelTag." });
         guard.endOnce();
         return;
       }
-      if (localEngineRuntime.lmsPullBusyTag) {
-        const cancelledPull =
-          localEngineRuntime.lmsPullBusyTag === tag ? localEngineRuntime.lmsPullTeardown : null;
-        if (cancelledPull) {
-          await cancelledPull;
-          if (guard.disconnected()) {
-            guard.endOnce();
-            return;
-          }
-        }
-        if (localEngineRuntime.lmsPullBusyTag) {
-          send({
-            type: "error",
-            error: "Another LM Studio download is already in progress.",
-            hint: `Wait for "${localEngineRuntime.lmsPullBusyTag}" to finish, or cancel that download, then retry.`,
-          });
-          guard.endOnce();
-          return;
-        }
-      }
+      if (!(await waitForPullSlot())) return;
       const disk = gateLocalPullDiskSpace("lms", tag);
       if (!disk.ok) {
         send({ type: "error", error: disk.error, hint: disk.hint });

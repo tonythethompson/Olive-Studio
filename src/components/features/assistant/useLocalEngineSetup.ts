@@ -43,6 +43,32 @@ type PullState = {
 
 type PullMeta = Pick<PullState, "modelId" | "verified">;
 
+function isPullDownloadPhaseEvent(evt: PullStreamEvent): boolean {
+  return (
+    evt.type === "progress" ||
+    evt.type === "log" ||
+    (evt.type === "step" && /download|pulling/i.test(evt.message ?? ""))
+  );
+}
+
+function isPullLogEvent(evt: PullStreamEvent): boolean {
+  return evt.type === "log" || evt.type === "step" || evt.type === "progress";
+}
+
+function isCurrentPullController(
+  controller: AbortController,
+  activeController: AbortController | null,
+): boolean {
+  return !controller.signal.aborted && activeController === controller;
+}
+
+function applyPullCompletion(evt: PullStreamEvent, state: PullState): void {
+  state.gotDone = true;
+  state.finalMessage = evt.message || "Model ready.";
+  if (typeof evt.modelId === "string" && evt.modelId.trim()) state.modelId = evt.modelId.trim();
+  if (typeof evt.verified === "boolean") state.verified = evt.verified;
+}
+
 function applyLegacyPullBody(
   body: string,
   response: Response,
@@ -337,32 +363,21 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     onDownloadPhase?: () => void,
     controller?: AbortController,
   ) => {
-    if (controller && (controller.signal.aborted || pullAbortRef.current !== controller)) return;
+    if (controller && !isCurrentPullController(controller, pullAbortRef.current)) return;
     // Server only starts its 20m lms get / ollama timer after ensure*; arm ours then too.
-    if (
-      evt.type === "progress" ||
-      evt.type === "log" ||
-      (evt.type === "step" && /download|pulling/i.test(evt.message ?? ""))
-    ) {
-      onDownloadPhase?.();
-    }
+    if (isPullDownloadPhaseEvent(evt)) onDownloadPhase?.();
     if (typeof evt.percent === "number" && Number.isFinite(evt.percent)) {
       setLocalPullPercent(clampPercent(evt.percent));
     }
     if (evt.message) {
       setLocalInstallInfo(evt.message);
-      if (evt.type === "log" || evt.type === "step" || evt.type === "progress") {
-        appendPullLog(evt.message);
-      }
+      if (isPullLogEvent(evt)) appendPullLog(evt.message);
     }
     if (evt.type === "error") {
       throw new Error(joinErrorParts(evt.error || "Pull failed", evt.hint));
     }
     if (evt.type === "done") {
-      state.gotDone = true;
-      state.finalMessage = evt.message || "Model ready.";
-      if (typeof evt.modelId === "string" && evt.modelId.trim()) state.modelId = evt.modelId.trim();
-      if (typeof evt.verified === "boolean") state.verified = evt.verified;
+      applyPullCompletion(evt, state);
       setLocalPullPercent(100);
     }
   };
@@ -453,15 +468,31 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     setLocalPullError("Download cancelled.");
   };
 
-  const pullLocalModel = async (modelTag: string, source: LocalEngine = "lms") => {
-    if (pullAbortRef.current) {
-      if (pullUserCancelledRef.current && pullCompletionRef.current) {
-        await pullCompletionRef.current;
-        if (!pullAbortRef.current) return pullLocalModel(modelTag, source);
-      }
-      setLocalPullError("A download is already in progress. Cancel it first, or wait for it to finish.");
-      return;
+  const waitForPullSlot = async (): Promise<boolean> => {
+    if (!pullAbortRef.current) return true;
+    if (pullUserCancelledRef.current && pullCompletionRef.current) {
+      await pullCompletionRef.current;
+      return !pullAbortRef.current;
     }
+    setLocalPullError("A download is already in progress. Cancel it first, or wait for it to finish.");
+    return false;
+  };
+
+  const activateExistingPull = async (
+    modelId: string,
+    source: LocalEngine,
+    controller: AbortController,
+  ): Promise<void> => {
+    if (!isCurrentPullController(controller, pullAbortRef.current)) return;
+    setLocalPullPercent(100);
+    setLocalInstallInfo(`Already installed — enabling ${modelId}…`);
+    await onModelActivated(modelId, source, controller.signal);
+    if (!isCurrentPullController(controller, pullAbortRef.current)) return;
+    setLocalInstallInfo(`Ready: ${modelId}`);
+  };
+
+  const pullLocalModel = async (modelTag: string, source: LocalEngine = "lms") => {
+    if (!(await waitForPullSlot())) return;
 
     const controller = new AbortController();
     pullAbortRef.current = controller;
@@ -489,12 +520,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
         installed,
       );
       if (existing) {
-        if (controller.signal.aborted || pullAbortRef.current !== controller) return;
-        setLocalPullPercent(100);
-        setLocalInstallInfo(`Already installed — enabling ${existing}…`);
-        await onModelActivated(existing, source, controller.signal);
-        if (controller.signal.aborted || pullAbortRef.current !== controller) return;
-        setLocalInstallInfo(`Ready: ${existing}`);
+        await activateExistingPull(existing, source, controller);
         return;
       }
 
