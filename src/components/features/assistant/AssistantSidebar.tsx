@@ -9,15 +9,14 @@ import {
   buildWorkspaceContextSummary,
 } from "@/lib/aiWorkspaceContext";
 import { chatPatchToUiState, sanitizeChatActionPatch, type ChatAction } from "@/lib/chatActions";
-import { Bot, X, Lightbulb, MessageSquareCode, Settings2, Bug } from "lucide-react";
+import { Bot, X, MessageSquareCode, Settings2, Bug } from "lucide-react";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
-import { AuditPanel } from "./AuditPanel";
+import { PipelineReview } from "./PipelineReview";
 import { ReportIssueModal } from "@/components/ReportIssueModal";
 import { PROVIDER_OPTIONS, normalizeUiProviderId } from "./aiProviderCatalog";
 import { ChatPanel } from "./ChatPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import type { SidebarTab } from "./types";
-import { useAiAudit } from "./useAiAudit";
 import { useAiChat } from "./useAiChat";
 import { useAiProviderSettings } from "./useAiProviderSettings";
 import { useLocalEngineSetup } from "./useLocalEngineSetup";
@@ -36,8 +35,7 @@ interface AssistantSidebarProps {
 }
 
 const TABS = [
-  { id: "audit" as const, label: "Audit", Icon: Lightbulb },
-  { id: "chat" as const, label: "Chat", Icon: MessageSquareCode },
+  { id: "assistant" as const, label: "Assistant", Icon: MessageSquareCode },
   { id: "settings" as const, label: "Settings", Icon: Settings2 },
 ];
 
@@ -64,7 +62,7 @@ export function AssistantSidebar({
   const storeState = usePipelineState();
   const state = propState ?? storeState.state;
   const setState = propSetState ?? storeState.setState;
-  const [activeTab, setActiveTab] = useState<SidebarTab>("audit");
+  const [activeTab, setActiveTab] = useState<SidebarTab>("assistant");
   const [, startTabTransition] = useTransition();
   const { data: hardwareProbe = null } = useHardwareProbe({ enabled: isOpen });
 
@@ -78,9 +76,9 @@ export function AssistantSidebar({
   const presetQueries = useMemo(() => buildChatPresetQueries(state), [state]);
   const workspaceSummary = useMemo(() => buildWorkspaceContextSummary(workspaceContext), [workspaceContext]);
 
-  const audit = useAiAudit({ state, setState });
   const chat = useAiChat(workspaceContext);
-  const chatActionAuditTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ref to trigger post-patch refresh in PipelineReview from chat actions.
+  const postPatchRefreshRef = useRef<(() => void) | null>(null);
   const chatLogForReport = useMemo(
     () =>
       chat.chatMessages.map((m) => {
@@ -105,39 +103,24 @@ export function AssistantSidebar({
     [chat.chatMessages],
   );
 
-  useEffect(() => {
-    return () => {
-      if (chatActionAuditTimerRef.current) clearTimeout(chatActionAuditTimerRef.current);
-    };
-  }, []);
-
   const handleApplyChatAction = (messageIndex: number, action: ChatAction) => {
     const patch = sanitizeChatActionPatch(action.patch);
     if (!patch) return;
     const partial = chatPatchToUiState(state, patch);
-    const next: UIState = {
-      ...state,
-      ...partial,
-      passes: partial.passes ?? state.passes,
-    };
     setState(partial);
     chat.markActionApplied(messageIndex, action.id);
-    if (chatActionAuditTimerRef.current) clearTimeout(chatActionAuditTimerRef.current);
-    chatActionAuditTimerRef.current = setTimeout(() => {
-      chatActionAuditTimerRef.current = null;
-      void audit.runAnalysis({ stateOverride: next });
-    }, 400);
+    // Route post-patch refresh through PipelineReview's schedulePostPatchRefresh.
+    postPatchRefreshRef.current?.();
   };
 
   const providers = useAiProviderSettings({
     isOpen,
     activeTab,
     onProviderActivated: () => {
-      audit.resetAnalysis();
-      setActiveTab("audit");
+      setActiveTab("assistant");
     },
-    onProviderCleared: audit.resetAnalysis,
     onProviderMissing: () => setActiveTab("settings"),
+    onProviderCleared: () => setActiveTab("settings"),
   });
 
   const local = useLocalEngineSetup({
@@ -145,31 +128,22 @@ export function AssistantSidebar({
     onModelActivated: async (modelTag, source, signal) => {
       const ok = await providers.enableLocalAiProvider(source, modelTag, signal);
       if (!ok || signal?.aborted) return;
-      audit.resetAnalysis();
     },
   });
 
   const providerSource = providers.providerStatus.source;
 
   useEffect(() => {
-    // Intentional: audit as soon as a provider is available for the open sidebar
-    if (isOpen && !audit.analysis && providerSource !== "none") {
-      void audit.runAnalysis();
-    }
-  }, [isOpen, providerSource]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
     if (!openToAudit) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: respond to prop change
-    setActiveTab("audit");
-    audit.restartAnalysis();
+    setActiveTab("assistant");
     onAuditOpened?.();
   }, [openToAudit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!pendingChatQuery) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: respond to prop change
-    setActiveTab("chat");
+    setActiveTab("assistant");
     void chat.sendChat(pendingChatQuery.query);
     onChatQueryConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per nonce, not on every chat/audit identity change
@@ -243,7 +217,7 @@ export function AssistantSidebar({
             <div
               role="tablist"
               aria-label="Assistant panels"
-              className="grid grid-cols-3 bg-slate-950/90 p-1 border border-slate-850 rounded-lg transform-gpu"
+              className="grid grid-cols-2 bg-slate-950/90 p-1 border border-slate-850 rounded-lg transform-gpu"
             >
               {TABS.map(({ id, label, Icon }) => (
                 <button
@@ -267,49 +241,39 @@ export function AssistantSidebar({
 
           {/* Content */}
           <div className="flex-1 overflow-hidden relative transform-gpu">
-            {/* ── Audit ── */}
+            {/* ── Assistant (Unified: PipelineReview + Chat) ── */}
             <div
               role="tabpanel"
-              id="assistant-panel-audit"
-              aria-labelledby="assistant-tab-audit"
+              id="assistant-panel-assistant"
+              aria-labelledby="assistant-tab-assistant"
               className={cn(
-                "absolute inset-0 p-4 overflow-y-auto",
-                activeTab === "audit" ? "block" : "hidden",
+                "absolute inset-0 flex flex-col overflow-y-auto",
+                activeTab === "assistant" ? "visible" : "invisible",
               )}
             >
-              <AuditPanel
-                analysis={audit.analysis}
-                isAnalyzing={audit.isAnalyzing}
-                analysisError={audit.analysisError}
-                onApplyAutofix={audit.applyAutofix}
-                onRunAnalysis={() => void audit.runAnalysis()}
-                onGoSettings={() => setActiveTab("settings")}
+              {/* PipelineReview at the top (Req 1.2) */}
+              <PipelineReview
+                onExplain={(body) => void chat.sendChat(body)}
+                className="m-4 mb-0 shrink-0"
+                postPatchRefreshRef={postPatchRefreshRef}
               />
-            </div>
 
-            {/* ── Chat ── */}
-            <div
-              role="tabpanel"
-              id="assistant-panel-chat"
-              aria-labelledby="assistant-tab-chat"
-              className={cn(
-                "absolute inset-0 p-4 overflow-y-auto",
-                activeTab === "chat" ? "block" : "hidden",
-              )}
-            >
-              <ChatPanel
-                workspaceSummary={workspaceSummary}
-                chatMessages={chat.chatMessages}
-                isChatting={chat.isChatting}
-                chatError={chat.chatError}
-                chatEndRef={chat.chatEndRef}
-                presetQueries={presetQueries}
-                inputQuestion={chat.inputQuestion}
-                onInputChange={chat.setInputQuestion}
-                onSend={(presetText) => void chat.sendChat(presetText)}
-                onGoSettings={() => setActiveTab("settings")}
-                onApplyAction={handleApplyChatAction}
-              />
+              {/* Chat conversation below (Req 1.5) */}
+              <div className="flex-1 p-4">
+                <ChatPanel
+                  workspaceSummary={workspaceSummary}
+                  chatMessages={chat.chatMessages}
+                  isChatting={chat.isChatting}
+                  chatError={chat.chatError}
+                  chatEndRef={chat.chatEndRef}
+                  presetQueries={presetQueries}
+                  inputQuestion={chat.inputQuestion}
+                  onInputChange={chat.setInputQuestion}
+                  onSend={(presetText) => void chat.sendChat(presetText)}
+                  onGoSettings={() => setActiveTab("settings")}
+                  onApplyAction={handleApplyChatAction}
+                />
+              </div>
             </div>
 
             {/* ── Settings ── */}
