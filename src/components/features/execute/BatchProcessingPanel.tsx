@@ -1260,15 +1260,19 @@ function isTerminalBatchStatusJob(job: BatchJob): job is BatchJob & { status: Te
   return isTerminalBatchStatus(job.status);
 }
 
-function batchJobToHistoryRecord(job: BatchJob): JobHistoryRecord {
+function batchJobToHistoryRecord(
+  job: BatchJob & { status: TerminalBatchStatus },
+): JobHistoryRecord {
   return {
     id: job.id,
     jobId: job.oliveJobId ?? job.id,
-    timestamp: new Date().toISOString(),
+    timestamp: new Date(
+      job.finishedAtMs ?? job.startedAtMs ?? Date.now(),
+    ).toISOString(),
     modelId: job.modelIdentifier,
     ihvProvider: job.provider,
     memoryOffload: "",
-    status: job.status === "queued" || job.status === "running" ? "failed" : job.status,
+    status: job.status,
     exitCode: job.status === "completed" ? 0 : 1,
     durationMs:
       job.startedAtMs != null && job.finishedAtMs != null
