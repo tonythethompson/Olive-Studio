@@ -700,11 +700,17 @@ export function ExecutionWorkspace({
   const [exportRecords, setExportRecords] = useState<JobHistoryRecord[]>([]);
 
   useEffect(() => {
+    let isSubscribed = true;
     void getJobHistory()
-      .then(setExportRecords)
+      .then((records) => {
+        if (isSubscribed) setExportRecords(records);
+      })
       .catch(() => {
-        setExportRecords([]);
+        if (isSubscribed) setExportRecords([]);
       });
+    return () => {
+      isSubscribed = false;
+    };
   }, [isHistoryOpen, agentOutcome, executionStatus]);
 
   // SSE stream for agent activity
