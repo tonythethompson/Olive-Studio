@@ -5,6 +5,7 @@ import { InputEnvironmentPanel } from "@/components/features/input/InputEnvironm
 import { LicenseNotice } from "@/components/LicenseNotice";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
+import { hasSelectedModel } from "@/lib/pipelineValidation";
 import type { ReportArea } from "@/lib/issueReport";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { KbSyncIndicator } from "@/components/features/KbSyncIndicator";
@@ -236,12 +237,14 @@ function Dashboard() {
               <div className="space-y-0.5">
                 {SECTIONS.map(({ id, step, label, icon: Icon }) => {
                   const isActive = activeView === id;
+                  const modelSelected = hasSelectedModel(pipelineState);
+                  const isIncomplete = !modelSelected && id !== "input";
                   return (
                     <button
                       key={id}
                       type="button"
-                      title={`${step} ${label}`}
-                      aria-label={`${step} ${label}`}
+                      title={isIncomplete ? `${step} ${label} — select a model first` : `${step} ${label}`}
+                      aria-label={isIncomplete ? `${step} ${label}, incomplete` : `${step} ${label}`}
                       onClick={() => scrollToSection(id)}
                       aria-current={isActive ? "step" : undefined}
                       disabled={isOliveRunning && id !== "execute" && id !== "playground"}
@@ -258,11 +261,17 @@ function Dashboard() {
                     >
                       <span
                         className={cn(
-                          "text-[11px] tabular-nums shrink-0 w-5 text-center wide:text-left",
+                          "relative text-[11px] tabular-nums shrink-0 w-5 text-center wide:text-left",
                           isActive ? "text-electric-blue" : "text-slate-400",
                         )}
                       >
                         {step}
+                        {isIncomplete && (
+                          <span
+                            className="absolute -top-0.5 -right-0.5 wide:right-auto wide:left-[calc(100%-2px)] h-1.5 w-1.5 rounded-full bg-amber-500"
+                            aria-hidden
+                          />
+                        )}
                       </span>
                       <Icon
                         className={cn(

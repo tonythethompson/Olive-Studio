@@ -2,7 +2,7 @@
  * Single IHV provider selection card (conflicts, install CTAs, local detection).
  * Extracted from IHVIntegrationPanel to keep that panel under CodeFactor complexity limits.
  */
-import { memo, type ReactNode } from "react";
+import { memo, useState, type ReactNode } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -58,6 +58,7 @@ import {
   XCircle,
   Globe,
   ExternalLink,
+  ChevronDown,
 } from "lucide-react";
 
 export interface HardwareProviderCardProps {
@@ -123,6 +124,7 @@ function resolveCardChrome(input: {
   badgeText: string;
   BadgeIcon: typeof CheckCircle | null;
   badgeColor: string;
+  badgeIconColor?: string;
 } {
   const base =
     "relative flex flex-col rounded-xl border p-4.5 transition-all duration-200 cursor-pointer min-w-0 max-w-full overflow-hidden ";
@@ -227,7 +229,8 @@ function resolveCardChrome(input: {
       cardClasses: base + "border-emerald-900/40 bg-emerald-950/10 opacity-95 hover:border-emerald-500/40",
       badgeText: "Compatible, runtime available",
       BadgeIcon: CheckCircle,
-      badgeColor: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+      badgeColor: "bg-slate-800/60 text-slate-300 border-slate-700/60",
+      badgeIconColor: "text-emerald-400",
     };
   }
   if (needsPluginInstall && !detectedLocally && !probeLoading) {
@@ -269,7 +272,8 @@ function resolveCardChrome(input: {
     cardClasses: base + "border-slate-800/80 bg-slate-900/40 hover:bg-slate-900 hover:border-slate-700",
     badgeText: "Compatible with active passes",
     BadgeIcon: CheckCircle,
-    badgeColor: "bg-emerald-500/10 text-emerald-400 border-emerald-500/15",
+    badgeColor: "bg-slate-800/60 text-slate-300 border-slate-700/60",
+    badgeIconColor: "text-emerald-400",
   };
 }
 
@@ -848,6 +852,8 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
   onInstallOrtGpu,
 }: HardwareProviderCardProps) {
   const isSelected = state.ihvProvider === p.id;
+  // Selected card starts open so the active target's details aren't hidden behind a click.
+  const [isExpanded, setIsExpanded] = useState(isSelected);
   const Icon = p.icon;
   const pConflicts = getProviderConflicts(p.id, state.passes);
   const cardHasCritical = pConflicts.some((c) => c.severity === "critical");
@@ -885,7 +891,7 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
   const hardwareCompatibleNotDetected =
     p.id === "DmlExecutionProvider" && directMlNeedsInstall && !detectedLocally;
 
-  const { cardClasses, badgeText, BadgeIcon, badgeColor } = resolveCardChrome({
+  const { cardClasses, badgeText, BadgeIcon, badgeColor, badgeIconColor } = resolveCardChrome({
     isSelected,
     cardBlocked,
     cardHardwareBlocked,
@@ -926,7 +932,9 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
             <span
               className={`inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider font-extrabold px-2 py-0.5 rounded border ${badgeColor}`}
             >
-              {BadgeIcon ? <BadgeIcon className="h-3 w-3" aria-hidden /> : null}
+              {BadgeIcon ? (
+                <BadgeIcon className={cn("h-3 w-3", badgeIconColor)} aria-hidden />
+              ) : null}
               {badgeText}
             </span>
           </div>
@@ -959,71 +967,89 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
               </div>
             </TooltipContent>
           </Tooltip>
-          {detectedLocally && hardwareDetail ? (
-            <p className="text-xs text-emerald-400/90 font-mono break-words">{hardwareDetail}</p>
-          ) : null}
-          <ProviderPluginInstalls
-            providerId={p.id}
-            hardwareProbe={hardwareProbe}
-            trtRtxNeedsInstall={trtRtxNeedsInstall}
-            trtNeedsInstall={trtNeedsInstall}
-            openvinoNeedsInstall={openvinoNeedsInstall}
-            hardwareInstallBusy={hardwareInstallBusy}
-            installingTrtRtx={installingTrtRtx}
-            installTrtRtxError={installTrtRtxError}
-            installTrtRtxLog={installTrtRtxLog}
-            onInstallTensorRtRtx={onInstallTensorRtRtx}
-            installingTrt={installingTrt}
-            installTrtError={installTrtError}
-            installTrtLog={installTrtLog}
-            onInstallTensorRt={onInstallTensorRt}
-            openvinoInstall={openvinoInstall}
-            qnnInstall={qnnInstall}
-            directMlInstall={directMlInstall}
-            isPreMaxwellBox={isPreMaxwellBox}
-            cudaNeedsOrtGpuInstall={cudaNeedsOrtGpuInstall}
-            cudaToolkitMissingAndEpWorks={cudaToolkitMissingAndEpWorks}
-            cudaToolkitMissing={cudaToolkitMissing}
-            cudaEpInVenv={cudaEpInVenv}
-            nvidiaGpus={nvidiaGpus}
-            installingOrtGpu={installingOrtGpu}
-            installOrtGpuError={installOrtGpuError}
-            installOrtGpuLog={installOrtGpuLog}
-            onInstallOrtGpu={onInstallOrtGpu}
-          />
-          {p.id === "OpenVINOExecutionProvider" ? (
-            <OpenVinoDeviceHint hardwareProbe={hardwareProbe} />
-          ) : null}
-          {isWebGpuTarget ? (
-            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-              Not a local Python EP. Select to build web-oriented recipes, then use{" "}
-              <span className="text-slate-400">Recipe &amp; run → Browser Test</span> / WebGPU benchmark in
-              Chrome or Edge 113+.
-            </p>
-          ) : null}
-          {isExportTarget && !isWebGpuTarget ? (
-            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-              {isLegacyTarget
-                ? "Legacy export path (prefer QNN for Snapdragon). Not available for Studio Execute Live."
-                : "Export / deploy target only. Not a local Python EP, so Execute Live stays blocked."}
-            </p>
-          ) : null}
-          {isPlatformTarget && !detectedLocally && !probeLoading ? (
-            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-              Platform EP: selectable for recipes; Execute Live requires a matching ORT probe hit on this host.
-            </p>
-          ) : null}
-          {!detectedLocally &&
-            !probeLoading &&
-            !isExportTarget &&
-            !isPlatformTarget &&
-            !needsPluginInstall ? (
-            <p className="text-xs text-slate-600">
-              {p.id === "CPUExecutionProvider"
-                ? "Hardware detection unavailable. CPU status is unknown."
-                : "No matching hardware found locally. You can still select for remote/cross-compile targets."}
-            </p>
-          ) : null}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded((v) => !v);
+            }}
+            className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-400 transition-colors cursor-pointer"
+            aria-expanded={isExpanded}
+          >
+            <ChevronDown
+              className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-180")}
+            />
+            {isExpanded ? "Hide details" : "Show details"}
+          </button>
+          {isExpanded && (
+            <>
+              {detectedLocally && hardwareDetail ? (
+                <p className="text-xs text-emerald-400/90 font-mono break-words">{hardwareDetail}</p>
+              ) : null}
+              <ProviderPluginInstalls
+                providerId={p.id}
+                hardwareProbe={hardwareProbe}
+                trtRtxNeedsInstall={trtRtxNeedsInstall}
+                trtNeedsInstall={trtNeedsInstall}
+                openvinoNeedsInstall={openvinoNeedsInstall}
+                hardwareInstallBusy={hardwareInstallBusy}
+                installingTrtRtx={installingTrtRtx}
+                installTrtRtxError={installTrtRtxError}
+                installTrtRtxLog={installTrtRtxLog}
+                onInstallTensorRtRtx={onInstallTensorRtRtx}
+                installingTrt={installingTrt}
+                installTrtError={installTrtError}
+                installTrtLog={installTrtLog}
+                onInstallTensorRt={onInstallTensorRt}
+                openvinoInstall={openvinoInstall}
+                qnnInstall={qnnInstall}
+                directMlInstall={directMlInstall}
+                isPreMaxwellBox={isPreMaxwellBox}
+                cudaNeedsOrtGpuInstall={cudaNeedsOrtGpuInstall}
+                cudaToolkitMissingAndEpWorks={cudaToolkitMissingAndEpWorks}
+                cudaToolkitMissing={cudaToolkitMissing}
+                cudaEpInVenv={cudaEpInVenv}
+                nvidiaGpus={nvidiaGpus}
+                installingOrtGpu={installingOrtGpu}
+                installOrtGpuError={installOrtGpuError}
+                installOrtGpuLog={installOrtGpuLog}
+                onInstallOrtGpu={onInstallOrtGpu}
+              />
+              {p.id === "OpenVINOExecutionProvider" ? (
+                <OpenVinoDeviceHint hardwareProbe={hardwareProbe} />
+              ) : null}
+              {isWebGpuTarget ? (
+                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                  Not a local Python EP. Select to build web-oriented recipes, then use{" "}
+                  <span className="text-slate-400">Recipe &amp; run → Browser Test</span> / WebGPU benchmark in
+                  Chrome or Edge 113+.
+                </p>
+              ) : null}
+              {isExportTarget && !isWebGpuTarget ? (
+                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                  {isLegacyTarget
+                    ? "Legacy export path (prefer QNN for Snapdragon). Not available for Studio Execute Live."
+                    : "Export / deploy target only. Not a local Python EP, so Execute Live stays blocked."}
+                </p>
+              ) : null}
+              {isPlatformTarget && !detectedLocally && !probeLoading ? (
+                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                  Platform EP: selectable for recipes; Execute Live requires a matching ORT probe hit on this host.
+                </p>
+              ) : null}
+              {!detectedLocally &&
+                !probeLoading &&
+                !isExportTarget &&
+                !isPlatformTarget &&
+                !needsPluginInstall ? (
+                <p className="text-xs text-slate-600">
+                  {p.id === "CPUExecutionProvider"
+                    ? "Hardware detection unavailable. CPU status is unknown."
+                    : "No matching hardware found locally. You can still select for remote/cross-compile targets."}
+                </p>
+              ) : null}
+            </>
+          )}
         </div>
 
         <div className="flex items-center justify-center shrink-0">

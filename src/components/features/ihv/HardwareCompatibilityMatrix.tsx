@@ -54,14 +54,14 @@ export function HardwareCompatibilityMatrix({
     <TooltipProvider delayDuration={150}>
       <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/25 mt-2 shadow-xl animate-in fade-in duration-300">
         <div
-          className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+          className="max-h-[560px] overflow-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
           tabIndex={0}
           role="region"
           aria-label="Pass and execution provider compatibility matrix"
         >
           <table className="w-full text-left border-collapse min-w-[720px]">
-            <thead>
-              <tr className="border-b border-slate-800/80 bg-slate-900/30">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-slate-800/80 bg-slate-900">
                 {/* Header Cell 1 */}
                 <th className="p-2 px-3 text-[11px] font-mono font-semibold tracking-wider text-slate-400 w-[200px]">
                   PASS

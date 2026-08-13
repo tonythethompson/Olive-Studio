@@ -4,12 +4,13 @@ import type { RecipeHardwareCompatTier } from "@/lib/recipeHardwareCompatibility
 
 const TIER_UI: Record<
   RecipeHardwareCompatTier,
-  { label: string; Icon: typeof CheckCircle2; className: string }
+  { label: string; Icon: typeof CheckCircle2; className: string; iconClassName?: string }
 > = {
   compatible: {
     label: "Compatible",
     Icon: CheckCircle2,
-    className: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10",
+    className: "text-slate-300 border-slate-700 bg-slate-900/60",
+    iconClassName: "text-emerald-400",
   },
   unavailable: {
     label: "Incompatible",
@@ -37,7 +38,7 @@ interface CompatStatusPillProps {
  * @param size - The badge size
  */
 export function CompatStatusPill({ tier, className, size = "sm" }: CompatStatusPillProps) {
-  const { label, Icon, className: tierClass } = TIER_UI[tier];
+  const { label, Icon, className: tierClass, iconClassName } = TIER_UI[tier];
   return (
     <span
       className={cn(
@@ -47,7 +48,10 @@ export function CompatStatusPill({ tier, className, size = "sm" }: CompatStatusP
         className,
       )}
     >
-      <Icon className={size === "sm" ? "h-3 w-3" : "h-3.5 w-3.5"} aria-hidden />
+      <Icon
+        className={cn(size === "sm" ? "h-3 w-3" : "h-3.5 w-3.5", iconClassName)}
+        aria-hidden
+      />
       <span>{label}</span>
     </span>
   );
