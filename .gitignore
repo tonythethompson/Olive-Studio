@@ -22,7 +22,6 @@ storybook-static/
 start-server.bat
 
 # Kiro Crew steering (local agent config)
-.kiro/
 
 # Playwright
 /test-results/

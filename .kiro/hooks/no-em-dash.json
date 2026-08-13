@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Block em dashes in TypeScript source",
+      "trigger": "PostFileSave",
+      "description": "Checks saved TypeScript/TSX files for em dash characters (U+2014) and fails if any are found in non-comment lines",
+      "matcher": "src/.*\\.(ts|tsx)$",
+      "action": {
+        "type": "command",
+        "command": "node -e \"const fs=require('fs');const f=process.argv[1];const lines=fs.readFileSync(f,'utf8').split('\\n');const hits=[];lines.forEach((l,i)=>{if(l.includes('\\u2014')&&!l.trimStart().startsWith('//')&&!l.trimStart().startsWith('*'))hits.push(i+1)});if(hits.length){console.error('Em dash (\\u2014) found on line(s): '+hits.join(', ')+'\\nUse periods, commas, or colons instead.');process.exit(1)}\" \"${filePath}\"",
+        "timeout": 5
+      }
+    }
+  ]
+}
