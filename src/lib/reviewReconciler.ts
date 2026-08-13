@@ -109,22 +109,48 @@ function wouldNotResolveProviderConflict(
 /**
  * Convert a deterministic PipelineIssue into the unified Finding format.
  */
+const TOP_LEVEL_PATCH_KEYS = [
+  "ihvProvider",
+  "cudaVersion",
+  "memoryOffload",
+  "modelSource",
+  "hfModelId",
+  "hfDataset",
+  "cacheDir",
+] as const;
+
 function pipelineIssueToFinding(issue: PipelineIssue): Finding {
   const actions: Action[] = [];
 
-  // If the issue has a valid autofix with passes payload, create an applyPatch action
-  if (
-    issue.autofix &&
-    issue.actionLabel &&
-    issue.autofix.passes &&
-    typeof issue.autofix.passes === "object" &&
-    Object.keys(issue.autofix.passes as Record<string, unknown>).length > 0
-  ) {
-    actions.push({
-      kind: "applyPatch",
-      label: issue.actionLabel.slice(0, 80),
-      payload: { passes: issue.autofix.passes },
-    });
+  if (issue.autofix && issue.actionLabel) {
+    const payload: ActionPayloadApplyPatch["payload"] = {};
+    const autofix = issue.autofix as Record<string, unknown>;
+    for (const key of TOP_LEVEL_PATCH_KEYS) {
+      if (autofix[key] !== undefined) {
+        (payload as Record<string, unknown>)[key] = autofix[key];
+      }
+    }
+    if (issue.autofix.passes && typeof issue.autofix.passes === "object") {
+      const passPatch = issue.autofix.passes as Record<string, unknown>;
+      const targeted: Record<string, unknown> = {};
+      const keys =
+        issue.affectedPasses && issue.affectedPasses.length > 0
+          ? issue.affectedPasses.filter((k) => k in passPatch && k !== "provider")
+          : Object.keys(passPatch);
+      for (const key of keys) {
+        targeted[key] = passPatch[key];
+      }
+      if (Object.keys(targeted).length > 0) {
+        payload.passes = targeted as ActionPayloadApplyPatch["payload"]["passes"];
+      }
+    }
+    if (Object.keys(payload).length > 0) {
+      actions.push({
+        kind: "applyPatch",
+        label: issue.actionLabel.slice(0, 80),
+        payload,
+      });
+    }
   }
 
   // Always provide at least an explain action as fallback
@@ -202,19 +228,16 @@ export function reconcileFindings(
   // and its affectedPasses array
   const deterministicPassFields = new Map<string, PipelineIssue>();
   for (const issue of deterministicIssues) {
-    // Index by autofix pass keys (the concrete field targets)
-    if (issue.autofix) {
-      const passes = issue.autofix.passes;
-      if (passes && typeof passes === "object") {
-        for (const key of Object.keys(passes as Record<string, unknown>)) {
-          deterministicPassFields.set(key, issue);
-        }
-      }
-    }
-    // Also index by affectedPasses (broader coverage)
     if (issue.affectedPasses) {
       for (const passId of issue.affectedPasses) {
         deterministicPassFields.set(passId, issue);
+      }
+    }
+    if (issue.autofix) {
+      for (const key of Object.keys(issue.autofix)) {
+        if (key !== "passes") {
+          deterministicPassFields.set(key, issue);
+        }
       }
     }
   }
