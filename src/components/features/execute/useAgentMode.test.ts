@@ -246,12 +246,12 @@ describe("useAgentMode", () => {
       });
       expect(result.current.jobId).toBe("job-cancel-fail");
 
+      let cancelled = true;
       await act(async () => {
-        result.current.stopAgent();
-        await Promise.resolve();
-        await Promise.resolve();
+        cancelled = await result.current.stopAgent();
       });
 
+      expect(cancelled).toBe(false);
       expect(result.current.agentRunning).toBe(true);
       expect(result.current.outcome?.status).toBe("failure");
       expect(result.current.outcome?.errorDescription).toContain("cancel denied");

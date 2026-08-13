@@ -769,9 +769,17 @@ export function ExecutionWorkspace({
 
   /** User confirmed stopping the agent and switching to manual. */
   const handleConfirmStopAndSwitch = useCallback(() => {
-    if (agentRunning) stopAgent();
-    setAgentMode("manual");
-    setConfirmDialogOpen(false);
+    void (async () => {
+      if (agentRunning) {
+        const cancelled = await stopAgent();
+        if (!cancelled) {
+          setConfirmDialogOpen(false);
+          return;
+        }
+      }
+      setAgentMode("manual");
+      setConfirmDialogOpen(false);
+    })();
   }, [agentRunning, stopAgent, setAgentMode]);
 
   /** User cancelled the confirmation dialog — stay in agent mode. */

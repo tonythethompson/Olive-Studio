@@ -56,8 +56,8 @@ export interface UseAgentModeReturn {
   jobId: string | undefined;
   /** Start the agent loop. Clears previous session and starts 10s timeout. */
   startAgent: (opts?: { recipeJson?: string; cudaVersion?: string }) => Promise<void>;
-  /** Stop the agent loop. Creates a terminal cancellation entry. */
-  stopAgent: () => void;
+  /** Stop the agent loop. Resolves true when the session is cancelled. */
+  stopAgent: () => Promise<boolean>;
   /** Append an entry to the activity log (truncated + FIFO bounded). */
   appendEntry: (entry: ActivityLogEntry) => void;
   /** Clear all activity log entries. */
@@ -270,51 +270,51 @@ export function useAgentMode(): UseAgentModeReturn {
    * Stop the agent loop manually (user-initiated cancellation).
    * Appends a terminal cancellation entry and disables running state.
    */
-  const stopAgent = useCallback(() => {
+  const stopAgent = useCallback(async (): Promise<boolean> => {
     clearStartTimeout();
 
     const activeJobId = jobIdRef.current;
     if (!activeJobId) {
       if (submitInFlightRef.current) {
         stopRequestedRef.current = true;
-        return;
+        return false;
       }
       if (!stopRequestedRef.current) {
         runGenerationRef.current += 1;
         stopRequestedRef.current = true;
         applyCancelledOutcome();
       }
-      return;
+      return true;
     }
 
-    if (stopRequestedRef.current) return;
+    if (stopRequestedRef.current) return false;
     runGenerationRef.current += 1;
     stopRequestedRef.current = true;
     const stopGen = runGenerationRef.current;
 
-    void (async () => {
-      try {
-        const resp = await requestAgentCancel(activeJobId);
-        const data = (await resp.json().catch(() => ({}))) as { error?: string; status?: string };
-        if (runGenerationRef.current !== stopGen) return;
-        if (!resp.ok) {
-          throw new Error(data.error || `HTTP ${resp.status}`);
-        }
-        applyCancelledOutcome();
-      } catch (err) {
-        if (runGenerationRef.current !== stopGen) return;
-        stopRequestedRef.current = false;
-        const message = err instanceof Error ? err.message : "Failed to cancel agent job";
-        setOutcome({
-          status: "failure",
-          totalSteps: stepCountRef.current,
-          elapsedMs: startedAtRef.current
-            ? Date.now() - new Date(startedAtRef.current).getTime()
-            : 0,
-          errorDescription: message,
-        });
+    try {
+      const resp = await requestAgentCancel(activeJobId);
+      const data = (await resp.json().catch(() => ({}))) as { error?: string; status?: string };
+      if (runGenerationRef.current !== stopGen) return false;
+      if (!resp.ok) {
+        throw new Error(data.error || `HTTP ${resp.status}`);
       }
-    })();
+      applyCancelledOutcome();
+      return true;
+    } catch (err) {
+      if (runGenerationRef.current !== stopGen) return false;
+      stopRequestedRef.current = false;
+      const message = err instanceof Error ? err.message : "Failed to cancel agent job";
+      setOutcome({
+        status: "failure",
+        totalSteps: stepCountRef.current,
+        elapsedMs: startedAtRef.current
+          ? Date.now() - new Date(startedAtRef.current).getTime()
+          : 0,
+        errorDescription: message,
+      });
+      return false;
+    }
   }, [applyCancelledOutcome, clearStartTimeout]);
 
   /**

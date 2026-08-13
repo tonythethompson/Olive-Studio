@@ -22,6 +22,11 @@ const MAX_RETRIES = 3;
 /** Base delay for exponential backoff (ms). Delays: 1s, 2s, 4s. */
 const BASE_BACKOFF_MS = 1000;
 
+/** Matches the server's synthetic replay preamble when job.logsTruncated is set. */
+function isTruncationNotice(text: string): boolean {
+  return text.includes("Earlier log lines were trimmed");
+}
+
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
 export interface UseAgentStreamOptions {
@@ -237,6 +242,11 @@ export function useAgentStream({
               if (seenPayloadKeysRef.current.has(eventId)) return;
               seenPayloadKeysRef.current.add(eventId);
             } else if (replayingPrefixRef.current) {
+              if (isTruncationNotice(entry.text)) {
+                retryCountRef.current = 0;
+                onEntryRef.current(entry);
+                return;
+              }
               const prefix = deliveredPrefixRef.current;
               let idx = replayIndexRef.current;
               let expected = prefix[idx];
