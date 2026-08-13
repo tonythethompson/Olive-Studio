@@ -49,7 +49,7 @@ jobs:
           from pathlib import Path
 
           from packaging.requirements import Requirement
-          from packaging.version import Version
+          from packaging.version import InvalidVersion, Version
 
           data = tomllib.load(Path("pyproject.toml").open("rb"))
           deps = data.get("project", {}).get("dependencies", [])
@@ -69,25 +69,65 @@ jobs:
               print("::error::mcp dependency must be pinned below 2 (unpinned specifier)")
               sys.exit(1)
 
-          def bump(ver: Version, *, minor=False) -> Version:
-              if minor:
-                  return Version(f"{ver.major}.{ver.minor + 1}.0")
-              return Version(f"{ver.major}.{ver.minor}.{ver.micro + 1}")
+          def series_version(raw: str) -> Version | None:
+              prefix = raw.split("*", 1)[0].rstrip(".") or "0"
+              try:
+                  return Version(prefix if prefix.count(".") else prefix + ".0")
+              except InvalidVersion:
+                  return None
 
-          # Any 2.x that satisfies the specifier (including bounds like >2.99.99,<3).
-          candidates = {
-              Version("2.0.0a0"),
-              Version("2.0.0"),
-              Version("2.0.1"),
-              Version("2.1.0"),
-          }
-          for item in spec:
-              bound = Version(item.version)
-              candidates.add(bound)
-              candidates.add(bump(bound))
-              candidates.add(bump(bound, minor=True))
+          def is_2_ceiling(ver: Version) -> bool:
+              # <2 / <2.0 / <2.0.0 exclude released 2.x; <2.0.1 still allows 2.0.0.
+              if ver.major < 2:
+                  return True
+              if ver.post or ver.dev is not None or ver.is_prerelease:
+                  return False
+              return ver.major == 2 and all(part == 0 for part in ver.release[1:])
 
-          if any(c.major == 2 and spec.contains(c, prereleases=True) for c in candidates):
+          def excludes_released_2x() -> bool:
+              for item in spec:
+                  op, raw = item.operator, item.version
+                  if "*" in raw:
+                      series = series_version(raw)
+                      if series is None:
+                          continue
+                      if op in ("==", "===", "~=") and series.major == 2:
+                          return False
+                      if op in ("==", "===", "~=") and series.major != 2:
+                          return True
+                      continue
+                  try:
+                      ver = Version(raw)
+                  except InvalidVersion:
+                      continue
+                  if op in ("==", "===") and ver.major == 2 and not ver.is_prerelease:
+                      return False
+                  if op == "~=" and ver.major == 2:
+                      return False
+                  if op in ("==", "===", "~=") and ver.major != 2:
+                      return True
+              for item in spec:
+                  op, raw = item.operator, item.version
+                  if op not in ("<", "<="):
+                      continue
+                  if "*" in raw:
+                      series = series_version(raw)
+                      if series is not None and op == "<" and series.major <= 2:
+                          return True
+                      if series is not None and op == "<=" and series.major < 2:
+                          return True
+                      continue
+                  try:
+                      ver = Version(raw)
+                  except InvalidVersion:
+                      continue
+                  if op == "<" and is_2_ceiling(ver):
+                      return True
+                  if op == "<=" and ver.major < 2:
+                      return True
+              return False
+
+          if not excludes_released_2x():
               print("::error::mcp dependency must not allow 2.x (e.g. 'mcp>=1,<2'). Got: " + str(req))
               sys.exit(1)
           print("mcp pin excludes 2.x")
