@@ -302,6 +302,54 @@ describe("useAgentMode", () => {
       expect(result.current.outcome?.status).toBe("failure");
     });
 
+    it("does not complete a deferred stop on start timeout before cancel", async () => {
+      let resolveSubmit: (value: Response) => void = () => {};
+      const submitPromise = new Promise<Response>((resolve) => {
+        resolveSubmit = resolve;
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url: string) => {
+          if (String(url).includes("/olive/jobs/submit")) return submitPromise;
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ status: "cancelled" }),
+          } as Response);
+        }),
+      );
+
+      const { result } = renderHook(() => useAgentMode());
+      act(() => {
+        void result.current.startAgent({ recipeJson: "{}" });
+      });
+
+      let stopSettled: boolean | undefined;
+      let stopResult: Promise<boolean> | undefined;
+      act(() => {
+        stopResult = result.current.stopAgent().then((ok) => {
+          stopSettled = ok;
+          return ok;
+        });
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(stopSettled).toBeUndefined();
+      expect(result.current.agentRunning).toBe(true);
+
+      await act(async () => {
+        resolveSubmit({
+          ok: true,
+          json: async () => ({ jobId: "job-after-timeout" }),
+        } as Response);
+        expect(await stopResult).toBe(true);
+      });
+
+      expect(result.current.agentRunning).toBe(false);
+      expect(result.current.outcome?.status).toBe("cancelled");
+    });
+
     it("resolves deferred stop after pending submit is cancelled", async () => {
       let resolveSubmit: (value: Response) => void = () => {};
       const submitPromise = new Promise<Response>((resolve) => {

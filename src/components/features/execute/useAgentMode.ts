@@ -171,6 +171,10 @@ export function useAgentMode(): UseAgentModeReturn {
     clearStartTimeout();
     startTimeoutRef.current = setTimeout(() => {
       if (thisGen !== runGenerationRef.current) return;
+      startTimeoutRef.current = null;
+      // A deferred Stop is waiting on submit+cancel. Do not claim success or
+      // bump generation — that would hide Stop and skip a checked cancel.
+      if (stopRequestedRef.current) return;
       runGenerationRef.current += 1;
       const orphanId = jobIdRef.current;
       const now = new Date();
@@ -193,8 +197,6 @@ export function useAgentMode(): UseAgentModeReturn {
           : START_TIMEOUT_MS,
         errorDescription: "Agent failed to start within 10 seconds",
       });
-      startTimeoutRef.current = null;
-      resolvePendingStop(true);
       if (orphanId) void requestAgentCancel(orphanId);
     }, START_TIMEOUT_MS);
 
@@ -250,7 +252,17 @@ export function useAgentMode(): UseAgentModeReturn {
         return;
       }
       if (thisGen !== runGenerationRef.current) {
-        if (data.jobId) void requestAgentCancel(data.jobId);
+        if (!data.jobId) {
+          resolvePendingStop(true);
+          return;
+        }
+        let cancelOk = false;
+        try {
+          cancelOk = (await requestAgentCancel(data.jobId)).ok;
+        } catch {
+          cancelOk = false;
+        }
+        resolvePendingStop(cancelOk);
         return;
       }
       if (!resp.ok || !data.jobId) {
