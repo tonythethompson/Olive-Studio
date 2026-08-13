@@ -11,7 +11,6 @@ export interface RecipeGraphViewProps {
   /** Optional override — defaults to Zustand store */
   state?: UIState;
   setState?: (s: Partial<UIState>) => void;
-  showDot?: boolean;
 }
 
 /**
@@ -19,12 +18,10 @@ export interface RecipeGraphViewProps {
  *
  * @param state - Optional UI state override; when omitted, state is read from the pipeline store.
  * @param setState - Optional state update handler; when omitted, the pipeline store handler is used.
- * @param showDot - Whether to display the graph's dot visualization.
  */
 export function RecipeGraphView({
   state: propState,
   setState: propSetState,
-  showDot = true,
 }: RecipeGraphViewProps) {
   const storeState = usePipelineState();
   const state = propState ?? storeState.state;
@@ -55,12 +52,11 @@ export function RecipeGraphView({
   /* eslint-enable react-hooks/exhaustive-deps */
 
   return (
-    <div className="flex flex-col h-full min-h-[560px] overflow-x-auto">
+    <div className="flex flex-col h-full min-h-[400px] overflow-x-auto">
       <GraphCanvas
         state={state}
         selectedNodeId={selectedNodeId}
         onSelectNode={setSelectedNodeId}
-        showDot={showDot}
         layoutTick={layoutTick}
         onLayoutTick={bumpLayout}
       />

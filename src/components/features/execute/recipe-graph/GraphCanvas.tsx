@@ -1,14 +1,8 @@
-import { useLayoutEffect, useRef, type KeyboardEvent, type ReactElement } from "react";
+import { useLayoutEffect, useRef, type KeyboardEvent } from "react";
 import { getPipelineValidation } from "@/lib/pipelineValidation";
 import { UIState } from "@/types";
-import { buildPipelineSteps, buildSegmentCurve, type GraphPoint } from "./graphLayout";
+import { buildPipelineSteps } from "./graphLayout";
 import { getNodePreviewData } from "./nodePreview";
-import {
-  ARROW_MARKER_ID,
-  GraphSvgDefs,
-  PIPELINE_DOT_SYMBOL_ID,
-  WIRE_GRADIENT_ID,
-} from "./svgDefs";
 
 /** Left-to-right / reading order for arrow-key graph navigation. */
 export const GRAPH_NODE_ORDER = [
@@ -27,7 +21,6 @@ interface GraphCanvasProps {
   state: UIState;
   selectedNodeId: string;
   onSelectNode: (id: string) => void;
-  showDot: boolean;
   layoutTick: number;
   onLayoutTick: () => void;
 }
@@ -38,7 +31,6 @@ interface GraphCanvasProps {
  * @param state - The current recipe and pipeline state
  * @param selectedNodeId - The identifier of the currently selected graph node
  * @param onSelectNode - Handles selection of a graph node
- * @param showDot - Whether to display animated dots on the connections
  * @param layoutTick - Value used to trigger layout recalculation
  * @param onLayoutTick - Triggers recalculation of the graph layout
  */
@@ -46,13 +38,11 @@ export function GraphCanvas({
   state,
   selectedNodeId,
   onSelectNode,
-  showDot,
   layoutTick,
   onLayoutTick,
 }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const pipelineSteps = buildPipelineSteps(state.passes);
-  const activeNodes = pipelineSteps.filter((s) => s.active);
   const validation = getPipelineValidation(state);
 
   const nodeIssueLevel = (nodeId: string): "critical" | "warning" | null => {
@@ -123,176 +113,6 @@ export function GraphCanvas({
     const forward = event.key === "ArrowRight" || event.key === "ArrowDown";
     const nextIdx = forward ? (idx + 1) % order.length : (idx - 1 + order.length) % order.length;
     focusNode(order[nextIdx]);
-  };
-
-  const getConnectionPoints = (fromId: string, toId: string): { from: GraphPoint; to: GraphPoint } | null => {
-    if (!containerRef.current) return null;
-    const fromElem = document.getElementById(`node-btn-${fromId}`);
-    const toElem = document.getElementById(`node-btn-${toId}`);
-    if (!fromElem || !toElem) return null;
-
-    const parentRect = containerRef.current.getBoundingClientRect();
-    const toParent = (rect: DOMRect) => ({
-      left: rect.left - parentRect.left,
-      top: rect.top - parentRect.top,
-      right: rect.right - parentRect.left,
-      bottom: rect.bottom - parentRect.top,
-      cx: rect.left - parentRect.left + rect.width / 2,
-      cy: rect.top - parentRect.top + rect.height / 2,
-    });
-
-    const fromBox = toParent(fromElem.getBoundingClientRect());
-    const toBox = toParent(toElem.getBoundingClientRect());
-    const dx = toBox.cx - fromBox.cx;
-    const dy = toBox.cy - fromBox.cy;
-
-    if (Math.abs(dx) >= Math.abs(dy)) {
-      return dx >= 0
-        ? { from: { x: fromBox.right, y: fromBox.cy }, to: { x: toBox.left, y: toBox.cy } }
-        : { from: { x: fromBox.left, y: fromBox.cy }, to: { x: toBox.right, y: toBox.cy } };
-    }
-
-    return dy >= 0
-      ? { from: { x: fromBox.cx, y: fromBox.bottom }, to: { x: toBox.cx, y: toBox.top } }
-      : { from: { x: fromBox.cx, y: fromBox.top }, to: { x: toBox.cx, y: toBox.bottom } };
-  };
-
-  const renderSVGConnections = () => {
-    if (!containerRef.current) return null;
-
-    const paths: ReactElement[] = [];
-    const parentRect = containerRef.current.getBoundingClientRect();
-    const arcYTop = 28;
-    const numSegs = activeNodes.length - 1;
-    const totalDur = Math.max(2, numSegs * 0.8);
-
-    /** Shared renderer for a single connection segment (normal or bypass). */
-    const renderSegment = (opts: {
-      key: string;
-      d: string;
-      hasSkip: boolean;
-      tStart: number;
-      tEnd: number;
-      tStartBefore: number;
-      tEndAfter: number;
-    }): ReactElement => (
-      <g key={opts.key}>
-        <path
-          d={opts.d}
-          fill="none"
-          stroke={opts.hasSkip ? "rgba(141, 168, 64, 0.08)" : "rgba(141, 168, 64, 0.12)"}
-          strokeWidth={opts.hasSkip ? 5 : 6}
-          className="transition-all duration-300"
-        />
-        <path
-          d={opts.d}
-          fill="none"
-          stroke={`url(#${WIRE_GRADIENT_ID})`}
-          strokeWidth={opts.hasSkip ? 1.5 : 2}
-          strokeDasharray="6 6"
-          strokeOpacity={opts.hasSkip ? 0.6 : 1}
-          className="transition-all duration-300"
-          markerEnd={`url(#${ARROW_MARKER_ID})`}
-        >
-          <animate attributeName="stroke-dashoffset" from="12" to="0" dur="0.7s" repeatCount="indefinite" />
-        </path>
-        {showDot && (
-          <use href={`#${PIPELINE_DOT_SYMBOL_ID}`} opacity="0">
-            <animateMotion
-              dur={`${totalDur}s`}
-              repeatCount="indefinite"
-              path={opts.d}
-              calcMode="linear"
-              keyPoints="0;0;1;1"
-              keyTimes={`0;${opts.tStart};${opts.tEnd};1`}
-            />
-            <animate
-              attributeName="opacity"
-              dur={`${totalDur}s`}
-              repeatCount="indefinite"
-              values="0;0;1;1;0;0"
-              keyTimes={`0;${opts.tStartBefore};${opts.tStart};${opts.tEnd};${opts.tEndAfter};1`}
-            />
-          </use>
-        )}
-      </g>
-    );
-
-    for (let i = 0; i < numSegs; i++) {
-      const fromNode = activeNodes[i];
-      const toNode = activeNodes[i + 1];
-      const fromPipelineIdx = pipelineSteps.findIndex((s) => s.id === fromNode.id);
-      const toPipelineIdx = pipelineSteps.findIndex((s) => s.id === toNode.id);
-      const hasSkip = pipelineSteps.slice(fromPipelineIdx + 1, toPipelineIdx).some((s) => !s.active);
-
-      const tStart = i / numSegs;
-      const tEnd = (i + 1) / numSegs;
-      const tStartBefore = Math.max(0, tStart - 0.001);
-      const tEndAfter = Math.min(1, tEnd + 0.001);
-
-      let d: string;
-
-      if (hasSkip) {
-        const points = getConnectionPoints(fromNode.id, toNode.id);
-        const dx = points ? points.to.x - points.from.x : 0;
-        const dy = points ? points.to.y - points.from.y : 0;
-        // Skipped passes in pipeline order, but nodes stack vertically (e.g. conversion → quant):
-        // draw a direct down connector instead of arcing over the whole graph.
-        const useDirectVertical = points && Math.abs(dy) > Math.abs(dx);
-
-        if (useDirectVertical) {
-          d = buildSegmentCurve(points.from, points.to);
-        } else {
-          const fromElem = document.getElementById(`node-btn-${fromNode.id}`);
-          const toElem = document.getElementById(`node-btn-${toNode.id}`);
-          if (!fromElem || !toElem) continue;
-
-          const fromR = fromElem.getBoundingClientRect();
-          const toR = toElem.getBoundingClientRect();
-          const fromX = fromR.left - parentRect.left + fromR.width / 2;
-          const fromY = fromR.top - parentRect.top;
-          const toX = toR.left - parentRect.left + toR.width / 2;
-          const toY = toR.top - parentRect.top;
-          const arcY = arcYTop;
-
-          d = `M ${fromX} ${fromY} C ${fromX} ${arcY}, ${toX} ${arcY}, ${toX} ${toY}`;
-
-          paths.push(
-            <path
-              key={`bypass-lane-${fromNode.id}-${toNode.id}`}
-              d={d}
-              fill="none"
-              stroke="rgba(100, 116, 139, 0.08)"
-              strokeWidth="8"
-              className="transition-all duration-300"
-            />,
-          );
-        }
-      } else {
-        const points = getConnectionPoints(fromNode.id, toNode.id);
-        if (!points) continue;
-        d = buildSegmentCurve(points.from, points.to);
-      }
-
-      paths.push(renderSegment({
-        key: `${fromNode.id}-${toNode.id}`,
-        d,
-        hasSkip,
-        tStart,
-        tEnd,
-        tStartBefore,
-        tEndAfter,
-      }));
-    }
-
-    return (
-      <svg className="absolute inset-0 pointer-events-none w-full h-full z-0 overflow-visible">
-        <defs>
-          <GraphSvgDefs />
-        </defs>
-        {paths}
-      </svg>
-    );
   };
 
   const renderPassNode = (id: string) => {
@@ -468,9 +288,6 @@ export function GraphCanvas({
         backgroundSize: "24px 24px",
       }}
     >
-      {/* eslint-disable-next-line react-hooks/refs -- intentional: SVG connections read DOM layout during render (client-side SPA, no SSR) */}
-      {renderSVGConnections()}
-
       <div className="grid grid-cols-1 wide:grid-cols-12 gap-y-3 wide:gap-3 relative z-10 items-center justify-between h-full w-full min-w-0 wide:min-w-[720px]">
         <div className="wide:col-span-2 flex flex-col justify-center items-center h-full w-full">
           <div className="text-sm text-slate-400 mb-2">Input</div>
