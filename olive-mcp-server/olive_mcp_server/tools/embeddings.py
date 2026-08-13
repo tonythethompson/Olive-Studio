@@ -1,7 +1,12 @@
 """Shared embedding utilities for semantic knowledge-base search.
 
-Uses sentence-transformers all-MiniLM-L6-v2 (384-dim, ~80MB, CPU-only).
+Uses BAAI/bge-small-en-v1.5 (384-dim, ~130MB, CPU-only, retrieval-tuned).
 The model is loaded lazily on first encode call, not at import time.
+
+BGE models require a query instruction prefix for retrieval (s2p) tasks:
+  "Represent this sentence for searching relevant passages: "
+This prefix is applied to queries in ``encode_query`` but NOT to indexed
+passages in ``encode_texts`` / ``build_kb_index``.
 """
 
 from __future__ import annotations
@@ -12,9 +17,11 @@ from typing import Any
 
 import numpy as np
 
-MODEL_NAME = "all-MiniLM-L6-v2"
+MODEL_NAME = "BAAI/bge-small-en-v1.5"
 EMBEDDING_DIM = 384
 DEFAULT_THRESHOLD = 0.30
+# BGE retrieval query instruction (s2p). Prepended to queries only, not passages.
+QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages: "
 
 _model = None
 _model_lock = threading.Lock()
@@ -59,10 +66,15 @@ def encode_texts(texts: Iterable[str]) -> np.ndarray:
 
 
 def encode_query(query: str) -> np.ndarray:
-    """Encode a single query string into a (384,) float32 vector."""
+    """Encode a single query string into a (384,) float32 vector.
+
+    Prepends the BGE retrieval instruction prefix so the query embedding
+    aligns with passage embeddings from ``encode_texts`` / ``build_kb_index``
+    (which do NOT receive the prefix).
+    """
     if not query or not str(query).strip():
         return np.zeros((EMBEDDING_DIM,), dtype=np.float32)
-    return encode_texts([str(query)])[0]
+    return encode_texts([QUERY_INSTRUCTION + str(query)])[0]
 
 
 def cosine_similarity_scores(

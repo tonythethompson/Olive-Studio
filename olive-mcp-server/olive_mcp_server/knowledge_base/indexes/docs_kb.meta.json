@@ -1,7 +1,7 @@
 {
   "stem": "docs_kb",
   "kind": "pairs",
-  "model": "all-MiniLM-L6-v2",
+  "model": "BAAI/bge-small-en-v1.5",
   "dim": 384,
   "count": 4385,
   "content_hash": "192658843ab943214a6b5236516e6c1cf3b812da76e5b20d2bb0780f3344b00e",

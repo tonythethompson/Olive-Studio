@@ -98,7 +98,7 @@ def test_semantic_match_without_exact_pattern(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_paraphrased_oom_realistic_score_vector(monkeypatch: pytest.MonkeyPatch):
-    """Regression: realistic MiniLM-like scores must rank oom-quantization first.
+    """Regression: realistic embedding-model-like scores must rank oom-quantization first.
 
     Freezes approximate cosine values observed when encoding error_message only
     (without pass_name contamination).
@@ -377,15 +377,15 @@ def test_scoring_uses_index_entry_list(monkeypatch: pytest.MonkeyPatch):
     assert result["matched_entry"] == "custom-first"
 
 
-def test_real_minilm_paraphrased_oom_optional():
+def test_real_bge_paraphrased_oom_optional():
     """Real-model check when sentence-transformers is installed: paraphrased OOM."""
     pytest.importorskip("sentence_transformers")
     ts._ts_index_cache = {}
 
     result = troubleshoot_olive_error(
         error_message=(
-            "Process killed while running weight-only packing "
-            "due to insufficient device memory"
+            "Runtime killed the process during quantization "
+            "because GPU memory was exhausted by intermediate tensors"
         ),
         pass_name="OnnxQuantization",
     )
