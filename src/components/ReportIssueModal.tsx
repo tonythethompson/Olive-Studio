@@ -18,6 +18,7 @@ import {
   type ReportArea,
   type TelemetryOptionId,
   type IssueReport,
+  categoryHasSeverity,
   collectTelemetry,
   buildReport,
 } from "@/lib/issueReport";
@@ -28,6 +29,7 @@ interface ReportIssueModalProps {
   state?: UIState;
   hardwareProbe?: HardwareProbeResult | null;
   executionLogs?: string[];
+  chatLog?: string[];
   mcpDiagnostic?: unknown;
   /** Pre-fill the area dropdown (e.g., from execution context). */
   defaultArea?: ReportArea;
@@ -43,6 +45,7 @@ export function ReportIssueModal({
   state,
   hardwareProbe,
   executionLogs,
+  chatLog,
   mcpDiagnostic: _mcpDiagnostic,
   defaultArea,
   defaultDescription,
@@ -78,6 +81,16 @@ export function ReportIssueModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only depend on open
   }, [open]);
 
+  // Lock severity to N/A whenever the category isn't "bug" — severity only
+  // describes bug impact and has no meaning for feature requests etc.
+  useEffect(() => {
+    if (!categoryHasSeverity(category)) {
+      setSeverity("n-a");
+    } else {
+      setSeverity((prev) => (prev === "n-a" ? "annoying" : prev));
+    }
+  }, [category]);
+
   const toggleTelemetry = useCallback((id: TelemetryOptionId) => {
     setSelectedTelemetry((prev) => {
       const next = new Set(prev);
@@ -97,6 +110,7 @@ export function ReportIssueModal({
         state,
         hardwareProbe,
         executionLogs,
+        chatLog,
       }),
       frequencyInfo: frequencyInfo
         ? {
@@ -107,12 +121,12 @@ export function ReportIssueModal({
           }
         : null,
     }),
-    [category, severity, area, description, selectedTelemetry, state, hardwareProbe, executionLogs, frequencyInfo],
+    [category, severity, area, description, selectedTelemetry, state, hardwareProbe, executionLogs, chatLog, frequencyInfo],
   );
 
   const { url, fullText, urlExceededBudget } = useMemo(
-    () => buildReport(report, { state, hardwareProbe, executionLogs }),
-    [report, state, hardwareProbe, executionLogs],
+    () => buildReport(report, { state, hardwareProbe, executionLogs, chatLog }),
+    [report, state, hardwareProbe, executionLogs, chatLog],
   );
 
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -283,8 +297,9 @@ export function ReportIssueModal({
               <select
                 id="report-severity"
                 value={severity}
+                disabled={!categoryHasSeverity(category)}
                 onChange={(e) => setSeverity(e.target.value as ReportSeverity)}
-                className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-electric-blue cursor-pointer"
+                className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-electric-blue cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {REPORT_SEVERITIES.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -378,7 +393,7 @@ export function ReportIssueModal({
               {showPreview && (
                 <div className="bg-slate-950 border border-slate-800 rounded-md p-3 text-sm font-mono text-slate-400 max-h-40 overflow-y-auto">
                   {Array.from(selectedTelemetry).map((key) => {
-                    const telemetry = collectTelemetry([key], { state, hardwareProbe, executionLogs });
+                    const telemetry = collectTelemetry([key], { state, hardwareProbe, executionLogs, chatLog });
                     const value = telemetry[key] ?? "N/A";
                     const label = TELEMETRY_OPTIONS.find((o) => o.id === key)?.label ?? key;
                     return (

@@ -224,7 +224,7 @@
   html {
     /* Belt-and-braces: prevent horizontal overscroll as well. */
     overflow-x: hidden;
-    font-size: 18px;
+    font-size: 16px;
   }
 
   body {

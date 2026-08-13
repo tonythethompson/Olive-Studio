@@ -228,8 +228,32 @@ export function mountLmStudioRoutes(router: Router): void {
       }, LMS_GET_MAX_MS);
       guard.signal.addEventListener("abort", killProc, { once: true });
 
+      // `lms get` can go silent for long stretches on a stalled connection well
+      // before the 20-minute hard timeout. Surface that instead of leaving the
+      // user staring at a frozen percentage with no idea whether it's still working.
+      const STALL_WARN_MS = 45_000;
+      let stallTimer: ReturnType<typeof setTimeout> | undefined;
+      const armStallTimer = () => {
+        if (stallTimer) clearTimeout(stallTimer);
+        stallTimer = setTimeout(() => {
+          send({
+            type: "log",
+            message: `No progress for ${Math.round(STALL_WARN_MS / 1000)}s — the download may be stuck. You can cancel and retry.`,
+          });
+        }, STALL_WARN_MS);
+        if (typeof stallTimer.unref === "function") stallTimer.unref();
+      };
+      const clearStallTimer = () => {
+        if (stallTimer) {
+          clearTimeout(stallTimer);
+          stallTimer = undefined;
+        }
+      };
+      armStallTimer();
+
       const logBuf: string[] = [];
       const pushCliChunk = (d: Buffer) => {
+        armStallTimer();
         for (const line of splitCliLines(d.toString())) {
           logBuf.push(line);
           if (logBuf.length > 80) logBuf.splice(0, logBuf.length - 80);
@@ -250,6 +274,7 @@ export function mountLmStudioRoutes(router: Router): void {
       proc.on("close", (code) => {
         clearTimeout(maxTimer);
         clearKillEscalate();
+        clearStallTimer();
         void (async () => {
           try {
             if (!guard.disconnected()) {
@@ -300,6 +325,7 @@ export function mountLmStudioRoutes(router: Router): void {
       proc.on("error", (err) => {
         clearTimeout(maxTimer);
         clearKillEscalate();
+        clearStallTimer();
         if (!guard.disconnected()) send({ type: "error", error: err.message });
         releaseBusy();
         guard.endOnce();
