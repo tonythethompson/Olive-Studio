@@ -17,8 +17,9 @@ import {
   isCatalogStale,
   catalogEntryToRecipeItem,
   inferDeviceTarget,
+  type CatalogEntry,
+  type CatalogMetadata,
 } from "@/lib/recipeCatalogPin";
-import type { CatalogEntry, CatalogMetadata } from "@/lib/recipeCatalogPin";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -83,7 +84,6 @@ function arbInvalidCharsSha(): fc.Arbitrary<string> {
 
 /** Generate a 40-char string with uppercase hex chars (should still fail strict check). */
 function arbUppercaseSha(): fc.Arbitrary<string> {
-  const upperHex = "0123456789ABCDEF";
   return fc
     .tuple(
       // Position to inject uppercase (0-39)
