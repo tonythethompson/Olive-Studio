@@ -105,14 +105,17 @@ VRAM (GB) = Parameters (B) x Bytes per Parameter + Overhead
 
 ### Will my model fit?
 
+Limits below include runtime overhead (activations, KV cache, ORT/CUDA). They are
+smaller than a weights-only estimate so an 8 GB card is not assigned a 14B INT4 model.
+
 | GPU VRAM | Max Model (INT4) | Max Model (INT8) | Max Model (FP16) |
 |----------|------------------|------------------|-------------------|
-| 8 GB | ~14B | ~7B | ~3B |
-| 12 GB | ~22B | ~11B | ~5B |
-| 16 GB | ~30B | ~14B | ~7B |
-| 24 GB | ~46B | ~22B | ~11B |
-| 48 GB | ~94B | ~46B | ~22B |
-| 80 GB | ~158B | ~78B | ~38B |
+| 8 GB | ~7B | ~3B | ~1.5B |
+| 12 GB | ~13B | ~7B | ~3B |
+| 16 GB | ~20B | ~10B | ~5B |
+| 24 GB | ~32B | ~16B | ~8B |
+| 48 GB | ~70B | ~35B | ~18B |
+| 80 GB | ~120B | ~60B | ~30B |
 
 ## Decision Tree: Which Optimization Path?
 
@@ -133,7 +136,7 @@ What's the deployment target?
     - NPU: INT8 only, batch 1
     
   CPU only --> CPUExecutionProvider
-    - LLM: RTN INT4 (data-free, fast) or GPTQ INT4 (better quality)
+    - LLM: HQQ or RTN INT4 (data-free). GPTQ is GPU-only and will fail validation on CPU.
     - CNN/Vision: PTQ INT8 with MinMax calibration
     
   Qualcomm NPU --> QNN EP

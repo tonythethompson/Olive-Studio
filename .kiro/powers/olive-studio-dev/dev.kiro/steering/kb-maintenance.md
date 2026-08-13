@@ -14,8 +14,7 @@ knowledge_base/
 ├── integration_recipes.json    # Pre-built end-to-end recipes
 ├── troubleshooting.json        # Error patterns with fixes
 ├── studio_troubleshooting.json # Studio-specific UI/bridge errors
-├── quirks.json                 # Edge cases for specific configurations
-├── candidate_quirks.json       # Proposed quirks awaiting validation
+├── quirks.json                 # Edge cases (categories object, loaded by tools)
 ├── update_report.json          # Last KB update metadata
 └── indexes/                    # Pre-built semantic search indexes
     ├── docs_embeddings.npy     # Documentation embedding vectors
@@ -36,14 +35,14 @@ Each pass entry follows this schema:
   "type": "category",
   "class": "olive.passes.my_new_pass.MyNewPass",
   "description": "One sentence describing what the pass does.",
-  "input_format": "onnx",
-  "output_format": "onnx",
-  "parameters": {
+  "input_formats": ["onnx"],
+  "output_formats": ["onnx"],
+  "required_params": [],
+  "optional_params": {
     "param_name": {
       "type": "string",
       "default": "value",
-      "description": "What this parameter controls.",
-      "valid_values": ["option_a", "option_b"]
+      "description": "What this parameter controls."
     }
   },
   "hardware_requirements": ["gpu"],
@@ -59,8 +58,8 @@ Each pass entry follows this schema:
 - `name` — Exact Olive pass class name
 - `type` — One of: `quantization`, `conversion`, `graph_optimization`, `pruning`, `finetuning`, `distillation`, `performance_tuning`
 - `description` — Clear, concise (shown to agents)
-- `input_format` / `output_format` — `onnx`, `pytorch`, `openvino`, `qnn`, or `any`
-- `parameters` — At minimum the key user-facing parameters
+- `input_formats` / `output_formats` — arrays of `onnx`, `torch`, `hf`, `openvino`, `qnn`, or `any`
+- `required_params` / `optional_params` — at minimum the key user-facing parameters
 
 ### Optional but recommended:
 - `hardware_requirements` — `["cpu"]`, `["gpu"]`, `["npu"]`
@@ -133,56 +132,49 @@ Each pass entry follows this schema:
 ```json
 {
   "id": "modelname_hardware_method",
-  "title": "Model Name → INT4 on Hardware",
+  "name": "Model Name INT4 on Hardware",
   "description": "End-to-end recipe for optimizing ModelName for TargetHW.",
-  "model_type": "LLM",
+  "model_type": ["LLM"],
   "target_hardware": ["nvidia", "cpu"],
   "source_format": "PyTorch",
-  "passes": [
-    {
-      "name": "conversion",
-      "type": "OnnxConversion",
-      "config": { "use_external_data_format": true }
-    },
-    {
-      "name": "quantization",
-      "type": "OnnxQuantization",
-      "config": { "weight_type": "QInt4", "calibrate_method": "MinMax" }
+  "passes": ["OnnxConversion", "OnnxStaticQuantization"],
+  "recipe": {
+    "input_model": { "type": "HfModel", "config": { "model_path": "org/model" } },
+    "data_configs": [],
+    "passes": {
+      "convert": { "type": "OnnxConversion", "config": { "use_external_data_format": true } }
     }
-  ],
-  "expected_outcomes": {
-    "size_reduction": "~75%",
-    "latency_improvement": "2-3x",
-    "accuracy_impact": "<2% drop"
-  },
-  "prerequisites": ["CUDA 12+", "16GB+ VRAM"],
-  "tags": ["popular", "validated"]
+  }
 }
 ```
+
+The loader indexes `recipe["name"]` and the nested `recipe["recipe"]` object. Do not use `title` or a top-level pass-config list as the recipe body.
 
 ### Naming convention for IDs:
 - `{model}_{hardware}_{method}` — e.g., `llama3_nvidia_awq`, `resnet50_cpu_ptq`
 
 ## Adding a Quirk Entry
 
-**File:** `quirks.json` (validated) or `candidate_quirks.json` (unvalidated)
+**File:** `quirks.json` only. There is no `candidate_quirks.json` loader.
+
+Entries live under a `categories` object (not a top-level array):
 
 ```json
 {
-  "id": "quirk-kebab-id",
-  "applies_to": {
-    "passes": ["PassName"],
-    "models": ["model-pattern*"],
-    "hardware": ["category"]
-  },
-  "description": "What's quirky about this combination.",
-  "workaround": "How to avoid the issue.",
-  "verified": true,
-  "added_date": "2026-08-13"
+  "version": "0.3.0",
+  "last_updated": "2026-08-13",
+  "categories": {
+    "quantization": [
+      {
+        "id": "quirk-kebab-id",
+        "title": "Short title",
+        "description": "What's quirky about this combination.",
+        "source": "https://example.com or empirical note"
+      }
+    ]
+  }
 }
 ```
-
-Use `candidate_quirks.json` for unverified reports. Move to `quirks.json` after validation.
 
 ## Rebuilding Semantic Search Indexes
 
@@ -208,7 +200,7 @@ cd olive-mcp-server
 ### Index files:
 - `indexes/docs_embeddings.npy` + `docs_metadata.json` — for `search_olive_documentation`
 - `indexes/troubleshoot_embeddings.npy` + `troubleshoot_metadata.json` — for `troubleshoot_olive_error`
-- Uses BAAI/bge-small-en-v1.5 (~130MB model, downloaded on first build)
+- Uses `all-MiniLM-L6-v2` (384-dim; same model as `olive_mcp_server/tools/embeddings.py`)
 
 ## Updating the Compatibility Matrix
 

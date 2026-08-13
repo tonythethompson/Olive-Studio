@@ -11,27 +11,32 @@ Complete checklist for adding a new AI provider to the Olive Studio assistant.
 
 **Directory:** `src/server/services/ai/`
 
-Create `myProvider.ts` implementing the `AiProviderPlugin` interface:
+Add the new provider id to `ProviderConfig["provider"]` in `src/server/types.ts` first.
+Then create `myProvider.ts` implementing `AiProviderPlugin`:
 
 ```typescript
+import type { ProviderConfig, AIChatMessage } from "../../types.ts";
 import { registerProvider, type AiProviderPlugin } from "./registry.js";
+import { callOpenAICompat } from "./openai.js";
 
 const plugin: AiProviderPlugin = {
-  name: "my-provider",
+  name: "openai-compat",
   label: "My Provider",
   defaultModel: "model-name",
+  defaultBaseUrl: "https://api.myprovider.com/v1",
   envVarNames: ["MY_PROVIDER_API_KEY"],
 
-  buildConfig(env) {
+  buildConfig(apiKey: string): ProviderConfig {
     return {
-      apiKey: env.MY_PROVIDER_API_KEY,
-      baseUrl: "https://api.myprovider.com/v1",
+      provider: "openai-compat",
+      apiKey,
+      model: "model-name",
+      endpoint: "https://api.myprovider.com/v1",
     };
   },
 
-  async call(messages, config, options) {
-    // Implement the chat completion call
-    // Return { content: string, usage?: { ... } }
+  call(cfg, system, messages, wantJson) {
+    return callOpenAICompat(cfg, system, messages, wantJson);
   },
 };
 

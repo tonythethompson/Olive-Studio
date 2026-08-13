@@ -18,7 +18,11 @@ This skill covers hardware detection, execution provider (EP) mapping, and hardw
 
 ## Step 1: Probe Local Hardware
 
-Detect what's available on the current machine:
+Detect what's available on the current machine.
+
+**Prerequisite:** Studio must be running and `OLIVE_STUDIO_API_URL` must point at it
+(typically `http://127.0.0.1:3000`). This tool does not probe hardware by itself;
+without Studio it returns `studio_unavailable`.
 
 ```
 Tool: get_runtime_ep_hints

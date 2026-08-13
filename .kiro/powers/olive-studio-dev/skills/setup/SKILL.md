@@ -30,17 +30,14 @@ Opens Express + Vite on http://localhost:3000 with HMR.
 
 ## Step 3: Set Up MCP Server (Optional)
 
-The Python MCP server provides 27 tools for pass catalog, validation, and troubleshooting. The web app runs fine without it.
+The Python MCP server provides 32 tools for pass catalog, validation, and troubleshooting. The web app runs fine without it.
 
 ```bash
-cd olive-mcp-server
-python -m venv .venv
-
-# Windows:
-.venv\Scripts\pip install -e ".[dev]" "mcp<2"
+# Windows (PowerShell), from repo root:
+.\scripts\setup-mcp.ps1
 
 # Linux/macOS:
-.venv/bin/pip install -e ".[dev]" "mcp<2"
+./scripts/setup-mcp.sh
 ```
 
 **Critical:** Pin `mcp<2` — version 2.x removes `mcp.server.fastmcp` and breaks all imports.
@@ -54,26 +51,14 @@ Verify:
 .venv/bin/python -m pytest tests -q
 ```
 
-## Step 4: Configure Kiro MCP (Optional)
+## Step 4: Kiro MCP connection
 
-Create `.kiro/settings/mcp.json` manually (cannot be written by agents):
+Do **not** commit `.kiro/settings/mcp.json`. The `olive-mcp-tools` Power
+(`.kiro/powers/olive-mcp-tools/mcp.json`) already launches the server via
+`node scripts/run-olive-mcp.mjs` (venv interpreter when present).
 
-```json
-{
-  "mcpServers": {
-    "olive-mcp": {
-      "type": "stdio",
-      "command": "python",
-      "args": ["olive-mcp-server/run.py"],
-      "env": {
-        "OLIVE_MCP_RETRIEVAL_MODE": "auto",
-        "OLIVE_STUDIO_API_URL": "http://127.0.0.1:3000",
-        "PYTHONPATH": "olive-mcp-server"
-      }
-    }
-  }
-}
-```
+Create a local `.kiro/settings/mcp.json` only if you need to override that Power
+(different env vars). Keep it untracked.
 
 ## Step 5: Verify the Setup
 

@@ -46,7 +46,7 @@ pip install -e ".[dev]" "mcp<2"
 
 **Fix:** Don't run full suites locally. Push the branch and let GitHub Actions CI run them. For local dev:
 ```bash
-vitest run src/lib/specificFile.test.ts
+pnpm vitest run src/lib/specificFile.test.ts
 ```
 
 ### Integration test setup fails

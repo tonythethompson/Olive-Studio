@@ -45,24 +45,30 @@ For LLMs (most common):
 
 ```json
 {
-  "data_config": {
-    "name": "calibration_data",
-    "type": "HuggingfaceContainer",
-    "load_dataset_config": {
-      "data_name": "wikitext",
-      "subset": "wikitext-2-raw-v1",
-      "split": "train"
-    },
-    "pre_process_data_config": {
-      "type": "text_generation",
-      "max_length": 2048,
-      "add_special_tokens": true
-    },
-    "dataloader_config": {
-      "batch_size": 1,
-      "num_samples": 256
+  "data_configs": [
+    {
+      "name": "calibration_data",
+      "type": "HuggingFaceContainer",
+      "load_dataset_config": {
+        "path": "wikitext",
+        "subset": "wikitext-2-raw-v1",
+        "split": "train"
+      },
+      "pre_process_data_config": {
+        "input_cols": ["text"],
+        "label_cols": ["label"],
+        "padding": "max_length",
+        "max_length": 2048,
+        "normalization": "none"
+      },
+      "dataloader_config": {
+        "batch_size": 1,
+        "drop_last": false,
+        "num_workers": 0
+      },
+      "sampling": 256
     }
-  }
+  ]
 }
 ```
 
@@ -70,24 +76,30 @@ For vision models:
 
 ```json
 {
-  "data_config": {
-    "name": "calibration_data",
-    "type": "HuggingfaceContainer",
-    "load_dataset_config": {
-      "data_name": "imagenet-1k",
-      "subset": "default",
-      "split": "validation"
-    },
-    "pre_process_data_config": {
-      "type": "image_classification",
-      "image_size": 224,
-      "normalize": true
-    },
-    "dataloader_config": {
-      "batch_size": 8,
-      "num_samples": 512
+  "data_configs": [
+    {
+      "name": "calibration_data",
+      "type": "HuggingFaceContainer",
+      "load_dataset_config": {
+        "path": "imagenet-1k",
+        "subset": "default",
+        "split": "validation"
+      },
+      "pre_process_data_config": {
+        "input_cols": ["image"],
+        "label_cols": ["label"],
+        "padding": "max_length",
+        "max_length": 512,
+        "normalization": "ImageNet"
+      },
+      "dataloader_config": {
+        "batch_size": 8,
+        "drop_last": false,
+        "num_workers": 0
+      },
+      "sampling": 512
     }
-  }
+  ]
 }
 ```
 
@@ -95,17 +107,27 @@ For vision models:
 
 ```json
 {
-  "data_config": {
-    "name": "calibration_data",
-    "type": "RawDataContainer",
-    "data_dir": "./calibration_samples/",
-    "input_cols": ["input_ids", "attention_mask"],
-    "label_cols": ["labels"],
-    "dataloader_config": {
-      "batch_size": 1,
-      "num_samples": 256
+  "data_configs": [
+    {
+      "name": "calibration_data",
+      "type": "DataContainer",
+      "load_dataset_config": {
+        "data_dir": "./calibration_samples/",
+        "data_files": ["train.json"]
+      },
+      "pre_process_data_config": {
+        "input_cols": ["input_ids", "attention_mask"],
+        "label_cols": ["labels"],
+        "normalization": "custom"
+      },
+      "dataloader_config": {
+        "batch_size": 1,
+        "drop_last": false,
+        "num_workers": 0
+      },
+      "sampling": 256
     }
-  }
+  ]
 }
 ```
 
@@ -113,21 +135,28 @@ For vision models:
 
 ```json
 {
-  "data_config": {
-    "name": "calibration_data",
-    "type": "ImageFolder",
-    "data_dir": "./calibration_images/",
-    "pre_process_data_config": {
-      "image_size": 224,
-      "normalize": true,
-      "mean": [0.485, 0.456, 0.406],
-      "std": [0.229, 0.224, 0.225]
-    },
-    "dataloader_config": {
-      "batch_size": 8,
-      "num_samples": 512
+  "data_configs": [
+    {
+      "name": "calibration_data",
+      "type": "ImageNetContainer",
+      "load_dataset_config": {
+        "data_dir": "./calibration_images/"
+      },
+      "pre_process_data_config": {
+        "mean": [0.485, 0.456, 0.406],
+        "std": [0.229, 0.224, 0.225],
+        "input_size": [224, 224],
+        "interpolation": "bilinear",
+        "normalization": "ImageNet"
+      },
+      "dataloader_config": {
+        "batch_size": 8,
+        "drop_last": false,
+        "num_workers": 0
+      },
+      "sampling": 512
     }
-  }
+  ]
 }
 ```
 
@@ -176,15 +205,17 @@ Evaluation is separate from calibration — used to measure accuracy post-quanti
           "name": "perplexity",
           "type": "perplexity",
           "data_config": {
-            "type": "HuggingfaceContainer",
+            "name": "eval_data",
+            "type": "HuggingFaceContainer",
             "load_dataset_config": {
-              "data_name": "wikitext",
+              "path": "wikitext",
               "subset": "wikitext-2-raw-v1",
               "split": "test"
             },
             "dataloader_config": {
               "batch_size": 1,
-              "num_samples": 1000
+              "drop_last": false,
+              "num_workers": 0
             }
           }
         }
@@ -203,7 +234,7 @@ Evaluation is separate from calibration — used to measure accuracy post-quanti
 ## Troubleshooting
 
 ### "Calibration dataset is empty"
-- Check `data_name` and `subset` are correct for the HuggingFace dataset
+- Check `path` and `subset` are correct for the HuggingFace dataset
 - Verify `split` exists (try "train", "validation", "test")
 - Ensure `num_samples` is not larger than the dataset
 

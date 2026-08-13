@@ -116,8 +116,11 @@ Returns on success:
 - `artifact_path_refs`: Output model artifact references
 
 Returns on failure:
-- `status`: "failed" or "timeout"
+- `status`: last polled job status (typically `"failed"`, `"queued"`, or `"running"`)
+- `timed_out`: `true` when polling reached the timeout (status is **not** rewritten to `"timeout"`)
 - `logs`: Diagnostic log lines containing the failure details
+
+Treat `timed_out: true` as a timeout even if `status` is still `"running"` or `"queued"`. Use those logs with `diagnose_and_fix` / retry.
 
 ### Step 6: Handle Failures
 

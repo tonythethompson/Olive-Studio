@@ -8,11 +8,12 @@ Olive Studio is a local GUI for Microsoft Olive ONNX model optimization. It prov
 - No cloud dependency required for core functionality
 - Optional Tauri 2 desktop shell (app runs without it as a web app)
 - Includes an AI assistant that helps configure optimization pipelines
-- Ships with an MCP (Model Context Protocol) server exposing 27 tools for pass catalog, validation, and troubleshooting
+- Ships with an MCP (Model Context Protocol) server exposing 32 tools for pass catalog, validation, and troubleshooting
 
 ## Branding Rule
 
-Do **not** describe this product as "local-first", "Local First", or "Local-First" in any context. Use "local GUI", "runs on your machine", or "loopback-only" / "local-only" instead.
+Do **not** use the banned branding phrase in `.cursor/rules/no-local-first-branding.mdc`.
+Use "local GUI", "runs on your machine", or "loopback-only" / "local-only" instead.
 
 ## License
 

@@ -39,7 +39,7 @@ UIState (zustand) → commitUiStateUpdate (coercion) → buildOliveRecipe (memoi
 
 ## MCP Server
 
-- 27 tools registered via lazy `_TOOL_IMPORTS` dict
+- 32 tools registered via lazy `_TOOL_IMPORTS` dict
 - Knowledge base: `passes.json` (84+ passes), `hardware_profiles.json` (22 profiles), `compatibility_matrix.json`, `troubleshooting.json`
 - Transport: stdio (default) or SSE
 - Launcher: `olive-mcp-server/run.py` — finds project venv, sets PYTHONPATH
