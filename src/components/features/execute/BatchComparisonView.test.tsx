@@ -186,6 +186,25 @@ describe("BatchComparisonView", () => {
     expect(btn.getAttribute("aria-disabled")).toBe("false");
   });
 
+  it("does not call onCompare when the button is disabled", () => {
+    const onCompare = vi.fn();
+    const records = [makeRecord({ id: "a", status: "completed" })];
+    render(<BatchComparisonView records={records} onCompare={onCompare} />);
+    fireEvent.click(screen.getByText("Compare Results"));
+    expect(onCompare).not.toHaveBeenCalled();
+  });
+
+  it("disables Compare Results and reports the upper bound above 10 completed records", () => {
+    const records = Array.from({ length: 11 }, (_, i) =>
+      makeRecord({ id: `rec-${i}`, status: "completed" }),
+    );
+    render(<BatchComparisonView records={records} onCompare={vi.fn()} />);
+    const btn = screen.getByText("Compare Results");
+    expect(btn.getAttribute("aria-disabled")).toBe("true");
+    expect(btn.getAttribute("title")).toBe("Maximum 10 completed jobs supported");
+    expect(screen.getByRole("tooltip").textContent).toContain("Maximum 10 completed jobs supported");
+  });
+
   it("shows tooltip when Compare Results is disabled", () => {
     const records = [makeRecord({ id: "a", status: "completed" })];
     render(<BatchComparisonView records={records} onCompare={vi.fn()} completedJobCount={1} />);
