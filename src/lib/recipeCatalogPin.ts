@@ -10,9 +10,11 @@
  */
 
 import {
+  fetchGitHubRecipeJson,
   getRecipesBranch,
   OLIVE_RECIPES_BRANCH_DEFAULT,
   OLIVE_RECIPES_REPO,
+  type RecipeCatalogItem,
 } from "@/lib/oliveRecipeHub";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -330,9 +332,8 @@ export async function fetchCatalogAtSha(
   );
 
   // Convert tree entries into CatalogEntry records.
-  // The full recipe content is NOT fetched eagerly here — `content` is left as
-  // a stub. The caller (task 10.4) fetches individual recipe content on demand
-  // via the existing `fetchOliveRecipesCatalogItem` pattern.
+  // Content is deferred: load via `fetchCatalogEntryContent` so the request
+  // is addressed at `pinned.commitSha`, not the live branch tip.
   const entries: CatalogEntry[] = recipeFiles.map(
     (item: Record<string, unknown>) => {
       const path = String(item.path);
@@ -354,6 +355,32 @@ export async function fetchCatalogAtSha(
   );
 
   return entries;
+}
+
+/**
+ * Maps a pinned catalog entry to the hub item shape, carrying the commit SHA
+ * so later content fetches stay on the pin instead of branch HEAD.
+ */
+export function catalogEntryToRecipeItem(entry: CatalogEntry): RecipeCatalogItem {
+  return {
+    name: entry.name,
+    architecture: entry.architecture,
+    device: entry.deviceTarget,
+    repoPath: entry.id,
+    description: "",
+    commitSha: entry.pinned.commitSha,
+  };
+}
+
+/**
+ * Loads recipe JSON for a pinned catalog entry at `pinned.commitSha`.
+ */
+export async function fetchCatalogEntryContent(
+  entry: CatalogEntry,
+  repo: string = OLIVE_RECIPES_REPO,
+): Promise<unknown> {
+  const { json } = await fetchGitHubRecipeJson(repo, entry.pinned.commitSha, entry.id);
+  return json;
 }
 
 // ─── Staleness Detection ─────────────────────────────────────────────────────
