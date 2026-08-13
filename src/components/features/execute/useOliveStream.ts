@@ -540,7 +540,7 @@ export function useOliveStream({
     executionStatus,
     executionExitCode,
     gpuMetrics,
-    runRecipeJson: runRecipeJsonRef.current,
+    runRecipeJsonRef,
     handleExecuteLive,
     handleCancelJob,
     runRecipeJsonRef,

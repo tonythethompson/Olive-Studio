@@ -477,10 +477,9 @@ export function ExecutionWorkspace({
     executionStatus,
     executionExitCode,
     gpuMetrics,
-    runRecipeJson,
+    runRecipeJsonRef,
     handleExecuteLive,
     handleCancelJob,
-    runRecipeJsonRef,
   } = useOliveStream({
     state,
     hardwareProbe,
@@ -586,7 +585,11 @@ export function ExecutionWorkspace({
     if (executionStatus === "completed" && runRecipeJsonRef.current) {
       setCapturedRunRecipe(runRecipeJsonRef.current);
     }
+<<<<<<< HEAD
   }, [executionStatus, setCapturedRunRecipe, runRecipeJsonRef]);
+=======
+  }, [executionStatus, runRecipeJsonRef, setCapturedRunRecipe]);
+>>>>>>> 8cd60918 (Fix react-hooks/refs error by returning ref object instead of .current value)
 
   // Auto-save completed diagnoses to history
   const prevDiagnosticRef = useRef(mcpDiagnostic);
