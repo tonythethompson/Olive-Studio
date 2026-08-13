@@ -22,7 +22,8 @@ import {
 import { CHAT_JSON_RESPONSE_CONTRACT, parseChatStructuredReply } from "../../../lib/chatActions.ts";
 import { getChatScopeBlock } from "../../../lib/chatScope.ts";
 import { validateOliveRecipeStructure } from "../../../lib/oliveRecipeSchema.ts";
-import { parseUIStatePayload } from "../../../lib/pipelineValidation.ts";
+import { getAllowedQuantMethods, parseUIStatePayload } from "../../../lib/pipelineValidation.ts";
+import type { UIState } from "../../../types.ts";
 
 export function mountChatRoutes(router: Router): void {
   router.post("/ai/chat", async (req, res) => {
@@ -166,6 +167,50 @@ export function mountChatRoutes(router: Router): void {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       return res.status(500).json({ error: msg });
+    }
+  });
+
+  // ─── Quantization Recommendation ─────────────────────────────────────────
+
+  router.post("/ai/recommend-quant", async (req, res) => {
+    const body = parseBody<{ state: unknown }>(req.body, {
+      state: { type: "object", message: "Missing state" },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+    const parsedState = parseUIStatePayload(body.parsed.state);
+    if (!parsedState.ok) return res.status(400).json({ error: parsedState.error });
+    const { state } = parsedState;
+    try {
+      const allowedMethods = getAllowedQuantMethods(state.ihvProvider);
+      const ctx = buildAiWorkspaceContext(state);
+      const ctxSummary = formatAiWorkspaceContextForPrompt(ctx).slice(0, 3500);
+      const system =
+        "You recommend Olive quantization settings for the model and execution provider described below. " +
+        "Reply with ONE JSON object only (no markdown, no prose outside JSON). " +
+        `Allowed quantMethod values for this execution provider: ${allowedMethods.join(", ")}. Pick exactly one. ` +
+        'Schema: {"quantMethod": one of the allowed values, "quantPrecision": "int4"|"int8"|"fp16"}. ' +
+        'If quantMethod is "gptq", also include: {"gptqBlockSize": number (e.g. 32/64/128/256), "gptqGroupSize": number (e.g. 32/64/128), "gptqDescAct": boolean}. ' +
+        'If quantMethod is "awq", also include: {"awqGroupSize": number (e.g. 32/64/128), "awqDampPercent": number (e.g. 0.005-0.05), "awqSym": boolean}. ' +
+        'If quantMethod is "qat", also include: {"qatQuantPrecision": "int4"|"int8", "qatCalibrateMethod": "minmax"|"percentile"|"entropy", "qatCalibrateSteps": number (e.g. 5-50)}. ' +
+        "Base the choice on the model size/family and the execution provider's typical quantization support and accuracy/speed tradeoffs. Prefer well-tested defaults over exotic combinations.";
+      const reply = await callAI(system, [{ role: "user", content: ctxSummary }], true);
+      const parsed = parseJsonFromAiResponse(reply);
+      const fields = typeof parsed === "object" && parsed ? (parsed as Record<string, unknown>) : {};
+
+      // Defense: the model may hallucinate a method this provider can't run — clamp to an allowed one.
+      const requestedMethod = fields.quantMethod as UIState["passes"]["quantMethod"] | undefined;
+      const quantMethod = allowedMethods.includes(requestedMethod as never)
+        ? requestedMethod!
+        : (allowedMethods[0] ?? "ptq");
+      const requestedPrecision = fields.quantPrecision;
+      const quantPrecision =
+        requestedPrecision === "int4" || requestedPrecision === "int8" || requestedPrecision === "fp16"
+          ? requestedPrecision
+          : "int8";
+
+      return res.json({ ...fields, quantMethod, quantPrecision });
+    } catch (err: unknown) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 }
