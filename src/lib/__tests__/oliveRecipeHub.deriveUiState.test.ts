@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveUiStateFromOliveRecipe,
   getCatalogDeviceFromRecipe,
+  mapExecutionProviderFromRecipe,
 } from "../oliveRecipeHub";
 
 function recipeWithExecutionProviders(providers: unknown) {
@@ -488,3 +489,21 @@ describe("deriveUiStateFromOliveRecipe validation", () => {
     expect(withValid.passes?.pruningCriteria).toBe("l2_norm");
   });
 });
+
+describe("mapExecutionProviderFromRecipe", () => {
+  it("extracts execution provider from structured recipe object", () => {
+    const recipe = recipeWithExecutionProviders(["WebGpuExecutionProvider"]);
+    expect(mapExecutionProviderFromRecipe(recipe)).toBe("WebGpuExecutionProvider");
+  });
+
+  it("extracts execution provider directly from JSON string", () => {
+    const recipeJson = JSON.stringify(recipeWithExecutionProviders(["WebGpuExecutionProvider"]));
+    expect(mapExecutionProviderFromRecipe(recipeJson)).toBe("WebGpuExecutionProvider");
+  });
+
+  it("returns undefined for invalid JSON string or missing systems", () => {
+    expect(mapExecutionProviderFromRecipe("invalid json")).toBeUndefined();
+    expect(mapExecutionProviderFromRecipe({})).toBeUndefined();
+  });
+});
+

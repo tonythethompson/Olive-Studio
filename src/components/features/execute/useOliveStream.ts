@@ -76,6 +76,7 @@ export function useOliveStream({
 
   const beginNewRunEpoch = useCallback(() => {
     runGenerationRef.current += 1;
+    runRecipeJsonRef.current = null;
     runAbortRef.current?.abort();
     runAbortRef.current = null;
     statusAbortRef.current?.abort();
@@ -224,6 +225,7 @@ export function useOliveStream({
 
   const handleExecuteLive = useCallback(async () => {
     if (isRunning) return;
+    runRecipeJsonRef.current = null;
 
     const fresh = buildRecipeFromState(state, { hardwareProbe });
 

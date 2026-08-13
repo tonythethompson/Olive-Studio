@@ -60,12 +60,7 @@ function LoadingFallback({ label }: { label: string }) {
 /* ------------------------------------------------------------------ */
 
 function isWebGpuRecipe(recipeJson: string): boolean {
-  try {
-    const parsed = JSON.parse(recipeJson);
-    return mapExecutionProviderFromRecipe(parsed) === "WebGpuExecutionProvider";
-  } catch {
-    return false;
-  }
+  return mapExecutionProviderFromRecipe(recipeJson) === "WebGpuExecutionProvider";
 }
 
 export function PlaygroundPanel() {
