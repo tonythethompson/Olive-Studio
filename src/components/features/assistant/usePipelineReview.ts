@@ -24,7 +24,7 @@ import {
 import { computeFingerprint } from "@/lib/workspaceFingerprint";
 import { resolveAuditAutofix } from "@/lib/auditAutofix";
 import type { Action, Finding } from "@/lib/types/findingTypes";
-import type { ChatActionPatch } from "@/lib/chatActions";
+import { sanitizeChatActionPatch, type ChatActionPatch } from "@/lib/chatActions";
 import type { UIState } from "@/types";
 
 // ─── Return Type ─────────────────────────────────────────────────────────────
@@ -76,9 +76,29 @@ function parseActions(raw: unknown): Action[] {
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     const rec = item as Record<string, unknown>;
-    if (!ACTION_KINDS.has(rec.kind as Action["kind"])) continue;
+    const kind = rec.kind;
+    if (typeof kind !== "string" || !ACTION_KINDS.has(kind as Action["kind"])) continue;
     if (typeof rec.label !== "string") continue;
-    out.push(rec as Action);
+    const label = rec.label.slice(0, 80);
+    const payload = rec.payload;
+    if (!payload || typeof payload !== "object") continue;
+    const body = payload as Record<string, unknown>;
+    let action: Action | null = null;
+    if (kind === "applyPatch") {
+      const patch = sanitizeChatActionPatch(body);
+      if (!patch) continue;
+      action = { kind, label, payload: patch };
+    } else if (kind === "navigate" && typeof body.targetPanel === "string") {
+      action = { kind, label, payload: { targetPanel: body.targetPanel } };
+    } else if (kind === "explain" && typeof body.body === "string") {
+      action = { kind, label, payload: { body: body.body } };
+    } else if (kind === "documentation") {
+      const url = typeof body.url === "string" ? body.url : undefined;
+      const topicKey = typeof body.topicKey === "string" ? body.topicKey : undefined;
+      if (!url && !topicKey) continue;
+      action = { kind, label, payload: { url, topicKey } };
+    }
+    if (action) out.push(action);
   }
   return out.slice(0, 10);
 }
