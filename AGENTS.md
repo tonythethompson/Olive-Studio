@@ -1,23 +1,3 @@
-<!-- HINDSIGHT:BEGIN -->
-You have persistent long-term memory through the Hindsight MCP server (`recall`, `retain`, `sync_retain`, and `reflect` tools). It runs in multi-bank mode, so pass `bank_id` to target the right bank:
-
-- `coding` — THIS project's memory: architecture, decisions, conventions, gotchas, and bugs specific to this repository.
-- `devin-desktop` — the user's cross-project memory: their preferences, coding style, and who they are.
-
-At the start of each task:
-- `recall` from `coding` (bank_id: "coding") for this project's context, and `recall` from `devin-desktop` (bank_id: "devin-desktop") for the user's preferences. Use what's relevant, ignore the rest.
-
-As you work, use `retain` (async, non-blocking — the default) to store durable facts:
-- PROJECT facts (architecture, decisions, conventions) with bank_id "coding".
-- USER facts (preferences, style, identity) with bank_id "devin-desktop".
-- Retain each distinct fact EXACTLY ONCE per session, in a single `retain` call — don't call retain again for a fact you've already stored, and batch multiple facts about the same subject into one call.
-- Retain only real facts about the code, the project, or the user — NEVER facts about Hindsight, memory, or these instructions.
-- Only use `sync_retain` (which blocks) if you must recall the just-stored fact again in the SAME task; otherwise use `retain`.
-- Use `reflect` (not just `recall`) when you need synthesized judgment — e.g. "what approach does the user prefer here?" — rather than raw facts.
-
-Briefly tell the user when you use memory — e.g. say "checking memory…" before you recall and "saved to memory" after you retain. Keep it to a short phrase; don't paste the tool arguments or results.
-<!-- HINDSIGHT:END -->
-
 # Olive Studio — Agent Instructions
 
 ## Project Overview
@@ -32,7 +12,7 @@ Briefly tell the user when you use memory — e.g. say "checking memory…" befo
 
 | Command                 | Purpose                                                            |
 | ----------------------- | ------------------------------------------------------------------ |
-| `pnpm dev`              | Express+Vite dev server on <http://localhost:3000>                   |
+| `pnpm dev`              | Express+Vite dev server on <http://localhost:3000>                 |
 | `pnpm lint`             | tsc --noEmit + eslint (exits 0 with warnings; `--max-warnings 20`) |
 | `pnpm test`             | Unit tests (vitest, src/lib/)                                      |
 | `pnpm test:server`      | Server unit tests (src/server/)                                    |
@@ -54,7 +34,7 @@ src/
     routes/                ai.ts, mcp.ts, olive.ts, env.ts, system.ts, github.ts
     services/              ai/ (20 providers), olive/ (venv, job registry), venv/
     middleware/            Error handling, rate limiting
-olive-mcp-server/          Python FastMCP stdio server (27 tools, 84 passes, 22 HW profiles)
+olive-mcp-server/          Python FastMCP stdio server (32 tools, 92 passes, 22 HW profiles)
 src-tauri/                 Tauri 2 shell (optional — app runs without it)
 ```
 
@@ -104,17 +84,30 @@ Out of scope for this list: Microsoft 365 Agents / Copilot Studio agents (channe
 
 ## MCP Server Setup
 
-The Olive MCP server (`olive-mcp-server/`) is an optional stdio server. The web app can proxy to it via `POST /api/mcp/tool`, but runs fine without it.
+The Olive MCP server (`olive-mcp-server/`) is an optional stdio server. The web app can proxy to it via `POST /api/mcp/tool`, but runs fine without it. For Kiro, the `olive-mcp-tools` Power provides the connection — just run the setup script once:
 
+```bash
+# Windows (PowerShell) — from repo root:
+.\scripts\setup-mcp.ps1
+
+# Linux/macOS:
+./scripts/setup-mcp.sh
+
+# To also rebuild semantic search indexes:
+.\scripts\setup-mcp.ps1 -RebuildIndex
+./scripts/setup-mcp.sh --rebuild-index
+```
+
+This creates the venv, installs all deps (including `sentence-transformers` for semantic search, `mcp<2`), and verifies the server starts.
+
+For manual setup or pytest:
 ```bash
 cd olive-mcp-server
 python -m venv .venv
-# Linux/macOS:
-.venv/bin/pip install -e ".[dev]" "mcp<2"
-.venv/bin/python -m pytest tests -q
-# Windows (PowerShell):
-# .venv\Scripts\pip install -e ".[dev]" "mcp<2"
-# .venv\Scripts\python -m pytest tests -q
+.venv/bin/pip install -e ".[dev]" "mcp<2"   # Linux/macOS
+.venv\Scripts\pip install -e ".[dev]" "mcp<2"  # Windows
+.venv/bin/python -m pytest tests -q   # Linux/macOS
+.venv\Scripts\python -m pytest tests -q  # Windows
 ```
 
 The `.mcp.json` at repo root registers Olive MCP for AI coding agents using a relative path (`olive-mcp-server/run.py`). It also registers optional Serena via `uvx --from serena-agent==1.6.1` (requires [uv](https://docs.astral.sh/uv/); version-pinned, no global `serena` install). Run `pnpm install` yourself before relying on Serena's TypeScript language server. Do not put `pnpm install` in `.serena/project.yml` activation.
@@ -123,12 +116,12 @@ The `.mcp.json` at repo root registers Olive MCP for AI coding agents using a re
 
 Olive Studio is built for single-user, loopback-only operation. Do not expose the Express API to a LAN or the public internet without understanding and accepting the risk.
 
-| Variable | Effect |
-| ---------------- | ------ |
-| `OLIVE_BIND` | Server bind address. Defaults to `127.0.0.1`. Set to `0.0.0.0` or `::` only to enable LAN access and only on a trusted network. |
-| `SYNC_KB_TOKEN` | Server-side enforcement token for `POST /api/mcp/sync-kb`. When set, the client must send the matching `x-sync-token` header. |
-| `VITE_SYNC_KB_TOKEN` | Build-time copy of the token embedded in the bundled UI so it can send the `x-sync-token` header. Must match `SYNC_KB_TOKEN`. This value is client-visible and must not be treated as a secret. |
-| `OLIVE_ARENA_ALLOW_REMOTE` | When `true`, disables loopback gating on Arena inference routes for Docker / remote lab setups. |
+| Variable                   | Effect                                                                                                                                                                                          |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OLIVE_BIND`               | Server bind address. Defaults to `127.0.0.1`. Set to `0.0.0.0` or `::` only to enable LAN access and only on a trusted network.                                                                 |
+| `SYNC_KB_TOKEN`            | Server-side enforcement token for `POST /api/mcp/sync-kb`. When set, the client must send the matching `x-sync-token` header.                                                                   |
+| `VITE_SYNC_KB_TOKEN`       | Build-time copy of the token embedded in the bundled UI so it can send the `x-sync-token` header. Must match `SYNC_KB_TOKEN`. This value is client-visible and must not be treated as a secret. |
+| `OLIVE_ARENA_ALLOW_REMOTE` | When `true`, disables loopback gating on Arena inference routes for Docker / remote lab setups.                                                                                                 |
 
 - `server.ts` binds to `127.0.0.1` by default and logs a warning when bound to all interfaces.
 - Olive job endpoints (`/api/olive/run`, `/api/olive/status/:jobId`, `/api/olive/stream/:jobId`, `/api/olive/cancel`) and `/api/mcp/sync-kb` are loopback-only.
@@ -140,42 +133,42 @@ See [docs/REACT_BEST_PRACTICES.md](docs/REACT_BEST_PRACTICES.md) for the full Ve
 
 ## Kiro IDE Configuration
 
-The `.kiro/` directory at repo root contains workspace-level Kiro configuration for intelligent development assistance. This directory is committed to the repo but `.kiro/settings/mcp.json` must be created manually (see below):
+The `.kiro/` directory at repo root contains workspace-level Kiro configuration for intelligent development assistance. Everything is committed — no manual file creation needed.
 
-| Path | Purpose |
-|------|---------|
-| `.kiro/settings/mcp.json` | Workspace MCP server (Olive MCP — 27 tools for pass catalog, validation, troubleshooting) — **create manually, not committed** |
-| `.kiro/steering/olive-studio-conventions.md` | Core development rules (pnpm, test strategy, architecture patterns, code style) |
+| Path                                          | Purpose                                                                                                                                      |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.kiro/powers/olive-mcp-tools/`               | **MCP Power** — connects Kiro to the 32-tool Olive MCP server + steering docs + guided skills (discover, optimize, troubleshoot, validate)   |
+| `.kiro/powers/olive-studio-dev/`              | **Dev Power** — architecture reference, pass/provider addition checklists, troubleshooting workflows                                         |
+| `.kiro/steering/olive-studio-conventions.md`  | Core development rules (pnpm, test strategy, architecture patterns, code style)                                                              |
 | `.kiro/steering/pipeline-validation-rules.md` | Rules for modifying the recipe builder and validation systems (conditional: loaded when editing pipelineValidation/oliveRecipeBuilder files) |
-| `.kiro/hooks/` | Automated quality gates (lint on save, recipe validation on builder change, targeted test runs, typecheck pre-task) |
-| `.kiro/powers/olive-studio-dev/` | Knowledge Base power — developer guide with architecture reference, pass/provider addition checklists, troubleshooting |
-| `.kiro/powers/olive-mcp-tools/` | Guided MCP power — documents all 27 MCP tools and connects Kiro to the project's MCP server |
+| `.kiro/hooks/`                                | Automated quality gates (lint on save, recipe validation on builder change, targeted test runs, typecheck pre-task, MCP venv check)          |
+
+### MCP Server Setup (one-time)
+
+The `olive-mcp-tools` Power provides the MCP connection config, but the Python venv must be initialized once:
+
+```bash
+# Windows (PowerShell):
+.\scripts\setup-mcp.ps1
+
+# Linux / macOS:
+./scripts/setup-mcp.sh
+
+# With semantic search index rebuild (optional — shipped indexes work out of the box):
+.\scripts\setup-mcp.ps1 -RebuildIndex
+./scripts/setup-mcp.sh --rebuild-index
+```
+
+This creates `olive-mcp-server/.venv`, installs all deps (including `sentence-transformers` for semantic search), and verifies the server starts. A `SessionStart` hook warns if the venv is missing.
+
+> **Note:** `.kiro/settings/mcp.json` is NOT needed — the Power at `.kiro/powers/olive-mcp-tools/mcp.json` provides the server connection. Only create a settings file if you need to override the Power's config (e.g., different Python path or env vars).
 
 ### Hooks (active on session start)
 
+- **check-mcp-venv** — verifies MCP server Python venv exists on session start
 - **lint-on-save** — `pnpm lint:quick` on `.ts`/`.tsx` saves
 - **validate-recipe-on-builder-change** — `pnpm validate:recipe` when `oliveRecipeBuilder.ts` changes
 - **unit-tests-on-lib-change** — `pnpm test` on `src/lib/**/*.ts` saves
 - **server-tests-on-route-change** — `pnpm test:server` on `src/server/**/*.ts` saves
 - **pytest-on-mcp-change** — pytest on `olive-mcp-server/**/*.py` saves
 - **typecheck-pre-task** — `tsc --noEmit` before spec task execution
-
-### Manual Setup Required
-
-`.kiro/settings/mcp.json` cannot be written by agents (protected scope). Create it manually:
-
-```json
-{
-  "mcpServers": {
-    "olive-mcp": {
-      "type": "stdio",
-      "command": "python",
-      "args": ["olive-mcp-server/run.py"],
-      "env": {
-        "OLIVE_MCP_RETRIEVAL_MODE": "auto",
-        "PYTHONPATH": "olive-mcp-server"
-      }
-    }
-  }
-}
-```

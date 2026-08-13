@@ -1,43 +1,44 @@
 #!/usr/bin/env bash
-# Setup the Olive MCP Server Python virtual environment with all dependencies.
+# Set up the Olive MCP Server Python virtual environment with all dependencies.
 #
 # Usage (from repo root):
 #   ./scripts/setup-mcp.sh
 #   ./scripts/setup-mcp.sh --rebuild-index
 #   ./scripts/setup-mcp.sh --skip-verify
+set -euo pipefail
 
-set -e
-
-REBUILD_INDEX=false
-SKIP_VERIFY=false
-
-for arg in "$@"; do
-  case "$arg" in
-    --rebuild-index) REBUILD_INDEX=true ;;
-    --skip-verify) SKIP_VERIFY=true ;;
-    *) echo "Unknown option: $arg"; exit 1 ;;
-  esac
-done
-
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-MCP_DIR="$SCRIPT_DIR/../olive-mcp-server"
-MCP_DIR="$(cd "$MCP_DIR" && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MCP_DIR="$ROOT/olive-mcp-server"
 VENV_DIR="$MCP_DIR/.venv"
 
+REBUILD_INDEX=0
+SKIP_VERIFY=0
+for arg in "$@"; do
+  case "$arg" in
+    --rebuild-index) REBUILD_INDEX=1 ;;
+    --skip-verify) SKIP_VERIFY=1 ;;
+    -h|--help)
+      echo "Usage: $0 [--rebuild-index] [--skip-verify]"
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $arg" >&2
+      exit 1
+      ;;
+  esac
+done
 echo ""
 echo "=== Olive MCP Server Setup ==="
 echo ""
 
-# ── Step 1: Check Python ───────────────────────────────────────────────────────
 echo "[1/5] Checking Python..."
 PYTHON_CMD=""
 for cmd in python3 python; do
-  if command -v "$cmd" &>/dev/null; then
-    ver=$("$cmd" --version 2>&1)
-    # POSIX/BSD-safe: avoid grep -P (GNU/PCRE only; fails on macOS).
-    if echo "$ver" | grep -q 'Python 3'; then
-      minor=$(printf '%s\n' "$ver" | sed 's/.*Python 3\.//' | sed 's/[^0-9].*//')
-      if [ "$minor" -ge 10 ] 2>/dev/null; then
+  if command -v "$cmd" >/dev/null 2>&1; then
+    ver="$("$cmd" --version 2>&1 || true)"
+    if [[ "$ver" =~ Python\ 3\.([0-9]+) ]]; then
+      minor="${BASH_REMATCH[1]}"
+      if [[ "$minor" -ge 10 ]]; then
         PYTHON_CMD="$cmd"
         echo "      Found: $ver"
         break
@@ -45,50 +46,87 @@ for cmd in python3 python; do
     fi
   fi
 done
-
-if [ -z "$PYTHON_CMD" ]; then
-  echo "      ERROR: Python >= 3.10 not found on PATH."
+if [[ -z "$PYTHON_CMD" ]]; then
+  echo "      ERROR: Python >= 3.10 not found on PATH." >&2
   exit 1
 fi
 
-# ── Step 2: Create venv ────────────────────────────────────────────────────────
 echo "[2/5] Setting up virtual environment..."
-if [ -d "$VENV_DIR" ]; then
-  echo "      Venv already exists at: $VENV_DIR"
+if [[ -d "$VENV_DIR" ]]; then
+  existing_py=""
+  if [[ -x "$VENV_DIR/bin/python" ]]; then
+    existing_py="$VENV_DIR/bin/python"
+  elif [[ -x "$VENV_DIR/Scripts/python" ]]; then
+    existing_py="$VENV_DIR/Scripts/python"
+  fi
+  recreate=0
+  if [[ -z "$existing_py" ]]; then
+    recreate=1
+  else
+    ver="$("$existing_py" --version 2>&1 || true)"
+    if [[ "$ver" =~ Python\ 3\.([0-9]+) ]]; then
+      if [[ "${BASH_REMATCH[1]}" -lt 10 ]]; then
+        echo "      Existing venv is $ver (< 3.10); recreating..."
+        recreate=1
+      fi
+    else
+      recreate=1
+    fi
+  fi
+  if [[ "$recreate" -eq 1 ]]; then
+    rm -rf "$VENV_DIR"
+    echo "      Creating venv at: $VENV_DIR"
+    "$PYTHON_CMD" -m venv "$VENV_DIR"
+    echo "      Created."
+  else
+    echo "      Venv already exists at: $VENV_DIR"
+  fi
 else
   echo "      Creating venv at: $VENV_DIR"
   "$PYTHON_CMD" -m venv "$VENV_DIR"
   echo "      Created."
 fi
 
-# ── Step 3: Install dependencies ───────────────────────────────────────────────
+if [[ -x "$VENV_DIR/bin/pip" ]]; then
+  PIP_CMD="$VENV_DIR/bin/pip"
+  PY_VENV="$VENV_DIR/bin/python"
+elif [[ -x "$VENV_DIR/Scripts/pip" ]]; then
+  PIP_CMD="$VENV_DIR/Scripts/pip"
+  PY_VENV="$VENV_DIR/Scripts/python"
+else
+  echo "      ERROR: venv pip not found." >&2
+  exit 1
+fi
+
 echo "[3/5] Installing dependencies..."
-PIP_CMD="$VENV_DIR/bin/pip"
-"$PIP_CMD" install --upgrade pip --quiet 2>/dev/null
-"$PIP_CMD" install -e "$MCP_DIR[dev]" "mcp<2" --quiet
+"$PIP_CMD" install --upgrade pip --quiet
+"$PIP_CMD" install -e "${MCP_DIR}[dev]" "mcp<2" --quiet
 echo "      All dependencies installed (including sentence-transformers for semantic search)."
 
-# ── Step 4: Verify ─────────────────────────────────────────────────────────────
-if [ "$SKIP_VERIFY" = false ]; then
+if [[ "$SKIP_VERIFY" -eq 0 ]]; then
   echo "[4/5] Verifying server starts..."
-  PYTHON_VENV="$VENV_DIR/bin/python"
-  output=$("$PYTHON_VENV" -c "from olive_mcp_server.mcp_server import _build_mcp; print('OK')" 2>&1)
-  if echo "$output" | grep -q "OK"; then
-    echo "      Server module imports successfully."
-  else
-    echo "      WARNING: Unexpected output: $output"
+  if ! test_output="$("$PY_VENV" -c "from olive_mcp_server.mcp_server import _build_mcp; _build_mcp(); print('OK')" 2>&1)"; then
+    echo "      WARNING: Server import check failed:" >&2
+    echo "      $test_output" >&2
+    exit 1
   fi
+  if [[ "$test_output" != *OK* ]]; then
+    echo "      WARNING: Server import check returned unexpected output:" >&2
+    echo "      $test_output" >&2
+    exit 1
+  fi
+  echo "      Server module imports successfully."
 else
   echo "[4/5] Skipping verification (--skip-verify)."
 fi
 
-# ── Step 5: Rebuild indexes ────────────────────────────────────────────────────
-if [ "$REBUILD_INDEX" = true ]; then
+if [[ "$REBUILD_INDEX" -eq 1 ]]; then
   echo "[5/5] Rebuilding semantic search indexes..."
-  PYTHON_VENV="$VENV_DIR/bin/python"
-  "$PYTHON_VENV" "$MCP_DIR/scripts/build_kb_index.py" || {
+  if ! "$PY_VENV" "$MCP_DIR/scripts/build_kb_index.py"; then
     echo "      WARNING: Index rebuild failed. Shipped indexes will be used."
-  }
+  else
+    echo "      Indexes rebuilt successfully."
+  fi
 else
   echo "[5/5] Skipping index rebuild (use --rebuild-index to regenerate)."
   echo "      Pre-built indexes ship with the repo and work out of the box."
@@ -98,5 +136,5 @@ echo ""
 echo "=== Setup Complete ==="
 echo ""
 echo "The MCP server is ready. Kiro will connect via the olive-mcp-tools Power."
-echo "To test manually:  $VENV_DIR/bin/python $MCP_DIR/run.py"
+echo "To test manually:  $PY_VENV $MCP_DIR/run.py"
 echo ""

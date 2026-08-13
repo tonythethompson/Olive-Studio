@@ -28,6 +28,10 @@ does not require network access for semantic search on first request.
 
 ## Running the Container
 
+Run these commands from the **repository root** unless noted. The host knowledge-base
+path is `olive-mcp-server/olive_mcp_server/knowledge_base`. If you `cd olive-mcp-server`
+first (same as the build step), use `./olive_mcp_server/knowledge_base` instead.
+
 ### Basic Run
 
 ```bash
@@ -38,7 +42,7 @@ docker run -d \
   -e MCP_HOST=0.0.0.0 \
   -e MCP_PORT=8000 \
   -e OLIVE_MCP_RETRIEVAL_MODE=auto \
-  -v ./olive_mcp_server/knowledge_base:/app/olive_mcp_server/knowledge_base:ro \
+  -v ./olive-mcp-server/olive_mcp_server/knowledge_base:/app/olive_mcp_server/knowledge_base:ro \
   olive-mcp-server
 ```
 
@@ -58,19 +62,22 @@ without rebuilding the image.
 | `OLIVE_MCP_PRELOAD_EMBEDDINGS` | `1`, `0` | `0` | When `1`, loads the embedding model and KB indexes at startup before accepting traffic. Increases cold-start time but eliminates first-request latency. |
 | `SYNC_KB_TOKEN` | Any string | _(unset)_ | Studio Express only (not this MCP container): when set on the Studio process, requires matching `x-sync-token` on `POST /api/mcp/sync-kb`. |
 | `HF_HUB_OFFLINE` | `1`, `0` | `1` | Prevents Hugging Face Hub downloads at runtime (model is pre-cached in the image). |
+`SYNC_KB_TOKEN` is **not** an MCP container variable. It is enforced by the Olive Studio
+Express process on `POST /api/mcp/sync-kb`. Set it (and matching `VITE_SYNC_KB_TOKEN` /
+`x-sync-token` from the UI) on the Studio host process, not on `olive_mcp_server`.
 
 ## Volume Mounts
 
 | Host Path | Container Path | Mode | Purpose |
 |-----------|---------------|------|---------|
-| `./olive_mcp_server/knowledge_base` | `/app/olive_mcp_server/knowledge_base` | `ro` | Pass catalog, hardware profiles, troubleshooting KB |
+| `./olive-mcp-server/olive_mcp_server/knowledge_base` (repo root) | `/app/olive_mcp_server/knowledge_base` | `ro` | Pass catalog, hardware profiles, troubleshooting KB |
 
 ## Docker Compose
 
-The following `docker-compose.yml` runs the MCP server. Olive Studio itself is not
-published as a root-level Docker image; run Studio on the host (`pnpm start`) and
-point it at the container with `OLIVE_MCP_URL=http://127.0.0.1:8000`, or add your
-own Express image if you maintain one.
+There is no Studio Dockerfile at the repository root. Use Compose for the **MCP
+server only**. A checked-in example lives at `olive-mcp-server/docker-compose.yml`
+(build context is that directory). From the **repository root**, this equivalent
+file works:
 
 ```yaml
 services:
@@ -95,10 +102,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
-
-networks:
-  default:
-    name: olive-network
 ```
 
 Start the MCP service:
@@ -106,6 +109,16 @@ Start the MCP service:
 ```bash
 docker compose up -d
 ```
+
+Olive Studio itself is not containerized in this repo. Run it on the host with
+`pnpm start` (or `pnpm dev`), then point Studio at the container with
+`OLIVE_MCP_URL=http://127.0.0.1:8000` (or another reachable SSE URL).
+
+Do **not** expect a Dockerized MCP process to reach Studio via `http://127.0.0.1:3000`.
+That address is the container's own loopback, and Studio's job/recipe routes are
+loopback-gated on the host. For tools that call Studio HTTP (`validate_ui_state_recipe`,
+`get_recipe_for_ui_state`, `execute_and_observe`, and similar), run the MCP server
+**on the host** (stdio / `scripts/setup-mcp.*`) with `OLIVE_STUDIO_API_URL=http://127.0.0.1:3000`.
 
 ## Health Check
 
@@ -128,9 +141,9 @@ After starting the container, verify it is healthy:
 docker inspect --format='{{.State.Health.Status}}' olive-mcp
 # Expected output: healthy
 
-# Or test the endpoint directly (SSE stays open; --max-time avoids a hang)
-curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://localhost:8000/sse
-# Expected output: 200 (curl may exit 28 after printing the status)
+# Or test the endpoint directly
+curl -s -o /dev/null -w "%{http_code}" --max-time 3 -H "Accept: text/event-stream" http://localhost:8000/sse
+# Expected output: 200 (use --max-time; an untimed curl on SSE can hang)
 ```
 
 ## Security Notes
@@ -143,7 +156,7 @@ curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://localhost:8000/sse
   remain restricted to loopback even when bound to all interfaces.
 - When exposing to a network, place a reverse proxy (nginx, Caddy, Traefik) in front
   with HTTPS and authentication.
-- Set `SYNC_KB_TOKEN` on the Studio Express process (not the MCP container) to protect `POST /api/mcp/sync-kb`.
+- Set `SYNC_KB_TOKEN` on the Studio host process (not the MCP container) to protect `POST /api/mcp/sync-kb`.
 - The MCP server runs as a non-root user (`mcp`) inside the container.
 
 ## Troubleshooting
@@ -155,4 +168,5 @@ curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://localhost:8000/sse
 | Slow first request | Embedding model loading on demand | Set `OLIVE_MCP_PRELOAD_EMBEDDINGS=1` to front-load at startup |
 | `HfHubHTTPError` at runtime | Container attempting to download models | Ensure `HF_HUB_OFFLINE=1` (set by default in image); rebuild if model cache is missing |
 | Health check failing | Server not yet ready within start period | Increase `start_period` in compose or Dockerfile healthcheck |
-| Express cannot reach MCP | Wrong network or service name | Ensure both services are on the same Docker network; use `olive-mcp` as the hostname |
+| Studio cannot reach MCP | `OLIVE_MCP_URL` is unset or points at the wrong address | Run Studio on the host and set `OLIVE_MCP_URL=http://127.0.0.1:8000` (or the published container URL) |
+| Studio-backed MCP tools fail | Dockerized MCP cannot call the host's loopback-only Studio routes | Run the MCP server on the host with `OLIVE_STUDIO_API_URL=http://127.0.0.1:3000` when you need Studio job/recipe tools |
