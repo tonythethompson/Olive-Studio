@@ -13,6 +13,7 @@ import { useState, useCallback } from "react";
 import { AlertCircle, AlertTriangle, Info, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Finding, FindingSeverity } from "@/lib/types/findingTypes";
+import type { UIState } from "@/types";
 import { ActionButton } from "./ActionButton";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -29,6 +30,8 @@ export interface FindingCardProps {
   onPatchApplied?: () => void;
   /** Callback to inject an explanation body into the chat panel. */
   onExplain?: (body: string) => void;
+  state?: UIState;
+  setState?: (partial: Partial<UIState>) => void;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -77,10 +80,12 @@ export function FindingCard({
   isStale,
   onPatchApplied,
   onExplain,
+  state,
+  setState,
 }: FindingCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const config = SEVERITY_CONFIG[finding.severity];
+  const config = SEVERITY_CONFIG[finding.severity] ?? SEVERITY_CONFIG.info;
   const SeverityIcon = config.icon;
 
   const isTruncated = finding.description.length > DESCRIPTION_TRUNCATE_LIMIT;
@@ -176,6 +181,8 @@ export function FindingCard({
               action={action}
               onPatchApplied={onPatchApplied}
               onExplain={onExplain}
+              state={state}
+              setState={setState}
             />
           ))}
         </div>

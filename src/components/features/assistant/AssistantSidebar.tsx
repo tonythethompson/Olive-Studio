@@ -80,6 +80,7 @@ export function AssistantSidebar({
   // Ref to trigger post-patch refresh in PipelineReview from chat actions.
   const postPatchRefreshRef = useRef<(() => void) | null>(null);
   const reviewRefreshRef = useRef<(() => void) | null>(null);
+  const reviewResetRef = useRef<(() => void) | null>(null);
   const chatLogForReport = useMemo(
     () =>
       chat.chatMessages.map((m) => {
@@ -122,7 +123,10 @@ export function AssistantSidebar({
       reviewRefreshRef.current?.();
     },
     onProviderMissing: () => setActiveTab("settings"),
-    onProviderCleared: () => setActiveTab("settings"),
+    onProviderCleared: () => {
+      setActiveTab("settings");
+      reviewResetRef.current?.();
+    },
   });
 
   const local = useLocalEngineSetup({
@@ -264,10 +268,12 @@ export function AssistantSidebar({
               {/* PipelineReview at the top (Req 1.2) */}
               <PipelineReview
                 state={state}
+                setState={setState}
                 onExplain={(body) => void chat.sendChat(body)}
                 className="m-4 mb-0 shrink-0"
                 postPatchRefreshRef={postPatchRefreshRef}
                 reviewRefreshRef={reviewRefreshRef}
+                reviewResetRef={reviewResetRef}
               />
 
               {/* Chat conversation below (Req 1.5) */}

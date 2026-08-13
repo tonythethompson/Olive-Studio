@@ -41,11 +41,13 @@ export interface PipelineReviewProps {
    * post-patch refresh. The parent can call this after applying a chat
    * action patch to schedule a debounced review refresh.
    */
-  postPatchRefreshRef?: React.MutableRefObject<(() => void) | null>;
+  postPatchRefreshRef?: React.RefObject<(() => void) | null>;
   /** Optional controlled pipeline state (same object the chat applies patches to). */
   state?: import("@/types").UIState;
+  setState?: (partial: Partial<import("@/types").UIState>) => void;
   /** Optional ref populated with `refresh` so the parent can trigger a review. */
-  reviewRefreshRef?: React.MutableRefObject<(() => void) | null>;
+  reviewRefreshRef?: React.RefObject<(() => void) | null>;
+  reviewResetRef?: React.RefObject<(() => void) | null>;
 }
 
 // ─── Score Level Colors ──────────────────────────────────────────────────────
@@ -92,7 +94,7 @@ function getScoreTextColor(level: string): string {
  * - 1.7: Zero-state with "No review yet" message and Refresh button.
  * - 1.8: Toggle via click or Enter/Space on focused header.
  */
-export function PipelineReview({ onExplain, className, postPatchRefreshRef, state, reviewRefreshRef }: PipelineReviewProps) {
+export function PipelineReview({ onExplain, className, postPatchRefreshRef, state, setState, reviewRefreshRef, reviewResetRef }: PipelineReviewProps) {
   // Expanded by default on first session open (Req 1.6).
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -105,6 +107,7 @@ export function PipelineReview({ onExplain, className, postPatchRefreshRef, stat
     isLoading,
     error,
     refresh,
+    reset,
     schedulePostPatchRefresh,
     completedAt,
   } = usePipelineReview(state);
@@ -118,16 +121,23 @@ export function PipelineReview({ onExplain, className, postPatchRefreshRef, stat
     [findings],
   );
 
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (!hasReviewData) return;
+    const id = window.setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, [hasReviewData, completedAt]);
+
   // Format last-checked timestamp from the review result's completion timestamp.
   const lastCheckedLabel = useMemo(() => {
     if (!hasReviewData) return "";
     if (!completedAt) return "Just now";
-    const elapsed = Date.now() - completedAt;
+    const elapsed = nowTick - completedAt;
     if (elapsed < 60_000) return "Just now";
     if (elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)}m ago`;
     if (elapsed < 86_400_000) return `${Math.floor(elapsed / 3_600_000)}h ago`;
     return `${Math.floor(elapsed / 86_400_000)}d ago`;
-  }, [hasReviewData, completedAt]);
+  }, [hasReviewData, completedAt, nowTick]);
 
   // Expose schedulePostPatchRefresh to parent via ref (for chat action patches).
   useEffect(() => {
@@ -137,6 +147,9 @@ export function PipelineReview({ onExplain, className, postPatchRefreshRef, stat
     if (reviewRefreshRef) {
       reviewRefreshRef.current = refresh;
     }
+    if (reviewResetRef) {
+      reviewResetRef.current = reset;
+    }
     return () => {
       if (postPatchRefreshRef) {
         postPatchRefreshRef.current = null;
@@ -144,8 +157,11 @@ export function PipelineReview({ onExplain, className, postPatchRefreshRef, stat
       if (reviewRefreshRef) {
         reviewRefreshRef.current = null;
       }
+      if (reviewResetRef) {
+        reviewResetRef.current = null;
+      }
     };
-  }, [postPatchRefreshRef, reviewRefreshRef, schedulePostPatchRefresh, refresh]);
+  }, [postPatchRefreshRef, reviewRefreshRef, reviewResetRef, schedulePostPatchRefresh, refresh, reset]);
 
   // ── Toggle handlers ─────────────────────────────────────────────────────
 
@@ -356,6 +372,8 @@ export function PipelineReview({ onExplain, className, postPatchRefreshRef, stat
                         isStale={isStale}
                         onPatchApplied={schedulePostPatchRefresh}
                         onExplain={onExplain}
+                        state={state}
+                        setState={setState}
                       />
                     </div>
                   ))}

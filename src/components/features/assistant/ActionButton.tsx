@@ -15,8 +15,10 @@ import { useState, useCallback } from "react";
 import { Wrench, Navigation, BookOpen, ExternalLink, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePipelineStore, usePipelineState } from "@/lib/stores/pipelineStore";
-import { chatPatchToUiState } from "@/lib/chatActions";
+import { chatPatchToUiState, sanitizeChatActionPatch } from "@/lib/chatActions";
+import { executeNavigateAction } from "@/lib/actionExecutor";
 import type { Action } from "@/lib/types/findingTypes";
+import type { UIState } from "@/types";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -32,6 +34,9 @@ export interface ActionButtonProps {
   onExplain?: (body: string) => void;
   /** Optional additional className. */
   className?: string;
+  /** Controlled pipeline snapshot used when applying patches. */
+  state?: UIState;
+  setState?: (partial: Partial<UIState>) => void;
 }
 
 // ─── Coercion Notice ─────────────────────────────────────────────────────────
@@ -95,10 +100,13 @@ export function ActionButton({
   onPatchApplied,
   onExplain,
   className,
+  state: stateProp,
+  setState: setStateProp,
 }: ActionButtonProps) {
   const [coercion, setCoercion] = useState<CoercionNotice | null>(null);
-  const { state } = usePipelineState();
-  const setState = usePipelineStore((s) => s.setState);
+  const store = usePipelineState();
+  const state = stateProp ?? store.state;
+  const setState = setStateProp ?? store.setState;
 
   const Icon = KIND_ICONS[action.kind];
 
@@ -107,7 +115,8 @@ export function ActionButton({
   const handleApplyPatch = useCallback(() => {
     if (action.kind !== "applyPatch") return;
 
-    const patch = action.payload;
+    const patch = sanitizeChatActionPatch(action.payload);
+    if (!patch) return;
     const partial = chatPatchToUiState(state, patch);
 
     // Apply the patch through the store (runs commitUiStateUpdate internally).
@@ -115,7 +124,7 @@ export function ActionButton({
 
     // Read committed state to detect coercion (Req 2.7).
     // The store's setState uses commitUiStateUpdate which may auto-coerce values.
-    const committed = usePipelineStore.getState().state;
+    const committed = setStateProp ? { ...state, ...partial } : usePipelineStore.getState().state;
     const coercedFields: string[] = [];
 
     for (const key of Object.keys(partial) as (keyof typeof partial)[]) {
@@ -145,20 +154,11 @@ export function ActionButton({
 
     // Trigger debounced re-run (Req 2.6).
     onPatchApplied?.();
-  }, [action, state, setState, onPatchApplied]);
+  }, [action, state, setState, setStateProp, onPatchApplied]);
 
   const handleNavigate = useCallback(() => {
     if (action.kind !== "navigate") return;
-    const { targetPanel } = action.payload;
-    const el = document.getElementById(targetPanel) ?? document.querySelector(`[data-panel="${targetPanel}"]`);
-    if (!el) return;
-    const htmlEl = el as HTMLElement;
-    htmlEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    // Ensure non-focusable panels can receive focus after scroll.
-    if (htmlEl.tabIndex < 0) {
-      htmlEl.tabIndex = -1;
-    }
-    htmlEl.focus();
+    executeNavigateAction(action);
   }, [action]);
 
   const handleExplain = useCallback(() => {
