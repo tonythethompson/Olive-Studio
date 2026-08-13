@@ -33,6 +33,18 @@ import { readStudioConfig, writeStudioConfig } from "../config.ts";
 import type { KbStatusCache } from "../types.ts";
 import { denyUnless } from "../services/olive/agentAccess.ts";
 
+/** Serialize MCP settings RMW + reconnect so overlapping POSTs cannot restore stale config. */
+let mcpSettingsWriteChain: Promise<void> = Promise.resolve();
+
+function enqueueMcpSettingsWrite<T>(fn: () => Promise<T>): Promise<T> {
+  const run = mcpSettingsWriteChain.then(fn, fn);
+  mcpSettingsWriteChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 /**
  * Strict loopback gate for the MCP tool proxy (including write-capable tools
  * such as record_troubleshoot_feedback). Rejects reverse-proxy hops and
@@ -392,18 +404,18 @@ export function mountMcpRoutes(router: Router): void {
       return res.status(400).json({ error: `retrievalMode must be one of: ${validModes.join(", ")}` });
     }
 
-    // Persist to disk config
-    const current = readStudioConfig();
-    const mcpSettings = {
-      ...current.mcpSettings,
-      ...(parsed.retrievalMode !== undefined && { retrievalMode: parsed.retrievalMode }),
-      ...(parsed.preloadEmbeddings !== undefined && { preloadEmbeddings: parsed.preloadEmbeddings }),
-    };
-    writeStudioConfig({ mcpSettings });
-
-    // Reconnect the MCP server with new env vars
     try {
-      await reconnectMcpClient();
+      const mcpSettings = await enqueueMcpSettingsWrite(async () => {
+        const current = readStudioConfig();
+        const next = {
+          ...current.mcpSettings,
+          ...(parsed.retrievalMode !== undefined && { retrievalMode: parsed.retrievalMode }),
+          ...(parsed.preloadEmbeddings !== undefined && { preloadEmbeddings: parsed.preloadEmbeddings }),
+        };
+        writeStudioConfig({ mcpSettings: next });
+        await reconnectMcpClient();
+        return next;
+      });
       return res.json({ ok: true, mcpSettings });
     } catch {
       return res.status(500).json({ ok: false, error: "Failed to restart MCP server with new settings" });

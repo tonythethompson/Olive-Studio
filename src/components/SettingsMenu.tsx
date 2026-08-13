@@ -47,6 +47,8 @@ export function SettingsMenu() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  /** Bumped on each user write so a stale GET/POST cannot overwrite newer state. */
+  const settingsGenRef = useRef(0);
 
   const themePreference = usePreferencesStore((s) => s.themePreference);
   const setThemePreference = usePreferencesStore((s) => s.setThemePreference);
@@ -67,6 +69,7 @@ export function SettingsMenu() {
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
+    const gen = settingsGenRef.current;
     void (async () => {
       try {
         const res = await fetch("/api/mcp/settings");
@@ -74,7 +77,7 @@ export function SettingsMenu() {
         const data = (await res.json()) as {
           mcpSettings?: { retrievalMode?: McpRetrievalMode; preloadEmbeddings?: boolean };
         };
-        if (cancelled) return;
+        if (cancelled || gen !== settingsGenRef.current) return;
         const server = data.mcpSettings;
         if (server?.retrievalMode) setMcpRetrievalMode(server.retrievalMode);
         if (typeof server?.preloadEmbeddings === "boolean") {
@@ -91,9 +94,11 @@ export function SettingsMenu() {
 
   const handleRetrievalModeSelect = useCallback(
     async (value: McpRetrievalMode) => {
+      const gen = ++settingsGenRef.current;
       setRestarting(true);
       setSettingsError(null);
       const ok = await updateMcpSettings({ retrievalMode: value });
+      if (gen !== settingsGenRef.current) return;
       if (ok) setMcpRetrievalMode(value);
       else setSettingsError("Could not apply retrieval mode.");
       setRestarting(false);
@@ -103,9 +108,11 @@ export function SettingsMenu() {
 
   const handlePreloadToggle = useCallback(
     async (enabled: boolean) => {
+      const gen = ++settingsGenRef.current;
       setRestarting(true);
       setSettingsError(null);
       const ok = await updateMcpSettings({ preloadEmbeddings: enabled });
+      if (gen !== settingsGenRef.current) return;
       if (ok) setMcpPreloadEmbeddings(enabled);
       else setSettingsError("Could not apply embedding preload.");
       setRestarting(false);
