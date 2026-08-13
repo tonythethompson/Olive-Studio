@@ -37,11 +37,15 @@ describe("redactSecrets", () => {
 
   it("redacts standalone JWTs and PEM private keys", () => {
     const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signaturevalue123";
+    const compactJwt = "a.e30.-";
+    const emptySignatureJwt = "a.e30.";
     const pem = "-----BEGIN PRIVATE KEY-----\nsecret-material\n-----END PRIVATE KEY-----";
-    const redacted = redactSecrets(`jwt=${jwt}\nkey=${pem}`);
+    const redacted = redactSecrets(`jwt=${jwt}\ncompact=${compactJwt}\nempty=${emptySignatureJwt}\nkey=${pem}`);
     expect(redacted).not.toContain(jwt);
+    expect(redacted).not.toContain(compactJwt);
+    expect(redacted).not.toContain(emptySignatureJwt);
     expect(redacted).not.toContain("secret-material");
-    expect(redacted.match(/\[REDACTED\]/g)?.length).toBe(2);
+    expect(redacted.match(/\[REDACTED\]/g)?.length).toBe(4);
   });
 
   it("redacts Windows user paths", () => {
