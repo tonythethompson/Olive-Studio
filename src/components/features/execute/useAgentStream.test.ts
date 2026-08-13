@@ -237,6 +237,37 @@ describe("useAgentStream", () => {
       expect(onEntry.mock.calls[2][0].text).toBe("[INFO] pass C");
     });
 
+    it("resumes prefix skip when reconnect replay starts mid-log", () => {
+      const onEntry = vi.fn();
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
+
+      const lineA = JSON.stringify({ line: "[INFO] pass A" });
+      const lineB = JSON.stringify({ line: "[INFO] pass B" });
+      const lineC = JSON.stringify({ line: "[INFO] pass C" });
+      act(() => {
+        mockEventSources[0].onmessage?.(new MessageEvent("message", { data: lineA }));
+        mockEventSources[0].onmessage?.(new MessageEvent("message", { data: lineB }));
+      });
+      expect(onEntry).toHaveBeenCalledTimes(2);
+
+      act(() => {
+        mockEventSources[0].onerror?.();
+      });
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      act(() => {
+        mockEventSources[1].onmessage?.(new MessageEvent("message", { data: lineB }));
+        mockEventSources[1].onmessage?.(new MessageEvent("message", { data: lineC }));
+      });
+      expect(onEntry).toHaveBeenCalledTimes(3);
+      expect(onEntry.mock.calls[2][0].text).toBe("[INFO] pass C");
+    });
+
     it("dedupes reconnect replay when SSE lastEventId is present", () => {
       const onEntry = vi.fn();
       renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));

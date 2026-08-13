@@ -237,15 +237,28 @@ export function useAgentStream({
               if (seenPayloadKeysRef.current.has(eventId)) return;
               seenPayloadKeysRef.current.add(eventId);
             } else if (replayingPrefixRef.current) {
-              const expected = deliveredPrefixRef.current[replayIndexRef.current];
-              if (expected && expected.kind === entry.kind && expected.text === entry.text) {
-                replayIndexRef.current += 1;
-                if (replayIndexRef.current >= deliveredPrefixRef.current.length) {
+              const prefix = deliveredPrefixRef.current;
+              let idx = replayIndexRef.current;
+              let expected = prefix[idx];
+              if (!expected || expected.kind !== entry.kind || expected.text !== entry.text) {
+                const found = prefix.findIndex(
+                  (item, i) => i >= idx && item.kind === entry.kind && item.text === entry.text,
+                );
+                if (found === -1) {
+                  replayingPrefixRef.current = false;
+                } else {
+                  idx = found;
+                  replayIndexRef.current = found;
+                  expected = prefix[found];
+                }
+              }
+              if (replayingPrefixRef.current && expected && expected.kind === entry.kind && expected.text === entry.text) {
+                replayIndexRef.current = idx + 1;
+                if (replayIndexRef.current >= prefix.length) {
                   replayingPrefixRef.current = false;
                 }
                 return;
               }
-              replayingPrefixRef.current = false;
             }
             deliveredPrefixRef.current.push({ kind: entry.kind, text: entry.text });
             // A parsed payload means the stream is actually delivering data.

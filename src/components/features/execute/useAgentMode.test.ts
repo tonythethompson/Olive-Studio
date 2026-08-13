@@ -302,6 +302,42 @@ describe("useAgentMode", () => {
       expect(result.current.outcome?.status).toBe("failure");
     });
 
+    it("applies cancelled when stop-during-submit gets no jobId", async () => {
+      let resolveSubmit: (value: Response) => void = () => {};
+      const submitPromise = new Promise<Response>((resolve) => {
+        resolveSubmit = resolve;
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url: string) => {
+          if (String(url).includes("/olive/jobs/submit")) return submitPromise;
+          return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
+        }),
+      );
+
+      const { result } = renderHook(() => useAgentMode());
+      let startDone: Promise<void> = Promise.resolve();
+      act(() => {
+        startDone = result.current.startAgent({ recipeJson: "{}" });
+      });
+      act(() => {
+        result.current.stopAgent();
+      });
+
+      await act(async () => {
+        resolveSubmit({
+          ok: false,
+          status: 400,
+          json: async () => ({ error: "bad recipe" }),
+        } as Response);
+        await startDone;
+      });
+
+      expect(result.current.agentRunning).toBe(false);
+      expect(result.current.outcome?.status).toBe("cancelled");
+      expect(result.current.jobId).toBeUndefined();
+    });
+
     it("does not apply a stale cancel after a newer session starts", async () => {
       let resolveCancel: (value: Response) => void = () => {};
       const cancelPromise = new Promise<Response>((resolve) => {

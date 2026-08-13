@@ -200,7 +200,11 @@ export function useAgentMode(): UseAgentModeReturn {
       });
       const data = (await resp.json().catch(() => ({}))) as { jobId?: string; error?: string };
       if (stopRequestedRef.current && thisGen === runGenerationRef.current) {
-        if (!data.jobId) return;
+        if (!data.jobId) {
+          stopRequestedRef.current = false;
+          applyCancelledOutcome();
+          return;
+        }
         let cancelOk = false;
         try {
           const cancelResp = await requestAgentCancel(data.jobId);
@@ -238,6 +242,7 @@ export function useAgentMode(): UseAgentModeReturn {
       jobIdRef.current = data.jobId;
     } catch (err) {
       if (thisGen !== runGenerationRef.current) return;
+      stopRequestedRef.current = false;
       clearStartTimeout();
       const message = err instanceof Error ? err.message : "Failed to submit agent job";
       setAgentRunning(false);
