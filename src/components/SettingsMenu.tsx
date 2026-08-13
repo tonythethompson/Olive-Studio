@@ -13,6 +13,7 @@ export function SettingsMenu() {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const themePreference = usePreferencesStore((s) => s.themePreference);
   const setThemePreference = usePreferencesStore((s) => s.setThemePreference);
@@ -26,18 +27,55 @@ export function SettingsMenu() {
     [setThemePreference],
   );
 
-  // Close on Escape
-  const handleKeyDown = useCallback(
+  // Focus first menu item when menu opens
+  useEffect(() => {
+    if (open) {
+      // Defer to next frame so the menu is rendered before focusing
+      requestAnimationFrame(() => {
+        itemRefs.current[0]?.focus();
+      });
+    }
+  }, [open]);
+
+  // Keyboard navigation within menu
+  const handleMenuKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-        triggerRef.current?.focus();
+      const items = itemRefs.current.filter(Boolean) as HTMLButtonElement[];
+      const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+
+      switch (e.key) {
+        case "Escape":
+          setOpen(false);
+          triggerRef.current?.focus();
+          e.preventDefault();
+          break;
+        case "ArrowDown": {
+          e.preventDefault();
+          const next = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+          items[next]?.focus();
+          break;
+        }
+        case "ArrowUp": {
+          e.preventDefault();
+          const prev = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+          items[prev]?.focus();
+          break;
+        }
+        case "Home":
+          e.preventDefault();
+          items[0]?.focus();
+          break;
+        case "End":
+          e.preventDefault();
+          items[items.length - 1]?.focus();
+          break;
       }
     },
     [],
   );
 
-  // Close on outside click
+  // Close on outside pointer — defer focus restoration so browser default
+  // focus processing on the target element completes first.
   useEffect(() => {
     if (!open) return;
     function onPointerDown(e: PointerEvent) {
@@ -46,7 +84,13 @@ export function SettingsMenu() {
         !triggerRef.current?.contains(e.target as Node)
       ) {
         setOpen(false);
-        triggerRef.current?.focus();
+        // Defer focus restoration so the browser can process default focus on the
+        // clicked element first — prevents overriding focus on a focusable sibling.
+        requestAnimationFrame(() => {
+          if (!document.activeElement || document.activeElement === document.body) {
+            triggerRef.current?.focus();
+          }
+        });
       }
     }
     document.addEventListener("pointerdown", onPointerDown);
@@ -79,16 +123,19 @@ export function SettingsMenu() {
             "absolute right-0 top-full mt-1 z-50 min-w-[160px]",
             "rounded border border-slate-700 bg-slate-900 shadow-lg py-1",
           )}
-          onKeyDown={handleKeyDown}
+          onKeyDown={handleMenuKeyDown}
         >
           <div className="px-2 py-1 text-[11px] text-slate-500 uppercase tracking-wider">
             Theme
           </div>
-          {THEME_OPTIONS.map(({ value, label, Icon }) => (
+          {THEME_OPTIONS.map(({ value, label, Icon }, index) => (
             <button
               key={value}
+              ref={(el) => { itemRefs.current[index] = el; }}
               type="button"
-              role="menuitem"
+              role="menuitemradio"
+              aria-checked={value === themePreference}
+              tabIndex={-1}
               className={cn(
                 "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors",
                 "hover:bg-slate-800 focus-visible:bg-slate-800 focus-visible:outline-none",
