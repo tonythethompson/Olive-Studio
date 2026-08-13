@@ -28,6 +28,10 @@ does not require network access for semantic search on first request.
 
 ## Running the Container
 
+Run these commands from the **repository root** unless noted. The host knowledge-base
+path is `olive-mcp-server/olive_mcp_server/knowledge_base`. If you `cd olive-mcp-server`
+first (same as the build step), use `./olive_mcp_server/knowledge_base` instead.
+
 ### Basic Run
 
 ```bash
@@ -38,7 +42,7 @@ docker run -d \
   -e MCP_HOST=0.0.0.0 \
   -e MCP_PORT=8000 \
   -e OLIVE_MCP_RETRIEVAL_MODE=auto \
-  -v ./olive_mcp_server/knowledge_base:/app/olive_mcp_server/knowledge_base:ro \
+  -v ./olive-mcp-server/olive_mcp_server/knowledge_base:/app/olive_mcp_server/knowledge_base:ro \
   olive-mcp-server
 ```
 
@@ -63,13 +67,14 @@ without rebuilding the image.
 
 | Host Path | Container Path | Mode | Purpose |
 |-----------|---------------|------|---------|
-| `./olive_mcp_server/knowledge_base` | `/app/olive_mcp_server/knowledge_base` | `ro` | Pass catalog, hardware profiles, troubleshooting KB |
+| `./olive-mcp-server/olive_mcp_server/knowledge_base` (repo root) | `/app/olive_mcp_server/knowledge_base` | `ro` | Pass catalog, hardware profiles, troubleshooting KB |
 
 ## Docker Compose
 
-The following `docker-compose.yml` runs the MCP server alongside an Olive Studio Express
-application on a shared Docker network. The Express service reaches the MCP server via
-the `olive-mcp` service name.
+There is no Studio Dockerfile at the repository root. Use Compose for the **MCP
+server only**. A checked-in example lives at `olive-mcp-server/docker-compose.yml`
+(build context is that directory). From the **repository root**, this equivalent
+file works:
 
 ```yaml
 services:
@@ -94,36 +99,20 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
-
-  olive-studio:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      # OLIVE_BIND=0.0.0.0 is required inside Docker so the container can
-      # accept connections on the bridge network. Loopback-gated routes
-      # (/api/olive/run, /api/olive/status, /api/mcp/sync-kb) remain
-      # restricted to 127.0.0.1 even with this setting.
-      - OLIVE_BIND=0.0.0.0
-      - OLIVE_MCP_URL=http://olive-mcp:8000
-    depends_on:
-      olive-mcp:
-        condition: service_healthy
-    restart: unless-stopped
-
-networks:
-  default:
-    name: olive-network
 ```
 
-Start both services:
+Start the MCP service:
 
 ```bash
 docker compose up -d
 ```
+
+Olive Studio itself is not containerized in this repo. Run it on the host with
+`pnpm start` (or `pnpm dev`). The Express MCP client launches a **local stdio**
+subprocess; it does not read `OLIVE_MCP_URL`. Tools that call Studio HTTP
+(`validate_ui_state_recipe`, `get_recipe_for_ui_state`, and similar) need
+`OLIVE_STUDIO_API_URL` pointing at the Studio process (typically
+`http://127.0.0.1:3000`), not a Docker-internal hostname from Studio to MCP.
 
 ## Health Check
 
@@ -173,4 +162,4 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/sse
 | Slow first request | Embedding model loading on demand | Set `OLIVE_MCP_PRELOAD_EMBEDDINGS=1` to front-load at startup |
 | `HfHubHTTPError` at runtime | Container attempting to download models | Ensure `HF_HUB_OFFLINE=1` (set by default in image); rebuild if model cache is missing |
 | Health check failing | Server not yet ready within start period | Increase `start_period` in compose or Dockerfile healthcheck |
-| Express cannot reach MCP | Wrong network or service name | Ensure both services are on the same Docker network; use `olive-mcp` as the hostname |
+| Studio MCP tools fail | Express uses stdio, not `OLIVE_MCP_URL` | Run Studio on the host (`pnpm start`); set `OLIVE_STUDIO_API_URL` on the MCP process for loopback tools |
