@@ -67,9 +67,10 @@ without rebuilding the image.
 
 ## Docker Compose
 
-The following `docker-compose.yml` runs the MCP server alongside an Olive Studio Express
-application on a shared Docker network. The Express service reaches the MCP server via
-the `olive-mcp` service name.
+The following `docker-compose.yml` runs the MCP server. Olive Studio itself is not
+published as a root-level Docker image; run Studio on the host (`pnpm start`) and
+point it at the container with `OLIVE_MCP_URL=http://127.0.0.1:8000`, or add your
+own Express image if you maintain one.
 
 ```yaml
 services:
@@ -94,21 +95,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
-
-  olive-studio:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - OLIVE_BIND=0.0.0.0
-      - OLIVE_MCP_URL=http://olive-mcp:8000
-    depends_on:
-      olive-mcp:
-        condition: service_healthy
-    restart: unless-stopped
 
 networks:
   default:

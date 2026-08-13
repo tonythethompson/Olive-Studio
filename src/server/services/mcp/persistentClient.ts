@@ -325,7 +325,18 @@ export function resetPersistentClient(): void {
  * change and need to take effect.
  */
 export async function reconnectMcpClient(): Promise<void> {
-  // Tear down the existing connection
+  // Serialize with any in-flight connect() so its success/catch cannot
+  // overwrite the replacement session after we reset module state.
+  const pending = connectingPromise;
+  connectingPromise = null;
+  if (pending) {
+    try {
+      await pending;
+    } catch {
+      // Previous connect failed; continue with a fresh attempt.
+    }
+  }
+
   if (client) {
     try { await client.close(); } catch { /* best-effort */ }
   }
@@ -337,7 +348,6 @@ export async function reconnectMcpClient(): Promise<void> {
   state = "idle";
   connectingPromise = null;
 
-  // Re-establish with fresh env
   await connect();
 }
 

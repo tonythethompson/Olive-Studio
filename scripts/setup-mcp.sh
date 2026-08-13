@@ -34,9 +34,10 @@ PYTHON_CMD=""
 for cmd in python3 python; do
   if command -v "$cmd" &>/dev/null; then
     ver=$("$cmd" --version 2>&1)
-    if echo "$ver" | grep -qP "Python 3\.\d+"; then
-      minor=$(echo "$ver" | grep -oP '3\.\K\d+')
-      if [ "$minor" -ge 10 ]; then
+    # POSIX/BSD-safe: avoid grep -P (GNU/PCRE only; fails on macOS).
+    if echo "$ver" | grep -q 'Python 3'; then
+      minor=$(printf '%s\n' "$ver" | sed 's/.*Python 3\.//' | sed 's/[^0-9].*//')
+      if [ "$minor" -ge 10 ] 2>/dev/null; then
         PYTHON_CMD="$cmd"
         echo "      Found: $ver"
         break

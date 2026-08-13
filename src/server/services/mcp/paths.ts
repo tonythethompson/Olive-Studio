@@ -39,8 +39,8 @@ export function buildPythonEnv(): NodeJS.ProcessEnv {
     if (mcpSettings.retrievalMode) {
       env.OLIVE_MCP_RETRIEVAL_MODE = mcpSettings.retrievalMode;
     }
-    if (mcpSettings.preloadEmbeddings) {
-      env.OLIVE_MCP_PRELOAD_EMBEDDINGS = "1";
+    if (mcpSettings.preloadEmbeddings !== undefined) {
+      env.OLIVE_MCP_PRELOAD_EMBEDDINGS = mcpSettings.preloadEmbeddings ? "1" : "0";
     }
   }
 

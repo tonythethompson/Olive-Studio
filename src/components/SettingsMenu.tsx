@@ -43,6 +43,7 @@ async function updateMcpSettings(patch: {
 export function SettingsMenu() {
   const [open, setOpen] = useState(false);
   const [restarting, setRestarting] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -61,11 +62,38 @@ export function SettingsMenu() {
     [setThemePreference],
   );
 
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/mcp/settings");
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          mcpSettings?: { retrievalMode?: McpRetrievalMode; preloadEmbeddings?: boolean };
+        };
+        if (cancelled) return;
+        const server = data.mcpSettings;
+        if (server?.retrievalMode) setMcpRetrievalMode(server.retrievalMode);
+        if (typeof server?.preloadEmbeddings === "boolean") {
+          setMcpPreloadEmbeddings(server.preloadEmbeddings);
+        }
+      } catch {
+        // Keep persisted local defaults if the server is unreachable.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, setMcpRetrievalMode, setMcpPreloadEmbeddings]);
+
   const handleRetrievalModeSelect = useCallback(
     async (value: McpRetrievalMode) => {
-      setMcpRetrievalMode(value);
       setRestarting(true);
-      await updateMcpSettings({ retrievalMode: value });
+      setSettingsError(null);
+      const ok = await updateMcpSettings({ retrievalMode: value });
+      if (ok) setMcpRetrievalMode(value);
+      else setSettingsError("Could not apply retrieval mode.");
       setRestarting(false);
     },
     [setMcpRetrievalMode],
@@ -73,9 +101,11 @@ export function SettingsMenu() {
 
   const handlePreloadToggle = useCallback(
     async (enabled: boolean) => {
-      setMcpPreloadEmbeddings(enabled);
       setRestarting(true);
-      await updateMcpSettings({ preloadEmbeddings: enabled });
+      setSettingsError(null);
+      const ok = await updateMcpSettings({ preloadEmbeddings: enabled });
+      if (ok) setMcpPreloadEmbeddings(enabled);
+      else setSettingsError("Could not apply embedding preload.");
       setRestarting(false);
     },
     [setMcpPreloadEmbeddings],
@@ -290,6 +320,11 @@ export function SettingsMenu() {
           {restarting && (
             <div className="px-3 py-1.5 text-[11px] text-slate-500 italic">
               Restarting MCP server...
+            </div>
+          )}
+          {settingsError && !restarting && (
+            <div className="px-3 py-1.5 text-[11px] text-rose-500" role="alert">
+              {settingsError}
             </div>
           )}
         </div>
