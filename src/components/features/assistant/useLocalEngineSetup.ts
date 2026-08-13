@@ -34,6 +34,40 @@ type PullStreamEvent = {
   verified?: boolean;
 };
 
+type PullState = {
+  gotDone: boolean;
+  finalMessage: string;
+  modelId?: string;
+  verified?: boolean;
+};
+
+type PullMeta = Pick<PullState, "modelId" | "verified">;
+
+function applyLegacyPullBody(
+  body: string,
+  response: Response,
+  state: PullState,
+  onDownloadPhase?: () => void,
+): void {
+  if (!state.gotDone && response.headers.get("content-type")?.includes("application/json") && body.trim()) {
+    const data = JSON.parse(body) as {
+      ok?: boolean;
+      error?: string;
+      message?: string;
+      modelId?: string;
+      verified?: boolean;
+    };
+    if (data.error) throw new Error(data.error);
+    if (data.ok) {
+      state.gotDone = true;
+      state.finalMessage = data.message || "Model ready.";
+      if (data.modelId) state.modelId = data.modelId;
+      if (typeof data.verified === "boolean") state.verified = data.verified;
+      onDownloadPhase?.();
+    }
+  }
+}
+
 function readStoredEngine(): LocalEngine {
   try {
     const stored = localStorage.getItem("localEngine");
@@ -297,7 +331,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
 
   const handlePullStreamEvent = (
     evt: PullStreamEvent,
-    state: { gotDone: boolean; finalMessage: string; modelId?: string; verified?: boolean },
+    state: PullState,
     onDownloadPhase?: () => void,
     controller?: AbortController,
   ) => {
@@ -335,14 +369,14 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     r: Response,
     controller: AbortController,
     onDownloadPhase?: () => void,
-  ): Promise<{ modelId?: string; verified?: boolean }> => {
+  ): Promise<PullMeta> => {
     if (!r.ok && !r.body) {
       const data = (await r.json().catch(() => ({}))) as { error?: string; hint?: string };
       throw new Error(joinErrorParts(data.error || `HTTP ${r.status}`, data.hint));
     }
     if (!r.body) throw new Error(`Empty response (HTTP ${r.status})`);
 
-    const state: { gotDone: boolean; finalMessage: string; modelId?: string; verified?: boolean } = {
+    const state: PullState = {
       gotDone: false,
       finalMessage: "",
     };
@@ -355,24 +389,8 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
       }
     });
 
-    // Legacy JSON body (non-stream) if server ever falls back
-    if (!state.gotDone && r.headers.get("content-type")?.includes("application/json") && buf.trim()) {
-      const data = JSON.parse(buf) as {
-        ok?: boolean;
-        error?: string;
-        message?: string;
-        modelId?: string;
-        verified?: boolean;
-      };
-      if (data.error) throw new Error(data.error);
-      if (data.ok) {
-        state.gotDone = true;
-        state.finalMessage = data.message || "Model ready.";
-        if (data.modelId) state.modelId = data.modelId;
-        if (typeof data.verified === "boolean") state.verified = data.verified;
-        onDownloadPhase?.();
-      }
-    }
+    // Legacy JSON body (non-stream) if server ever falls back.
+    applyLegacyPullBody(buf, r, state, onDownloadPhase);
     if (!state.gotDone && !r.ok) {
       throw new Error(`Pull failed (HTTP ${r.status})`);
     }
@@ -380,6 +398,45 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     if (controller.signal.aborted || pullAbortRef.current !== controller) return {};
     setLocalInstallInfo(state.finalMessage || "Model ready.");
     return { modelId: state.modelId, verified: state.verified };
+  };
+
+  const runModelPull = async (
+    modelTag: string,
+    source: LocalEngine,
+    controller: AbortController,
+  ): Promise<PullMeta> => {
+    const endpoint = source === "ollama" ? "/api/ai/ollama-pull" : "/api/ai/local-pull";
+    // Align the 20m abort with the server's lms get / ollama pull timer (starts after ensure*).
+    const DOWNLOAD_MAX_MS = 20 * 60 * 1000;
+    // Cap hung ensure/install so a stuck startup cannot stream forever.
+    const ENSURE_PHASE_MAX_MS = 15 * 60 * 1000;
+    let downloadTimer: ReturnType<typeof setTimeout> | undefined;
+    const ensureTimer = setTimeout(() => {
+      if (!downloadTimer) controller.abort();
+    }, ENSURE_PHASE_MAX_MS);
+    const armDownloadTimeout = () => {
+      if (downloadTimer) return;
+      clearTimeout(ensureTimer);
+      downloadTimer = setTimeout(() => controller.abort(), DOWNLOAD_MAX_MS);
+    };
+
+    try {
+      if (controller.signal.aborted) return {};
+      const r = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/x-ndjson, application/json",
+        },
+        body: JSON.stringify({ modelTag }),
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return {};
+      return await consumePullStream(r, controller, armDownloadTimeout);
+    } finally {
+      clearTimeout(ensureTimer);
+      if (downloadTimer) clearTimeout(downloadTimer);
+    }
   };
 
   const cancelLocalPull = () => {
@@ -441,39 +498,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
           : "Starting: ensure LM Studio → serve → download…",
       );
 
-      const endpoint = source === "ollama" ? "/api/ai/ollama-pull" : "/api/ai/local-pull";
-      // Align the 20m abort with the server's lms get / ollama pull timer (starts after ensure*).
-      const DOWNLOAD_MAX_MS = 20 * 60 * 1000;
-      // Cap hung ensure/install so a stuck startup cannot stream forever.
-      const ENSURE_PHASE_MAX_MS = 15 * 60 * 1000;
-      let downloadTimer: ReturnType<typeof setTimeout> | undefined;
-      const ensureTimer = setTimeout(() => {
-        if (!downloadTimer) controller.abort();
-      }, ENSURE_PHASE_MAX_MS);
-      const armDownloadTimeout = () => {
-        if (downloadTimer) return;
-        clearTimeout(ensureTimer);
-        downloadTimer = setTimeout(() => controller.abort(), DOWNLOAD_MAX_MS);
-      };
-      let pullMeta: { modelId?: string; verified?: boolean } = {};
-      try {
-        if (controller.signal.aborted) return;
-        const r = await fetch(endpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/x-ndjson, application/json",
-          },
-          body: JSON.stringify({ modelTag }),
-          signal: controller.signal,
-        });
-        if (controller.signal.aborted) return;
-        pullMeta = await consumePullStream(r, controller, armDownloadTimeout);
-      } finally {
-        clearTimeout(ensureTimer);
-        if (downloadTimer) clearTimeout(downloadTimer);
-      }
-
+      const pullMeta = await runModelPull(modelTag, source, controller);
       if (controller.signal.aborted) return;
       markEngineReady(source);
       const after = await refreshInstalledModels(source);
