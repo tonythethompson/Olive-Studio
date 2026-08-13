@@ -70,15 +70,15 @@ if (Test-Path $VenvDir) {
 
 # ── Step 3: Install dependencies ───────────────────────────────────────────────
 Write-Host "[3/5] Installing dependencies..." -ForegroundColor Yellow
-$pipCmd = Join-Path $VenvDir "Scripts" "pip"
-if (-not (Test-Path $pipCmd)) {
+$pythonVenv = Join-Path $VenvDir "Scripts" "python.exe"
+if (-not (Test-Path $pythonVenv)) {
     # Linux/macOS fallback
-    $pipCmd = Join-Path $VenvDir "bin" "pip"
+    $pythonVenv = Join-Path $VenvDir "bin" "python"
 }
 
 # Core + dev + semantic deps, with mcp pinned <2
-& $pipCmd install --upgrade pip --quiet 2>$null
-& $pipCmd install -e "$McpDir[dev]" "mcp<2" --quiet
+& $pythonVenv -m pip install --upgrade pip --quiet 2>$null
+& $pythonVenv -m pip install -e "$McpDir[dev]" "mcp<2" --quiet
 if ($LASTEXITCODE -ne 0) {
     Write-Host "      ERROR: pip install failed." -ForegroundColor Red
     exit 1
@@ -88,7 +88,7 @@ Write-Host "      All dependencies installed (including sentence-transformers fo
 # ── Step 4: Verify server starts ───────────────────────────────────────────────
 if (-not $SkipVerify) {
     Write-Host "[4/5] Verifying server starts..." -ForegroundColor Yellow
-    $pythonVenv = Join-Path $VenvDir "Scripts" "python"
+    $pythonVenv = Join-Path $VenvDir "Scripts" "python.exe"
     if (-not (Test-Path $pythonVenv)) {
         $pythonVenv = Join-Path $VenvDir "bin" "python"
     }
@@ -106,7 +106,7 @@ if (-not $SkipVerify) {
 # ── Step 5: Optionally rebuild semantic indexes ────────────────────────────────
 if ($RebuildIndex) {
     Write-Host "[5/5] Rebuilding semantic search indexes..." -ForegroundColor Yellow
-    $pythonVenv = Join-Path $VenvDir "Scripts" "python"
+    $pythonVenv = Join-Path $VenvDir "Scripts" "python.exe"
     if (-not (Test-Path $pythonVenv)) {
         $pythonVenv = Join-Path $VenvDir "bin" "python"
     }
