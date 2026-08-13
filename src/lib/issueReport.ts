@@ -13,17 +13,11 @@ export const REPORT_CATEGORIES = [
 export type ReportCategory = (typeof REPORT_CATEGORIES)[number]["id"];
 
 export const REPORT_SEVERITIES = [
-  { id: "n-a", label: "N/A" },
   { id: "annoying", label: "Annoying" },
   { id: "blocking", label: "Blocking" },
   { id: "crash", label: "Crash" },
   { id: "silent", label: "Silent data loss" },
 ] as const;
-
-/** Severity only describes bug impact; other categories have nothing to rate. */
-export function categoryHasSeverity(category: ReportCategory): boolean {
-  return category === "bug";
-}
 
 export type ReportSeverity = (typeof REPORT_SEVERITIES)[number]["id"];
 
@@ -47,7 +41,6 @@ export const TELEMETRY_OPTIONS = [
   { id: "olive-version", label: "Olive & ORT versions", description: "ONNX Runtime and Olive engine versions" },
   { id: "recipe", label: "Current recipe", description: "The active recipe JSON (redacted)" },
   { id: "logs", label: "Execution logs", description: "Recent log lines from the last run" },
-  { id: "chat-logs", label: "Assistant chat log", description: "Recent messages from this chat session (redacted)" },
 ] as const;
 
 export type TelemetryOptionId = (typeof TELEMETRY_OPTIONS)[number]["id"];
@@ -120,8 +113,6 @@ export interface BuildReportOptions {
   state?: UIState;
   hardwareProbe?: HardwareProbeResult | null;
   executionLogs?: string[];
-  /** Recent assistant chat transcript, formatted as one "sender: text" line per turn. */
-  chatLog?: string[];
   mcpDiagnostic?: unknown;
 }
 
@@ -189,11 +180,6 @@ function collectLogs(logs: string[] | undefined, maxLines = 50): string {
   return recent.join("\n");
 }
 
-function collectChatLog(chatLog: string[] | undefined, maxLines = 20): string {
-  if (!chatLog || chatLog.length === 0) return "No chat history available";
-  return chatLog.slice(-maxLines).join("\n");
-}
-
 // ── Builder ──────────────────────────────────────────────────────────────────
 
 /**
@@ -221,9 +207,6 @@ export function collectTelemetry(
         break;
       case "logs":
         telemetry.logs = redactSecrets(collectLogs(buildOptions.executionLogs));
-        break;
-      case "chat-logs":
-        telemetry["chat-logs"] = redactSecrets(collectChatLog(buildOptions.chatLog));
         break;
     }
   }

@@ -325,7 +325,7 @@ function Dashboard() {
                     <span className="hidden wide:inline">Assistant</span>
                   </span>
                 </div>
-                <div className="justify-self-center flex items-center flex-nowrap justify-center gap-x-3 min-w-0 overflow-hidden">
+                <div className="justify-self-center flex items-center flex-wrap justify-center gap-x-3 gap-y-1 min-w-0 overflow-hidden">
                   <KbSyncIndicator />
                   <span className="hidden sm:block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />
                   <RuntimeEnvControls />

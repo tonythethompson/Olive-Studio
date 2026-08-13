@@ -260,7 +260,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center justify-center gap-0 min-[1300px]:gap-1.5 text-slate-400 hover:text-slate-200 transition-colors px-1.5 py-1 rounded border border-transparent hover:border-slate-700/80"
+        className="flex items-center justify-center gap-0 wide:gap-1.5 text-slate-400 hover:text-slate-200 transition-colors px-1.5 py-1 rounded border border-transparent hover:border-slate-700/80"
         title={runtimeTitle}
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -270,19 +270,19 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls() {
         {status?.oliveInstalled ? (
           <span className="text-emerald-600/90 flex items-center gap-0.5">
             <CheckCircle2 className="h-3 w-3" aria-hidden />
-            <span className="hidden min-[1300px]:inline">{runtimeLabel}</span>
+            <span className="hidden wide:inline">{runtimeLabel}</span>
           </span>
         ) : needsAttention ? (
           <span className="text-slate-400 flex items-center gap-0.5">
             <AlertTriangle className="h-3 w-3 text-amber-600/75" aria-hidden />
-            <span className="hidden min-[1300px]:inline">{runtimeLabel}</span>
+            <span className="hidden wide:inline">{runtimeLabel}</span>
           </span>
         ) : (
-          <span className="text-slate-400 hidden min-[1300px]:inline">{runtimeLabel}</span>
+          <span className="text-slate-400 hidden wide:inline">{runtimeLabel}</span>
         )}
         {status && !pathOk && status.venvExists && (
           <span
-            className="text-slate-500 hidden min-[1300px]:inline"
+            className="text-slate-500 hidden wide:inline"
             title="Project .venv Scripts/bin is not on your user PATH"
           >
             · add PATH

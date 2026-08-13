@@ -192,7 +192,7 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center justify-center gap-0 min-[1300px]:gap-1.5 text-slate-400 hover:text-slate-200 transition-colors px-1.5 py-1 rounded border border-transparent hover:border-slate-700/80"
+        className="flex items-center justify-center gap-0 wide:gap-1.5 text-slate-400 hover:text-slate-200 transition-colors px-1.5 py-1 rounded border border-transparent hover:border-slate-700/80"
         title={title}
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -202,7 +202,7 @@ export const AgentAccessControls = memo(function AgentAccessControls() {
         <Bot className="h-3 w-3 text-slate-500" aria-hidden />
         <span className={elevated ? "text-amber-400/90 flex items-center gap-0.5" : "text-slate-400"}>
           {elevated ? <Shield className="h-3 w-3" aria-hidden /> : null}
-          <span className="hidden min-[1300px]:inline">Agent access</span>
+          <span className="hidden wide:inline">Agent access</span>
         </span>
       </button>
 

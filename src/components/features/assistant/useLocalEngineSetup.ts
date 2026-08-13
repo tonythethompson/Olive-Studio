@@ -381,16 +381,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
   const cancelLocalPull = () => {
     pullUserCancelledRef.current = true;
     pullAbortRef.current?.abort();
-    // Free the busy guard immediately rather than waiting for the aborted
-    // fetch/stream to finish unwinding — that teardown can lag (or, on some
-    // platforms, never resolve if the underlying connection is already
-    // stuck), which otherwise leaves "another download is in progress"
-    // blocking every retry until the stale request eventually settles.
-    pullAbortRef.current = null;
-    setPullingModel(null);
-    setLocalPullPercent(null);
-    setLocalInstallInfo(null);
-    setLocalPullError("Download cancelled.");
+    setLocalInstallInfo("Cancelling download…");
   };
 
   const pullLocalModel = async (modelTag: string, source: LocalEngine = "lms") => {
@@ -502,19 +493,14 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
       if (controller.signal.aborted) return;
       setLocalInstallInfo(`Ready: ${enableId}`);
     } catch (err: unknown) {
-      // A cancelled pull already reset all this state synchronously and may have
-      // let the user start a new pull — don't let this stale rejection stomp it.
-      if (pullAbortRef.current !== controller) return;
       setLocalPullError(
         describePullFetchError(err, { userCancelled: pullUserCancelledRef.current }),
       );
       setLocalInstallInfo(null);
     } finally {
-      if (pullAbortRef.current === controller) {
-        pullAbortRef.current = null;
-        setPullingModel(null);
-      }
+      pullAbortRef.current = null;
       pullUserCancelledRef.current = false;
+      setPullingModel(null);
     }
   };
 

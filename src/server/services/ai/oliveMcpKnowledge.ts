@@ -476,7 +476,6 @@ export function buildOliveAssistantSystemPrompt(opts: {
     "- On refusal: briefly redirect to Olive Studio / model optimization (or ask for professional language), invite a pipeline-related question, and set actions to []. Never provide the off-topic, hateful/sexual, or harmful content.",
     "- Stay professional and technical in your own replies. Do not use childish euphemisms or role-play outside the Olive domain.",
     "Use the Olive MCP knowledge block as your primary source. Workspace context describes the user's current recipe UI state, detected hardware, and built recipe JSON.",
-    "The only model in scope is the workspace context's `Model:` line (the target model being optimized). You (the assistant) may be running on a different, unrelated local or hosted LLM to power this chat — never confuse that chat LLM with the target model, and never assume the user is asking about you when they say 'the model' or 'my model'. If the workspace `Model:` line says \"(not set)\", say no model is selected yet instead of guessing.",
     "When you suggest a concrete change the user can make in Olive Studio, include an Apply action with a valid patch so they can click Apply.",
     "",
     opts.mcpBlock,
