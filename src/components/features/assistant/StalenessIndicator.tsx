@@ -24,27 +24,30 @@ export function StalenessIndicator({
   onRefresh,
   className,
 }: StalenessIndicatorProps) {
-  if (!isStale) return null;
-
   return (
     <div
       className={cn(
         "flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2",
+        !isStale && "hidden",
         className,
       )}
       role="status"
       aria-live="polite"
     >
-      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
-      <span className="text-xs font-medium text-amber-300">Results outdated</span>
-      <button
-        type="button"
-        onClick={onRefresh}
-        className="ml-auto inline-flex items-center gap-1 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-300 transition-colors hover:bg-amber-500/20 hover:text-amber-200 cursor-pointer"
-      >
-        <RefreshCw className="h-3 w-3" aria-hidden="true" />
-        Re-run review
-      </button>
+      {isStale ? (
+        <>
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
+          <span className="text-xs font-medium text-amber-300">Results outdated</span>
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="ml-auto inline-flex items-center gap-1 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-300 transition-colors hover:bg-amber-500/20 hover:text-amber-200 cursor-pointer"
+          >
+            <RefreshCw className="h-3 w-3" aria-hidden="true" />
+            Re-run review
+          </button>
+        </>
+      ) : null}
     </div>
   );
 }

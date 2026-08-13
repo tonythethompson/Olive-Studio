@@ -14,7 +14,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Wrench, Navigation, BookOpen, ExternalLink, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { usePipelineStore, usePipelineState } from "@/lib/stores/pipelineStore";
+import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { chatPatchToUiState, sanitizeChatActionPatch } from "@/lib/chatActions";
 import { commitUiStateUpdate } from "@/lib/pipelineValidation";
 import { executeNavigateAction } from "@/lib/actionExecutor";
@@ -158,7 +158,7 @@ export function ActionButton({
 
     // Trigger debounced re-run (Req 2.6).
     onPatchApplied?.();
-  }, [action, state, setState, setStateProp, onPatchApplied]);
+  }, [action, state, setState, onPatchApplied]);
 
   const handleNavigate = useCallback(() => {
     if (action.kind !== "navigate") return;
