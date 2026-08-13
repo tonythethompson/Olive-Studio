@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from packaging.requirements import Requirement
-from packaging.version import Version
+from packaging.version import InvalidVersion, Version
 
 try:
     import tomllib
@@ -38,25 +38,25 @@ def _get_candidate_versions(spec) -> list[Version]:
             continue
         try:
             v = Version(raw_v)
-        except Exception:
-            continue
+        except InvalidVersion:
+            pass
+        else:
+            base_versions = [v]
+            if v.major < 2:
+                base_versions.append(Version(f"2.{v.minor}.{v.micro}"))
 
-        base_versions = [v]
-        if v.major < 2:
-            base_versions.append(Version(f"2.{v.minor}.{v.micro}"))
-
-        for base_v in base_versions:
-            candidates.add(base_v)
-            if base_v.major >= 2:
-                candidates.add(Version(f"{base_v.major}.{base_v.minor}.{base_v.micro + 1}"))
-                if base_v.micro > 0:
-                    candidates.add(Version(f"{base_v.major}.{base_v.minor}.{base_v.micro - 1}"))
-                candidates.add(Version(f"{base_v.major}.{base_v.minor + 1}.0"))
-                if base_v.minor > 0:
-                    candidates.add(Version(f"{base_v.major}.{base_v.minor - 1}.0"))
-                candidates.add(Version(f"{base_v.major + 1}.0.0"))
-                if base_v.major > 2:
-                    candidates.add(Version(f"{base_v.major - 1}.0.0"))
+            for base_v in base_versions:
+                candidates.add(base_v)
+                if base_v.major >= 2:
+                    candidates.add(Version(f"{base_v.major}.{base_v.minor}.{base_v.micro + 1}"))
+                    if base_v.micro > 0:
+                        candidates.add(Version(f"{base_v.major}.{base_v.minor}.{base_v.micro - 1}"))
+                    candidates.add(Version(f"{base_v.major}.{base_v.minor + 1}.0"))
+                    if base_v.minor > 0:
+                        candidates.add(Version(f"{base_v.major}.{base_v.minor - 1}.0"))
+                    candidates.add(Version(f"{base_v.major + 1}.0.0"))
+                    if base_v.major > 2:
+                        candidates.add(Version(f"{base_v.major - 1}.0.0"))
 
     return [c for c in candidates if c >= Version("2.0.0")]
 
