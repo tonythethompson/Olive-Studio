@@ -30,7 +30,10 @@
               if (pref === "light" || pref === "dark") return pref;
             }
           } catch (e) { /* corrupted or unavailable — fall through */ }
-          return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          if (typeof window.matchMedia === "function") {
+            return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          }
+          return "light";
         }
 
         var theme = getResolved();

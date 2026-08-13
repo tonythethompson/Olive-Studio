@@ -11,6 +11,14 @@ export function useThemeEffect(): void {
   const themePreference = usePreferencesStore((s) => s.themePreference);
 
   useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      typeof document === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
+      return;
+    }
+
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
 
     function apply() {
@@ -23,8 +31,14 @@ export function useThemeEffect(): void {
 
     // Only subscribe to OS changes when preference is "system"
     if (themePreference === "system") {
-      mq.addEventListener("change", apply);
-      return () => mq.removeEventListener("change", apply);
+      if (typeof mq.addEventListener === "function") {
+        mq.addEventListener("change", apply);
+        return () => mq.removeEventListener("change", apply);
+      }
+      if (typeof mq.addListener === "function") {
+        mq.addListener(apply);
+        return () => mq.removeListener(apply);
+      }
     }
   }, [themePreference]);
 }
