@@ -94,7 +94,8 @@ function formatElapsed(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
 
   if (totalSeconds < 60) {
-    return `${(ms / 1000).toFixed(1)}s`;
+    const tenths = Math.floor(ms / 100) / 10;
+    return `${tenths.toFixed(1)}s`;
   }
 
   const hours = Math.floor(totalSeconds / 3600);

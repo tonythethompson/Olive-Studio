@@ -58,6 +58,10 @@ export async function computeFingerprint(state: UIState): Promise<string> {
     filtered.localFileNames = state.localFiles.map((file) => file.name);
   }
 
+  if (Array.isArray(state.batchJobs)) {
+    filtered.batchJobs = sanitizeBatchJobsForFingerprint(state.batchJobs);
+  }
+
   // Deterministic serialization with sorted keys
   const serialized = stableStringify(filtered);
 
@@ -96,5 +100,21 @@ export function _serializeForFingerprint(state: UIState): string {
     filtered.localFileNames = state.localFiles.map((file) => file.name);
   }
 
+  if (Array.isArray(state.batchJobs)) {
+    filtered.batchJobs = sanitizeBatchJobsForFingerprint(state.batchJobs);
+  }
+
   return stableStringify(filtered);
+}
+
+function sanitizeBatchJobsForFingerprint(jobs: UIState["batchJobs"]) {
+  return (jobs ?? []).map((job) => ({
+    id: job.id,
+    name: job.name,
+    modelSource: job.modelSource,
+    modelIdentifier: job.modelIdentifier,
+    provider: job.provider,
+    passes: job.passes,
+    recipeJson: job.recipeJson,
+  }));
 }

@@ -104,8 +104,14 @@ export function parseMcpCompareOutput(
     results.push(parsed);
   }
 
-  // Validate `winner` is string or null
+  // Validate `winner` is string or null, and refers to a compared job when set
   if (raw.winner !== null && !isString(raw.winner)) return null;
+  if (
+    typeof raw.winner === "string" &&
+    !results.some((entry) => entry.job_id === raw.winner)
+  ) {
+    return null;
+  }
 
   // Validate `reasoning` is a string
   if (!isString(raw.reasoning)) return null;
