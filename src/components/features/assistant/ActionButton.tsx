@@ -16,6 +16,7 @@ import { Wrench, Navigation, BookOpen, ExternalLink, AlertTriangle } from "lucid
 import { cn } from "@/lib/utils";
 import { usePipelineStore, usePipelineState } from "@/lib/stores/pipelineStore";
 import { chatPatchToUiState, sanitizeChatActionPatch } from "@/lib/chatActions";
+import { commitUiStateUpdate } from "@/lib/pipelineValidation";
 import { executeNavigateAction } from "@/lib/actionExecutor";
 import type { Action } from "@/lib/types/findingTypes";
 import type { UIState } from "@/types";
@@ -108,7 +109,7 @@ export function ActionButton({
   const state = stateProp ?? store.state;
   const setState = setStateProp ?? store.setState;
 
-  const Icon = KIND_ICONS[action.kind];
+  const Icon = KIND_ICONS[action.kind] ?? Wrench;
 
   // ── Handlers ────────────────────────────────────────────────────────────
 
@@ -124,7 +125,7 @@ export function ActionButton({
 
     // Read committed state to detect coercion (Req 2.7).
     // The store's setState uses commitUiStateUpdate which may auto-coerce values.
-    const committed = setStateProp ? { ...state, ...partial } : usePipelineStore.getState().state;
+    const committed = commitUiStateUpdate(state, partial);
     const coercedFields: string[] = [];
 
     for (const key of Object.keys(partial) as (keyof typeof partial)[]) {

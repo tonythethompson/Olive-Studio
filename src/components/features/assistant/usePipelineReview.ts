@@ -23,7 +23,7 @@ import {
 } from "@/lib/pipelineValidation";
 import { computeFingerprint } from "@/lib/workspaceFingerprint";
 import { resolveAuditAutofix } from "@/lib/auditAutofix";
-import type { Finding } from "@/lib/types/findingTypes";
+import type { Action, Finding } from "@/lib/types/findingTypes";
 import type { ChatActionPatch } from "@/lib/chatActions";
 import type { UIState } from "@/types";
 
@@ -63,6 +63,26 @@ export interface UsePipelineReviewReturn {
 const POST_PATCH_DEBOUNCE_MS = 400;
 const ANALYZE_TIMEOUT_MS = 45_000;
 
+const ACTION_KINDS = new Set<Action["kind"]>([
+  "applyPatch",
+  "navigate",
+  "explain",
+  "documentation",
+]);
+
+function parseActions(raw: unknown): Action[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Action[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    if (!ACTION_KINDS.has(rec.kind as Action["kind"])) continue;
+    if (typeof rec.label !== "string") continue;
+    out.push(rec as Action);
+  }
+  return out.slice(0, 10);
+}
+
 function parseFindings(raw: unknown): Finding[] | null {
   if (!Array.isArray(raw)) return null;
   const out: Finding[] = [];
@@ -74,18 +94,27 @@ function parseFindings(raw: unknown): Finding[] | null {
       typeof rec.id !== "string" ||
       typeof rec.title !== "string" ||
       typeof rec.description !== "string" ||
-      (severity !== "critical" && severity !== "warning" && severity !== "info") ||
-      !Array.isArray(rec.actions)
+      (severity !== "critical" && severity !== "warning" && severity !== "info")
     ) {
       continue;
     }
+    const actions = parseActions(rec.actions);
     out.push({
       id: rec.id,
       title: rec.title.slice(0, 120),
       description: rec.description.slice(0, 2000),
       severity,
       evidence: typeof rec.evidence === "string" ? rec.evidence : rec.description,
-      actions: rec.actions as Finding["actions"],
+      actions:
+        actions.length > 0
+          ? actions
+          : [
+              {
+                kind: "explain",
+                label: "View details",
+                payload: { body: `**${rec.title}**\n\n${rec.description}` },
+              },
+            ],
     });
   }
   return out;
@@ -287,6 +316,10 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
   const reset = useCallback(() => {
     reviewIdRef.current += 1;
     abortRef.current?.abort();
+    if (postPatchTimerRef.current) {
+      clearTimeout(postPatchTimerRef.current);
+      postPatchTimerRef.current = null;
+    }
     setFindings([]);
     setScore(0);
     setLevel("");
