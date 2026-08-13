@@ -138,8 +138,49 @@ export function mountLmStudioRoutes(router: Router): void {
       rawSend(evt);
     };
     const tag = String(modelTag);
+    let ownsBusy = false;
+    let resolveTeardown: (() => void) | null = null;
+    const teardown = new Promise<void>((resolve) => {
+      resolveTeardown = resolve;
+    });
     const releaseBusy = () => {
-      if (localEngineRuntime.lmsPullBusyTag === tag) localEngineRuntime.lmsPullBusyTag = null;
+      if (ownsBusy && localEngineRuntime.lmsPullBusyTag === tag) {
+        localEngineRuntime.lmsPullBusyTag = null;
+        ownsBusy = false;
+      }
+    };
+    const finalizeBusy = () => {
+      releaseBusy();
+      if (localEngineRuntime.lmsPullTeardown === teardown) {
+        localEngineRuntime.lmsPullTeardown = null;
+        resolveTeardown?.();
+        resolveTeardown = null;
+      }
+    };
+    const waitForPullSlot = async (): Promise<boolean> => {
+      if (localEngineRuntime.lmsPullBusyTag) {
+        const cancelledPull =
+          localEngineRuntime.lmsPullBusyTag === tag ? localEngineRuntime.lmsPullTeardown : null;
+        if (cancelledPull) {
+          await cancelledPull;
+          if (guard.disconnected()) {
+            guard.endOnce();
+            return false;
+          }
+        }
+        if (localEngineRuntime.lmsPullBusyTag) {
+          send({
+            type: "error",
+            error: "Another LM Studio download is already in progress.",
+            hint: `Wait for "${localEngineRuntime.lmsPullBusyTag}" to finish, or cancel that download, then retry.`,
+          });
+          guard.endOnce();
+          return false;
+        }
+      }
+      localEngineRuntime.lmsPullBusyTag = tag;
+      ownsBusy = true;
+      return true;
     };
     try {
       if (!isValidLocalModelTag(tag)) {
@@ -147,27 +188,25 @@ export function mountLmStudioRoutes(router: Router): void {
         guard.endOnce();
         return;
       }
-      if (localEngineRuntime.lmsPullBusyTag) {
-        send({
-          type: "error",
-          error: "Another LM Studio download is already in progress.",
-          hint: `Wait for "${localEngineRuntime.lmsPullBusyTag}" to finish, or cancel that download, then retry.`,
-        });
-        guard.endOnce();
-        return;
-      }
+      if (!(await waitForPullSlot())) return;
       const disk = gateLocalPullDiskSpace("lms", tag);
       if (!disk.ok) {
         send({ type: "error", error: disk.error, hint: disk.hint });
+        finalizeBusy();
         guard.endOnce();
         return;
       }
 
-      localEngineRuntime.lmsPullBusyTag = tag;
+      const markCancelled = () => {
+        if (ownsBusy && localEngineRuntime.lmsPullBusyTag === tag) {
+          localEngineRuntime.lmsPullTeardown = teardown;
+        }
+      };
+      guard.signal.addEventListener("abort", markCancelled, { once: true });
       // Waiter-based abort: shared ensure continues while other clients wait.
       const ready = await ensureLmsReady((evt) => send(evt), guard.signal);
       if (guard.disconnected()) {
-        releaseBusy();
+        finalizeBusy();
         guard.endOnce();
         return;
       }
@@ -177,7 +216,7 @@ export function mountLmStudioRoutes(router: Router): void {
           error: ready.error || "LM Studio is not ready",
           openedUrl: ready.openedUrl ?? "https://lmstudio.ai",
         });
-        releaseBusy();
+        finalizeBusy();
         guard.endOnce();
         return;
       }
@@ -188,7 +227,7 @@ export function mountLmStudioRoutes(router: Router): void {
           error: "LM Studio CLI (lms) not found. Install LM Studio from https://lmstudio.ai",
           openedUrl: "https://lmstudio.ai",
         });
-        releaseBusy();
+        finalizeBusy();
         guard.endOnce();
         return;
       }
@@ -228,13 +267,43 @@ export function mountLmStudioRoutes(router: Router): void {
       }, LMS_GET_MAX_MS);
       guard.signal.addEventListener("abort", killProc, { once: true });
 
+      // `lms get` can go silent for long stretches on a stalled connection well
+      // before the 20-minute hard timeout. Surface that instead of leaving the
+      // user staring at a frozen percentage with no idea whether it's still working.
+      const STALL_WARN_MS = 45_000;
+      let stallTimer: ReturnType<typeof setTimeout> | undefined;
+      const armStallTimer = () => {
+        if (stallTimer) clearTimeout(stallTimer);
+        stallTimer = setTimeout(() => {
+          if (guard.disconnected()) return;
+          send({
+            type: "log",
+            message: `No progress for ${Math.round(STALL_WARN_MS / 1000)}s — the download may be stuck. You can cancel and retry.`,
+          });
+        }, STALL_WARN_MS);
+        if (typeof stallTimer.unref === "function") stallTimer.unref();
+      };
+      const clearStallTimer = () => {
+        if (stallTimer) {
+          clearTimeout(stallTimer);
+          stallTimer = undefined;
+        }
+      };
+      guard.signal.addEventListener("abort", clearStallTimer, { once: true });
+      armStallTimer();
+
       const logBuf: string[] = [];
+      let lastProgressPercent: number | null = null;
       const pushCliChunk = (d: Buffer) => {
         for (const line of splitCliLines(d.toString())) {
           logBuf.push(line);
           if (logBuf.length > 80) logBuf.splice(0, logBuf.length - 80);
           const cliPct = parseLmsGetPercent(line);
           if (cliPct !== null) {
+            if (lastProgressPercent === null || cliPct > lastProgressPercent) {
+              lastProgressPercent = cliPct;
+              armStallTimer();
+            }
             send({
               type: "progress",
               message: line.replace(/\s+/g, " ").slice(0, 160),
@@ -250,6 +319,7 @@ export function mountLmStudioRoutes(router: Router): void {
       proc.on("close", (code) => {
         clearTimeout(maxTimer);
         clearKillEscalate();
+        clearStallTimer();
         void (async () => {
           try {
             if (!guard.disconnected()) {
@@ -292,7 +362,7 @@ export function mountLmStudioRoutes(router: Router): void {
               }
             }
           } finally {
-            releaseBusy();
+            finalizeBusy();
             guard.endOnce();
           }
         })();
@@ -300,12 +370,13 @@ export function mountLmStudioRoutes(router: Router): void {
       proc.on("error", (err) => {
         clearTimeout(maxTimer);
         clearKillEscalate();
+        clearStallTimer();
         if (!guard.disconnected()) send({ type: "error", error: err.message });
-        releaseBusy();
+        finalizeBusy();
         guard.endOnce();
       });
     } catch (err: unknown) {
-      releaseBusy();
+      finalizeBusy();
       if (!guard.disconnected()) {
         send({ type: "error", error: err instanceof Error ? err.message : String(err) });
       }

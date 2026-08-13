@@ -17,6 +17,8 @@ export interface LocalEngineRuntime {
   lastOllamaStartAt: number;
   /** One active `lms get` at a time (server-side single-flight). */
   lmsPullBusyTag: string | null;
+  /** Resolves after a cancelled LM Studio pull has fully torn down. */
+  lmsPullTeardown: Promise<void> | null;
   /** One active Ollama pull at a time (server-side single-flight). */
   ollamaPullBusyTag: string | null;
   ollamaProgressSubscribers: Set<(evt: EnsureProgressEvt) => void>;
@@ -36,6 +38,7 @@ function createLocalEngineRuntime(): LocalEngineRuntime {
     lmsEnsureInFlight: null,
     lastOllamaStartAt: 0,
     lmsPullBusyTag: null,
+    lmsPullTeardown: null,
     ollamaPullBusyTag: null,
     ollamaProgressSubscribers: new Set(),
     lmsProgressSubscribers: new Set(),

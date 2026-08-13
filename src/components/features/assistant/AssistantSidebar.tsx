@@ -10,6 +10,7 @@ import {
 } from "@/lib/aiWorkspaceContext";
 import { chatPatchToUiState, sanitizeChatActionPatch, type ChatAction } from "@/lib/chatActions";
 import { Bot, X, Lightbulb, MessageSquareCode, Settings2, Bug } from "lucide-react";
+import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { AuditPanel } from "./AuditPanel";
 import { ReportIssueModal } from "@/components/ReportIssueModal";
 import { PROVIDER_OPTIONS, normalizeUiProviderId } from "./aiProviderCatalog";
@@ -65,6 +66,7 @@ export function AssistantSidebar({
   const setState = propSetState ?? storeState.setState;
   const [activeTab, setActiveTab] = useState<SidebarTab>("audit");
   const [, startTabTransition] = useTransition();
+  const { data: hardwareProbe = null } = useHardwareProbe({ enabled: isOpen });
 
   const handleTabChange = (tab: SidebarTab) => {
     startTabTransition(() => {
@@ -79,6 +81,29 @@ export function AssistantSidebar({
   const audit = useAiAudit({ state, setState });
   const chat = useAiChat(workspaceContext);
   const chatActionAuditTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chatLogForReport = useMemo(
+    () =>
+      chat.chatMessages.map((m) => {
+        // Normalize message text to keep one "sender: text" line per turn
+        // 1. Replace newlines with spaces
+        // 2. Collapse multiple whitespace characters
+        // 3. Trim leading/trailing whitespace
+        // 4. Optionally truncate to a reasonable maximum length
+        const maxLength = 500;
+        const normalized = m.text
+          .replace(/\s*\n\s*/g, " ") // replace newlines (and surrounding spaces) with a single space
+          .replace(/\s+/g, " ") // collapse multiple whitespace into a single space
+          .trim();
+
+        const text =
+          normalized.length > maxLength
+            ? `${normalized.slice(0, maxLength)}…`
+            : normalized;
+
+        return `${m.sender}: ${text}`;
+      }),
+    [chat.chatMessages],
+  );
 
   useEffect(() => {
     return () => {
@@ -117,9 +142,9 @@ export function AssistantSidebar({
 
   const local = useLocalEngineSetup({
     isOpen,
-    onModelActivated: async (modelTag, source) => {
-      const ok = await providers.enableLocalAiProvider(source, modelTag);
-      if (!ok) return;
+    onModelActivated: async (modelTag, source, signal) => {
+      const ok = await providers.enableLocalAiProvider(source, modelTag, signal);
+      if (!ok || signal?.aborted) return;
       audit.resetAnalysis();
     },
   });
@@ -328,6 +353,9 @@ export function AssistantSidebar({
             open={isReportOpen}
             onClose={() => setIsReportOpen(false)}
             state={state}
+            hardwareProbe={hardwareProbe}
+            chatLog={chatLogForReport}
+            defaultArea="assistant-ai"
           />
         </div>
       </aside>

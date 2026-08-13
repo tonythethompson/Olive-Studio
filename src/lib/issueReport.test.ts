@@ -6,6 +6,7 @@ import {
   buildIssueTitle,
   buildGitHubIssueUrl,
   buildReport,
+  categoryHasSeverity,
   type IssueReport,
   type BuildReportOptions,
 } from "./issueReport";
@@ -32,6 +33,19 @@ describe("redactSecrets", () => {
 
   it("redacts API key patterns", () => {
     expect(redactSecrets('api_key="sk-1234567890abcdef1234567890"')).toContain("[REDACTED]");
+  });
+
+  it("redacts standalone JWTs and PEM private keys", () => {
+    const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signaturevalue123";
+    const compactJwt = "a.e30.-";
+    const emptySignatureJwt = "a.e30.";
+    const pem = "-----BEGIN PRIVATE KEY-----\nsecret-material\n-----END PRIVATE KEY-----";
+    const redacted = redactSecrets(`jwt=${jwt}\ncompact=${compactJwt}\nempty=${emptySignatureJwt}\nkey=${pem}`);
+    expect(redacted).not.toContain(jwt);
+    expect(redacted).not.toContain(compactJwt);
+    expect(redacted).not.toContain(emptySignatureJwt);
+    expect(redacted).not.toContain("secret-material");
+    expect(redacted.match(/\[REDACTED\]/g)?.length).toBe(4);
   });
 
   it("redacts Windows user paths", () => {
@@ -154,6 +168,18 @@ describe("buildIssueBody", () => {
     const report = { ...baseReport, telemetry: {} };
     const body = buildIssueBody(report);
     expect(body).not.toContain("### Telemetry");
+  });
+
+  it("normalizes N/A away from bug reports", () => {
+    const body = buildIssueBody({ ...baseReport, severity: "n-a" });
+    expect(body).toContain("**Severity:** Annoying");
+    expect(body).not.toContain("**Severity:** N/A");
+  });
+
+  it("uses N/A for non-bug categories", () => {
+    expect(categoryHasSeverity("feature")).toBe(false);
+    const body = buildIssueBody({ ...baseReport, category: "feature", severity: "blocking" });
+    expect(body).toContain("**Severity:** N/A");
   });
 });
 

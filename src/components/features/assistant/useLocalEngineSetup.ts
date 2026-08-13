@@ -11,7 +11,7 @@ import {
 interface UseLocalEngineSetupOptions {
   isOpen: boolean;
   /** Called after a 1-click pull finishes so the provider status / audit can refresh. */
-  onModelActivated: (modelTag: string, source: LocalEngine) => void | Promise<void>;
+  onModelActivated: (modelTag: string, source: LocalEngine, signal?: AbortSignal) => void | Promise<void>;
 }
 
 type InstallStreamEvent = {
@@ -33,6 +33,66 @@ type PullStreamEvent = {
   modelId?: string;
   verified?: boolean;
 };
+
+type PullState = {
+  gotDone: boolean;
+  finalMessage: string;
+  modelId?: string;
+  verified?: boolean;
+};
+
+type PullMeta = Pick<PullState, "modelId" | "verified">;
+
+function isPullDownloadPhaseEvent(evt: PullStreamEvent): boolean {
+  return (
+    evt.type === "progress" ||
+    evt.type === "log" ||
+    (evt.type === "step" && /download|pulling/i.test(evt.message ?? ""))
+  );
+}
+
+function isPullLogEvent(evt: PullStreamEvent): boolean {
+  return evt.type === "log" || evt.type === "step" || evt.type === "progress";
+}
+
+function isCurrentPullController(
+  controller: AbortController,
+  activeController: AbortController | null,
+): boolean {
+  return !controller.signal.aborted && activeController === controller;
+}
+
+function applyPullCompletion(evt: PullStreamEvent, state: PullState): void {
+  state.gotDone = true;
+  state.finalMessage = evt.message || "Model ready.";
+  if (typeof evt.modelId === "string" && evt.modelId.trim()) state.modelId = evt.modelId.trim();
+  if (typeof evt.verified === "boolean") state.verified = evt.verified;
+}
+
+function applyLegacyPullBody(
+  body: string,
+  response: Response,
+  state: PullState,
+  onDownloadPhase?: () => void,
+): void {
+  if (!state.gotDone && response.headers.get("content-type")?.includes("application/json") && body.trim()) {
+    const data = JSON.parse(body) as {
+      ok?: boolean;
+      error?: string;
+      message?: string;
+      modelId?: string;
+      verified?: boolean;
+    };
+    if (data.error) throw new Error(data.error);
+    if (data.ok) {
+      state.gotDone = true;
+      state.finalMessage = data.message || "Model ready.";
+      if (data.modelId) state.modelId = data.modelId;
+      if (typeof data.verified === "boolean") state.verified = data.verified;
+      onDownloadPhase?.();
+    }
+  }
+}
 
 function readStoredEngine(): LocalEngine {
   try {
@@ -131,7 +191,18 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
   const [installingEngine, setInstallingEngine] = useState<LocalEngine | null>(null);
   const [preferredEngine, setPreferredEngine] = useState<LocalEngine>(readStoredEngine);
   const pullAbortRef = useRef<AbortController | null>(null);
+  const pullCompletionRef = useRef<Promise<void> | null>(null);
+  const resolvePullCompletionRef = useRef<(() => void) | null>(null);
   const pullUserCancelledRef = useRef(false);
+
+  /**
+   * Returns true when this controller is no longer the active pull — either
+   * because the user cancelled it (abort) or a newer pull superseded it.
+   * All async continuations must bail when stale to avoid overwriting
+   * the newer pull's UI state.
+   */
+  const isStale = (controller: AbortController): boolean =>
+    !isCurrentPullController(controller, pullAbortRef.current);
 
   const selectPreferredEngine = (engine: LocalEngine) => {
     setPreferredEngine(engine);
@@ -297,101 +368,227 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
 
   const handlePullStreamEvent = (
     evt: PullStreamEvent,
-    state: { gotDone: boolean; finalMessage: string; modelId?: string; verified?: boolean },
+    state: PullState,
     onDownloadPhase?: () => void,
+    controller?: AbortController,
   ) => {
+    if (controller && isStale(controller)) return;
     // Server only starts its 20m lms get / ollama timer after ensure*; arm ours then too.
-    if (
-      evt.type === "progress" ||
-      evt.type === "log" ||
-      (evt.type === "step" && /download|pulling/i.test(evt.message ?? ""))
-    ) {
-      onDownloadPhase?.();
-    }
+    if (isPullDownloadPhaseEvent(evt)) onDownloadPhase?.();
     if (typeof evt.percent === "number" && Number.isFinite(evt.percent)) {
       setLocalPullPercent(clampPercent(evt.percent));
     }
     if (evt.message) {
       setLocalInstallInfo(evt.message);
-      if (evt.type === "log" || evt.type === "step" || evt.type === "progress") {
-        appendPullLog(evt.message);
-      }
+      if (isPullLogEvent(evt)) appendPullLog(evt.message);
     }
     if (evt.type === "error") {
       throw new Error(joinErrorParts(evt.error || "Pull failed", evt.hint));
     }
     if (evt.type === "done") {
-      state.gotDone = true;
-      state.finalMessage = evt.message || "Model ready.";
-      if (typeof evt.modelId === "string" && evt.modelId.trim()) state.modelId = evt.modelId.trim();
-      if (typeof evt.verified === "boolean") state.verified = evt.verified;
+      applyPullCompletion(evt, state);
       setLocalPullPercent(100);
     }
   };
 
   const consumePullStream = async (
     r: Response,
+    controller: AbortController,
     onDownloadPhase?: () => void,
-  ): Promise<{ modelId?: string; verified?: boolean }> => {
+  ): Promise<PullMeta> => {
     if (!r.ok && !r.body) {
       const data = (await r.json().catch(() => ({}))) as { error?: string; hint?: string };
       throw new Error(joinErrorParts(data.error || `HTTP ${r.status}`, data.hint));
     }
     if (!r.body) throw new Error(`Empty response (HTTP ${r.status})`);
 
-    const state: { gotDone: boolean; finalMessage: string; modelId?: string; verified?: boolean } = {
+    const state: PullState = {
       gotDone: false,
       finalMessage: "",
     };
     const buf = await readNdjsonLines(r.body, (line) => {
       try {
-        handlePullStreamEvent(JSON.parse(line) as PullStreamEvent, state, onDownloadPhase);
+        handlePullStreamEvent(JSON.parse(line) as PullStreamEvent, state, onDownloadPhase, controller);
       } catch (e) {
         if (e instanceof SyntaxError) return;
         throw e;
       }
     });
 
-    // Legacy JSON body (non-stream) if server ever falls back
-    if (!state.gotDone && r.headers.get("content-type")?.includes("application/json") && buf.trim()) {
-      const data = JSON.parse(buf) as {
-        ok?: boolean;
-        error?: string;
-        message?: string;
-        modelId?: string;
-        verified?: boolean;
-      };
-      if (data.error) throw new Error(data.error);
-      if (data.ok) {
-        state.gotDone = true;
-        state.finalMessage = data.message || "Model ready.";
-        if (data.modelId) state.modelId = data.modelId;
-        if (typeof data.verified === "boolean") state.verified = data.verified;
-        onDownloadPhase?.();
-      }
-    }
+    // Bail early if this controller became stale while the stream was being consumed.
+    if (isStale(controller)) return {};
+
+    // Legacy JSON body (non-stream) if server ever falls back.
+    applyLegacyPullBody(buf, r, state, onDownloadPhase);
     if (!state.gotDone && !r.ok) {
       throw new Error(`Pull failed (HTTP ${r.status})`);
     }
 
+    if (isStale(controller)) return {};
     setLocalInstallInfo(state.finalMessage || "Model ready.");
     return { modelId: state.modelId, verified: state.verified };
+  };
+
+  const runModelPull = async (
+    modelTag: string,
+    source: LocalEngine,
+    controller: AbortController,
+  ): Promise<PullMeta> => {
+    const endpoint = source === "ollama" ? "/api/ai/ollama-pull" : "/api/ai/local-pull";
+    // Align the 20m abort with the server's lms get / ollama pull timer (starts after ensure*).
+    const DOWNLOAD_MAX_MS = 20 * 60 * 1000;
+    // Cap hung ensure/install so a stuck startup cannot stream forever.
+    const ENSURE_PHASE_MAX_MS = 15 * 60 * 1000;
+    let downloadTimer: ReturnType<typeof setTimeout> | undefined;
+    const ensureTimer = setTimeout(() => {
+      if (!downloadTimer) controller.abort();
+    }, ENSURE_PHASE_MAX_MS);
+    const armDownloadTimeout = () => {
+      if (downloadTimer) return;
+      clearTimeout(ensureTimer);
+      downloadTimer = setTimeout(() => controller.abort(), DOWNLOAD_MAX_MS);
+    };
+
+    try {
+      if (isStale(controller)) return {};
+      const r = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/x-ndjson, application/json",
+        },
+        body: JSON.stringify({ modelTag }),
+        signal: controller.signal,
+      });
+      if (isStale(controller)) return {};
+      return await consumePullStream(r, controller, armDownloadTimeout);
+    } finally {
+      clearTimeout(ensureTimer);
+      if (downloadTimer) clearTimeout(downloadTimer);
+    }
   };
 
   const cancelLocalPull = () => {
     pullUserCancelledRef.current = true;
     pullAbortRef.current?.abort();
-    setLocalInstallInfo("Cancelling download…");
+    // Keep the controller until the aborted request has fully unwound. A retry
+    // requested during that window waits for server-side process teardown, so
+    // it cannot be rejected by the LM Studio busy gate or overlap the old pull.
+    setPullingModel(null);
+    setLocalPullPercent(null);
+    setLocalInstallInfo(null);
+    setLocalPullError("Download cancelled.");
   };
 
-  const pullLocalModel = async (modelTag: string, source: LocalEngine = "lms") => {
-    if (pullAbortRef.current) {
-      setLocalPullError("A download is already in progress. Cancel it first, or wait for it to finish.");
+  const waitForPullSlot = async (): Promise<boolean> => {
+    if (!pullAbortRef.current) return true;
+    if (pullUserCancelledRef.current && pullCompletionRef.current) {
+      await pullCompletionRef.current;
+      return !pullAbortRef.current;
+    }
+    setLocalPullError("A download is already in progress. Cancel it first, or wait for it to finish.");
+    return false;
+  };
+
+  const activateExistingPull = async (
+    modelId: string,
+    source: LocalEngine,
+    controller: AbortController,
+  ): Promise<void> => {
+    // Skip activation — a newer pull has started or this one was cancelled.
+    if (isStale(controller)) return;
+    setLocalPullPercent(100);
+    setLocalInstallInfo(`Already installed — enabling ${modelId}…`);
+    await onModelActivated(modelId, source, controller.signal);
+    // A newer pull may have started while activation was in flight — don't overwrite its state.
+    if (isStale(controller)) return;
+    setLocalInstallInfo(`Ready: ${modelId}`);
+  };
+
+  const activateDownloadedPull = async (
+    modelTag: string,
+    source: LocalEngine,
+    starter: ReturnType<typeof starterForTag>,
+    pullMeta: PullMeta,
+    controller: AbortController,
+  ): Promise<void> => {
+    if (isStale(controller)) return;
+    markEngineReady(source);
+    const after = await refreshInstalledModels(source);
+    if (isStale(controller)) return;
+    const found = findInstalledStarterId(
+      {
+        tag: modelTag,
+        enableTag: starter?.enableTag ?? preferredEnableTag(modelTag, source) ?? modelTag,
+        match: starter?.match ?? starter?.enableTag ?? modelTag,
+      },
+      after,
+    );
+    const enableId =
+      found ??
+      (pullMeta.modelId && after.includes(pullMeta.modelId) ? pullMeta.modelId : undefined) ??
+      (pullMeta.verified && pullMeta.modelId ? pullMeta.modelId : undefined);
+    if (!enableId) {
+      const expected =
+        pullMeta.modelId ||
+        preferredEnableTag(modelTag, source) ||
+        resolveLocalEnableModelId(modelTag, preferredEnableTag(modelTag, source), after);
+      throw new Error(
+        joinErrorParts(
+          `Download finished but the model did not appear in ${source === "ollama" ? "Ollama" : "LM Studio"}`,
+          `Expected something like "${expected}". Click Refresh under Installed models, then Enable.`,
+        ),
+      );
+    }
+    setLocalInstallInfo(`Enabling ${enableId}…`);
+    // Skip activation — a newer pull superseded this one or it was cancelled.
+    if (isStale(controller)) return;
+    await onModelActivated(enableId, source, controller.signal);
+    // A newer pull may have started while activation was in flight — don't overwrite its state.
+    if (isStale(controller)) return;
+    setLocalInstallInfo(`Ready: ${enableId}`);
+  };
+
+  const executePullLocalModel = async (
+    modelTag: string,
+    source: LocalEngine,
+    controller: AbortController,
+  ): Promise<void> => {
+    const starter = starterForTag(modelTag, source);
+    const installed = await refreshInstalledModels(source);
+    if (isStale(controller)) return;
+    const existing = findInstalledStarterId(
+      {
+        tag: modelTag,
+        enableTag: starter?.enableTag ?? preferredEnableTag(modelTag, source) ?? modelTag,
+        match: starter?.match ?? starter?.enableTag ?? modelTag,
+      },
+      installed,
+    );
+    if (existing) {
+      await activateExistingPull(existing, source, controller);
       return;
     }
 
+    setLocalPullPercent(0);
+    setLocalInstallInfo(
+      source === "ollama"
+        ? "Starting: ensure Ollama → serve → download…"
+        : "Starting: ensure LM Studio → serve → download…",
+    );
+    const pullMeta = await runModelPull(modelTag, source, controller);
+    await activateDownloadedPull(modelTag, source, starter, pullMeta, controller);
+  };
+
+  const pullLocalModel = async (modelTag: string, source: LocalEngine = "lms") => {
+    if (!(await waitForPullSlot())) return;
+
     const controller = new AbortController();
     pullAbortRef.current = controller;
+    const completion = new Promise<void>((resolve) => {
+      resolvePullCompletionRef.current = resolve;
+    });
+    pullCompletionRef.current = completion;
 
     setPullingModel(modelTag);
     setLocalPullError("");
@@ -400,107 +597,29 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     pullUserCancelledRef.current = false;
 
     try {
-      const starter = starterForTag(modelTag, source);
-      const installed = await refreshInstalledModels(source);
-      if (controller.signal.aborted) return;
-      const existing = findInstalledStarterId(
-        {
-          tag: modelTag,
-          enableTag: starter?.enableTag ?? preferredEnableTag(modelTag, source) ?? modelTag,
-          match: starter?.match ?? starter?.enableTag ?? modelTag,
-        },
-        installed,
-      );
-      if (existing) {
-        setLocalPullPercent(100);
-        setLocalInstallInfo(`Already installed — enabling ${existing}…`);
-        await onModelActivated(existing, source);
-        if (controller.signal.aborted) return;
-        setLocalInstallInfo(`Ready: ${existing}`);
-        return;
-      }
-
-      setLocalPullPercent(0);
-      setLocalInstallInfo(
-        source === "ollama"
-          ? "Starting: ensure Ollama → serve → download…"
-          : "Starting: ensure LM Studio → serve → download…",
-      );
-
-      const endpoint = source === "ollama" ? "/api/ai/ollama-pull" : "/api/ai/local-pull";
-      // Align the 20m abort with the server's lms get / ollama pull timer (starts after ensure*).
-      const DOWNLOAD_MAX_MS = 20 * 60 * 1000;
-      // Cap hung ensure/install so a stuck startup cannot stream forever.
-      const ENSURE_PHASE_MAX_MS = 15 * 60 * 1000;
-      let downloadTimer: ReturnType<typeof setTimeout> | undefined;
-      const ensureTimer = setTimeout(() => {
-        if (!downloadTimer) controller.abort();
-      }, ENSURE_PHASE_MAX_MS);
-      const armDownloadTimeout = () => {
-        if (downloadTimer) return;
-        clearTimeout(ensureTimer);
-        downloadTimer = setTimeout(() => controller.abort(), DOWNLOAD_MAX_MS);
-      };
-      let pullMeta: { modelId?: string; verified?: boolean } = {};
-      try {
-        if (controller.signal.aborted) return;
-        const r = await fetch(endpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/x-ndjson, application/json",
-          },
-          body: JSON.stringify({ modelTag }),
-          signal: controller.signal,
-        });
-        if (controller.signal.aborted) return;
-        pullMeta = await consumePullStream(r, armDownloadTimeout);
-      } finally {
-        clearTimeout(ensureTimer);
-        if (downloadTimer) clearTimeout(downloadTimer);
-      }
-
-      if (controller.signal.aborted) return;
-      markEngineReady(source);
-      const after = await refreshInstalledModels(source);
-      if (controller.signal.aborted) return;
-      const found = findInstalledStarterId(
-        {
-          tag: modelTag,
-          enableTag: starter?.enableTag ?? preferredEnableTag(modelTag, source) ?? modelTag,
-          match: starter?.match ?? starter?.enableTag ?? modelTag,
-        },
-        after,
-      );
-      const enableId =
-        found ??
-        (pullMeta.modelId && after.includes(pullMeta.modelId) ? pullMeta.modelId : undefined) ??
-        (pullMeta.verified && pullMeta.modelId ? pullMeta.modelId : undefined);
-      if (!enableId) {
-        const expected =
-          pullMeta.modelId ||
-          preferredEnableTag(modelTag, source) ||
-          resolveLocalEnableModelId(modelTag, preferredEnableTag(modelTag, source), after);
-        throw new Error(
-          joinErrorParts(
-            `Download finished but the model did not appear in ${source === "ollama" ? "Ollama" : "LM Studio"}`,
-            `Expected something like "${expected}". Click Refresh under Installed models, then Enable.`,
-          ),
-        );
-      }
-      setLocalInstallInfo(`Enabling ${enableId}…`);
-      await onModelActivated(enableId, source);
-      if (controller.signal.aborted) return;
-      setLocalInstallInfo(`Ready: ${enableId}`);
+      await executePullLocalModel(modelTag, source, controller);
     } catch (err: unknown) {
+      // Suppress only when a *newer* pull superseded this controller, or the user
+      // explicitly cancelled (cancelLocalPull already set error state synchronously).
+      // An internal timeout (ensure/download timer) aborts the signal but this
+      // controller is still active — let the error surface so the user sees guidance.
+      const superseded = pullAbortRef.current !== controller;
+      if (superseded || pullUserCancelledRef.current) return;
       setLocalPullError(
-        describePullFetchError(err, { userCancelled: pullUserCancelledRef.current }),
+        describePullFetchError(err, { userCancelled: false }),
       );
       setLocalInstallInfo(null);
     } finally {
-      pullAbortRef.current = null;
-      pullUserCancelledRef.current = false;
-      setPullingModel(null);
+      if (pullAbortRef.current === controller) {
+        pullAbortRef.current = null;
+        pullCompletionRef.current = null;
+        pullUserCancelledRef.current = false;
+        setPullingModel(null);
+      }
+      if (resolvePullCompletionRef.current) {
+        resolvePullCompletionRef.current();
+        resolvePullCompletionRef.current = null;
+      }
     }
   };
 

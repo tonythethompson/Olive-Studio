@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { createMockUIState } from "../__tests__/testUtils";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { createMockUIState, renderWithProviders } from "../__tests__/testUtils";
 
 const mockSetState = vi.fn();
 vi.mock("@/lib/stores/pipelineStore", () => ({
@@ -53,7 +53,7 @@ describe("AssistantSidebar flows", () => {
       );
     });
 
-    render(<AssistantSidebar isOpen onClose={vi.fn()} />);
+    renderWithProviders(<AssistantSidebar isOpen onClose={vi.fn()} />);
 
     // Header reflects the active provider and the audit auto-runs
     await waitFor(() => expect(screen.getByText(/Google Gemini \/ gemini-2.5-flash/)).toBeTruthy());

@@ -4,20 +4,26 @@ import type { UIState } from "@/types";
 // ── Report categories ────────────────────────────────────────────────────────
 
 export const REPORT_CATEGORIES = [
-  { id: "bug", label: "Bug report" },
-  { id: "feature", label: "Feature request" },
-  { id: "docs", label: "Documentation" },
-  { id: "other", label: "Other" },
+  { id: "bug", label: "Bug report", hasSeverity: true },
+  { id: "feature", label: "Feature request", hasSeverity: false },
+  { id: "docs", label: "Documentation", hasSeverity: false },
+  { id: "other", label: "Other", hasSeverity: false },
 ] as const;
 
 export type ReportCategory = (typeof REPORT_CATEGORIES)[number]["id"];
 
 export const REPORT_SEVERITIES = [
+  { id: "n-a", label: "N/A" },
   { id: "annoying", label: "Annoying" },
   { id: "blocking", label: "Blocking" },
   { id: "crash", label: "Crash" },
   { id: "silent", label: "Silent data loss" },
 ] as const;
+
+/** Severity only describes bug impact; other categories have nothing to rate. */
+export function categoryHasSeverity(category: ReportCategory): boolean {
+  return REPORT_CATEGORIES.find((candidate) => candidate.id === category)?.hasSeverity ?? false;
+}
 
 export type ReportSeverity = (typeof REPORT_SEVERITIES)[number]["id"];
 
@@ -41,6 +47,7 @@ export const TELEMETRY_OPTIONS = [
   { id: "olive-version", label: "Olive & ORT versions", description: "ONNX Runtime and Olive engine versions" },
   { id: "recipe", label: "Current recipe", description: "The active recipe JSON (redacted)" },
   { id: "logs", label: "Execution logs", description: "Recent log lines from the last run" },
+  { id: "chat-logs", label: "Assistant chat log", description: "Recent messages from this chat session (redacted)" },
 ] as const;
 
 export type TelemetryOptionId = (typeof TELEMETRY_OPTIONS)[number]["id"];
@@ -59,6 +66,10 @@ const SECRET_PATTERNS: RegExp[] = [
   /(?:AKIA|ASIA)[A-Z0-9]{16}/g,
   // Bearer tokens (Authorization header)
   /Bearer\s+[A-Za-z0-9\-._~+/]+=*/g,
+  // JSON Web Tokens (three base64url-encoded segments; payload/signature may be empty)
+  /(?<![A-Za-z0-9_-])[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*(?![A-Za-z0-9_-])/g,
+  // PEM private-key blocks
+  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/gi,
   // Generic long hex strings that look like secrets (32+ hex chars)
   /(?:["'\s:=]|^)[0-9a-f]{32,}(?:["'\s]|$)/gi,
   // Paths containing user home directories (privacy)
@@ -113,6 +124,8 @@ export interface BuildReportOptions {
   state?: UIState;
   hardwareProbe?: HardwareProbeResult | null;
   executionLogs?: string[];
+  /** Recent assistant chat transcript, formatted as one "sender: text" line per turn. */
+  chatLog?: string[];
   mcpDiagnostic?: unknown;
 }
 
@@ -180,6 +193,11 @@ function collectLogs(logs: string[] | undefined, maxLines = 50): string {
   return recent.join("\n");
 }
 
+function collectChatLog(chatLog: string[] | undefined, maxLines = 20): string {
+  if (!chatLog || chatLog.length === 0) return "No chat history available";
+  return chatLog.slice(-maxLines).join("\n");
+}
+
 // ── Builder ──────────────────────────────────────────────────────────────────
 
 /**
@@ -208,6 +226,9 @@ export function collectTelemetry(
       case "logs":
         telemetry.logs = redactSecrets(collectLogs(buildOptions.executionLogs));
         break;
+      case "chat-logs":
+        telemetry["chat-logs"] = redactSecrets(collectChatLog(buildOptions.chatLog)).replace(/\bsk-[A-Za-z0-9_-]{20,}/g, "[REDACTED]");
+        break;
     }
   }
 
@@ -219,6 +240,8 @@ export function collectTelemetry(
  */
 export function buildIssueBody(report: IssueReport): string {
   const lines: string[] = [];
+  const hasSeverity = categoryHasSeverity(report.category);
+  const severity = hasSeverity ? (report.severity === "n-a" ? "annoying" : report.severity) : "n-a";
 
   // Header
   lines.push("## Issue Report");
@@ -226,7 +249,7 @@ export function buildIssueBody(report: IssueReport): string {
 
   // Metadata
   lines.push(`**Category:** ${REPORT_CATEGORIES.find((c) => c.id === report.category)?.label ?? report.category}`);
-  lines.push(`**Severity:** ${REPORT_SEVERITIES.find((s) => s.id === report.severity)?.label ?? report.severity}`);
+  lines.push(`**Severity:** ${REPORT_SEVERITIES.find((s) => s.id === severity)?.label ?? severity}`);
   lines.push(`**Area:** ${REPORT_AREAS.find((a) => a.id === report.area)?.label ?? report.area}`);
   
   // Frequency info for repeated errors
