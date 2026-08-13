@@ -110,7 +110,7 @@ export function validateAdapters(
     errors.push({
       index: -1,
       field: "adapters",
-      message: `Adapter count ${adapters.length} exceeds maximum of ${maxCount} for ${vramGb <= LOW_VRAM_THRESHOLD_GB ? "<= 12" : "> 12"} GB VRAM`,
+      message: `Adapter count ${adapters.length} exceeds maximum of ${maxCount} for ${!Number.isFinite(vramGb) || vramGb <= LOW_VRAM_THRESHOLD_GB ? "<= 12" : "> 12"} GB VRAM`,
     });
   }
 
