@@ -330,8 +330,10 @@ pub fn run() {
                 if let Err(e) = update.download_and_install(|_chunk, _total| {}, || {}).await {
                   log::error!("failed to download and install update: {e}");
                 } else {
-                  log::info!("update v{} downloaded and installed successfully, restarting", update.version);
-                  handle.restart();
+                  log::info!(
+                    "update v{} downloaded and installed successfully (will take effect on next launch)",
+                    update.version
+                  );
                 }
               }
               Ok(None) => {
