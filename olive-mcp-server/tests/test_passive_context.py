@@ -143,19 +143,54 @@ def test_return_shape():
         "confidence",
         "snippet_count",
         "status",
+        "retrieval",
     }
     assert result["status"] == "ok"
 
 
-def test_status_reports_retrieval_failure(monkeypatch: pytest.MonkeyPatch):
-    """A KB/embedding failure must be distinguishable from a genuine empty result."""
+def test_semantic_failure_falls_back_to_keyword(monkeypatch: pytest.MonkeyPatch):
+    """When semantic search fails, keyword fallback must be used (not empty results)."""
 
     def boom():
         raise RuntimeError("model unavailable")
 
+    def fake_keyword_search(entries, terms, top_k):
+        return [
+            {
+                "source": "passes.OnnxQuantization",
+                "snippet": "Static quantization requires calibration data.",
+                "relevance": 0.6,
+            }
+        ]
+
     monkeypatch.setattr(passive_context, "get_or_build_kb_index", boom)
+    monkeypatch.setattr(passive_context, "_keyword_search", fake_keyword_search)
+    monkeypatch.setattr(passive_context, "_load_kb_text", lambda: [("s", "t")])
+
+    result = get_context_for_pipeline(pipeline_passes=["OnnxQuantization"], top_k=3)
+    assert result["status"] == "degraded"
+    assert result["snippet_count"] == 1
+    assert len(result["context_snippets"]) == 1
+    assert result["retrieval"]["effective"] == "keyword"
+    assert result["retrieval"]["degraded"] is True
+    assert result["retrieval"]["reason"] == "semantic_error"
+
+
+def test_both_retrieval_paths_fail(monkeypatch: pytest.MonkeyPatch):
+    """Only when both semantic and keyword fail should status be retrieval_failed."""
+
+    def boom():
+        raise RuntimeError("model unavailable")
+
+    def keyword_boom(entries, terms, top_k):
+        raise RuntimeError("kb load failed")
+
+    monkeypatch.setattr(passive_context, "get_or_build_kb_index", boom)
+    monkeypatch.setattr(passive_context, "_keyword_search", keyword_boom)
+    monkeypatch.setattr(passive_context, "_load_kb_text", lambda: [("s", "t")])
 
     result = get_context_for_pipeline(pipeline_passes=["OnnxQuantization"], top_k=3)
     assert result["status"] == "retrieval_failed"
     assert result["context_snippets"] == []
     assert result["snippet_count"] == 0
+    assert result["retrieval"]["reason"] == "keyword_and_semantic_error"

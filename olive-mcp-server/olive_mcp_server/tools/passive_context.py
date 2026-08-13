@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .docs_search import get_or_build_kb_index
+from .docs_search import _keyword_search, _load_kb_text, get_or_build_kb_index
 from .embeddings import DEFAULT_THRESHOLD, semantic_search
 
 logger = logging.getLogger(__name__)
@@ -95,9 +95,11 @@ def get_context_for_pipeline(
             "confidence": 0.0,
             "snippet_count": 0,
             "status": "ok",
+            "retrieval": {"mode": "auto", "effective": "none"},
         }
 
     status = "ok"
+    retrieval: dict[str, Any] = {"mode": "auto", "effective": "semantic"}
     try:
         kb_texts, embeddings = get_or_build_kb_index()
         results = semantic_search(
@@ -108,9 +110,34 @@ def get_context_for_pipeline(
             threshold=DEFAULT_THRESHOLD,
         )
     except Exception:
-        logger.warning("KB retrieval failed for pipeline context", exc_info=True)
-        results = []
-        status = "retrieval_failed"
+        logger.warning(
+            "Semantic KB retrieval failed for pipeline context; "
+            "falling back to keyword search",
+            exc_info=True,
+        )
+        try:
+            terms = [t.lower() for t in query.split() if t]
+            results = _keyword_search(_load_kb_text(), terms, top_k)
+            status = "degraded"
+            retrieval = {
+                "mode": "auto",
+                "effective": "keyword",
+                "degraded": True,
+                "reason": "semantic_error",
+            }
+        except Exception:
+            logger.warning(
+                "Keyword fallback also failed for pipeline context",
+                exc_info=True,
+            )
+            results = []
+            status = "retrieval_failed"
+            retrieval = {
+                "mode": "auto",
+                "effective": "none",
+                "degraded": True,
+                "reason": "keyword_and_semantic_error",
+            }
 
     confidences = [float(r.get("relevance", 0.0)) for r in results]
     confidence = sum(confidences) / len(confidences) if confidences else 0.0
@@ -123,7 +150,8 @@ def get_context_for_pipeline(
         "confidence": confidence,
         "snippet_count": len(results),
         # Distinguishes "genuinely no relevant KB entries" (ok, empty
-        # results) from "the retrieval subsystem errored" (retrieval_failed)
-        # — both would otherwise look identical to a caller.
+        # results) from "semantic failed, keyword fallback used" (degraded)
+        # from "both retrieval paths failed" (retrieval_failed).
         "status": status,
+        "retrieval": retrieval,
     }

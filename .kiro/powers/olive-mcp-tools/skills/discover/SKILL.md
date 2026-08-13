@@ -85,7 +85,7 @@ Search Olive docs with natural language:
 ```
 search_olive_documentation(query="how to calibrate static quantization")
 ```
-Uses semantic embeddings for relevance ranking.
+Uses semantic embeddings for relevance ranking, with automatic keyword fallback when the embedding model is unavailable. Set `OLIVE_MCP_PRELOAD_EMBEDDINGS=1` to warm the model at server startup and avoid first-call latency.
 
 ## CLI Command Generation
 
