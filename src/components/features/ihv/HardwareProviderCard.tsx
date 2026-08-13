@@ -978,6 +978,7 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
             }}
             className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-400 transition-colors cursor-pointer"
             aria-expanded={isExpanded}
+            aria-controls="hardware-provider-details"
           >
             <ChevronDown
               className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-180")}
@@ -985,7 +986,7 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
             {isExpanded ? "Hide details" : "Show details"}
           </button>
           {isExpanded && (
-            <>
+            <div id="hardware-provider-details">
               {detectedLocally && hardwareDetail ? (
                 <p className="text-xs text-emerald-400/90 font-mono break-words">{hardwareDetail}</p>
               ) : null}
@@ -1051,7 +1052,7 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
                     : "No matching hardware found locally. You can still select for remote/cross-compile targets."}
                 </p>
               ) : null}
-            </>
+            </div>
           )}
         </div>
 
