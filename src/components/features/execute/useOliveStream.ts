@@ -78,7 +78,6 @@ export function useOliveStream({
 
   const beginNewRunEpoch = useCallback(() => {
     runGenerationRef.current += 1;
-    runRecipeJsonRef.current = null;
     setRunRecipeJson(null);
     runAbortRef.current?.abort();
     runAbortRef.current = null;
