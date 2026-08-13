@@ -116,30 +116,45 @@
   [data-theme="light"] {
     color-scheme: light;
 
-    /* Invert the slate scale: high numbers → light green, low numbers → dark */
-    --color-slate-950: #f0f5e8;
-    /* body bg: very light green */
-    --color-slate-900: #e4ecda;
-    --color-slate-850: #d8e3cc;
-    --color-slate-800: #c8d9b8;
-    --color-slate-750: #b0c99e;
-    --color-slate-700: #94b580;
-    --color-slate-600: #6b8a55;
-    --color-slate-500: #4d6b3a;
-    --color-slate-400: #3a5228;
-    --color-slate-300: #1a1f14;
-    /* body text: near-black */
-    --color-slate-200: #2c3422;
-    --color-slate-100: #1f2518;
-    --color-slate-50: #141a10;
+    /*
+     * Olive-green paper palette — distinctly green, not washed-out white.
+     * Body bg is a soft sage; panels step slightly lighter; dark end stays
+     * legible olive-black. Contrast body text vs bg ≈ 12:1 (WCAG AAA).
+     */
+    --color-slate-950: #d4e4c8;
+    /* body bg: soft sage green */
+    --color-slate-900: #c4d9b5;
+    /* panel surfaces */
+    --color-slate-850: #b5cea6;
+    /* card backgrounds */
+    --color-slate-800: #a3c193;
+    /* borders, dividers */
+    --color-slate-750: #8bb37d;
+    /* heavier borders */
+    --color-slate-700: #6f9a5f;
+    /* scrollbar thumb, muted UI */
+    --color-slate-600: #527a42;
+    /* secondary text, icons */
+    --color-slate-500: #3d5f30;
+    /* mid-emphasis text */
+    --color-slate-400: #2d4a22;
+    /* strong secondary text */
+    --color-slate-300: #1a2b12;
+    /* body text: deep olive-black */
+    --color-slate-200: #162410;
+    /* headings / high-emphasis */
+    --color-slate-100: #111d0c;
+    /* near-black */
+    --color-slate-50: #0c1408;
+    /* deepest ink */
 
-    /* Accent adjustments for light contrast */
-    --color-electric-blue: #5c8020;
-    --color-electric-blue-dark: #4a6a18;
-    --color-olive: #5c8020;
-    --color-olive-dark: #4a6a18;
-    --color-emerald-accent: #3a6b28;
-    --color-emerald-dark: #3a6b28;
+    /* Accent: darker olive-gold for punchy contrast on green bg */
+    --color-electric-blue: #3d6b10;
+    --color-electric-blue-dark: #2e5508;
+    --color-olive: #3d6b10;
+    --color-olive-dark: #2e5508;
+    --color-emerald-accent: #2a7a1e;
+    --color-emerald-dark: #1e5c14;
   }
 
   /*
