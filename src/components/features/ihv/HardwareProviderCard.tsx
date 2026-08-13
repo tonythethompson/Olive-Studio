@@ -985,40 +985,42 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
             />
             {isExpanded ? "Hide details" : "Show details"}
           </button>
+          {/* Always surfaced, independent of the details toggle — a user should never have to
+              expand a card to find the action that fixes "not ready" / "needs install". */}
+          <ProviderPluginInstalls
+            providerId={p.id}
+            hardwareProbe={hardwareProbe}
+            trtRtxNeedsInstall={trtRtxNeedsInstall}
+            trtNeedsInstall={trtNeedsInstall}
+            openvinoNeedsInstall={openvinoNeedsInstall}
+            hardwareInstallBusy={hardwareInstallBusy}
+            installingTrtRtx={installingTrtRtx}
+            installTrtRtxError={installTrtRtxError}
+            installTrtRtxLog={installTrtRtxLog}
+            onInstallTensorRtRtx={onInstallTensorRtRtx}
+            installingTrt={installingTrt}
+            installTrtError={installTrtError}
+            installTrtLog={installTrtLog}
+            onInstallTensorRt={onInstallTensorRt}
+            openvinoInstall={openvinoInstall}
+            qnnInstall={qnnInstall}
+            directMlInstall={directMlInstall}
+            isPreMaxwellBox={isPreMaxwellBox}
+            cudaNeedsOrtGpuInstall={cudaNeedsOrtGpuInstall}
+            cudaToolkitMissingAndEpWorks={cudaToolkitMissingAndEpWorks}
+            cudaToolkitMissing={cudaToolkitMissing}
+            cudaEpInVenv={cudaEpInVenv}
+            nvidiaGpus={nvidiaGpus}
+            installingOrtGpu={installingOrtGpu}
+            installOrtGpuError={installOrtGpuError}
+            installOrtGpuLog={installOrtGpuLog}
+            onInstallOrtGpu={onInstallOrtGpu}
+          />
           {isExpanded && (
             <div id={detailsId}>
               {detectedLocally && hardwareDetail ? (
                 <p className="text-xs text-emerald-400/90 font-mono break-words">{hardwareDetail}</p>
               ) : null}
-              <ProviderPluginInstalls
-                providerId={p.id}
-                hardwareProbe={hardwareProbe}
-                trtRtxNeedsInstall={trtRtxNeedsInstall}
-                trtNeedsInstall={trtNeedsInstall}
-                openvinoNeedsInstall={openvinoNeedsInstall}
-                hardwareInstallBusy={hardwareInstallBusy}
-                installingTrtRtx={installingTrtRtx}
-                installTrtRtxError={installTrtRtxError}
-                installTrtRtxLog={installTrtRtxLog}
-                onInstallTensorRtRtx={onInstallTensorRtRtx}
-                installingTrt={installingTrt}
-                installTrtError={installTrtError}
-                installTrtLog={installTrtLog}
-                onInstallTensorRt={onInstallTensorRt}
-                openvinoInstall={openvinoInstall}
-                qnnInstall={qnnInstall}
-                directMlInstall={directMlInstall}
-                isPreMaxwellBox={isPreMaxwellBox}
-                cudaNeedsOrtGpuInstall={cudaNeedsOrtGpuInstall}
-                cudaToolkitMissingAndEpWorks={cudaToolkitMissingAndEpWorks}
-                cudaToolkitMissing={cudaToolkitMissing}
-                cudaEpInVenv={cudaEpInVenv}
-                nvidiaGpus={nvidiaGpus}
-                installingOrtGpu={installingOrtGpu}
-                installOrtGpuError={installOrtGpuError}
-                installOrtGpuLog={installOrtGpuLog}
-                onInstallOrtGpu={onInstallOrtGpu}
-              />
               {p.id === "OpenVINOExecutionProvider" ? (
                 <OpenVinoDeviceHint hardwareProbe={hardwareProbe} />
               ) : null}
