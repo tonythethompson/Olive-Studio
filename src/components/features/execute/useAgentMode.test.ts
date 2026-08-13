@@ -283,6 +283,8 @@ describe("useAgentMode", () => {
 
       act(() => {
         result.current.stopAgent();
+        result.current.stopAgent();
+        result.current.stopAgent();
       });
       expect(result.current.outcome?.status).not.toBe("cancelled");
       expect(result.current.agentRunning).toBe(true);

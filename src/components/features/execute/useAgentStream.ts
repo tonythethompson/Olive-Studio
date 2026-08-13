@@ -169,6 +169,9 @@ export function useAgentStream({
   const isMountedRef = useRef(true);
   const completedRef = useRef(false);
   const seenPayloadKeysRef = useRef(new Set<string>());
+  const deliveredPrefixRef = useRef<{ kind: ActivityEntryKind; text: string }[]>([]);
+  const replayIndexRef = useRef(0);
+  const replayingPrefixRef = useRef(false);
 
   // Cleanup helper
   const cleanup = useCallback(() => {
@@ -183,6 +186,9 @@ export function useAgentStream({
     retryCountRef.current = 0;
     completedRef.current = false;
     seenPayloadKeysRef.current = new Set();
+    deliveredPrefixRef.current = [];
+    replayIndexRef.current = 0;
+    replayingPrefixRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -208,6 +214,11 @@ export function useAgentStream({
         eventSourceRef.current = null;
       }
 
+      if (deliveredPrefixRef.current.length > 0) {
+        replayingPrefixRef.current = true;
+        replayIndexRef.current = 0;
+      }
+
       const evtSource = new EventSource(`${AGENT_STREAM_ENDPOINT}/${encodeURIComponent(streamJobId)}`);
       eventSourceRef.current = evtSource;
 
@@ -225,7 +236,18 @@ export function useAgentStream({
             if (eventId) {
               if (seenPayloadKeysRef.current.has(eventId)) return;
               seenPayloadKeysRef.current.add(eventId);
+            } else if (replayingPrefixRef.current) {
+              const expected = deliveredPrefixRef.current[replayIndexRef.current];
+              if (expected && expected.kind === entry.kind && expected.text === entry.text) {
+                replayIndexRef.current += 1;
+                if (replayIndexRef.current >= deliveredPrefixRef.current.length) {
+                  replayingPrefixRef.current = false;
+                }
+                return;
+              }
+              replayingPrefixRef.current = false;
             }
+            deliveredPrefixRef.current.push({ kind: entry.kind, text: entry.text });
             // A parsed payload means the stream is actually delivering data.
             retryCountRef.current = 0;
             onEntryRef.current(entry);

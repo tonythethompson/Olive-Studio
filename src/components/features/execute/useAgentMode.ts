@@ -94,6 +94,7 @@ export function useAgentMode(): UseAgentModeReturn {
   /** Bumped on start/stop/timeout/complete so a late POST cannot attach. */
   const runGenerationRef = useRef(0);
   const submitInFlightRef = useRef(false);
+  const stopRequestedRef = useRef(false);
 
   // ─── Internal helpers ───────────────────────────────────────────────────────
 
@@ -142,6 +143,7 @@ export function useAgentMode(): UseAgentModeReturn {
     // Clear previous session (Requirement 7.5: new session clears old entries)
     runGenerationRef.current += 1;
     const thisGen = runGenerationRef.current;
+    stopRequestedRef.current = false;
     setEntries([]);
     setOutcome(undefined);
     setJobId(undefined);
@@ -197,7 +199,7 @@ export function useAgentMode(): UseAgentModeReturn {
         }),
       });
       const data = (await resp.json().catch(() => ({}))) as { jobId?: string; error?: string };
-      if (thisGen !== runGenerationRef.current) {
+      if (stopRequestedRef.current && thisGen === runGenerationRef.current) {
         if (!data.jobId) return;
         let cancelOk = false;
         try {
@@ -206,12 +208,12 @@ export function useAgentMode(): UseAgentModeReturn {
         } catch {
           cancelOk = false;
         }
-        // Only this start was invalidated (stop/timeout). A newer start must not inherit the job.
-        if (runGenerationRef.current !== thisGen + 1) return;
+        if (thisGen !== runGenerationRef.current) return;
         if (cancelOk) {
           applyCancelledOutcome();
           return;
         }
+        stopRequestedRef.current = false;
         setJobId(data.jobId);
         jobIdRef.current = data.jobId;
         setAgentRunning(true);
@@ -223,6 +225,10 @@ export function useAgentMode(): UseAgentModeReturn {
             : 0,
           errorDescription: "Failed to cancel agent job",
         });
+        return;
+      }
+      if (thisGen !== runGenerationRef.current) {
+        if (data.jobId) void requestAgentCancel(data.jobId);
         return;
       }
       if (!resp.ok || !data.jobId) {
@@ -261,14 +267,25 @@ export function useAgentMode(): UseAgentModeReturn {
    */
   const stopAgent = useCallback(() => {
     clearStartTimeout();
-    runGenerationRef.current += 1;
-    const stopGen = runGenerationRef.current;
 
     const activeJobId = jobIdRef.current;
     if (!activeJobId) {
-      if (!submitInFlightRef.current) applyCancelledOutcome();
+      if (submitInFlightRef.current) {
+        stopRequestedRef.current = true;
+        return;
+      }
+      if (!stopRequestedRef.current) {
+        runGenerationRef.current += 1;
+        stopRequestedRef.current = true;
+        applyCancelledOutcome();
+      }
       return;
     }
+
+    if (stopRequestedRef.current) return;
+    runGenerationRef.current += 1;
+    stopRequestedRef.current = true;
+    const stopGen = runGenerationRef.current;
 
     void (async () => {
       try {
@@ -281,6 +298,7 @@ export function useAgentMode(): UseAgentModeReturn {
         applyCancelledOutcome();
       } catch (err) {
         if (runGenerationRef.current !== stopGen) return;
+        stopRequestedRef.current = false;
         const message = err instanceof Error ? err.message : "Failed to cancel agent job";
         setOutcome({
           status: "failure",
