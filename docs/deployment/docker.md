@@ -56,7 +56,7 @@ without rebuilding the image.
 | `OLIVE_MCP_RETRIEVAL_MODE` | `auto`, `keyword`, `semantic` | `auto` | Search strategy for knowledge base queries. `auto` uses semantic when budget allows, falls back to keyword. |
 | `OLIVE_MCP_SEMANTIC_BUDGET_MS` | Non-negative integer | `8000` | Maximum milliseconds for semantic search in `auto` mode; `0` means unlimited. |
 | `OLIVE_MCP_PRELOAD_EMBEDDINGS` | `1`, `0` | `0` | When `1`, loads the embedding model and KB indexes at startup before accepting traffic. Increases cold-start time but eliminates first-request latency. |
-| `SYNC_KB_TOKEN` | Any string | _(unset)_ | When set, requires matching `x-sync-token` header on `POST /api/mcp/sync-kb` requests. |
+| `SYNC_KB_TOKEN` | Any string | _(unset)_ | Studio Express only (not this MCP container): when set on the Studio process, requires matching `x-sync-token` on `POST /api/mcp/sync-kb`. |
 | `HF_HUB_OFFLINE` | `1`, `0` | `1` | Prevents Hugging Face Hub downloads at runtime (model is pre-cached in the image). |
 
 ## Volume Mounts
@@ -143,7 +143,7 @@ curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://localhost:8000/sse
   remain restricted to loopback even when bound to all interfaces.
 - When exposing to a network, place a reverse proxy (nginx, Caddy, Traefik) in front
   with HTTPS and authentication.
-- Set `SYNC_KB_TOKEN` to protect the knowledge base sync endpoint.
+- Set `SYNC_KB_TOKEN` on the Studio Express process (not the MCP container) to protect `POST /api/mcp/sync-kb`.
 - The MCP server runs as a non-root user (`mcp`) inside the container.
 
 ## Troubleshooting
