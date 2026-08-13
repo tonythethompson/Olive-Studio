@@ -138,8 +138,12 @@ export function mountLmStudioRoutes(router: Router): void {
       rawSend(evt);
     };
     const tag = String(modelTag);
+    let ownsBusy = false;
     const releaseBusy = () => {
-      if (localEngineRuntime.lmsPullBusyTag === tag) localEngineRuntime.lmsPullBusyTag = null;
+      if (ownsBusy && localEngineRuntime.lmsPullBusyTag === tag) {
+        localEngineRuntime.lmsPullBusyTag = null;
+        ownsBusy = false;
+      }
     };
     try {
       if (!isValidLocalModelTag(tag)) {
@@ -164,6 +168,7 @@ export function mountLmStudioRoutes(router: Router): void {
       }
 
       localEngineRuntime.lmsPullBusyTag = tag;
+      ownsBusy = true;
       // Waiter-based abort: shared ensure continues while other clients wait.
       const ready = await ensureLmsReady((evt) => send(evt), guard.signal);
       if (guard.disconnected()) {

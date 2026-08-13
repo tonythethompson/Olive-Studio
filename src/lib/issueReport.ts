@@ -66,6 +66,10 @@ const SECRET_PATTERNS: RegExp[] = [
   /(?:AKIA|ASIA)[A-Z0-9]{16}/g,
   // Bearer tokens (Authorization header)
   /Bearer\s+[A-Za-z0-9\-._~+/]+=*/g,
+  // JSON Web Tokens (three base64url-encoded segments)
+  /\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g,
+  // PEM private-key blocks
+  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/gi,
   // Generic long hex strings that look like secrets (32+ hex chars)
   /(?:["'\s:=]|^)[0-9a-f]{32,}(?:["'\s]|$)/gi,
   // Paths containing user home directories (privacy)
