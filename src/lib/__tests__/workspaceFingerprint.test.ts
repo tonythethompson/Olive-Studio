@@ -114,19 +114,38 @@ function arbUIState(): fc.Arbitrary<UIState> {
 }
 
 /**
- * Generate a pair of UIState objects that are deeply equal after transient
- * field exclusion but may differ in transient fields (activeJobId).
+ * Generate a pair of UIState objects that are deeply equal in recipe-relevant
+ * state but differ only in transient fields (activeJobId, localFiles metadata/paths).
  */
 function arbUIStatePairDifferingOnlyInTransient(): fc.Arbitrary<[UIState, UIState]> {
   return arbUIState().chain((baseState) =>
-    fc.option(fc.uuid(), { nil: null }).map((altJobId) => {
-      const state1: UIState = { ...baseState };
-      const state2: UIState = {
-        ...baseState,
-        activeJobId: altJobId,
-      };
-      return [state1, state2] as [UIState, UIState];
-    }),
+    fc
+      .tuple(
+        fc.option(fc.uuid(), { nil: null }),
+        fc.array(
+          fc.record({
+            path: fc.string({ minLength: 1, maxLength: 50 }),
+            size: fc.integer({ min: 1, max: 100000 }),
+          }),
+          {
+            minLength: baseState.localFiles?.length ?? 0,
+            maxLength: baseState.localFiles?.length ?? 0,
+          },
+        ),
+      )
+      .map(([altJobId, altFileMeta]) => {
+        const state1: UIState = { ...baseState };
+        const state2: UIState = {
+          ...baseState,
+          activeJobId: altJobId,
+          localFiles: baseState.localFiles?.map((file, i) => ({
+            ...file,
+            path: altFileMeta[i]?.path ?? file.path,
+            size: altFileMeta[i]?.size ?? file.size,
+          })),
+        };
+        return [state1, state2] as [UIState, UIState];
+      }),
   );
 }
 
