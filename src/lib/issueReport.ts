@@ -227,7 +227,7 @@ export function collectTelemetry(
         telemetry.logs = redactSecrets(collectLogs(buildOptions.executionLogs));
         break;
       case "chat-logs":
-        telemetry["chat-logs"] = redactSecrets(collectChatLog(buildOptions.chatLog));
+        telemetry["chat-logs"] = redactSecrets(collectChatLog(buildOptions.chatLog)).replace(/\bsk-[A-Za-z0-9_-]{20,}/g, "[REDACTED]");
         break;
     }
   }
