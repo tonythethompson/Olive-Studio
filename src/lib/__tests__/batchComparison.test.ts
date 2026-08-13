@@ -212,6 +212,38 @@ describe("batchComparison — parseMcpCompareOutput validation", () => {
     expect(parseMcpCompareOutput(raw as Record<string, unknown>)).toBeNull();
   });
 
+  it("accepts MCP compare_results payloads nested under comparison.metrics", () => {
+    const raw = {
+      comparison: [
+        {
+          job_id: "a",
+          status: "completed",
+          metrics: { latency_ms: 12, model_size_mb: 40, accuracy: 0.8 },
+          score: 0.7,
+        },
+        {
+          job_id: "b",
+          status: "completed",
+          metrics: { latency_ms: 20, model_size_mb: 30, accuracy: null },
+          score: 0.4,
+        },
+      ],
+      winner: "a",
+      reasoning: "a wins",
+      excluded_jobs: [{ job_id: "c", reason: "job_failed" }],
+    };
+    const result = parseMcpCompareOutput(raw);
+    expect(result).toEqual({
+      results: [
+        { job_id: "a", latency_ms: 12, model_size_mb: 40, accuracy: 0.8, score: 0.7 },
+        { job_id: "b", latency_ms: 20, model_size_mb: 30, accuracy: null, score: 0.4 },
+      ],
+      winner: "a",
+      reasoning: "a wins",
+      excluded_jobs: [{ job_id: "c", reason: "job_failed" }],
+    });
+  });
+
   it("returns null when excluded_jobs contains invalid entries", () => {
     const raw = {
       results: [{ job_id: "j1", latency_ms: 10, model_size_mb: 50, accuracy: 0.9, score: 85 }],

@@ -116,25 +116,15 @@ function arbUIState(): fc.Arbitrary<UIState> {
 
 /**
  * Generate a pair of UIState objects that are deeply equal after transient
- * field exclusion but may differ in transient fields (activeJobId, localFiles).
+ * field exclusion but may differ in transient fields (activeJobId).
  */
 function arbUIStatePairDifferingOnlyInTransient(): fc.Arbitrary<[UIState, UIState]> {
   return arbUIState().chain((baseState) =>
-    fc.tuple(
-      fc.option(fc.uuid(), { nil: null }),
-      fc.array(
-        fc.record({
-          name: fc.string({ minLength: 1, maxLength: 50 }),
-          size: fc.nat({ max: 1_000_000_000 }),
-        }),
-        { minLength: 0, maxLength: 5 },
-      ),
-    ).map(([altJobId, altLocalFiles]) => {
+    fc.option(fc.uuid(), { nil: null }).map((altJobId) => {
       const state1: UIState = { ...baseState };
       const state2: UIState = {
         ...baseState,
         activeJobId: altJobId,
-        localFiles: altLocalFiles,
       };
       return [state1, state2] as [UIState, UIState];
     }),
@@ -249,7 +239,6 @@ describe("Property 5: Fingerprint Determinism and Transient Exclusion", () => {
         const clone: UIState = JSON.parse(JSON.stringify(state));
         // Set different transient values to ensure exclusion works
         clone.activeJobId = state.activeJobId === "test-id" ? null : "test-id";
-        clone.localFiles = [{ name: "different.bin", size: 999 }];
 
         const fp1 = await computeFingerprint(state);
         const fp2 = await computeFingerprint(clone);
