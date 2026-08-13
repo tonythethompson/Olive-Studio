@@ -18,6 +18,7 @@ import {
   fetchCatalogAtSha,
   isCatalogStale,
   formatCatalogMetadata,
+  isValidSha,
   CatalogPinError,
 } from "@/lib/recipeCatalogPin";
 import type { CatalogMetadata, CatalogEntry } from "@/lib/recipeCatalogPin";
@@ -57,9 +58,13 @@ export function loadStoredMetadata(): CatalogMetadata | null {
       typeof parsed.branch === "string" &&
       typeof parsed.commitSha === "string" &&
       typeof parsed.fetchedAt === "string" &&
-      parsed.commitSha.length === 40
+      isValidSha(parsed.commitSha.toLowerCase())
     ) {
-      return parsed as unknown as CatalogMetadata;
+      return {
+        branch: parsed.branch,
+        commitSha: parsed.commitSha.toLowerCase(),
+        fetchedAt: parsed.fetchedAt,
+      };
     }
     return null;
   } catch {

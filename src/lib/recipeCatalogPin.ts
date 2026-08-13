@@ -338,9 +338,9 @@ export async function fetchCatalogAtSha(
       const path = String(item.path);
       const parts = path.split("/");
       const fileName = parts[parts.length - 1].replace(/\.json$/, "");
-      const architecture = parts.length > 1 ? parts[0] : "Other";
-      const deviceFolder = parts.length > 2 ? parts[1] : "";
-      const deviceTarget = inferDeviceTarget(deviceFolder);
+      // Layout is <model-slug>/<tool-or-provider>/<file>, not architecture/device.
+      const architecture = inferArchitectureFromPath(path, fileName);
+      const deviceTarget = inferDeviceTarget(path);
 
       return {
         id: path,
@@ -408,8 +408,27 @@ export { OLIVE_RECIPES_BRANCH_DEFAULT };
  * Infers a device target label from a folder name in the recipe repository tree.
  * Uses common naming conventions from the `microsoft/olive-recipes` layout.
  */
-function inferDeviceTarget(folder: string): string {
-  const lower = folder.toLowerCase();
+function inferArchitectureFromPath(path: string, fileName: string): string {
+  const hay = `${path} ${fileName}`.toLowerCase();
+  if (hay.includes("whisper")) return "Whisper";
+  if (hay.includes("bert") || hay.includes("roberta") || hay.includes("deberta")) return "Encoder";
+  if (
+    hay.includes("llama") ||
+    hay.includes("phi") ||
+    hay.includes("qwen") ||
+    hay.includes("mistral") ||
+    hay.includes("gpt") ||
+    hay.includes("gemma") ||
+    hay.includes("falcon")
+  ) {
+    return "LLM";
+  }
+  if (hay.includes("resnet") || hay.includes("vit") || hay.includes("yolo")) return "Vision";
+  return "Other";
+}
+
+function inferDeviceTarget(pathOrFolder: string): string {
+  const lower = pathOrFolder.toLowerCase();
   if (lower.includes("cpu")) return "CPU";
   if (lower.includes("cuda")) return "CUDA";
   if (lower.includes("tensorrtrtx") || lower.includes("nvtensorrtrtx") || lower.includes("trt-rtx") || lower.includes("trtrtx")) return "TRT-RTX";
