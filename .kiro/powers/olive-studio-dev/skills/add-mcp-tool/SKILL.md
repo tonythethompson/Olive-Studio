@@ -54,7 +54,7 @@ _TOOL_IMPORTS: dict[str, tuple[str, str]] = {
 }
 ```
 
-The tool is lazy-imported at first invocation — startup cost is zero.
+All tool modules are imported while `_build_mcp()` constructs the server; imports are not deferred until first invocation. Keep module-level imports light.
 
 ## Step 3: Add to Node-Side Allowlist
 
@@ -144,14 +144,13 @@ Available KB files:
 For tools that search the KB semantically:
 
 ```python
-from olive_mcp_server.tools.retrieval import search_kb
+from olive_mcp_server.tools.docs_search import search_olive_documentation
 
 def my_search_tool(query: str, top_k: int = 5) -> dict:
-    results = search_kb(query, top_k=top_k, mode="auto")
-    return {"results": results, "count": len(results)}
+    return search_olive_documentation(query=query, top_k=top_k)
 ```
 
-The `retrieval.py` module handles keyword/semantic/auto mode selection and index loading.
+Use `search_olive_documentation` (or the helpers in `docs_search.py` / `retrieval.py`) — there is no `search_kb` export.
 
 ## Step 7: Studio Loopback (If Needed)
 
@@ -162,7 +161,7 @@ from olive_mcp_server.tools.studio_loopback import studio_request
 
 def my_studio_tool(data: dict) -> dict:
     """Tool that requires Studio to be running."""
-    resp = studio_request("POST", "/api/olive/some-endpoint", json=data)
+    resp = studio_request("POST", "/api/olive/some-endpoint", body=data)
     if resp is None:
         return {"error": "studio_unavailable", "message": "Olive Studio not running"}
     return resp

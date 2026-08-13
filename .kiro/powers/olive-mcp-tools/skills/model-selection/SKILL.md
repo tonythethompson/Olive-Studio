@@ -25,11 +25,11 @@ Input: { "model_id": "meta-llama/Llama-3-8B" }
 ```
 
 Returns:
-- `parameter_count` — Total parameters (e.g., 8B)
+- `params_b` — Total parameters (e.g., 8B)
 - `architecture` — Model architecture (e.g., LlamaForCausalLM)
 - `model_type` — Classification: LLM, CNN, Vision, Audio, Multimodal
-- `vram_estimate` — Approximate VRAM needed at various precisions
-- `recommended_quantization` — Suggested quant method based on architecture
+- `estimated_vram_gb` — Approximate VRAM needed at various precisions
+- `recommended_quant` — Suggested quant method based on architecture
 
 ## Step 2: Check Compatibility
 

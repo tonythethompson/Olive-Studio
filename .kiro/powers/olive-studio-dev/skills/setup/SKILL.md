@@ -67,6 +67,7 @@ Create `.kiro/settings/mcp.json` manually (cannot be written by agents):
       "args": ["olive-mcp-server/run.py"],
       "env": {
         "OLIVE_MCP_RETRIEVAL_MODE": "auto",
+        "OLIVE_STUDIO_API_URL": "http://127.0.0.1:3000",
         "PYTHONPATH": "olive-mcp-server"
       }
     }

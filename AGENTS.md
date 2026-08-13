@@ -106,7 +106,8 @@ cd olive-mcp-server
 python -m venv .venv
 .venv/bin/pip install -e ".[dev]" "mcp<2"   # Linux/macOS
 .venv\Scripts\pip install -e ".[dev]" "mcp<2"  # Windows
-python -m pytest tests -q
+.venv/bin/python -m pytest tests -q   # Linux/macOS
+.venv\Scripts\python -m pytest tests -q  # Windows
 ```
 
 The `.mcp.json` at repo root registers Olive MCP for AI coding agents using a relative path (`olive-mcp-server/run.py`). It also registers optional Serena via `uvx --from serena-agent==1.6.1` (requires [uv](https://docs.astral.sh/uv/); version-pinned, no global `serena` install). Run `pnpm install` yourself before relying on Serena's TypeScript language server. Do not put `pnpm install` in `.serena/project.yml` activation.

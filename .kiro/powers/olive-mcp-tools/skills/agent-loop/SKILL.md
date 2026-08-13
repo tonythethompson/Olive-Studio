@@ -112,13 +112,12 @@ Input: {
 Returns on success:
 - `status`: "completed"
 - `metrics`: latency, size, accuracy measurements
-- `log_tail`: Last N log lines
-- `artifacts`: Output model paths
+- `logs`: Last N log lines
+- `artifact_path_refs`: Output model artifact references
 
 Returns on failure:
 - `status`: "failed" or "timeout"
-- `error`: Error message/traceback
-- `log_tail`: Diagnostic log lines
+- `logs`: Diagnostic log lines containing the failure details
 
 ### Step 6: Handle Failures
 
@@ -136,13 +135,13 @@ Input: {
 Returns:
 - `diagnosis` — What went wrong and why
 - `fixed_recipe` — Repaired recipe (if repairable)
-- `changes` — List of specific changes made
-- `confidence` — How confident the fix is (high/medium/low)
+- `changes_made` — List of specific changes made
+- `fix_confidence` — How confident the fix is (high/medium/low)
 
 Decision points:
-- `confidence: "high"` — Retry with the fixed recipe automatically
-- `confidence: "medium"` — Retry but be prepared for another failure
-- `confidence: "low"` — Present to user for guidance, or try a different approach
+- `fix_confidence: "high"` — Retry with the fixed recipe automatically
+- `fix_confidence: "medium"` — Retry but be prepared for another failure
+- `fix_confidence: "low"` — Present to user for guidance, or try a different approach
 
 ### Step 7: Retry (Loop)
 
@@ -206,7 +205,7 @@ Best for: Leveraging actual local hardware rather than guessing.
 
 - **Max retries:** 3 per optimization attempt
 - **Timeout ceiling:** 1800 seconds (30 minutes) per job
-- **Never auto-retry** when `diagnose_and_fix` returns `confidence: "low"`
+- **Never auto-retry** when `diagnose_and_fix` returns `fix_confidence: "low"`
 - **Always surface to user** after 3 failed attempts or if diagnosis suggests fundamental incompatibility
 - **Job cleanup:** Failed jobs terminate on their own — no manual cancellation needed
 - **Cost awareness:** Each `execute_and_observe` call consumes GPU time. Don't loop carelessly.

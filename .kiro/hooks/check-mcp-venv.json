@@ -7,7 +7,7 @@
       "description": "Checks if the olive-mcp-server Python venv exists and has deps installed on session start. Warns if setup is needed.",
       "action": {
         "type": "command",
-        "command": "pwsh -NoProfile -Command \"if (-not (Test-Path 'olive-mcp-server/.venv/Scripts/python.exe') -and -not (Test-Path 'olive-mcp-server/.venv/bin/python')) { Write-Output 'WARNING: Olive MCP Server venv not found. Run: .\\\\scripts\\\\setup-mcp.ps1 (or ./scripts/setup-mcp.sh on Linux/macOS) to set up the MCP server with semantic search support.' } else { $ver = & 'olive-mcp-server/.venv/Scripts/python.exe' -c 'import mcp; print(mcp.__version__)' 2>&1; if ($LASTEXITCODE -ne 0) { Write-Output 'WARNING: MCP server deps may be incomplete. Run: .\\\\scripts\\\\setup-mcp.ps1 to reinstall.' } }\""
+        "command": "pwsh -NoProfile -Command \"$py = $null; if (Test-Path 'olive-mcp-server/.venv/Scripts/python.exe') { $py = 'olive-mcp-server/.venv/Scripts/python.exe' } elseif (Test-Path 'olive-mcp-server/.venv/bin/python') { $py = 'olive-mcp-server/.venv/bin/python' }; if (-not $py) { Write-Output 'WARNING: Olive MCP Server venv not found. Run: .\\\\scripts\\\\setup-mcp.ps1 (or ./scripts/setup-mcp.sh on Linux/macOS) to set up the MCP server with semantic search support.' } else { & $py -c 'import mcp; print(mcp.__version__)' 2>&1 | Out-Null; if ($LASTEXITCODE -ne 0) { Write-Output 'WARNING: MCP server deps may be incomplete. Run: .\\\\scripts\\\\setup-mcp.ps1 (or ./scripts/setup-mcp.sh) to reinstall.' } }\""
       }
     }
   ]

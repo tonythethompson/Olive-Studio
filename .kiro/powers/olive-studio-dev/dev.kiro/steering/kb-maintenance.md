@@ -197,7 +197,7 @@ After modifying KB files, rebuild the search indexes:
 
 # Or manually:
 cd olive-mcp-server
-.venv\Scripts\python scripts/build_index.py
+.venv\Scripts\python scripts/build_kb_index.py
 ```
 
 ### When to rebuild:
