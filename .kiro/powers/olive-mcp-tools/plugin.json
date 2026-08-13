@@ -1,0 +1,20 @@
+{
+  "name": "olive-mcp-tools",
+  "version": "1.0.0",
+  "description": "Query the Olive pass catalog, validate recipes, troubleshoot optimization errors, and inspect hardware profiles during development via the project's MCP server.",
+  "author": {
+    "name": "Olive Studio"
+  },
+  "keywords": [
+    "olive",
+    "onnx",
+    "mcp",
+    "model-optimization",
+    "quantization",
+    "recipe",
+    "troubleshooting",
+    "hardware",
+    "passes"
+  ],
+  "license": "MIT"
+}

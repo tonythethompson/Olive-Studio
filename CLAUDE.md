@@ -80,7 +80,7 @@ One file per provider (anthropic, gemini, codex, devin, openai-compat, etc.). `d
 
 ### Python MCP server (`olive-mcp-server/`)
 
-Optional stdio FastMCP server — 27 tools, 84 passes, 22 hardware profiles. The web app proxies to it via `POST /api/mcp/tool`. Registered for AI coding agents via `.mcp.json` at repo root.
+Optional stdio FastMCP server — 32 tools, 92 passes, 22 hardware profiles. The web app proxies to it via `POST /api/mcp/tool`. Registered for AI coding agents via `.mcp.json` at repo root.
 
 Setup:
 
