@@ -252,13 +252,17 @@ export function mountLmStudioRoutes(router: Router): void {
       armStallTimer();
 
       const logBuf: string[] = [];
+      let lastProgressPercent: number | null = null;
       const pushCliChunk = (d: Buffer) => {
         for (const line of splitCliLines(d.toString())) {
           logBuf.push(line);
           if (logBuf.length > 80) logBuf.splice(0, logBuf.length - 80);
           const cliPct = parseLmsGetPercent(line);
           if (cliPct !== null) {
-            armStallTimer();
+            if (lastProgressPercent === null || cliPct > lastProgressPercent) {
+              lastProgressPercent = cliPct;
+              armStallTimer();
+            }
             send({
               type: "progress",
               message: line.replace(/\s+/g, " ").slice(0, 160),
