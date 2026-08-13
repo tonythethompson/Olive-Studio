@@ -181,6 +181,20 @@
     --color-emerald-800: #053a32;
     --color-emerald-900: #032a24;
     --color-emerald-950: #021c18;
+
+    /*
+     * Semantic status colors — dark-theme values are unreadable on sage bg.
+     * amber: warnings, rose/red: errors/danger. Darkened for ≥ 4.5:1 on #d4e4c8.
+     */
+    --color-amber-300: #92600a;
+    --color-amber-400: #7a4f06;
+    --color-amber-500: #6b4304;
+    --color-amber-600: #5c3903;
+    --color-rose-400: #b91c3d;
+    --color-rose-500: #a01833;
+    --color-rose-600: #8b1429;
+    --color-rose-700: #751020;
+    --color-red-400: #b91c1c;
   }
 
   /*
