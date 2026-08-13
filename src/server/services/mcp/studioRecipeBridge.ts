@@ -98,6 +98,38 @@ function parseLocalFiles(raw: unknown): UIState["localFiles"] | undefined {
   return out;
 }
 
+const MAX_BRIDGE_ADAPTERS = 8;
+
+function parseBridgeAdapters(raw: unknown): UIState["multiLoraAdapters"] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: NonNullable<UIState["multiLoraAdapters"]> = [];
+  for (const item of raw) {
+    if (!isObjectRecord(item)) continue;
+    const adapterPath = clipString(item.path, 1024);
+    if (!adapterPath) continue;
+    const name = clipString(item.name, 128);
+    const rank = typeof item.rank === "number" && Number.isFinite(item.rank) ? item.rank : undefined;
+    const alpha = typeof item.alpha === "number" && Number.isFinite(item.alpha) ? item.alpha : undefined;
+    const rawModules = Array.isArray(item.targetModules) ? item.targetModules : item.target_modules;
+    const targetModules = Array.isArray(rawModules)
+      ? rawModules
+          .filter((m): m is string => typeof m === "string")
+          .map((m) => m.trim().slice(0, 128))
+          .filter(Boolean)
+          .slice(0, 32)
+      : undefined;
+    out.push({
+      path: adapterPath,
+      ...(name ? { name } : {}),
+      ...(rank !== undefined ? { rank } : {}),
+      ...(alpha !== undefined ? { alpha } : {}),
+      ...(targetModules && targetModules.length > 0 ? { targetModules } : {}),
+    });
+    if (out.length >= MAX_BRIDGE_ADAPTERS) break;
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 function assignClippedBridgeStrings(
   partial: UiStatePatch,
   raw: Record<string, unknown>,
@@ -170,6 +202,14 @@ export function mergeBridgeUiState(
 
   const localFiles = parseLocalFiles(raw.localFiles);
   if (localFiles) partial.localFiles = localFiles;
+
+  const adapters = parseBridgeAdapters(raw.multiLoraAdapters ?? raw.multi_lora_adapters);
+  if (adapters) partial.multiLoraAdapters = adapters;
+
+  const vramRaw = raw.vramEstimateGb ?? raw.vram_estimate_gb;
+  if (typeof vramRaw === "number" && Number.isFinite(vramRaw)) {
+    partial.vramEstimateGb = vramRaw;
+  }
 
   const passesError = assignBridgePasses(partial, raw);
   if (passesError) return passesError;

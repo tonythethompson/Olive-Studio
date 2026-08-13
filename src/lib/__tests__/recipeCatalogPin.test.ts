@@ -16,6 +16,7 @@ import {
   formatCatalogMetadata,
   isCatalogStale,
   catalogEntryToRecipeItem,
+  inferDeviceTarget,
 } from "@/lib/recipeCatalogPin";
 import type { CatalogEntry, CatalogMetadata } from "@/lib/recipeCatalogPin";
 
@@ -277,5 +278,9 @@ describe("catalogEntryToRecipeItem", () => {
     expect(item.repoPath).toBe(entry.id);
     expect(item.commitSha).toBe(sha);
     expect(item.device).toBe("DirectML");
+  });
+
+  it("labels ROCm recipe paths as CUDA to match catalog device comparison", () => {
+    expect(inferDeviceTarget("Llama-3-8B/rocm/llama3_rocm_gptq.json")).toBe("CUDA");
   });
 });
