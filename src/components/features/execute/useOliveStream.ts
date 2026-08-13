@@ -24,6 +24,7 @@ export interface UseOliveStreamReturn {
   executionStatus: "idle" | "running" | "completed" | "failed" | "cancelled";
   executionExitCode: number | null;
   gpuMetrics: GpuMetrics | null;
+  runRecipeJson: string | null;
   handleExecuteLive: () => Promise<void>;
   handleCancelJob: () => Promise<void>;
   runRecipeJsonRef: React.MutableRefObject<string | null>;
@@ -65,6 +66,7 @@ export function useOliveStream({
   >("idle");
   const [executionExitCode, setExecutionExitCode] = useState<number | null>(null);
   const [gpuMetrics, setGpuMetrics] = useState<GpuMetrics | null>(null);
+  const [runRecipeJson, setRunRecipeJson] = useState<string | null>(null);
   const liveSourceRef = useRef<EventSource | null>(null);
   const runStartTimeRef = useRef<number | null>(null);
   const runRecipeJsonRef = useRef<string | null>(null);
@@ -77,6 +79,7 @@ export function useOliveStream({
   const beginNewRunEpoch = useCallback(() => {
     runGenerationRef.current += 1;
     runRecipeJsonRef.current = null;
+    setRunRecipeJson(null);
     runAbortRef.current?.abort();
     runAbortRef.current = null;
     statusAbortRef.current?.abort();
@@ -263,6 +266,7 @@ export function useOliveStream({
     runAbortRef.current = runAbort;
 
     runRecipeJsonRef.current = fresh.recipeJson;
+    setRunRecipeJson(fresh.recipeJson);
     pendingCancelRef.current = false;
     setLiveJobId(null);
     setState({ activeJobId: null });
@@ -541,6 +545,7 @@ export function useOliveStream({
     executionStatus,
     executionExitCode,
     gpuMetrics,
+    runRecipeJson,
     runRecipeJsonRef,
     handleExecuteLive,
     handleCancelJob,
