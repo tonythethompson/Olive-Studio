@@ -322,8 +322,8 @@ export function GraphCanvas({
               : issueLevel === "warning"
                 ? "border-amber-700/50 bg-amber-950/5 hover:border-amber-600"
                 : active
-                  ? "border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/60"
-                  : "border-dashed border-slate-400/70 bg-slate-900/35 hover:border-slate-300 hover:bg-slate-900/55"
+                  ? "border-emerald-600/50 bg-emerald-950/10 hover:border-emerald-500 hover:bg-emerald-950/20"
+                  : "border-slate-800 bg-slate-900/30 hover:border-slate-700 hover:bg-slate-900/45"
           }`}
       >
         {issueLevel && (
@@ -339,8 +339,8 @@ export function GraphCanvas({
                   : issueLevel === "warning"
                     ? "bg-amber-950/30 border border-amber-700/30 text-amber-400"
                     : active
-                      ? "bg-electric-blue/10 border border-electric-blue/20 text-electric-blue"
-                      : "bg-slate-900 border border-dashed border-slate-400 text-slate-300"
+                      ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
+                      : "bg-slate-900 border border-slate-700 text-slate-500"
                 }`}
             >
               {nd.icon}
@@ -351,8 +351,8 @@ export function GraphCanvas({
                   : issueLevel === "warning"
                     ? "bg-amber-950/30 text-amber-400 border-amber-700/30"
                     : active
-                      ? "bg-slate-950 text-electric-blue border-electric-blue/20"
-                      : "bg-slate-950 text-slate-200 border-slate-400 border-dashed"
+                      ? "bg-emerald-950/40 text-emerald-400 border-emerald-600/50"
+                      : "bg-slate-950 text-slate-500 border-slate-700"
                 }`}
             >
               {issueLevel === "critical"
@@ -365,14 +365,14 @@ export function GraphCanvas({
             </span>
           </div>
           <h4
-            className={`text-sm font-bold truncate leading-snug ${active || issueLevel ? "text-slate-100" : "text-slate-300"
+            className={`text-sm font-bold break-words leading-snug ${active || issueLevel ? "text-slate-100" : "text-slate-300"
               }`}
           >
             {nd.title}
           </h4>
-          <p className="text-xs leading-tight font-mono line-clamp-2 mt-1 min-h-[20px] text-slate-400">
-            {active ? nd.desc : "Pass disabled · click to configure"}
-          </p>
+          {active && (
+            <p className="text-xs leading-tight font-mono mt-1 text-slate-400 break-words">{nd.desc}</p>
+          )}
         </div>
       </button>
     );
@@ -418,8 +418,8 @@ export function GraphCanvas({
                 {providerNd.icon}
               </div>
             </div>
-            <h4 className="text-sm font-semibold text-slate-100">{providerNd.title}</h4>
-            <p className="text-xs font-mono text-slate-400 leading-snug truncate">{providerNd.desc}</p>
+            <h4 className="text-sm font-semibold text-slate-100 break-words">{providerNd.title}</h4>
+            <p className="text-xs font-mono text-slate-400 leading-snug break-words">{providerNd.desc}</p>
           </button>
         </div>
 
@@ -446,8 +446,8 @@ export function GraphCanvas({
                 {outputNd.badge}
               </span>
             </div>
-            <h4 className="text-sm font-semibold text-slate-100">{outputNd.title}</h4>
-            <p className="text-xs font-mono text-slate-400 leading-snug truncate">{outputNd.desc}</p>
+            <h4 className="text-sm font-semibold text-slate-100 break-words">{outputNd.title}</h4>
+            <p className="text-xs font-mono text-slate-400 leading-snug break-words">{outputNd.desc}</p>
           </button>
         </div>
       </>
@@ -499,8 +499,8 @@ export function GraphCanvas({
                     {nd.badge}
                   </span>
                 </div>
-                <h4 className="text-sm font-semibold text-slate-100 mb-1 leading-tight">{nd.title}</h4>
-                <p className="text-xs font-mono text-slate-400 truncate leading-relaxed">{nd.desc}</p>
+                <h4 className="text-sm font-semibold text-slate-100 mb-1 leading-tight break-words">{nd.title}</h4>
+                <p className="text-xs font-mono text-slate-400 leading-relaxed break-words">{nd.desc}</p>
               </button>
             );
           })()}
