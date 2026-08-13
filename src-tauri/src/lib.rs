@@ -320,11 +320,25 @@ pub fn run() {
         let handle = app.handle().clone();
         tauri::async_runtime::spawn(async move {
           match handle.updater() {
-            Ok(updater) => {
-              if let Err(e) = updater.check().await {
-                log::warn!("updater check failed: {e}");
+            Ok(updater) => match updater.check().await {
+              Ok(Some(update)) => {
+                log::info!(
+                  "found update v{} (current: v{})",
+                  update.version,
+                  update.current_version
+                );
+                if let Err(e) = update.download_and_install(|_chunk, _total| {}, || {}).await {
+                  log::error!("failed to download and install update: {e}");
+                } else {
+                  log::info!("update v{} downloaded and installed successfully, restarting", update.version);
+                  handle.restart();
+                }
               }
-            }
+              Ok(None) => {
+                log::info!("no update available");
+              }
+              Err(e) => log::warn!("updater check failed: {e}"),
+            },
             Err(e) => log::warn!("updater unavailable: {e}"),
           }
         });
