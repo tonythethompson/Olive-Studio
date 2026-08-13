@@ -1,15 +1,16 @@
 {
-    "mcpServers": {
-        "olive-mcp": {
-            "type": "stdio",
-            "command": "python",
-            "args": [
-                "olive-mcp-server/run.py"
-            ],
-            "env": {
-                "OLIVE_MCP_RETRIEVAL_MODE": "auto",
-                "PYTHONPATH": "olive-mcp-server"
-            }
-        }
+  "mcpServers": {
+    "olive-mcp": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "olive-mcp-server/run.py"
+      ],
+      "env": {
+        "OLIVE_MCP_RETRIEVAL_MODE": "auto",
+        "PYTHONPATH": "olive-mcp-server"
+      },
+      "disabled": false
     }
+  }
 }

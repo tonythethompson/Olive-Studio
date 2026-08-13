@@ -8,7 +8,8 @@
       ],
       "env": {
         "OLIVE_MCP_RETRIEVAL_MODE": "auto",
-        "PYTHONPATH": "olive-mcp-server"
+        "PYTHONPATH": "olive-mcp-server",
+        "VIRTUAL_ENV": "olive-mcp-server/.venv"
       }
     }
   }
