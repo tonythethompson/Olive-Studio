@@ -158,14 +158,14 @@ function preferredPassOrder(torchQuantActive: boolean): string[] {
       "peft", "pruning", "quantization", "conversion", "transformer_opt",
       "mobius_builder", "quantize_embedding_int8", "share_embedding_lm_head",
       "simplified_layer_norm_to_rms_norm", "float16", "splitting",
-      "qairt_pipeline", "extract_adapters", "onnx_discrepancy_check",
+      "qairt_pipeline", "onnx_discrepancy_check",
     ];
   }
   return [
     "peft", "pruning", "conversion", "transformer_opt", "quantization",
     "mobius_builder", "quantize_embedding_int8", "share_embedding_lm_head",
     "simplified_layer_norm_to_rms_norm", "float16", "splitting",
-    "qairt_pipeline", "extract_adapters", "onnx_discrepancy_check",
+    "qairt_pipeline", "onnx_discrepancy_check",
   ];
 }
 
@@ -791,23 +791,24 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
     };
   }
 
-  // Multi-LoRA adapter gating — PEFT + UIState.multiLoraAdapters
-  const multiLoraAdapters = state.multiLoraAdapters;
+  // Order: Convert → Optimize → Quantize (ONNX path), then MCP pass overrides
+  // Multi-LoRA adapter gating — when PEFT is active and adapters are configured
+  const passesAny = state.passes as Record<string, unknown>;
+  const multiLoraAdapters = passesAny.multiLoraAdapters;
   if (state.passes.peft && Array.isArray(multiLoraAdapters) && multiLoraAdapters.length > 0) {
-    const vram = typeof state.vramEstimateGb === "number" && Number.isFinite(state.vramEstimateGb)
-      ? state.vramEstimateGb
-      : 16;
+    const vram = typeof (state as unknown as Record<string, unknown>).vramEstimateGb === "number"
+      ? (state as unknown as Record<string, unknown>).vramEstimateGb as number
+      : Number.NaN;
     const gateResult = gateMultiLoraAdapters(multiLoraAdapters, vram);
-    if (!gateResult.allowed) {
-      throw new Error(
-        `Multi-LoRA adapter configuration rejected: ${gateResult.reason ?? "invalid adapter configuration"}`,
-      );
-    }
-    // ExtractAdapters is experimental and only emitted when the feature flag is on.
-    if (isMultiLoraEnabled() && gateResult.adapters.length > 0) {
-      const extractPass = buildExtractAdaptersPass(gateResult.adapters);
-      if (extractPass) {
-        passes["extract_adapters"] = extractPass;
+    if (gateResult.allowed && gateResult.adapters.length > 0) {
+      if (isMultiLoraEnabled()) {
+        const extractPass = buildExtractAdaptersPass(gateResult.adapters);
+        if (extractPass) {
+          passes["extract_adapters"] = extractPass;
+        }
+      } else {
+        // Feature-off single-adapter configurations use Olive's legacy field.
+        inputConfig.adapter_path = gateResult.adapters[0].path;
       }
     }
   }
