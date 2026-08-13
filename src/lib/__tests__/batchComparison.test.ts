@@ -150,12 +150,22 @@ describe("batchComparison — parseMcpCompareOutput validation", () => {
   });
 
   /** Helper: generate a full valid CompareResultsOutput-shaped object. */
-  const arbValidOutput = fc.record({
-    results: fc.array(arbResultEntry, { minLength: 0, maxLength: 10 }),
-    winner: fc.oneof(fc.string({ minLength: 1, maxLength: 20 }), fc.constant(null)),
-    reasoning: fc.string({ minLength: 1, maxLength: 200 }),
-    excluded_jobs: fc.array(arbExcludedJob, { minLength: 0, maxLength: 5 }),
-  });
+  const arbValidOutput = fc
+    .record({
+      results: fc.array(arbResultEntry, { minLength: 0, maxLength: 10 }),
+      reasoning: fc.string({ minLength: 1, maxLength: 200 }),
+      excluded_jobs: fc.array(arbExcludedJob, { minLength: 0, maxLength: 5 }),
+    })
+    .chain((base) =>
+      fc
+        .oneof(
+          fc.constant(null),
+          base.results.length > 0
+            ? fc.constantFrom(...base.results.map((r) => r.job_id))
+            : fc.constant(null),
+        )
+        .map((winner) => ({ ...base, winner })),
+    );
 
   it("returns typed output for valid MCP compare_results responses", () => {
     fc.assert(
