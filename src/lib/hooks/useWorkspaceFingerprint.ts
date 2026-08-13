@@ -49,6 +49,8 @@ export function useWorkspaceFingerprint(): UseWorkspaceFingerprintReturn {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Ref to track in-flight computation to discard stale results
   const computeIdRef = useRef(0);
+  // Ref to track the store state reference for which the current fingerprint was computed
+  const computedStateRef = useRef<UIState | null>(null);
 
   useEffect(() => {
     // Clear any pending debounce timer
@@ -59,9 +61,6 @@ export function useWorkspaceFingerprint(): UseWorkspaceFingerprintReturn {
     // Increment the generation counter immediately so that any in-flight
     // computation from a prior state is invalidated.
     const generation = ++computeIdRef.current;
-    setFpState((prev) =>
-      prev.fingerprint === "" ? prev : { fingerprint: "", computedAt: 0 },
-    );
 
     // Schedule debounced recomputation
     timerRef.current = setTimeout(() => {
@@ -69,6 +68,7 @@ export function useWorkspaceFingerprint(): UseWorkspaceFingerprintReturn {
         // Only commit if this generation is still the latest —
         // a newer state change would have incremented computeIdRef further.
         if (generation === computeIdRef.current) {
+          computedStateRef.current = state;
           setFpState({
             fingerprint: hash,
             computedAt: Date.now(),
@@ -91,11 +91,13 @@ export function useWorkspaceFingerprint(): UseWorkspaceFingerprintReturn {
    */
   const isStale = useCallback(
     (resultFingerprint: string): boolean => {
-      // If we haven't computed a fingerprint yet, we can't determine staleness
-      if (fpState.fingerprint === "") return resultFingerprint.length > 0;
+      // If we haven't computed a fingerprint yet or state has changed since computation
+      if (fpState.fingerprint === "" || state !== computedStateRef.current) {
+        return resultFingerprint.length > 0;
+      }
       return resultFingerprint !== fpState.fingerprint;
     },
-    [fpState.fingerprint],
+    [fpState.fingerprint, state],
   );
 
   return {
