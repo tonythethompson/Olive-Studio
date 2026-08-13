@@ -11,8 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, FileText, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { downloadMarkdownReport, printReportAsPdf } from "@/lib/reportGenerator";
-import type { ReportOptions } from "@/lib/reportGenerator";
+import { downloadMarkdownReport, printReportAsPdf, type ReportOptions } from "@/lib/reportGenerator";
 import type { JobHistoryRecord } from "@/lib/jobHistoryStore";
 import { isFeatureEnabled } from "@/lib/featureFlags";
 
