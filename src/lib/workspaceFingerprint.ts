@@ -53,6 +53,11 @@ export async function computeFingerprint(state: UIState): Promise<string> {
     }
   }
 
+  // File handles and metadata are transient, but selected names affect the recipe.
+  if (Array.isArray(state.localFiles)) {
+    filtered.localFileNames = state.localFiles.map((file) => file.name);
+  }
+
   // Deterministic serialization with sorted keys
   const serialized = stableStringify(filtered);
 
@@ -84,6 +89,11 @@ export function _serializeForFingerprint(state: UIState): string {
     if (!excludeSet.has(key)) {
       filtered[key] = (state as unknown as Record<string, unknown>)[key];
     }
+  }
+
+  // File handles and metadata are transient, but selected names affect the recipe.
+  if (Array.isArray(state.localFiles)) {
+    filtered.localFileNames = state.localFiles.map((file) => file.name);
   }
 
   return stableStringify(filtered);
