@@ -479,7 +479,6 @@ export function ExecutionWorkspace({
     gpuMetrics,
     handleExecuteLive,
     handleCancelJob,
-    runRecipeJsonRef,
   } = useOliveStream({
     state,
     hardwareProbe,
@@ -582,10 +581,10 @@ export function ExecutionWorkspace({
   // not a rebuilt version that might include post-run state edits.
   const setCapturedRunRecipe = usePlaygroundStore((s) => s.setCapturedRunRecipe);
   useEffect(() => {
-    if (executionStatus === "completed" && runRecipeJsonRef.current) {
-      setCapturedRunRecipe(runRecipeJsonRef.current);
+    if (executionStatus === "completed" && runRecipeJson) {
+      setCapturedRunRecipe(runRecipeJson);
     }
-  }, [executionStatus, setCapturedRunRecipe, runRecipeJsonRef]);
+  }, [executionStatus, runRecipeJson, setCapturedRunRecipe]);
 
   // Auto-save completed diagnoses to history
   const prevDiagnosticRef = useRef(mcpDiagnostic);

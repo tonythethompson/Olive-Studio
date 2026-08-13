@@ -193,7 +193,15 @@ export async function fetchOliveRecipesCatalogItem(
  * @returns The first recognized execution provider, or `undefined` when the recipe has no recognized provider.
  */
 export function mapExecutionProviderFromRecipe(parsed: unknown): IHVProvider | undefined {
-  const recipe = parsed as Record<string, unknown> | undefined;
+  let recipeObj = parsed;
+  if (typeof recipeObj === "string") {
+    try {
+      recipeObj = JSON.parse(recipeObj);
+    } catch {
+      return undefined;
+    }
+  }
+  const recipe = recipeObj as Record<string, unknown> | undefined;
   const systems = recipe?.systems as Record<string, unknown> | undefined;
   if (systems && typeof systems === "object") {
     for (const system of Object.values(systems)) {
