@@ -45,6 +45,8 @@ export interface RecipeCatalogItem {
   description: string;
   /** How architecture/device tags were derived. Folder inference is approximate. */
   metadataSource?: "folder" | "recipe";
+  /** Pinned catalog commit; when set, content is fetched at this SHA, not branch HEAD. */
+  commitSha?: string;
 }
 
 export interface ParsedGitHubTarget {
@@ -183,7 +185,8 @@ export async function fetchOliveRecipesCatalogItem(
   repo = OLIVE_RECIPES_REPO,
   branch = getRecipesBranch(),
 ): Promise<unknown> {
-  const { json } = await fetchGitHubRecipeJson(repo, branch, item.repoPath);
+  const ref = item.commitSha || branch;
+  const { json } = await fetchGitHubRecipeJson(repo, ref, item.repoPath);
   return json;
 }
 
