@@ -15,7 +15,8 @@
         }
       }
     </script>
-    <!-- Synchronous theme init — prevents flash of wrong theme before React mounts -->
+    <!-- Synchronous theme init — prevents flash of wrong theme before React mounts.
+         STORAGE_KEY must match STORAGE_KEY in src/lib/stores/preferencesStore.ts -->
     <script>
       (function () {
         var STORAGE_KEY = "olive:preferences";

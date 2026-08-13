@@ -14,7 +14,7 @@ interface PreferencesActions {
 
 type PreferencesStore = PreferencesState & PreferencesActions;
 
-const STORAGE_KEY = "olive:preferences";
+export const STORAGE_KEY = "olive:preferences";
 
 export const usePreferencesStore = create<PreferencesStore>()(
   persist(

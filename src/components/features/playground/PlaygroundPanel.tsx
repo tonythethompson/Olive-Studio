@@ -83,10 +83,18 @@ export function PlaygroundPanel() {
   // Only pass recipe if provider is WebGPU; other providers should not show this hint.
   const recipeJson = useMemo(() => {
     if (isCapturedWebGpu && capturedRunRecipe) return capturedRunRecipe;
+    return undefined;
+  }, [isCapturedWebGpu, capturedRunRecipe]);
+
+  // Rebuild recipe from state only if no captured WebGPU recipe is available
+  const fallbackRecipeJson = useMemo(() => {
+    if (isCapturedWebGpu) return undefined;
     return hasSelectedModel(state) && state.ihvProvider === "WebGpuExecutionProvider"
       ? buildRecipeJsonFromState(state)
       : undefined;
-  }, [isCapturedWebGpu, capturedRunRecipe, state]);
+  }, [isCapturedWebGpu, state]);
+
+  const finalRecipeJson = recipeJson || fallbackRecipeJson;
 
   // Keep-alive: seed from store so remounts don't blank a restored sub-view
   const [visitedSubViews, setVisitedSubViews] = useState<Set<string>>(
@@ -193,7 +201,7 @@ export function PlaygroundPanel() {
           >
             <ErrorBoundary label="Browser Test">
               <Suspense fallback={<LoadingFallback label="Loading Browser Test..." />}>
-                <InBrowserValidation recipeJson={recipeJson} />
+                <InBrowserValidation recipeJson={finalRecipeJson} />
               </Suspense>
             </ErrorBoundary>
           </div>

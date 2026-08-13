@@ -46,6 +46,7 @@ export function SettingsMenu() {
         !triggerRef.current?.contains(e.target as Node)
       ) {
         setOpen(false);
+        triggerRef.current?.focus();
       }
     }
     document.addEventListener("pointerdown", onPointerDown);

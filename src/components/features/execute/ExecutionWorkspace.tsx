@@ -477,7 +477,6 @@ export function ExecutionWorkspace({
     executionStatus,
     executionExitCode,
     gpuMetrics,
-    runRecipeJson,
     handleExecuteLive,
     handleCancelJob,
     runRecipeJsonRef,
