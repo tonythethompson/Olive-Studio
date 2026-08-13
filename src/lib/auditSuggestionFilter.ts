@@ -69,7 +69,7 @@ function isNvidiaFamilyEp(ep: string): boolean {
  *
  * @param suggestion - The audit suggestion to evaluate
  * @param ctx - The active model and hardware context
- * @returns `true` if the suggestion applies to the workspace and has a valid autofix target, `false` otherwise
+ * @returns `true` if the suggestion applies to the workspace, `false` otherwise
  */
 export function isAuditSuggestionRelevant(suggestion: AuditSuggestion, ctx: AuditFilterContext): boolean {
   const text = suggestionText(suggestion);
@@ -110,18 +110,18 @@ export function isAuditSuggestionRelevant(suggestion: AuditSuggestion, ctx: Audi
     }
   }
 
-  // Drop cards whose Apply target is not a real UI field (nested Olive JSON, TensorRTPass, etc.).
-  if (!isAuditAutofixApplyable(suggestion.autofix)) {
-    return false;
-  }
-
   return true;
 }
 
-/** Rewrite autofix.pass to the canonical UI field when we know the mapping. */
+/** Rewrite autofix.pass to the canonical UI field when we know the mapping, or clear it if not applyable. */
 export function normalizeAuditSuggestion(suggestion: AuditSuggestion): AuditSuggestion {
+  // If the autofix target isn't a real UI field, clear it so the card renders
+  // as informational (no Apply button) rather than being hidden entirely.
+  if (!isAuditAutofixApplyable(suggestion.autofix)) {
+    return { ...suggestion, autofix: { pass: "", value: "" } };
+  }
   const key = canonicalizeAutofixPass(suggestion.autofix.pass);
-  if (!key || key.startsWith("__")) return suggestion;
+  if (!key || key.startsWith("__")) return { ...suggestion, autofix: { pass: "", value: "" } };
   if (key === suggestion.autofix.pass) return suggestion;
   return {
     ...suggestion,
@@ -137,10 +137,9 @@ export function normalizeAuditSuggestion(suggestion: AuditSuggestion): AuditSugg
  * @returns The filtered and normalized audit analysis
  */
 export function filterAuditAnalysis(analysis: AuditAnalysis, ctx: AuditFilterContext): AuditAnalysis {
-  const kept = analysis.suggestions
-    .filter((s) => isAuditSuggestionRelevant(s, ctx))
-    .map(normalizeAuditSuggestion);
-  const dropped = analysis.suggestions.length - kept.length;
+  const relevant = analysis.suggestions.filter((s) => isAuditSuggestionRelevant(s, ctx));
+  const kept = relevant.map(normalizeAuditSuggestion);
+  const dropped = analysis.suggestions.length - relevant.length;
   let summary = analysis.summary;
   if (dropped > 0) {
     const note = `Removed ${dropped} off-topic suggestion${dropped === 1 ? "" : "s"} that did not match this model/EP.`;
