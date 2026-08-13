@@ -78,7 +78,7 @@ if (-not (Test-Path $pythonVenv)) {
 
 # Core + dev + semantic deps, with mcp pinned <2
 & $pythonVenv -m pip install --upgrade pip --quiet 2>$null
-& $pythonVenv -m pip install -e "$McpDir[dev]" "mcp<2" --quiet
+& $pythonVenv -m pip install -e ($McpDir + "[dev]") "mcp<2" --quiet
 if ($LASTEXITCODE -ne 0) {
     Write-Host "      ERROR: pip install failed." -ForegroundColor Red
     exit 1
@@ -98,6 +98,7 @@ if (-not $SkipVerify) {
     } else {
         Write-Host "      WARNING: Server import check returned unexpected output:" -ForegroundColor Yellow
         Write-Host "      $testOutput" -ForegroundColor DarkGray
+        exit 1
     }
 } else {
     Write-Host "[4/5] Skipping verification (--SkipVerify)." -ForegroundColor DarkGray
