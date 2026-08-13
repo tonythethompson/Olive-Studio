@@ -10,6 +10,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { usePipelineStore } from "@/lib/stores/pipelineStore";
+import type { UIState } from "@/types";
 import { computeFingerprint } from "@/lib/workspaceFingerprint";
 import type { WorkspaceFingerprintState } from "@/lib/types/findingTypes";
 

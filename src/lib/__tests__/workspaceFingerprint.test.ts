@@ -124,7 +124,6 @@ function arbUIStatePairDifferingOnlyInTransient(): fc.Arbitrary<[UIState, UIStat
         fc.option(fc.uuid(), { nil: null }),
         fc.array(
           fc.record({
-            path: fc.string({ minLength: 1, maxLength: 50 }),
             size: fc.integer({ min: 1, max: 100000 }),
           }),
           {
@@ -140,7 +139,6 @@ function arbUIStatePairDifferingOnlyInTransient(): fc.Arbitrary<[UIState, UIStat
           activeJobId: altJobId,
           localFiles: baseState.localFiles?.map((file, i) => ({
             ...file,
-            path: altFileMeta[i]?.path ?? file.path,
             size: altFileMeta[i]?.size ?? file.size,
           })),
         };
