@@ -6,6 +6,7 @@ import {
   computeQnnCompatibleHardware,
   getProviderAvailabilityBlock,
   isNvidiaGpuTensorRtFamily,
+  isProviderDetectedLocally,
   mergeDetectedProviders,
   parseComputeCapability,
   pickRecommendedProvider,
@@ -653,5 +654,29 @@ describe("mergeDetectedProviders QNN", () => {
         ortReportsQnn: true,
       }),
     ).toBe(false);
+  });
+});
+
+describe("isProviderDetectedLocally", () => {
+  it("always detects CPUExecutionProvider locally even when probe is null", () => {
+    expect(isProviderDetectedLocally("CPUExecutionProvider", null)).toBe(true);
+    expect(isProviderDetectedLocally("CPUExecutionProvider", undefined)).toBe(true);
+  });
+
+  it("checks probe detectedProviders for GPU providers", () => {
+    const probe = {
+      probedAt: "now",
+      platform: { os: "win", arch: "x64", cpuModel: "CPU", cpuCores: 4 },
+      detectedProviders: ["CPUExecutionProvider", "CUDAExecutionProvider"],
+      recommendedProvider: "CUDAExecutionProvider",
+      notes: [],
+    } as HardwareProbeResult;
+
+    expect(isProviderDetectedLocally("CUDAExecutionProvider", probe)).toBe(true);
+    expect(isProviderDetectedLocally("ROCMExecutionProvider", probe)).toBe(false);
+  });
+
+  it("returns false for non-CPU providers when probe is null", () => {
+    expect(isProviderDetectedLocally("CUDAExecutionProvider", null)).toBe(false);
   });
 });

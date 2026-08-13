@@ -6,6 +6,7 @@ import { usePlaygroundStore, type PlaygroundSubView } from "@/lib/stores/playgro
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { buildRecipeJsonFromState } from "@/lib/recipePipeline";
 import { hasSelectedModel } from "@/lib/pipelineValidation";
+import { mapExecutionProviderFromRecipe } from "@/lib/oliveRecipeHub";
 
 /* ------------------------------------------------------------------ */
 /*  Lazy sub-view imports                                               */
@@ -58,6 +59,15 @@ function LoadingFallback({ label }: { label: string }) {
 /*  PlaygroundPanel                                                     */
 /* ------------------------------------------------------------------ */
 
+function isWebGpuRecipe(recipeJson: string): boolean {
+  try {
+    const parsed = JSON.parse(recipeJson);
+    return mapExecutionProviderFromRecipe(parsed) === "WebGpuExecutionProvider";
+  } catch {
+    return false;
+  }
+}
+
 export function PlaygroundPanel() {
   const activeSubView = usePlaygroundStore((s) => s.activeSubView);
   const setActiveSubView = usePlaygroundStore((s) => s.setActiveSubView);
@@ -67,8 +77,10 @@ export function PlaygroundPanel() {
   // user modifies state afterward). Fallback to building from current state for manual Browser Test.
   // Only pass recipe if provider is WebGPU; other providers should not show this hint.
   const recipeJson = useMemo(() => {
-    if (capturedRunRecipe) return capturedRunRecipe;
-    return hasSelectedModel(state) && state.ihvProvider === "WebGpuExecutionProvider" ? buildRecipeJsonFromState(state) : undefined;
+    if (capturedRunRecipe && isWebGpuRecipe(capturedRunRecipe)) return capturedRunRecipe;
+    return hasSelectedModel(state) && state.ihvProvider === "WebGpuExecutionProvider"
+      ? buildRecipeJsonFromState(state)
+      : undefined;
   }, [capturedRunRecipe, state]);
 
   // Keep-alive: seed from store so remounts don't blank a restored sub-view

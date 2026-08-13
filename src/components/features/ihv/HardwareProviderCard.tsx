@@ -863,8 +863,7 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
   const cardHardwareBlocked =
     !isExportTargetProvider(p.id) &&
     !isPlatformLocalProvider(p.id) &&
-    (Boolean(getProviderHardwareBlock(p.id, hardwareProbe)) ||
-      (p.id === "CPUExecutionProvider" && !hardwareProbe));
+    Boolean(getProviderHardwareBlock(p.id, hardwareProbe));
   const cardBlocked = cardHasCritical || cardHardwareBlocked;
   const cardHasWarning = pConflicts.some((c) => c.severity === "warning");
   const showSwitchAssist = pConflicts.length > 0 && (isSelected || !cardBlocked);
