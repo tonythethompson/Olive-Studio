@@ -84,7 +84,7 @@ function StatusBadge({ status }: { status: string }) {
  * @param onClose - Optional callback invoked when the comparison panel is closed.
  * @param compareResults - Optional MCP compare_results output for metric display.
  * @param onCompare - Optional callback to trigger comparison with scoring preference.
- * @param completedJobCount - Number of completed jobs (for button enable/disable logic).
+ * @param completedJobCount - Ignored; eligibility uses completed rows in `records`.
  * @returns The comparison panel element.
  */
 export function BatchComparisonView({
@@ -92,7 +92,6 @@ export function BatchComparisonView({
   onClose,
   compareResults,
   onCompare,
-  completedJobCount,
 }: BatchComparisonViewProps) {
   const [sortKey, setSortKey] = useState<SortKey>("durationMs");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -124,8 +123,8 @@ export function BatchComparisonView({
   // Compute deltas relative to the first record (baseline)
   const baseline = sorted[0];
 
-  // Determine effective completed job count for button state
-  const effectiveCompletedCount = completedJobCount ?? records.filter((r) => r.status === "completed").length;
+  // Eligibility is the selected `records`, not a global completed count.
+  const effectiveCompletedCount = records.filter((r) => r.status === "completed").length;
   const canCompare = validateJobCount(effectiveCompletedCount);
 
   const columns: { key: SortKey; label: string }[] = [

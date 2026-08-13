@@ -257,6 +257,58 @@ describe("useAgentMode", () => {
       expect(result.current.outcome?.errorDescription).toContain("cancel denied");
     });
 
+    it("does not apply a stale cancel after a newer session starts", async () => {
+      let resolveCancel: (value: Response) => void = () => {};
+      const cancelPromise = new Promise<Response>((resolve) => {
+        resolveCancel = resolve;
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url: string) => {
+          if (String(url).includes("/olive/jobs/submit")) {
+            return Promise.resolve({
+              ok: true,
+              json: async () => ({ jobId: `job-${Math.random()}` }),
+            } as Response);
+          }
+          return cancelPromise;
+        }),
+      );
+
+      const { result } = renderHook(() => useAgentMode());
+
+      await act(async () => {
+        await result.current.startAgent({ recipeJson: "{}" });
+      });
+      const firstJob = result.current.jobId;
+      expect(firstJob).toBeDefined();
+
+      act(() => {
+        result.current.stopAgent();
+      });
+
+      await act(async () => {
+        await result.current.startAgent({ recipeJson: "{}" });
+      });
+      const secondJob = result.current.jobId;
+      expect(secondJob).toBeDefined();
+      expect(secondJob).not.toBe(firstJob);
+      expect(result.current.agentRunning).toBe(true);
+
+      await act(async () => {
+        resolveCancel({
+          ok: true,
+          json: async () => ({ status: "cancelled" }),
+        } as Response);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(result.current.agentRunning).toBe(true);
+      expect(result.current.jobId).toBe(secondJob);
+      expect(result.current.outcome).toBeUndefined();
+    });
+
     it("clears the start timeout if stop is called before 10s", () => {
       const { result } = renderHook(() => useAgentMode());
 

@@ -160,6 +160,21 @@ describe("BatchComparisonView", () => {
     expect(btn.getAttribute("aria-disabled")).toBe("true");
   });
 
+  it("ignores completedJobCount when selected records are not eligible", () => {
+    const records = [makeRecord({ id: "a", status: "completed" })];
+    render(<BatchComparisonView records={records} onCompare={vi.fn()} completedJobCount={5} />);
+    expect(screen.getByText("Compare Results").getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("enables Compare Results from selected records even if completedJobCount is low", () => {
+    const records = [
+      makeRecord({ id: "a", status: "completed" }),
+      makeRecord({ id: "b", status: "completed" }),
+    ];
+    render(<BatchComparisonView records={records} onCompare={vi.fn()} completedJobCount={1} />);
+    expect(screen.getByText("Compare Results").getAttribute("aria-disabled")).toBe("false");
+  });
+
   it("enables Compare Results button when 2 or more completed jobs", () => {
     const records = [
       makeRecord({ id: "a", status: "completed" }),

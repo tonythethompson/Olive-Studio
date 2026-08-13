@@ -234,6 +234,7 @@ export function useAgentMode(): UseAgentModeReturn {
   const stopAgent = useCallback(() => {
     clearStartTimeout();
     runGenerationRef.current += 1;
+    const stopGen = runGenerationRef.current;
 
     const activeJobId = jobIdRef.current;
     if (!activeJobId) {
@@ -245,11 +246,13 @@ export function useAgentMode(): UseAgentModeReturn {
       try {
         const resp = await requestAgentCancel(activeJobId);
         const data = (await resp.json().catch(() => ({}))) as { error?: string; status?: string };
+        if (runGenerationRef.current !== stopGen) return;
         if (!resp.ok) {
           throw new Error(data.error || `HTTP ${resp.status}`);
         }
         applyCancelledOutcome();
       } catch (err) {
+        if (runGenerationRef.current !== stopGen) return;
         const message = err instanceof Error ? err.message : "Failed to cancel agent job";
         setOutcome({
           status: "failure",
