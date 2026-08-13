@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
 import { screen, fireEvent, act } from "@testing-library/react";
-import { createMockUIState, renderWithProviders as render, useFetchRoutesMock } from "../__tests__/testUtils";
+import { createMockUIState, useFetchRoutesMock, renderWithProviders } from "../__tests__/testUtils";
 
 // Mock the pipeline store
 const mockSetState = vi.fn();
@@ -50,7 +50,7 @@ describe("AssistantSidebar", () => {
 
   it("renders when isOpen is true", async () => {
     await act(async () => {
-      render(<AssistantSidebar {...defaultProps} />);
+      renderWithProviders(<AssistantSidebar {...defaultProps} />);
     });
     // Sidebar should be visible with tab content
     expect(screen.getAllByText(/audit/i).length).toBeGreaterThan(0);
@@ -58,7 +58,7 @@ describe("AssistantSidebar", () => {
 
   it("renders tab navigation (audit, chat, settings)", async () => {
     await act(async () => {
-      render(<AssistantSidebar {...defaultProps} />);
+      renderWithProviders(<AssistantSidebar {...defaultProps} />);
     });
     expect(screen.getAllByText(/chat/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/settings/i).length).toBeGreaterThan(0);
@@ -67,7 +67,7 @@ describe("AssistantSidebar", () => {
   it("calls onClose when close button is clicked", async () => {
     const onClose = vi.fn();
     await act(async () => {
-      render(<AssistantSidebar isOpen={true} onClose={onClose} />);
+      renderWithProviders(<AssistantSidebar isOpen={true} onClose={onClose} />);
     });
     const closeButton = screen.getByRole("button", { name: /close sidebar/i });
     fireEvent.click(closeButton);
@@ -77,7 +77,7 @@ describe("AssistantSidebar", () => {
   it("renders with controlled state props", async () => {
     const state = createMockUIState();
     await act(async () => {
-      render(<AssistantSidebar {...defaultProps} state={state} setState={mockSetState} />);
+      renderWithProviders(<AssistantSidebar {...defaultProps} state={state} setState={mockSetState} />);
     });
     expect(screen.getAllByText(/audit/i).length).toBeGreaterThan(0);
   });
@@ -85,7 +85,7 @@ describe("AssistantSidebar", () => {
   it("sets aria-hidden when isOpen is false", async () => {
     let container: HTMLElement | undefined;
     await act(async () => {
-      const result = render(<AssistantSidebar {...defaultProps} isOpen={false} />);
+      const result = renderWithProviders(<AssistantSidebar {...defaultProps} isOpen={false} />);
       container = result.container;
     });
     // The sidebar uses aria-hidden + w-0 rather than conditional rendering
@@ -95,10 +95,10 @@ describe("AssistantSidebar", () => {
 
   it("compact sidebar: scrim dismiss, inert/aria-hidden, responsive classes, Escape", async () => {
     const onClose = vi.fn();
-    let view: ReturnType<typeof render> | undefined;
+    let view: ReturnType<typeof renderWithProviders> | undefined;
 
     await act(async () => {
-      view = render(<AssistantSidebar isOpen={true} onClose={onClose} />);
+      view = renderWithProviders(<AssistantSidebar isOpen={true} onClose={onClose} />);
     });
 
     const openAside = view!.container.querySelector("#assistant-panel");
