@@ -14,26 +14,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 3.11+: tomllib is stdlib (no tomli). packaging parses PEP 508 specifiers.
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
       - name: Install build tools
-        run: pip install build
+        run: pip install build packaging
 
       - name: Verify version matches tag
         working-directory: olive-mcp-server
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#mcp-server/v}"
-          PKG_VERSION=$(python -c "
-          try:
-              import tomllib
-          except ModuleNotFoundError:
-              import tomli as tomllib
-          with open('pyproject.toml', 'rb') as f:
-              data = tomllib.load(f)
-          print(data['project']['version'])
-          ")
+          PKG_VERSION=$(python - <<'PY'
+          import tomllib
+          from pathlib import Path
+          data = tomllib.load(Path("pyproject.toml").open("rb"))
+          print(data["project"]["version"])
+          PY
+          )
           echo "Tag version: $TAG_VERSION"
           echo "Package version: $PKG_VERSION"
           if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
@@ -44,24 +43,39 @@ jobs:
       - name: Verify mcp dependency is pinned below 2
         working-directory: olive-mcp-server
         run: |
-          MCP_CONSTRAINT=$(python -c "
-          try:
-              import tomllib
-          except ModuleNotFoundError:
-              import tomli as tomllib
-          with open('pyproject.toml', 'rb') as f:
-              data = tomllib.load(f)
-          deps = data.get('project', {}).get('dependencies', [])
+          python - <<'PY'
+          import sys
+          import tomllib
+          from pathlib import Path
+
+          from packaging.requirements import Requirement
+          from packaging.version import Version
+
+          data = tomllib.load(Path("pyproject.toml").open("rb"))
+          deps = data.get("project", {}).get("dependencies", [])
+          req = None
           for dep in deps:
-              if dep.lower().startswith('mcp'):
-                  print(dep)
+              parsed = Requirement(dep)
+              if parsed.name == "mcp":
+                  req = parsed
                   break
-          ")
-          echo "MCP constraint: $MCP_CONSTRAINT"
-          if ! echo "$MCP_CONSTRAINT" | grep -qE 'mcp[<>=!~ ]+.*2'; then
-            echo "::error::mcp dependency must be pinned below 2 (e.g. 'mcp<2')"
-            exit 1
-          fi
+          if req is None:
+              print("::error::mcp dependency is missing from project.dependencies")
+              sys.exit(1)
+
+          spec = req.specifier
+          print(f"MCP constraint: {req}")
+          if not spec:
+              print("::error::mcp dependency must be pinned below 2 (unpinned specifier)")
+              sys.exit(1)
+
+          # Reject any specifier that allows any 2.x (including prereleases).
+          probes = [Version("2.0.0a0"), Version("2.0.0"), Version("2.0.1"), Version("2.1.0"), Version("2.99.99")]
+          if any(spec.contains(v, prereleases=True) for v in probes):
+              print("::error::mcp dependency must not allow 2.x (e.g. 'mcp>=1,<2'). Got: " + str(req))
+              sys.exit(1)
+          print("mcp pin excludes 2.x")
+          PY
 
       - name: Build package
         working-directory: olive-mcp-server
