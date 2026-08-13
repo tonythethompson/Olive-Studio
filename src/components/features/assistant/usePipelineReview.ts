@@ -22,7 +22,9 @@ import {
   getProviderConflicts,
 } from "@/lib/pipelineValidation";
 import { computeFingerprint } from "@/lib/workspaceFingerprint";
+import { resolveAuditAutofix } from "@/lib/auditAutofix";
 import type { Finding } from "@/lib/types/findingTypes";
+import type { ChatActionPatch } from "@/lib/chatActions";
 
 // ─── Return Type ─────────────────────────────────────────────────────────────
 
@@ -200,6 +202,7 @@ export function usePipelineReview(): UsePipelineReviewReturn {
         // Use findings if available (new contract), otherwise convert suggestions.
         const aiFindings: Finding[] = rawResult.findings ?? adaptSuggestionsToFindings(
           rawResult.suggestions ?? [],
+          stateRef.current,
         );
 
         // Reconcile AI findings with deterministic validation.
@@ -269,6 +272,7 @@ export function usePipelineReview(): UsePipelineReviewReturn {
  */
 function adaptSuggestionsToFindings(
   suggestions: Array<Record<string, unknown>>,
+  pipelineState: Parameters<typeof resolveAuditAutofix>[1],
 ): Finding[] {
   return suggestions.map((s, idx) => {
     const title = typeof s.title === "string" ? s.title.slice(0, 120) : `Finding ${idx + 1}`;
@@ -282,15 +286,22 @@ function adaptSuggestionsToFindings(
 
     // Build actions from legacy autofix.
     const actions: Finding["actions"] = [];
-    const autofix = s.autofix as { pass?: string; value?: string } | undefined;
-    if (autofix && autofix.pass) {
-      actions.push({
-        kind: "applyPatch",
-        label: `Apply fix: ${autofix.pass}`.slice(0, 80),
-        payload: {
-          passes: { [autofix.pass]: autofix.value },
-        },
-      });
+    const autofix = s.autofix as { pass?: string; value?: unknown } | undefined;
+    if (autofix && typeof autofix.pass === "string" && autofix.pass) {
+      const value = typeof autofix.value === "string"
+        ? autofix.value
+        : JSON.stringify(autofix.value ?? "");
+      const payload = resolveAuditAutofix(
+        { pass: autofix.pass, value },
+        pipelineState,
+      );
+      if (payload) {
+        actions.push({
+          kind: "applyPatch",
+          label: `Apply fix: ${autofix.pass}`.slice(0, 80),
+          payload: payload as ChatActionPatch,
+        });
+      }
     }
 
     // Always provide an explain fallback if no valid patch action.
