@@ -793,19 +793,28 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
 
   // Order: Convert → Optimize → Quantize (ONNX path), then MCP pass overrides
   // Multi-LoRA adapter gating — when PEFT is active and adapters are configured
-  const passesAny = state.passes as Record<string, unknown>;
-  const multiLoraAdapters = passesAny.multiLoraAdapters;
+  const multiLoraAdapters = state.multiLoraAdapters;
   if (state.passes.peft && Array.isArray(multiLoraAdapters) && multiLoraAdapters.length > 0) {
-    const vram = typeof (state as unknown as Record<string, unknown>).vramEstimateGb === "number"
-      ? (state as unknown as Record<string, unknown>).vramEstimateGb as number
-      : Number.NaN;
+    const vram = typeof state.vramEstimateGb === "number" ? state.vramEstimateGb : Number.NaN;
     const gateResult = gateMultiLoraAdapters(multiLoraAdapters, vram);
-    if (gateResult.allowed && gateResult.adapters.length > 0) {
+    if (!gateResult.allowed) {
+      throw new Error(
+        `Multi-LoRA adapter configuration rejected: ${gateResult.reason ?? "invalid adapter configuration"}`,
+      );
+    }
+    if (gateResult.adapters.length > 0) {
       if (isMultiLoraEnabled()) {
         const extractPass = buildExtractAdaptersPass(gateResult.adapters);
         if (extractPass) {
           passes["extract_adapters"] = extractPass;
         }
+        (recipe as Record<string, unknown>).adapters = gateResult.adapters.map((a) => ({
+          name: a.name,
+          path: a.path,
+          rank: a.rank,
+          alpha: a.alpha,
+          ...(a.targetModules ? { target_modules: a.targetModules } : {}),
+        }));
       } else {
         // Feature-off single-adapter configurations use Olive's legacy field.
         inputConfig.adapter_path = gateResult.adapters[0].path;
@@ -915,16 +924,13 @@ export function gateMultiLoraAdapters(
  */
 export function buildExtractAdaptersPass(adapters: AdapterEntry[]): Record<string, unknown> | undefined {
   if (adapters.length === 0) return undefined;
+  // Olive ExtractAdapters unwraps adapters already embedded in ONNX.
+  // Multi-adapter switching is recipe-level `adapters[]`, not this pass config.
   return {
     type: "ExtractAdapters",
     config: {
-      adapters: adapters.map((a) => ({
-        name: a.name,
-        path: a.path,
-        rank: a.rank,
-        alpha: a.alpha,
-        ...(a.targetModules ? { target_modules: a.targetModules } : {}),
-      })),
+      adapter_type: "lora",
+      make_inputs: true,
     },
   };
 }
