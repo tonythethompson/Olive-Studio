@@ -123,6 +123,19 @@ function Dashboard() {
   const [headerCompact, setHeaderCompact] = useState(false);
   const HEADER_CLUSTER_FULL_WIDTH = 520;
 
+  const [isOliveRunning, setIsOliveRunning] = useState(false);
+  const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
+  const [triggerAiAudit, setTriggerAiAudit] = useState(false);
+  const [pendingChatQuery, setPendingChatQuery] = useState<AskAiChatDetail | null>(null);
+  const [licenseOpen, setLicenseOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [reportData, setReportData] = useState<{
+    error: Error;
+    label?: string;
+    componentStack?: string;
+    frequencyInfo?: import("@/lib/errorFrequency").ErrorFrequencyInfo | null;
+  } | null>(null);
+
   useEffect(() => {
     const leftEl = headerLeftRef.current;
     const rightEl = headerRightRef.current;
@@ -143,18 +156,6 @@ function Dashboard() {
       window.removeEventListener("resize", measure);
     };
   }, [isAiSidebarOpen]);
-  const [isOliveRunning, setIsOliveRunning] = useState(false);
-  const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
-  const [triggerAiAudit, setTriggerAiAudit] = useState(false);
-  const [pendingChatQuery, setPendingChatQuery] = useState<AskAiChatDetail | null>(null);
-  const [licenseOpen, setLicenseOpen] = useState(false);
-  const [isReportOpen, setIsReportOpen] = useState(false);
-  const [reportData, setReportData] = useState<{
-    error: Error;
-    label?: string;
-    componentStack?: string;
-    frequencyInfo?: import("@/lib/errorFrequency").ErrorFrequencyInfo | null;
-  } | null>(null);
 
   const handleReportError = useCallback(
     (details: {
